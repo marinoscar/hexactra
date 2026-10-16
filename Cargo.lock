@@ -717,6 +717,7 @@ dependencies = [
  "clap",
  "hexactra-core",
  "hexactra-telemetry",
+ "libc",
  "serde",
  "serde_json",
  "tempfile",
@@ -725,6 +726,7 @@ dependencies = [
  "tokio-native-tls",
  "tokio-test",
  "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
