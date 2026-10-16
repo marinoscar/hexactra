@@ -1,25 +1,128 @@
 //! Session worker for Hexactra
 
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use hexactra_core::{BrowserAction, SessionId};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::net::UnixStream;
 use tokio::io::AsyncWriteExt;
-use std::path::Path;
 use uuid::Uuid;
+use std::path::Path;
 
 /// Worker configuration
 #[derive(Debug, Clone)]
 pub struct WorkerConfig {
     pub session_id: SessionId,
     pub control_socket: String,
+    pub max_payload_size: usize,
+    pub action_timeout: Duration,
 }
 
-/// Session worker that executes browser actions
+impl Default for WorkerConfig {
+    fn default() -> Self {
+        Self {
+            session_id: SessionId::new(),
+            control_socket: "/tmp/hexactra-control.sock".to_string(),
+            max_payload_size: 1024 * 1024, // 1 MB
+            action_timeout: Duration::from_secs(30),
+        }
+    }
+}
+
+/// Worker state
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WorkerState {
+    /// Worker is initializing
+    Initializing,
+    /// Worker is running and ready
+    Running,
+    /// Worker is paused
+    Paused,
+    /// Worker is stopping
+    Stopping,
+    /// Worker has stopped
+    Stopped,
+}
+
+/// Action status
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ActionStatus {
+    /// Action is queued
+    Queued,
+    /// Action is in progress
+    InProgress,
+    /// Action completed successfully
+    Completed,
+    /// Action failed
+    Failed,
+    /// Action timed out
+    TimedOut,
+    /// Action status is unknown (e.g., bridge crashed)
+    Unknown,
+    /// Action should be retried
+    Retryable,
+}
+
+/// Result of an action with proper lifecycle tracking
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActionResult {
+    /// Unique action ID
+    pub action_id: Uuid,
+    /// Session ID
+    pub session_id: SessionId,
+    /// Status of the action
+    pub status: ActionStatus,
+    /// Error message if any
+    pub error: Option<String>,
+    /// Timestamp when action was created
+    pub created_at: DateTime<Utc>,
+    /// Timestamp when action was completed
+    pub completed_at: Option<DateTime<Utc>>,
+    /// Result data if successful
+    pub data: Option<serde_json::Value>,
+}
+
+/// Pending operation tracking
+#[derive(Debug, Clone)]
+pub struct PendingOperation {
+    pub action_id: Uuid,
+    pub action: BrowserAction,
+    pub status: ActionStatus,
+    pub created_at: DateTime<Utc>,
+    pub retry_count: u32,
+    pub max_retries: u32,
+}
+
+/// Worker event for lifecycle management
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", content = "payload")]
+pub enum WorkerEvent {
+    /// Worker started
+    Started { session_id: SessionId },
+    /// Worker stopped
+    Stopped { session_id: SessionId },
+    /// Action completed
+    ActionCompleted { result: ActionResult },
+    /// Action failed
+    ActionFailed { action_id: Uuid, error: String },
+    /// Bridge connection lost
+    BridgeLost,
+    /// Bridge reconnected
+    BridgeReconnected,
+}
+
+/// Session worker that executes browser actions with lifecycle management
 pub struct SessionWorker {
     config: WorkerConfig,
+    state: WorkerState,
     action_tx: Option<mpsc::Sender<BrowserAction>>,
     action_rx: Option<mpsc::Receiver<BrowserAction>>,
+    pending_operations: HashMap<Uuid, PendingOperation>,
+    completed_actions: Vec<ActionResult>,
 }
 
 impl SessionWorker {
@@ -27,13 +130,20 @@ impl SessionWorker {
         let (tx, rx) = mpsc::channel(100);
         Self {
             config,
+            state: WorkerState::Initializing,
             action_tx: Some(tx),
             action_rx: Some(rx),
+            pending_operations: HashMap::new(),
+            completed_actions: Vec::new(),
         }
     }
 
     /// Start the worker
     pub async fn start(&mut self) -> Result<()> {
+        if self.state != WorkerState::Initializing {
+            return Err(anyhow::anyhow!("Worker already started or stopped"));
+        }
+
         tracing::info!("Starting worker for session: {:?}", self.config.session_id);
 
         // Spawn the action handler task
@@ -42,21 +152,48 @@ impl SessionWorker {
             tokio::spawn(Self::handle_actions(config, rx));
         }
 
+        self.state = WorkerState::Running;
         Ok(())
     }
 
     /// Stop the worker
-    pub async fn stop(&self) -> Result<()> {
+    pub async fn stop(&mut self) -> Result<()> {
+        if self.state != WorkerState::Running {
+            return Err(anyhow::anyhow!("Worker not running"));
+        }
+
         tracing::info!("Stopping worker for session: {:?}", self.config.session_id);
+
+        // Wait for pending operations to complete or timeout
+        self.wait_for_pending().await?;
+
+        self.state = WorkerState::Stopped;
         Ok(())
     }
 
     /// Send an action to the worker
-    pub async fn send_action(&self, action: BrowserAction) -> Result<()> {
+    pub async fn send_action(&mut self, action: BrowserAction) -> Result<Uuid> {
+        let action_id = Uuid::new_v4();
+        let action_clone = action.clone();
+        
         if let Some(tx) = &self.action_tx {
             tx.send(action).await?;
         }
-        Ok(())
+        
+        // Track pending operation
+        self.pending_operations.insert(
+            action_id,
+            PendingOperation {
+                action_id,
+                action: action_clone,
+                status: ActionStatus::Queued,
+                created_at: Utc::now(),
+                retry_count: 0,
+                max_retries: 3,
+            },
+        );
+
+        Ok(action_id)
     }
 
     /// Handle actions from the channel
@@ -67,87 +204,109 @@ impl SessionWorker {
         }
     }
 
-    /// Connect to the native messaging host via Unix socket
-    pub async fn connect_to_native_host(&self) -> Result<UnixStream> {
-        let path = Path::new(&self.config.control_socket);
-        
-        // Wait for the socket to be available
-        let mut attempts = 0;
-        while !path.exists() && attempts < 30 {
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-            attempts += 1;
+    /// Wait for pending operations to complete
+    async fn wait_for_pending(&mut self) -> Result<()> {
+        // Wait for all pending operations to complete or timeout
+        let timeout = tokio::time::sleep(self.config.action_timeout);
+        tokio::pin!(timeout);
+
+        loop {
+            if self.pending_operations.is_empty() {
+                break;
+            }
+
+            tokio::select! {
+                _ = &mut timeout => {
+                    // Timeout - mark all pending operations as unknown
+                    for (_op_id, op) in &mut self.pending_operations {
+                        op.status = ActionStatus::Unknown;
+                    }
+                    break;
+                }
+            }
         }
 
-        if !path.exists() {
-            return Err(anyhow::anyhow!(
-                "Native messaging host socket not found at {}",
-                self.config.control_socket
-            ));
-        }
+        Ok(())
+    }
 
-        UnixStream::connect(path).await.context("Failed to connect to native messaging host")
+    /// Mark an action as completed
+    pub fn complete_action(&mut self, action_id: Uuid, status: ActionStatus, error: Option<String>) {
+        if let Some(op) = self.pending_operations.remove(&action_id) {
+            self.completed_actions.push(ActionResult {
+                action_id,
+                session_id: self.config.session_id,
+                status,
+                error,
+                created_at: op.created_at,
+                completed_at: Some(Utc::now()),
+                data: None,
+            });
+        }
+    }
+
+    /// Reconcile pending operations after a crash/reconnect
+    pub fn reconcile_pending(&mut self) {
+        for (_id, op) in &mut self.pending_operations {
+            // Mark as retryable after crash
+            if op.retry_count < op.max_retries {
+                op.status = ActionStatus::Retryable;
+                op.retry_count += 1;
+            } else {
+                op.status = ActionStatus::Failed;
+            }
+        }
+    }
+
+    /// Get the current state
+    pub fn state(&self) -> WorkerState {
+        self.state.clone()
+    }
+
+    /// Get pending operations count
+    pub fn pending_count(&self) -> usize {
+        self.pending_operations.len()
+    }
+
+    /// Get completed actions
+    pub fn completed_actions(&self) -> &[ActionResult] {
+        &self.completed_actions
     }
 }
 
-/// BrowserDriver trait for platform-specific browser control
-pub trait BrowserDriver {
-    /// Get the driver name
-    fn name(&self) -> &str;
-
-    /// Initialize the driver
-    fn initialize(&mut self) -> Result<()>;
-
-    /// Cleanup the driver
-    fn cleanup(&mut self) -> Result<()>;
-
-    /// Execute a browser action
-    fn execute(&mut self, action: BrowserAction) -> Result<BrowserObservation>;
-
-    /// Check if the driver is ready
-    fn is_ready(&self) -> bool;
-}
-
-/// Observation from a browser action
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BrowserObservation {
-    /// Navigation completed successfully
-    Navigate { url: String },
-    /// Element clicked successfully
-    Click { selector: String },
-    /// Text typed successfully
-    Type { selector: String, text: String },
-    /// Value retrieved successfully
-    GetValue { selector: String, value: String },
-    /// Screenshot captured (as artifact handle)
-    Screenshot { artifact_id: Uuid },
-    /// Script executed successfully
-    ExecuteScript { result: serde_json::Value },
-    /// Element found
-    WaitForElement { selector: String, found: bool },
-    /// Navigation history action completed
-    History { action: String },
-    /// Page refreshed
-    Refresh,
-    /// Error observation
-    Error { message: String },
-}
-
-/// Native messaging host driver
-pub struct NativeMessagingDriver {
+/// Native messaging bridge for connection management
+pub struct NativeMessagingBridge {
     socket_path: String,
     connected: bool,
+    reconnect_attempts: u32,
+    max_reconnect_attempts: u32,
 }
 
-impl NativeMessagingDriver {
+impl NativeMessagingBridge {
     pub fn new(socket_path: String) -> Self {
         Self {
             socket_path,
             connected: false,
+            reconnect_attempts: 0,
+            max_reconnect_attempts: 5,
         }
     }
 
     /// Connect to the native messaging host
     pub async fn connect(&mut self) -> Result<()> {
+        // Wait for the socket to be available
+        let mut attempts = 0;
+        while !Path::new(&self.socket_path).exists() && attempts < 30 {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            attempts += 1;
+        }
+
+        if !Path::new(&self.socket_path).exists() {
+            return Err(anyhow::anyhow!(
+                "Native messaging host socket not found at {}",
+                self.socket_path
+            ));
+        }
+
         let mut stream = UnixStream::connect(&self.socket_path).await?;
         
         // Send hello message
@@ -159,6 +318,7 @@ impl NativeMessagingDriver {
         stream.write_all(message.as_bytes()).await?;
         
         self.connected = true;
+        self.reconnect_attempts = 0;
         Ok(())
     }
 
@@ -166,52 +326,30 @@ impl NativeMessagingDriver {
     pub fn disconnect(&mut self) {
         self.connected = false;
     }
+
+    /// Check if the bridge is connected
+    pub fn is_connected(&self) -> bool {
+        self.connected
+    }
+
+    /// Try to reconnect
+    pub async fn try_reconnect(&mut self) -> Result<()> {
+        if self.reconnect_attempts >= self.max_reconnect_attempts {
+            return Err(anyhow::anyhow!("Max reconnect attempts reached"));
+        }
+
+        self.disconnect();
+        tokio::time::sleep(Duration::from_millis(100 * (self.reconnect_attempts + 1) as u64)).await;
+        
+        self.connect().await?;
+        self.reconnect_attempts += 1;
+        Ok(())
+    }
 }
 
-impl BrowserDriver for NativeMessagingDriver {
-    fn name(&self) -> &str {
-        "native-messaging"
-    }
-
-    fn initialize(&mut self) -> Result<()> {
-        tracing::info!("Initializing native messaging driver");
-        Ok(())
-    }
-
-    fn cleanup(&mut self) -> Result<()> {
-        tracing::info!("Cleaning up native messaging driver");
-        self.disconnect();
-        Ok(())
-    }
-
-    fn execute(&mut self, action: BrowserAction) -> Result<BrowserObservation> {
-        if !self.connected {
-            return Err(anyhow::anyhow!("Not connected to native messaging host"));
-        }
-
-        // Convert action to message
-        let message = serde_json::to_string(&action)?;
-        
-        // TODO: Send message via Unix socket
-        tracing::debug!("Sending action to native host: {}", message);
-
-        // Return success observation
-        match action {
-            BrowserAction::Navigate { url } => Ok(BrowserObservation::Navigate { url }),
-            BrowserAction::Click { selector } => Ok(BrowserObservation::Click { selector }),
-            BrowserAction::Type { selector, text } => Ok(BrowserObservation::Type { selector, text }),
-            BrowserAction::GetValue { selector } => Ok(BrowserObservation::GetValue { selector, value: String::new() }),
-            BrowserAction::Screenshot => Ok(BrowserObservation::Screenshot { artifact_id: Uuid::new_v4() }),
-            BrowserAction::ExecuteScript { script: _ } => Ok(BrowserObservation::ExecuteScript { result: serde_json::Value::Null }),
-            BrowserAction::WaitForElement { selector, timeout_ms: _ } => Ok(BrowserObservation::WaitForElement { selector, found: true }),
-            BrowserAction::Back => Ok(BrowserObservation::History { action: "back".to_string() }),
-            BrowserAction::Forward => Ok(BrowserObservation::History { action: "forward".to_string() }),
-            BrowserAction::Refresh => Ok(BrowserObservation::Refresh),
-        }
-    }
-
-    fn is_ready(&self) -> bool {
-        self.connected
+impl Default for NativeMessagingBridge {
+    fn default() -> Self {
+        Self::new("/tmp/hexactra-control.sock".to_string())
     }
 }
 
@@ -220,27 +358,61 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_worker_config() {
-        let config = WorkerConfig {
+    fn test_worker_config_default() {
+        let config = WorkerConfig::default();
+        assert_eq!(config.max_payload_size, 1024 * 1024);
+        assert_eq!(config.action_timeout, Duration::from_secs(30));
+    }
+
+    #[test]
+    fn test_action_result() {
+        let result = ActionResult {
+            action_id: Uuid::new_v4(),
             session_id: SessionId::new(),
-            control_socket: "/tmp/test.sock".to_string(),
+            status: ActionStatus::Completed,
+            error: None,
+            created_at: Utc::now(),
+            completed_at: Some(Utc::now()),
+            data: Some(serde_json::json!({"result": "success"})),
         };
-        assert_eq!(config.control_socket, "/tmp/test.sock");
+        assert_eq!(result.status, ActionStatus::Completed);
+        assert!(result.data.is_some());
     }
 
     #[test]
-    fn test_browser_observation() {
-        let obs = BrowserObservation::Navigate { url: "https://example.com".to_string() };
-        // Just verify the observation can be created
-        match obs {
-            BrowserObservation::Navigate { url } => assert_eq!(url, "https://example.com"),
-            _ => panic!("Unexpected variant"),
-        }
+    fn test_pending_operation() {
+        let op = PendingOperation {
+            action_id: Uuid::new_v4(),
+            action: BrowserAction::Screenshot,
+            status: ActionStatus::Queued,
+            created_at: Utc::now(),
+            retry_count: 0,
+            max_retries: 3,
+        };
+        assert_eq!(op.status, ActionStatus::Queued);
+        assert_eq!(op.max_retries, 3);
     }
 
     #[test]
-    fn test_native_messaging_driver_name() {
-        let driver = NativeMessagingDriver::new("/tmp/test.sock".to_string());
-        assert_eq!(driver.name(), "native-messaging");
+    fn test_worker_state() {
+        let config = WorkerConfig::default();
+        let worker = SessionWorker::new(config);
+        
+        // Initial state should be Initializing
+        assert_eq!(worker.state(), WorkerState::Initializing);
+    }
+
+    #[test]
+    fn test_action_status_serialization() {
+        let status = ActionStatus::Retryable;
+        let json = serde_json::to_string(&status).unwrap();
+        assert_eq!(json, "\"retryable\"");
+    }
+
+    #[test]
+    fn test_native_messaging_bridge_default() {
+        let bridge = NativeMessagingBridge::default();
+        assert!(!bridge.is_connected());
+        assert_eq!(bridge.max_reconnect_attempts, 5);
     }
 }
