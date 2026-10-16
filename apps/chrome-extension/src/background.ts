@@ -26,6 +26,29 @@ export async function init() {
 }
 
 /**
+ * Message types
+ */
+type MessageType = 
+  | 'INITIALIZE'
+  | 'OBSERVE'
+  | 'CLICK'
+  | 'TYPE'
+  | 'NAVIGATE'
+  | 'TAKE_SCREENSHOT'
+  | 'TAB_LIST'
+  | 'TAB_SWITCH'
+  | 'TAB_OPEN'
+  | 'TAB_CLOSE'
+  | 'FOCUS'
+  | 'CLEAR'
+  | 'SELECT'
+  | 'TOGGLE'
+  | 'KEYPRESS'
+  | 'SCROLL'
+  | 'WAIT'
+  | 'SUBMIT';
+
+/**
  * Handle messages from side panel or content scripts
  */
 function handleMessage(
@@ -36,21 +59,47 @@ function handleMessage(
     return;
   }
 
-  switch (message && typeof message === 'object' ? (message as any).type : undefined) {
+  const msg = message as any;
+  switch (msg.type as MessageType) {
     case 'INITIALIZE':
       return handleInitialize(sender);
     case 'OBSERVE':
       return handleObserve(sender);
     case 'CLICK':
-      return handleClick(sender, message);
+      return handleClick(sender, msg);
     case 'TYPE':
-      return handleType(sender, message);
+      return handleType(sender, msg);
     case 'NAVIGATE':
-      return handleNavigate(sender, message);
+      return handleNavigate(sender, msg);
     case 'TAKE_SCREENSHOT':
-      return handleScreenshot(sender, message);
+      return handleScreenshot(sender, msg);
+    case 'TAB_LIST':
+      return handleTabList(sender);
+    case 'TAB_SWITCH':
+      return handleTabSwitch(sender, msg);
+    case 'TAB_OPEN':
+      return handleTabOpen(sender, msg);
+    case 'TAB_CLOSE':
+      return handleTabClose(sender, msg);
+    case 'FOCUS':
+      return handleFocus(sender, msg);
+    case 'CLEAR':
+      return handleClear(sender, msg);
+    case 'SELECT':
+      return handleSelect(sender, msg);
+    case 'TOGGLE':
+      return handleToggle(sender, msg);
+    case 'KEYPRESS':
+      return handleKeypress(sender, msg);
+    case 'SCROLL':
+      return handleScroll(sender, msg);
+    case 'WAIT':
+      return handleWait(sender, msg);
+    case 'SUBMIT':
+      return handleSubmit(sender, msg);
     default:
-      console.warn('Unknown message type:', (message as any)?.type);
+      console.warn('Unknown message type:', msg.type);
+      sendResponse(sender, { success: false, error: `Unknown action: ${msg.type}` });
   }
 }
 
@@ -151,9 +200,8 @@ async function handleObserve(sender: chrome.runtime.MessageSender) {
  */
 async function handleClick(
   sender: chrome.runtime.MessageSender,
-  message: unknown
+  msg: any
 ) {
-  const msg = message as any;
   if (!sender.tab?.id || !msg.selector) {
     sendResponse(sender, { success: false, error: 'Missing tab ID or selector' });
     return;
@@ -192,9 +240,8 @@ async function handleClick(
  */
 async function handleType(
   sender: chrome.runtime.MessageSender,
-  message: unknown
+  msg: any
 ) {
-  const msg = message as any;
   if (!sender.tab?.id || !msg.selector || typeof msg.text !== 'string') {
     sendResponse(sender, { success: false, error: 'Missing required parameters' });
     return;
@@ -235,9 +282,8 @@ async function handleType(
  */
 async function handleNavigate(
   sender: chrome.runtime.MessageSender,
-  message: unknown
+  msg: any
 ) {
-  const msg = message as any;
   if (!sender.tab?.id || typeof msg.url !== 'string') {
     sendResponse(sender, { success: false, error: 'Missing tab ID or URL' });
     return;
@@ -259,9 +305,8 @@ async function handleNavigate(
  */
 async function handleScreenshot(
   sender: chrome.runtime.MessageSender,
-  message: unknown
+  msg: any
 ) {
-  const msg = message as any;
   if (!sender.tab?.id) {
     sendResponse(sender, { success: false, error: 'Missing tab ID' });
     return;
@@ -278,6 +323,403 @@ async function handleScreenshot(
     sendResponse(sender, { 
       success: false, 
       error: error instanceof Error ? error.message : 'Screenshot failed' 
+    });
+  }
+}
+
+/**
+ * Handle tab list action
+ */
+async function handleTabList(sender: chrome.runtime.MessageSender) {
+  try {
+    const tabs = await chrome.tabs.query({});
+    
+    sendResponse(sender, {
+      success: true,
+      tabs: tabs.map(tab => ({
+        id: tab.id,
+        url: tab.url,
+        title: tab.title,
+        active: tab.active,
+        windowId: tab.windowId,
+      })),
+    });
+  } catch (error) {
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to list tabs' 
+    });
+  }
+}
+
+/**
+ * Handle tab switch action
+ */
+async function handleTabSwitch(
+  sender: chrome.runtime.MessageSender,
+  msg: any
+) {
+  if (!msg.tabId) {
+    sendResponse(sender, { success: false, error: 'Missing tab ID' });
+    return;
+  }
+
+  try {
+    await chrome.tabs.update(msg.tabId, { active: true });
+    
+    // Get updated tab info
+    const tab = await chrome.tabs.get(msg.tabId);
+    sendResponse(sender, { 
+      success: true,
+      tabId: tab.id,
+      url: tab.url,
+      title: tab.title,
+    });
+  } catch (error) {
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to switch tab' 
+    });
+  }
+}
+
+/**
+ * Handle tab open action
+ */
+async function handleTabOpen(
+  sender: chrome.runtime.MessageSender,
+  msg: any
+) {
+  try {
+    const createProperties: chrome.tabs.CreateProperties = {
+      url: msg.url || 'about:newtab',
+      active: msg.active ?? true,
+      windowId: msg.windowId,
+    };
+
+    const tab = await chrome.tabs.create(createProperties);
+    
+    sendResponse(sender, {
+      success: true,
+      tabId: tab.id,
+      url: tab.url,
+      title: tab.title,
+    });
+  } catch (error) {
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to open tab' 
+    });
+  }
+}
+
+/**
+ * Handle tab close action
+ */
+async function handleTabClose(
+  sender: chrome.runtime.MessageSender,
+  msg: any
+) {
+  if (!msg.tabId) {
+    sendResponse(sender, { success: false, error: 'Missing tab ID' });
+    return;
+  }
+
+  try {
+    await chrome.tabs.remove(msg.tabId);
+    sendResponse(sender, { success: true });
+  } catch (error) {
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to close tab' 
+    });
+  }
+}
+
+/**
+ * Handle focus action
+ */
+async function handleFocus(
+  sender: chrome.runtime.MessageSender,
+  msg: any
+) {
+  if (!sender.tab?.id || !msg.selector) {
+    sendResponse(sender, { success: false, error: 'Missing tab ID or selector' });
+    return;
+  }
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: sender.tab.id },
+      func: (selector: string) => {
+        const element = document.querySelector(selector);
+        if (!element) {
+          throw new Error(`Element not found: ${selector}`);
+        }
+        
+        if (element instanceof HTMLElement) {
+          element.focus();
+        } else {
+          throw new Error('Element cannot receive focus');
+        }
+      },
+      args: [msg.selector],
+    });
+
+    sendResponse(sender, { success: true });
+  } catch (error) {
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Focus failed' 
+    });
+  }
+}
+
+/**
+ * Handle clear action
+ */
+async function handleClear(
+  sender: chrome.runtime.MessageSender,
+  msg: any
+) {
+  if (!sender.tab?.id || !msg.selector) {
+    sendResponse(sender, { success: false, error: 'Missing tab ID or selector' });
+    return;
+  }
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: sender.tab.id },
+      func: (selector: string) => {
+        const element = document.querySelector(selector) as HTMLInputElement | HTMLTextAreaElement;
+        if (!element) {
+          throw new Error(`Element not found: ${selector}`);
+        }
+
+        if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+          element.value = '';
+          element.dispatchEvent(new Event('input', { bubbles: true }));
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+        } else {
+          throw new Error('Element is not a clearable input field');
+        }
+      },
+      args: [msg.selector],
+    });
+
+    sendResponse(sender, { success: true });
+  } catch (error) {
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Clear failed' 
+    });
+  }
+}
+
+/**
+ * Handle select action
+ */
+async function handleSelect(
+  sender: chrome.runtime.MessageSender,
+  msg: any
+) {
+  if (!sender.tab?.id || !msg.selector || typeof msg.value !== 'string') {
+    sendResponse(sender, { success: false, error: 'Missing required parameters' });
+    return;
+  }
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: sender.tab.id },
+      func: (selector: string, value: string) => {
+        const element = document.querySelector(selector) as HTMLSelectElement;
+        if (!element) {
+          throw new Error(`Element not found: ${selector}`);
+        }
+
+        if (element instanceof HTMLSelectElement) {
+          element.value = value;
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+        } else {
+          throw new Error('Element is not a select element');
+        }
+      },
+      args: [msg.selector, msg.value],
+    });
+
+    sendResponse(sender, { success: true });
+  } catch (error) {
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Select failed' 
+    });
+  }
+}
+
+/**
+ * Handle toggle action
+ */
+async function handleToggle(
+  sender: chrome.runtime.MessageSender,
+  msg: any
+) {
+  if (!sender.tab?.id || !msg.selector) {
+    sendResponse(sender, { success: false, error: 'Missing tab ID or selector' });
+    return;
+  }
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: sender.tab.id },
+      func: (selector: string) => {
+        const element = document.querySelector(selector) as HTMLInputElement;
+        if (!element) {
+          throw new Error(`Element not found: ${selector}`);
+        }
+
+        if (element instanceof HTMLInputElement && 
+            (element.type === 'checkbox' || element.type === 'radio')) {
+          element.checked = !element.checked;
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+        } else {
+          throw new Error('Element is not a toggleable input (checkbox/radio)');
+        }
+      },
+      args: [msg.selector],
+    });
+
+    sendResponse(sender, { success: true });
+  } catch (error) {
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Toggle failed' 
+    });
+  }
+}
+
+/**
+ * Handle keypress action
+ */
+async function handleKeypress(
+  sender: chrome.runtime.MessageSender,
+  msg: any
+) {
+  if (!sender.tab?.id || !msg.key || typeof msg.key !== 'string') {
+    sendResponse(sender, { success: false, error: 'Missing tab ID or key' });
+    return;
+  }
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: sender.tab.id },
+      func: (key: string) => {
+        // Create and dispatch keyboard event
+        const event = new KeyboardEvent('keydown', {
+          key: key,
+          code: key,
+          bubbles: true,
+        });
+        document.dispatchEvent(event);
+      },
+      args: [msg.key],
+    });
+
+    sendResponse(sender, { success: true });
+  } catch (error) {
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Keypress failed' 
+    });
+  }
+}
+
+/**
+ * Handle scroll action
+ */
+async function handleScroll(
+  sender: chrome.runtime.MessageSender,
+  msg: any
+) {
+  if (!sender.tab?.id || typeof msg.x !== 'number' || typeof msg.y !== 'number') {
+    sendResponse(sender, { success: false, error: 'Missing tab ID or scroll coordinates' });
+    return;
+  }
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: sender.tab.id },
+      func: (x: number, y: number) => {
+        window.scrollTo(x, y);
+      },
+      args: [msg.x, msg.y],
+    });
+
+    sendResponse(sender, { success: true });
+  } catch (error) {
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Scroll failed' 
+    });
+  }
+}
+
+/**
+ * Handle wait action
+ */
+async function handleWait(
+  sender: chrome.runtime.MessageSender,
+  msg: any
+) {
+  if (typeof msg.duration !== 'number') {
+    sendResponse(sender, { success: false, error: 'Missing duration' });
+    return;
+  }
+
+  // Wait for the specified duration
+  await new Promise(resolve => setTimeout(resolve, msg.duration));
+
+  sendResponse(sender, { 
+    success: true,
+    waitedFor: msg.duration,
+  });
+}
+
+/**
+ * Handle submit action
+ */
+async function handleSubmit(
+  sender: chrome.runtime.MessageSender,
+  msg: any
+) {
+  if (!sender.tab?.id || !msg.selector) {
+    sendResponse(sender, { success: false, error: 'Missing tab ID or selector' });
+    return;
+  }
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId: sender.tab.id },
+      func: (selector: string) => {
+        const element = document.querySelector(selector);
+        if (!element) {
+          throw new Error(`Element not found: ${selector}`);
+        }
+
+        const form = element instanceof HTMLElement ? element.closest('form') : null;
+        if (!form) {
+          throw new Error('Element is not inside a form');
+        }
+
+        form.submit();
+      },
+      args: [msg.selector],
+    });
+
+    sendResponse(sender, { success: true });
+  } catch (error) {
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Submit failed' 
     });
   }
 }
