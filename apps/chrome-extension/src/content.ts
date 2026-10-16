@@ -1,10 +1,32 @@
 //! Hexactra Chrome extension - Content script for DOM observation
 
 /**
+ * Type definitions for semantic snapshot data
+ */
+export interface ElementInfo {
+  tagName: string;
+  id?: string;
+  className?: string;
+  role?: string;
+  text?: string;
+  accessibleName?: string;
+  visible: boolean;
+  position?: { x: number; y: number };
+  attributes: Record<string, string>;
+  childrenCount: number;
+}
+
+export interface DocumentSnapshot {
+  url: string;
+  title: string;
+  elements: ElementInfo[];
+}
+
+/**
  * Get accessible DOM elements with semantic information
  */
-export function getSemanticSnapshot(): any {
-  function getElementInfo(element: Element): any | null {
+export function getSemanticSnapshot(): DocumentSnapshot {
+  function getElementInfo(element: Element): ElementInfo | null {
     // Skip non-interactable elements
     if (element instanceof HTMLElement) {
       const rect = element.getBoundingClientRect();
@@ -23,14 +45,14 @@ export function getSemanticSnapshot(): any {
       tagName,
       id: element.id || undefined,
       className: element.className || undefined,
-      role,
+      role: role ?? undefined,
       text: element.textContent?.trim().substring(0, 100) || undefined,
       accessibleName: element.getAttribute('aria-label') || 
                       element.getAttribute('title') || 
                       getAccessibleName(element) || 
                       undefined,
       visible: isElementVisible(element),
-      position: getElementPosition(element),
+      position: getElementPosition(element) ?? undefined,
       attributes: getRelevantAttributes(element),
       childrenCount: element.children.length,
     };
@@ -170,7 +192,7 @@ export function getSemanticSnapshot(): any {
   }
 
   // Get document-level information
-  const documentInfo: any = {
+  const documentInfo: DocumentSnapshot = {
     url: window.location.href,
     title: document.title,
     elements: [],
@@ -182,6 +204,9 @@ export function getSemanticSnapshot(): any {
   
   for (const element of allElements) {
     if (count >= 500) break; // Limit elements
+    
+    // Skip password fields
+    if (isPasswordField(element)) continue;
 
     const info = getElementInfo(element);
     if (info) {
@@ -195,11 +220,21 @@ export function getSemanticSnapshot(): any {
 
 /**
  * Get stable selectors for elements
+ * 
+ * Stable selectors:
+ * - ID selector if available and unique
+ * - Class-based selector with tag name
+ * - nth-child fallback for uniqueness
  */
 export function getStableSelector(element: Element): string | null {
-  // Try ID first
+  // Try ID first (most stable when unique)
   if (element.id) {
-    return `#${CSS.escape(element.id)}`;
+    const idSelector = `#${CSS.escape(element.id)}`;
+    // Verify ID is unique in document
+    const matches = document.querySelectorAll(idSelector);
+    if (matches.length === 1 && matches[0] === element) {
+      return idSelector;
+    }
   }
 
   // Build selector from tag and classes
@@ -209,6 +244,7 @@ export function getStableSelector(element: Element): string | null {
   if (className && typeof className === 'string') {
     const classes = className.trim().split(/\s+/).filter(c => c.length > 0);
     if (classes.length > 0) {
+      // Use first two classes for specificity
       parts.push(`.${classes.slice(0, 2).map(c => CSS.escape(c)).join('.')}`);
     }
   }
@@ -226,6 +262,16 @@ export function getStableSelector(element: Element): string | null {
   }
 
   return parts.join(' > ');
+}
+
+/**
+ * Check if element is a password field (excluded from snapshots)
+ */
+export function isPasswordField(element: Element): boolean {
+  if (element instanceof HTMLInputElement) {
+    return element.type.toLowerCase() === 'password';
+  }
+  return false;
 }
 
 /**
@@ -278,8 +324,55 @@ export function interactWithElement(element: Element, action: 'click' | 'focus' 
   }
 }
 
+/**
+ * Detect and report inaccessible frames
+ */
+export function detectInaccessibleFrames(): FrameInfo[] {
+  const frames = Array.from(document.querySelectorAll('iframe, frame'));
+  const frameInfos: FrameInfo[] = [];
+
+  for (const frame of frames) {
+    let accessible = true;
+    let reason: string | null = null;
+
+    try {
+      // Try to access the iframe's contentDocument
+      // This will throw if cross-origin
+      const contentDoc = frame instanceof HTMLIFrameElement 
+        ? frame.contentDocument 
+        : (frame as HTMLFrameElement).contentDocument;
+
+      if (!contentDoc) {
+        accessible = false;
+        reason = 'No content document available';
+      }
+    } catch (error) {
+      accessible = false;
+      reason = 'Cross-origin restriction';
+    }
+
+    frameInfos.push({
+      src: frame.getAttribute('src') || frame.getAttribute('name') || 'unnamed',
+      accessible,
+      reason,
+    });
+  }
+
+  return frameInfos;
+}
+
+/**
+ * Type definitions
+ */
+export interface FrameInfo {
+  src: string;
+  accessible: boolean;
+  reason?: string | null;
+}
+
 // Expose functions to window for background script access
 (window as any).getSemanticSnapshot = getSemanticSnapshot;
 (window as any).getStableSelector = getStableSelector;
 (window as any).isInteractable = isInteractable;
 (window as any).interactWithElement = interactWithElement;
+(window as any).detectInaccessibleFrames = detectInaccessibleFrames;
