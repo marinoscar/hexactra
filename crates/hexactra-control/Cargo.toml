@@ -23,6 +23,9 @@ schemars.workspace = true
 chrono.workspace = true
 sqlx.workspace = true
 clap.workspace = true
+jsonwebtoken = "9.3"
+sha2 = "0.10"
+hex = "0.4"
 
 hexactra-core = { path = "../hexactra-core" }
 hexactra-telemetry = { path = "../hexactra-telemetry" }
