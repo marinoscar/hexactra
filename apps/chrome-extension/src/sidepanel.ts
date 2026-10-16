@@ -1,10 +1,11 @@
 //! Hexactra Chrome extension - Side panel logic
 
+import { loadProviders, addProvider, setCurrentProvider, testProviderConnection, removeProvider } from './provider';
+
 // DOM state
 let currentTabId: number | null = null;
 let currentUrl: string | null = null;
-
-// Configuration state (reserved for future provider configuration)
+let providerState: any = {};
 
 /**
  * Initialize the side panel
@@ -24,7 +25,10 @@ export async function init() {
 /**
  * Set up UI elements
  */
-function setupUI() {
+async function setupUI() {
+  // Load provider state
+  providerState = await loadProviders();
+
   const initializeBtn = document.getElementById('initialize-btn');
   const observeBtn = document.getElementById('observe-btn');
   const screenshotBtn = document.getElementById('screenshot-btn');
@@ -39,6 +43,31 @@ function setupUI() {
 
   if (screenshotBtn) {
     screenshotBtn.addEventListener('click', handleScreenshot);
+  }
+
+  // Provider configuration
+  const providerSelect = document.getElementById('provider-select');
+  const testConnectionBtn = document.getElementById('test-connection-btn');
+
+  if (providerSelect) {
+    providerSelect.addEventListener('change', handleProviderChange);
+    populateProviderDropdown();
+  }
+
+  if (testConnectionBtn) {
+    testConnectionBtn.addEventListener('click', handleTestConnection);
+  }
+
+  // Provider management buttons
+  const addProviderBtn = document.getElementById('add-provider-btn');
+  const removeProviderBtn = document.getElementById('remove-provider-btn');
+
+  if (addProviderBtn) {
+    addProviderBtn.addEventListener('click', handleAddProvider);
+  }
+
+  if (removeProviderBtn) {
+    removeProviderBtn.addEventListener('click', handleRemoveProvider);
   }
 }
 
@@ -191,6 +220,150 @@ async function handleScreenshot() {
       }
     }
   });
+}
+
+// Provider configuration handlers
+
+/**
+ * Populate provider dropdown with saved providers
+ */
+async function populateProviderDropdown() {
+  const select = document.getElementById('provider-select') as HTMLSelectElement;
+  if (!select) return;
+
+  // Clear existing options except the disabled one
+  while (select.options.length > 1) {
+    select.remove(1);
+  }
+
+  for (const [id, provider] of Object.entries(providerState.providers)) {
+    const option = document.createElement('option');
+    option.value = id;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = provider as any;
+    option.textContent = p.name;
+    select.appendChild(option);
+  }
+}
+
+/**
+ * Handle provider selection change
+ */
+async function handleProviderChange(event: Event) {
+  const select = event.target as HTMLSelectElement;
+  const id = select.value;
+
+  if (id) {
+    await setCurrentProvider(providerState, id);
+    const statusDiv = document.getElementById('status');
+    if (statusDiv) statusDiv.textContent = `Selected: ${providerState.providers[id]?.name}`;
+  }
+}
+
+/**
+ * Handle test connection button click
+ */
+async function handleTestConnection() {
+  const urlInput = document.getElementById('provider-url') as HTMLInputElement;
+  const modelInput = document.getElementById('provider-model') as HTMLInputElement;
+  const keyInput = document.getElementById('provider-key') as HTMLInputElement;
+
+  if (!urlInput?.value || !modelInput?.value) {
+    alert('Please provide URL and model ID');
+    return;
+  }
+
+  const config = {
+    baseUrl: urlInput.value,
+    modelId: modelInput.value,
+    apiKey: keyInput?.value,
+  };
+
+  const statusDiv = document.getElementById('status');
+  if (statusDiv) statusDiv.textContent = 'Testing connection...';
+
+  const result = await testProviderConnection(config);
+
+  if (statusDiv) {
+    statusDiv.textContent = result.message || (result.success ? 'Success' : 'Failed');
+    statusDiv.className = result.success ? 'status' : 'status error';
+  }
+}
+
+/**
+ * Handle add provider button click
+ */
+async function handleAddProvider() {
+  const nameInput = document.getElementById('provider-name') as HTMLInputElement;
+  const urlInput = document.getElementById('provider-url') as HTMLInputElement;
+  const modelInput = document.getElementById('provider-model') as HTMLInputElement;
+  const keyInput = document.getElementById('provider-key') as HTMLInputElement;
+
+  if (!nameInput?.value || !urlInput?.value || !modelInput?.value) {
+    alert('Please fill in all required fields');
+    return;
+  }
+
+  try {
+    const provider = await addProvider(providerState, {
+      name: nameInput.value,
+      baseUrl: urlInput.value,
+      modelId: modelInput.value,
+      apiKey: keyInput?.value,
+    });
+
+    providerState.providers[provider.id] = provider;
+    populateProviderDropdown();
+
+    // Clear inputs
+    nameInput.value = '';
+    urlInput.value = '';
+    modelInput.value = '';
+    keyInput.value = '';
+
+    const statusDiv = document.getElementById('status');
+    if (statusDiv) {
+      statusDiv.textContent = `Provider added: ${provider.name}`;
+      statusDiv.className = 'status';
+    }
+  } catch (error) {
+    const statusDiv = document.getElementById('status');
+    if (statusDiv) {
+      statusDiv.textContent = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      statusDiv.className = 'status error';
+    }
+  }
+}
+
+/**
+ * Handle remove provider button click
+ */
+async function handleRemoveProvider() {
+  const select = document.getElementById('provider-select') as HTMLSelectElement;
+  const id = select.value;
+
+  if (!id) {
+    alert('Please select a provider to remove');
+    return;
+  }
+
+  try {
+    await removeProvider(providerState, id);
+    delete providerState.providers[id];
+    populateProviderDropdown();
+
+    const statusDiv = document.getElementById('status');
+    if (statusDiv) {
+      statusDiv.textContent = `Provider removed: ${id}`;
+      statusDiv.className = 'status';
+    }
+  } catch (error) {
+    const statusDiv = document.getElementById('status');
+    if (statusDiv) {
+      statusDiv.textContent = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      statusDiv.className = 'status error';
+    }
+  }
 }
 
 // Initialize when side panel loads
