@@ -7,7 +7,6 @@
 //! - Operation, Lease for resource management
 //! - InteractionRequest for HITL (Human-in-the-Loop) workflow
 
-use anyhow::Error;
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -162,7 +161,7 @@ impl Default for ArtifactId {
 }
 
 /// Status of a goal execution
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RunStatus {
     /// Goal is queued and waiting for execution
@@ -180,7 +179,7 @@ pub enum RunStatus {
 }
 
 /// Result of a browser action
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ActionResult {
     pub success: bool,
     pub error: Option<String>,
@@ -188,7 +187,7 @@ pub struct ActionResult {
 }
 
 /// Browser action to execute
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "type", content = "payload")]
 pub enum BrowserAction {
     /// Navigate to a URL
@@ -234,7 +233,7 @@ pub struct Session {
 }
 
 /// Status of a session
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionStatus {
     /// Session is initializing
@@ -269,7 +268,7 @@ pub struct Operation {
 }
 
 /// Status of an operation
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum OperationStatus {
     /// Operation is queued
@@ -305,7 +304,7 @@ pub struct InteractionRequest {
 }
 
 /// Status of an interaction request
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum InteractionStatus {
     /// Request is pending human review
