@@ -1,0 +1,859 @@
+openapi: 3.0.3
+info:
+  title: Hexactra API
+  description: |
+    Hexactra is a portable, self-hostable computer-use runtime letting authorized AI agents
+    operate real graphical browsers through an HTTP API, TypeScript SDK, CLI and MCP.
+    
+    ## Authentication
+    
+    All endpoints (except `/health`) require authentication via Bearer token in the
+    `Authorization` header. Tokens are issued by the identity provider and include
+    scopes for granular access control.
+    
+    ## Error Handling
+    
+    Errors return JSON with structure:
+    ```json
+    {
+      "error": {
+        "code": "INVALID_INPUT",
+        "message": "Human-readable error message",
+        "details": {}
+      }
+    }
+    ```
+    
+    ## Idempotency
+    
+    Mutating requests support the `Idempotency-Key` header. Repeated requests with the
+    same key return the original response without re-executing the operation.
+  version: "1.0.0"
+  contact:
+    name: Hexactra Project
+    url: https://github.com/marinoscar/hexactra
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  
+  schemas:
+    GoalId:
+      type: string
+      format: uuid
+      description: Unique identifier for a goal
+    
+    SessionId:
+      type: string
+      format: uuid
+      description: Unique identifier for a session
+    
+    OperationId:
+      type: string
+      format: uuid
+      description: Unique identifier for an operation
+    
+    InteractionRequestId:
+      type: string
+      format: uuid
+      description: Unique identifier for an interaction request (HITL)
+    
+    RunStatus:
+      type: string
+      enum:
+        - queued
+        - running
+        - completed
+        - failed
+        - cancelled
+        - timed_out
+      description: Status of a goal execution
+    
+    SessionStatus:
+      type: string
+      enum:
+        - initializing
+        - running
+        - paused
+        - ended
+      description: Status of a session
+    
+    InteractionStatus:
+      type: string
+      enum:
+        - pending
+        - approved
+        - rejected
+      description: Status of an interaction request
+    
+    OperationStatus:
+      type: string
+      enum:
+        - queued
+        - in_progress
+        - completed
+        - failed
+      description: Status of an operation
+    
+    BrowserActionType:
+      type: string
+      enum:
+        - navigate
+        - click
+        - type
+        - get_value
+        - screenshot
+        - execute_script
+        - wait_for_element
+        - back
+        - forward
+        - refresh
+      description: Type of browser action
+    
+    BrowserAction:
+      oneOf:
+        - $ref: '#/components/schemas/NavigateAction'
+        - $ref: '#/components/schemas/ClickAction'
+        - $ref: '#/components/schemas/TypeAction'
+        - $ref: '#/components/schemas/GetValueAction'
+        - $ref: '#/components/schemas/ScreenshotAction'
+        - $ref: '#/components/schemas/ExecuteScriptAction'
+        - $ref: '#/components/schemas/WaitForElementAction'
+        - $ref: '#/components/schemas/BackAction'
+        - $ref: '#/components/schemas/ForwardAction'
+        - $ref: '#/components/schemas/RefreshAction'
+      discriminator:
+        propertyName: type
+        mapping:
+          navigate: '#/components/schemas/NavigateAction'
+          click: '#/components/schemas/ClickAction'
+          type: '#/components/schemas/TypeAction'
+          get_value: '#/components/schemas/GetValueAction'
+          screenshot: '#/components/schemas/ScreenshotAction'
+          execute_script: '#/components/schemas/ExecuteScriptAction'
+          wait_for_element: '#/components/schemas/WaitForElementAction'
+          back: '#/components/schemas/BackAction'
+          forward: '#/components/schemas/ForwardAction'
+          refresh: '#/components/schemas/RefreshAction'
+    
+    NavigateAction:
+      type: object
+      required:
+        - type
+        - url
+      properties:
+        type:
+          type: string
+          enum: [navigate]
+        url:
+          type: string
+          format: uri
+    
+    ClickAction:
+      type: object
+      required:
+        - type
+        - selector
+      properties:
+        type:
+          type: string
+          enum: [click]
+        selector:
+          type: string
+    
+    TypeAction:
+      type: object
+      required:
+        - type
+        - selector
+        - text
+      properties:
+        type:
+          type: string
+          enum: [type]
+        selector:
+          type: string
+        text:
+          type: string
+    
+    GetValueAction:
+      type: object
+      required:
+        - type
+        - selector
+      properties:
+        type:
+          type: string
+          enum: [get_value]
+        selector:
+          type: string
+    
+    ScreenshotAction:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [screenshot]
+    
+    ExecuteScriptAction:
+      type: object
+      required:
+        - type
+        - script
+      properties:
+        type:
+          type: string
+          enum: [execute_script]
+        script:
+          type: string
+    
+    WaitForElementAction:
+      type: object
+      required:
+        - type
+        - selector
+        - timeout_ms
+      properties:
+        type:
+          type: string
+          enum: [wait_for_element]
+        selector:
+          type: string
+        timeout_ms:
+          type: integer
+          minimum: 0
+    
+    BackAction:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [back]
+    
+    ForwardAction:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [forward]
+    
+    RefreshAction:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [refresh]
+    
+    ActionResult:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+        error:
+          type: string
+          nullable: true
+        data:
+          type: object
+          nullable: true
+    
+    Goal:
+      type: object
+      required:
+        - id
+        - session_id
+        - actions
+        - created_at
+        - status
+      properties:
+        id:
+          $ref: '#/components/schemas/GoalId'
+        session_id:
+          $ref: '#/components/schemas/SessionId'
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrowserAction'
+        created_at:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/RunStatus'
+    
+    Session:
+      type: object
+      required:
+        - id
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          $ref: '#/components/schemas/SessionId'
+        profile_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/SessionStatus'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    
+    Operation:
+      type: object
+      required:
+        - id
+        - goal_id
+        - status
+        - created_at
+      properties:
+        id:
+          $ref: '#/components/schemas/OperationId'
+        goal_id:
+          $ref: '#/components/schemas/GoalId'
+        status:
+          $ref: '#/components/schemas/OperationStatus'
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+    
+    InteractionRequest:
+      type: object
+      required:
+        - id
+        - session_id
+        - reason
+        - created_at
+        - status
+      properties:
+        id:
+          $ref: '#/components/schemas/InteractionRequestId'
+        session_id:
+          $ref: '#/components/schemas/SessionId'
+        reason:
+          type: string
+        details:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/InteractionStatus'
+    
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Error code (e.g., INVALID_INPUT, NOT_FOUND)
+        message:
+          type: string
+          description: Human-readable error message
+        details:
+          type: object
+          nullable: true
+          description: Additional error details
+    
+    ListSessionsResponse:
+      type: object
+      required:
+        - sessions
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Session'
+    
+    CreateGoalRequest:
+      type: object
+      required:
+        - session_id
+        - actions
+      properties:
+        session_id:
+          $ref: '#/components/schemas/SessionId'
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrowserAction'
+    
+    CreateGoalResponse:
+      type: object
+      required:
+        - goal
+      properties:
+        goal:
+          $ref: '#/components/schemas/Goal'
+    
+    ListGoalsResponse:
+      type: object
+      required:
+        - goals
+      properties:
+        goals:
+          type: array
+          items:
+            $ref: '#/components/schemas/Goal'
+    
+    GetGoalResponse:
+      type: object
+      required:
+        - goal
+      properties:
+        goal:
+          $ref: '#/components/schemas/Goal'
+    
+    ListOperationsResponse:
+      type: object
+      required:
+        - operations
+      properties:
+        operations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Operation'
+    
+    GetOperationResponse:
+      type: object
+      required:
+        - operation
+      properties:
+        operation:
+          $ref: '#/components/schemas/Operation'
+    
+    ListInteractionRequestsResponse:
+      type: object
+      required:
+        - requests
+      properties:
+        requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/InteractionRequest'
+    
+    CreateInteractionRequestResponse:
+      type: object
+      required:
+        - request
+      properties:
+        request:
+          $ref: '#/components/schemas/InteractionRequest'
+    
+    ApproveInteractionRequestResponse:
+      type: object
+      required:
+        - request
+      properties:
+        request:
+          $ref: '#/components/schemas/InteractionRequest'
+    
+    RejectInteractionRequestResponse:
+      type: object
+      required:
+        - request
+      properties:
+        request:
+          $ref: '#/components/schemas/InteractionRequest'
+
+security:
+  - bearer: []
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: health
+      tags:
+        - system
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: OK
+
+  /sessions:
+    get:
+      summary: List sessions
+      operationId: listSessions
+      tags:
+        - sessions
+      security:
+        - bearer: [sessions:read]
+      responses:
+        '200':
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListSessionsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /goals:
+    post:
+      summary: Create a new goal (task)
+      operationId: createGoal
+      tags:
+        - goals
+      security:
+        - bearer: [goals:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGoalRequest'
+      responses:
+        '201':
+          description: Goal created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateGoalResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      summary: List goals
+      operationId: listGoals
+      tags:
+        - goals
+      security:
+        - bearer: [goals:read]
+      responses:
+        '200':
+          description: List of goals
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListGoalsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /goals/{goalId}:
+    get:
+      summary: Get a specific goal
+      operationId: getGoal
+      tags:
+        - goals
+      security:
+        - bearer: [goals:read]
+      parameters:
+        - name: goalId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/GoalId'
+      responses:
+        '200':
+          description: Goal details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetGoalResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Goal not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /operations:
+    get:
+      summary: List operations
+      operationId: listOperations
+      tags:
+        - operations
+      security:
+        - bearer: [operations:read]
+      responses:
+        '200':
+          description: List of operations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListOperationsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /operations/{operationId}:
+    get:
+      summary: Get a specific operation
+      operationId: getOperation
+      tags:
+        - operations
+      security:
+        - bearer: [operations:read]
+      parameters:
+        - name: operationId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/OperationId'
+      responses:
+        '200':
+          description: Operation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetOperationResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Operation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /interaction-requests:
+    post:
+      summary: Create an interaction request (HITL)
+      operationId: createInteractionRequest
+      tags:
+        - interaction
+      security:
+        - bearer: [interaction:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - session_id
+                - reason
+              properties:
+                session_id:
+                  $ref: '#/components/schemas/SessionId'
+                reason:
+                  type: string
+                details:
+                  type: object
+      responses:
+        '201':
+          description: Interaction request created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateInteractionRequestResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      summary: List interaction requests
+      operationId: listInteractionRequests
+      tags:
+        - interaction
+      security:
+        - bearer: [interaction:read]
+      responses:
+        '200':
+          description: List of interaction requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListInteractionRequestsResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /interaction-requests/{requestId}/approve:
+    post:
+      summary: Approve an interaction request
+      operationId: approveInteractionRequest
+      tags:
+        - interaction
+      security:
+        - bearer: [interaction:write]
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/InteractionRequestId'
+      responses:
+        '200':
+          description: Interaction request approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApproveInteractionRequestResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemasError'
+        '404':
+          description: Interaction request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /interaction-requests/{requestId}/reject:
+    post:
+      summary: Reject an interaction request
+      operationId: rejectInteractionRequest
+      tags:
+        - interaction
+      security:
+        - bearer: [interaction:write]
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/InteractionRequestId'
+      responses:
+        '200':
+          description: Interaction request rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RejectInteractionRequestResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemasError'
+        '404':
+          description: Interaction request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
