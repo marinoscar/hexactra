@@ -7,6 +7,8 @@
 //! - Operation, Lease for resource management
 //! - InteractionRequest for HITL (Human-in-the-Loop) workflow
 
+pub mod profile;
+
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
