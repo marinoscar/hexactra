@@ -1,0 +1,32 @@
+[Unit]
+Description=Hexactra Host Agent Service
+Documentation=https://github.com/marinoscar/hexactra
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=hexactra-agent
+Group=hexactra-agent
+ExecStart=/usr/bin/hexactra-agent daemon
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/run/hexactra
+ReadWritePaths=/var/log
+ReadWritePaths=/var/lib/hexactra
+ReadOnlyPaths=/usr/share/hexactra
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hexactra-agent
+
+[Install]
+WantedBy=multi-user.target

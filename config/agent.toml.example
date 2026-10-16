@@ -1,0 +1,33 @@
+# Hexactra Host Agent Configuration
+# This file should be placed at /etc/hexactra/agent.toml
+
+[agent]
+# Path to the control Unix socket
+control_socket_path = "/run/hexactra/agent.sock"
+
+# Path to Chrome profile directory (optional)
+chrome_profile_path = "/var/lib/hexactra/chrome-profiles/default"
+
+# Service account for least privilege (UID/GID)
+service_uid = 977
+service_gid = 977
+
+# Health check endpoint
+health_endpoint_path = "/health"
+
+[logging]
+# Log level: trace, debug, info, warn, error
+level = "info"
+
+# Log format: text or json
+format = "text"
+
+[security]
+# Require authentication for control socket connections
+require_auth = true
+
+# Allowed operator groups (GIDs)
+allowed_groups = [977]
+
+# Socket file permissions (octal)
+socket_permissions = "0660"
