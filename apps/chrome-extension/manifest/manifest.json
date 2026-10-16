@@ -2,27 +2,38 @@
   "manifest_version": 3,
   "name": "Hexactra AI",
   "version": "0.1.0",
-  "description": "AI-powered browser automation assistant",
+  "description": "AI-powered browser automation assistant - Standalone Chrome driver and browser automation",
   "permissions": [
     "sidePanel",
     "scripting",
-    "activeTab"
+    "activeTab",
+    "tabs",
+    "storage"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "side_panel": {
     "default_path": "sidepanel.html"
   },
+  "action": {
+    "default_title": "Hexactra AI",
+    "default_popup": "sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
   "icons": {
     "16": "icons/icon-16.png",
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
-  },
-  "action": {
-    "default_title": "Hexactra AI"
   }
 }
