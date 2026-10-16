@@ -4,6 +4,8 @@
 //! independent of login/display session, with structured config, health endpoint,
 //! private Unix socket, graceful shutdown, and least-privilege service account.
 
+pub mod chrome;
+
 use anyhow::Result;
 use std::path::Path;
 use tokio::net::UnixListener;
