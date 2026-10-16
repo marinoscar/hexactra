@@ -48,18 +48,15 @@ try {
   process.exit(1);
 }
 
-// Copy compiled files from dist to root dist directory
-const distTsDir = path.join(__dirname, 'dist', 'src');
-if (fs.existsSync(distTsDir)) {
-  const files = fs.readdirSync(distTsDir);
-  for (const file of files) {
-    if (file.endsWith('.js')) {
-      fs.copyFileSync(
-        path.join(distTsDir, file),
-        path.join(distDir, file)
-      );
-      console.log(`Copied ${file}`);
-    }
+// Copy compiled files from src to root dist directory
+const files = fs.readdirSync(srcDir);
+for (const file of files) {
+  if (file.endsWith('.js')) {
+    fs.copyFileSync(
+      path.join(srcDir, file),
+      path.join(distDir, file)
+    );
+    console.log(`Copied ${file}`);
   }
 }
 
