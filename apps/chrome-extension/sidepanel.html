@@ -98,6 +98,15 @@
       background-color: #d0d0d0;
     }
 
+    .btn-danger {
+      background-color: #ef5350;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background-color: #e53935;
+    }
+
     .observation-section {
       margin-top: 24px;
     }
@@ -171,6 +180,23 @@
       font-size: 12px;
       padding: 20px;
     }
+
+    textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+    }
   </style>
 </head>
 <body>
@@ -185,6 +211,32 @@
     <button id="initialize-btn" class="btn-primary">Initialize Tab</button>
     <button id="observe-btn" class="btn-secondary">Observe DOM</button>
     <button id="screenshot-btn" class="btn-secondary">Take Screenshot</button>
+  </div>
+
+  <!-- Task Controls -->
+  <div class="provider-section">
+    <div class="section-title">Task Controls</div>
+    
+    <div class="control-group">
+      <label for="task-goal" class="control-label">Task Goal</label>
+      <textarea id="task-goal" rows="3" placeholder="Describe what you want the browser to do..."></textarea>
+    </div>
+
+    <div class="button-group">
+      <button id="start-task-btn" class="btn-primary">Start Task</button>
+      <button id="pause-task-btn" class="btn-secondary" disabled>Pause</button>
+      <button id="resume-task-btn" class="btn-secondary" disabled>Resume</button>
+      <button id="stop-task-btn" class="btn-danger" disabled>Stop</button>
+    </div>
+
+    <div id="task-status" class="status">No active task</div>
+
+    <div class="control-group">
+      <label class="control-label">Task History</label>
+      <div id="task-history" class="elements-list" style="max-height: 150px;">
+        <div class="empty-state">No task history yet</div>
+      </div>
+    </div>
   </div>
 
   <div class="observation-section">

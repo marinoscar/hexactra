@@ -3,6 +3,15 @@
 // Extension state
 let initialized = false;
 
+// Import checkpoint module
+import { 
+  loadCurrentTask, 
+  saveCurrentTask, 
+  recoverTask,
+  createCheckpoint,
+  updateCheckpoint,
+} from './checkpoint.js';
+
 /**
  * Initialize the extension background worker
  */
@@ -19,10 +28,16 @@ export async function init() {
   // Listen for messages from side panel
   chrome.runtime.onMessage.addListener(handleMessage);
 
+  // Handle service worker lifecycle events
+  handleLifecycleEvents();
+
   // Open the side panel when installed/updated
   chrome.action.onClicked.addListener(() => {
     chrome.sidePanel.open({ windowId: chrome.windows.WINDOW_ID_CURRENT });
   });
+
+  // Check for recovered task on startup
+  checkForRecoveredTask();
 }
 
 /**
@@ -47,7 +62,11 @@ type MessageType =
   | 'KEYPRESS'
   | 'SCROLL'
   | 'WAIT'
-  | 'SUBMIT';
+  | 'SUBMIT'
+  | 'START_TASK'
+  | 'PAUSE_TASK'
+  | 'RESUME_TASK'
+  | 'STOP_TASK';
 
 /**
  * Handle messages from side panel or content scripts
@@ -100,6 +119,14 @@ function handleMessage(
       return handleWait(sender, msg);
     case 'SUBMIT':
       return handleSubmit(sender, msg);
+    case 'START_TASK':
+      return handleStartTask(sender, msg);
+    case 'PAUSE_TASK':
+      return handlePauseTask(sender, msg);
+    case 'RESUME_TASK':
+      return handleResumeTask(sender, msg);
+    case 'STOP_TASK':
+      return handleStopTask(sender, msg);
     default:
       console.warn('Unknown message type:', msg.type);
       sendResponse(sender, { success: false, error: `Unknown action: ${msg.type}` });
@@ -827,6 +854,249 @@ async function getCapabilities(): Promise<CapabilityInfo> {
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Hexactra extension installed');
 });
+
+/**
+ * Handle service worker lifecycle events (suspend, resume, restart)
+ */
+function handleLifecycleEvents() {
+  // Handle service worker being suspended by Chrome
+  chrome.runtime.onSuspend.addListener(() => {
+    console.log('Service worker suspended - saving state');
+    saveWorkerState();
+  });
+
+  // Handle service worker being resumed after suspension
+  chrome.runtime.onSuspendClosed.addListener(() => {
+    console.log('Service worker suspended and closed');
+  });
+
+  // Handle extension startup (after suspend/resume cycle)
+  chrome.runtime.onStartup.addListener(() => {
+    console.log('Extension started - checking for recovered task');
+    checkForRecoveredTask();
+  });
+}
+
+/**
+ * Save worker state to storage
+ */
+async function saveWorkerState() {
+  try {
+    const currentTask = await loadCurrentTask();
+    if (currentTask) {
+      // Task was running when suspended - mark as paused
+      console.log(`Saving task state: ${currentTask.taskId}`);
+      // State is persisted in checkpoints, just log for debugging
+    }
+  } catch (error) {
+    console.error('Failed to save worker state:', error);
+  }
+}
+
+/**
+ * Check for recovered task on extension startup
+ */
+async function checkForRecoveredTask() {
+  try {
+    const currentTask = await loadCurrentTask();
+    
+    if (currentTask) {
+      // Task was active when service worker was suspended
+      console.log(`Recovered task: ${currentTask.taskId} in state ${currentTask.state}`);
+      
+      // Notify side panel about recovered task
+      chrome.runtime.sendMessage({
+        type: 'TASK_RECOVERED',
+        taskId: currentTask.taskId,
+        goal: currentTask.goal,
+        state: currentTask.state,
+        stepsCompleted: currentTask.stepsCount,
+      });
+    }
+  } catch (error) {
+    console.error('Failed to check for recovered task:', error);
+  }
+}
+
+/**
+ * Handle start task request
+ */
+async function handleStartTask(sender: chrome.runtime.MessageSender, msg: any) {
+  if (!sender.tab?.id) {
+    sendResponse(sender, { success: false, error: 'No tab ID' });
+    return;
+  }
+
+  const goal = msg.goal;
+  if (!goal) {
+    sendResponse(sender, { success: false, error: 'Goal is required' });
+    return;
+  }
+
+  const taskId = Date.now().toString();
+  
+  // Create checkpoint for the new task
+  try {
+    await createCheckpoint(taskId, goal, 'running');
+    
+    // Save current task metadata
+    await saveCurrentTask({
+      taskId,
+      goal,
+      state: 'running',
+      createdAt: Date.now(),
+      lastUpdatedAt: Date.now(),
+      stepsCount: 0,
+    });
+
+    console.log(`Starting task: ${taskId}, goal: ${goal}`);
+
+    // Send confirmation
+    sendResponse(sender, { 
+      success: true, 
+      taskId,
+      message: `Task started: ${goal.substring(0, 50)}...`
+    });
+
+    // Notify side panel
+    chrome.runtime.sendMessage({
+      type: 'TASK_UPDATE',
+      status: 'running',
+      goal,
+    });
+  } catch (error) {
+    console.error('Failed to start task:', error);
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to start task'
+    });
+  }
+}
+
+/**
+ * Handle pause task request
+ */
+async function handlePauseTask(sender: chrome.runtime.MessageSender, msg: any) {
+  const taskId = msg.taskId;
+  if (!taskId) {
+    sendResponse(sender, { success: false, error: 'Task ID is required' });
+    return;
+  }
+
+  try {
+    await updateCheckpoint(taskId, { state: 'paused' });
+    
+    // Update current task metadata
+    const currentTask = await loadCurrentTask();
+    if (currentTask && currentTask.taskId === taskId) {
+      await saveCurrentTask({
+        ...currentTask,
+        state: 'paused',
+        lastUpdatedAt: Date.now(),
+      });
+    }
+
+    console.log(`Pausing task: ${taskId}`);
+
+    sendResponse(sender, { 
+      success: true, 
+      taskId,
+      message: 'Task paused'
+    });
+
+    chrome.runtime.sendMessage({
+      type: 'TASK_UPDATE',
+      status: 'paused',
+    });
+  } catch (error) {
+    console.error('Failed to pause task:', error);
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to pause task'
+    });
+  }
+}
+
+/**
+ * Handle resume task request
+ */
+async function handleResumeTask(sender: chrome.runtime.MessageSender, msg: any) {
+  const taskId = msg.taskId;
+  if (!taskId) {
+    sendResponse(sender, { success: false, error: 'Task ID is required' });
+    return;
+  }
+
+  try {
+    await updateCheckpoint(taskId, { state: 'running' });
+    
+    // Update current task metadata
+    const currentTask = await loadCurrentTask();
+    if (currentTask && currentTask.taskId === taskId) {
+      await saveCurrentTask({
+        ...currentTask,
+        state: 'running',
+        lastUpdatedAt: Date.now(),
+      });
+    }
+
+    console.log(`Resuming task: ${taskId}`);
+
+    sendResponse(sender, { 
+      success: true, 
+      taskId,
+      message: 'Task resumed'
+    });
+
+    chrome.runtime.sendMessage({
+      type: 'TASK_UPDATE',
+      status: 'running',
+    });
+  } catch (error) {
+    console.error('Failed to resume task:', error);
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to resume task'
+    });
+  }
+}
+
+/**
+ * Handle stop task request
+ */
+async function handleStopTask(sender: chrome.runtime.MessageSender, msg: any) {
+  const taskId = msg.taskId;
+  if (!taskId) {
+    sendResponse(sender, { success: false, error: 'Task ID is required' });
+    return;
+  }
+
+  try {
+    await updateCheckpoint(taskId, { state: 'stopped' });
+    
+    // Clear current task metadata
+    await chrome.storage.local.remove('currentTask');
+    
+    console.log(`Stopping task: ${taskId}`);
+
+    sendResponse(sender, { 
+      success: true, 
+      taskId,
+      message: 'Task stopped'
+    });
+
+    chrome.runtime.sendMessage({
+      type: 'TASK_UPDATE',
+      status: 'stopped',
+    });
+  } catch (error) {
+    console.error('Failed to stop task:', error);
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to stop task'
+    });
+  }
+}
 
 /**
  * Type definitions

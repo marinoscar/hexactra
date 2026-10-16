@@ -6,6 +6,8 @@ import { loadProviders, addProvider, setCurrentProvider, testProviderConnection,
 let currentTabId: number | null = null;
 let currentUrl: string | null = null;
 let providerState: any = {};
+let currentTaskId: string | null = null;
+let taskStatus: 'idle' | 'running' | 'paused' | 'stopped' = 'idle';
 
 /**
  * Initialize the side panel
@@ -69,6 +71,28 @@ async function setupUI() {
   if (removeProviderBtn) {
     removeProviderBtn.addEventListener('click', handleRemoveProvider);
   }
+
+  // Task control buttons
+  const startTaskBtn = document.getElementById('start-task-btn');
+  const pauseTaskBtn = document.getElementById('pause-task-btn');
+  const resumeTaskBtn = document.getElementById('resume-task-btn');
+  const stopTaskBtn = document.getElementById('stop-task-btn');
+
+  if (startTaskBtn) {
+    startTaskBtn.addEventListener('click', handleStartTask);
+  }
+
+  if (pauseTaskBtn) {
+    pauseTaskBtn.addEventListener('click', handlePauseTask);
+  }
+
+  if (resumeTaskBtn) {
+    resumeTaskBtn.addEventListener('click', handleResumeTask);
+  }
+
+  if (stopTaskBtn) {
+    stopTaskBtn.addEventListener('click', handleStopTask);
+  }
 }
 
 /**
@@ -79,7 +103,42 @@ function handleMessage(message: any) {
     case 'RESPONSE':
       handleResponse(message);
       break;
+    case 'TASK_RECOVERED':
+      handleTaskRecovered(message);
+      break;
+    case 'TASK_UPDATE':
+      handleTaskUpdate(message);
+      break;
   }
+}
+
+/**
+ * Handle task recovered message from background
+ */
+function handleTaskRecovered(message: any) {
+  const statusDiv = document.getElementById('task-status');
+  if (statusDiv) {
+    statusDiv.textContent = `Recovered task: ${message.goal.substring(0, 50)}... (${message.state})`;
+    statusDiv.className = 'status';
+  }
+
+  currentTaskId = message.taskId;
+  taskStatus = message.state as any;
+  updateTaskControls();
+}
+
+/**
+ * Handle task update message from background
+ */
+function handleTaskUpdate(message: any) {
+  const statusDiv = document.getElementById('task-status');
+  if (statusDiv) {
+    statusDiv.textContent = `Task ${message.status}: ${currentTaskId}`;
+    statusDiv.className = 'status';
+  }
+
+  taskStatus = message.status as any;
+  updateTaskControls();
 }
 
 /**
@@ -363,6 +422,172 @@ async function handleRemoveProvider() {
       statusDiv.textContent = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
       statusDiv.className = 'status error';
     }
+  }
+}
+
+/**
+ * Handle start task button click
+ */
+async function handleStartTask() {
+  const goalInput = document.getElementById('task-goal') as HTMLTextAreaElement;
+  const goal = goalInput?.value?.trim();
+
+  if (!goal) {
+    const statusDiv = document.getElementById('status');
+    if (statusDiv) statusDiv.textContent = 'Please enter a task goal';
+    return;
+  }
+
+  const statusDiv = document.getElementById('status');
+  if (statusDiv) statusDiv.textContent = 'Starting task...';
+
+  chrome.runtime.sendMessage({
+    type: 'START_TASK',
+    requestId: Date.now().toString(),
+    goal,
+  }, (response: any) => {
+    if (response?.success) {
+      currentTaskId = response.taskId;
+      taskStatus = 'running';
+      updateTaskControls();
+      
+      if (statusDiv) {
+        statusDiv.textContent = `Task started: ${goal.substring(0, 50)}...`;
+        statusDiv.className = 'status';
+      }
+    } else {
+      if (statusDiv) statusDiv.textContent = `Failed to start task: ${response?.error || 'Unknown error'}`;
+      statusDiv.className = 'status error';
+    }
+  });
+}
+
+/**
+ * Handle pause task button click
+ */
+async function handlePauseTask() {
+  if (!currentTaskId) {
+    const statusDiv = document.getElementById('status');
+    if (statusDiv) statusDiv.textContent = 'No active task to pause';
+    return;
+  }
+
+  const statusDiv = document.getElementById('status');
+  if (statusDiv) statusDiv.textContent = 'Pausing task...';
+
+  chrome.runtime.sendMessage({
+    type: 'PAUSE_TASK',
+    requestId: Date.now().toString(),
+    taskId: currentTaskId,
+  }, (response: any) => {
+    if (response?.success) {
+      taskStatus = 'paused';
+      updateTaskControls();
+      
+      if (statusDiv) {
+        statusDiv.textContent = `Task paused: ${currentTaskId}`;
+        statusDiv.className = 'status';
+      }
+    } else {
+      if (statusDiv) statusDiv.textContent = `Failed to pause task: ${response?.error || 'Unknown error'}`;
+      statusDiv.className = 'status error';
+    }
+  });
+}
+
+/**
+ * Handle resume task button click
+ */
+async function handleResumeTask() {
+  if (!currentTaskId) {
+    const statusDiv = document.getElementById('status');
+    if (statusDiv) statusDiv.textContent = 'No task to resume';
+    return;
+  }
+
+  const statusDiv = document.getElementById('status');
+  if (statusDiv) statusDiv.textContent = 'Resuming task...';
+
+  chrome.runtime.sendMessage({
+    type: 'RESUME_TASK',
+    requestId: Date.now().toString(),
+    taskId: currentTaskId,
+  }, (response: any) => {
+    if (response?.success) {
+      taskStatus = 'running';
+      updateTaskControls();
+      
+      if (statusDiv) {
+        statusDiv.textContent = `Task resumed: ${currentTaskId}`;
+        statusDiv.className = 'status';
+      }
+    } else {
+      if (statusDiv) statusDiv.textContent = `Failed to resume task: ${response?.error || 'Unknown error'}`;
+      statusDiv.className = 'status error';
+    }
+  });
+}
+
+/**
+ * Handle stop task button click
+ */
+async function handleStopTask() {
+  if (!currentTaskId) {
+    const statusDiv = document.getElementById('status');
+    if (statusDiv) statusDiv.textContent = 'No active task to stop';
+    return;
+  }
+
+  const statusDiv = document.getElementById('status');
+  if (statusDiv) statusDiv.textContent = 'Stopping task...';
+
+  chrome.runtime.sendMessage({
+    type: 'STOP_TASK',
+    requestId: Date.now().toString(),
+    taskId: currentTaskId,
+  }, (response: any) => {
+    if (response?.success) {
+      currentTaskId = null;
+      taskStatus = 'stopped';
+      updateTaskControls();
+      
+      if (statusDiv) {
+        statusDiv.textContent = `Task stopped: ${currentTaskId}`;
+        statusDiv.className = 'status';
+      }
+    } else {
+      if (statusDiv) statusDiv.textContent = `Failed to stop task: ${response?.error || 'Unknown error'}`;
+      statusDiv.className = 'status error';
+    }
+  });
+}
+
+/**
+ * Update task control button states
+ */
+function updateTaskControls() {
+  const startBtn = document.getElementById('start-task-btn');
+  const pauseBtn = document.getElementById('pause-task-btn');
+  const resumeBtn = document.getElementById('resume-task-btn');
+  const stopBtn = document.getElementById('stop-task-btn');
+
+  if (!startBtn || !pauseBtn || !resumeBtn || !stopBtn) return;
+
+  // Disable all buttons first
+  startBtn.disabled = false;
+  pauseBtn.disabled = true;
+  resumeBtn.disabled = true;
+  stopBtn.disabled = true;
+
+  // Enable based on current state
+  if (taskStatus === 'idle' || taskStatus === 'stopped') {
+    startBtn.disabled = false;
+  } else if (taskStatus === 'running') {
+    pauseBtn.disabled = false;
+    stopBtn.disabled = false;
+  } else if (taskStatus === 'paused') {
+    resumeBtn.disabled = false;
+    stopBtn.disabled = false;
   }
 }
 
