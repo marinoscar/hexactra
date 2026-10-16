@@ -7,6 +7,7 @@
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",
+    "test:deterministic": "playwright test deterministic.spec.js",
     "install:chromium": "playwright install chromium"
   },
   "devDependencies": {
