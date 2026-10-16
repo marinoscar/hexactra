@@ -8,6 +8,7 @@
 //! - InteractionRequest for HITL (Human-in-the-Loop) workflow
 
 pub mod profile;
+pub mod viewer;
 
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
