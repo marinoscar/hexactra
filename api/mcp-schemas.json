@@ -1,0 +1,300 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "hexactra",
+  "description": "Hexactra: AI-powered browser automation runtime",
+  "version": "1.0.0",
+  "tools": [
+    {
+      "name": "create_session",
+      "description": "Create a new browser session with the specified profile",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "profile_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the Chrome profile to use"
+          },
+          "timeout_minutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60,
+            "default": 30,
+            "description": "Session timeout in minutes"
+          }
+        },
+        "required": ["profile_id"]
+      }
+    },
+    {
+      "name": "list_sessions",
+      "description": "List all active sessions",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "create_goal",
+      "description": "Create a new goal (task) to execute in a session",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the session to execute the goal in"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "oneOf": [
+                {
+                  "properties": {
+                    "type": {"const": "navigate"},
+                    "url": {"type": "string", "format": "uri"}
+                  },
+                  "required": ["type", "url"]
+                },
+                {
+                  "properties": {
+                    "type": {"const": "click"},
+                    "selector": {"type": "string"}
+                  },
+                  "required": ["type", "selector"]
+                },
+                {
+                  "properties": {
+                    "type": {"const": "type"},
+                    "selector": {"type": "string"},
+                    "text": {"type": "string"}
+                  },
+                  "required": ["type", "selector", "text"]
+                },
+                {
+                  "properties": {
+                    "type": {"const": "get_value"},
+                    "selector": {"type": "string"}
+                  },
+                  "required": ["type", "selector"]
+                },
+                {
+                  "properties": {
+                    "type": {"const": "screenshot"}
+                  },
+                  "required": ["type"]
+                },
+                {
+                  "properties": {
+                    "type": {"const": "execute_script"},
+                    "script": {"type": "string"}
+                  },
+                  "required": ["type", "script"]
+                },
+                {
+                  "properties": {
+                    "type": {"const": "wait_for_element"},
+                    "selector": {"type": "string"},
+                    "timeout_ms": {"type": "integer", "minimum": 0}
+                  },
+                  "required": ["type", "selector", "timeout_ms"]
+                },
+                {
+                  "properties": {
+                    "type": {"const": "back"}
+                  },
+                  "required": ["type"]
+                },
+                {
+                  "properties": {
+                    "type": {"const": "forward"}
+                  },
+                  "required": ["type"]
+                },
+                {
+                  "properties": {
+                    "type": {"const": "refresh"}
+                  },
+                  "required": ["type"]
+                }
+              ]
+            },
+            "description": "List of browser actions to execute"
+          }
+        },
+        "required": ["session_id", "actions"]
+      }
+    },
+    {
+      "name": "get_goal_status",
+      "description": "Get the status of a specific goal",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "goal_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the goal"
+          }
+        },
+        "required": ["goal_id"]
+      }
+    },
+    {
+      "name": "list_goals",
+      "description": "List all goals for a session",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the session"
+          }
+        },
+        "required": ["session_id"]
+      }
+    },
+    {
+      "name": "create_interaction_request",
+      "description": "Create a human-in-the-loop interaction request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the session"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason for the interaction request"
+          },
+          "details": {
+            "type": "object",
+            "description": "Additional context for the request"
+          }
+        },
+        "required": ["session_id", "reason"]
+      }
+    },
+    {
+      "name": "approve_interaction_request",
+      "description": "Approve an interaction request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the interaction request"
+          }
+        },
+        "required": ["request_id"]
+      }
+    },
+    {
+      "name": "reject_interaction_request",
+      "description": "Reject an interaction request",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the interaction request"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Reason for rejection (optional)"
+          }
+        },
+        "required": ["request_id"]
+      }
+    },
+    {
+      "name": "get_operation_status",
+      "description": "Get the status of a specific operation",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID of the operation"
+          }
+        },
+        "required": ["operation_id"]
+      }
+    },
+    {
+      "name": "get_health",
+      "description": "Check service health",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  ],
+  "resourceTemplates": [
+    {
+      "name": "session",
+      "description": "A browser session resource",
+      "uriTemplate": "hexactra://sessions/{session_id}",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "profile_id": {"type": "string", "format": "uuid"},
+          "status": {
+            "type": "string",
+            "enum": ["initializing", "running", "paused", "ended"]
+          },
+          "created_at": {"type": "string", "format": "date-time"},
+          "updated_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    },
+    {
+      "name": "goal",
+      "description": "A goal (task) resource",
+      "uriTemplate": "hexactra://goals/{goal_id}",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "session_id": {"type": "string", "format": "uuid"},
+          "actions": {
+            "type": "array",
+            "items": {"type": "object"}
+          },
+          "created_at": {"type": "string", "format": "date-time"},
+          "status": {
+            "type": "string",
+            "enum": ["queued", "running", "completed", "failed", "cancelled", "timed_out"]
+          }
+        }
+      }
+    },
+    {
+      "name": "interaction_request",
+      "description": "An interaction request (HITL) resource",
+      "uriTemplate": "hexactra://interaction-requests/{request_id}",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "session_id": {"type": "string", "format": "uuid"},
+          "reason": {"type": "string"},
+          "details": {"type": "object"},
+          "created_at": {"type": "string", "format": "date-time"},
+          "status": {
+            "type": "string",
+            "enum": ["pending", "approved", "rejected"]
+          }
+        }
+      }
+    }
+  ]
+}
