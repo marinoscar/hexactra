@@ -1,0 +1,22 @@
+{
+  "name": "@hexactra/chrome-extension",
+  "version": "0.1.0",
+  "description": "Hexactra Chrome extension for AI browser assistant",
+  "scripts": {
+    "build": "tsc && cp manifest/manifest.json dist && web-ext build --source-dir dist --artifacts-dir dist-build",
+    "test": "vitest run",
+    "lint": "eslint src --ext .ts,.tsx",
+    "format": "prettier --write src"
+  },
+  "dependencies": {
+    "@hexactra/sdk": "workspace:*",
+    "uuid": "^11.0.3"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.280",
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "web-ext": "^8.3.0"
+  }
+}
