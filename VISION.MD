@@ -2,7 +2,7 @@
 
 > **Status:** Foundational vision and proposed architecture (not a statement of shipped capabilities)  
 > **Repository:** https://github.com/marinoscar/hexactra  
-> **Document version:** 1.0  
+> **Document version:** 1.1  
 > **Date:** October 15, 2026  
 > **Product:** Hexactra  
 > **Tagline:** Human-like interaction. Agent-powered execution.
@@ -13,9 +13,9 @@
 
 **Hexactra is a portable, self-hostable computer-use runtime that allows authorized AI agents to operate real applications through the same graphical interfaces that humans use.** It exposes a consistent control surface through an HTTP API, an SDK, a CLI, and Model Context Protocol (MCP). It runs persistent graphical browser sessions on remote hosts, even when nobody is logged into the host operating system, while keeping human operators in control of access, authentication, and high-impact actions.
 
-The initial focus is **real graphical Chrome on Linux**, with persistent browser profiles, retained website sessions, a Chrome Manifest V3 extension, a local native-messaging bridge, and a Rust session runtime. The architecture must not tie the public API to Chrome or Linux: future adapters can control other browsers and desktop applications, and host agents can eventually run on Windows and macOS where the operating system permits.
+The initial focus is **real graphical Chrome on Linux**, with persistent browser profiles, retained website sessions, a Chrome Manifest V3 extension, a local native-messaging bridge, and a Rust session runtime. **The Chrome extension must also be a usable, standalone AI browser assistant** with built-in chat, AI provider/model settings, and direct control of permitted browser tabs; running a Hexactra server must not be mandatory for local browser automation. The architecture must not tie the public API to Chrome or Linux: future adapters can control other browsers and desktop applications, and host agents can eventually run on Windows and macOS where the operating system permits.
 
-Hexactra is **not an LLM, chatbot, or autonomous reasoning framework**. Its job is to provide a dependable, secure execution environment to models and agents chosen by the developer. An external agent determines *what to attempt*; Hexactra enforces *what is permitted*, carries out authorized UI actions, reports the results, and offers human intervention when needed.
+**Hexactra has a built-in AI browser/computer-use agent as well as interfaces for externally hosted agents.** A human can open the Chrome extension, choose an OpenAI-compatible model, enter a natural-language goal, and let the built-in agent observe the browser, plan actions, execute them through the extension, verify results, and request human assistance as needed. External agents can also use Hexactra through its SDK, CLI, HTTP API, and MCP. The platform does not itself train or host foundation models by default.
 
 A first-class requirement is **Human in the Loop (HITL)**. Authentication, one-time passwords, passkeys, physical security keys, consent prompts, missing credentials, and sensitive approvals are routine parts of computer use. Hexactra must not assume that an agent can or should satisfy them unaided. When human input is required, execution pauses safely, an authorized human is prompted, and the workflow resumes only when the required input or approval has been supplied. **In v1, all such requests go to a built-in human-interaction mechanism.** The interfaces for notifications, credential vaults, and other providers are designed now but external integrations are implemented later.
 
@@ -57,11 +57,15 @@ Hexactra addresses the **execution and control** part of this problem. A separat
 11. **Composable automation:** expose low-level capabilities and reusable higher-level operations, without forcing a particular model or agent framework.
 12. **Security by default:** apply explicit identity, authorization, isolation, auditability, and least privilege.
 13. **Extensibility:** define connector seams now for credential vaults, messaging, notification channels, alternate drivers, and independent agent memory.
+14. **Built-in AI execution:** observe, reason, act, verify, and replan toward a natural-language goal.
+15. **Standalone extension:** native Side Panel chat, model/provider configuration, and real browser-control tools without a daemon for ordinary browser interactions.
+16. **OpenAI-compatible models:** custom API base URL, API key, model ID, optional inference parameters, and capability-based interoperability with cloud or self-hosted providers.
+17. **Remote session startup:** a remote API/MCP/CLI caller can cause a boot-time Linux daemon to launch visible Chrome using a specified persistent profile even when nobody is logged into the host.
 
 ### 3.2 Non-goals for version 1
 
 - Building or hosting a foundation model.
-- Replacing Claude Code, OpenCode, Pi, or other agent orchestration frameworks.
+- Replacing Claude Code, OpenCode, Pi, or other general-purpose agent frameworks. Hexactra **does include** its own purpose-built goal-driven computer-use agent and also works with external frameworks.
 - Requiring a knowledge graph, vector database, LLM gateway, or experiential memory service for basic browser control.
 - Automatically intercepting SMS messages, reading email inboxes, extracting authenticator-app codes, or retrieving credentials from third-party vaults.
 - Automatically bypassing MFA, passkeys, CAPTCHAs, bot-detection controls, or website access restrictions.
@@ -1060,6 +1064,15 @@ Hexactra v1 is ready when all of the following are demonstrably true:
 - [ ] Persistent profiles survive session restarts without simultaneous-writer corruption.
 - [ ] Native binary and documented container deployment work without a mandatory cloud dependency.
 - [ ] A separate computer can connect using an authenticated API.
+- [ ] A remote API/MCP/CLI caller can trigger boot-time-daemon startup of a **real visible Chrome session with a selected persistent profile** while no human is logged into Linux; extension/worker readiness is verified before reporting success.
+
+### Built-in AI and standalone extension
+- [ ] Chrome extension Side Panel supports natural-language chat/goals, live progress, history, pause/resume/stop and human assistance.
+- [ ] A locally installed extension runs an AI browser task with no Rust server, native messaging host, MCP client, or external agent framework.
+- [ ] AI emits typed action requests that the extension actually performs on permitted tabs, followed by verified observations and replanning.
+- [ ] User can configure arbitrary supported OpenAI-compatible API endpoints, model IDs and keys, select inference parameters, and test compatibility.
+- [ ] Cloud and local OpenAI-style endpoints are supported by feature negotiation; unsupported optional tools/vision/streaming are handled explicitly.
+- [ ] A managed AI goal runner can execute durable goals in remote browser sessions and report progress through SDK/CLI/MCP.
 
 ### Execution
 - [ ] Sessions can start, stop, navigate, snapshot, click, type, and take screenshots.
@@ -1162,11 +1175,11 @@ Open questions must not undermine the required functional or security invariants
 
 ## 23. Product positioning
 
-**Hexactra is a computer-use infrastructure layer, not another agent framework.**
+**Hexactra is both a built-in AI computer-use operator and an infrastructure layer for external agents—not a replacement for general-purpose agent frameworks.**
 
 It should make it straightforward for any authorized agent to request computer actions on a real, persistent, remotely hosted session. It should make the intervention of a human feel like a controlled part of execution, not a failure or a workaround. And it should make the resulting behavior understandable through tracing, audit evidence, and operator observation.
 
-The initial demo can be a browser controlling one site. The underlying product is intentionally broader: **a portable, secure, observable execution plane for human-like interaction with software**.
+The initial demonstrations must show (a) a person giving the standalone Chrome extension a natural-language goal and watching it operate real tabs with a configured OpenAI-compatible model, and (b) a remote agent launching a Chrome profile on an unattended, logged-out Linux host and pursuing a goal through the managed runtime. The underlying product is intentionally broader: **a portable, secure, observable execution plane for human-like interaction with software**.
 
 The long-term ambition is to reduce the friction between agents and the real application environments in which people work, while preserving user consent, authentication boundaries, and the ability to intervene at any time.
 
@@ -1189,3 +1202,265 @@ Primary upstream implementation references (verify exact versions during impleme
 - [OpenTelemetry context propagation](https://opentelemetry.io/docs/concepts/context-propagation/)
 
 **Document rule:** this vision records intended product behavior and architectural boundaries. Individual sections may describe future capabilities and conceptual APIs; they must not be presented as already implemented. As code is shipped, track implementation status in project plans, ADRs, API specifications, and release notes rather than editing the vision to imply unfinished components exist.
+
+---
+
+## 25. AI-native computer use, standalone Chrome extension, and remote startup (v1 requirements)
+
+**This section is normative and expands Sections 3, 6–11, 16, 19, 20 and 22. Where earlier descriptions suggest that Hexactra only exposes low-level tools to an external agent, this section takes precedence.** Hexactra ships an AI-powered operator *and* a remote control runtime.
+
+### 25.1 The two product entry points
+
+**A. Standalone Chrome extension (local AI assistant, required in v1).** A user installs Hexactra in an already-running Chrome browser, opens the built-in UI, configures an OpenAI-compatible model provider, and types a goal. The extension observes relevant pages, calls the model, interprets typed tool/action requests, and operates authorized tabs. The extension is fully usable without installing the Rust daemon, using a remote host, running MCP, or creating a developer application. It is limited to what a Chrome MV3 extension can access. Local execution does not promise to continue after Chrome closes.
+
+**B. Remote managed computer-use runtime (required in v1).** A remotely running agent or human invokes HTTP/SDK/CLI/MCP against a control service. The Rust daemon starts and maintains a *real graphical, visible (non-headless)* Chrome instance on an unattended Linux host using a chosen persistent Chrome user profile. Clients can submit natural-language goals to Hexactra's managed AI operator, or they can use lower-level browser tools directly. The AI model and the remote agent never get unrestricted OS/browser privileges.
+
+The same extension code provides the **browser actuator** in both modes. The local AI runner and the managed AI runner must use compatible action/observation/tool contracts and safety rules, even though their runtimes and durability guarantees differ.
+
+### 25.2 The Chrome extension must actually operate Chrome
+
+The extension is **not just a scraper, telemetry collector, or passive page observer**. It must receive authorized AI-generated browser instructions and execute real actions in Chrome, within user grants and browser restrictions.
+
+Minimum capabilities:
+
+- **Browser context:** enumerate/select/open/close permitted tabs, navigate URLs, switch windows/tabs, track navigation and document state.
+- **Perception:** inspect semantic DOM, visible text, accessible roles/names, inputs/buttons/links, selected and disabled states, frame contexts, dialogs where exposed, and optional screenshots.
+- **Actions:** click/focus, type/clear fields, select options, check/uncheck, keypress, scroll, navigate, fill and submit forms, wait for conditions, and open links.
+- **Interaction control:** observe new tabs, popups, modals, navigation, validation errors, downloads, loading/idle, and login challenges as allowed by Chrome.
+- **Verification:** after each significant action, return a structured result and refreshed page observation; an “action delivered” response alone does not establish goal completion.
+- **Fallback:** use selected permitted chrome.debugger/CDP domains where beneficial; reserve OS-level pointer/keyboard control and unsupported native dialogs for the managed desktop driver or human takeover.
+
+Build a typed **BrowserDriver** boundary around these operations. Prefer accessible/semantic locators and stable snapshot references to fragile coordinates. Respect frame, tab, document-revision and origin constraints. The model proposes a command; **Hexactra validates it before the extension acts**.
+
+Chrome does not permit control of every internal page, native security prompt, cross-origin context, or managed-browser target. A restricted capability must produce an explicit error or a human-intervention request, never a fictitious success. Neither browser permissions nor website protections should be bypassed surreptitiously.
+
+### 25.3 AI execution loop: emulate an authorized human operator
+
+The built-in agent is goal-directed, not a fixed workflow recorder. It interprets a person's intent, observes the current screen/page, selects one or more actions, executes them, checks progress and adjusts to new information—similar to how a human operator adapts as an interface changes.
+
+~~~text
+HUMAN GOAL
+   |
+   v
+Read user's policy, current Chrome tab and provider configuration
+   |
+   v
+OBSERVE: capture fresh relevant DOM/accessibility state (+ screenshot if enabled)
+   |
+   v
+REASON: invoke configured OpenAI-compatible model
+   |
+   v
+PROPOSE: receive structured browser action / tool call / completion assessment
+   |
+   v
+VALIDATE: schema, allowed origin, action policy, live target, budgets, HITL
+   |
+   v
+ACT: extension performs actual Chrome command (or desktop fallback if managed)
+   |
+   v
+VERIFY: fresh page state, result, progress toward original goal
+   |
+   +-- complete -> display evidence and outcome
+   +-- needs human -> pause, request help, resume after revalidation
+   +-- recoverable failure -> bounded replan and retry
+   +-- exceeded limits -> stop with honest partial/failed outcome
+   +-- more steps needed -> OBSERVE again
+~~~
+
+Key design requirements:
+
+1. Use **bounded, typed tool calls**. The model must not execute arbitrary JavaScript, injected page scripts, shell commands, extension internals, or unsanctioned HTTP requests on its own.
+2. Prefer concise semantic snapshots for text-capable models; add images only for providers declaring vision support and when the user permits screenshot transmission.
+3. Account for dynamic DOM, redirects, new tabs, elements that move or disappear, modals, loading states, and inaccurate model predictions. Reobserve and replan.
+4. Provide step limit, duration limit, provider-call timeout, maximum token/cost budget where known, backoff, infinite-loop/no-progress detection, and an always-accessible Stop command.
+5. Never automatically retry irreversible/non-idempotent clicks after an ambiguous timeout without rechecking state.
+6. Request human intervention for passwords, OTPs, passkeys, authenticator approvals, CAPTCHA/manual challenges, or high-impact approvals as specified in Sections 11–12.
+7. Keep natural-language user instructions distinct from **untrusted website content**. A page cannot promote text to higher-priority system instructions, grant permissions, or authorize new actions.
+8. Treat model outputs as proposals and verify claimed completion against observable evidence. Do not invent a successful task outcome.
+9. Make task history and status understandable to the human without exposing private chain-of-thought or raw credentials.
+10. Permit an external agent to use low-level execution instead of the built-in reasoning loop, subject to identical server-side authorization in managed mode.
+
+Suggested goal-run states: CREATED, RUNNING, WAITING_FOR_HUMAN, PAUSED_BY_USER, RESUMING, COMPLETED, LIMIT_REACHED, FAILED and CANCELLED. A run is traceable by a durable ID in managed mode.
+
+### 25.4 Any OpenAI-compatible AI provider, not a provider-specific application
+
+Hexactra must support **any endpoint implementing its documented OpenAI-compatible contract**, not a fixed list of branded services. The user supplies base URL, model ID and authentication details. Examples include cloud models, API gateways and self-hosted endpoints such as llama.cpp server, LocalAI, vLLM, Ollama and LM Studio **when that deployment's API/model behavior is compatible**.
+
+**Baseline v1 model dialect:** OpenAI-style Chat Completions messages/responses over HTTP, with optional structured function/tool calling where supported. If a compatible text model lacks native tools, Hexactra may request structured JSON actions and validate them against the same allowlisted schema. Unsupported native tool calling is not a reason to execute free-form model-generated code.
+
+| Configurable field | Required use |
+|---|---|
+| Provider alias | Friendly human label; arbitrary provider is accepted |
+| Base URL | User-supplied HTTPS or approved private/loopback HTTP for local use |
+| Model identifier | Arbitrary model ID; no required vendor-defined enum |
+| API authentication | Optional key/Bearer as needed; separate secret from target website password |
+| Sampling | Temperature/top-p/seed where supported; omit unsupported fields |
+| Output and context limits | Max output tokens, context policy, prompt size and summarization |
+| Reasoning settings | Optional reasoning-effort or provider options only when compatible |
+| Tools | OpenAI-style tool calls or validated structured-response fallback |
+| Streaming | SSE if supported; otherwise standard nonstreaming HTTP |
+| Vision | Capability-gated screenshots; not mandatory for text-only models |
+| Timeouts/budgets | Model request timeout, retry policy, task cost/token/step limits |
+
+Do **not** equate “OpenAI-compatible” with universal support for all optional OpenAI API features, OpenAI Responses API, images, streaming, tools, or strict JSON schema. Expose an explicit **capability matrix**, a **Test Connection** function and actionable validation errors. Support manual model entry when list-models endpoints are absent. Prefer a small interoperable baseline plus optional feature negotiation, not a fake universal guarantee. Provider model output must always pass the action validator.
+
+A custom inference URL may point to a secured home/local model server, including servers fronted by a personal domain and bearer authentication. Neither the UI nor API should assume that inference requires a cloud provider or a publicly hosted endpoint.
+
+### 25.5 The Chrome extension requires a real, independent UI
+
+Implement **Chrome Side Panel (MV3)** as the main experience; an action-popup can launch it. The standalone extension must offer:
+
+**Chat / Agent workspace**
+- Natural-language goal composer, Send/Run, streamed/progressively updated responses and readable action history.
+- Current selected tab/site scope, explicit access grants and active provider/model indicator.
+- Task state, active step, last observation/result, completion evidence and recoverable errors.
+- Pause, Resume, Stop, Take Over, and corrective instruction controls.
+- Local nonsecret goal history, with retention settings and clear/delete controls.
+- Human-assistance prompts for login, OTP, approval or takeover, with expiry and target origin shown.
+
+**AI Provider / Settings workspace**
+- Add, edit, test, choose and remove multiple OpenAI-compatible provider configurations.
+- Enter custom endpoint URL, model name/ID and masked API key (or a session-only key).
+- Adjust supported model parameters, streaming/tool/vision options, default agent instruction, max steps, timeouts, output limits and safety approvals.
+- Configure site/tab scope, screenshot/context sharing, whether a run is local or attached to a managed host and whether human approval is required for sensitive actions.
+- Surface feature-test results and warn when selected provider lacks needed capabilities.
+
+**Security considerations**
+- Model API keys stay in privileged extension contexts. Never inject provider keys into web-page content scripts or echo them into chat/model prompts, logs, telemetry, tool results, exported histories or page DOM.
+- A key saved in standard Chrome extension storage is **not guaranteed to have hardware-backed vault protection**. Offer session-only usage, clear warnings and later vault connectors; do not label normal browser storage as a secure credential vault.
+- Request minimal host permissions for user-approved sites and selected inference endpoints; require explicit consent when sending page text/screenshot context to a remote AI service.
+- Restrict unsafe HTTP endpoints other than explicitly approved local/private configurations. Any unusual custom host permission must be visible to the user.
+- Chrome Manifest V3 service workers are ephemeral. Keep important nonsecret run state in extension storage/IndexedDB, recover from service-worker shutdown/reload, and revalidate actions before retrying.
+- Do not claim local extension jobs survive Chrome being closed, or that the extension can start the operating system's desktop session.
+
+**No native messaging requirement in local mode.** The extension can communicate with compatible model servers and control permitted tabs through sanctioned extension APIs. In remote managed mode the *same extension* additionally connects to a local native host, which relays validated actions from the external control plane.
+
+### 25.6 Unattended remote session startup — non-negotiable
+
+This is a direct requirement carried over from the original remote-control architecture paper.
+
+**A remote authenticated agent must be able to contact a continuously available Linux daemon while NO human is logged into Linux, select one of several persistent Chrome profiles, launch visible real Chrome using that profile, and begin controlling it with the Hexactra extension.**
+
+Exact conceptual sequence:
+
+~~~text
+Remote SDK / CLI / MCP / AI agent
+    -> Authenticated Hexactra control API
+    -> Authorize session request, selected host and saved profile
+    -> Boot-time Rust Linux daemon / host agent
+    -> Reserve exclusive profile lock and create/reuse graphical display
+    -> Start Chrome (not headless) with persistent user-data directory
+    -> Load/activate registered Hexactra Chrome MV3 extension
+    -> Extension initiates Chrome Native Messaging to Rust native host
+    -> Session worker handshakes and verifies browser health/capabilities
+    -> Control plane returns READY session + remote viewer/session identifiers
+    -> Run built-in Hexactra AI goal OR execute low-level SDK/MCP actions
+    -> Optional human viewer/takeover + HITL
+    -> Disconnect/reconnect without losing authorized browser session
+~~~
+
+The daemon must be independently started at boot (for example by systemd) and must not rely on a human graphical login. A Linux graphical runtime (display server/compositor, optional isolated container, viewer) must be created on demand. The user selects the desired saved Chrome profile; profile isolation, host affinity and one-writer locking are required. Previously authenticated website sessions may be usable, subject to browser encryption and website rules. Do not promise every site will remain logged in.
+
+A successful start response requires evidence that Chrome, extension, worker and control channel are ready; profile in-use, native-host failure, display failure, crash and handshake mismatch are explicit errors. A lost remote client connection must not automatically destroy the browser. Stop/idle/TTL semantics must be intentional, and reconnection should preserve session identity where feasible.
+
+The host is assumed powered on; remote boot of a powered-off computer requires separately supported Wake-on-LAN/IPMI and is out of scope for v1. **Extension-only mode cannot substitute for the host daemon.**
+
+### 25.7 Shared contracts, implementation boundaries and technology decisions
+
+~~~mermaid
+flowchart TB
+  HUMAN["Chrome user"] --> PANEL["Chrome Side Panel chat and settings"]
+  PANEL --> LOCAL["TypeScript local AI goal runner"]
+  LOCAL --> EXT["Chrome extension action/observation driver"]
+  EXT <--> CHROME["Local Chrome and tabs"]
+
+  CLIENT["Remote SDK / CLI / MCP"] --> CORE["Rust control plane"]
+  CORE --> MANAGED["Rust managed AI goal runner"]
+  MANAGED --> WORKER["Rust Linux host agent/session worker"]
+  WORKER --> NATIVE["Rust Native Messaging host"]
+  NATIVE --> REXT["Same extension driver"]
+  REXT <--> REMOTEBROWSER["Remote graphical Chrome/persistent profile"]
+
+  LOCAL --> LLM["Configurable OpenAI-compatible model endpoint"]
+  MANAGED --> LLM
+  LOCAL -. "local human requests" .-> PANEL
+  MANAGED -. "server HITL broker" .-> CORE
+~~~
+
+| Responsibility | Local extension mode | Managed remote mode |
+|---|---|---|
+| Goal orchestration | TypeScript extension agent | Rust managed AI goal runner |
+| AI provider | TypeScript OpenAI-compatible adapter | Rust OpenAI-compatible adapter |
+| Browser actuator | Chrome extension | Same extension, Native Messaging and session worker |
+| Lifecycle | Existing Chrome/browser session | Boot-time daemon, persistent sessions and host control |
+| Persistence | Extension storage/IndexedDB | SQLite operation state and profile volumes |
+| HITL | Secure extension-controlled human prompt/takeover | Durable server Human Interaction Broker/dashboard |
+| Telemetry | Local diagnostics and optional permitted export | OTel traces/metrics/logs and durable audit |
+| SDK/MCP | Not required | Full HTTP/SDK/CLI/MCP access |
+
+Define and version the same **Goal, Observation, BrowserAction, ActionResult, RunStatus, ProviderCapabilities, HITLRequest and VerificationResult** schemas for both runtimes. Implement conformance tests to prevent TypeScript and Rust agent behavior from drifting. Avoid requiring Node.js on the managed Linux daemon merely to use the built-in AI goal runner.
+
+### 25.8 Interactions with Human in the Loop
+
+The AI may detect that it needs a username/password, SMS/email OTP, TOTP code from an authenticator app, phone push approval, passkey/hardware security key, or the human's judgment. It must transition to **WAITING_FOR_HUMAN**, clearly identify the intended origin and task, and stop entering further values until an authorized response/takeover is received. Secrets must not become model input or ordinary telemetry.
+
+**V1:** use the built-in human prompt/UI in standalone extension mode and the existing durable Human Interaction Broker/dashboard in managed mode. **Later:** use the planned credential vault, email/SMS/push/messaging integration hooks without changing AI browser-action protocols. An authenticator requiring user presence must be completed by the human on the appropriate device; the AI must not claim to have defeated or reproduced that authentication mechanism.
+
+### 25.9 Managed AI goal API and MCP
+
+In addition to low-level browser actions, the managed service must offer a goal-level contract:
+
+~~~text
+POST   /api/v1/agent-runs               # start goal in selected session/profile
+GET    /api/v1/agent-runs/{run_id}       # sanitized status
+GET    /api/v1/agent-runs/{run_id}/events
+POST   /api/v1/agent-runs/{run_id}/pause
+POST   /api/v1/agent-runs/{run_id}/resume
+POST   /api/v1/agent-runs/{run_id}/cancel
+~~~
+
+Illustrative CLI (not implemented yet):
+
+~~~bash
+hexactra sessions start --host home-linux --profile personal
+hexactra agent run --session sess_123 --goal "Find the newest invoice and summarize the amount due"
+hexactra agent status --run run_123
+hexactra agent pause --run run_123
+~~~
+
+Proposed MCP tools include **hexactra_agent_run**, **hexactra_agent_status**, **hexactra_agent_pause**, **hexactra_agent_resume**, and **hexactra_agent_cancel**. They invoke the same policy-controlled run subsystem as the SDK and dashboard, and should never return secret values or grant actions unapproved permissions.
+
+### 25.10 Roadmap and acceptance gates
+
+These are **v1 requirements**, not optional “later” aspirations.
+
+1. **Local AI browser vertical slice:** install MV3 extension alone, configure an OpenAI-compatible endpoint, submit a goal in Side Panel, observe/act/verify across several pages, view action progress and stop safely.
+2. **Generic provider conformance:** test at least one OpenAI cloud-style endpoint, one self-hosted endpoint, one native-tool-capable model and one text-only/JSON-fallback model; reject malformed tools, unsupported parameters and invalid credentials gracefully.
+3. **Remote no-login startup:** from a different machine, call a boot-time daemon when the Linux host has no logged-in desktop user; select a saved Chrome profile; receive a healthy non-headless graphical session with the extension active.
+4. **Managed agent goals:** start a goal remotely over SDK/CLI/MCP; survive client disconnect; preserve browser session; show progress, observe completion and optionally take over.
+5. **HITL both modes:** pause for OTP/password/passkey/approval, securely ask the human and resume or fail clearly. Integrations with external vaults/notifiers remain future capabilities.
+6. **OTel and security:** trace AI provider latency, tool/action counts, errors and goal states without logging page secrets or raw prompts. Durable audit, action authorization, origin binding, stop controls and protection from malicious page instructions remain required.
+7. **Portability:** a user can use the extension alone with no host service, while a Rust managed host can start browser sessions independently of Chrome being previously open and without desktop login.
+
+The Phase 2 extension milestone in Section 19 must therefore include **Side Panel, model settings, provider adapter and local agent loop**, and Phase 3 must include **remote browser bootstrap plus managed AI goal execution**. Neither should be deferred to a future release merely because SDK/MCP exposes primitive actions first.
+
+### 25.11 Additional architecture questions to resolve in ADRs
+
+- Precise OpenAI-compatible baseline and tool-schema fallback; optional Responses API support.
+- Versioned conformance suite shared by TypeScript local runner and Rust managed runner.
+- Chrome extension permission grants, restricted debugging domains, side-panel lifecycle and HTTP access to user-selected inference servers.
+- Safe BYOK API-key storage modes in the standalone extension and transition to future OS vaults.
+- Which agent-generated actions require explicit approval even inside a broad natural-language request.
+- Resource, token/latency and privacy policies for screenshot- and vision-heavy computer use.
+- Reliable browser profile bootstrapping and remote viewer behavior under an unattended Linux system service.
+- Whether model inference runs near the browser worker or control plane in distributed deployments; keep the action policy boundary invariant.
+
+### 25.12 Reference documentation
+
+- [Chrome Side Panel API](https://developer.chrome.com/docs/extensions/reference/api/sidePanel)
+- [Chrome debugger API and restricted CDP domains](https://developer.chrome.com/docs/extensions/reference/api/debugger)
+- [Chrome MV3 service-worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle)
+- [Chrome extension network requests and host permissions](https://developer.chrome.com/docs/extensions/develop/concepts/network-requests)
+- [OpenAI Chat Completions reference](https://platform.openai.com/docs/api-reference/chat)
