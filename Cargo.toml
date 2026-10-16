@@ -6,6 +6,7 @@ members = [
     "crates/hexactra-agent",
     "crates/hexactra-worker",
     "crates/hexactra-native-host",
+    "crates/hexactra-desktop-input",
     "crates/hexactra-cli",
     "crates/hexactra-mcp",
 ]
