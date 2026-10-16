@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Hexactra Error Schemas",
+  "description": "Error models for Hexactra API and MCP responses",
+  "version": "1.0.0",
+  "definitions": {
+    "Error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "description": "Machine-readable error code",
+          "enum": [
+            "INVALID_INPUT",
+            "NOT_FOUND",
+            "UNAUTHORIZED",
+            "FORBIDDEN",
+            "CONFLICT",
+            "INTERNAL_ERROR",
+            "TIMEOUT",
+            "SERVICE_UNAVAILABLE"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable error message"
+        },
+        "details": {
+          "type": "object",
+          "nullable": true,
+          "description": "Additional error details (may be redacted for security)"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique request ID for troubleshooting"
+        }
+      }
+    },
+    "ValidationError": {
+      "allOf": [
+        {"$ref": "#/definitions/Error"},
+        {
+          "properties": {
+            "code": {
+              "const": "INVALID_INPUT"
+            },
+            "details": {
+              "type": "object",
+              "properties": {
+                "field": {"type": "string"},
+                "value": {"type": ["string", "number", "boolean", "null"]},
+                "reason": {"type": "string"}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "NotFoundError": {
+      "allOf": [
+        {"$ref": "#/definitions/Error"},
+        {
+          "properties": {
+            "code": {
+              "const": "NOT_FOUND"
+            },
+            "details": {
+              "type": "object",
+              "properties": {
+                "resource_type": {"type": "string"},
+                "resource_id": {"type": "string"}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "UnauthorizedError": {
+      "allOf": [
+        {"$ref": "#/definitions/Error"},
+        {
+          "properties": {
+            "code": {
+              "const": "UNAUTHORIZED"
+            },
+            "details": {
+              "type": "object",
+              "properties": {
+                "scope": {"type": "string"},
+                "required_scope": {"type": "string"}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ForbiddenError": {
+      "allOf": [
+        {"$ref": "#/definitions/Error"},
+        {
+          "properties": {
+            "code": {
+              "const": "FORBIDDEN"
+            },
+            "details": {
+              "type": "object",
+              "properties": {
+                "action": {"type": "string"},
+                "resource": {"type": "string"}
+              }
+            }
+          }
+        }
+      ]
+    },
+    "TimeoutError": {
+      "allOf": [
+        {"$ref": "#/definitions/Error"},
+        {
+          "properties": {
+            "code": {
+              "const": "TIMEOUT"
+            },
+            "details": {
+              "type": "object",
+              "properties": {
+                "operation": {"type": "string"},
+                "timeout_ms": {"type": "integer"}
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

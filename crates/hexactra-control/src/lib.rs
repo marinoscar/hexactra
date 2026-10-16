@@ -24,3 +24,6 @@ pub fn create_router(_config: &Config) -> Router {
 async fn health() -> &'static str {
     "OK"
 }
+
+// Re-export types from core for convenience
+pub use hexactra_core::{Goal, Session, Operation, InteractionRequest, BrowserAction};
