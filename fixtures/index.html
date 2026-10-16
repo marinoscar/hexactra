@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Fixture Site</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .nav { display: flex; gap: 10px; margin-bottom: 20px; }
+        .nav button { padding: 8px 16px; cursor: pointer; }
+        .content { min-height: 300px; border: 1px solid #ccc; padding: 20px; }
+        .form-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; }
+        .tabs { display: flex; gap: 5px; margin-bottom: 15px; }
+        .tabs button { padding: 8px 16px; cursor: pointer; }
+        .tab-content { display: none; padding: 15px; border: 1px solid #ccc; }
+        .tab-content.active { display: block; }
+        iframe { width: 100%; height: 200px; border: 1px solid #999; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Browser Fixture Site</h1>
+    
+    <!-- Navigation -->
+    <div class="nav">
+        <button onclick="showPage('home')">Home</button>
+        <button onclick="showPage('forms')">Forms</button>
+        <button onclick="showPage('tabs')">Tabs</button>
+        <button onclick="showPage('frames')">Frames</button>
+        <button onclick="showPage('challenges')">Challenges</button>
+    </div>
+
+    <!-- Home Page -->
+    <div id="home" class="content">
+        <h2>Home</h2>
+        <p>Welcome to the browser fixture site.</p>
+        <p>Use this site to test browser automation capabilities.</p>
+        <button id="home-btn">Home Button</button>
+    </div>
+
+    <!-- Forms Page -->
+    <div id="forms" class="content" style="display: none;">
+        <h2>Forms</h2>
+        <div class="form-section">
+            <h3>Simple Form</h3>
+            <input type="text" id="simple-input" placeholder="Enter text">
+            <button onclick="submitForm('simple')">Submit</button>
+        </div>
+        
+        <div class="form-section">
+            <h3>Login Form</h3>
+            <input type="email" id="login-email" placeholder="Email">
+            <input type="password" id="login-password" placeholder="Password">
+            <button onclick="submitForm('login')">Login</button>
+        </div>
+        
+        <div class="form-section">
+            <h3>Checkbox Form</h3>
+            <label><input type="checkbox" id="checkbox-1"> Option 1</label><br>
+            <label><input type="checkbox" id="checkbox-2"> Option 2</label><br>
+            <label><input type="checkbox" id="checkbox-3"> Option 3</label>
+        </div>
+    </div>
+
+    <!-- Tabs Page -->
+    <div id="tabs" class="content" style="display: none;">
+        <h2>Tabs</h2>
+        <div class="tabs">
+            <button onclick="showTab('tab1', this)">Tab 1</button>
+            <button onclick="showTab('tab2', this)">Tab 2</button>
+            <button onclick="showTab('tab3', this)">Tab 3</button>
+        </div>
+        <div id="tab1" class="tab-content active">
+            <p>This is tab 1 content.</p>
+        </div>
+        <div id="tab2" class="tab-content">
+            <p>This is tab 2 content.</p>
+        </div>
+        <div id="tab3" class="tab-content">
+            <p>This is tab 3 content.</p>
+        </div>
+    </div>
+
+    <!-- Frames Page -->
+    <div id="frames" class="content" style="display: none;">
+        <h2>Nested Frames</h2>
+        <p>Parent page content</p>
+        
+        <iframe src="frame1.html" title="Frame 1"></iframe>
+        <iframe src="frame2.html" title="Frame 2"></iframe>
+    </div>
+
+    <!-- Challenges Page -->
+    <div id="challenges" class="content" style="display: none;">
+        <h2>Challenges</h2>
+        
+        <!-- OTP Challenge -->
+        <div class="form-section">
+            <h3>OTP Verification</h3>
+            <p>Enter the OTP sent to your phone (use any 6-digit number)</p>
+            <input type="text" id="otp-input" maxlength="6" placeholder="123456">
+            <button onclick="verifyOtp()">Verify OTP</button>
+        </div>
+
+        <!-- Approval Challenge -->
+        <div class="form-section">
+            <h3>Approval Required</h3>
+            <p>This action requires human approval:</p>
+            <button id="approval-btn">Request Approval</button>
+        </div>
+
+        <!-- Delayed Action -->
+        <div class="form-section">
+            <h3>Delayed Response</h3>
+            <button onclick="delayedAction()">Trigger Delayed Action</button>
+            <span id="delayed-result" style="margin-left: 10px;"></span>
+        </div>
+
+        <!-- Conditional Content -->
+        <div class="form-section">
+            <h3>Conditional Visibility</h3>
+            <button onclick="toggleConditional()">Toggle Content</button>
+            <div id="conditional-content" style="display: none; margin-top: 10px;">
+                <p>This content appears after clicking the button.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Navigation
+        function showPage(pageId) {
+            document.querySelectorAll('.content').forEach(c => c.style.display = 'none');
+            document.getElementById(pageId).style.display = 'block';
+        }
+
+        // Tabs
+        function showTab(tabId, btn) {
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            document.querySelectorAll('.tabs button').forEach(b => b.style.background = '');
+            btn.style.background = '#007bff';
+            btn.style.color = 'white';
+        }
+
+        // Forms
+        function submitForm(type) {
+            console.log('Form submitted:', type);
+            alert('Form submitted: ' + type);
+        }
+
+        // OTP
+        function verifyOtp() {
+            const otp = document.getElementById('otp-input').value;
+            if (otp.length === 6 && /^\d+$/.test(otp)) {
+                alert('OTP verified successfully!');
+            } else {
+                alert('Invalid OTP. Please enter a 6-digit number.');
+            }
+        }
+
+        // Approval
+        document.getElementById('approval-btn').onclick = function() {
+            console.log('Approval requested');
+            this.disabled = true;
+            setTimeout(() => {
+                alert('Approval granted (simulated)');
+                this.disabled = false;
+            }, 1000);
+        };
+
+        // Delayed action
+        function delayedAction() {
+            const result = document.getElementById('delayed-result');
+            result.textContent = 'Processing...';
+            setTimeout(() => {
+                result.textContent = 'Done!';
+            }, 2000);
+        }
+
+        // Conditional content
+        function toggleConditional() {
+            const content = document.getElementById('conditional-content');
+            content.style.display = content.style.display === 'none' ? 'block' : 'none';
+        }
+    </script>
+</body>
+</html>
