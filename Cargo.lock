@@ -821,6 +821,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "hexactra-desktop-input"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "hexactra-core",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "hexactra-mcp"
 version = "0.1.0"
 dependencies = [
