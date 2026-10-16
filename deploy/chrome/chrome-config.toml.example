@@ -1,0 +1,29 @@
+# Chrome Runtime Configuration
+
+[chrome]
+# Path to Chrome/Chromium binary
+binary = "/usr/bin/google-chrome"
+
+# Display for virtual X server
+display = ":99"
+
+# User data directory (profile)
+user_data_dir = "/var/lib/hexactra/chrome-profiles/default"
+
+# Resource limits (in MB and cores)
+memory_mb = 2048
+cpu_cores = 2
+max_open_files = 1024
+
+# Enable GPU acceleration (default: false)
+enable_gpu = false
+
+# Extra Chrome arguments
+extra_args = [
+    "--disable-extensions",
+    "--disable-sync",
+    "--disable-translate",
+]
+
+[logging]
+level = "info"

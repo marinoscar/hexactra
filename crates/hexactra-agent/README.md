@@ -6,6 +6,7 @@ The host agent is a background service that runs at boot time, independent of lo
 - Health endpoint for monitoring
 - Graceful shutdown handling
 - Least-privilege service account support
+- Chrome runtime management with virtual display
 
 ## Installation
 
@@ -38,6 +39,35 @@ sudo cp config/agent.toml.example /etc/hexactra/agent.toml
 ```
 
 Edit `/etc/hexactra/agent.toml` to customize settings.
+
+## Chrome Runtime Setup
+
+### Installing Chrome and Xvfb
+
+Run the Chrome installation script:
+
+```bash
+sudo bash deploy/chrome/install-chrome.sh
+```
+
+This installs:
+- Xvfb for virtual display
+- Google Chrome
+- Required dependencies
+
+### Starting Xvfb
+
+```bash
+sudo systemctl start xvfb
+sudo systemctl enable xvfb
+```
+
+### Verifying Chrome
+
+```bash
+# Check Chrome version in virtual display
+DISPLAY=:99 google-chrome --version
+```
 
 ## Usage
 
