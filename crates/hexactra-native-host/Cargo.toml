@@ -22,6 +22,8 @@ uuid.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 clap.workspace = true
+chrono.workspace = true
+dirs.workspace = true
 
 hexactra-core = { path = "../hexactra-core" }
 hexactra-telemetry = { path = "../hexactra-telemetry" }

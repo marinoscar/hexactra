@@ -2,13 +2,14 @@
   "manifest_version": 3,
   "name": "Hexactra AI",
   "version": "0.1.0",
-  "description": "AI-powered browser automation assistant - Standalone Chrome driver and browser automation",
+  "description": "AI-powered browser automation assistant - Native messaging bridge and managed browser worker",
   "permissions": [
     "sidePanel",
     "scripting",
     "activeTab",
     "tabs",
-    "storage"
+    "storage",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -35,5 +36,12 @@
     "16": "icons/icon-16.png",
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
+  },
+  "native_manifests": {
+    "com.hexactra.nativehost": {
+      "allowed_origins": [
+        "chrome-extension://YOUR_EXTENSION_ID_HERE/"
+      ]
+    }
   }
 }
