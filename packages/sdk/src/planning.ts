@@ -3,7 +3,7 @@
 //! This module implements the core AI loop: goal → observe → model propose → parse schema →
 //! authorize → execute BrowserDriver → observe/verify → continue/finish.
 
-import { OpenAIClient, ChatMessage, ToolDefinition, StreamingDelta } from './openai';
+import { OpenAIClient, ToolDefinition, ChatMessage } from './openai';
 
 /**
  * Browser action types
@@ -277,12 +277,14 @@ Constraints:
     // Validate action-specific requirements
     switch (action.type) {
       case 'click':
-      case 'type':
         if (!action.selector) {
-          return { valid: false, error: `Selector required for ${action.type} action` };
+          return { valid: false, error: 'Selector required for click action' };
         }
         break;
       case 'type':
+        if (!action.selector) {
+          return { valid: false, error: 'Selector required for type action' };
+        }
         if (!action.text) {
           return { valid: false, error: 'Text required for type action' };
         }
@@ -315,6 +317,9 @@ Constraints:
       if (action.type === 'click' && !action.selector) {
         return { success: false, error: 'Selector required for click' };
       }
+      if (action.type === 'type' && (!action.selector || !action.text)) {
+        return { success: false, error: 'Selector and text required for type action' };
+      }
 
       return { success: true };
     } catch (error) {
@@ -325,7 +330,7 @@ Constraints:
   /**
    * Verify the action result against expectations
    */
-  private verifyResult(action: BrowserAction, result: unknown): boolean {
+  private verifyResult(_action: BrowserAction, result: unknown): boolean {
     // Simple verification - in production this would check for expected outcomes
     return result !== null && result !== undefined;
   }
@@ -350,6 +355,7 @@ Constraints:
       return {
         success: false,
         error: `Model proposal failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        shouldContinue: false,
       };
     }
 
@@ -365,6 +371,7 @@ Constraints:
       return {
         success: false,
         error: `Action validation failed: ${validation.error}`,
+        shouldContinue: false,
       };
     }
 
@@ -382,6 +389,7 @@ Constraints:
           return {
             success: false,
             error: `Action execution failed after ${this.config.maxRetries} retries: ${executionResult.error}`,
+            shouldContinue: false,
           };
         }
       }
@@ -393,6 +401,7 @@ Constraints:
       return {
         success: false,
         error: 'Action verification failed',
+        shouldContinue: false,
       };
     }
 

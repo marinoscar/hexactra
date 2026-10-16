@@ -4,6 +4,8 @@
 let currentTabId: number | null = null;
 let currentUrl: string | null = null;
 
+// Configuration state (reserved for future provider configuration)
+
 /**
  * Initialize the side panel
  */
