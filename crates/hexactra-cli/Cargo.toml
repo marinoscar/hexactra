@@ -1,0 +1,32 @@
+[package]
+name = "hexactra-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[[bin]]
+name = "hexactra"
+path = "src/main.rs"
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
+clap.workspace = true
+
+hexactra-core = { path = "../hexactra-core" }
+hexactra-telemetry = { path = "../hexactra-telemetry" }
+hexactra-control = { path = "../hexactra-control" }
+hexactra-agent = { path = "../hexactra-agent" }
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -1,0 +1,51 @@
+[workspace]
+members = [
+    "crates/hexactra-core",
+    "crates/hexactra-telemetry",
+    "crates/hexactra-control",
+    "crates/hexactra-agent",
+    "crates/hexactra-worker",
+    "crates/hexactra-native-host",
+    "crates/hexactra-cli",
+    "crates/hexactra-mcp",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Oscar Marin <marinoscar@users.noreply.github.com>"]
+license = "MIT"
+repository = "https://github.com/marinoscar/hexactra"
+description = "Hexactra: AI-powered browser automation runtime"
+
+[workspace.dependencies]
+# Core dependencies
+tokio = { version = "1.42", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+tokio-util = "0.7"
+anyhow = "1.0"
+async-trait = "0.1"
+uuid = { version = "1.11", features = ["v4", "serde"] }
+axum = { version = "0.8", features = ["json", "macros"] }
+tower = "0.5"
+hyper = "1.5"
+utoipa = { version = "5.2", features = ["axum_extras"] }
+schemars = { version = "0.8", features = ["chrono"] }
+chrono = { version = "0.4", features = ["serde"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono"] }
+clap = { version = "4.5", features = ["derive"] }
+tokio-native-tls = "0.3"
+futures = "0.3"
+hex = "0.4"
+base64 = "0.21"
+dirs = "6.0"
+
+# Testing
+tokio-test = "0.4"
+mockall = "0.13"
+tempfile = "3.14"
