@@ -31,7 +31,7 @@ pub async fn migrate(pool: &DbPool) -> Result<()> {
     let migrations_path = std::path::PathBuf::from(manifest_dir).join("migrations");
     
     // Use the full path as a literal string
-    let migrations_str = migrations_path.to_str().unwrap();
+    let _migrations_str = migrations_path.to_str().unwrap();
     
     // Note: sqlx::migrate! requires a compile-time literal, so we use the path directly
     // The path is relative to CARGO_MANIFEST_DIR which points to the crate root

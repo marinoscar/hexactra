@@ -17,10 +17,11 @@ use crate::config::Config;
 use crate::state::DbState;
 
 /// Create the main application router
-pub fn create_router(_config: &Config, db_state: DbState) -> Router {
+pub fn create_router(_config: &Config, db_state: DbState) -> Router<DbState> {
     Router::new()
-        .route("/health", get(health))
         .with_state(db_state)
+        .route("/health", get(health))
+        .merge(routes::sessions::router())
 }
 
 /// Health check endpoint
