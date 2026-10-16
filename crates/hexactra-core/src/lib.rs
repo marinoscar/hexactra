@@ -43,6 +43,18 @@ impl Default for GoalId {
     }
 }
 
+impl From<GoalId> for Uuid {
+    fn from(id: GoalId) -> Self {
+        id.0
+    }
+}
+
+impl From<Uuid> for GoalId {
+    fn from(uuid: Uuid) -> Self {
+        GoalId::from_uuid(uuid)
+    }
+}
+
 /// Unique identifier for a session
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct SessionId(Uuid);
@@ -67,6 +79,18 @@ impl Default for SessionId {
     }
 }
 
+impl From<SessionId> for Uuid {
+    fn from(id: SessionId) -> Self {
+        id.0
+    }
+}
+
+impl From<Uuid> for SessionId {
+    fn from(uuid: Uuid) -> Self {
+        SessionId::from_uuid(uuid)
+    }
+}
+
 /// Unique identifier for an operation
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct OperationId(Uuid);
@@ -88,6 +112,18 @@ impl OperationId {
 impl Default for OperationId {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl From<OperationId> for Uuid {
+    fn from(id: OperationId) -> Self {
+        id.0
+    }
+}
+
+impl From<Uuid> for OperationId {
+    fn from(uuid: Uuid) -> Self {
+        OperationId::from_uuid(uuid)
     }
 }
 
@@ -139,6 +175,18 @@ impl Default for InteractionRequestId {
     }
 }
 
+impl From<InteractionRequestId> for Uuid {
+    fn from(id: InteractionRequestId) -> Self {
+        id.0
+    }
+}
+
+impl From<Uuid> for InteractionRequestId {
+    fn from(uuid: Uuid) -> Self {
+        InteractionRequestId::from_uuid(uuid)
+    }
+}
+
 /// Unique identifier for an artifact
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ArtifactId(Uuid);
@@ -163,6 +211,18 @@ impl Default for ArtifactId {
     }
 }
 
+impl From<ArtifactId> for Uuid {
+    fn from(id: ArtifactId) -> Self {
+        id.0
+    }
+}
+
+impl From<Uuid> for ArtifactId {
+    fn from(uuid: Uuid) -> Self {
+        ArtifactId::from_uuid(uuid)
+    }
+}
+
 /// Status of a goal execution
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -179,6 +239,31 @@ pub enum RunStatus {
     Cancelled,
     /// Goal timed out
     TimedOut,
+}
+
+impl RunStatus {
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            RunStatus::Queued => "queued",
+            RunStatus::Running => "running",
+            RunStatus::Completed => "completed",
+            RunStatus::Failed => "failed",
+            RunStatus::Cancelled => "cancelled",
+            RunStatus::TimedOut => "timed_out",
+        }
+    }
+
+    pub fn from_str_name(s: &str) -> Self {
+        match s {
+            "queued" => RunStatus::Queued,
+            "running" => RunStatus::Running,
+            "completed" => RunStatus::Completed,
+            "failed" => RunStatus::Failed,
+            "cancelled" => RunStatus::Cancelled,
+            "timed_out" => RunStatus::TimedOut,
+            _ => RunStatus::Queued,
+        }
+    }
 }
 
 /// Result of a browser action
@@ -249,6 +334,27 @@ pub enum SessionStatus {
     Ended,
 }
 
+impl SessionStatus {
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            SessionStatus::Initializing => "initializing",
+            SessionStatus::Running => "running",
+            SessionStatus::Paused => "paused",
+            SessionStatus::Ended => "ended",
+        }
+    }
+
+    pub fn from_str_name(s: &str) -> Self {
+        match s {
+            "initializing" => SessionStatus::Initializing,
+            "running" => SessionStatus::Running,
+            "paused" => SessionStatus::Paused,
+            "ended" => SessionStatus::Ended,
+            _ => SessionStatus::Initializing,
+        }
+    }
+}
+
 /// Profile configuration
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Profile {
@@ -284,6 +390,27 @@ pub enum OperationStatus {
     Failed,
 }
 
+impl OperationStatus {
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            OperationStatus::Queued => "queued",
+            OperationStatus::InProgress => "in_progress",
+            OperationStatus::Completed => "completed",
+            OperationStatus::Failed => "failed",
+        }
+    }
+
+    pub fn from_str_name(s: &str) -> Self {
+        match s {
+            "queued" => OperationStatus::Queued,
+            "in_progress" => OperationStatus::InProgress,
+            "completed" => OperationStatus::Completed,
+            "failed" => OperationStatus::Failed,
+            _ => OperationStatus::Queued,
+        }
+    }
+}
+
 /// Lease for resource access
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Lease {
@@ -316,6 +443,25 @@ pub enum InteractionStatus {
     Approved,
     /// Human rejected the request
     Rejected,
+}
+
+impl InteractionStatus {
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            InteractionStatus::Pending => "pending",
+            InteractionStatus::Approved => "approved",
+            InteractionStatus::Rejected => "rejected",
+        }
+    }
+
+    pub fn from_str_name(s: &str) -> Self {
+        match s {
+            "pending" => InteractionStatus::Pending,
+            "approved" => InteractionStatus::Approved,
+            "rejected" => InteractionStatus::Rejected,
+            _ => InteractionStatus::Pending,
+        }
+    }
 }
 
 /// Error types for Hexactra operations
