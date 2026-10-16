@@ -3,7 +3,7 @@
   "permission": {
     "bash": {
       "*": "allow",
-      "git push*": "ask",
+      "git push* main*": "ask",
       "rm -rf*": "ask"
     },
     "read": {
