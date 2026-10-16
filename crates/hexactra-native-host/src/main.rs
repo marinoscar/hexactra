@@ -5,7 +5,7 @@
 //! (32-bit length-prefixed JSON) on stdout/stdin and communicates with the
 //! worker via a Unix socket.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use std::io::{self, Write};
 use tracing::{info, error, warn, debug};
@@ -13,7 +13,10 @@ use tracing::{info, error, warn, debug};
 mod protocol;
 mod bridge;
 
-use protocol::{read_message, write_message, write_error, MAX_MESSAGE_SIZE};
+use protocol::{
+    read_message, write_message, write_error, validate_envelope, create_error_message,
+    create_ready_message, HostId, CorrelationId,
+};
 use bridge::worker_ready;
 
 #[derive(Parser, Debug)]
@@ -25,14 +28,14 @@ struct Args {
     control_socket: String,
 
     /// Maximum message size in bytes
-    #[arg(long, default_value_t = MAX_MESSAGE_SIZE)]
+    #[arg(long, default_value_t = protocol::MAX_MESSAGE_SIZE)]
     max_message_size: usize,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
-    
+
     tracing_subscriber::fmt::init();
 
     info!("Starting native messaging host");
@@ -49,27 +52,58 @@ async fn main() -> Result<()> {
     // Main message loop
     let stdin = io::stdin();
     let mut stdout = io::stdout();
-    
+
+    // Host ID for this instance
+    let host_id = HostId::new();
+
     loop {
         match read_message(&mut stdin.lock()) {
             Ok(message) => {
                 debug!("Received message: {}", message);
-                
-                // Forward to worker
-                match handle_message(&message, &args.control_socket) {
-                    Ok(response) => {
-                        if let Err(e) = write_message(&mut stdout, &response) {
-                            error!("Failed to write response: {}", e);
-                            write_error(&format!("Response write failed: {}", e));
+
+                // Parse and validate the envelope
+                match serde_json::from_str::<protocol::Envelope>(&message) {
+                    Ok(envelope) => {
+                        // Validate the envelope
+                        if let Err(e) = validate_envelope(&envelope) {
+                            error!("Invalid envelope: {}", e);
+                            let error_msg = create_error_message(
+                                &format!("Validation failed: {}", e),
+                                envelope.correlation_id,
+                            );
+                            if let Err(e) = write_message(&mut stdout, &serde_json::to_string(&error_msg)?) {
+                                error!("Failed to write error response: {}", e);
+                            }
+                            continue;
+                        }
+
+                        // Handle the message based on type
+                        match handle_message(&envelope, &args.control_socket, host_id).await {
+                            Ok(response) => {
+                                if let Err(e) = write_message(&mut stdout, &response) {
+                                    error!("Failed to write response: {}", e);
+                                }
+                            }
+                            Err(e) => {
+                                error!("Message handling failed: {}", e);
+                                let error_msg = create_error_message(
+                                    &e.to_string(),
+                                    envelope.correlation_id,
+                                );
+                                if let Err(e) = write_message(&mut stdout, &serde_json::to_string(&error_msg)?) {
+                                    error!("Failed to write error response: {}", e);
+                                }
+                            }
                         }
                     }
                     Err(e) => {
-                        error!("Message handling failed: {}", e);
-                        let error_msg = serde_json::json!({
-                            "error": e.to_string(),
-                            "timestamp": chrono::Utc::now().to_rfc3339()
-                        });
-                        if let Err(e) = write_message(&mut stdout, &error_msg.to_string()) {
+                        error!("Failed to parse message as envelope: {}", e);
+                        // Try to extract correlation ID if possible
+                        let error_msg = create_error_message(
+                            &format!("Parse failed: {}", e),
+                            CorrelationId::new(),
+                        );
+                        if let Err(e) = write_message(&mut stdout, &serde_json::to_string(&error_msg)?) {
                             error!("Failed to write error response: {}", e);
                         }
                     }
@@ -90,7 +124,7 @@ async fn main() -> Result<()> {
                 }
             }
         }
-        
+
         // Flush stdout after each message
         if let Err(e) = stdout.flush() {
             error!("Failed to flush stdout: {}", e);
@@ -102,16 +136,110 @@ async fn main() -> Result<()> {
 }
 
 /// Handle a single message from Chrome
-fn handle_message(_message: &str, _socket_path: &str) -> Result<String> {
-    // For now, we just echo back a response
-    // In a full implementation, this would forward to the worker
-    
-    // Create a simple response
-    let response = serde_json::json!({
-        "status": "ok",
-        "host": "native-messaging",
-        "timestamp": chrono::Utc::now().to_rfc3339()
-    });
+async fn handle_message(
+    envelope: &protocol::Envelope,
+    socket_path: &str,
+    host_id: HostId,
+) -> Result<String> {
+    debug!("Handling message type: {}", envelope.message_type);
 
-    Ok(response.to_string())
+    match envelope.message_type.as_str() {
+        "hello" => {
+            // Return ready message with worker identity
+            let ready = create_ready_message("native-host", protocol::PROTOCOL_VERSION);
+            serde_json::to_string(&ready).context("Failed to serialize ready message")
+        }
+        "heartbeat" => {
+            // Return heartbeat response
+            let response = protocol::Envelope {
+                version: envelope.version.clone(),
+                message_type: "heartbeat_response".to_string(),
+                host_id,
+                session_id: envelope.session_id,
+                tab_id: envelope.tab_id,
+                correlation_id: envelope.correlation_id,
+                sequence_number: envelope.sequence_number + 1,
+                timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64,
+                sender_identity: protocol::SenderIdentity::Worker(protocol::WorkerIdentity {
+                    worker_id: "native-host".to_string(),
+                    protocol_version: protocol::PROTOCOL_VERSION.to_string(),
+                }),
+                payload: Some(serde_json::json!({"status": "ok"})),
+            };
+            serde_json::to_string(&response).context("Failed to serialize heartbeat response")
+        }
+        "get_capabilities" => {
+            // Return capability information
+            let capabilities = protocol::Capabilities {
+                supports_screenshots: true,
+                supports_click: true,
+                supports_type: true,
+                supports_navigate: true,
+                supports_tabs: true,
+                supports_javascript: true,
+            };
+            let response = protocol::Envelope {
+                version: envelope.version.clone(),
+                message_type: "capabilities".to_string(),
+                host_id,
+                session_id: envelope.session_id,
+                tab_id: envelope.tab_id,
+                correlation_id: envelope.correlation_id,
+                sequence_number: envelope.sequence_number + 1,
+                timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64,
+                sender_identity: protocol::SenderIdentity::Worker(protocol::WorkerIdentity {
+                    worker_id: "native-host".to_string(),
+                    protocol_version: protocol::PROTOCOL_VERSION.to_string(),
+                }),
+                payload: Some(serde_json::to_value(capabilities)?),
+            };
+            serde_json::to_string(&response).context("Failed to serialize capabilities response")
+        }
+        _ => {
+            // Forward unknown messages to worker
+            forward_to_worker(envelope, socket_path).await
+        }
+    }
+}
+
+/// Forward a message to the session worker via Unix socket
+async fn forward_to_worker(
+    envelope: &protocol::Envelope,
+    socket_path: &str,
+) -> Result<String> {
+    // TODO: Implement actual worker connection and message forwarding
+    // For now, return a mock response
+
+    debug!("Forwarding to worker at {}", socket_path);
+
+    // Create a mock response
+    let response = protocol::Envelope {
+        version: envelope.version.clone(),
+        message_type: "success".to_string(),
+        host_id: HostId::new(),
+        session_id: envelope.session_id,
+        tab_id: envelope.tab_id,
+        correlation_id: envelope.correlation_id,
+        sequence_number: envelope.sequence_number + 1,
+        timestamp: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64,
+        sender_identity: protocol::SenderIdentity::Worker(protocol::WorkerIdentity {
+            worker_id: "native-host".to_string(),
+            protocol_version: protocol::PROTOCOL_VERSION.to_string(),
+        }),
+        payload: Some(serde_json::json!({
+            "status": "mock",
+            "message": "Worker connection not yet implemented"
+        })),
+    };
+
+    serde_json::to_string(&response).context("Failed to serialize response")
 }
