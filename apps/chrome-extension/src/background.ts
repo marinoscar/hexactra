@@ -35,6 +35,7 @@ type MessageType =
   | 'TYPE'
   | 'NAVIGATE'
   | 'TAKE_SCREENSHOT'
+  | 'GET_CAPABILITIES'
   | 'TAB_LIST'
   | 'TAB_SWITCH'
   | 'TAB_OPEN'
@@ -73,6 +74,8 @@ function handleMessage(
       return handleNavigate(sender, msg);
     case 'TAKE_SCREENSHOT':
       return handleScreenshot(sender, msg);
+    case 'GET_CAPABILITIES':
+      return handleGetCapabilities(sender);
     case 'TAB_LIST':
       return handleTabList(sender);
     case 'TAB_SWITCH':
@@ -437,6 +440,30 @@ async function handleTabClose(
 }
 
 /**
+ * Handle get capabilities action
+ */
+async function handleGetCapabilities(sender: chrome.runtime.MessageSender) {
+  try {
+    const capabilities = await getCapabilities();
+    sendResponse(sender, { 
+      success: true,
+      capabilities,
+    });
+  } catch (error) {
+    // Return minimal capabilities even on error
+    sendResponse(sender, { 
+      success: true,
+      capabilities: {
+        screenshot: { supported: true, formats: ['png', 'jpeg'], defaultFormat: 'jpeg' },
+        debugger: { available: false, supported: false, error: error instanceof Error ? error.message : 'Capability detection failed' },
+        tabCapture: { supported: true, maxTabs: 10 },
+        scripting: { supported: true, canInjectScripts: true, canExecuteScripts: true },
+      },
+    });
+  }
+}
+
+/**
  * Handle focus action
  */
 async function handleFocus(
@@ -746,7 +773,91 @@ function sendResponse(
   }
 }
 
+/**
+ * Get browser/debugger capability information
+ */
+async function getCapabilities(): Promise<CapabilityInfo> {
+  const capabilities: CapabilityInfo = {
+    screenshot: {
+      supported: true,
+      formats: ['png', 'jpeg'],
+      defaultFormat: 'jpeg',
+    },
+    debugger: {
+      available: false,
+      supported: false,
+      error: 'Chrome debugger not available',
+    },
+    tabCapture: {
+      supported: true,
+      maxTabs: 10, // Chrome extension limit
+    },
+    scripting: {
+      supported: true,
+      canInjectScripts: true,
+      canExecuteScripts: true,
+    },
+  };
+
+  // Check if chrome.debugger API is available
+  try {
+    if (chrome.debugger) {
+      capabilities.debugger.available = true;
+      capabilities.debugger.supported = true;
+      capabilities.debugger.error = undefined;
+      
+      // Try to get version info
+      try {
+        const targets = await chrome.debugger.getTargets();
+        capabilities.debugger.targetsCount = targets.length;
+      } catch (debugError) {
+        // Debug API exists but may not be connected yet
+        capabilities.debugger.targetsCount = 0;
+      }
+    }
+  } catch (error) {
+    // chrome.debugger not available
+    capabilities.debugger.error = 'Chrome debugger API not available';
+  }
+
+  return capabilities;
+}
+
 // Auto-initialize when the extension loads
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Hexactra extension installed');
 });
+
+/**
+ * Type definitions
+ */
+interface CapabilityInfo {
+  screenshot: ScreenshotCapability;
+  debugger: DebuggerCapability;
+  tabCapture: TabCaptureCapability;
+  scripting: ScriptingCapability;
+}
+
+interface ScreenshotCapability {
+  supported: boolean;
+  formats: string[];
+  defaultFormat: string;
+}
+
+interface DebuggerCapability {
+  available: boolean;
+  supported: boolean;
+  error?: string;
+  targetsCount?: number;
+}
+
+interface TabCaptureCapability {
+  supported: boolean;
+  maxTabs: number;
+}
+
+interface ScriptingCapability {
+  supported: boolean;
+  canInjectScripts: boolean;
+  canExecuteScripts: boolean;
+}
