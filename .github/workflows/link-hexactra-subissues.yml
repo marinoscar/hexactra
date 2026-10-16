@@ -1,0 +1,33 @@
+name: Link Hexactra epic sub-issues
+
+# Run on this workflow's initial commit, or manually later if interrupted.
+on:
+  push:
+    paths:
+      - ".github/workflows/link-hexactra-subissues.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: hexactra-subissue-backfill
+  cancel-in-progress: false
+
+jobs:
+  link:
+    if: github.repository == 'marinoscar/hexactra'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Attach and verify native GitHub sub-issues
+        run: node scripts/link-github-subissues.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
