@@ -7,6 +7,7 @@ pub mod redact;
 pub mod routes {
     pub mod goals;
     pub mod interaction_requests;
+    pub mod mcp;
     pub mod operations;
     pub mod sessions;
     pub mod hosts;
@@ -24,13 +25,14 @@ use crate::state::DbState;
 /// Create the main application router
 pub fn create_router(_config: &Config, db_state: DbState) -> Router<DbState> {
     Router::new()
-        .with_state(db_state)
+        .with_state(db_state.clone())
         .route("/health", get(health))
         .merge(routes::sessions::router())
         .merge(routes::hosts::router())
         .merge(routes::session_lifecycle::router())
         .merge(routes::viewers::router())
         .merge(routes::hitl_broker::router())
+        .merge(routes::mcp::router(db_state))
 }
 
 /// Health check endpoint

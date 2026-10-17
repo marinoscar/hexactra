@@ -7,7 +7,7 @@ use std::env;
 use std::path::PathBuf;
 
 /// Configuration for the Hexactra control plane
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Config {
     /// Bind address for the HTTP server
     pub bind_address: String,

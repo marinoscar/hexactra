@@ -9,6 +9,7 @@ description.workspace = true
 
 [dependencies]
 tokio.workspace = true
+tokio-stream.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -27,6 +28,8 @@ jsonwebtoken = "9.3"
 sha2 = "0.10"
 hex = "0.4"
 rand = "0.8"
+futures-util.workspace = true
+async-stream = "0.3"
 
 hexactra-core = { path = "../hexactra-core" }
 hexactra-telemetry = { path = "../hexactra-telemetry" }
