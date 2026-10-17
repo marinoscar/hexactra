@@ -1,0 +1,26 @@
+"use strict";
+//! Hexactra TypeScript SDK
+//!
+//! This SDK provides type definitions and utilities for interacting with the Hexactra control plane API.
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.HexactraError = exports.HttpClient = void 0;
+__exportStar(require("./types"), exports);
+__exportStar(require("./client"), exports);
+var http_1 = require("./http");
+Object.defineProperty(exports, "HttpClient", { enumerable: true, get: function () { return http_1.HttpClient; } });
+Object.defineProperty(exports, "HexactraError", { enumerable: true, get: function () { return http_1.HexactraError; } });
+//# sourceMappingURL=index.js.map

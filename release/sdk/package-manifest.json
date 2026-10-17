@@ -1,0 +1,21 @@
+{
+  "name": "@hexactra/sdk",
+  "version": "0.1.0",
+  "files": [
+    "dist/index.js",
+    "dist/index.d.ts",
+    "dist/client.js",
+    "dist/client.d.ts",
+    "dist/http.js",
+    "dist/http.d.ts",
+    "dist/openai.js",
+    "dist/openai.d.ts",
+    "dist/planning.js",
+    "dist/planning.d.ts",
+    "dist/types.js",
+    "dist/types.d.ts"
+  ],
+  "checksums": {
+
+  }
+}

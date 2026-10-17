@@ -1,0 +1,38 @@
+{
+  "name": "@hexactra/sdk",
+  "version": "0.1.0",
+  "description": "Hexactra TypeScript SDK for browser automation runtime",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src --ext .ts,.tsx",
+    "format": "prettier --write src",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "uuid": "^11.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "eslint": "^8.57.1",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "keywords": ["hexactra", "browser-automation", "ai-agent", "mcp"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/marinoscar/hexactra.git",
+    "directory": "packages/sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/marinoscar/hexactra/issues"
+  }
+}
