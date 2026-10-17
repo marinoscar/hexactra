@@ -10,6 +10,7 @@ members = [
     "crates/hexactra-cli",
     "crates/hexactra-mcp",
     "crates/hexactra-model-adapter",
+    "crates/hexactra-agent-run",
 ]
 resolver = "2"
 
