@@ -1042,6 +1042,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "hexactra-planning-loop"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "clap",
+ "futures",
+ "hexactra-agent-run",
+ "hexactra-core",
+ "hexactra-model-adapter",
+ "hexactra-telemetry",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "hexactra-telemetry"
 version = "0.1.0"
 dependencies = [
