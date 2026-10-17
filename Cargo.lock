@@ -1027,6 +1027,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "hexactra-credential-resolver"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "hexactra-provider-sdk",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "hexactra-desktop-input"
 version = "0.1.0"
 dependencies = [
