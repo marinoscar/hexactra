@@ -9,6 +9,7 @@ pub mod routes {
     pub mod interaction_requests;
     pub mod operations;
     pub mod sessions;
+    pub mod hosts;
 }
 pub mod state;
 
@@ -22,6 +23,7 @@ pub fn create_router(_config: &Config, db_state: DbState) -> Router<DbState> {
         .with_state(db_state)
         .route("/health", get(health))
         .merge(routes::sessions::router())
+        .merge(routes::hosts::router())
 }
 
 /// Health check endpoint
@@ -30,4 +32,4 @@ async fn health() -> &'static str {
 }
 
 // Re-export types from core for convenience
-pub use hexactra_core::{Goal, Session, Operation, InteractionRequest, BrowserAction};
+pub use hexactra_core::{Goal, Session, Operation, InteractionRequest, BrowserAction, Host, HostId, HostStatus, Capability};
