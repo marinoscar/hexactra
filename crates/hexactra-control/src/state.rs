@@ -14,6 +14,17 @@ use hexactra_core::{
     OperationStatus, Profile, RunStatus, Session, SessionStatus,
 };
 
+/// Passkey challenge information
+#[derive(Debug, Clone)]
+pub struct PasskeyChallengeInfo {
+    pub request_id: Uuid,
+    pub rp_entity_name: String,
+    pub user_id: String,
+    pub timeout_seconds: u32,
+    pub attestation_types: Vec<String>,
+    pub expires_at: DateTime<Utc>,
+}
+
 /// Database state storage
 #[derive(Clone)]
 pub struct DbState {
@@ -786,6 +797,11 @@ impl DbState {
                 ),
                 owner_id: row.get::<Option<String>, _>(8).and_then(|s| Uuid::parse_str(&s).ok()),
                 origin_session_id: Uuid::parse_str(&row.get::<String, _>(9))?,
+                policy: hexactra_core::InteractionPolicy {
+                    approval_level: hexactra_core::ApprovalLevel::Standard,
+                    verify_origin: false,
+                    max_retries: 3,
+                },
             };
             request.details = serde_json::from_str(&row.get::<String, _>(3))?;
             Ok(Some(request))
@@ -861,12 +877,181 @@ impl DbState {
                 ),
                 owner_id: row.get::<Option<String>, _>(8).and_then(|s| Uuid::parse_str(&s).ok()),
                 origin_session_id: Uuid::parse_str(&row.get::<String, _>(9))?,
+                policy: hexactra_core::InteractionPolicy {
+                    approval_level: hexactra_core::ApprovalLevel::Standard,
+                    verify_origin: false,
+                    max_retries: 3,
+                },
             };
             request.details = serde_json::from_str(&row.get::<String, _>(3))?;
             requests.push(request);
         }
 
         Ok(requests)
+    }
+
+    // ==================== OOB Confirmation Operations ====================
+
+    /// Store OOB verification channel info
+    pub async fn create_oob_channel(
+        &self,
+        channel_id: &str,
+        verification_code: &str,
+        request_id: Uuid,
+        expires_at: DateTime<Utc>,
+    ) -> Result<()> {
+        let pool = self.pool.clone();
+        sqlx::query(
+            r#"
+            INSERT INTO oob_channels (channel_id, verification_code, request_id, expires_at, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(channel_id)
+        .bind(verification_code)
+        .bind(request_id.to_string())
+        .bind(expires_at.to_rfc3339())
+        .bind(Utc::now().to_rfc3339())
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Verify OOB channel and return the associated request ID
+    pub async fn verify_oob_channel(
+        &self,
+        channel_id: &str,
+        verification_code: &str,
+    ) -> Result<Option<Uuid>> {
+        let pool = self.pool.clone();
+        let row = sqlx::query(
+            r#"
+            SELECT request_id, expires_at FROM oob_channels 
+            WHERE channel_id = ? AND verification_code = ?
+            "#,
+        )
+        .bind(channel_id)
+        .bind(verification_code)
+        .fetch_optional(&*pool)
+        .await?;
+
+        if let Some(row) = row {
+            let request_id: String = row.get(0);
+            let expires_at: chrono::NaiveDateTime = row.get(1);
+
+            // Check if not expired
+            if Utc::now().naive_utc() < expires_at {
+                return Ok(Some(Uuid::parse_str(&request_id)?));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Delete OOB channel after verification
+    pub async fn delete_oob_channel(&self, channel_id: &str) -> Result<u64> {
+        let pool = self.pool.clone();
+        let result = sqlx::query(
+            r#"
+            DELETE FROM oob_channels WHERE channel_id = ?
+            "#,
+        )
+        .bind(channel_id)
+        .execute(&*pool)
+        .await?;
+
+        Ok(result.rows_affected())
+    }
+
+    // ==================== Passkey Operations ====================
+
+    /// Store passkey challenge
+    pub async fn create_passkey_challenge(
+        &self,
+        challenge_id: &str,
+        request_id: Uuid,
+        rp_entity_name: &str,
+        user_id: &str,
+        timeout_seconds: u32,
+        attestation_types: &[String],
+        expires_at: DateTime<Utc>,
+    ) -> Result<()> {
+        let pool = self.pool.clone();
+        let attestation_json = serde_json::to_value(attestation_types)?;
+        sqlx::query(
+            r#"
+            INSERT INTO passkey_challenges (challenge_id, request_id, rp_entity_name, user_id, timeout_seconds, attestation_types, expires_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(challenge_id)
+        .bind(request_id.to_string())
+        .bind(rp_entity_name)
+        .bind(user_id)
+        .bind(timeout_seconds.to_string())
+        .bind(attestation_json.to_string())
+        .bind(expires_at.to_rfc3339())
+        .bind(Utc::now().to_rfc3339())
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get passkey challenge by ID
+    pub async fn get_passkey_challenge(
+        &self,
+        challenge_id: &str,
+    ) -> Result<Option<PasskeyChallengeInfo>> {
+        let pool = self.pool.clone();
+        let row = sqlx::query(
+            r#"
+            SELECT request_id, rp_entity_name, user_id, timeout_seconds, attestation_types, expires_at
+            FROM passkey_challenges
+            WHERE challenge_id = ?
+            "#,
+        )
+        .bind(challenge_id)
+        .fetch_optional(&*pool)
+        .await?;
+
+        if let Some(row) = row {
+            let request_id_str: String = row.get(0);
+            let rp_entity_name: String = row.get(1);
+            let user_id: String = row.get(2);
+            let timeout_seconds_str: String = row.get(3);
+            let attestation_json: String = row.get(4);
+            let expires_at: chrono::NaiveDateTime = row.get(5);
+
+            let attestation_types: Vec<String> = serde_json::from_str(&attestation_json)?;
+
+            return Ok(Some(PasskeyChallengeInfo {
+                request_id: Uuid::parse_str(&request_id_str)?,
+                rp_entity_name,
+                user_id,
+                timeout_seconds: timeout_seconds_str.parse().unwrap_or(60),
+                attestation_types,
+                expires_at: DateTime::<Utc>::from_utc(expires_at.into(), Utc),
+            }));
+        }
+
+        Ok(None)
+    }
+
+    /// Delete passkey challenge after verification
+    pub async fn delete_passkey_challenge(&self, challenge_id: &str) -> Result<u64> {
+        let pool = self.pool.clone();
+        let result = sqlx::query(
+            r#"
+            DELETE FROM passkey_challenges WHERE challenge_id = ?
+            "#,
+        )
+        .bind(challenge_id)
+        .execute(&*pool)
+        .await?;
+
+        Ok(result.rows_affected())
     }
 
     // ==================== HITL Broker Operations ====================
@@ -1026,6 +1211,11 @@ impl DbState {
                 ),
                 owner_id: row.get::<Option<String>, _>(8).and_then(|s| Uuid::parse_str(&s).ok()),
                 origin_session_id: Uuid::parse_str(&row.get::<String, _>(9))?,
+                policy: hexactra_core::InteractionPolicy {
+                    approval_level: hexactra_core::ApprovalLevel::Standard,
+                    verify_origin: false,
+                    max_retries: 3,
+                },
             };
             request.details = serde_json::from_str(&row.get::<String, _>(3))?;
             requests.push(request);
@@ -1451,7 +1641,13 @@ mod tests {
             expires_at: Utc::now() + chrono::Duration::minutes(15),
             owner_id: None,
             origin_session_id: session.id.as_uuid(),
+            policy: hexactra_core::InteractionPolicy {
+                approval_level: hexactra_core::ApprovalLevel::Standard,
+                verify_origin: false,
+                max_retries: 3,
+            },
         };
+        
 
         state.create_interaction_request(&request).await.unwrap();
         let retrieved = state.get_interaction_request(request.id.as_uuid()).await.unwrap();
@@ -1496,7 +1692,13 @@ mod tests {
             expires_at: Utc::now() + chrono::Duration::minutes(15),
             owner_id: None,
             origin_session_id: session.id.as_uuid(),
+            policy: hexactra_core::InteractionPolicy {
+                approval_level: hexactra_core::ApprovalLevel::Standard,
+                verify_origin: false,
+                max_retries: 3,
+            },
         };
+        
 
         state.create_interaction_request(&request).await.unwrap();
 
@@ -1543,7 +1745,13 @@ mod tests {
             expires_at: Utc::now() + chrono::Duration::minutes(15),
             owner_id: None,
             origin_session_id: session.id.as_uuid(),
+            policy: hexactra_core::InteractionPolicy {
+                approval_level: hexactra_core::ApprovalLevel::Standard,
+                verify_origin: false,
+                max_retries: 3,
+            },
         };
+        
 
         state.create_interaction_request(&request).await.unwrap();
 
@@ -1599,7 +1807,13 @@ mod tests {
             expires_at: past_time + Duration::minutes(5), // Expired 1 minute ago
             owner_id: None,
             origin_session_id: session.id.as_uuid(),
+            policy: hexactra_core::InteractionPolicy {
+                approval_level: hexactra_core::ApprovalLevel::Standard,
+                verify_origin: false,
+                max_retries: 3,
+            },
         };
+        
 
         state.create_interaction_request(&request).await.unwrap();
 
