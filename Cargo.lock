@@ -1216,6 +1216,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "hexactra-provider-tests"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "hexactra-credential-resolver",
+ "hexactra-demo-provider",
+ "hexactra-notification-delivery",
+ "hexactra-provider-sdk",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "hexactra-telemetry"
 version = "0.1.0"
 dependencies = [
