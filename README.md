@@ -55,6 +55,16 @@ pnpm test
 node scripts/fixture-server.js
 ```
 
+## Documentation
+
+For detailed documentation, see the `docs/` directory:
+
+- [Installation Guide](docs/installation.md) - Install Hexactra on Linux with systemd or Docker
+- [Operations Guide](docs/operations.md) - Daily operations, monitoring, and maintenance
+- [API Documentation](docs/api.md) - REST API and MCP tools reference
+- [Security Guide](docs/security.md) - Security principles and best practices
+- [Recovery Guide](docs/recovery.md) - Backup, restore, and disaster recovery
+
 ## CI
 
 The CI pipeline runs on push and pull requests:
