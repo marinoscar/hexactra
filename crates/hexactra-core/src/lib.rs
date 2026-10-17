@@ -721,6 +721,138 @@ pub struct Host {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Platform type for a host
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum HostPlatform {
+    Linux,
+    Windows,
+    MacOs,
+}
+
+impl HostPlatform {
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            HostPlatform::Linux => "linux",
+            HostPlatform::Windows => "windows",
+            HostPlatform::MacOs => "macos",
+        }
+    }
+
+    pub fn from_str_name(s: &str) -> Self {
+        match s {
+            "linux" => HostPlatform::Linux,
+            "windows" => HostPlatform::Windows,
+            "macos" => HostPlatform::MacOs,
+            _ => HostPlatform::Linux,
+        }
+    }
+}
+
+/// Extended host information for fleet orchestration
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostExtended {
+    pub id: HostId,
+    pub platform: HostPlatform,
+    pub display_available: bool,
+    pub max_concurrent_sessions: u32,
+    pub current_load: u32,
+}
+
+/// Profile affinity assignment
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileAffinity {
+    pub profile_id: Uuid,
+    pub assigned_host_id: HostId,
+    pub assigned_at: DateTime<Utc>,
+    pub assigned_by: String,
+}
+
+/// Schedule for automated task execution
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Schedule {
+    pub id: Uuid,
+    pub owner_id: Uuid,
+    pub name: String,
+    pub cron_expression: String,
+    pub timezone: String,
+    pub goal_definition: serde_json::Value,
+    pub max_retries: u32,
+    pub retry_delay_seconds: u32,
+    pub enabled: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Schedule run instance
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScheduleRun {
+    pub id: Uuid,
+    pub schedule_id: Uuid,
+    pub run_number: u32,
+    pub status: ScheduleRunStatus,
+    pub host_id: Option<HostId>,
+    pub session_id: Option<SessionId>,
+    pub started_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub error_message: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Status of a schedule run
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ScheduleRunStatus {
+    Queued,
+    Running,
+    Completed,
+    Failed,
+    Skipped,
+}
+
+impl ScheduleRunStatus {
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            ScheduleRunStatus::Queued => "queued",
+            ScheduleRunStatus::Running => "running",
+            ScheduleRunStatus::Completed => "completed",
+            ScheduleRunStatus::Failed => "failed",
+            ScheduleRunStatus::Skipped => "skipped",
+        }
+    }
+
+    pub fn from_str_name(s: &str) -> Self {
+        match s {
+            "queued" => ScheduleRunStatus::Queued,
+            "running" => ScheduleRunStatus::Running,
+            "completed" => ScheduleRunStatus::Completed,
+            "failed" => ScheduleRunStatus::Failed,
+            "skipped" => ScheduleRunStatus::Skipped,
+            _ => ScheduleRunStatus::Queued,
+        }
+    }
+}
+
+/// Distributed lease for coordinating across hosts
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DistributedLease {
+    pub id: Uuid,
+    pub resource_type: String,
+    pub resource_id: String,
+    pub holder_id: HostId,
+    pub expires_at: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Fleet scheduling decision
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SchedulingDecision {
+    pub host_id: HostId,
+    pub profile_id: Option<Uuid>,
+    pub reason: String,
+    pub score: f64,
+}
+
 // Re-export viewer types for convenience
 pub use viewer::{ViewerToken, ViewerPermissions, InputLease};
 

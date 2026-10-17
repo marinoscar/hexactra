@@ -15,6 +15,7 @@ pub mod routes {
     pub mod durable_actions;
     pub mod viewers;
     pub mod hitl_broker;
+    pub mod fleet;
 }
 pub mod state;
 
@@ -32,7 +33,8 @@ pub fn create_router(_config: &Config, db_state: DbState) -> Router<DbState> {
         .merge(routes::session_lifecycle::router())
         .merge(routes::viewers::router())
         .merge(routes::hitl_broker::router())
-        .merge(routes::mcp::router(db_state))
+        .merge(routes::mcp::router(db_state.clone()))
+        .merge(routes::fleet::router())
 }
 
 /// Health check endpoint
