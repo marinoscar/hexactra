@@ -1,0 +1,17 @@
+[package]
+name = "hexactra-provider-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+hexactra-demo-provider = { path = "../hexactra-demo-provider" }
+hexactra-credential-resolver = { path = "../hexactra-credential-resolver" }
+hexactra-notification-delivery = { path = "../hexactra-notification-delivery" }
+hexactra-provider-sdk = { path = "../hexactra-provider-sdk" }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros"] }
+uuid = { version = "1.0", features = ["v4"] }
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["rt-multi-thread", "macros", "test-util"] }
