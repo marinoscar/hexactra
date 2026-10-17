@@ -11,6 +11,7 @@ pub mod routes {
     pub mod sessions;
     pub mod hosts;
     pub mod session_lifecycle;
+    pub mod durable_actions;
     pub mod viewers;
 }
 pub mod state;
