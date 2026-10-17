@@ -1,0 +1,410 @@
+//! Session lifecycle management routes
+
+use axum::{
+    extract::State,
+    http::StatusCode,
+    response::Json,
+    routing::{get, post},
+    Router,
+};
+use chrono::Utc;
+use uuid::Uuid;
+
+use hexactra_core::{HostStatus, Session, SessionId, SessionStatus};
+
+use crate::state::DbState;
+
+/// Request to start a session
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StartSessionRequest {
+    pub profile_id: Uuid,
+    pub host_id: Option<Uuid>,
+}
+
+/// Response for session start
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StartSessionResponse {
+    pub session_id: Uuid,
+    pub status: String,
+}
+
+/// Request to stop a session
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StopSessionRequest {
+    pub reason: Option<String>,
+}
+
+/// Request to restart a session
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RestartSessionRequest {
+    pub force: bool,
+}
+
+/// Session status update request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateSessionStatusRequest {
+    pub status: String,
+    pub details: Option<serde_json::Value>,
+}
+
+/// Get session by ID with full details
+async fn get_session_full(
+    State(db_state): State<DbState>,
+    session_id: axum::extract::Path<Uuid>,
+) -> Result<Json<Session>, (StatusCode, String)> {
+    let session = db_state
+        .get_session(session_id.into_inner())
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+
+    match session {
+        Some(s) => Ok(Json(s)),
+        None => Err((StatusCode::NOT_FOUND, "Session not found".to_string())),
+    }
+}
+
+/// Start a new session
+async fn start_session(
+    State(db_state): State<DbState>,
+    Json(request): Json<StartSessionRequest>,
+) -> Result<Json<StartSessionResponse>, (StatusCode, String)> {
+    // Check if profile exists
+    let profile = db_state
+        .get_profile(request.profile_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+
+    if profile.is_none() {
+        return Err((StatusCode::NOT_FOUND, "Profile not found".to_string()));
+    }
+
+    // Check if host is available if specified
+    if let Some(host_id) = request.host_id {
+        let host = db_state
+            .get_host(&host_id)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+
+        match host {
+            Some(h) => {
+                if h.status != HostStatus::Ready {
+                    return Err((StatusCode::BAD_REQUEST, "Host is not ready".to_string()));
+                }
+            }
+            None => {
+                return Err((StatusCode::NOT_FOUND, "Host not found".to_string()));
+            }
+        }
+    }
+
+    // Create session
+    let session_id = SessionId::from_uuid(Uuid::new_v4());
+    let session = Session {
+        id: session_id,
+        profile_id: request.profile_id,
+        status: SessionStatus::Initializing,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+    };
+
+    db_state
+        .create_session(&session)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create session: {}", e)))?;
+
+    Ok(Json(StartSessionResponse {
+        session_id: session_id.as_uuid(),
+        status: SessionStatus::Initializing.as_str_name().to_string(),
+    }))
+}
+
+/// Stop a session
+async fn stop_session(
+    State(db_state): State<DbState>,
+    session_id: axum::extract::Path<Uuid>,
+) -> Result<Json<StartSessionResponse>, (StatusCode, String)> {
+    let session = db_state
+        .get_session(session_id.into_inner())
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+
+    match session {
+        Some(mut s) => {
+            s.status = SessionStatus::Ended;
+            s.updated_at = Utc::now();
+
+            db_state
+                .update_session_status(s.id.as_uuid(), s.status)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to stop session: {}", e)))?;
+
+            Ok(Json(StartSessionResponse {
+                session_id: s.id.as_uuid(),
+                status: SessionStatus::Ended.as_str_name().to_string(),
+            }))
+        }
+        None => Err((StatusCode::NOT_FOUND, "Session not found".to_string())),
+    }
+}
+
+/// Restart a session
+async fn restart_session(
+    State(db_state): State<DbState>,
+    session_id: axum::extract::Path<Uuid>,
+    Json(request): Json<RestartSessionRequest>,
+) -> Result<Json<StartSessionResponse>, (StatusCode, String)> {
+    let session = db_state
+        .get_session(session_id.into_inner())
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+
+    match session {
+        Some(mut s) => {
+            // Force restart can override status checks
+            if !request.force && s.status != SessionStatus::Ended {
+                return Err((StatusCode::BAD_REQUEST, "Session must be ended before restart".to_string()));
+            }
+
+            s.status = SessionStatus::Initializing;
+            s.updated_at = Utc::now();
+
+            db_state
+                .update_session_status(s.id.as_uuid(), s.status)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to restart session: {}", e)))?;
+
+            Ok(Json(StartSessionResponse {
+                session_id: s.id.as_uuid(),
+                status: SessionStatus::Initializing.as_str_name().to_string(),
+            }))
+        }
+        None => Err((StatusCode::NOT_FOUND, "Session not found".to_string())),
+    }
+}
+
+/// Update session status (e.g., from host)
+async fn update_session_status(
+    State(db_state): State<DbState>,
+    session_id: axum::extract::Path<Uuid>,
+    Json(request): Json<UpdateSessionStatusRequest>,
+) -> Result<Json<StartSessionResponse>, (StatusCode, String)> {
+    let status = SessionStatus::from_str_name(&request.status);
+
+    let session = db_state
+        .get_session(session_id.into_inner())
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+
+    match session {
+        Some(mut s) => {
+            s.status = status;
+            s.updated_at = Utc::now();
+
+            db_state
+                .update_session_status(s.id.as_uuid(), status)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update session status: {}", e)))?;
+
+            Ok(Json(StartSessionResponse {
+                session_id: s.id.as_uuid(),
+                status: status.as_str_name().to_string(),
+            }))
+        }
+        None => Err((StatusCode::NOT_FOUND, "Session not found".to_string())),
+    }
+}
+
+/// Get sessions by profile
+async fn get_sessions_by_profile(
+    State(db_state): State<DbState>,
+    profile_id: axum::extract::Path<Uuid>,
+) -> Result<Json<Vec<Session>>, (StatusCode, String)> {
+    let sessions = db_state
+        .list_sessions_by_profile(profile_id.into_inner())
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+
+    Ok(Json(sessions))
+}
+
+/// Check session readiness
+async fn check_session_readiness(
+    State(db_state): State<DbState>,
+    session_id: axum::extract::Path<Uuid>,
+) -> Result<Json<Session>, (StatusCode, String)> {
+    let session = db_state
+        .get_session(session_id.into_inner())
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+
+    match session {
+        Some(s) => {
+            if s.status != SessionStatus::Running {
+                return Err((StatusCode::BAD_REQUEST, "Session must be running to check readiness".to_string()));
+            }
+            Ok(Json(s))
+        }
+        None => Err((StatusCode::NOT_FOUND, "Session not found".to_string())),
+    }
+}
+
+/// Create router for session lifecycle routes
+pub fn router() -> Router<DbState> {
+    Router::new()
+        .route("/{id}", get(get_session_full))
+        .route("/", post(start_session))
+        .route("/{id}/stop", post(stop_session))
+        .route("/{id}/restart", post(restart_session))
+        .route("/{id}/status", post(update_session_status))
+        .route("/profile/{profile_id}", get(get_sessions_by_profile))
+        .route("/{id}/ready", get(check_session_readiness))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+    use sqlx::{Sqlite, SqlitePool};
+
+    async fn setup_test_db() -> DbState {
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+        let db_uri = format!("file:{}?mode=rwc", db_path.display());
+
+        let pool = SqlitePool::connect(&db_uri).await.unwrap();
+        sqlx::migrate!("../../hexactra-control/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+
+        DbState::new(pool)
+    }
+
+    #[tokio::test]
+    async fn test_start_session() {
+        let state = setup_test_db().await;
+        let app = Router::new()
+            .merge(router())
+            .with_state(state.clone());
+
+        let client = axum::test::TestClient::new(app);
+
+        // First create a profile
+        let profile_id = Uuid::new_v4();
+        let profile = hexactra_core::Profile {
+            id: profile_id,
+            name: "Test Profile".to_string(),
+            chrome_profile_path: Some("/tmp/test-profile".to_string()),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        state.create_profile(&profile).await.unwrap();
+
+        // Start a session
+        let request = StartSessionRequest {
+            profile_id,
+            host_id: None,
+        };
+
+        let response = client
+            .post("/sessions")
+            .json(&request)
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body: StartSessionResponse = response.json().await.unwrap();
+        assert_eq!(body.status, "initializing");
+    }
+
+    #[tokio::test]
+    async fn test_stop_session() {
+        let state = setup_test_db().await;
+
+        // Create profile and session
+        let profile_id = Uuid::new_v4();
+        let profile = hexactra_core::Profile {
+            id: profile_id,
+            name: "Test Profile".to_string(),
+            chrome_profile_path: Some("/tmp/test-profile".to_string()),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        state.create_profile(&profile).await.unwrap();
+
+        let session_id = SessionId::from_uuid(Uuid::new_v4());
+        let session = Session {
+            id: session_id,
+            profile_id,
+            status: SessionStatus::Running,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        state.create_session(&session).await.unwrap();
+
+        // Stop the session
+        let app = Router::new()
+            .merge(router())
+            .with_state(state);
+
+        let client = axum::test::TestClient::new(app);
+
+        let response = client
+            .post(format!("/sessions/{}/stop", session_id))
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: StartSessionResponse = response.json().await.unwrap();
+        assert_eq!(body.status, "ended");
+    }
+
+    #[tokio::test]
+    async fn test_restart_session() {
+        let state = setup_test_db().await;
+
+        // Create profile and session
+        let profile_id = Uuid::new_v4();
+        let profile = hexactra_core::Profile {
+            id: profile_id,
+            name: "Test Profile".to_string(),
+            chrome_profile_path: Some("/tmp/test-profile".to_string()),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        state.create_profile(&profile).await.unwrap();
+
+        let session_id = SessionId::from_uuid(Uuid::new_v4());
+        let session = Session {
+            id: session_id,
+            profile_id,
+            status: SessionStatus::Ended,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        state.create_session(&session).await.unwrap();
+
+        // Restart the session
+        let app = Router::new()
+            .merge(router())
+            .with_state(state);
+
+        let client = axum::test::TestClient::new(app);
+
+        let request = RestartSessionRequest { force: false };
+
+        let response = client
+            .post(format!("/sessions/{}/restart", session_id))
+            .json(&request)
+            .send()
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: StartSessionResponse = response.json().await.unwrap();
+        assert_eq!(body.status, "initializing");
+    }
+}

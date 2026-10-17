@@ -43,34 +43,33 @@ All work is tracked in GitHub issues. Nothing is implemented, and no branch or w
 - **Report status** after each issue as a table with columns Issue # | Issue Name | PR (full URL) | Status, where Status is one of `Not started`, `In progress`, `Open — awaiting review`, `Changes requested`, `Merged`, `Blocked — <reason>`. Show the whole epic's set, not only the last issue.
 - Only an explicit user instruction (e.g. "commit and push to main") overrides this for a given change, and only for that change.
 
-## MANDATORY: Worktree-based development
+## MANDATORY: Branch-based development
 
-Every issue is developed in its own Git worktree. **The main checkout stays on `main` at all times.**
+Every issue is developed in its own Git branch. **The main checkout stays on `main` at all times.**
 
-- Worktrees live under `worktrees/` in the repo root (git-ignored, never committed), named `worktrees/<issue#>-<slug>`.
 - Branch name: `issue/<issue#>-<slug>`, always created from an up-to-date `main`.
+- Branches live in the main repository (no worktrees).
 
 ```bash
 git -C <repo> fetch origin && git -C <repo> pull --ff-only          # from the main checkout
-git worktree add worktrees/2-bootstrap-monorepo -b issue/2-bootstrap-monorepo origin/main
-# ...work, commit, push from inside the worktree...
+git checkout -b issue/2-bootstrap-monorepo origin/main               # create branch from main
+# ...work, commit, push...
 git push -u origin issue/2-bootstrap-monorepo
 gh pr create --base main --fill   # body must contain "Fixes #2"
-gh pr merge --squash              # run from the worktree; do not pass --delete-branch (main is checked out elsewhere)
-# cleanup, from the main checkout:
-git worktree remove worktrees/2-bootstrap-monorepo
+gh pr merge --squash              # run from the main checkout
+# cleanup:
+git checkout main && git pull --ff-only
 git branch -D issue/2-bootstrap-monorepo && git push origin --delete issue/2-bootstrap-monorepo
-git pull --ff-only
 ```
 
 Rules:
-- Never check out an issue branch or develop in the main checkout. Give the start point explicitly; omitting it branches from whatever is checked out.
-- One issue → one branch → one worktree → one PR. Never combine issues in a PR.
-- If the worktree already exists, work inside it; don't recreate it. Other agents (Claude Code, OpenCode) may be working in other worktrees, so don't touch them.
-- Run builds/tests inside the worktree (each has its own `target/`/`node_modules`).
-- Rebase or merge `main` into a long-running worktree rather than cherry-picking.
-- Do not delegate to sub-agents for now; the session working the issue does the work itself in its worktree.
-- Remove the worktree and branch once the PR is merged. `git worktree list` shows what exists.
+- Always create branches from `main`. Never check out an issue branch in the main checkout; use a separate checkout if needed.
+- One issue → one branch → one PR. Never combine issues in a PR.
+- If the branch already exists, work on it; don't recreate it.
+- Run builds/tests from the branch checkout (uses the main `target/`).
+- Rebase or merge `main` into a long-running branch rather than cherry-picking.
+- Do not delegate to sub-agents for now; the session working the issue does the work itself in its branch.
+- Remove the branch once the PR is merged. `git branch -a` shows what exists.
 
 ## Commits
 
@@ -85,7 +84,7 @@ Dev machine is Ubuntu 24.04 x86_64. Installed: Rust via rustup (stable, with cli
 - Keep instructions in `AGENTS.md`; put only tool-specific notes in `CLAUDE.md` or `opencode.json`.
 - Shared skills go in `.claude/skills/<name>/SKILL.md` (OpenCode also discovers this path; `name` must match the directory, lowercase-hyphenated). Don't duplicate them under `.opencode/skills/`.
 - Slash commands/agents are not shared between tools (`.claude/commands` vs `.opencode/commands`); keep them thin and put real procedures in a skill or a script under `scripts/`.
-- Agents work in separate worktrees (see above), so concurrent agents don't collide. `CLAUDE.md` and `AGENTS.md` are kept in sync by construction (`CLAUDE.md` only imports `AGENTS.md`); `node scripts/check-agent-sync.mjs` verifies it and runs in CI. Never paste `AGENTS.md` content into `CLAUDE.md`.
+- Agents work on separate branches (see above), so concurrent agents don't collide. `CLAUDE.md` and `AGENTS.md` are kept in sync by construction (`CLAUDE.md` only imports `AGENTS.md`); `node scripts/check-agent-sync.mjs` verifies it and runs in CI. Never paste `AGENTS.md` content into `CLAUDE.md`.
 
 ## Product in one paragraph
 

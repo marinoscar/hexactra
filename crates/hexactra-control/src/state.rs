@@ -298,6 +298,10 @@ impl DbState {
         Ok(sessions)
     }
 
+    pub async fn list_sessions_by_profile(&self, profile_id: Uuid) -> Result<Vec<Session>> {
+        self.get_session_by_profile(profile_id, None).await
+    }
+
     // ==================== Goal Operations ====================
 
     pub async fn create_goal(&self, goal: &Goal) -> Result<()> {
