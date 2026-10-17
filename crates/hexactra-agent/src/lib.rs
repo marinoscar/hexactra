@@ -5,6 +5,7 @@
 //! private Unix socket, graceful shutdown, and least-privilege service account.
 
 pub mod chrome;
+pub mod platform;
 
 use anyhow::Result;
 use std::path::Path;
