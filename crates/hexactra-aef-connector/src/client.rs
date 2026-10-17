@@ -178,6 +178,12 @@ impl AefClient {
         let state = self.circuit_state.lock().await;
         state.clone()
     }
+
+    /// Store hints locally for offline access
+    pub fn store_hints(&self, _hints: Vec<Hint>) {
+        // Hint storage is handled by the caller (e.g., in-memory or persistent store)
+        // This is a placeholder for future implementation
+    }
 }
 
 /// Response from events submission
