@@ -135,11 +135,17 @@ impl AuditEvent {
     /// Add a detail field (automatically redacts sensitive data)
     pub fn add_detail(mut self, key: impl Into<String>, value: serde_json::Value) -> Self {
         let key = key.into();
-        self.details.insert(key, crate::redact_sensitive(&value));
+        let is_sensitive = ["password", "token", "secret", "key", "otp", "credential"]
+            .iter()
+            .any(|sk| key.to_lowercase().contains(sk));
+        let redacted = if is_sensitive {
+            serde_json::json!("[REDACTED]")
+        } else {
+            value.clone()
+        };
+        self.details.insert(key, redacted);
         self
     }
-
-    /// Create an auth event
     pub fn auth(principal: impl Into<String>, owner_id: Uuid, success: bool) -> Self {
         let mut event = Self::new(
             AuditEventType::Auth,

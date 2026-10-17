@@ -221,7 +221,8 @@ mod tests {
     fn test_safe_labels() {
         let long_id = "a".repeat(100);
         assert_eq!(SafeLabels::safe_session_id(&long_id).len(), 8);
-        assert_eq!(SafeLabels::safe_model_name("provider/model-name").len(), 12);
+        // "model-name" after splitting "provider/model-name" has length 10
+        assert_eq!(SafeLabels::safe_model_name("provider/model-name").len(), 10);
     }
 
     #[test]
