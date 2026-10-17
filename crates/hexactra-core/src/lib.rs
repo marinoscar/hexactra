@@ -9,12 +9,27 @@
 
 pub mod profile;
 pub mod viewer;
+pub mod policy;
 
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use thiserror::Error as ThisError;
 use uuid::Uuid;
+
+// Re-export policy types for convenience
+pub use policy::{ActionPolicy, ApprovalLevel, HighImpactAction, PolicyManager};
+
+/// Policy configuration for an interaction request
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct InteractionPolicy {
+    /// Required approval level for this request
+    pub approval_level: ApprovalLevel,
+    /// Whether origin verification is required
+    pub verify_origin: bool,
+    /// Maximum number of retries allowed
+    pub max_retries: u32,
+}
 
 /// Current protocol version
 pub const PROTOCOL_VERSION: &str = "1.0.0";
@@ -438,6 +453,30 @@ pub struct InteractionRequest {
     pub owner_id: Option<Uuid>,
     /// Origin/session that created this request (for mismatch detection)
     pub origin_session_id: Uuid,
+    /// Policy configuration for this request
+    pub policy: InteractionPolicy,
+}
+
+impl Default for InteractionRequest {
+    fn default() -> Self {
+        Self {
+            id: InteractionRequestId::from_uuid(Uuid::new_v4()),
+            session_id: SessionId::from_uuid(Uuid::new_v4()),
+            reason: String::new(),
+            details: serde_json::Value::Null,
+            created_at: Utc::now(),
+            kind: InteractionKind::SecretText,
+            status: InteractionStatus::Pending,
+            expires_at: Utc::now() + chrono::Duration::minutes(15),
+            owner_id: None,
+            origin_session_id: Uuid::new_v4(),
+            policy: InteractionPolicy {
+                approval_level: ApprovalLevel::Standard,
+                verify_origin: false,
+                max_retries: 3,
+            },
+        }
+    }
 }
 
 /// Type of interaction request (HITL taxonomy)
