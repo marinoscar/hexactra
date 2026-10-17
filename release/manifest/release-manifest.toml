@@ -1,0 +1,10 @@
+version = "0.1.0"
+platform = "Linux-Mini-PC"
+arch = "x86_64"
+date = "20261017"
+
+[binaries]
+hexactra = { path = "bin/hexactra", sha256 = "180f779e74781942e12b7068632512887a3b58e98c143933a2c3d1262bd0e5b6", md5 = "c3eca8004e997eae85444523e794a72e" }
+hexactra-agent = { path = "bin/hexactra-agent", sha256 = "83144888bf03d0878e7789b3034d40bb03ae6314b3da84953fd0d95bf9c8e78d", md5 = "5054266997fcbefe153a5eab6da9959e" }
+hexactra-native-host = { path = "bin/hexactra-native-host", sha256 = "1f37bf2bee8d849dc186dee818f7006726b89ba4d69d7a73b1c8f02f91a80441", md5 = "d996ab5656dbbc705f50f1460394faa4" }
+hexactra-mcp = { path = "bin/hexactra-mcp", sha256 = "52bfb87c3092e59f5dce4b125ad120c9075d6365c33467fc42306f854415f1d6", md5 = "5cc70220644a4561971236e3d59398c7" }
