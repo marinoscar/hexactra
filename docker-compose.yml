@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  hexactra-agent:
+    image: hexactra:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hexactra-agent
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - hexactra-data:/var/lib/hexactra
+      - hexactra-run:/run/hexactra
+      - hexactra-logs:/var/log/hexactra
+      - /tmp/hexactra:/tmp/hexactra
+    environment:
+      - HEXACTRA_LOG_LEVEL=info
+      - HEXACTRA_CONFIG_PATH=/etc/hexactra/config.toml
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  chrome:
+    image: selenium/standalone-chrome:latest
+    container_name: hexactra-chrome
+    shm_size: 2g
+    ports:
+      - "4444:4444"
+      - "7900:7900"
+    environment:
+      - VNC_NO_PASSWORD=1
+      - GRID_TIMEOUT=300
+      - GRID_BROWSER_TIMEOUT=300
+    volumes:
+      - chrome-profiles:/home/seluser/.chrome-profiles
+    restart: unless-stopped
+
+volumes:
+  hexactra-data:
+    driver: local
+  hexactra-run:
+    driver: local
+  hexactra-logs:
+    driver: local
+  chrome-profiles:
+    driver: local
