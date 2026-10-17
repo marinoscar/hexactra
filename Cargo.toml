@@ -9,6 +9,7 @@ members = [
     "crates/hexactra-desktop-input",
     "crates/hexactra-cli",
     "crates/hexactra-mcp",
+    "crates/hexactra-model-adapter",
 ]
 resolver = "2"
 
