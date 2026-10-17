@@ -1237,3 +1237,360 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas.Error'
+
+   /experience/events:
+     post:
+       summary: Submit experience events (opt-in)
+       operationId: submitExperienceEvents
+       tags:
+         - experience
+       security:
+         - bearer: [experience:submit]
+       requestBody:
+         required: true
+         content:
+           application/json:
+             schema:
+               type: object
+               required:
+                 - owner_id
+                 - events
+               properties:
+                 owner_id:
+                   $ref: '#/components/schemas/SessionId'
+                 events:
+                   type: array
+                   items:
+                     type: object
+                   minItems: 1
+       responses:
+         '202':
+           description: Events accepted for processing
+           content:
+             application/json:
+               schema:
+                 type: object
+                 properties:
+                   batch_id:
+                     type: string
+                     format: uuid
+                   submitted_count:
+                     type: integer
+                   accepted_count:
+                     type: integer
+         '400':
+           description: Invalid input (missing required fields, invalid schema)
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas.Error'
+         '401':
+           description: Unauthorized
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas.Error'
+         '403':
+           description: Forbidden (consent not granted or revoked)
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas.Error'
+
+   /experience/batches:
+     get:
+       summary: List experience event batches
+       operationId: listExperienceBatches
+       tags:
+         - experience
+       security:
+         - bearer: [experience:read]
+       parameters:
+         - name: owner_id
+           in: query
+           required: false
+           schema:
+             $ref: '#/components/schemas/SessionId'
+         - name: limit
+           in: query
+           required: false
+           schema:
+             type: integer
+             minimum: 1
+             maximum: 100
+             default: 20
+         - name: offset
+           in: query
+           required: false
+           schema:
+             type: integer
+             minimum: 0
+             default: 0
+       responses:
+         '200':
+           description: List of batches
+           content:
+             application/json:
+               schema:
+                 type: object
+                 properties:
+                   batches:
+                     type: array
+                     items:
+                       type: object
+                       properties:
+                         batch_id:
+                           type: string
+                           format: uuid
+                         owner_id:
+                           type: string
+                           format: uuid
+                         event_count:
+                           type: integer
+                         created_at:
+                           type: string
+                           format: date-time
+                   total:
+                     type: integer
+                   limit:
+                     type: integer
+                   offset:
+                     type: integer
+         '401':
+           description: Unauthorized
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas.Error'
+
+   /experience/health:
+     get:
+       summary: Check experience service health
+       operationId: getExperienceHealth
+       tags:
+         - experience
+       security:
+         - bearer: [health:read]
+       responses:
+         '200':
+           description: Health status
+           content:
+             application/json:
+               schema:
+                 type: object
+                 required:
+                   - status
+                   - timestamp
+                 properties:
+                   status:
+                     type: string
+                     enum: [healthy, degraded, unhealthy]
+                   timestamp:
+                     type: string
+                     format: date-time
+                   circuit_breaker:
+                     type: object
+                     properties:
+                       state:
+                         type: string
+                         enum: [closed, open, half_open]
+                       failure_count:
+                         type: integer
+                       last_failure:
+                         type: string
+                         format: date-time
+         '503':
+           description: Service unavailable
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas.Error'
+
+   /experience/consent:
+     post:
+       summary: Grant or revoke consent for experience events
+       operationId: manageConsent
+       tags:
+         - experience
+       security:
+         - bearer: [consent:manage]
+       requestBody:
+         required: true
+         content:
+           application/json:
+             schema:
+               type: object
+               required:
+                 - owner_id
+                 - site_url
+                 - granted
+               properties:
+                 owner_id:
+                   $ref: '#/components/schemas/SessionId'
+                 site_url:
+                   type: string
+                   format: uri
+                 granted:
+                   type: boolean
+                 revoke_at:
+                   type: string
+                   format: date-time
+       responses:
+         '200':
+           description: Consent updated
+           content:
+             application/json:
+               schema:
+                 type: object
+                 properties:
+                   request_id:
+                     type: string
+                     format: uuid
+                   granted:
+                     type: boolean
+                   revoked_at:
+                     type: string
+                     format: date-time
+         '400':
+           description: Invalid input
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas.Error'
+         '401':
+           description: Unauthorized
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas.Error'
+
+   /experience/hints:
+     get:
+       summary: Retrieve reusable hints for similar tasks
+       operationId: retrieveHints
+       tags:
+         - experience
+       security:
+         - bearer: [hints:read]
+       parameters:
+         - name: site_url
+           in: query
+           required: true
+           schema:
+             type: string
+             format: uri
+         - name: task_type
+           in: query
+           required: true
+           schema:
+             type: string
+             enum:
+               - navigation
+               - form_submission
+               - data_extraction
+               - authentication
+               - click_action
+               - text_input
+               - element_interaction
+         - name: limit
+           in: query
+           required: false
+           schema:
+             type: integer
+             minimum: 1
+             maximum: 20
+             default: 10
+         - name: min_confidence
+           in: query
+           required: false
+           schema:
+             type: number
+             minimum: 0
+             maximum: 1
+             default: 0.5
+       responses:
+         '200':
+           description: Relevant hints
+           content:
+             application/json:
+               schema:
+                 type: object
+                 properties:
+                   hints:
+                     type: array
+                     items:
+                       type: object
+                       properties:
+                         hint_id:
+                           type: string
+                           format: uuid
+                         site_url:
+                           type: string
+                           format: uri
+                         task_type:
+                           type: string
+                         confidence:
+                           type: number
+                           minimum: 0
+                           maximum: 1
+                         payload:
+                           type: object
+                         provenance:
+                           type: object
+                           properties:
+                             created_at:
+                               type: string
+                               format: date-time
+                             agent_id:
+                               type: string
+                               format: uuid
+                         freshness_days:
+                           type: integer
+         '400':
+           description: Invalid input
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas.Error'
+         '401':
+           description: Unauthorized
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas.Error'
+
+   /experience/config:
+     get:
+       summary: Get experience service configuration
+       operationId: getExperienceConfig
+       tags:
+         - experience
+       security:
+         - bearer: [config:read]
+       responses:
+         '200':
+           description: Configuration
+           content:
+             application/json:
+               schema:
+                 type: object
+                 properties:
+                   opt_in_default:
+                     type: boolean
+                   max_events_per_batch:
+                     type: integer
+                   batch_flush_interval_ms:
+                     type: integer
+                   circuit_breaker:
+                     type: object
+                     properties:
+                       failure_threshold:
+                         type: integer
+                       recovery_timeout_ms:
+                         type: integer
+         '401':
+           description: Unauthorized
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas.Error'

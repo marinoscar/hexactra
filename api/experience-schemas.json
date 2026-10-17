@@ -1,0 +1,475 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Hexactra Experience Event Schemas",
+  "description": "Opt-in sanitized experience events for Agent Experience Framework (AEF) integration",
+  "version": "1.0.0",
+  "definitions": {
+    "ExperienceEvent": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "event_id",
+        "timestamp",
+        "origin",
+        "task_type",
+        "allowed_actions",
+        "outcome",
+        "provenance"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "1.0.0",
+          "description": "Schema version for backward compatibility"
+        },
+        "event_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique identifier for this experience event"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event occurred"
+        },
+        "origin": {
+          "type": "object",
+          "required": ["site_url", "session_id"],
+          "properties": {
+            "site_url": {
+              "type": "string",
+              "format": "uri",
+              "description": "Origin URL of the website where the action occurred"
+            },
+            "session_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Hexactra session ID where the action occurred"
+            },
+            "profile_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Chrome profile ID (optional, for session continuity)"
+            }
+          }
+        },
+        "task_type": {
+          "type": "string",
+          "enum": [
+            "navigation",
+            "form_submission",
+            "data_extraction",
+            "authentication",
+            "click_action",
+            "text_input",
+            "element_interaction"
+          ],
+          "description": "Category of task performed"
+        },
+        "allowed_actions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["action_type", "selector"],
+            "properties": {
+              "action_type": {
+                "type": "string",
+                "enum": [
+                  "navigate",
+                  "click",
+                  "type",
+                  "get_value",
+                  "screenshot",
+                  "execute_script",
+                  "wait_for_element",
+                  "back",
+                  "forward",
+                  "refresh"
+                ]
+              },
+              "selector": {
+                "type": "string",
+                "description": "CSS selector or equivalent locator for the target element"
+              },
+              "value": {
+                "type": "string",
+                "description": "Value for type actions (redacted in sanitized events)"
+              }
+            }
+          },
+          "description": "Actions that were allowed and executed during this experience"
+        },
+        "outcome": {
+          "type": "object",
+          "required": ["success", "status"],
+          "properties": {
+            "success": {
+              "type": "boolean",
+              "description": "Whether the overall task succeeded"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "completed",
+                "partial_success",
+                "failed",
+                "cancelled",
+                "timeout"
+              ]
+            },
+            "error_message": {
+              "type": "string",
+              "description": "Error message (sanitized, no secrets)"
+            },
+            "redacted_output": {
+              "type": "object",
+              "description": "Non-sensitive output data that can be shared for learning"
+            }
+          }
+        },
+        "provenance": {
+          "type": "object",
+          "required": ["agent_id", "model_provider", "model_id"],
+          "properties": {
+            "agent_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Agent instance identifier"
+            },
+            "model_provider": {
+              "type": "string",
+              "description": "AI model provider (e.g., 'openai', 'anthropic')"
+            },
+            "model_id": {
+              "type": "string",
+              "description": "Model identifier (e.g., 'gpt-4o', 'claude-3.5-sonnet')"
+            },
+            "total_tokens": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Total tokens consumed (input + output)"
+            },
+            "total_cost_usd": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Estimated cost in USD (redacted in sanitized events)"
+            }
+          }
+        },
+        "ui_capabilities": {
+          "type": "object",
+          "properties": {
+            "has_screenshots": {
+              "type": "boolean",
+              "description": "Whether screenshots were available"
+            },
+            "has_dom_snapshot": {
+              "type": "boolean",
+              "description": "Whether DOM snapshot was available"
+            },
+            "browser_viewport": {
+              "type": "object",
+              "properties": {
+                "width": {"type": "integer", "minimum": 0},
+                "height": {"type": "integer", "minimum": 0}
+              }
+            }
+          }
+        },
+        "consent": {
+          "type": "object",
+          "required": ["opt_in", "owner_id", "revoked"],
+          "properties": {
+            "opt_in": {
+              "type": "boolean",
+              "description": "Whether the user explicitly opted in to share this event"
+            },
+            "owner_id": {
+              "type": "string",
+              "format": "uuid",
+              "description": "Owner identifier for consent management"
+            },
+            "revoked": {
+              "type": "boolean",
+              "default": false,
+              "description": "Whether consent has been revoked (post-event)"
+            },
+            "consent_timestamp": {
+              "type": "string",
+              "format": "date-time",
+              "description": "When consent was granted"
+            }
+          }
+        },
+        "metadata": {
+          "type": "object",
+          "properties": {
+            "session_sequence": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Sequence number within the session"
+            },
+            "total_actions": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Total actions in this task"
+            },
+            "duration_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Task duration in milliseconds"
+            },
+            "tags": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "User-defined tags for categorization"
+            }
+          }
+        }
+      }
+    },
+    "ConsentRequest": {
+      "type": "object",
+      "required": ["owner_id", "site_url", "request_timestamp"],
+      "properties": {
+        "owner_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Owner requesting consent"
+        },
+        "site_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Site URL for which consent is requested"
+        },
+        "request_timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "purpose": {
+          "type": "string",
+          "description": "Purpose of data collection"
+        },
+        "data_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "action_outcomes",
+              "navigation_patterns",
+              "failure_recovery",
+              "ui_interactions"
+            ]
+          }
+        },
+        "retention_days": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "can_revoke": {
+          "type": "boolean",
+          "const": true,
+          "description": "Whether consent can be revoked (always true)"
+        }
+      }
+    },
+    "ConsentResponse": {
+      "type": "object",
+      "required": ["request_id", "granted", "timestamp"],
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "granted": {
+          "type": "boolean"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "revoked_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When consent was revoked (if applicable)"
+        }
+      }
+    },
+    "ExperienceEventBatch": {
+      "type": "object",
+      "required": ["batch_id", "events", "owner_id"],
+      "properties": {
+        "batch_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "owner_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "events": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/ExperienceEvent"},
+          "minItems": 1
+        },
+        "batch_metadata": {
+          "type": "object",
+          "properties": {
+            "total_events": {"type": "integer", "minimum": 1},
+            "oldest_timestamp": {"type": "string", "format": "date-time"},
+            "newest_timestamp": {"type": "string", "format": "date-time"}
+          }
+        }
+      }
+    },
+    "HealthCheckRequest": {
+      "type": "object",
+      "properties": {
+        "check_connections": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "HealthCheckResponse": {
+      "type": "object",
+      "required": ["status", "timestamp"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["healthy", "degraded", "unhealthy"]
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "connections": {
+          "type": "object",
+          "properties": {
+            "database": {
+              "type": "object",
+              "properties": {
+                "status": {"type": "string", "enum": ["ok", "error"]},
+                "latency_ms": {"type": "integer", "minimum": 0}
+              }
+            },
+            "external_service": {
+              "type": "object",
+              "properties": {
+                "status": {"type": "string", "enum": ["ok", "error"]},
+                "latency_ms": {"type": "integer", "minimum": 0},
+                "last_success": {"type": "string", "format": "date-time"}
+              }
+            }
+          }
+        },
+        "circuit_breaker": {
+          "type": "object",
+          "properties": {
+            "state": {
+              "type": "string",
+              "enum": ["closed", "open", "half_open"]
+            },
+            "failure_count": {"type": "integer", "minimum": 0},
+            "last_failure": {"type": "string", "format": "date-time"}
+          }
+        }
+      }
+    },
+    "CircuitBreakerConfig": {
+      "type": "object",
+      "properties": {
+        "failure_threshold": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 5
+        },
+        "recovery_timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "default": 30000
+        },
+        "half_open_requests": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 3
+        }
+      }
+    },
+    "BatchConfig": {
+      "type": "object",
+      "properties": {
+        "max_events_per_batch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "default": 100
+        },
+        "max_batch_size_bytes": {
+          "type": "integer",
+          "minimum": 1024,
+          "default": 1048576
+        },
+        "flush_interval_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "default": 30000
+        },
+        "backoff_min_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "default": 1000
+        },
+        "backoff_max_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "default": 30000
+        }
+      }
+    }
+  },
+  "messages": {
+    "ExperienceEventMessage": {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "experience_event"
+        },
+        "payload": {"$ref": "#/definitions/ExperienceEvent"}
+      }
+    },
+    "BatchMessage": {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "experience_batch"
+        },
+        "payload": {"$ref": "#/definitions/ExperienceEventBatch"}
+      }
+    },
+    "HealthCheckMessage": {
+      "type": "object",
+      "required": ["type", "payload"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "health_check"
+        },
+        "payload": {
+          "oneOf": [
+            {"$ref": "#/definitions/HealthCheckRequest"},
+            {"$ref": "#/definitions/HealthCheckResponse"}
+          ]
+        }
+      }
+    }
+  }
+}
