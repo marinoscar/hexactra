@@ -18,6 +18,7 @@ members = [
     "crates/hexactra-notification-delivery",
     "crates/hexactra-demo-provider",
     "crates/hexactra-provider-tests",
+    "crates/hexactra-aef-connector",
     "tests",
 ]
 resolver = "2"
