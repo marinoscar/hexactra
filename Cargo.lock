@@ -1259,6 +1259,7 @@ dependencies = [
  "futures",
  "hexactra-core",
  "hexactra-telemetry",
+ "schemars",
  "serde",
  "serde_json",
  "tempfile",
