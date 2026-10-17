@@ -1,5 +1,9 @@
 //! Telemetry and tracing utilities for Hexactra
 
+pub mod metrics;
+pub use metrics::{Metrics, Timer, track_session_created, track_session_terminated, 
+                  track_action_executed, track_action_failed, track_model_call};
+
 use tracing::{span, Level};
 use uuid::Uuid;
 
