@@ -430,7 +430,61 @@ pub struct InteractionRequest {
     pub reason: String,
     pub details: serde_json::Value,
     pub created_at: DateTime<Utc>,
+    pub kind: InteractionKind,
     pub status: InteractionStatus,
+    /// Expiry time for the request
+    pub expires_at: DateTime<Utc>,
+    /// Owner who claimed this request (for single-claim semantics)
+    pub owner_id: Option<Uuid>,
+    /// Origin/session that created this request (for mismatch detection)
+    pub origin_session_id: Uuid,
+}
+
+/// Type of interaction request (HITL taxonomy)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum InteractionKind {
+    /// Secret text input (password, API key, etc.)
+    SecretText,
+    /// One-time password code
+    OtpCode,
+    /// Out-of-band confirmation (push notification)
+    OobConfirmation,
+    /// Passkey or security key authentication
+    PasskeyOrSecurityKey,
+    /// Action approval (confirm before proceeding)
+    ActionApproval,
+    /// Full human takeover of browser control
+    HumanTakeover,
+    /// Informational message (no action required)
+    Information,
+}
+
+impl InteractionKind {
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            InteractionKind::SecretText => "secret_text",
+            InteractionKind::OtpCode => "otp_code",
+            InteractionKind::OobConfirmation => "oob_confirmation",
+            InteractionKind::PasskeyOrSecurityKey => "passkey_or_security_key",
+            InteractionKind::ActionApproval => "action_approval",
+            InteractionKind::HumanTakeover => "human_takeover",
+            InteractionKind::Information => "information",
+        }
+    }
+
+    pub fn from_str_name(s: &str) -> Self {
+        match s {
+            "secret_text" => InteractionKind::SecretText,
+            "otp_code" => InteractionKind::OtpCode,
+            "oob_confirmation" => InteractionKind::OobConfirmation,
+            "passkey_or_security_key" => InteractionKind::PasskeyOrSecurityKey,
+            "action_approval" => InteractionKind::ActionApproval,
+            "human_takeover" => InteractionKind::HumanTakeover,
+            "information" => InteractionKind::Information,
+            _ => InteractionKind::SecretText,
+        }
+    }
 }
 
 /// Status of an interaction request
@@ -443,6 +497,10 @@ pub enum InteractionStatus {
     Approved,
     /// Human rejected the request
     Rejected,
+    /// Request expired without response
+    Expired,
+    /// Request was cancelled
+    Cancelled,
 }
 
 impl InteractionStatus {
@@ -451,6 +509,8 @@ impl InteractionStatus {
             InteractionStatus::Pending => "pending",
             InteractionStatus::Approved => "approved",
             InteractionStatus::Rejected => "rejected",
+            InteractionStatus::Expired => "expired",
+            InteractionStatus::Cancelled => "cancelled",
         }
     }
 
@@ -459,6 +519,8 @@ impl InteractionStatus {
             "pending" => InteractionStatus::Pending,
             "approved" => InteractionStatus::Approved,
             "rejected" => InteractionStatus::Rejected,
+            "expired" => InteractionStatus::Expired,
+            "cancelled" => InteractionStatus::Cancelled,
             _ => InteractionStatus::Pending,
         }
     }

@@ -9,8 +9,9 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use hexactra_core::{
-    BrowserAction, Capability, Goal, Host, HostId, HostStatus, InteractionRequest,
-    InteractionStatus, Lease, LeaseId, Operation, OperationStatus, Profile, RunStatus, Session, SessionStatus,
+    BrowserAction, Capability, Goal, Host, HostId, HostStatus, InteractionKind,
+    InteractionRequestId, InteractionRequest, InteractionStatus, Lease, LeaseId, Operation,
+    OperationStatus, Profile, RunStatus, Session, SessionStatus,
 };
 
 /// Database state storage
@@ -721,8 +722,8 @@ impl DbState {
         let details_json = serde_json::to_value(&request.details)?;
         sqlx::query(
             r#"
-            INSERT INTO interaction_requests (id, session_id, reason, details, created_at, status)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO interaction_requests (id, session_id, reason, details, created_at, status, kind, expires_at, owner_id, origin_session_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(request.id.as_uuid().to_string())
@@ -731,6 +732,10 @@ impl DbState {
         .bind(details_json.to_string())
         .bind(request.created_at.to_rfc3339())
         .bind(request.status.as_str_name())
+        .bind(request.kind.as_str_name())
+        .bind(request.expires_at.to_rfc3339())
+        .bind(request.owner_id.map(|id| id.to_string()))
+        .bind(request.origin_session_id.to_string())
         .execute(&*pool)
         .await?;
 
@@ -750,7 +755,11 @@ impl DbState {
                 reason,
                 details,
                 created_at,
-                status
+                status,
+                kind,
+                expires_at,
+                owner_id,
+                origin_session_id
             FROM interaction_requests
             WHERE id = ?
             "#,
@@ -770,6 +779,13 @@ impl DbState {
                     Utc,
                 ),
                 status: InteractionStatus::from_str_name(&row.get::<String, _>(5)),
+                kind: InteractionKind::from_str_name(&row.get::<String, _>(6)),
+                expires_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(7).into(),
+                    Utc,
+                ),
+                owner_id: row.get::<Option<String>, _>(8).and_then(|s| Uuid::parse_str(&s).ok()),
+                origin_session_id: Uuid::parse_str(&row.get::<String, _>(9))?,
             };
             request.details = serde_json::from_str(&row.get::<String, _>(3))?;
             Ok(Some(request))
@@ -812,7 +828,11 @@ impl DbState {
                 reason,
                 details,
                 created_at,
-                status
+                status,
+                kind,
+                expires_at,
+                owner_id,
+                origin_session_id
             FROM interaction_requests
             WHERE session_id = ?
             ORDER BY created_at DESC
@@ -834,12 +854,235 @@ impl DbState {
                     Utc,
                 ),
                 status: InteractionStatus::from_str_name(&row.get::<String, _>(5)),
+                kind: InteractionKind::from_str_name(&row.get::<String, _>(6)),
+                expires_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(7).into(),
+                    Utc,
+                ),
+                owner_id: row.get::<Option<String>, _>(8).and_then(|s| Uuid::parse_str(&s).ok()),
+                origin_session_id: Uuid::parse_str(&row.get::<String, _>(9))?,
             };
             request.details = serde_json::from_str(&row.get::<String, _>(3))?;
             requests.push(request);
         }
 
         Ok(requests)
+    }
+
+    // ==================== HITL Broker Operations ====================
+
+    /// Claim an interaction request (single-claim semantics)
+    /// Returns error if already claimed by another owner
+    pub async fn claim_interaction_request(
+        &self,
+        request_id: Uuid,
+        owner_id: Uuid,
+    ) -> Result<bool> {
+        let pool = self.pool.clone();
+        let result = sqlx::query(
+            r#"
+            UPDATE interaction_requests 
+            SET owner_id = ?, updated_at = datetime('now')
+            WHERE id = ? AND owner_id IS NULL
+            "#,
+        )
+        .bind(owner_id.to_string())
+        .bind(request_id.to_string())
+        .execute(&*pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Respond to an interaction request (approve/reject/expired/cancelled)
+    pub async fn respond_interaction_request(
+        &self,
+        request_id: Uuid,
+        new_status: InteractionStatus,
+        owner_id: Uuid,
+    ) -> Result<bool> {
+        let pool = self.pool.clone();
+        
+        // Verify the response is coming from the owner
+        let existing = sqlx::query(
+            r#"
+            SELECT owner_id FROM interaction_requests WHERE id = ?
+            "#,
+        )
+        .bind(request_id.to_string())
+        .fetch_optional(&*pool)
+        .await?;
+
+        if let Some(row) = existing {
+            let stored_owner: Option<String> = row.get(0);
+            if stored_owner != Some(owner_id.to_string()) {
+                return Ok(false); // Owner mismatch
+            }
+        } else {
+            return Ok(false); // Request not found
+        }
+
+        let result = sqlx::query(
+            r#"
+            UPDATE interaction_requests 
+            SET status = ?, updated_at = datetime('now')
+            WHERE id = ? AND status = 'pending'
+            "#,
+        )
+        .bind(new_status.as_str_name())
+        .bind(request_id.to_string())
+        .execute(&*pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Check if an interaction request has expired
+    pub async fn is_interaction_request_expired(&self, request_id: Uuid) -> Result<bool> {
+        let pool = self.pool.clone();
+        let row = sqlx::query(
+            r#"
+            SELECT expires_at, status FROM interaction_requests WHERE id = ?
+            "#,
+        )
+        .bind(request_id.to_string())
+        .fetch_optional(&*pool)
+        .await?;
+
+        if let Some(row) = row {
+            let expires_at: chrono::NaiveDateTime = row.get(0);
+            let status: String = row.get(1);
+            
+            // Check if expired and still pending
+            let is_expired = Utc::now().naive_utc() > expires_at;
+            let is_pending = status == "pending";
+            
+            Ok(is_expired && is_pending)
+        } else {
+            Ok(false) // Request not found
+        }
+    }
+
+    /// Expire all pending requests that have passed their expiry time
+    pub async fn expire_pending_requests(&self) -> Result<u64> {
+        let pool = self.pool.clone();
+        let result = sqlx::query(
+            r#"
+            UPDATE interaction_requests 
+            SET status = 'expired', updated_at = datetime('now')
+            WHERE status = 'pending' AND expires_at < datetime('now')
+            "#,
+        )
+        .execute(&*pool)
+        .await?;
+
+        Ok(result.rows_affected() as u64)
+    }
+
+    /// Get all pending interaction requests for a session (including expired ones for recovery)
+    pub async fn get_pending_interaction_requests(
+        &self,
+        session_id: Uuid,
+    ) -> Result<Vec<InteractionRequest>> {
+        let pool = self.pool.clone();
+        let rows = sqlx::query(
+            r#"
+            SELECT 
+                id,
+                session_id,
+                reason,
+                details,
+                created_at,
+                status,
+                kind,
+                expires_at,
+                owner_id,
+                origin_session_id
+            FROM interaction_requests
+            WHERE session_id = ? AND status IN ('pending', 'expired')
+            ORDER BY created_at DESC
+            "#,
+        )
+        .bind(session_id.to_string())
+        .fetch_all(&*pool)
+        .await?;
+
+        let mut requests = Vec::new();
+        for row in rows {
+            let mut request = InteractionRequest {
+                id: Uuid::parse_str(&row.get::<String, _>(0))?.into(),
+                session_id: Uuid::parse_str(&row.get::<String, _>(1))?.into(),
+                reason: row.get::<String, _>(2),
+                details: serde_json::Value::Null,
+                created_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(4).into(),
+                    Utc,
+                ),
+                status: InteractionStatus::from_str_name(&row.get::<String, _>(5)),
+                kind: InteractionKind::from_str_name(&row.get::<String, _>(6)),
+                expires_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(7).into(),
+                    Utc,
+                ),
+                owner_id: row.get::<Option<String>, _>(8).and_then(|s| Uuid::parse_str(&s).ok()),
+                origin_session_id: Uuid::parse_str(&row.get::<String, _>(9))?,
+            };
+            request.details = serde_json::from_str(&row.get::<String, _>(3))?;
+            requests.push(request);
+        }
+
+        Ok(requests)
+    }
+
+    /// Clear owner when response is consumed (single-claim/consume semantics)
+    pub async fn consume_interaction_claim(&self, request_id: Uuid) -> Result<bool> {
+        let pool = self.pool.clone();
+        let result = sqlx::query(
+            r#"
+            UPDATE interaction_requests 
+            SET owner_id = NULL, updated_at = datetime('now')
+            WHERE id = ?
+            "#,
+        )
+        .bind(request_id.to_string())
+        .execute(&*pool)
+        .await?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    /// Create a new interaction request with expiry
+    pub async fn create_interaction_request_with_expiry(
+        &self,
+        request: &InteractionRequest,
+        ttl_minutes: i64,
+    ) -> Result<()> {
+        let pool = self.pool.clone();
+        let details_json = serde_json::to_value(&request.details)?;
+        
+        // Calculate expiry time
+        let expires_at = Utc::now() + chrono::Duration::minutes(ttl_minutes);
+        
+        sqlx::query(
+            r#"
+            INSERT INTO interaction_requests (id, session_id, reason, details, created_at, status, kind, expires_at, owner_id, origin_session_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(request.id.as_uuid().to_string())
+        .bind(request.session_id.as_uuid().to_string())
+        .bind(&request.reason)
+        .bind(details_json.to_string())
+        .bind(request.created_at.to_rfc3339())
+        .bind(request.status.as_str_name())
+        .bind(request.kind.as_str_name())
+        .bind(expires_at.to_rfc3339())
+        .bind(request.owner_id.map(|id| id.to_string()))
+        .bind(request.origin_session_id.to_string())
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
     }
 
     // ==================== Host Operations ====================
@@ -1172,5 +1415,207 @@ mod tests {
 
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().actions.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_hitl_broker_create_and_get() {
+        let state = setup_test_db().await;
+
+        // Create a profile and session first
+        let profile = Profile {
+            id: Uuid::new_v4(),
+            name: "Test Profile".to_string(),
+            chrome_profile_path: Some("/path/to/profile".to_string()),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        state.create_profile(&profile).await.unwrap();
+
+        let session = Session {
+            id: SessionId::from_uuid(Uuid::new_v4()),
+            profile_id: profile.id,
+            status: SessionStatus::Initializing,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        state.create_session(&session).await.unwrap();
+
+        let request = InteractionRequest {
+            id: InteractionRequestId::from_uuid(Uuid::new_v4()),
+            session_id: session.id,
+            reason: "Test OTP request".to_string(),
+            details: serde_json::json!({"type": "otp"}),
+            created_at: Utc::now(),
+            kind: InteractionKind::OtpCode,
+            status: InteractionStatus::Pending,
+            expires_at: Utc::now() + chrono::Duration::minutes(15),
+            owner_id: None,
+            origin_session_id: session.id.as_uuid(),
+        };
+
+        state.create_interaction_request(&request).await.unwrap();
+        let retrieved = state.get_interaction_request(request.id.as_uuid()).await.unwrap();
+
+        assert!(retrieved.is_some());
+        let retrieved = retrieved.unwrap();
+        assert_eq!(retrieved.kind, InteractionKind::OtpCode);
+        assert_eq!(retrieved.status, InteractionStatus::Pending);
+    }
+
+    #[tokio::test]
+    async fn test_hitl_broker_claim_single_owner() {
+        let state = setup_test_db().await;
+
+        // Create a profile and session first
+        let profile = Profile {
+            id: Uuid::new_v4(),
+            name: "Test Profile".to_string(),
+            chrome_profile_path: Some("/path/to/profile".to_string()),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        state.create_profile(&profile).await.unwrap();
+
+        let session = Session {
+            id: SessionId::from_uuid(Uuid::new_v4()),
+            profile_id: profile.id,
+            status: SessionStatus::Initializing,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        state.create_session(&session).await.unwrap();
+
+        let request = InteractionRequest {
+            id: InteractionRequestId::from_uuid(Uuid::new_v4()),
+            session_id: session.id,
+            reason: "Test claim".to_string(),
+            details: serde_json::json!({}),
+            created_at: Utc::now(),
+            kind: InteractionKind::ActionApproval,
+            status: InteractionStatus::Pending,
+            expires_at: Utc::now() + chrono::Duration::minutes(15),
+            owner_id: None,
+            origin_session_id: session.id.as_uuid(),
+        };
+
+        state.create_interaction_request(&request).await.unwrap();
+
+        // First claim should succeed
+        let owner1 = Uuid::new_v4();
+        assert!(state.claim_interaction_request(request.id.as_uuid(), owner1).await.unwrap());
+
+        // Second claim should fail (single-claim semantics)
+        let owner2 = Uuid::new_v4();
+        assert!(!state.claim_interaction_request(request.id.as_uuid(), owner2).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_hitl_broker_respond_with_owner_check() {
+        let state = setup_test_db().await;
+
+        // Create a profile and session first
+        let profile = Profile {
+            id: Uuid::new_v4(),
+            name: "Test Profile".to_string(),
+            chrome_profile_path: Some("/path/to/profile".to_string()),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        state.create_profile(&profile).await.unwrap();
+
+        let session = Session {
+            id: SessionId::from_uuid(Uuid::new_v4()),
+            profile_id: profile.id,
+            status: SessionStatus::Initializing,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        state.create_session(&session).await.unwrap();
+
+        let request = InteractionRequest {
+            id: InteractionRequestId::from_uuid(Uuid::new_v4()),
+            session_id: session.id,
+            reason: "Test respond".to_string(),
+            details: serde_json::json!({}),
+            created_at: Utc::now(),
+            kind: InteractionKind::OtpCode,
+            status: InteractionStatus::Pending,
+            expires_at: Utc::now() + chrono::Duration::minutes(15),
+            owner_id: None,
+            origin_session_id: session.id.as_uuid(),
+        };
+
+        state.create_interaction_request(&request).await.unwrap();
+
+        // Claim the request
+        let owner = Uuid::new_v4();
+        assert!(state.claim_interaction_request(request.id.as_uuid(), owner).await.unwrap());
+
+        // Respond with correct owner should succeed
+        assert!(state
+            .respond_interaction_request(request.id.as_uuid(), InteractionStatus::Approved, owner)
+            .await
+            .unwrap());
+
+        // Verify status changed
+        let retrieved = state.get_interaction_request(request.id.as_uuid()).await.unwrap();
+        assert_eq!(retrieved.unwrap().status, InteractionStatus::Approved);
+    }
+
+    #[tokio::test]
+    async fn test_hitl_broker_expiry() {
+        use chrono::Duration;
+        let state = setup_test_db().await;
+
+        // Create a profile and session first
+        let profile = Profile {
+            id: Uuid::new_v4(),
+            name: "Test Profile".to_string(),
+            chrome_profile_path: Some("/path/to/profile".to_string()),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        state.create_profile(&profile).await.unwrap();
+
+        let session = Session {
+            id: SessionId::from_uuid(Uuid::new_v4()),
+            profile_id: profile.id,
+            status: SessionStatus::Initializing,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+        state.create_session(&session).await.unwrap();
+
+        // Create request that expired 1 minute ago
+        let past_time = Utc::now() - Duration::minutes(1);
+        let request = InteractionRequest {
+            id: InteractionRequestId::from_uuid(Uuid::new_v4()),
+            session_id: session.id,
+            reason: "Test expiry".to_string(),
+            details: serde_json::json!({}),
+            created_at: past_time,
+            kind: InteractionKind::OtpCode,
+            status: InteractionStatus::Pending,
+            expires_at: past_time + Duration::minutes(5), // Expired 1 minute ago
+            owner_id: None,
+            origin_session_id: session.id.as_uuid(),
+        };
+
+        state.create_interaction_request(&request).await.unwrap();
+
+        // Manually set expiry in the past for testing
+        let pool = state.pool.clone();
+        sqlx::query("UPDATE interaction_requests SET expires_at = datetime('now', '-1 minute')")
+            .execute(&*pool)
+            .await
+            .unwrap();
+
+        // Expire pending requests
+        let expired_count = state.expire_pending_requests().await.unwrap();
+        assert!(expired_count > 0);
+
+        // Verify status changed to expired
+        let retrieved = state.get_interaction_request(request.id.as_uuid()).await.unwrap();
+        assert_eq!(retrieved.unwrap().status, InteractionStatus::Expired);
     }
 }

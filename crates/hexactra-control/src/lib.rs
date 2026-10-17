@@ -13,6 +13,7 @@ pub mod routes {
     pub mod session_lifecycle;
     pub mod durable_actions;
     pub mod viewers;
+    pub mod hitl_broker;
 }
 pub mod state;
 
@@ -29,6 +30,7 @@ pub fn create_router(_config: &Config, db_state: DbState) -> Router<DbState> {
         .merge(routes::hosts::router())
         .merge(routes::session_lifecycle::router())
         .merge(routes::viewers::router())
+        .merge(routes::hitl_broker::router())
 }
 
 /// Health check endpoint
