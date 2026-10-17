@@ -12,6 +12,9 @@ use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 use std::path::Path;
 
+// Re-export secret transport for integration
+pub use hexactra_core::secret_transport::{SecretStore, SecretTransport, SecretReference};
+
 /// Worker configuration
 #[derive(Debug, Clone)]
 pub struct WorkerConfig {
@@ -123,6 +126,7 @@ pub struct SessionWorker {
     action_rx: Option<mpsc::Receiver<BrowserAction>>,
     pending_operations: HashMap<Uuid, PendingOperation>,
     completed_actions: Vec<ActionResult>,
+    secret_transport: SecretTransport,
 }
 
 impl SessionWorker {
@@ -135,6 +139,7 @@ impl SessionWorker {
             action_rx: Some(rx),
             pending_operations: HashMap::new(),
             completed_actions: Vec::new(),
+            secret_transport: SecretTransport::new(),
         }
     }
 
@@ -197,10 +202,25 @@ impl SessionWorker {
     }
 
     /// Handle actions from the channel
-    async fn handle_actions(_config: WorkerConfig, mut rx: mpsc::Receiver<BrowserAction>) {
+    async fn handle_actions(config: WorkerConfig, mut rx: mpsc::Receiver<BrowserAction>) {
         while let Some(action) = rx.recv().await {
             tracing::info!("Handling action: {:?}", action);
+
+            // Check if this is a Type action that might contain secrets
+            match &action {
+                BrowserAction::Type { selector, text } => {
+                    // In production, the text would be a secret reference
+                    // For now, we log that a type action was received (without the actual text)
+                    tracing::debug!("Type action for selector: {}", selector);
+                    // Note: The actual secret text should never be logged
+                }
+                _ => {
+                    tracing::debug!("Action: {:?}", action);
+                }
+            }
+
             // TODO: Execute action via native messaging host
+            // When executing Type actions, retrieve the secret from the transport
         }
     }
 
@@ -270,6 +290,37 @@ impl SessionWorker {
     /// Get completed actions
     pub fn completed_actions(&self) -> &[ActionResult] {
         &self.completed_actions
+    }
+
+    /// Store a secret for browser action (e.g., password/OTP input)
+    /// The secret is stored in memory only and never persisted
+    pub async fn store_secret(&self, value: String, ttl_minutes: i64) -> Result<SecretReference> {
+        // Create a unique session/action context for this secret
+        let session_id = self.config.session_id.as_uuid();
+        let action_id = Uuid::new_v4();
+
+        self.secret_transport
+            .create_secret_reference(value, session_id, action_id, ttl_minutes)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to store secret: {}", e))
+    }
+
+    /// Verify a secret reference is still valid before use
+    pub async fn verify_secret(&self, ref_: &SecretReference) -> Result<bool> {
+        self.secret_transport.verify_secret_reference(ref_).await
+            .map_err(|e| anyhow::anyhow!("Failed to verify secret: {}", e))
+    }
+
+    /// Retrieve and consume a secret (removes it from store)
+    pub async fn retrieve_secret(&self, ref_: &SecretReference) -> Result<Option<String>> {
+        self.secret_transport.retrieve_secret_from_reference(ref_).await
+            .map_err(|e| anyhow::anyhow!("Failed to retrieve secret: {}", e))
+    }
+
+    /// Cleanup expired secrets from the transport
+    pub async fn cleanup_secrets(&self) -> Result<u64> {
+        self.secret_transport.cleanup().await
+            .map_err(|e| anyhow::anyhow!("Failed to cleanup secrets: {}", e))
     }
 }
 
@@ -414,5 +465,53 @@ mod tests {
         let bridge = NativeMessagingBridge::default();
         assert!(!bridge.is_connected());
         assert_eq!(bridge.max_reconnect_attempts, 5);
+    }
+
+    #[tokio::test]
+    async fn test_secret_storage_and_retrieval() {
+        let config = WorkerConfig::default();
+        let worker = SessionWorker::new(config);
+
+        // Store a secret
+        let secret_value = "test-password-123";
+        let ref_ = worker.store_secret(secret_value.to_string(), 15).await.unwrap();
+
+        // Verify the secret can be retrieved
+        let retrieved = worker.retrieve_secret(&ref_).await.unwrap();
+        assert_eq!(retrieved, Some(secret_value.to_string()));
+
+        // Retrieve again should fail (single-use)
+        let retrieved_again = worker.retrieve_secret(&ref_).await.unwrap();
+        assert_eq!(retrieved_again, None);
+    }
+
+    #[tokio::test]
+    async fn test_secret_verification() {
+        let config = WorkerConfig::default();
+        let worker = SessionWorker::new(config);
+
+        // Store a secret
+        let ref_ = worker.store_secret("verify-test".to_string(), 15).await.unwrap();
+
+        // Verify should work
+        assert!(worker.verify_secret(&ref_).await.unwrap());
+
+        // Retrieve and verify again should fail
+        worker.retrieve_secret(&ref_).await.unwrap();
+        assert!(!worker.verify_secret(&ref_).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_secret_cleanup() {
+        let config = WorkerConfig::default();
+        let worker = SessionWorker::new(config);
+
+        // Store multiple secrets
+        let _ref1 = worker.store_secret("secret1".to_string(), 15).await.unwrap();
+        let _ref2 = worker.store_secret("secret2".to_string(), -1).await.unwrap(); // Expired
+
+        // Cleanup should remove expired ones
+        let removed = worker.cleanup_secrets().await.unwrap();
+        assert!(removed >= 1);
     }
 }

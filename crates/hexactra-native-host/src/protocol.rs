@@ -113,6 +113,10 @@ pub enum MessageType {
     Click { selector: String },
     Type { selector: String, text: String },
     Screenshot,
+    /// Secret transport messages
+    StoreSecret { value: String, ttl_minutes: i64 },
+    RetrieveSecret { secret_id: String },
+    VerifySecret { secret_id: String },
     /// Response messages
     Success { data: Option<serde_json::Value> },
     Error { message: String },
@@ -134,6 +138,9 @@ impl Display for MessageType {
             MessageType::Click { .. } => write!(f, "click"),
             MessageType::Type { .. } => write!(f, "type"),
             MessageType::Screenshot => write!(f, "screenshot"),
+            MessageType::StoreSecret { .. } => write!(f, "store_secret"),
+            MessageType::RetrieveSecret { .. } => write!(f, "retrieve_secret"),
+            MessageType::VerifySecret { .. } => write!(f, "verify_secret"),
             MessageType::Success { .. } => write!(f, "success"),
             MessageType::Error { .. } => write!(f, "error"),
             MessageType::Heartbeat => write!(f, "heartbeat"),
@@ -203,6 +210,8 @@ pub struct Capabilities {
     pub supports_navigate: bool,
     pub supports_tabs: bool,
     pub supports_javascript: bool,
+    /// Supports secure secret transport for passwords/OTPs
+    pub supports_secret_transport: bool,
 }
 
 /// Read a single native message from stdin

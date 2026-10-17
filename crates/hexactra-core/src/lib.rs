@@ -652,3 +652,6 @@ pub struct Host {
 
 // Re-export viewer types for convenience
 pub use viewer::{ViewerToken, ViewerPermissions, InputLease};
+
+// Re-export secret transport for integration
+pub mod secret_transport;

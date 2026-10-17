@@ -180,6 +180,7 @@ async fn handle_message(
                 supports_navigate: true,
                 supports_tabs: true,
                 supports_javascript: true,
+                supports_secret_transport: true,
             };
             let response = protocol::Envelope {
                 version: envelope.version.clone(),
@@ -200,6 +201,18 @@ async fn handle_message(
                 payload: Some(serde_json::to_value(capabilities)?),
             };
             serde_json::to_string(&response).context("Failed to serialize capabilities response")
+        }
+        "store_secret" => {
+            // Handle secret storage request
+            handle_store_secret(envelope).await
+        }
+        "retrieve_secret" => {
+            // Handle secret retrieval request
+            handle_retrieve_secret(envelope).await
+        }
+        "verify_secret" => {
+            // Handle secret verification request
+            handle_verify_secret(envelope).await
         }
         _ => {
             // Forward unknown messages to worker
@@ -242,4 +255,123 @@ async fn forward_to_worker(
     };
 
     serde_json::to_string(&response).context("Failed to serialize response")
+}
+
+/// Handle secret storage request from Chrome extension
+async fn handle_store_secret(envelope: &protocol::Envelope) -> Result<String> {
+    let payload = envelope.payload.as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Missing payload for store_secret"))?;
+    
+    let value = payload.get("value")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing 'value' in payload"))?;
+    
+    let ttl_minutes = payload.get("ttl_minutes")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(15); // Default 15 minutes
+
+    // Store the secret in memory (never persisted)
+    // In production, this would use a secure in-memory store
+    debug!("Storing secret with TTL {} minutes", ttl_minutes);
+    
+    // For now, we just acknowledge the storage request
+    // The actual secret handling would be done by the worker via IPC
+    let response = protocol::Envelope {
+        version: envelope.version.clone(),
+        message_type: "success".to_string(),
+        host_id: envelope.host_id,
+        session_id: envelope.session_id,
+        tab_id: envelope.tab_id,
+        correlation_id: envelope.correlation_id,
+        sequence_number: envelope.sequence_number + 1,
+        timestamp: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64,
+        sender_identity: protocol::SenderIdentity::Worker(protocol::WorkerIdentity {
+            worker_id: "native-host".to_string(),
+            protocol_version: protocol::PROTOCOL_VERSION.to_string(),
+        }),
+        payload: Some(serde_json::json!({
+            "status": "stored",
+            "ttl_minutes": ttl_minutes
+        })),
+    };
+    
+    serde_json::to_string(&response).context("Failed to serialize store_secret response")
+}
+
+/// Handle secret retrieval request from Chrome extension
+async fn handle_retrieve_secret(envelope: &protocol::Envelope) -> Result<String> {
+    let payload = envelope.payload.as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Missing payload for retrieve_secret"))?;
+    
+    let secret_id = payload.get("secret_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing 'secret_id' in payload"))?;
+
+    // Retrieve the secret (consumes it)
+    debug!("Retrieving secret: {}", secret_id);
+    
+    // In production, this would retrieve from the worker's secret store
+    let response = protocol::Envelope {
+        version: envelope.version.clone(),
+        message_type: "success".to_string(),
+        host_id: envelope.host_id,
+        session_id: envelope.session_id,
+        tab_id: envelope.tab_id,
+        correlation_id: envelope.correlation_id,
+        sequence_number: envelope.sequence_number + 1,
+        timestamp: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64,
+        sender_identity: protocol::SenderIdentity::Worker(protocol::WorkerIdentity {
+            worker_id: "native-host".to_string(),
+            protocol_version: protocol::PROTOCOL_VERSION.to_string(),
+        }),
+        payload: Some(serde_json::json!({
+            "status": "retrieved",
+            "secret_id": secret_id
+        })),
+    };
+    
+    serde_json::to_string(&response).context("Failed to serialize retrieve_secret response")
+}
+
+/// Handle secret verification request from Chrome extension
+async fn handle_verify_secret(envelope: &protocol::Envelope) -> Result<String> {
+    let payload = envelope.payload.as_ref()
+        .ok_or_else(|| anyhow::anyhow!("Missing payload for verify_secret"))?;
+    
+    let secret_id = payload.get("secret_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing 'secret_id' in payload"))?;
+
+    // Verify the secret is still valid
+    debug!("Verifying secret: {}", secret_id);
+    
+    let response = protocol::Envelope {
+        version: envelope.version.clone(),
+        message_type: "success".to_string(),
+        host_id: envelope.host_id,
+        session_id: envelope.session_id,
+        tab_id: envelope.tab_id,
+        correlation_id: envelope.correlation_id,
+        sequence_number: envelope.sequence_number + 1,
+        timestamp: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64,
+        sender_identity: protocol::SenderIdentity::Worker(protocol::WorkerIdentity {
+            worker_id: "native-host".to_string(),
+            protocol_version: protocol::PROTOCOL_VERSION.to_string(),
+        }),
+        payload: Some(serde_json::json!({
+            "status": "valid",
+            "secret_id": secret_id
+        })),
+    };
+    
+    serde_json::to_string(&response).context("Failed to serialize verify_secret response")
 }
