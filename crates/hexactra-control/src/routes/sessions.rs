@@ -13,6 +13,7 @@ use hexactra_core::{OperationStatus, RunStatus, SessionStatus};
 use crate::state::DbState;
 use crate::auth::{validate_token, AuthContext, Scope, ResourceType};
 use tracing::instrument;
+use hexactra_telemetry::{Metrics, track_session_created, track_session_terminated};
 
 // ==================== Request/Response Types ====================
 
@@ -132,6 +133,9 @@ async fn create_session(
     }
     
     // TODO: Implement session creation with host assignment
+    // For now, just track that we attempted to create a session
+    track_session_created(&Metrics::new());
+    
     Err((StatusCode::NOT_IMPLEMENTED, "Session creation not yet implemented".to_string()))
 }
 

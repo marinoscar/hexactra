@@ -3,6 +3,7 @@
 use super::*;
 use anyhow::Context;
 use std::time::Instant;
+use hexactra_telemetry::{start_span, Metrics, track_model_call};
 
 /// OpenAI-compatible HTTP client
 pub struct OpenAIClient {
@@ -135,6 +136,12 @@ impl OpenAIClient {
             start_time.elapsed(),
             self.config.model_id
         );
+
+        // Track model call with token usage if available
+        if let Some(ref usage) = completion.usage {
+            let tokens = usage.prompt_tokens + usage.completion_tokens;
+            track_model_call(&Metrics::new(), tokens as u64);
+        }
 
         Ok(completion)
     }

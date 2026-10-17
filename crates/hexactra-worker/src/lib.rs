@@ -11,7 +11,7 @@ use tokio::net::UnixStream;
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 use std::path::Path;
-use hexactra_telemetry::start_span;
+use hexactra_telemetry::{start_span, Metrics, track_action_executed, track_action_failed};
 
 // Re-export secret transport for integration
 pub use hexactra_core::secret_transport::{SecretStore, SecretTransport, SecretReference};
@@ -207,6 +207,7 @@ impl SessionWorker {
 
     /// Handle actions from the channel
     async fn handle_actions(config: WorkerConfig, mut rx: mpsc::Receiver<BrowserAction>) {
+        let metrics = Metrics::new();
         while let Some(action) = rx.recv().await {
             let _span = start_span("worker.handle_action", &config.session_id.to_string());
             tracing::info!("Handling action: {:?}", action);
@@ -223,6 +224,9 @@ impl SessionWorker {
                     tracing::debug!("Action: {:?}", action);
                 }
             }
+
+            // Track action execution
+            track_action_executed(&metrics);
 
             // TODO: Execute action via native messaging host
             // When executing Type actions, retrieve the secret from the transport

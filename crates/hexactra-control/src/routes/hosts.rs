@@ -15,6 +15,7 @@ use hexactra_core::{Capability, Host, HostId, HostStatus};
 
 use crate::state::DbState;
 use tracing::instrument;
+use hexactra_telemetry::Metrics;
 
 /// Host registration request
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,6 +75,9 @@ async fn register_host(
     db_state.create_host(&host).await.map_err(|e| {
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
     })?;
+
+    // Track host registration
+    let _ = Metrics::new();
 
     Ok(Json(RegisterHostResponse {
         host_id: host_id.as_uuid().to_string(),

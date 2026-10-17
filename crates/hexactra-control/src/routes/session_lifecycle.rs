@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::state::DbState;
 use tracing::instrument;
+use hexactra_telemetry::{Metrics, track_session_created, track_session_terminated};
 
 /// Request to start a session
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,6 +123,9 @@ async fn start_session(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create session: {}", e)))?;
 
+    // Track session creation
+    track_session_created(&Metrics::new());
+
     Ok(Json(StartSessionResponse {
         session_id: session_id.as_uuid(),
         status: SessionStatus::Initializing.as_str_name().to_string(),
@@ -151,6 +155,9 @@ async fn stop_session(
                 .update_session_status(s.id.as_uuid(), s.status)
                 .await
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to stop session: {}", e)))?;
+
+            // Track session termination
+            track_session_terminated(&Metrics::new());
 
             Ok(Json(StartSessionResponse {
                 session_id: s.id.as_uuid(),
