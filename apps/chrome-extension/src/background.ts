@@ -7,10 +7,12 @@ let initialized = false;
 import { 
   loadCurrentTask, 
   saveCurrentTask, 
-  recoverTask,
   createCheckpoint,
   updateCheckpoint,
 } from './checkpoint.js';
+
+// Import HITL module
+import { initHitl } from './hitl.js';
 
 /**
  * Initialize the extension background worker
@@ -24,6 +26,9 @@ export async function init() {
   initialized = true;
 
   console.log('Hexactra extension initialized');
+
+  // Initialize HITL controls
+  initHitl();
 
   // Listen for messages from side panel
   chrome.runtime.onMessage.addListener(handleMessage);
@@ -66,7 +71,14 @@ type MessageType =
   | 'START_TASK'
   | 'PAUSE_TASK'
   | 'RESUME_TASK'
-  | 'STOP_TASK';
+  | 'STOP_TASK'
+  // HITL message types
+  | 'HITL_CREATE_REQUEST'
+  | 'HITL_APPROVE'
+  | 'HITL_REJECT'
+  | 'HITL_EXPIRE'
+  | 'HITL_INPUT_SECRET'
+  | 'HITL_GET_STATE';
 
 /**
  * Handle messages from side panel or content scripts
@@ -127,6 +139,19 @@ function handleMessage(
       return handleResumeTask(sender, msg);
     case 'STOP_TASK':
       return handleStopTask(sender, msg);
+    // HITL handlers
+    case 'HITL_CREATE_REQUEST':
+      return handleHitlCreateRequest(sender, msg);
+    case 'HITL_APPROVE':
+      return handleHitlApprove(sender, msg);
+    case 'HITL_REJECT':
+      return handleHitlReject(sender, msg);
+    case 'HITL_EXPIRE':
+      return handleHitlExpire(sender, msg);
+    case 'HITL_INPUT_SECRET':
+      return handleHitlInputSecret(sender, msg);
+    case 'HITL_GET_STATE':
+      return handleHitlGetState(sender);
     default:
       console.warn('Unknown message type:', msg.type);
       sendResponse(sender, { success: false, error: `Unknown action: ${msg.type}` });
@@ -850,6 +875,226 @@ async function getCapabilities(): Promise<CapabilityInfo> {
   return capabilities;
 }
 
+// ==================== HITL Handlers ====================
+
+/**
+ * Create a new HITL request
+ */
+async function handleHitlCreateRequest(
+  sender: chrome.runtime.MessageSender,
+  msg: any
+) {
+  const { type, message, details, ttlMinutes = 15 } = msg;
+
+  if (!type || !message) {
+    sendResponse(sender, { success: false, error: 'Missing type or message' });
+    return;
+  }
+
+  const requestId = Date.now().toString();
+  const expiresAt = Date.now() + ttlMinutes * 60 * 1000;
+
+  // Save HITL request state
+  try {
+    await saveCurrentTask({
+      taskId: requestId,
+      goal: message,
+      type: type as string,
+      details,
+      expiresAt,
+      state: 'pending_approval' as any,
+      createdAt: Date.now(),
+      lastUpdatedAt: Date.now(),
+      stepsCount: 0,
+    });
+  } catch (error) {
+    console.error('Failed to save HITL request:', error);
+  }
+
+  sendResponse(sender, {
+    success: true,
+    requestId,
+    message: 'HITL request created',
+  });
+
+  // Notify side panel
+  chrome.runtime.sendMessage({
+    type: 'HITL_NOTIFICATION',
+    notificationType: 'HITL_REQUEST_CREATED',
+    requestId,
+    hitlType: type as string,
+    message,
+    expiresAt,
+  }).catch(() => {});
+}
+
+/**
+ * Approve a HITL request
+ */
+async function handleHitlApprove(
+  sender: chrome.runtime.MessageSender,
+  msg: any
+) {
+  const { requestId } = msg;
+
+  if (!requestId) {
+    sendResponse(sender, { success: false, error: 'Request ID required' });
+    return;
+  }
+
+  try {
+    await updateCheckpoint(requestId, { state: 'approved' as any });
+    await chrome.storage.local.remove('currentTask');
+
+    sendResponse(sender, {
+      success: true,
+      message: 'Request approved',
+    });
+
+    chrome.runtime.sendMessage({
+      type: 'HITL_NOTIFICATION',
+      notificationType: 'HITL_REQUEST_APPROVED',
+      requestId,
+    }).catch(() => {});
+  } catch (error) {
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Approval failed' 
+    });
+  }
+}
+
+/**
+ * Reject a HITL request
+ */
+async function handleHitlReject(
+  sender: chrome.runtime.MessageSender,
+  msg: any
+) {
+  const { requestId } = msg;
+
+  if (!requestId) {
+    sendResponse(sender, { success: false, error: 'Request ID required' });
+    return;
+  }
+
+  try {
+    await updateCheckpoint(requestId, { state: 'rejected' as any });
+    await chrome.storage.local.remove('currentTask');
+
+    sendResponse(sender, {
+      success: true,
+      message: 'Request rejected',
+    });
+
+    chrome.runtime.sendMessage({
+      type: 'HITL_NOTIFICATION',
+      notificationType: 'HITL_REQUEST_REJECTED',
+      requestId,
+    }).catch(() => {});
+  } catch (error) {
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Rejection failed' 
+    });
+  }
+}
+
+/**
+ * Expire a HITL request
+ */
+async function handleHitlExpire(
+  sender: chrome.runtime.MessageSender,
+  msg: any
+) {
+  const { requestId } = msg;
+
+  if (!requestId) {
+    sendResponse(sender, { success: false, error: 'Request ID required' });
+    return;
+  }
+
+  try {
+    await updateCheckpoint(requestId, { state: 'expired' as any });
+    await chrome.storage.local.remove('currentTask');
+
+    sendResponse(sender, {
+      success: true,
+      message: 'Request expired',
+    });
+
+    chrome.runtime.sendMessage({
+      type: 'HITL_NOTIFICATION',
+      notificationType: 'HITL_REQUEST_EXPIRED',
+      requestId,
+    }).catch(() => {});
+  } catch (error) {
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Expiration failed' 
+    });
+  }
+}
+
+/**
+ * Input secret for a HITL request
+ */
+async function handleHitlInputSecret(
+  sender: chrome.runtime.MessageSender,
+  msg: any
+) {
+  const { requestId, secret } = msg;
+
+  if (!requestId || !secret) {
+    sendResponse(sender, { success: false, error: 'Missing request ID or secret' });
+    return;
+  }
+
+  try {
+    // In production, this would securely handle the secret
+    console.log(`Secret received for request: ${requestId}`);
+
+    await updateCheckpoint(requestId, { state: 'secret_input_received' as any });
+    
+    sendResponse(sender, {
+      success: true,
+      message: 'Secret received',
+    });
+
+    chrome.runtime.sendMessage({
+      type: 'HITL_NOTIFICATION',
+      notificationType: 'HITL_SECRET_INPUT_RECEIVED',
+      requestId,
+    }).catch(() => {});
+  } catch (error) {
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Secret input failed' 
+    });
+  }
+}
+
+/**
+ * Get current HITL state
+ */
+async function handleHitlGetState(
+  sender: chrome.runtime.MessageSender
+) {
+  try {
+    const currentTask = await loadCurrentTask();
+    
+    sendResponse(sender, {
+      success: true,
+      pendingRequest: currentTask?.state === 'pending_approval' ? currentTask : null,
+    });
+  } catch (error) {
+    sendResponse(sender, { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Failed to get HITL state' 
+    });
+  }
+}
+
 // Auto-initialize when the extension loads
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Hexactra extension installed');
@@ -863,11 +1108,6 @@ function handleLifecycleEvents() {
   chrome.runtime.onSuspend.addListener(() => {
     console.log('Service worker suspended - saving state');
     saveWorkerState();
-  });
-
-  // Handle service worker being resumed after suspension
-  chrome.runtime.onSuspendClosed.addListener(() => {
-    console.log('Service worker suspended and closed');
   });
 
   // Handle extension startup (after suspend/resume cycle)

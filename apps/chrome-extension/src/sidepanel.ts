@@ -1,6 +1,7 @@
 //! Hexactra Chrome extension - Side panel logic
 
 import { loadProviders, addProvider, setCurrentProvider, testProviderConnection, removeProvider } from './provider';
+import { HitlRequest, isRequestValid, getRequestRemainingSeconds } from './hitl.js';
 
 // DOM state
 let currentTabId: number | null = null;
@@ -93,6 +94,9 @@ async function setupUI() {
   if (stopTaskBtn) {
     stopTaskBtn.addEventListener('click', handleStopTask);
   }
+
+  // HITL controls
+  setupHitlUI();
 }
 
 /**
@@ -456,8 +460,10 @@ async function handleStartTask() {
         statusDiv.className = 'status';
       }
     } else {
-      if (statusDiv) statusDiv.textContent = `Failed to start task: ${response?.error || 'Unknown error'}`;
-      statusDiv.className = 'status error';
+      if (statusDiv) {
+        statusDiv.textContent = `Failed to start task: ${response?.error || 'Unknown error'}`;
+        statusDiv.className = 'status error';
+      }
     }
   });
 }
@@ -489,8 +495,10 @@ async function handlePauseTask() {
         statusDiv.className = 'status';
       }
     } else {
-      if (statusDiv) statusDiv.textContent = `Failed to pause task: ${response?.error || 'Unknown error'}`;
-      statusDiv.className = 'status error';
+      if (statusDiv) {
+        statusDiv.textContent = `Failed to pause task: ${response?.error || 'Unknown error'}`;
+        statusDiv.className = 'status error';
+      }
     }
   });
 }
@@ -522,8 +530,10 @@ async function handleResumeTask() {
         statusDiv.className = 'status';
       }
     } else {
-      if (statusDiv) statusDiv.textContent = `Failed to resume task: ${response?.error || 'Unknown error'}`;
-      statusDiv.className = 'status error';
+      if (statusDiv) {
+        statusDiv.textContent = `Failed to resume task: ${response?.error || 'Unknown error'}`;
+        statusDiv.className = 'status error';
+      }
     }
   });
 }
@@ -556,8 +566,10 @@ async function handleStopTask() {
         statusDiv.className = 'status';
       }
     } else {
-      if (statusDiv) statusDiv.textContent = `Failed to stop task: ${response?.error || 'Unknown error'}`;
-      statusDiv.className = 'status error';
+      if (statusDiv) {
+        statusDiv.textContent = `Failed to stop task: ${response?.error || 'Unknown error'}`;
+        statusDiv.className = 'status error';
+      }
     }
   });
 }
@@ -574,21 +586,258 @@ function updateTaskControls() {
   if (!startBtn || !pauseBtn || !resumeBtn || !stopBtn) return;
 
   // Disable all buttons first
-  startBtn.disabled = false;
-  pauseBtn.disabled = true;
-  resumeBtn.disabled = true;
-  stopBtn.disabled = true;
+  (startBtn as HTMLButtonElement).disabled = false;
+  (pauseBtn as HTMLButtonElement).disabled = true;
+  (resumeBtn as HTMLButtonElement).disabled = true;
+  (stopBtn as HTMLButtonElement).disabled = true;
 
   // Enable based on current state
   if (taskStatus === 'idle' || taskStatus === 'stopped') {
-    startBtn.disabled = false;
+    (startBtn as HTMLButtonElement).disabled = false;
   } else if (taskStatus === 'running') {
-    pauseBtn.disabled = false;
-    stopBtn.disabled = false;
+    (pauseBtn as HTMLButtonElement).disabled = false;
+    (stopBtn as HTMLButtonElement).disabled = false;
   } else if (taskStatus === 'paused') {
-    resumeBtn.disabled = false;
-    stopBtn.disabled = false;
+    (resumeBtn as HTMLButtonElement).disabled = false;
+    (stopBtn as HTMLButtonElement).disabled = false;
   }
+}
+
+/**
+ * Set up HITL UI elements
+ */
+function setupHitlUI() {
+  const hitlContainer = document.getElementById('hitl-container');
+  if (!hitlContainer) return;
+
+  // Check for pending requests on load
+  checkForPendingHITLRequests();
+}
+
+/**
+ * Check for pending HITL requests
+ */
+async function checkForPendingHITLRequests() {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'HITL_GET_STATE',
+    });
+
+    if (response?.success && response.pendingRequest) {
+      displayHITLRequest(response.pendingRequest as HitlRequest);
+    }
+  } catch (error) {
+    console.error('Failed to check for pending HITL requests:', error);
+  }
+}
+
+/**
+ * Display a pending HITL request in the UI
+ */
+function displayHITLRequest(request: HitlRequest) {
+  const hitlContainer = document.getElementById('hitl-container');
+  if (!hitlContainer) return;
+
+  // Clear existing content
+  hitlContainer.innerHTML = '';
+
+  // Calculate remaining time
+  const remainingSeconds = getRequestRemainingSeconds(request);
+  const remainingMinutes = Math.floor(remainingSeconds / 60);
+  const remainingSecs = remainingSeconds % 60;
+
+  // Create request display
+  const requestDiv = document.createElement('div');
+  requestDiv.className = 'hitl-request';
+  requestDiv.innerHTML = `
+    <h3>HITL Request</h3>
+    <p class="request-type">Type: ${request.type}</p>
+    <p class="request-message">${request.message}</p>
+    <p class="request-timer">Expires in: ${remainingMinutes}:${remainingSecs.toString().padStart(2, '0')}</p>
+  `;
+
+  // Create secret input if needed
+  const secretInputDiv = document.createElement('div');
+  secretInputDiv.className = 'hitl-secret-input';
+  secretInputDiv.innerHTML = `
+    <label for="secret-input">Enter secret:</label>
+    <input type="password" id="secret-input" placeholder="Password or OTP">
+    <button id="submit-secret-btn">Submit</button>
+  `;
+
+  // Create action buttons
+  const actionButtonsDiv = document.createElement('div');
+  actionButtonsDiv.className = 'hitl-action-buttons';
+  actionButtonsDiv.innerHTML = `
+    <button id="approve-btn" class="btn approve">Approve</button>
+    <button id="reject-btn" class="btn reject">Reject</button>
+    <button id="expire-btn" class="btn expire">Expire</button>
+  `;
+
+  // Append elements
+  hitlContainer.appendChild(requestDiv);
+  
+  // Only show secret input for secret_text and otp_code types
+  if (request.type === 'secret_text' || request.type === 'otp_code') {
+    hitlContainer.appendChild(secretInputDiv);
+  }
+  
+  hitlContainer.appendChild(actionButtonsDiv);
+
+  // Add event listeners
+  const submitSecretBtn = document.getElementById('submit-secret-btn');
+  if (submitSecretBtn) {
+    submitSecretBtn.addEventListener('click', () => handleSubmitSecret(request));
+  }
+
+  const approveBtn = document.getElementById('approve-btn');
+  if (approveBtn) {
+    approveBtn.addEventListener('click', () => handleApproveRequest(request));
+  }
+
+  const rejectBtn = document.getElementById('reject-btn');
+  if (rejectBtn) {
+    rejectBtn.addEventListener('click', () => handleRejectRequest(request));
+  }
+
+  const expireBtn = document.getElementById('expire-btn');
+  if (expireBtn) {
+    expireBtn.addEventListener('click', () => handleExpireRequest(request));
+  }
+
+  // Start timer update
+  startHITLTimer(request);
+}
+
+/**
+ * Handle secret submission for a HITL request
+ */
+async function handleSubmitSecret(request: HitlRequest) {
+  const secretInput = document.getElementById('secret-input') as HTMLInputElement;
+  const secret = secretInput?.value?.trim();
+
+  if (!secret) {
+    alert('Please enter a secret');
+    return;
+  }
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'HITL_INPUT_SECRET',
+      requestId: request.id,
+      secret,
+    });
+
+    if (response?.success) {
+      alert('Secret submitted successfully!');
+      // Clear the container
+      const hitlContainer = document.getElementById('hitl-container');
+      if (hitlContainer) {
+        hitlContainer.innerHTML = '';
+      }
+    } else {
+      alert(`Failed: ${response?.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Handle approve request
+ */
+async function handleApproveRequest(request: HitlRequest) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'HITL_APPROVE',
+      requestId: request.id,
+    });
+
+    if (response?.success) {
+      alert('Request approved!');
+      const hitlContainer = document.getElementById('hitl-container');
+      if (hitlContainer) {
+        hitlContainer.innerHTML = '';
+      }
+    } else {
+      alert(`Failed: ${response?.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Handle reject request
+ */
+async function handleRejectRequest(request: HitlRequest) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'HITL_REJECT',
+      requestId: request.id,
+    });
+
+    if (response?.success) {
+      alert('Request rejected');
+      const hitlContainer = document.getElementById('hitl-container');
+      if (hitlContainer) {
+        hitlContainer.innerHTML = '';
+      }
+    } else {
+      alert(`Failed: ${response?.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Handle expire request
+ */
+async function handleExpireRequest(request: HitlRequest) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: 'HITL_EXPIRE',
+      requestId: request.id,
+    });
+
+    if (response?.success) {
+      alert('Request expired');
+      const hitlContainer = document.getElementById('hitl-container');
+      if (hitlContainer) {
+        hitlContainer.innerHTML = '';
+      }
+    } else {
+      alert(`Failed: ${response?.error || 'Unknown error'}`);
+    }
+  } catch (error) {
+    alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Start updating the HITL timer display
+ */
+function startHITLTimer(request: HitlRequest) {
+  const interval = setInterval(() => {
+    if (!isRequestValid(request)) {
+      clearInterval(interval);
+      return;
+    }
+
+    const remainingSeconds = getRequestRemainingSeconds(request);
+    const timerElements = document.querySelectorAll('.request-timer');
+    
+    timerElements.forEach(element => {
+      const remainingMinutes = Math.floor(remainingSeconds / 60);
+      const remainingSecs = remainingSeconds % 60;
+      element.textContent = `Expires in: ${remainingMinutes}:${remainingSecs.toString().padStart(2, '0')}`;
+    });
+
+    if (remainingSeconds <= 0) {
+      clearInterval(interval);
+    }
+  }, 1000);
 }
 
 // Initialize when side panel loads
