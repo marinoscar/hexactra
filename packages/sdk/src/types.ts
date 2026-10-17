@@ -130,6 +130,7 @@ export interface InteractionRequestResponse {
   kind: InteractionKind;
   status: InteractionStatus;
   expiresAt: string;
+  originSessionId?: string;
 }
 
 export interface ClaimInteractionRequestRequest {
@@ -148,4 +149,69 @@ export interface RespondInteractionRequestRequest {
 
 export interface RespondInteractionRequestResponse {
   responded: boolean;
+}
+
+// ==================== OOB Confirmation Types ====================
+
+export interface RequestOobConfirmationRequest {
+  sessionId: string;
+  reason: string;
+  details: Record<string, unknown>;
+  ttlMinutes?: number;
+}
+
+export interface RequestOobConfirmationResponse {
+  request: InteractionRequestResponse;
+  oobChannel: OobChannelInfo;
+}
+
+export interface OobChannelInfo {
+  channelId: string;
+  verificationUri: string;
+  verificationCode: string;
+  expiresAt: string;
+}
+
+export interface VerifyOobRequest {
+  channelId: string;
+  verificationCode: string;
+}
+
+export interface VerifyOobResponse {
+  verified: boolean;
+}
+
+// ==================== Passkey Types ====================
+
+export interface RequestPasskeyRequest {
+  sessionId: string;
+  reason: string;
+  details: Record<string, unknown>;
+  ttlMinutes?: number;
+}
+
+export interface RequestPasskeyResponse {
+  request: InteractionRequestResponse;
+  passkeyChallenge: PasskeyChallenge;
+}
+
+export interface PasskeyChallenge {
+  challengeId: string;
+  rpEntityName: string;
+  userId: string;
+  timeoutSeconds: number;
+  attestationTypes: string[];
+}
+
+export interface VerifyPasskeyRequest {
+  challengeId: string;
+  credentialId: string;
+  authenticatorData: string;
+  clientDataJson: string;
+  signature: string;
+}
+
+export interface VerifyPasskeyResponse {
+  verified: boolean;
+  credentialId: string;
 }
