@@ -977,6 +977,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "hexactra-execution"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "clap",
+ "futures",
+ "hexactra-agent-run",
+ "hexactra-core",
+ "hexactra-model-adapter",
+ "hexactra-planning-loop",
+ "hexactra-telemetry",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tokio-test",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "hexactra-mcp"
 version = "0.1.0"
 dependencies = [
