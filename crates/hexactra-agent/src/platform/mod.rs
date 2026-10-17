@@ -171,6 +171,16 @@ pub mod windows;
 #[cfg(target_os = "macos")]
 pub mod macos;
 
+// Re-export platform implementations for easier testing
+#[cfg(target_os = "linux")]
+pub use linux::LinuxPlatform;
+
+#[cfg(target_os = "windows")]
+pub use windows::WindowsPlatform;
+
+#[cfg(target_os = "macos")]
+pub use macos::MacOsPlatform;
+
 #[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;

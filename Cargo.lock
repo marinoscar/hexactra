@@ -1250,6 +1250,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hexactra-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hexactra-agent",
+ "hexactra-core",
+ "schemars",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "hexactra-worker"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,19 @@
+[package]
+name = "hexactra-tests"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+hexactra-agent = { path = "../crates/hexactra-agent" }
+hexactra-core = { path = "../crates/hexactra-core" }
+anyhow.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[[test]]
+name = "platform_compatibility"
+path = "platform_compatibility.rs"
