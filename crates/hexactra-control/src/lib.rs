@@ -17,6 +17,7 @@ pub mod routes {
     pub mod hitl_broker;
     pub mod fleet;
 }
+pub mod scheduler;
 pub mod state;
 
 use axum::{Router, routing::get};

@@ -11,7 +11,7 @@ use uuid::Uuid;
 use hexactra_core::{
     BrowserAction, Capability, Goal, Host, HostId, HostStatus, InteractionKind,
     InteractionRequestId, InteractionRequest, InteractionStatus, Lease, LeaseId, Operation,
-    OperationStatus, Profile, RunStatus, Session, SessionStatus, HostPlatform, HostExtended,
+    OperationStatus, Profile, RunStatus, Session, SessionStatus, SessionId, HostPlatform, HostExtended,
     ProfileAffinity, Schedule, ScheduleRun, ScheduleRunStatus, DistributedLease, SchedulingDecision,
 };
 
@@ -2243,7 +2243,7 @@ impl DbState {
             query.push_str(&format!(" AND platform = '{}'", platform.as_str_name()));
         }
 
-        query.push_str(" ORDER BY current_load ASC, last_heartbeat DESC");
+        query.push_str(" ORDER BY last_heartbeat DESC");
 
         let rows = sqlx::query(&query).fetch_all(&*pool).await?;
 
@@ -2304,11 +2304,23 @@ impl DbState {
 
         // Otherwise, pick the least loaded host
         if let Some(host) = eligible_hosts.first() {
+            // Get extended info for load calculation
+            let extended = self.get_host_extended(&host.id).await?;
+            let score = if let Some(ext) = &extended {
+                if ext.max_concurrent_sessions > 0 {
+                    1.0 - (ext.current_load as f64 / ext.max_concurrent_sessions as f64)
+                } else {
+                    1.0
+                }
+            } else {
+                1.0 // Default score if no extended info available
+            };
+            
             Ok(Some(SchedulingDecision {
                 host_id: host.id,
                 profile_id,
                 reason: "least_loaded".to_string(),
-                score: 1.0 - (host.current_load as f64 / host.max_concurrent_sessions as f64),
+                score,
             }))
         } else {
             Ok(None)

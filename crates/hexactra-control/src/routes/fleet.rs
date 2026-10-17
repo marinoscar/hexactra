@@ -11,9 +11,10 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use hexactra_core::{HostId, HostPlatform};
+use hexactra_core::{HostId, HostPlatform, ScheduleRunStatus, SessionId};
 
 use crate::state::DbState;
+use crate::scheduler::ScheduleService;
 
 // ==================== Profile Affinity Routes ====================
 
@@ -265,8 +266,134 @@ pub fn router() -> Router<DbState> {
         // Schedule routes
         .route("/schedules", post(create_schedule))
         .route("/schedules", get(list_schedules))
+        .route("/schedules/{schedule_id}/pause", post(pause_schedule))
+        .route("/schedules/{schedule_id}/resume", post(resume_schedule))
+        .route("/schedules/{schedule_id}/disable", post(disable_schedule))
+        .route("/schedules/{schedule_id}/enable", post(enable_schedule))
+        .route("/schedules/{schedule_id}/run", post(run_schedule))
         // Host extended routes
         .route("/hosts/extended/{host_id}", get(get_host_extended))
         // Scheduling routes
         .route("/schedule-decision", post(make_scheduling_decision))
+}
+
+// ==================== Schedule Control Routes ====================
+
+/// Pause a schedule
+#[axum::debug_handler]
+async fn pause_schedule(
+    State(db_state): State<DbState>,
+    schedule_id: axum::extract::Path<String>,
+) -> Result<Json<()>, (StatusCode, String)> {
+    let uuid = Uuid::parse_str(&schedule_id)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    let schedule = db_state
+        .get_schedule(uuid)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "Schedule not found".to_string()))?;
+
+    let mut schedule = schedule;
+    schedule.enabled = false;
+    schedule.updated_at = Utc::now();
+
+    db_state
+        .update_schedule(&schedule)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(()))
+}
+
+/// Resume a schedule
+#[axum::debug_handler]
+async fn resume_schedule(
+    State(db_state): State<DbState>,
+    schedule_id: axum::extract::Path<String>,
+) -> Result<Json<()>, (StatusCode, String)> {
+    let uuid = Uuid::parse_str(&schedule_id)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    let schedule = db_state
+        .get_schedule(uuid)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "Schedule not found".to_string()))?;
+
+    let mut schedule = schedule;
+    schedule.enabled = true;
+    schedule.updated_at = Utc::now();
+
+    db_state
+        .update_schedule(&schedule)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(()))
+}
+
+/// Disable a schedule (permanent)
+#[axum::debug_handler]
+async fn disable_schedule(
+    State(db_state): State<DbState>,
+    schedule_id: axum::extract::Path<String>,
+) -> Result<Json<()>, (StatusCode, String)> {
+    pause_schedule(State(db_state), schedule_id).await
+}
+
+/// Enable a schedule
+#[axum::debug_handler]
+async fn enable_schedule(
+    State(db_state): State<DbState>,
+    schedule_id: axum::extract::Path<String>,
+) -> Result<Json<()>, (StatusCode, String)> {
+    resume_schedule(State(db_state), schedule_id).await
+}
+
+/// Trigger a manual run of a schedule
+#[axum::debug_handler]
+async fn run_schedule(
+    State(db_state): State<DbState>,
+    schedule_id: axum::extract::Path<String>,
+) -> Result<Json<CreateScheduleResponse>, (StatusCode, String)> {
+    let uuid = Uuid::parse_str(&schedule_id)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+
+    let schedule = db_state
+        .get_schedule(uuid)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "Schedule not found".to_string()))?;
+
+    // Create a run record directly in the database
+    let run_id = Uuid::new_v4();
+    let runs = db_state
+        .list_schedule_runs(uuid)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let run_number = (runs.len() as u32) + 1;
+
+    let run = hexactra_core::ScheduleRun {
+        id: run_id,
+        schedule_id: uuid,
+        run_number,
+        status: ScheduleRunStatus::Queued,
+        host_id: None,
+        session_id: None,
+        started_at: None,
+        completed_at: None,
+        error_message: None,
+        created_at: Utc::now(),
+    };
+
+    db_state.create_schedule_run(&run).await.map_err(|e| {
+        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+    })?;
+
+    Ok(Json(CreateScheduleResponse {
+        schedule_id: uuid.to_string(),
+        name: schedule.name,
+        enabled: schedule.enabled,
+    }))
 }
