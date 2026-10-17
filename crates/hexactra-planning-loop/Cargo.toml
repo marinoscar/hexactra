@@ -1,0 +1,31 @@
+[package]
+name = "hexactra-planning-loop"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+anyhow.workspace = true
+async-trait.workspace = true
+clap.workspace = true
+futures.workspace = true
+chrono.workspace = true
+
+hexactra-core = { path = "../hexactra-core" }
+hexactra-telemetry = { path = "../hexactra-telemetry" }
+hexactra-agent-run = { path = "../hexactra-agent-run" }
+hexactra-model-adapter = { path = "../hexactra-model-adapter" }
+
+[dev-dependencies]
+tokio-test.workspace = true
+tempfile.workspace = true

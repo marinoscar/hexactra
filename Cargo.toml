@@ -11,6 +11,7 @@ members = [
     "crates/hexactra-mcp",
     "crates/hexactra-model-adapter",
     "crates/hexactra-agent-run",
+    "crates/hexactra-planning-loop",
 ]
 resolver = "2"
 
