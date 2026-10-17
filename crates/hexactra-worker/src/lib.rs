@@ -1,6 +1,8 @@
 //! Session worker for Hexactra
 
-use anyhow::{Context, Result};
+pub mod driver;
+
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use hexactra_core::{BrowserAction, SessionId};
 use serde::{Deserialize, Serialize};
@@ -11,7 +13,7 @@ use tokio::net::UnixStream;
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 use std::path::Path;
-use hexactra_telemetry::{start_span, Metrics, track_action_executed, track_action_failed};
+use hexactra_telemetry::{start_span, Metrics, track_action_executed};
 
 // Re-export secret transport for integration
 pub use hexactra_core::secret_transport::{SecretStore, SecretTransport, SecretReference};
