@@ -3,6 +3,7 @@
 //! This crate provides end-to-end tests for provider conformance,
 //! vault/HITL integration, and failure recovery scenarios.
 
+use hexactra_demo_provider::DemoProviderRegistry;
 use hexactra_provider_sdk::{
     CredentialProvider, HumanInteractionKind, HumanInteractionProvider, NotificationProvider,
 };
