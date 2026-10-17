@@ -9,8 +9,8 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use hexactra_core::{
-    BrowserAction, Goal, InteractionRequest, InteractionStatus, Operation, OperationStatus,
-    Profile, RunStatus, Session, SessionStatus,
+    BrowserAction, Capability, Goal, Host, HostId, HostStatus, InteractionRequest,
+    InteractionStatus, Operation, OperationStatus, Profile, RunStatus, Session, SessionStatus,
 };
 
 /// Database state storage
@@ -674,37 +674,101 @@ impl DbState {
 
     // ==================== Host Operations ====================
 
-    pub async fn create_host(&self, host_id: &str, hostname: &str) -> Result<()> {
+    pub async fn create_host(&self, host: &Host) -> Result<()> {
         let pool = self.pool.clone();
+        let capabilities_json = serde_json::to_value(&host.capabilities)?;
         sqlx::query(
             r#"
-            INSERT INTO hosts (id, hostname, version, capabilities, last_heartbeat)
-            VALUES (?, ?, '1.0.0', '{}', datetime('now'))
+            INSERT INTO hosts (id, hostname, version, capabilities, status, last_heartbeat, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
-        .bind(host_id)
-        .bind(hostname)
+        .bind(host.id.as_uuid().to_string())
+        .bind(&host.hostname)
+        .bind(&host.version)
+        .bind(capabilities_json.to_string())
+        .bind(host.status.as_str_name())
+        .bind(host.last_heartbeat.to_rfc3339())
+        .bind(host.created_at.to_rfc3339())
+        .bind(host.updated_at.to_rfc3339())
         .execute(&*pool)
         .await?;
 
         Ok(())
     }
 
-    pub async fn get_host(&self, host_id: &str) -> Result<Option<String>> {
+    pub async fn get_host(&self, host_id: &HostId) -> Result<Option<Host>> {
         let pool = self.pool.clone();
-        let result = sqlx::query_scalar(
+        let row = sqlx::query(
             r#"
-            SELECT hostname FROM hosts WHERE id = ?
+            SELECT 
+                id,
+                hostname,
+                version,
+                capabilities,
+                status,
+                last_heartbeat,
+                created_at,
+                updated_at
+            FROM hosts
+            WHERE id = ?
             "#,
         )
-        .bind(host_id)
+        .bind(host_id.as_uuid().to_string())
         .fetch_optional(&*pool)
         .await?;
 
-        Ok(result)
+        if let Some(row) = row {
+            let host = Host {
+                id: HostId::from_uuid(Uuid::parse_str(&row.get::<String, _>(0))?),
+                hostname: row.get::<String, _>(1),
+                version: row.get::<String, _>(2),
+                capabilities: serde_json::from_str(&row.get::<String, _>(3))?,
+                status: HostStatus::from_str_name(&row.get::<String, _>(4)),
+                last_heartbeat: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(5).into(),
+                    Utc,
+                ),
+                created_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(6).into(),
+                    Utc,
+                ),
+                updated_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(7).into(),
+                    Utc,
+                ),
+            };
+            Ok(Some(host))
+        } else {
+            Ok(None)
+        }
     }
 
-    pub async fn update_host_heartbeat(&self, host_id: &str) -> Result<()> {
+    pub async fn update_host(&self, host: &Host) -> Result<()> {
+        let pool = self.pool.clone();
+        let capabilities_json = serde_json::to_value(&host.capabilities)?;
+        sqlx::query(
+            r#"
+            UPDATE hosts 
+            SET hostname = ?, version = ?, capabilities = ?, status = ?, 
+                last_heartbeat = ?, updated_at = ?
+            WHERE id = ?
+            "#,
+        )
+        .bind(&host.hostname)
+        .bind(&host.version)
+        .bind(capabilities_json.to_string())
+        .bind(host.status.as_str_name())
+        .bind(host.last_heartbeat.to_rfc3339())
+        .bind(host.updated_at.to_rfc3339())
+        .bind(host.id.as_uuid().to_string())
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn update_host_heartbeat(&self, host_id: &HostId) -> Result<()> {
         let pool = self.pool.clone();
         sqlx::query(
             r#"
@@ -713,11 +777,57 @@ impl DbState {
             WHERE id = ?
             "#,
         )
-        .bind(host_id)
+        .bind(host_id.as_uuid().to_string())
         .execute(&*pool)
         .await?;
 
         Ok(())
+    }
+
+    pub async fn list_hosts(&self) -> Result<Vec<Host>> {
+        let pool = self.pool.clone();
+        let rows = sqlx::query(
+            r#"
+            SELECT 
+                id,
+                hostname,
+                version,
+                capabilities,
+                status,
+                last_heartbeat,
+                created_at,
+                updated_at
+            FROM hosts
+            ORDER BY created_at DESC
+            "#,
+        )
+        .fetch_all(&*pool)
+        .await?;
+
+        let mut hosts = Vec::new();
+        for row in rows {
+            hosts.push(Host {
+                id: HostId::from_uuid(Uuid::parse_str(&row.get::<String, _>(0))?),
+                hostname: row.get::<String, _>(1),
+                version: row.get::<String, _>(2),
+                capabilities: serde_json::from_str(&row.get::<String, _>(3))?,
+                status: HostStatus::from_str_name(&row.get::<String, _>(4)),
+                last_heartbeat: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(5).into(),
+                    Utc,
+                ),
+                created_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(6).into(),
+                    Utc,
+                ),
+                updated_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(7).into(),
+                    Utc,
+                ),
+            });
+        }
+
+        Ok(hosts)
     }
 
     // ==================== Event Operations ====================

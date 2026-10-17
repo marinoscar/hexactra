@@ -493,3 +493,97 @@ impl From<anyhow::Error> for HexactraError {
 
 /// Result type for Hexactra operations
 pub type Result<T> = std::result::Result<T, HexactraError>;
+
+// ==================== Host Types ====================
+
+/// Unique identifier for a host
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct HostId(Uuid);
+
+impl HostId {
+    pub fn new() -> Self {
+        HostId(Uuid::new_v4())
+    }
+
+    pub fn from_uuid(uuid: Uuid) -> Self {
+        HostId(uuid)
+    }
+
+    pub fn as_uuid(&self) -> Uuid {
+        self.0
+    }
+}
+
+impl Default for HostId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl From<HostId> for Uuid {
+    fn from(id: HostId) -> Self {
+        id.0
+    }
+}
+
+impl From<Uuid> for HostId {
+    fn from(uuid: Uuid) -> Self {
+        HostId::from_uuid(uuid)
+    }
+}
+
+/// Status of a host
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum HostStatus {
+    /// Host is connecting
+    Connecting,
+    /// Host is connected and ready
+    Ready,
+    /// Host is disconnected
+    Disconnected,
+    /// Host is offline
+    Offline,
+}
+
+impl HostStatus {
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            HostStatus::Connecting => "connecting",
+            HostStatus::Ready => "ready",
+            HostStatus::Disconnected => "disconnected",
+            HostStatus::Offline => "offline",
+        }
+    }
+
+    pub fn from_str_name(s: &str) -> Self {
+        match s {
+            "connecting" => HostStatus::Connecting,
+            "ready" => HostStatus::Ready,
+            "disconnected" => HostStatus::Disconnected,
+            "offline" => HostStatus::Offline,
+            _ => HostStatus::Connecting,
+        }
+    }
+}
+
+/// A capability supported by a host
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct Capability {
+    pub name: String,
+    pub version: String,
+    pub description: Option<String>,
+}
+
+/// A host in the system
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Host {
+    pub id: HostId,
+    pub hostname: String,
+    pub version: String,
+    pub capabilities: Vec<Capability>,
+    pub status: HostStatus,
+    pub last_heartbeat: DateTime<Utc>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
