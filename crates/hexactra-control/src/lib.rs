@@ -11,6 +11,7 @@ pub mod routes {
     pub mod sessions;
     pub mod hosts;
     pub mod session_lifecycle;
+    pub mod viewers;
 }
 pub mod state;
 
@@ -26,6 +27,7 @@ pub fn create_router(_config: &Config, db_state: DbState) -> Router<DbState> {
         .merge(routes::sessions::router())
         .merge(routes::hosts::router())
         .merge(routes::session_lifecycle::router())
+        .merge(routes::viewers::router())
 }
 
 /// Health check endpoint

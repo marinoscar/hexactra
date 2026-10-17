@@ -383,6 +383,82 @@ components:
           type: object
           nullable: true
           description: Additional error details
+
+    ViewerToken:
+      type: object
+      required:
+        - id
+        - session_id
+        - viewer_id
+        - expires_at
+        - permissions
+      properties:
+        id:
+          type: string
+          format: uuid
+        session_id:
+          type: string
+          format: uuid
+        viewer_id:
+          type: string
+          format: uuid
+        expires_at:
+          type: string
+          format: date-time
+        permissions:
+          $ref: '#/components/schemas/ViewerPermissions'
+
+    ViewerPermissions:
+      type: object
+      required:
+        - view
+        - input
+      properties:
+        view:
+          type: boolean
+        input:
+          type: boolean
+
+    InputLease:
+      type: object
+      required:
+        - id
+        - session_id
+        - owner_id
+        - expires_at
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        session_id:
+          type: string
+          format: uuid
+        owner_id:
+          type: string
+          format: uuid
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    ViewerTokenResponse:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          $ref: '#/components/schemas/ViewerToken'
+
+    InputLeaseResponse:
+      type: object
+      required:
+        - lease
+      properties:
+        lease:
+          $ref: '#/components/schemas/InputLease'
     
     ListSessionsResponse:
       type: object
@@ -857,3 +933,307 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /viewers/token:
+    post:
+      summary: Generate a viewer token for a session
+      operationId: generateViewerToken
+      tags:
+        - viewers
+      security:
+        - bearer: [viewers:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - session_id
+                - viewer_id
+              properties:
+                session_id:
+                  $ref: '#/components/schemas/SessionId'
+                viewer_id:
+                  type: string
+                  format: uuid
+                permissions:
+                  $ref: '#/components/schemas/ViewerPermissions'
+      responses:
+        '201':
+          description: Viewer token generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ViewerTokenResponse'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /viewers/token/{tokenId}:
+    get:
+      summary: Validate a viewer token
+      operationId: validateViewerToken
+      tags:
+        - viewers
+      security:
+        - bearer: [viewers:read]
+      parameters:
+        - name: tokenId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Token validated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ViewerTokenResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas.Error'
+        '404':
+          description: Token not found or expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas.Error'
+
+    delete:
+      summary: Revoke a viewer token
+      operationId: revokeViewerToken
+      tags:
+        - viewers
+      security:
+        - bearer: [viewers:write]
+      parameters:
+        - name: tokenId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Token revoked
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas.Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas.Error'
+
+  /viewers/input-lease:
+    post:
+      summary: Acquire an input lease for a session
+      operationId: acquireInputLease
+      tags:
+        - viewers
+      security:
+        - bearer: [viewers:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - session_id
+                - owner_id
+              properties:
+                session_id:
+                  $ref: '#/components/schemas/SessionId'
+                owner_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Input lease acquired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InputLeaseResponse'
+        '400':
+          description: Invalid input or lease already held
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas.Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas.Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas.Error'
+
+  /viewers/input-lease/{sessionId}:
+    delete:
+      summary: Release an input lease for a session
+      operationId: releaseInputLease
+      tags:
+        - viewers
+      security:
+        - bearer: [viewers:write]
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/SessionId'
+      responses:
+        '204':
+          description: Input lease released
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas.Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas.Error'
+
+  /artifacts/{artifactId}:
+    get:
+      summary: Get an artifact with signed URL
+      operationId: getArtifact
+      tags:
+        - artifacts
+      security:
+        - bearer: [artifacts:read]
+      parameters:
+        - name: artifactId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+            description: Signed token for artifact access
+      responses:
+        '200':
+          description: Artifact content (redirect or stream)
+          headers:
+            X-Expires-At:
+              schema:
+                type: string
+                format: date-time
+              description: Token expiration time
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas.Error'
+        '403':
+          description: Forbidden (token expired or invalid)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas.Error'
+        '404':
+          description: Artifact not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas.Error'
+
+  /artifacts:
+    post:
+      summary: Create a new artifact (e.g., screenshot)
+      operationId: createArtifact
+      tags:
+        - artifacts
+      security:
+        - bearer: [artifacts:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - session_id
+                - artifact_type
+              properties:
+                session_id:
+                  $ref: '#/components/schemas/SessionId'
+                artifact_type:
+                  type: string
+                  enum: [screenshot, video, log]
+      responses:
+        '201':
+          description: Artifact created
+          headers:
+            X-Artifact-Id:
+              schema:
+                type: string
+                format: uuid
+            X-Signed-Url:
+              schema:
+                type: string
+                description: Signed URL for artifact access
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas.Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas.Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas.Error'

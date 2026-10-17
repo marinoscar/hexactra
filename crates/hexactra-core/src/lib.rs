@@ -587,3 +587,6 @@ pub struct Host {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+// Re-export viewer types for convenience
+pub use viewer::{ViewerToken, ViewerPermissions, InputLease};
