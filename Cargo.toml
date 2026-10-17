@@ -15,6 +15,7 @@ members = [
     "crates/hexactra-execution",
     "crates/hexactra-provider-sdk",
     "crates/hexactra-credential-resolver",
+    "crates/hexactra-notification-delivery",
 ]
 resolver = "2"
 
