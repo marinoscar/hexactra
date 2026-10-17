@@ -1,6 +1,9 @@
 //! Telemetry and tracing utilities for Hexactra
 
+pub mod audit;
 pub mod metrics;
+
+pub use audit::{AuditEvent, AuditEventType, AuditSeverity, AuditStore, AuditDb};
 pub use metrics::{Metrics, Timer, track_session_created, track_session_terminated, 
                   track_action_executed, track_action_failed, track_model_call};
 
