@@ -19,6 +19,7 @@ members = [
     "crates/hexactra-demo-provider",
     "crates/hexactra-provider-tests",
     "crates/hexactra-aef-connector",
+    "crates/hexactra-benchmark",
     "tests",
 ]
 resolver = "2"
