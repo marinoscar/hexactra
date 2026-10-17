@@ -14,6 +14,7 @@ use uuid::Uuid;
 use hexactra_core::{Capability, Host, HostId, HostStatus};
 
 use crate::state::DbState;
+use tracing::instrument;
 
 /// Host registration request
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,16 +40,23 @@ pub struct CapabilityDiscoveryResponse {
 }
 
 /// Get all hosts
+#[axum::debug_handler]
+#[instrument(skip(db_state), level = "info", fields(session_id = "control-plane"))]
 async fn list_hosts(State(db_state): State<DbState>) -> Json<Vec<Host>> {
+    tracing::info!("Handling hosts.list request");
     let hosts = db_state.list_hosts().await.unwrap_or_default();
     Json(hosts)
 }
 
 /// Register a new host
+#[axum::debug_handler]
+#[instrument(skip(db_state, request), level = "info", fields(session_id = "control-plane"))]
 async fn register_host(
     State(db_state): State<DbState>,
     Json(request): Json<RegisterHostRequest>,
 ) -> Result<Json<RegisterHostResponse>, (StatusCode, String)> {
+    tracing::info!("Handling hosts.register request");
+    
     let host_id = HostId::from_uuid(Uuid::new_v4());
 
     let host = Host {
@@ -75,10 +83,14 @@ async fn register_host(
 }
 
 /// Get host by ID
+#[axum::debug_handler]
+#[instrument(skip(db_state, host_id), level = "info", fields(session_id = "control-plane"))]
 async fn get_host(
     State(db_state): State<DbState>,
     host_id: axum::extract::Path<String>,
 ) -> Result<Json<Host>, (StatusCode, String)> {
+    tracing::info!("Handling hosts.get request");
+    
     let uuid = Uuid::parse_str(&host_id)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
@@ -94,10 +106,14 @@ async fn get_host(
 }
 
 /// Update host status (heartbeat)
+#[axum::debug_handler]
+#[instrument(skip(db_state, host_id), level = "info", fields(session_id = "control-plane"))]
 async fn update_host_heartbeat(
     State(db_state): State<DbState>,
     host_id: axum::extract::Path<String>,
 ) -> Result<Json<RegisterHostResponse>, (StatusCode, String)> {
+    tracing::info!("Handling hosts.heartbeat request");
+    
     let uuid = Uuid::parse_str(&host_id)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
@@ -121,10 +137,14 @@ async fn update_host_heartbeat(
 }
 
 /// Capability discovery for a host
+#[axum::debug_handler]
+#[instrument(skip(db_state, host_id), level = "info", fields(session_id = "control-plane"))]
 async fn discover_capabilities(
     State(db_state): State<DbState>,
     host_id: axum::extract::Path<String>,
 ) -> Result<Json<CapabilityDiscoveryResponse>, (StatusCode, String)> {
+    tracing::info!("Handling hosts.capabilities request");
+    
     let uuid = Uuid::parse_str(&host_id)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
@@ -141,11 +161,15 @@ async fn discover_capabilities(
 }
 
 /// Update host capabilities
+#[axum::debug_handler]
+#[instrument(skip(db_state, host_id, request), level = "info", fields(session_id = "control-plane"))]
 async fn update_capabilities(
     State(db_state): State<DbState>,
     host_id: axum::extract::Path<String>,
     Json(request): Json<Vec<Capability>>,
 ) -> Result<Json<Host>, (StatusCode, String)> {
+    tracing::info!("Handling hosts.update_capabilities request");
+    
     let uuid = Uuid::parse_str(&host_id)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
@@ -167,10 +191,14 @@ async fn update_capabilities(
 }
 
 /// Host disconnect notification
+#[axum::debug_handler]
+#[instrument(skip(db_state, host_id), level = "info", fields(session_id = "control-plane"))]
 async fn host_disconnect(
     State(db_state): State<DbState>,
     host_id: axum::extract::Path<String>,
 ) -> Result<Json<RegisterHostResponse>, (StatusCode, String)> {
+    tracing::info!("Handling hosts.disconnect request");
+    
     let uuid = Uuid::parse_str(&host_id)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 

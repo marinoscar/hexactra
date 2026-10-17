@@ -14,6 +14,7 @@ use hexactra_core::{HostId, HostStatus, Session, SessionId, SessionStatus};
 use serde::{Deserialize, Serialize};
 
 use crate::state::DbState;
+use tracing::instrument;
 
 /// Request to start a session
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,10 +50,14 @@ pub struct UpdateSessionStatusRequest {
 }
 
 /// Get session by ID with full details
+#[axum::debug_handler]
+#[instrument(skip(db_state, session_id), level = "info", fields(session_id = "control-plane"))]
 async fn get_session_full(
     State(db_state): State<DbState>,
     session_id: axum::extract::Path<Uuid>,
 ) -> Result<Json<Session>, (StatusCode, String)> {
+    tracing::info!("Handling session_lifecycle.get request");
+    
     let session = db_state
         .get_session(*session_id)
         .await
@@ -65,10 +70,14 @@ async fn get_session_full(
 }
 
 /// Start a new session
+#[axum::debug_handler]
+#[instrument(skip(db_state, request), level = "info", fields(session_id = "control-plane"))]
 async fn start_session(
     State(db_state): State<DbState>,
     Json(request): Json<StartSessionRequest>,
 ) -> Result<Json<StartSessionResponse>, (StatusCode, String)> {
+    tracing::info!("Handling session_lifecycle.start request");
+    
     // Check if profile exists
     let profile = db_state
         .get_profile(request.profile_id)
@@ -120,10 +129,14 @@ async fn start_session(
 }
 
 /// Stop a session
+#[axum::debug_handler]
+#[instrument(skip(db_state, session_id), level = "info", fields(session_id = "control-plane"))]
 async fn stop_session(
     State(db_state): State<DbState>,
     session_id: axum::extract::Path<Uuid>,
 ) -> Result<Json<StartSessionResponse>, (StatusCode, String)> {
+    tracing::info!("Handling session_lifecycle.stop request");
+    
     let session = db_state
         .get_session(*session_id)
         .await
@@ -149,11 +162,15 @@ async fn stop_session(
 }
 
 /// Restart a session
+#[axum::debug_handler]
+#[instrument(skip(db_state, session_id, request), level = "info", fields(session_id = "control-plane"))]
 async fn restart_session(
     State(db_state): State<DbState>,
     session_id: axum::extract::Path<Uuid>,
     Json(request): Json<RestartSessionRequest>,
 ) -> Result<Json<StartSessionResponse>, (StatusCode, String)> {
+    tracing::info!("Handling session_lifecycle.restart request");
+    
     let session = db_state
         .get_session(*session_id)
         .await
@@ -184,11 +201,15 @@ async fn restart_session(
 }
 
 /// Update session status (e.g., from host)
+#[axum::debug_handler]
+#[instrument(skip(db_state, session_id, request), level = "info", fields(session_id = "control-plane"))]
 async fn update_session_status(
     State(db_state): State<DbState>,
     session_id: axum::extract::Path<Uuid>,
     Json(request): Json<UpdateSessionStatusRequest>,
 ) -> Result<Json<StartSessionResponse>, (StatusCode, String)> {
+    tracing::info!("Handling session_lifecycle.update_status request");
+    
     let status = SessionStatus::from_str_name(&request.status);
 
     let session = db_state

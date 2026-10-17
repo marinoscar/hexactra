@@ -73,6 +73,8 @@ impl OpenAIClient {
         messages: Vec<ChatMessage>,
         tools: Option<Vec<Tool>>,
     ) -> Result<ChatCompletionResponse> {
+        let _span = start_span("model.chat_completion", &self.config.model_id);
+        
         self.validate()?;
 
         let url = self.build_url();
@@ -159,6 +161,8 @@ impl OpenAIClient {
 
     /// Test the connection to the model endpoint
     pub async fn test_connection(&self) -> Result<()> {
+        let _span = start_span("model.test_connection", &self.config.model_id);
+        
         let url = self.build_url();
         let headers = self.build_headers();
 

@@ -12,6 +12,7 @@ use hexactra_core::{OperationStatus, RunStatus, SessionStatus};
 
 use crate::state::DbState;
 use crate::auth::{validate_token, AuthContext, Scope, ResourceType};
+use tracing::instrument;
 
 // ==================== Request/Response Types ====================
 
@@ -82,10 +83,13 @@ fn check_ownership(auth_context: &AuthContext, owner_id: Uuid) -> bool {
 }
 
 #[axum::debug_handler]
+#[instrument(skip(db_state, headers), level = "info", fields(session_id = "control-plane"))]
 async fn list_sessions(
     State(db_state): State<DbState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<ListSessionsResponse>, (StatusCode, String)> {
+    tracing::info!("Handling sessions.list request");
+    
     // Extract and validate auth context
     let auth_context = extract_auth_context(headers).await?;
     
@@ -111,11 +115,14 @@ async fn list_sessions(
 }
 
 #[axum::debug_handler]
+#[instrument(skip(db_state, headers, request), level = "info", fields(session_id = "control-plane"))]
 async fn create_session(
     State(db_state): State<DbState>,
     headers: axum::http::HeaderMap,
     Json(request): Json<CreateSessionRequest>,
 ) -> Result<Json<CreateSessionResponse>, (StatusCode, String)> {
+    tracing::info!("Handling sessions.create request");
+    
     // Extract and validate auth context
     let auth_context = extract_auth_context(headers).await?;
     
@@ -129,11 +136,14 @@ async fn create_session(
 }
 
 #[axum::debug_handler]
+#[instrument(skip(db_state, headers, session_id), level = "info", fields(session_id = "control-plane"))]
 async fn get_session(
     State(db_state): State<DbState>,
     headers: axum::http::HeaderMap,
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<SessionResponse>, (StatusCode, String)> {
+    tracing::info!("Handling sessions.get request");
+    
     // Extract and validate auth context
     let auth_context = extract_auth_context(headers).await?;
     

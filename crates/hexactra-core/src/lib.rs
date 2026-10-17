@@ -106,6 +106,12 @@ impl From<Uuid> for SessionId {
     }
 }
 
+impl std::fmt::Display for SessionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// Unique identifier for an operation
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct OperationId(Uuid);
@@ -142,6 +148,12 @@ impl From<Uuid> for OperationId {
     }
 }
 
+impl std::fmt::Display for OperationId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// Unique identifier for a lease (resource lock)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct LeaseId(Uuid);
@@ -163,6 +175,12 @@ impl LeaseId {
 impl Default for LeaseId {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl std::fmt::Display for LeaseId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -202,6 +220,12 @@ impl From<Uuid> for InteractionRequestId {
     }
 }
 
+impl std::fmt::Display for InteractionRequestId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// Unique identifier for an artifact
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ArtifactId(Uuid);
@@ -235,6 +259,12 @@ impl From<ArtifactId> for Uuid {
 impl From<Uuid> for ArtifactId {
     fn from(uuid: Uuid) -> Self {
         ArtifactId::from_uuid(uuid)
+    }
+}
+
+impl std::fmt::Display for ArtifactId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

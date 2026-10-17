@@ -61,6 +61,9 @@ async fn main() -> Result<()> {
             Ok(message) => {
                 debug!("Received message: {}", message);
 
+                // Start a span for message handling
+                let _span = hexactra_telemetry::start_span("native-host.message", "native-host");
+                
                 // Parse and validate the envelope
                 match serde_json::from_str::<protocol::Envelope>(&message) {
                     Ok(envelope) => {
@@ -142,6 +145,8 @@ async fn handle_message(
     host_id: HostId,
 ) -> Result<String> {
     debug!("Handling message type: {}", envelope.message_type);
+    
+    let _span = hexactra_telemetry::start_span("native-host.handle", "native-host");
 
     match envelope.message_type.as_str() {
         "hello" => {
