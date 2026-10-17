@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use hexactra_core::{
     BrowserAction, Capability, Goal, Host, HostId, HostStatus, InteractionRequest,
-    InteractionStatus, Operation, OperationStatus, Profile, RunStatus, Session, SessionStatus,
+    InteractionStatus, Lease, LeaseId, Operation, OperationStatus, Profile, RunStatus, Session, SessionStatus,
 };
 
 /// Database state storage
@@ -543,6 +543,172 @@ impl DbState {
         }
 
         Ok(operations)
+    }
+
+    pub async fn list_operations_by_status(&self, status: OperationStatus) -> Result<Vec<Operation>> {
+        let pool = self.pool.clone();
+        let rows = sqlx::query(
+            r#"
+            SELECT 
+                id,
+                goal_id,
+                status,
+                created_at,
+                started_at,
+                completed_at
+            FROM operations
+            WHERE status = ?
+            ORDER BY created_at DESC
+            "#,
+        )
+        .bind(status.as_str_name())
+        .fetch_all(&*pool)
+        .await?;
+
+        let mut operations = Vec::new();
+        for row in rows {
+            operations.push(Operation {
+                id: Uuid::parse_str(&row.get::<String, _>(0))?.into(),
+                goal_id: Uuid::parse_str(&row.get::<String, _>(1))?.into(),
+                status: OperationStatus::from_str_name(&row.get::<String, _>(2)),
+                created_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(3).into(),
+                    Utc,
+                ),
+                started_at: row
+                    .get::<Option<chrono::NaiveDateTime>, _>(4)
+                    .map(|dt| DateTime::<Utc>::from_utc(dt.into(), Utc)),
+                completed_at: row
+                    .get::<Option<chrono::NaiveDateTime>, _>(5)
+                    .map(|dt| DateTime::<Utc>::from_utc(dt.into(), Utc)),
+            });
+        }
+
+        Ok(operations)
+    }
+
+    // ==================== Lease Operations ====================
+
+    pub async fn create_lease(
+        &self,
+        lease_id: &LeaseId,
+        resource_type: &str,
+        resource_id: &str,
+        owner: &Uuid,
+        expires_at: DateTime<Utc>,
+    ) -> Result<()> {
+        let pool = self.pool.clone();
+        sqlx::query(
+            r#"
+            INSERT INTO leases (id, resource_type, resource_id, owner, expires_at, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(lease_id.as_uuid().to_string())
+        .bind(resource_type)
+        .bind(resource_id)
+        .bind(owner.to_string())
+        .bind(expires_at.to_rfc3339())
+        .bind(Utc::now().to_rfc3339())
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn get_active_lease(&self, resource_type: &str, resource_id: &Uuid) -> Result<Option<Lease>> {
+        let pool = self.pool.clone();
+        let row = sqlx::query(
+            r#"
+            SELECT 
+                id,
+                resource_type,
+                resource_id,
+                owner,
+                expires_at,
+                created_at
+            FROM leases
+            WHERE resource_type = ? AND resource_id = ? AND expires_at > datetime('now')
+            "#,
+        )
+        .bind(resource_type)
+        .bind(resource_id.to_string())
+        .fetch_optional(&*pool)
+        .await?;
+
+        if let Some(row) = row {
+            let lease = Lease {
+                id: LeaseId::from_uuid(Uuid::parse_str(&row.get::<String, _>(0))?),
+                resource_type: row.get::<String, _>(1),
+                resource_id: row.get::<String, _>(2),
+                owner: Uuid::parse_str(&row.get::<String, _>(3))?,
+                expires_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(4).into(),
+                    Utc,
+                ),
+                created_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(5).into(),
+                    Utc,
+                ),
+            };
+            Ok(Some(lease))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn get_lease(&self, lease_id: LeaseId) -> Result<Option<Lease>> {
+        let pool = self.pool.clone();
+        let row = sqlx::query(
+            r#"
+            SELECT 
+                id,
+                resource_type,
+                resource_id,
+                owner,
+                expires_at,
+                created_at
+            FROM leases
+            WHERE id = ?
+            "#,
+        )
+        .bind(lease_id.as_uuid().to_string())
+        .fetch_optional(&*pool)
+        .await?;
+
+        if let Some(row) = row {
+            let lease = Lease {
+                id: LeaseId::from_uuid(Uuid::parse_str(&row.get::<String, _>(0))?),
+                resource_type: row.get::<String, _>(1),
+                resource_id: row.get::<String, _>(2),
+                owner: Uuid::parse_str(&row.get::<String, _>(3))?,
+                expires_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(4).into(),
+                    Utc,
+                ),
+                created_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(5).into(),
+                    Utc,
+                ),
+            };
+            Ok(Some(lease))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn release_lease(&self, lease_id: LeaseId) -> Result<()> {
+        let pool = self.pool.clone();
+        sqlx::query(
+            r#"
+            DELETE FROM leases WHERE id = ?
+            "#,
+        )
+        .bind(lease_id.as_uuid().to_string())
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
     }
 
     // ==================== Interaction Request Operations ====================
