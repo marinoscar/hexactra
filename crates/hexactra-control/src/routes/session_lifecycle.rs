@@ -10,7 +10,8 @@ use axum::{
 use chrono::Utc;
 use uuid::Uuid;
 
-use hexactra_core::{HostStatus, Session, SessionId, SessionStatus};
+use hexactra_core::{HostId, HostStatus, Session, SessionId, SessionStatus};
+use serde::{Deserialize, Serialize};
 
 use crate::state::DbState;
 
@@ -53,7 +54,7 @@ async fn get_session_full(
     session_id: axum::extract::Path<Uuid>,
 ) -> Result<Json<Session>, (StatusCode, String)> {
     let session = db_state
-        .get_session(session_id.into_inner())
+        .get_session(*session_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
 
@@ -81,7 +82,7 @@ async fn start_session(
     // Check if host is available if specified
     if let Some(host_id) = request.host_id {
         let host = db_state
-            .get_host(&host_id)
+            .get_host(&HostId::from_uuid(host_id))
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
 
@@ -124,7 +125,7 @@ async fn stop_session(
     session_id: axum::extract::Path<Uuid>,
 ) -> Result<Json<StartSessionResponse>, (StatusCode, String)> {
     let session = db_state
-        .get_session(session_id.into_inner())
+        .get_session(*session_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
 
@@ -154,7 +155,7 @@ async fn restart_session(
     Json(request): Json<RestartSessionRequest>,
 ) -> Result<Json<StartSessionResponse>, (StatusCode, String)> {
     let session = db_state
-        .get_session(session_id.into_inner())
+        .get_session(*session_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
 
@@ -191,7 +192,7 @@ async fn update_session_status(
     let status = SessionStatus::from_str_name(&request.status);
 
     let session = db_state
-        .get_session(session_id.into_inner())
+        .get_session(*session_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
 
@@ -220,7 +221,7 @@ async fn get_sessions_by_profile(
     profile_id: axum::extract::Path<Uuid>,
 ) -> Result<Json<Vec<Session>>, (StatusCode, String)> {
     let sessions = db_state
-        .list_sessions_by_profile(profile_id.into_inner())
+        .list_sessions_by_profile(*profile_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
 
@@ -233,7 +234,7 @@ async fn check_session_readiness(
     session_id: axum::extract::Path<Uuid>,
 ) -> Result<Json<Session>, (StatusCode, String)> {
     let session = db_state
-        .get_session(session_id.into_inner())
+        .get_session(*session_id)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
 
