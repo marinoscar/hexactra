@@ -6,10 +6,12 @@
 //! - Session and Profile for session management
 //! - Operation, Lease for resource management
 //! - InteractionRequest for HITL (Human-in-the-Loop) workflow
+//! - Experience events for Agent Experience Framework (AEF) integration
 
 pub mod profile;
 pub mod viewer;
 pub mod policy;
+pub mod experience;
 
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
