@@ -602,6 +602,58 @@ fn default_min_confidence() -> f64 {
     0.5
 }
 
+/// Store for experience hints
+pub struct HintStore {
+    hints: Vec<ExperienceHint>,
+}
+
+impl HintStore {
+    /// Create a new hint store
+    pub fn new() -> Self {
+        Self { hints: Vec::new() }
+    }
+
+    /// Add a hint to the store
+    pub fn add_hint(&mut self, hint: ExperienceHint) {
+        self.hints.push(hint);
+    }
+
+    /// Retrieve hints for a site and task type
+    pub fn get_hints(
+        &self,
+        site_url: &str,
+        task_type: &TaskType,
+        limit: usize,
+        min_confidence: f64,
+    ) -> Vec<&ExperienceHint> {
+        self.hints
+            .iter()
+            .filter(|h| {
+                h.site_url == site_url
+                    && h.task_type == *task_type
+                    && h.confidence >= min_confidence
+            })
+            .take(limit)
+            .collect()
+    }
+
+    /// Get the total number of hints in the store
+    pub fn len(&self) -> usize {
+        self.hints.len()
+    }
+
+    /// Check if the store is empty
+    pub fn is_empty(&self) -> bool {
+        self.hints.is_empty()
+    }
+}
+
+impl Default for HintStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -697,5 +749,32 @@ mod tests {
 
         let experience_config = ExperienceConfig::default();
         assert!(experience_config.opt_in_required);
+    }
+
+    #[test]
+    fn test_hint_store() {
+        let mut store = HintStore::new();
+
+        let hint = ExperienceHint {
+            hint_id: Uuid::new_v4(),
+            site_url: "https://example.com".to_string(),
+            task_type: TaskType::Navigation,
+            confidence: 0.9,
+            payload: serde_json::json!({"action": "click", "selector": ".btn"}),
+            provenance: HintProvenance {
+                created_at: Utc::now(),
+                agent_id: Uuid::new_v4(),
+                confidence: 0.9,
+            },
+            freshness_days: 1,
+        };
+
+        store.add_hint(hint);
+
+        assert_eq!(store.len(), 1);
+        assert!(!store.is_empty());
+
+        let hints = store.get_hints("https://example.com", &TaskType::Navigation, 10, 0.5);
+        assert_eq!(hints.len(), 1);
     }
 }
