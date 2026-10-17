@@ -7,7 +7,7 @@ use axum::{
     routing::{delete, get, post},
     Router,
 };
-use chrono::Utc;
+use chrono::{DateTime, Datelike, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -275,6 +275,10 @@ pub fn router() -> Router<DbState> {
         .route("/hosts/extended/{host_id}", get(get_host_extended))
         // Scheduling routes
         .route("/schedule-decision", post(make_scheduling_decision))
+        // Dashboard routes
+        .route("/dashboard/summary", get(get_dashboard_summary))
+        .route("/hosts/health", get(get_hosts_health))
+        .route("/health/metrics", get(get_health_metrics))
 }
 
 // ==================== Schedule Control Routes ====================
@@ -395,5 +399,172 @@ async fn run_schedule(
         schedule_id: uuid.to_string(),
         name: schedule.name,
         enabled: schedule.enabled,
+    }))
+}
+
+// ==================== Dashboard Routes ====================
+
+/// Dashboard summary response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardSummary {
+    pub total_hosts: u64,
+    pub active_hosts: u64,
+    pub total_profiles: u64,
+    pub active_schedules: u64,
+    pub pending_hitl_requests: u64,
+    pub scheduled_runs_today: u64,
+}
+
+/// Get dashboard summary
+#[axum::debug_handler]
+async fn get_dashboard_summary(
+    State(db_state): State<DbState>,
+) -> Result<Json<DashboardSummary>, (StatusCode, String)> {
+    let total_hosts = db_state
+        .list_hosts()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .len() as u64;
+
+    let active_hosts = db_state
+        .list_hosts()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .into_iter()
+        .filter(|h| h.status == hexactra_core::HostStatus::Ready)
+        .count() as u64;
+
+    let total_profiles = db_state
+        .list_profiles()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .len() as u64;
+
+    let active_schedules = db_state
+        .list_schedules_by_owner(Uuid::nil())
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .into_iter()
+        .filter(|s| s.enabled)
+        .count() as u64;
+
+    // Count pending HITL requests - query directly for pending status
+    let pool = db_state.pool();
+    let pending_hitl: u64 = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*) FROM interaction_requests WHERE status = 'pending'
+        "#,
+    )
+    .fetch_one(&*pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .try_into()
+    .unwrap_or(0);
+
+    // Count scheduled runs for today
+    let now = Utc::now();
+    let today_start = DateTime::<Utc>::from_utc(
+        chrono::NaiveDate::from_ymd_opt(now.year(), now.month(), now.day())
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap(),
+        Utc,
+    );
+
+    let scheduled_runs = db_state
+        .list_schedule_runs(Uuid::nil())
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .into_iter()
+        .filter(|r| r.created_at >= today_start && r.status != hexactra_core::ScheduleRunStatus::Skipped)
+        .count() as u64;
+
+    Ok(Json(DashboardSummary {
+        total_hosts,
+        active_hosts,
+        total_profiles,
+        active_schedules,
+        pending_hitl_requests: pending_hitl,
+        scheduled_runs_today: scheduled_runs,
+    }))
+}
+
+/// Host health status response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HostHealthStatus {
+    pub host_id: String,
+    pub hostname: String,
+    pub status: String,
+    pub last_heartbeat: String,
+    pub current_load: u32,
+    pub max_concurrent_sessions: u32,
+    pub platform: String,
+}
+
+/// Get all hosts health status
+#[axum::debug_handler]
+async fn get_hosts_health(
+    State(db_state): State<DbState>,
+) -> Result<Json<Vec<HostHealthStatus>>, (StatusCode, String)> {
+    let hosts = db_state
+        .list_hosts()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let hosts_health: Vec<HostHealthStatus> = hosts
+        .into_iter()
+        .map(|h| HostHealthStatus {
+            host_id: h.id.as_uuid().to_string(),
+            hostname: h.hostname,
+            status: format!("{:?}", h.status),
+            last_heartbeat: h.last_heartbeat.to_rfc3339(),
+            current_load: 0, // Will be populated from extended info
+            max_concurrent_sessions: 1, // Default value
+            platform: h.version.clone(), // Use version as placeholder for platform
+        })
+        .collect();
+
+    Ok(Json(hosts_health))
+}
+
+/// Get health metrics for OTel integration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthMetrics {
+    pub timestamp: String,
+    pub uptime_seconds: u64,
+    pub active_sessions: u64,
+    pub pending_operations: u64,
+}
+
+/// Get health metrics
+#[axum::debug_handler]
+async fn get_health_metrics(
+    State(db_state): State<DbState>,
+) -> Result<Json<HealthMetrics>, (StatusCode, String)> {
+    let now = Utc::now();
+
+    // Count active sessions (running)
+    let active_sessions = db_state
+        .list_sessions()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .into_iter()
+        .filter(|s| s.status == hexactra_core::SessionStatus::Running)
+        .count() as u64;
+
+    // Count pending operations (queued or in progress)
+    let pending_operations = db_state
+        .list_operations_by_status(hexactra_core::OperationStatus::Queued)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .into_iter()
+        .filter(|o| o.status == hexactra_core::OperationStatus::InProgress)
+        .count() as u64;
+
+    Ok(Json(HealthMetrics {
+        timestamp: now.to_rfc3339(),
+        uptime_seconds: 0, // Would need start time tracking
+        active_sessions,
+        pending_operations,
     }))
 }
