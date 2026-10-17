@@ -1150,6 +1150,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "hexactra-notification-delivery"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "hexactra-provider-sdk",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "hexactra-planning-loop"
 version = "0.1.0"
 dependencies = [
