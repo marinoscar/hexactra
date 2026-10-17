@@ -1492,7 +1492,209 @@ impl DbState {
 
         Ok(result)
     }
+
+    // ==================== Provider Registry Operations ====================
+
+    /// Register a new provider
+    pub async fn register_provider(
+        &self,
+        id: &str,
+        name: &str,
+        provider_type: &str,
+        config_json: &str,
+    ) -> Result<()> {
+        let pool = self.pool.clone();
+        sqlx::query(
+            r#"
+            INSERT INTO provider_registry (id, name, provider_type, config_json, enabled, health_status)
+            VALUES (?, ?, ?, ?, 1, 'not_configured')
+            "#,
+        )
+        .bind(id)
+        .bind(name)
+        .bind(provider_type)
+        .bind(config_json)
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get a registered provider by ID
+    pub async fn get_provider(&self, id: &str) -> Result<Option<ProviderInfo>> {
+        let pool = self.pool.clone();
+        let row = sqlx::query(
+            r#"
+            SELECT id, name, provider_type, config_json, enabled, health_status, created_at, updated_at
+            FROM provider_registry
+            WHERE id = ?
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&*pool)
+        .await?;
+
+        if let Some(row) = row {
+            let enabled: i32 = row.get(4);
+            let health_status: String = row.get(5);
+
+            return Ok(Some(ProviderInfo {
+                id: row.get(0),
+                name: row.get(1),
+                provider_type: row.get(2),
+                config_json: row.get(3),
+                enabled: enabled > 0,
+                health_status: ProviderHealth::from_str_name(&health_status),
+                created_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(6).into(),
+                    Utc,
+                ),
+                updated_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(7).into(),
+                    Utc,
+                ),
+            }));
+        }
+
+        Ok(None)
+    }
+
+    /// List all registered providers
+    pub async fn list_providers(&self) -> Result<Vec<ProviderInfo>> {
+        let pool = self.pool.clone();
+        let rows = sqlx::query(
+            r#"
+            SELECT id, name, provider_type, config_json, enabled, health_status, created_at, updated_at
+            FROM provider_registry
+            ORDER BY created_at DESC
+            "#,
+        )
+        .fetch_all(&*pool)
+        .await?;
+
+        let mut providers = Vec::new();
+        for row in rows {
+            let enabled: i32 = row.get(4);
+            let health_status: String = row.get(5);
+
+            providers.push(ProviderInfo {
+                id: row.get(0),
+                name: row.get(1),
+                provider_type: row.get(2),
+                config_json: row.get(3),
+                enabled: enabled > 0,
+                health_status: ProviderHealth::from_str_name(&health_status),
+                created_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(6).into(),
+                    Utc,
+                ),
+                updated_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(7).into(),
+                    Utc,
+                ),
+            });
+        }
+
+        Ok(providers)
+    }
+
+    /// Update provider health status
+    pub async fn update_provider_health(&self, id: &str, health: ProviderHealth) -> Result<()> {
+        let pool = self.pool.clone();
+        sqlx::query(
+            r#"
+            UPDATE provider_registry 
+            SET health_status = ?, updated_at = datetime('now')
+            WHERE id = ?
+            "#,
+        )
+        .bind(health.as_str_name())
+        .bind(id)
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Enable or disable a provider
+    pub async fn set_provider_enabled(&self, id: &str, enabled: bool) -> Result<()> {
+        let pool = self.pool.clone();
+        sqlx::query(
+            r#"
+            UPDATE provider_registry 
+            SET enabled = ?, updated_at = datetime('now')
+            WHERE id = ?
+            "#,
+        )
+        .bind(if enabled { 1 } else { 0 })
+        .bind(id)
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Delete a provider
+    pub async fn delete_provider(&self, id: &str) -> Result<u64> {
+        let pool = self.pool.clone();
+        let result = sqlx::query(
+            r#"
+            DELETE FROM provider_registry WHERE id = ?
+            "#,
+        )
+        .bind(id)
+        .execute(&*pool)
+        .await?;
+
+        Ok(result.rows_affected() as u64)
+    }
 }
+
+/// Provider information struct
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderInfo {
+    pub id: String,
+    pub name: String,
+    pub provider_type: String,
+    pub config_json: String,
+    pub enabled: bool,
+    pub health_status: ProviderHealth,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Provider health status
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProviderHealth {
+    Healthy,
+    Degraded,
+    Unavailable,
+    NotConfigured,
+}
+
+impl ProviderHealth {
+    /// Get string representation
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            ProviderHealth::Healthy => "healthy",
+            ProviderHealth::Degraded => "degraded",
+            ProviderHealth::Unavailable => "unavailable",
+            ProviderHealth::NotConfigured => "not_configured",
+        }
+    }
+
+    /// Parse from string
+    pub fn from_str_name(s: &str) -> Self {
+        match s {
+            "healthy" => ProviderHealth::Healthy,
+            "degraded" => ProviderHealth::Degraded,
+            "unavailable" => ProviderHealth::Unavailable,
+            "not_configured" => ProviderHealth::NotConfigured,
+            _ => ProviderHealth::NotConfigured,
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -1832,4 +2034,114 @@ mod tests {
         let retrieved = state.get_interaction_request(request.id.as_uuid()).await.unwrap();
         assert_eq!(retrieved.unwrap().status, InteractionStatus::Expired);
     }
+
+    #[tokio::test]
+    async fn test_provider_registry_operations() {
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .connect(&format!("sqlite:{}?mode=rwc", db_path.display()))
+            .await
+            .unwrap();
+
+        // Run migrations
+        sqlx::migrate!("../hexactra-control/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+
+        let state = DbState::new(pool);
+
+        // Register a provider
+        state
+            .register_provider(
+                "test-provider-1",
+                "Test Provider",
+                "human_interaction",
+                r#"{"config_key": "value"}"#,
+            )
+            .await
+            .unwrap();
+
+        // Get the provider
+        let provider = state.get_provider("test-provider-1").await.unwrap();
+        assert!(provider.is_some());
+        let provider = provider.unwrap();
+        assert_eq!(provider.name, "Test Provider");
+        assert!(provider.enabled);
+        assert_eq!(provider.health_status, ProviderHealth::NotConfigured);
+
+        // List all providers
+        let providers = state.list_providers().await.unwrap();
+        assert_eq!(providers.len(), 1);
+
+        // Update health status
+        state
+            .update_provider_health("test-provider-1", ProviderHealth::Healthy)
+            .await
+            .unwrap();
+
+        let provider = state.get_provider("test-provider-1").await.unwrap().unwrap();
+        assert_eq!(provider.health_status, ProviderHealth::Healthy);
+
+        // Disable the provider
+        state.set_provider_enabled("test-provider-1", false).await.unwrap();
+
+        let provider = state.get_provider("test-provider-1").await.unwrap().unwrap();
+        assert!(!provider.enabled);
+
+        // Delete the provider
+        let deleted = state.delete_provider("test-provider-1").await.unwrap();
+        assert_eq!(deleted, 1);
+
+        // Verify deletion
+        let provider = state.get_provider("test-provider-1").await.unwrap();
+        assert!(provider.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_provider_registry_duplicate() {
+        use tempfile::TempDir;
+        let temp_dir = TempDir::new().unwrap();
+        let db_path = temp_dir.path().join("test.db");
+
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .connect(&format!("sqlite:{}?mode=rwc", db_path.display()))
+            .await
+            .unwrap();
+
+        // Run migrations
+        sqlx::migrate!("../hexactra-control/migrations")
+            .run(&pool)
+            .await
+            .unwrap();
+
+        let state = DbState::new(pool);
+
+        // Register a provider
+        state
+            .register_provider(
+                "test-provider-2",
+                "Test Provider 2",
+                "credential",
+                r#"{"config_key": "value"}"#,
+            )
+            .await
+            .unwrap();
+
+        // Try to register with same ID (should fail due to primary key)
+        let result = state
+            .register_provider(
+                "test-provider-2",
+                "Duplicate Provider",
+                "notification",
+                r#"{"config_key": "value"}"#,
+            )
+            .await;
+
+        assert!(result.is_err());
+    }
+
 }

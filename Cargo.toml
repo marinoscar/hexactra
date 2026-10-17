@@ -13,6 +13,7 @@ members = [
     "crates/hexactra-agent-run",
     "crates/hexactra-planning-loop",
     "crates/hexactra-execution",
+    "crates/hexactra-provider-sdk",
 ]
 resolver = "2"
 
