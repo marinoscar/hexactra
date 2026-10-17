@@ -4,6 +4,7 @@ pub mod auth;
 pub mod config;
 pub mod db;
 pub mod redact;
+pub mod leader_election;
 pub mod routes {
     pub mod goals;
     pub mod interaction_requests;

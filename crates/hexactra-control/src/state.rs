@@ -39,6 +39,11 @@ impl DbState {
         }
     }
 
+    /// Get a clone of the database pool
+    pub fn pool(&self) -> Arc<sqlx::Pool<Sqlite>> {
+        self.pool.clone()
+    }
+
     // ==================== Profile Operations ====================
 
     pub async fn create_profile(&self, profile: &Profile) -> Result<()> {
