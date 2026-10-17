@@ -11,7 +11,8 @@ use uuid::Uuid;
 use hexactra_core::{
     BrowserAction, Capability, Goal, Host, HostId, HostStatus, InteractionKind,
     InteractionRequestId, InteractionRequest, InteractionStatus, Lease, LeaseId, Operation,
-    OperationStatus, Profile, RunStatus, Session, SessionStatus,
+    OperationStatus, Profile, RunStatus, Session, SessionStatus, HostPlatform, HostExtended,
+    ProfileAffinity, Schedule, ScheduleRun, ScheduleRunStatus, DistributedLease, SchedulingDecision,
 };
 
 /// Passkey challenge information
@@ -1647,6 +1648,764 @@ impl DbState {
         .await?;
 
         Ok(result.rows_affected() as u64)
+    }
+
+    // ==================== Fleet Orchestration Operations ====================
+
+    /// Get host extended info (platform, display, capacity)
+    pub async fn get_host_extended(&self, host_id: &HostId) -> Result<Option<HostExtended>> {
+        let pool = self.pool.clone();
+        let row = sqlx::query(
+            r#"
+            SELECT 
+                id,
+                platform,
+                display_available,
+                max_concurrent_sessions,
+                current_load
+            FROM hosts
+            WHERE id = ?
+            "#,
+        )
+        .bind(host_id.as_uuid().to_string())
+        .fetch_optional(&*pool)
+        .await?;
+
+        if let Some(row) = row {
+            let host_extended = HostExtended {
+                id: HostId::from_uuid(Uuid::parse_str(&row.get::<String, _>(0))?),
+                platform: HostPlatform::from_str_name(&row.get::<String, _>(1)),
+                display_available: row.get::<i32, _>(2) != 0,
+                max_concurrent_sessions: row.get::<i64, _>(3) as u32,
+                current_load: row.get::<i64, _>(4) as u32,
+            };
+            Ok(Some(host_extended))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Update host extended info
+    pub async fn update_host_extended(&self, host_extended: &HostExtended) -> Result<()> {
+        let pool = self.pool.clone();
+        sqlx::query(
+            r#"
+            UPDATE hosts 
+            SET platform = ?, display_available = ?, max_concurrent_sessions = ?, current_load = ?
+            WHERE id = ?
+            "#,
+        )
+        .bind(host_extended.platform.as_str_name())
+        .bind(if host_extended.display_available { 1 } else { 0 })
+        .bind(host_extended.max_concurrent_sessions as i64)
+        .bind(host_extended.current_load as i64)
+        .bind(host_extended.id.as_uuid().to_string())
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get profile affinity assignment
+    pub async fn get_profile_affinity(&self, profile_id: Uuid) -> Result<Option<ProfileAffinity>> {
+        let pool = self.pool.clone();
+        let row = sqlx::query(
+            r#"
+            SELECT 
+                profile_id,
+                assigned_host_id,
+                assigned_at,
+                assigned_by
+            FROM profile_affinity
+            WHERE profile_id = ?
+            "#,
+        )
+        .bind(profile_id.to_string())
+        .fetch_optional(&*pool)
+        .await?;
+
+        if let Some(row) = row {
+            let affinity = ProfileAffinity {
+                profile_id: Uuid::parse_str(&row.get::<String, _>(0))?,
+                assigned_host_id: HostId::from_uuid(Uuid::parse_str(&row.get::<String, _>(1))?),
+                assigned_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(2).into(),
+                    Utc,
+                ),
+                assigned_by: row.get::<String, _>(3),
+            };
+            Ok(Some(affinity))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Assign a profile to a host
+    pub async fn assign_profile(
+        &self,
+        profile_id: Uuid,
+        host_id: HostId,
+        assigned_by: &str,
+    ) -> Result<()> {
+        let pool = self.pool.clone();
+        
+        // Use UPSERT pattern for SQLite
+        sqlx::query(
+            r#"
+            INSERT INTO profile_affinity (profile_id, assigned_host_id, assigned_at, assigned_by)
+            VALUES (?, ?, datetime('now'), ?)
+            ON CONFLICT(profile_id) DO UPDATE SET 
+                assigned_host_id = excluded.assigned_host_id,
+                assigned_at = datetime('now'),
+                assigned_by = excluded.assigned_by
+            "#,
+        )
+        .bind(profile_id.to_string())
+        .bind(host_id.as_uuid().to_string())
+        .bind(assigned_by)
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Clear profile affinity (remove assignment)
+    pub async fn clear_profile_affinity(&self, profile_id: Uuid) -> Result<u64> {
+        let pool = self.pool.clone();
+        let result = sqlx::query(
+            r#"
+            DELETE FROM profile_affinity WHERE profile_id = ?
+            "#,
+        )
+        .bind(profile_id.to_string())
+        .execute(&*pool)
+        .await?;
+
+        Ok(result.rows_affected() as u64)
+    }
+
+    /// Get all profiles assigned to a host
+    pub async fn get_profiles_by_host(&self, host_id: HostId) -> Result<Vec<ProfileAffinity>> {
+        let pool = self.pool.clone();
+        let rows = sqlx::query(
+            r#"
+            SELECT 
+                profile_id,
+                assigned_host_id,
+                assigned_at,
+                assigned_by
+            FROM profile_affinity
+            WHERE assigned_host_id = ?
+            "#,
+        )
+        .bind(host_id.as_uuid().to_string())
+        .fetch_all(&*pool)
+        .await?;
+
+        let mut affinities = Vec::new();
+        for row in rows {
+            affinities.push(ProfileAffinity {
+                profile_id: Uuid::parse_str(&row.get::<String, _>(0))?,
+                assigned_host_id: HostId::from_uuid(Uuid::parse_str(&row.get::<String, _>(1))?),
+                assigned_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(2).into(),
+                    Utc,
+                ),
+                assigned_by: row.get::<String, _>(3),
+            });
+        }
+
+        Ok(affinities)
+    }
+
+    /// Create a new schedule
+    pub async fn create_schedule(&self, schedule: &Schedule) -> Result<()> {
+        let pool = self.pool.clone();
+        let goal_definition_json = serde_json::to_string(&schedule.goal_definition)?;
+        
+        sqlx::query(
+            r#"
+            INSERT INTO schedules (id, owner_id, name, cron_expression, timezone, goal_definition, max_retries, retry_delay_seconds, enabled, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            "#,
+        )
+        .bind(schedule.id.to_string())
+        .bind(schedule.owner_id.to_string())
+        .bind(&schedule.name)
+        .bind(&schedule.cron_expression)
+        .bind(&schedule.timezone)
+        .bind(goal_definition_json)
+        .bind(schedule.max_retries as i64)
+        .bind(schedule.retry_delay_seconds as i64)
+        .bind(if schedule.enabled { 1 } else { 0 })
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get a schedule by ID
+    pub async fn get_schedule(&self, schedule_id: Uuid) -> Result<Option<Schedule>> {
+        let pool = self.pool.clone();
+        let row = sqlx::query(
+            r#"
+            SELECT 
+                id,
+                owner_id,
+                name,
+                cron_expression,
+                timezone,
+                goal_definition,
+                max_retries,
+                retry_delay_seconds,
+                enabled,
+                created_at,
+                updated_at
+            FROM schedules
+            WHERE id = ?
+            "#,
+        )
+        .bind(schedule_id.to_string())
+        .fetch_optional(&*pool)
+        .await?;
+
+        if let Some(row) = row {
+            let schedule = Schedule {
+                id: Uuid::parse_str(&row.get::<String, _>(0))?,
+                owner_id: Uuid::parse_str(&row.get::<String, _>(1))?,
+                name: row.get::<String, _>(2),
+                cron_expression: row.get::<String, _>(3),
+                timezone: row.get::<String, _>(4),
+                goal_definition: serde_json::from_str(&row.get::<String, _>(5))?,
+                max_retries: row.get::<i64, _>(6) as u32,
+                retry_delay_seconds: row.get::<i64, _>(7) as u32,
+                enabled: row.get::<i32, _>(8) != 0,
+                created_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(9).into(),
+                    Utc,
+                ),
+                updated_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(10).into(),
+                    Utc,
+                ),
+            };
+            Ok(Some(schedule))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// List schedules for an owner
+    pub async fn list_schedules_by_owner(&self, owner_id: Uuid) -> Result<Vec<Schedule>> {
+        let pool = self.pool.clone();
+        let rows = sqlx::query(
+            r#"
+            SELECT 
+                id,
+                owner_id,
+                name,
+                cron_expression,
+                timezone,
+                goal_definition,
+                max_retries,
+                retry_delay_seconds,
+                enabled,
+                created_at,
+                updated_at
+            FROM schedules
+            WHERE owner_id = ?
+            ORDER BY created_at DESC
+            "#,
+        )
+        .bind(owner_id.to_string())
+        .fetch_all(&*pool)
+        .await?;
+
+        let mut schedules = Vec::new();
+        for row in rows {
+            schedules.push(Schedule {
+                id: Uuid::parse_str(&row.get::<String, _>(0))?,
+                owner_id: Uuid::parse_str(&row.get::<String, _>(1))?,
+                name: row.get::<String, _>(2),
+                cron_expression: row.get::<String, _>(3),
+                timezone: row.get::<String, _>(4),
+                goal_definition: serde_json::from_str(&row.get::<String, _>(5))?,
+                max_retries: row.get::<i64, _>(6) as u32,
+                retry_delay_seconds: row.get::<i64, _>(7) as u32,
+                enabled: row.get::<i32, _>(8) != 0,
+                created_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(9).into(),
+                    Utc,
+                ),
+                updated_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(10).into(),
+                    Utc,
+                ),
+            });
+        }
+
+        Ok(schedules)
+    }
+
+    /// Update a schedule
+    pub async fn update_schedule(&self, schedule: &Schedule) -> Result<()> {
+        let pool = self.pool.clone();
+        let goal_definition_json = serde_json::to_string(&schedule.goal_definition)?;
+        
+        sqlx::query(
+            r#"
+            UPDATE schedules 
+            SET name = ?, cron_expression = ?, timezone = ?, goal_definition = ?,
+                max_retries = ?, retry_delay_seconds = ?, enabled = ?, updated_at = datetime('now')
+            WHERE id = ?
+            "#,
+        )
+        .bind(&schedule.name)
+        .bind(&schedule.cron_expression)
+        .bind(&schedule.timezone)
+        .bind(goal_definition_json)
+        .bind(schedule.max_retries as i64)
+        .bind(schedule.retry_delay_seconds as i64)
+        .bind(if schedule.enabled { 1 } else { 0 })
+        .bind(schedule.id.to_string())
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Delete a schedule
+    pub async fn delete_schedule(&self, schedule_id: Uuid) -> Result<u64> {
+        let pool = self.pool.clone();
+        let result = sqlx::query(
+            r#"
+            DELETE FROM schedules WHERE id = ?
+            "#,
+        )
+        .bind(schedule_id.to_string())
+        .execute(&*pool)
+        .await?;
+
+        Ok(result.rows_affected() as u64)
+    }
+
+    /// Create a schedule run
+    pub async fn create_schedule_run(&self, run: &ScheduleRun) -> Result<()> {
+        let pool = self.pool.clone();
+        
+        sqlx::query(
+            r#"
+            INSERT INTO schedule_runs (id, schedule_id, run_number, status, host_id, session_id, started_at, completed_at, error_message, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            "#,
+        )
+        .bind(run.id.to_string())
+        .bind(run.schedule_id.to_string())
+        .bind(run.run_number as i64)
+        .bind(run.status.as_str_name())
+        .bind(run.host_id.map(|h| h.as_uuid().to_string()))
+        .bind(run.session_id.map(|s| s.as_uuid().to_string()))
+        .bind(run.started_at.map(|t| t.to_rfc3339()))
+        .bind(run.completed_at.map(|t| t.to_rfc3339()))
+        .bind(run.error_message.as_deref().unwrap_or(""))
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get a schedule run by ID
+    pub async fn get_schedule_run(&self, run_id: Uuid) -> Result<Option<ScheduleRun>> {
+        let pool = self.pool.clone();
+        let row = sqlx::query(
+            r#"
+            SELECT 
+                id,
+                schedule_id,
+                run_number,
+                status,
+                host_id,
+                session_id,
+                started_at,
+                completed_at,
+                error_message
+            FROM schedule_runs
+            WHERE id = ?
+            "#,
+        )
+        .bind(run_id.to_string())
+        .fetch_optional(&*pool)
+        .await?;
+
+        if let Some(row) = row {
+            let run = ScheduleRun {
+                id: Uuid::parse_str(&row.get::<String, _>(0))?,
+                schedule_id: Uuid::parse_str(&row.get::<String, _>(1))?,
+                run_number: row.get::<i64, _>(2) as u32,
+                status: ScheduleRunStatus::from_str_name(&row.get::<String, _>(3)),
+                host_id: row.get::<Option<String>, _>(4).and_then(|s| Uuid::parse_str(&s).ok()).map(HostId::from_uuid),
+                session_id: row.get::<Option<String>, _>(5).and_then(|s| Uuid::parse_str(&s).ok()).map(SessionId::from_uuid),
+                started_at: row.get::<Option<chrono::NaiveDateTime>, _>(6).map(|dt| DateTime::<Utc>::from_utc(dt.into(), Utc)),
+                completed_at: row.get::<Option<chrono::NaiveDateTime>, _>(7).map(|dt| DateTime::<Utc>::from_utc(dt.into(), Utc)),
+                error_message: row.get::<Option<String>, _>(8),
+                created_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(9).into(),
+                    Utc,
+                ),
+            };
+            Ok(Some(run))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// List schedule runs for a schedule
+    pub async fn list_schedule_runs(&self, schedule_id: Uuid) -> Result<Vec<ScheduleRun>> {
+        let pool = self.pool.clone();
+        let rows = sqlx::query(
+            r#"
+            SELECT 
+                id,
+                schedule_id,
+                run_number,
+                status,
+                host_id,
+                session_id,
+                started_at,
+                completed_at,
+                error_message
+            FROM schedule_runs
+            WHERE schedule_id = ?
+            ORDER BY created_at DESC
+            "#,
+        )
+        .bind(schedule_id.to_string())
+        .fetch_all(&*pool)
+        .await?;
+
+        let mut runs = Vec::new();
+        for row in rows {
+            runs.push(ScheduleRun {
+                id: Uuid::parse_str(&row.get::<String, _>(0))?,
+                schedule_id: Uuid::parse_str(&row.get::<String, _>(1))?,
+                run_number: row.get::<i64, _>(2) as u32,
+                status: ScheduleRunStatus::from_str_name(&row.get::<String, _>(3)),
+                host_id: row.get::<Option<String>, _>(4).and_then(|s| Uuid::parse_str(&s).ok()).map(HostId::from_uuid),
+                session_id: row.get::<Option<String>, _>(5).and_then(|s| Uuid::parse_str(&s).ok()).map(SessionId::from_uuid),
+                started_at: row.get::<Option<chrono::NaiveDateTime>, _>(6).map(|dt| DateTime::<Utc>::from_utc(dt.into(), Utc)),
+                completed_at: row.get::<Option<chrono::NaiveDateTime>, _>(7).map(|dt| DateTime::<Utc>::from_utc(dt.into(), Utc)),
+                error_message: row.get::<Option<String>, _>(8),
+                created_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(9).into(),
+                    Utc,
+                ),
+            });
+        }
+
+        Ok(runs)
+    }
+
+    /// Update schedule run status
+    pub async fn update_schedule_run_status(
+        &self,
+        run_id: Uuid,
+        status: ScheduleRunStatus,
+        started_at: Option<DateTime<Utc>>,
+        completed_at: Option<DateTime<Utc>>,
+        error_message: Option<String>,
+    ) -> Result<()> {
+        let pool = self.pool.clone();
+        
+        sqlx::query(
+            r#"
+            UPDATE schedule_runs 
+            SET status = ?, started_at = ?, completed_at = ?, error_message = ?, updated_at = datetime('now')
+            WHERE id = ?
+            "#,
+        )
+        .bind(status.as_str_name())
+        .bind(started_at.map(|t| t.to_rfc3339()))
+        .bind(completed_at.map(|t| t.to_rfc3339()))
+        .bind(error_message.as_deref().unwrap_or(""))
+        .bind(run_id.to_string())
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Create a distributed lease
+    pub async fn create_distributed_lease(&self, lease: &DistributedLease) -> Result<()> {
+        let pool = self.pool.clone();
+        
+        sqlx::query(
+            r#"
+            INSERT INTO distributed_leases (id, resource_type, resource_id, holder_id, expires_at, created_at)
+            VALUES (?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(resource_type, resource_id) DO UPDATE SET 
+                holder_id = excluded.holder_id,
+                expires_at = excluded.expires_at,
+                created_at = excluded.created_at
+            "#,
+        )
+        .bind(lease.id.to_string())
+        .bind(&lease.resource_type)
+        .bind(&lease.resource_id)
+        .bind(lease.holder_id.as_uuid().to_string())
+        .bind(lease.expires_at.to_rfc3339())
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get a distributed lease
+    pub async fn get_distributed_lease(
+        &self,
+        resource_type: &str,
+        resource_id: &str,
+    ) -> Result<Option<DistributedLease>> {
+        let pool = self.pool.clone();
+        let row = sqlx::query(
+            r#"
+            SELECT 
+                id,
+                resource_type,
+                resource_id,
+                holder_id,
+                expires_at,
+                created_at
+            FROM distributed_leases
+            WHERE resource_type = ? AND resource_id = ?
+            "#,
+        )
+        .bind(resource_type)
+        .bind(resource_id)
+        .fetch_optional(&*pool)
+        .await?;
+
+        if let Some(row) = row {
+            let lease = DistributedLease {
+                id: Uuid::parse_str(&row.get::<String, _>(0))?,
+                resource_type: row.get::<String, _>(1),
+                resource_id: row.get::<String, _>(2),
+                holder_id: HostId::from_uuid(Uuid::parse_str(&row.get::<String, _>(3))?),
+                expires_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(4).into(),
+                    Utc,
+                ),
+                created_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(5).into(),
+                    Utc,
+                ),
+            };
+            Ok(Some(lease))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Release a distributed lease
+    pub async fn release_distributed_lease(&self, resource_type: &str, resource_id: &str) -> Result<u64> {
+        let pool = self.pool.clone();
+        let result = sqlx::query(
+            r#"
+            DELETE FROM distributed_leases WHERE resource_type = ? AND resource_id = ?
+            "#,
+        )
+        .bind(resource_type)
+        .bind(resource_id)
+        .execute(&*pool)
+        .await?;
+
+        Ok(result.rows_affected() as u64)
+    }
+
+    /// Find eligible hosts for scheduling based on capabilities and load
+    pub async fn find_eligible_hosts(
+        &self,
+        required_capabilities: &[&str],
+        platform: Option<HostPlatform>,
+    ) -> Result<Vec<Host>> {
+        let pool = self.pool.clone();
+        
+        // Build query with optional filters
+        let mut query = String::from(
+            r#"
+            SELECT 
+                id, hostname, version, capabilities, status, last_heartbeat, created_at, updated_at
+            FROM hosts 
+            WHERE status != 'disconnected' AND status != 'offline'
+            "#,
+        );
+
+        if let Some(platform) = platform {
+            query.push_str(&format!(" AND platform = '{}'", platform.as_str_name()));
+        }
+
+        query.push_str(" ORDER BY current_load ASC, last_heartbeat DESC");
+
+        let rows = sqlx::query(&query).fetch_all(&*pool).await?;
+
+        let mut hosts = Vec::new();
+        for row in rows {
+            hosts.push(Host {
+                id: HostId::from_uuid(Uuid::parse_str(&row.get::<String, _>(0))?),
+                hostname: row.get::<String, _>(1),
+                version: row.get::<String, _>(2),
+                capabilities: serde_json::from_str(&row.get::<String, _>(3))?,
+                status: HostStatus::from_str_name(&row.get::<String, _>(4)),
+                last_heartbeat: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(5).into(),
+                    Utc,
+                ),
+                created_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(6).into(),
+                    Utc,
+                ),
+                updated_at: DateTime::<Utc>::from_utc(
+                    row.get::<chrono::NaiveDateTime, _>(7).into(),
+                    Utc,
+                ),
+            });
+        }
+
+        Ok(hosts)
+    }
+
+    /// Make a scheduling decision based on host capabilities and profile affinity
+    pub async fn make_scheduling_decision(
+        &self,
+        required_capabilities: &[&str],
+        platform: Option<HostPlatform>,
+        profile_id: Option<Uuid>,
+    ) -> Result<Option<SchedulingDecision>> {
+        // Get profile affinity if provided
+        let assigned_host = if let Some(profile_id) = profile_id {
+            self.get_profile_affinity(profile_id).await?.map(|a| a.assigned_host_id)
+        } else {
+            None
+        };
+
+        // Find eligible hosts
+        let mut eligible_hosts = self.find_eligible_hosts(required_capabilities, platform).await?;
+
+        // If there's an assigned host and it's still eligible, prefer it
+        if let Some(assigned_host_id) = assigned_host {
+            if let Some(host) = eligible_hosts.iter().find(|h| h.id == assigned_host_id) {
+                return Ok(Some(SchedulingDecision {
+                    host_id: host.id,
+                    profile_id,
+                    reason: "profile_affinity".to_string(),
+                    score: 1.0,
+                }));
+            }
+        }
+
+        // Otherwise, pick the least loaded host
+        if let Some(host) = eligible_hosts.first() {
+            Ok(Some(SchedulingDecision {
+                host_id: host.id,
+                profile_id,
+                reason: "least_loaded".to_string(),
+                score: 1.0 - (host.current_load as f64 / host.max_concurrent_sessions as f64),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Update host current load
+    pub async fn update_host_load(&self, host_id: &HostId, new_load: u32) -> Result<()> {
+        let pool = self.pool.clone();
+        sqlx::query(
+            r#"
+            UPDATE hosts 
+            SET current_load = ? WHERE id = ?
+            "#,
+        )
+        .bind(new_load as i64)
+        .bind(host_id.as_uuid().to_string())
+        .execute(&*pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Increment host load
+    pub async fn increment_host_load(&self, host_id: &HostId) -> Result<u32> {
+        let pool = self.pool.clone();
+        
+        // Get current load
+        let row = sqlx::query(
+            r#"
+            SELECT current_load, max_concurrent_sessions FROM hosts WHERE id = ?
+            "#,
+        )
+        .bind(host_id.as_uuid().to_string())
+        .fetch_optional(&*pool)
+        .await?;
+
+        if let Some(row) = row {
+            let current_load: i64 = row.get(0);
+            let max_sessions: i64 = row.get(1);
+            
+            if current_load >= max_sessions {
+                return Err(anyhow::anyhow!("Host at capacity"));
+            }
+            
+            let new_load = (current_load + 1) as u32;
+            
+            sqlx::query(
+                r#"
+                UPDATE hosts SET current_load = ? WHERE id = ?
+                "#,
+            )
+            .bind(current_load + 1)
+            .bind(host_id.as_uuid().to_string())
+            .execute(&*pool)
+            .await?;
+            
+            Ok(new_load)
+        } else {
+            Err(anyhow::anyhow!("Host not found"))
+        }
+    }
+
+    /// Decrement host load
+    pub async fn decrement_host_load(&self, host_id: &HostId) -> Result<u32> {
+        let pool = self.pool.clone();
+        
+        let row = sqlx::query(
+            r#"
+            SELECT current_load FROM hosts WHERE id = ?
+            "#,
+        )
+        .bind(host_id.as_uuid().to_string())
+        .fetch_optional(&*pool)
+        .await?;
+
+        if let Some(row) = row {
+            let current_load: i64 = row.get(0);
+            
+            if current_load > 0 {
+                sqlx::query(
+                    r#"
+                    UPDATE hosts SET current_load = ? WHERE id = ?
+                    "#,
+                )
+                .bind(current_load - 1)
+                .bind(host_id.as_uuid().to_string())
+                .execute(&*pool)
+                .await?;
+                
+                Ok((current_load - 1) as u32)
+            } else {
+                Ok(0)
+            }
+        } else {
+            Err(anyhow::anyhow!("Host not found"))
+        }
     }
 }
 
