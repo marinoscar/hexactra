@@ -137,6 +137,34 @@ All sensitive operations are logged:
 - [ ] Key rotation schedule
 - [ ] Incident response plan
 
+## Agent Experience Framework Security
+
+### Optional Integration
+
+The AEF is **optional** and disabled by default:
+
+- No AEF dependency for core functionality
+- AEF failure does not impact Hexactra operation
+- No credentials sent to AEF providers
+
+### Data Protection
+
+AEF-specific security controls:
+
+1. **Consent required**: Opt-in before any export
+2. **Sanitization**: All data sanitized before export
+3. **Separate stores**: Experience and audit data isolated
+4. **Time-limited retention**: Experience data auto-deleted
+
+### Provider Conformance
+
+AEF providers must:
+
+- Support health check endpoints
+- Handle authentication separately
+- Not override Hexactra authorization rules
+- Fail gracefully without breaking sessions
+
 ## Reporting Security Issues
 
 If you discover a security vulnerability:
