@@ -130,7 +130,7 @@ pub enum TaskStatus {
 }
 
 /// Provenance information about the event
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EventProvenance {
     /// Agent instance identifier
     pub agent_id: Uuid,
@@ -203,7 +203,7 @@ pub struct EventMetadata {
 }
 
 /// A sanitized experience event that can be shared with AEF
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExperienceEvent {
     /// Schema version for backward compatibility
     pub schema_version: String,
@@ -270,7 +270,7 @@ impl ExperienceEvent {
 }
 
 /// A batch of experience events for efficient transmission
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExperienceEventBatch {
     /// Unique batch identifier
     pub batch_id: Uuid,
@@ -550,7 +550,7 @@ impl Default for CircuitBreakerConfig {
 }
 
 /// Hint retrieved from experience memory
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExperienceHint {
     /// Unique hint identifier
     pub hint_id: Uuid,
@@ -569,7 +569,7 @@ pub struct ExperienceHint {
 }
 
 /// Provenance information for a hint
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HintProvenance {
     /// When the hint was created
     pub created_at: DateTime<Utc>,
@@ -580,7 +580,7 @@ pub struct HintProvenance {
 }
 
 /// Request to retrieve hints
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HintRequest {
     /// Site URL to search for
     pub site_url: String,
