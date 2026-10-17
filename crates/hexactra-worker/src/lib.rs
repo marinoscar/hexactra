@@ -11,6 +11,7 @@ use tokio::net::UnixStream;
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 use std::path::Path;
+use hexactra_telemetry::start_span;
 
 // Re-export secret transport for integration
 pub use hexactra_core::secret_transport::{SecretStore, SecretTransport, SecretReference};
@@ -149,6 +150,7 @@ impl SessionWorker {
             return Err(anyhow::anyhow!("Worker already started or stopped"));
         }
 
+        let _span = start_span("worker.start", &self.config.session_id.to_string());
         tracing::info!("Starting worker for session: {:?}", self.config.session_id);
 
         // Spawn the action handler task
@@ -167,6 +169,7 @@ impl SessionWorker {
             return Err(anyhow::anyhow!("Worker not running"));
         }
 
+        let _span = start_span("worker.stop", &self.config.session_id.to_string());
         tracing::info!("Stopping worker for session: {:?}", self.config.session_id);
 
         // Wait for pending operations to complete or timeout
@@ -178,6 +181,7 @@ impl SessionWorker {
 
     /// Send an action to the worker
     pub async fn send_action(&mut self, action: BrowserAction) -> Result<Uuid> {
+        let _span = start_span("worker.send_action", &self.config.session_id.to_string());
         let action_id = Uuid::new_v4();
         let action_clone = action.clone();
         
@@ -204,6 +208,7 @@ impl SessionWorker {
     /// Handle actions from the channel
     async fn handle_actions(config: WorkerConfig, mut rx: mpsc::Receiver<BrowserAction>) {
         while let Some(action) = rx.recv().await {
+            let _span = start_span("worker.handle_action", &config.session_id.to_string());
             tracing::info!("Handling action: {:?}", action);
 
             // Check if this is a Type action that might contain secrets
