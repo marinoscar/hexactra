@@ -1,5 +1,20 @@
 //! Type definitions for Hexactra
 
+/**
+ * Error codes for Hexactra SDK errors
+ */
+export enum ErrorCode {
+  InvalidInput = 'INVALID_INPUT',
+  Unauthorized = 'UNAUTHORIZED',
+  Forbidden = 'FORBIDDEN',
+  NotFound = 'NOT_FOUND',
+  Conflict = 'CONFLICT',
+  RateLimit = 'RATE_LIMIT',
+  InternalError = 'INTERNAL_ERROR',
+  NetworkError = 'NETWORK_ERROR',
+  TimeoutError = 'TIMEOUT_ERROR',
+}
+
 export interface Goal {
   id: string;
   sessionId: string;
