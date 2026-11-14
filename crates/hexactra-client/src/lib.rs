@@ -393,8 +393,20 @@ impl HostClient {
         browser_connected: bool,
         wait: Duration,
     ) -> Result<Option<DispatchedOperation>> {
+        self.next_with(host_id, browser_connected, false, wait)
+            .await
+    }
+
+    /// Long-poll, also reporting whether this host launches its browser on demand.
+    pub async fn next_with(
+        &self,
+        host_id: Uuid,
+        browser_connected: bool,
+        on_demand: bool,
+        wait: Duration,
+    ) -> Result<Option<DispatchedOperation>> {
         let path = format!(
-            "v1/hosts/{host_id}/next?wait_ms={}&browser_connected={browser_connected}",
+            "v1/hosts/{host_id}/next?wait_ms={}&browser_connected={browser_connected}&on_demand={on_demand}",
             wait.as_millis()
         );
         let resp = self

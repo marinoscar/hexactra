@@ -318,6 +318,13 @@ pub struct HostView {
     pub online: bool,
     /// The Chrome extension is connected to this host's native bridge.
     pub browser_connected: bool,
+    /// The host launches its browser on demand, so it can take sessions
+    /// while the browser is stopped.
+    #[serde(default)]
+    pub on_demand: bool,
+    /// Web viewer where a person can see and use this host's browser.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub viewer_url: Option<String>,
     pub last_seen: DateTime<Utc>,
 }
 
@@ -349,6 +356,10 @@ pub struct RegisterHostRequest {
     /// Re-register with a previously issued id to keep sessions bound to it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host_id: Option<Uuid>,
+    /// Web viewer for this host's browser (`http(s)` URL), shown to people
+    /// answering handoffs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub viewer_url: Option<String>,
 }
 
 /// Response to host registration.
@@ -551,6 +562,10 @@ pub struct HandoffView {
     pub resolved_at: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub response: Option<HandoffResponse>,
+    /// Web viewer of the host's browser, when the host has one: open it to
+    /// solve a CAPTCHA or approve a passkey in the remote browser.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub viewer_url: Option<String>,
 }
 
 /// Response to creating a handoff.

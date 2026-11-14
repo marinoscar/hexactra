@@ -26,6 +26,7 @@ async fn register(url: &str) -> (HostClient, uuid::Uuid) {
             name: "test-host".into(),
             version: "0".into(),
             host_id: None,
+            viewer_url: None,
         })
         .await
         .unwrap()

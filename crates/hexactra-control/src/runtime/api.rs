@@ -172,9 +172,27 @@ async fn register_host(
             "name must be 1-128 characters".into(),
         ));
     }
+    let viewer_url = match req.viewer_url.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some(u) => {
+            let ok = u.len() <= 2048
+                && url::Url::parse(u)
+                    .map(|p| matches!(p.scheme(), "http" | "https") && p.host_str().is_some())
+                    .unwrap_or(false);
+            if !ok {
+                return Err(AppError(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_request",
+                    "viewer_url must be an http(s) URL".into(),
+                ));
+            }
+            Some(u.to_string())
+        }
+    };
     let host_id = s
         .store
         .register_host(req.host_id, name.to_string(), req.version);
+    s.store.set_host_viewer_url(host_id, viewer_url)?;
     tracing::info!(%host_id, "host registered");
     Ok(Json(RegisterHostResponse { host_id }))
 }
@@ -184,6 +202,8 @@ struct PollQuery {
     wait_ms: Option<u64>,
     #[serde(default)]
     browser_connected: bool,
+    #[serde(default)]
+    on_demand: bool,
 }
 
 async fn next_operation(
@@ -192,6 +212,7 @@ async fn next_operation(
     Query(q): Query<PollQuery>,
 ) -> Result<Response, AppError> {
     let wait = Duration::from_millis(q.wait_ms.unwrap_or(25_000)).min(MAX_HOST_POLL);
+    s.store.set_host_on_demand(host_id, q.on_demand)?;
     match s
         .store
         .next_operation(host_id, q.browser_connected, wait)
