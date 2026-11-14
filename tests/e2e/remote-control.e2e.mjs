@@ -3,12 +3,12 @@
 //
 // Starts the real stack and drives a real Chromium through the CLI:
 //
-//   hexactra CLI -> hexactra-control -> hexactra-agent -> native host
+//   hexactra CLI / hexactra-mcp -> hexactra-control -> hexactra-agent -> native host
 //     -> Hexactra extension in Chromium -> fixture page
 //
 // Requirements:
 //   - built binaries in target/debug (or HEXACTRA_BIN_DIR):
-//       hexactra, hexactra-control, hexactra-agent, hexactra-native-host
+//       hexactra, hexactra-control, hexactra-agent, hexactra-native-host, hexactra-mcp
 //   - built extension in apps/chrome-extension/dist
 //   - a Chromium that honours --load-extension (Chromium or Chrome for
 //     Testing; branded Google Chrome does not), path in CHROMIUM_PATH
@@ -31,7 +31,7 @@ const fixtureDir = join(root, 'tests', 'e2e', 'remote-fixture');
 const chromium = process.env.CHROMIUM_PATH;
 const keep = process.env.HEXACTRA_E2E_KEEP === '1';
 
-for (const b of ['hexactra', 'hexactra-control', 'hexactra-agent', 'hexactra-native-host']) {
+for (const b of ['hexactra', 'hexactra-control', 'hexactra-agent', 'hexactra-native-host', 'hexactra-mcp']) {
   if (!existsSync(join(binDir, b))) throw new Error(`missing binary ${join(binDir, b)}; run cargo build first`);
 }
 if (!existsSync(join(extensionDir, 'manifest.json'))) throw new Error('extension not built; run pnpm build');
@@ -233,6 +233,63 @@ try {
     const r = await cli('navigate', 'javascript:alert(1)');
     assert.notEqual(r.code, 0);
     assert.match(r.err, /only http\(s\)/);
+  });
+
+  await step('an MCP client operates the browser through hexactra-mcp', async () => {
+    const mcp = spawn(join(binDir, 'hexactra-mcp'), [], {
+      env: { ...env, HEXACTRA_URL: controlUrl },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    children.push(mcp);
+    let buf = '';
+    const pending = new Map();
+    mcp.stdout.on('data', (d) => {
+      buf += d.toString();
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i);
+        buf = buf.slice(i + 1);
+        const msg = JSON.parse(line);
+        pending.get(msg.id)?.(msg);
+        pending.delete(msg.id);
+      }
+    });
+    let nextId = 1;
+    const rpc = (method, params) =>
+      new Promise((resolve, reject) => {
+        const id = nextId++;
+        const t = setTimeout(() => reject(new Error(`MCP ${method} timed out`)), 60_000);
+        pending.set(id, (m) => {
+          clearTimeout(t);
+          resolve(m);
+        });
+        mcp.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+      });
+
+    const init = await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e', version: '0' } });
+    assert.equal(init.result.serverInfo.name, 'hexactra');
+    mcp.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
+    const list = await rpc('tools/list', {});
+    assert.ok(list.result.tools.some((t) => t.name === 'browser_navigate'));
+
+    const nav = await rpc('tools/call', { name: 'browser_navigate', arguments: { url: `${site}/index.html` } });
+    assert.equal(nav.result.isError, false, JSON.stringify(nav));
+    assert.match(nav.result.content[0].text, /Hexactra Fixture Home/);
+
+    const typed = await rpc('tools/call', { name: 'browser_type', arguments: { selector: '#q', text: 'from mcp', submit: true } });
+    assert.equal(typed.result.isError, false, JSON.stringify(typed));
+    const text = await rpc('tools/call', { name: 'browser_text', arguments: { selector: '#out' } });
+    assert.match(text.result.content[0].text, /searched: from mcp/);
+
+    const shot = await rpc('tools/call', { name: 'browser_screenshot', arguments: {} });
+    assert.equal(shot.result.content[0].type, 'image');
+    assert.equal(shot.result.content[0].mimeType, 'image/jpeg');
+    assert.ok(shot.result.content[0].data.length > 1000);
+
+    const bad = await rpc('tools/call', { name: 'browser_click', arguments: { selector: '#nope' } });
+    assert.equal(bad.result.isError, true);
+    assert.match(bad.result.content[0].text, /no element matches #nope/);
+    mcp.stdin.end();
   });
 
   await step('the extension reconnects after the agent restarts', async () => {

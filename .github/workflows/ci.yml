@@ -110,7 +110,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @hexactra/chrome-extension build
-      - run: cargo build -p hexactra-cli -p hexactra-control -p hexactra-agent -p hexactra-native-host
+      - run: cargo build -p hexactra-cli -p hexactra-control -p hexactra-agent -p hexactra-native-host -p hexactra-mcp
       # Chromium (not branded Chrome) honours --load-extension.
       - name: Install Chromium and Xvfb
         run: |

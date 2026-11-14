@@ -1,300 +1,318 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Hexactra MCP server (hexactra-mcp): operate the user's browser through the control plane /v1 API.",
+  "instructions": "These tools operate a real Chrome browser that belongs to the user and is signed in to their accounts. Typical loop: browser_navigate, then browser_elements to get CSS selectors, then browser_click / browser_type, then browser_text or browser_screenshot to check the result. Act at a human pace and only on the user's own behalf. If a page shows a CAPTCHA, a verification code, a passkey prompt, a payment confirmation or any other security check, stop and ask the user to complete it in their browser; do not try to bypass it.",
   "name": "hexactra",
-  "description": "Hexactra: AI-powered browser automation runtime",
-  "version": "1.0.0",
   "tools": [
     {
-      "name": "create_session",
-      "description": "Create a new browser session with the specified profile",
+      "description": "Show whether the user's browser is connected.",
       "inputSchema": {
-        "type": "object",
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "browser_status"
+    },
+    {
+      "description": "Open an http(s) URL in the current tab and wait for it to load. Returns the final URL and title.",
+      "inputSchema": {
+        "additionalProperties": false,
         "properties": {
-          "profile_id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "ID of the Chrome profile to use"
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
           },
-          "timeout_minutes": {
-            "type": "integer",
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
+      "name": "browser_navigate"
+    },
+    {
+      "description": "List visible interactive elements (links, buttons, inputs) with a CSS selector, tag and label for each. Call this before clicking or typing.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "max_elements": {
+            "maximum": 500,
             "minimum": 1,
-            "maximum": 60,
-            "default": 30,
-            "description": "Session timeout in minutes"
-          }
-        },
-        "required": ["profile_id"]
-      }
-    },
-    {
-      "name": "list_sessions",
-      "description": "List all active sessions",
-      "inputSchema": {
-        "type": "object",
-        "properties": {}
-      }
-    },
-    {
-      "name": "create_goal",
-      "description": "Create a new goal (task) to execute in a session",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "session_id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "ID of the session to execute the goal in"
+            "type": "integer"
           },
-          "actions": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "oneOf": [
-                {
-                  "properties": {
-                    "type": {"const": "navigate"},
-                    "url": {"type": "string", "format": "uri"}
-                  },
-                  "required": ["type", "url"]
-                },
-                {
-                  "properties": {
-                    "type": {"const": "click"},
-                    "selector": {"type": "string"}
-                  },
-                  "required": ["type", "selector"]
-                },
-                {
-                  "properties": {
-                    "type": {"const": "type"},
-                    "selector": {"type": "string"},
-                    "text": {"type": "string"}
-                  },
-                  "required": ["type", "selector", "text"]
-                },
-                {
-                  "properties": {
-                    "type": {"const": "get_value"},
-                    "selector": {"type": "string"}
-                  },
-                  "required": ["type", "selector"]
-                },
-                {
-                  "properties": {
-                    "type": {"const": "screenshot"}
-                  },
-                  "required": ["type"]
-                },
-                {
-                  "properties": {
-                    "type": {"const": "execute_script"},
-                    "script": {"type": "string"}
-                  },
-                  "required": ["type", "script"]
-                },
-                {
-                  "properties": {
-                    "type": {"const": "wait_for_element"},
-                    "selector": {"type": "string"},
-                    "timeout_ms": {"type": "integer", "minimum": 0}
-                  },
-                  "required": ["type", "selector", "timeout_ms"]
-                },
-                {
-                  "properties": {
-                    "type": {"const": "back"}
-                  },
-                  "required": ["type"]
-                },
-                {
-                  "properties": {
-                    "type": {"const": "forward"}
-                  },
-                  "required": ["type"]
-                },
-                {
-                  "properties": {
-                    "type": {"const": "refresh"}
-                  },
-                  "required": ["type"]
-                }
-              ]
-            },
-            "description": "List of browser actions to execute"
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
           }
         },
-        "required": ["session_id", "actions"]
-      }
+        "required": [],
+        "type": "object"
+      },
+      "name": "browser_elements"
     },
     {
-      "name": "get_goal_status",
-      "description": "Get the status of a specific goal",
+      "description": "Click the first element matching a CSS selector.",
       "inputSchema": {
-        "type": "object",
+        "additionalProperties": false,
         "properties": {
-          "goal_id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "ID of the goal"
-          }
-        },
-        "required": ["goal_id"]
-      }
-    },
-    {
-      "name": "list_goals",
-      "description": "List all goals for a session",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "session_id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "ID of the session"
-          }
-        },
-        "required": ["session_id"]
-      }
-    },
-    {
-      "name": "create_interaction_request",
-      "description": "Create a human-in-the-loop interaction request",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "session_id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "ID of the session"
+          "selector": {
+            "type": "string"
           },
-          "reason": {
-            "type": "string",
-            "description": "Reason for the interaction request"
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "selector"
+        ],
+        "type": "object"
+      },
+      "name": "browser_click"
+    },
+    {
+      "description": "Type text into an input, textarea or editable element. Set clear to replace the existing value and submit to press Enter / submit the form.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "clear": {
+            "type": "boolean"
           },
-          "details": {
-            "type": "object",
-            "description": "Additional context for the request"
-          }
-        },
-        "required": ["session_id", "reason"]
-      }
-    },
-    {
-      "name": "approve_interaction_request",
-      "description": "Approve an interaction request",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "ID of the interaction request"
-          }
-        },
-        "required": ["request_id"]
-      }
-    },
-    {
-      "name": "reject_interaction_request",
-      "description": "Reject an interaction request",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "ID of the interaction request"
+          "selector": {
+            "type": "string"
           },
-          "reason": {
-            "type": "string",
-            "description": "Reason for rejection (optional)"
+          "submit": {
+            "type": "boolean"
+          },
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          },
+          "text": {
+            "type": "string"
           }
         },
-        "required": ["request_id"]
-      }
+        "required": [
+          "selector",
+          "text"
+        ],
+        "type": "object"
+      },
+      "name": "browser_type"
     },
     {
-      "name": "get_operation_status",
-      "description": "Get the status of a specific operation",
+      "description": "Press a key such as Enter, Escape, Tab or ArrowDown on the focused element or on selector.",
       "inputSchema": {
-        "type": "object",
+        "additionalProperties": false,
         "properties": {
-          "operation_id": {
-            "type": "string",
-            "format": "uuid",
-            "description": "ID of the operation"
+          "key": {
+            "type": "string"
+          },
+          "selector": {
+            "type": "string"
+          },
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
           }
         },
-        "required": ["operation_id"]
-      }
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "name": "browser_press"
     },
     {
-      "name": "get_health",
-      "description": "Check service health",
+      "description": "Scroll the page by dx/dy pixels, or scroll selector into view.",
       "inputSchema": {
-        "type": "object",
-        "properties": {}
-      }
+        "additionalProperties": false,
+        "properties": {
+          "dx": {
+            "type": "integer"
+          },
+          "dy": {
+            "type": "integer"
+          },
+          "selector": {
+            "type": "string"
+          },
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "browser_scroll"
+    },
+    {
+      "description": "Read the visible text of the page or of selector.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "max_chars": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "selector": {
+            "type": "string"
+          },
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "browser_text"
+    },
+    {
+      "description": "Capture the visible part of the tab as an image.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "browser_screenshot"
+    },
+    {
+      "description": "Wait until an element matching selector exists (timeout_ms up to 60000).",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "selector": {
+            "type": "string"
+          },
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          },
+          "timeout_ms": {
+            "maximum": 60000,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "selector"
+        ],
+        "type": "object"
+      },
+      "name": "browser_wait_for"
+    },
+    {
+      "description": "List open tabs with ids, titles and URLs.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "browser_tabs"
+    },
+    {
+      "description": "Open a new tab, optionally at an http(s) URL.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "browser_new_tab"
+    },
+    {
+      "description": "Switch to a tab.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "tab_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tab_id"
+        ],
+        "type": "object"
+      },
+      "name": "browser_activate_tab"
+    },
+    {
+      "description": "Close a tab.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "tab_id": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tab_id"
+        ],
+        "type": "object"
+      },
+      "name": "browser_close_tab"
+    },
+    {
+      "description": "Go back in history.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "browser_back"
+    },
+    {
+      "description": "Go forward in history.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "browser_forward"
+    },
+    {
+      "description": "Reload the tab.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "name": "browser_reload"
     }
   ],
-  "resourceTemplates": [
-    {
-      "name": "session",
-      "description": "A browser session resource",
-      "uriTemplate": "hexactra://sessions/{session_id}",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "id": {"type": "string", "format": "uuid"},
-          "profile_id": {"type": "string", "format": "uuid"},
-          "status": {
-            "type": "string",
-            "enum": ["initializing", "running", "paused", "ended"]
-          },
-          "created_at": {"type": "string", "format": "date-time"},
-          "updated_at": {"type": "string", "format": "date-time"}
-        }
-      }
-    },
-    {
-      "name": "goal",
-      "description": "A goal (task) resource",
-      "uriTemplate": "hexactra://goals/{goal_id}",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "id": {"type": "string", "format": "uuid"},
-          "session_id": {"type": "string", "format": "uuid"},
-          "actions": {
-            "type": "array",
-            "items": {"type": "object"}
-          },
-          "created_at": {"type": "string", "format": "date-time"},
-          "status": {
-            "type": "string",
-            "enum": ["queued", "running", "completed", "failed", "cancelled", "timed_out"]
-          }
-        }
-      }
-    },
-    {
-      "name": "interaction_request",
-      "description": "An interaction request (HITL) resource",
-      "uriTemplate": "hexactra://interaction-requests/{request_id}",
-      "schema": {
-        "type": "object",
-        "properties": {
-          "id": {"type": "string", "format": "uuid"},
-          "session_id": {"type": "string", "format": "uuid"},
-          "reason": {"type": "string"},
-          "details": {"type": "object"},
-          "created_at": {"type": "string", "format": "date-time"},
-          "status": {
-            "type": "string",
-            "enum": ["pending", "approved", "rejected"]
-          }
-        }
-      }
-    }
-  ]
+  "version": "0.1.0"
 }
