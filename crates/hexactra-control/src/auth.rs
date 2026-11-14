@@ -476,23 +476,22 @@ impl RevokedToken {
 
 // ==================== Main Authorization Function ====================
 
-/// Token secret key - in production, this should come from environment/config
-static mut TOKEN_SECRET: Option<String> = None;
+/// Token signing secret, set once at startup.
+static TOKEN_SECRET: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None);
 
 /// Set the token secret key
 pub fn set_token_secret(secret: &str) {
-    unsafe {
-        TOKEN_SECRET = Some(secret.to_string());
-    }
+    let mut guard = TOKEN_SECRET.write().unwrap_or_else(|e| e.into_inner());
+    *guard = Some(secret.to_string());
 }
 
 /// Get the token secret key
 pub fn get_token_secret() -> Result<String> {
-    unsafe {
-        TOKEN_SECRET
-            .clone()
-            .ok_or_else(|| anyhow!("Token secret not configured"))
-    }
+    TOKEN_SECRET
+        .read()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+        .ok_or_else(|| anyhow!("Token secret not configured"))
 }
 
 /// Create a new access token for an identity

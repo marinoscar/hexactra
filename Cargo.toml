@@ -20,6 +20,7 @@ members = [
     "crates/hexactra-provider-tests",
     "crates/hexactra-aef-connector",
     "crates/hexactra-benchmark",
+    "crates/hexactra-client",
     "tests",
 ]
 resolver = "2"
@@ -52,7 +53,7 @@ utoipa = { version = "5.2", features = ["axum_extras"] }
 schemars = { version = "0.8", features = ["chrono"] }
 chrono = { version = "0.4", features = ["serde"] }
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono"] }
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.5", features = ["derive", "env"] }
 tokio-native-tls = "0.3"
 futures = "0.3"
 futures-util = "0.3"

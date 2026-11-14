@@ -1,0 +1,219 @@
+//! Integration tests for the `/v1` remote-control API over real HTTP (#175).
+
+use std::time::Duration;
+
+use hexactra_client::{ControlClient, HostClient};
+use hexactra_control::runtime::{self, ApiState, RuntimeStore};
+use hexactra_core::remote::{
+    CreateSessionRequest, OperationResult, OperationState, RegisterHostRequest, RemoteAction,
+};
+use serde_json::json;
+
+const TOKEN: &str = "test-token-0123456789abcdef0123";
+
+async fn start() -> String {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let state = ApiState::new(RuntimeStore::new(), TOKEN);
+    tokio::spawn(runtime::serve(listener, state, std::future::pending()));
+    format!("http://{addr}")
+}
+
+async fn register(url: &str) -> (HostClient, uuid::Uuid) {
+    let host = HostClient::new(url, TOKEN).unwrap();
+    let id = host
+        .register(&RegisterHostRequest {
+            name: "test-host".into(),
+            version: "0".into(),
+            host_id: None,
+        })
+        .await
+        .unwrap()
+        .host_id;
+    // First poll marks the browser as connected.
+    assert!(host
+        .next(id, true, Duration::from_millis(10))
+        .await
+        .unwrap()
+        .is_none());
+    (host, id)
+}
+
+#[tokio::test]
+async fn health_is_public_everything_else_needs_token() {
+    let url = start().await;
+    let anon = reqwest::get(format!("{url}/v1/health")).await.unwrap();
+    assert_eq!(anon.status(), 200);
+
+    let r = reqwest::get(format!("{url}/v1/sessions")).await.unwrap();
+    assert_eq!(r.status(), 401);
+
+    let bad = ControlClient::new(&url, "wrong-token-wrong-token-wrong").unwrap();
+    assert_eq!(bad.sessions().await.unwrap_err().status(), Some(401));
+
+    let good = ControlClient::new(&url, TOKEN).unwrap();
+    assert!(good.sessions().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn action_round_trip_through_host() {
+    let url = start().await;
+    let (host, host_id) = register(&url).await;
+    let client = ControlClient::new(&url, TOKEN).unwrap();
+
+    let session = client
+        .create_session(&CreateSessionRequest::default())
+        .await
+        .unwrap();
+    assert_eq!(session.host_id, host_id);
+
+    // Fake host: execute one operation and report a result.
+    let worker = tokio::spawn(async move {
+        let op = host
+            .next(host_id, true, Duration::from_secs(5))
+            .await
+            .unwrap()
+            .expect("operation");
+        assert!(matches!(op.action, RemoteAction::Navigate { .. }));
+        host.report(
+            host_id,
+            op.id,
+            &OperationResult {
+                ok: true,
+                result: Some(json!({"url": "https://example.test/", "title": "Example"})),
+                error: None,
+            },
+        )
+        .await
+        .unwrap();
+    });
+
+    let done = client
+        .act(
+            session.id,
+            RemoteAction::Navigate {
+                url: "https://example.test/".into(),
+                tab_id: None,
+            },
+            Some(Duration::from_secs(5)),
+        )
+        .await
+        .unwrap();
+    worker.await.unwrap();
+    assert_eq!(done.state, OperationState::Succeeded);
+    assert_eq!(done.result.unwrap()["title"], "Example");
+
+    let fetched = client.operation(done.id).await.unwrap();
+    assert_eq!(fetched.state, OperationState::Succeeded);
+}
+
+#[tokio::test]
+async fn browser_failure_is_reported_as_failed_state() {
+    let url = start().await;
+    let (host, host_id) = register(&url).await;
+    let client = ControlClient::new(&url, TOKEN).unwrap();
+    let session = client
+        .create_session(&CreateSessionRequest::default())
+        .await
+        .unwrap();
+    tokio::spawn(async move {
+        let op = host
+            .next(host_id, true, Duration::from_secs(5))
+            .await
+            .unwrap()
+            .unwrap();
+        host.report(
+            host_id,
+            op.id,
+            &OperationResult {
+                ok: false,
+                result: None,
+                error: Some("no element matches #missing".into()),
+            },
+        )
+        .await
+        .unwrap();
+    });
+    let done = client
+        .act(
+            session.id,
+            RemoteAction::Click {
+                selector: "#missing".into(),
+                tab_id: None,
+            },
+            Some(Duration::from_secs(5)),
+        )
+        .await
+        .unwrap();
+    assert_eq!(done.state, OperationState::Failed);
+    assert!(done.error.unwrap().contains("#missing"));
+}
+
+#[tokio::test]
+async fn no_host_and_timeout_paths() {
+    let url = start().await;
+    let client = ControlClient::new(&url, TOKEN).unwrap();
+    let err = client
+        .create_session(&CreateSessionRequest::default())
+        .await
+        .unwrap_err();
+    assert_eq!(err.status(), Some(503));
+
+    let (_host, _id) = register(&url).await;
+    let session = client
+        .create_session(&CreateSessionRequest::default())
+        .await
+        .unwrap();
+    // Nobody polls, so the operation times out without running.
+    let done = client
+        .act(
+            session.id,
+            RemoteAction::Tabs,
+            Some(Duration::from_millis(200)),
+        )
+        .await
+        .unwrap();
+    assert_eq!(done.state, OperationState::TimedOut);
+    assert!(done.error.unwrap().contains("did not run"));
+}
+
+#[tokio::test]
+async fn invalid_actions_and_ended_sessions_are_rejected() {
+    let url = start().await;
+    let (_host, _id) = register(&url).await;
+    let client = ControlClient::new(&url, TOKEN).unwrap();
+    let session = client
+        .create_session(&CreateSessionRequest::default())
+        .await
+        .unwrap();
+
+    let err = client
+        .act(
+            session.id,
+            RemoteAction::Navigate {
+                url: "javascript:alert(1)".into(),
+                tab_id: None,
+            },
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(err.status(), Some(400));
+
+    // Unknown action types are rejected at deserialisation.
+    let r = reqwest::Client::new()
+        .post(format!("{url}/v1/sessions/{}/actions", session.id))
+        .bearer_auth(TOKEN)
+        .json(&json!({"action": {"type": "execute_script", "script": "1"}}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 422);
+
+    client.end_session(session.id).await.unwrap();
+    let err = client
+        .act(session.id, RemoteAction::Tabs, None)
+        .await
+        .unwrap_err();
+    assert_eq!(err.status(), Some(409));
+}

@@ -1,0 +1,17 @@
+[package]
+name = "hexactra-client"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "HTTP client for the Hexactra control plane /v1 API"
+
+[dependencies]
+hexactra-core = { path = "../hexactra-core" }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+url = "2"
