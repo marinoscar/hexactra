@@ -171,3 +171,92 @@ fn drives_a_session_end_to_end() {
 
     cli().args(["session", "end"]).assert().success();
 }
+
+#[test]
+fn handoff_and_webhook_commands() {
+    let url = start_stack();
+    let cfg = tempfile::tempdir().unwrap();
+    let cli = || {
+        let mut c = Command::cargo_bin("hexactra").unwrap();
+        c.env("HEXACTRA_API_TOKEN", TOKEN)
+            .env("HEXACTRA_URL", &url)
+            .env("XDG_CONFIG_HOME", cfg.path())
+            .env_remove("HEXACTRA_SESSION");
+        c
+    };
+
+    // An agent asks for text and waits; the operator answers from another process.
+    let waiter = cli()
+        .args([
+            "handoff",
+            "request",
+            "--kind",
+            "other",
+            "--prompt",
+            "Which seat?",
+            "--input",
+            "text",
+            "--wait",
+            "--timeout-s",
+            "30",
+        ])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut id = None;
+    for _ in 0..100 {
+        let out = cli().args(["--json", "handoff", "list"]).output().unwrap();
+        let list: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap_or_default();
+        if let Some(found) = list
+            .as_array()
+            .and_then(|a| a.first())
+            .and_then(|h| h["id"].as_str())
+        {
+            id = Some(found.to_string());
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let id = id.expect("handoff never appeared");
+
+    // Browser actions are paused meanwhile.
+    cli()
+        .arg("tabs")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("handoff_pending"));
+
+    cli()
+        .args(["handoff", "respond", &id, "--value", "12A"])
+        .assert()
+        .success();
+    let out = waiter.wait_with_output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("completed via cli"), "{stdout}");
+    assert!(stdout.contains("12A"), "{stdout}");
+
+    // Webhooks: http is refused by default; https is registered and listed without its secret.
+    cli()
+        .args(["webhook", "add", "http://hooks.example.test/x"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("https"));
+    let out = cli()
+        .args(["--json", "webhook", "add", "https://hooks.example.test/x"])
+        .output()
+        .unwrap();
+    let created: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert!(created["secret"].as_str().unwrap().starts_with("whsec_"));
+    let wid = created["webhook"]["id"].as_str().unwrap().to_string();
+    cli().args(["webhook", "list"]).assert().success().stdout(
+        predicate::str::contains("hooks.example.test")
+            .and(predicate::str::contains("whsec_").not()),
+    );
+    cli().args(["webhook", "remove", &wid]).assert().success();
+}

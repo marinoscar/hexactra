@@ -13,6 +13,8 @@
 //! saved by the last `hexactra session create`; if none exists or it has
 //! ended, a new session is created and saved.
 
+mod human;
+
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -67,6 +69,12 @@ enum Commands {
     /// Manage sessions.
     #[command(subcommand)]
     Session(SessionCmd),
+    /// Ask a person for help (CAPTCHA, code, passkey, approval) and get the answer.
+    #[command(subcommand)]
+    Handoff(human::HandoffCmd),
+    /// Manage webhook channels that reach a person when a handoff opens.
+    #[command(subcommand)]
+    Webhook(human::WebhookCmd),
     /// Open a URL in the current tab.
     Navigate {
         url: String,
@@ -343,6 +351,18 @@ async fn run() -> Result<()> {
                 );
             }
             return Ok(());
+        }
+        Commands::Handoff(cmd) => {
+            return human::handoff(
+                cmd.clone(),
+                &client,
+                resolve_session(&cli, &client),
+                cli.json,
+            )
+            .await;
+        }
+        Commands::Webhook(cmd) => {
+            return human::webhook(cmd.clone(), &client, cli.json).await;
         }
         Commands::Session(cmd) => {
             match cmd {
