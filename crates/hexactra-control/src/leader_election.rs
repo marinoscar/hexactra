@@ -67,7 +67,11 @@ pub struct LeaderElection {
 }
 
 impl LeaderElection {
-    pub fn new(db_state: DbState, node_id: impl Into<String>, config: Option<LeaderConfig>) -> Self {
+    pub fn new(
+        db_state: DbState,
+        node_id: impl Into<String>,
+        config: Option<LeaderConfig>,
+    ) -> Self {
         Self {
             db_state,
             node_id: node_id.into(),
@@ -188,7 +192,9 @@ impl LeaderElection {
         match info {
             Some(leader) => {
                 // Check if leader is still valid
-                Ok(Utc::now() > leader.expires_at - Duration::seconds(self.config.max_failover_seconds as i64))
+                Ok(Utc::now()
+                    > leader.expires_at
+                        - Duration::seconds(self.config.max_failover_seconds as i64))
             }
             None => Ok(true), // No leader exists
         }
@@ -199,7 +205,10 @@ impl LeaderElection {
         let mut last_renewal = Utc::now();
 
         loop {
-            tokio::time::sleep(std::time::Duration::from_secs(self.config.heartbeat_interval_seconds)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(
+                self.config.heartbeat_interval_seconds,
+            ))
+            .await;
 
             // Check if we need to acquire leadership
             if self.should_acquire_leadership().await? {

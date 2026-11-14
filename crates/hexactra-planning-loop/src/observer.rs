@@ -149,6 +149,9 @@ mod tests {
 
         assert_eq!(observation.page_url, "https://test.com");
         assert_eq!(observation.viewport_size, (1280, 720));
-        assert_eq!(observation.focused_element, Some("input#search".to_string()));
+        assert_eq!(
+            observation.focused_element,
+            Some("input#search".to_string())
+        );
     }
 }

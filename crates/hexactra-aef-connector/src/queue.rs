@@ -48,7 +48,8 @@ impl EventQueue {
         let last_flush = self.last_flush.lock().await;
 
         events.len() >= self.config.max_events_per_batch
-            || (Utc::now() - *last_flush).num_seconds() >= self.config.flush_interval_ms as i64 / 1000
+            || (Utc::now() - *last_flush).num_seconds()
+                >= self.config.flush_interval_ms as i64 / 1000
     }
 
     /// Flush the queue and return a batch

@@ -6,16 +6,16 @@
 //! - Suspend agent while human lease active
 //! - Never blindly replay unknown non-idempotent actions
 
-pub mod execution_policy;
 pub mod budget_tracker;
-pub mod retry_manager;
 pub mod control_takeover;
+pub mod execution_policy;
+pub mod retry_manager;
 
 // Re-export key types for convenience
-pub use execution_policy::ExecutionPolicy;
 pub use budget_tracker::BudgetTracker;
-pub use retry_manager::RetryManager;
 pub use control_takeover::{ControlTakeoverManager, HumanLeaseId};
+pub use execution_policy::ExecutionPolicy;
+pub use retry_manager::RetryManager;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -66,16 +66,11 @@ pub enum ExecutionState {
     /// Currently executing
     Running,
     /// Paused due to human lease or policy
-    Paused {
-        reason: PauseReason,
-    },
+    Paused { reason: PauseReason },
     /// Completed successfully
     Completed,
     /// Failed with an error
-    Failed {
-        error: String,
-        last_step: u32,
-    },
+    Failed { error: String, last_step: u32 },
     /// Cancelled by user
     Cancelled,
 }
@@ -112,7 +107,7 @@ impl ExecutionSession {
     /// Create a new execution session
     pub fn new(run_id: Uuid, policy: ExecutionPolicy) -> Self {
         let session_id = ExecutionSessionId::new();
-        
+
         Self {
             session_id,
             run_id,
@@ -268,7 +263,12 @@ mod tests {
 
         // Pause due to human lease
         session.take_control(PauseReason::HumanLeaseActive);
-        assert_eq!(session.state(), &ExecutionState::Paused { reason: PauseReason::HumanLeaseActive });
+        assert_eq!(
+            session.state(),
+            &ExecutionState::Paused {
+                reason: PauseReason::HumanLeaseActive
+            }
+        );
 
         // Release control
         session.release_control();

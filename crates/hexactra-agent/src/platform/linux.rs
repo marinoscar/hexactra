@@ -53,32 +53,44 @@ impl HostPlatform for LinuxPlatform {
 
     fn spawn_process(config: ProcessConfig) -> Result<SpawnedProcess> {
         let mut cmd = std::process::Command::new(&config.command);
-        
+
         if let Some(cwd) = config.cwd {
             cmd.current_dir(cwd);
         }
-        
+
         for (key, value) in config.env {
             cmd.env(key, value);
         }
-        
+
         cmd.args(&config.args)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
-        
+
         if config.detached {
             // For true detachment on Linux, we'd use setsid()
             // This is a simplified version
         }
-        
+
         let child = cmd.spawn()?;
-        
+
         Ok(SpawnedProcess {
             pid: child.id() as u32,
-            stdin: Some(child.stdin.ok_or_else(|| anyhow::anyhow!("Failed to get stdin"))?),
-            stdout: Some(child.stdout.ok_or_else(|| anyhow::anyhow!("Failed to get stdout"))?),
-            stderr: Some(child.stderr.ok_or_else(|| anyhow::anyhow!("Failed to get stderr"))?),
+            stdin: Some(
+                child
+                    .stdin
+                    .ok_or_else(|| anyhow::anyhow!("Failed to get stdin"))?,
+            ),
+            stdout: Some(
+                child
+                    .stdout
+                    .ok_or_else(|| anyhow::anyhow!("Failed to get stdout"))?,
+            ),
+            stderr: Some(
+                child
+                    .stderr
+                    .ok_or_else(|| anyhow::anyhow!("Failed to get stderr"))?,
+            ),
         })
     }
 
@@ -87,17 +99,17 @@ impl HostPlatform for LinuxPlatform {
         unsafe {
             libc::kill(pid as libc::pid_t, libc::SIGTERM);
         }
-        
+
         // Give it a moment to terminate gracefully
         std::thread::sleep(std::time::Duration::from_millis(100));
-        
+
         // Check if process is still running and send SIGKILL if needed
         unsafe {
             if libc::kill(pid as libc::pid_t, 0) == 0 {
                 libc::kill(pid as libc::pid_t, libc::SIGKILL);
             }
         }
-        
+
         Ok(())
     }
 
@@ -116,18 +128,14 @@ impl HostPlatform for LinuxPlatform {
         // For Linux, we use Unix domain sockets
         match endpoint.endpoint_type {
             IpcType::Unix => Ok(Box::new(LinuxIpcServer::new(endpoint.path)?)),
-            IpcType::NamedPipe => {
-                Err(anyhow::anyhow!("Named pipes not supported on Linux"))
-            }
+            IpcType::NamedPipe => Err(anyhow::anyhow!("Named pipes not supported on Linux")),
         }
     }
 
     fn connect_to_ipc(endpoint: IpcEndpoint) -> Result<Box<dyn IpcClient>> {
         match endpoint.endpoint_type {
             IpcType::Unix => Ok(Box::new(LinuxIpcClient::new(endpoint.path)?)),
-            IpcType::NamedPipe => {
-                Err(anyhow::anyhow!("Named pipes not supported on Linux"))
-            }
+            IpcType::NamedPipe => Err(anyhow::anyhow!("Named pipes not supported on Linux")),
         }
     }
 
@@ -171,13 +179,13 @@ impl LinuxIpcServer {
         if socket_path.exists() {
             std::fs::remove_file(&socket_path)?;
         }
-        
+
         let listener = std::os::unix::net::UnixListener::bind(&socket_path)?;
-        
+
         // Set secure permissions
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(&socket_path, std::fs::Permissions::from_mode(0o660))?;
-        
+
         Ok(Self {
             socket_path,
             listener: Some(listener),
@@ -192,7 +200,11 @@ impl IpcServer for LinuxIpcServer {
     }
 
     fn accept(&mut self) -> Result<Box<dyn IpcConnection>> {
-        let (stream, _) = self.listener.as_mut().ok_or_else(|| anyhow::anyhow!("Not started"))?.accept()
+        let (stream, _) = self
+            .listener
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("Not started"))?
+            .accept()
             .map_err(|e| anyhow::anyhow!("Failed to accept connection: {}", e))?;
         Ok(Box::new(LinuxIpcConnection { stream }))
     }
@@ -239,7 +251,8 @@ impl IpcClient for LinuxIpcClient {
 
     fn receive(&mut self, buffer: &mut [u8]) -> Result<usize> {
         if let Some(stream) = &mut self.stream {
-            stream.read(buffer)
+            stream
+                .read(buffer)
                 .map_err(|e| anyhow::anyhow!("Failed to read: {}", e))
         } else {
             Err(anyhow::anyhow!("Not connected"))
@@ -259,12 +272,14 @@ struct LinuxIpcConnection {
 
 impl IpcConnection for LinuxIpcConnection {
     fn read(&mut self, buffer: &mut [u8]) -> Result<usize> {
-        self.stream.read(buffer)
+        self.stream
+            .read(buffer)
             .map_err(|e| anyhow::anyhow!("Failed to read: {}", e))
     }
 
     fn write(&mut self, data: &[u8]) -> Result<()> {
-        self.stream.write_all(data)
+        self.stream
+            .write_all(data)
             .map_err(|e| anyhow::anyhow!("Failed to write: {}", e))
     }
 

@@ -6,19 +6,19 @@
 //! - Browser automation workflows succeed
 //! - Error cases are handled gracefully
 
-use hexactra_agent::platform::{HostPlatform, PlatformCapabilities, SessionState, LinuxPlatform};
+use hexactra_agent::platform::{HostPlatform, LinuxPlatform, PlatformCapabilities, SessionState};
 
 /// Test platform capabilities reporting
 #[test]
 fn test_platform_capabilities_reported() {
     let caps = LinuxPlatform::get_capabilities();
-    
+
     // All platforms should support interactive sessions
     assert!(caps.supports_interactive_sessions);
-    
+
     // All platforms should support GUI automation
     assert!(caps.supports_gui_automation);
-    
+
     // All platforms should support native messaging
     assert!(caps.supports_native_messaging);
 }
@@ -27,7 +27,7 @@ fn test_platform_capabilities_reported() {
 #[test]
 fn test_session_state_detection() {
     let state = LinuxPlatform::get_session_state();
-    
+
     // Should return a valid state
     match state {
         Ok(SessionState::None) => {
@@ -59,12 +59,12 @@ fn test_process_spawn() {
         env: std::collections::HashMap::new(),
         detached: false,
     };
-    
+
     match LinuxPlatform::spawn_process(config) {
         Ok(spawned) => {
             // Process should have a valid PID
             assert!(spawned.pid > 0);
-            
+
             // Cleanup - terminate the process
             let _ = LinuxPlatform::terminate_process(spawned.pid);
         }
@@ -79,10 +79,10 @@ fn test_process_spawn() {
 #[test]
 fn test_home_directory_detection() {
     let home = LinuxPlatform::get_home_dir();
-    
+
     // Home directory should exist or be a valid path
     assert!(!home.as_os_str().is_empty());
-    
+
     // Should be an absolute path
     assert!(home.is_absolute());
 }
@@ -91,7 +91,7 @@ fn test_home_directory_detection() {
 #[test]
 fn test_temp_directory_detection() {
     let temp = LinuxPlatform::get_temp_dir();
-    
+
     // Temp directory should exist
     assert!(temp.exists());
 }
@@ -100,10 +100,10 @@ fn test_temp_directory_detection() {
 #[test]
 fn test_native_messaging_registration() {
     use std::path::Path;
-    
+
     // Create a dummy manifest path
     let manifest_path = Path::new("/tmp/hexactra-test-native-messaging.json");
-    
+
     match LinuxPlatform::register_native_messaging_host(manifest_path) {
         Ok(()) => {
             // Registration succeeded - clean up
@@ -112,7 +112,10 @@ fn test_native_messaging_registration() {
         Err(e) => {
             // Registration may fail due to permissions or platform restrictions
             // This is acceptable in test environments
-            eprintln!("Native messaging registration error (may be acceptable): {}", e);
+            eprintln!(
+                "Native messaging registration error (may be acceptable): {}",
+                e
+            );
         }
     }
 }
@@ -121,7 +124,7 @@ fn test_native_messaging_registration() {
 #[test]
 fn test_gui_automation_check() {
     let available = LinuxPlatform::is_gui_automation_available();
-    
+
     // On Linux, GUI automation may not be available in headless environments
     // This test just verifies the method exists and returns a boolean
     let _ = available;
@@ -131,10 +134,10 @@ fn test_gui_automation_check() {
 #[test]
 fn test_platform_name() {
     let name = LinuxPlatform::platform_name();
-    
+
     // Should return a valid platform name
     assert!(!name.is_empty());
-    
+
     // Should be "linux" on this platform
     assert_eq!(name, "linux");
 }
@@ -143,11 +146,11 @@ fn test_platform_name() {
 #[test]
 fn test_capability_consistency() {
     let caps = LinuxPlatform::get_capabilities();
-    
+
     // Core capabilities should be present
     assert!(caps.supports_interactive_sessions);
     assert!(caps.supports_gui_automation);
-    
+
     // Linux supports unattended sessions
     assert!(caps.supports_unattended_sessions);
 }
@@ -156,7 +159,7 @@ fn test_capability_consistency() {
 #[test]
 fn test_environment_behavior() {
     let platform_name = LinuxPlatform::platform_name();
-    
+
     match platform_name {
         "linux" => {
             // Linux-specific checks
@@ -172,29 +175,29 @@ fn test_environment_behavior() {
 #[cfg(test)]
 mod integration_tests {
     use super::*;
-    
+
     /// Integration test: full workflow simulation
     #[test]
     fn test_full_workflow_simulation() {
         // 1. Check capabilities
         let caps = LinuxPlatform::get_capabilities();
         assert!(caps.supports_interactive_sessions);
-        
+
         // 2. Get session state
         let state = match LinuxPlatform::get_session_state() {
             Ok(s) => s,
             Err(_) => return, // Skip if we can't determine state
         };
-        
+
         // 3. Test home directory
         let home = LinuxPlatform::get_home_dir();
         assert!(!home.as_os_str().is_empty());
-        
+
         // 4. Test temp directory
         let temp = LinuxPlatform::get_temp_dir();
         assert!(temp.exists());
     }
-    
+
     /// Integration test: error handling for unsupported operations
     #[test]
     fn test_unsupported_operation_error_handling() {
@@ -206,7 +209,7 @@ mod integration_tests {
             env: std::collections::HashMap::new(),
             detached: false,
         };
-        
+
         // This should fail gracefully
         match LinuxPlatform::spawn_process(config) {
             Ok(_) => {

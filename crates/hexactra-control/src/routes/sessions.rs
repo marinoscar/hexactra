@@ -1,5 +1,5 @@
 use axum::{
-    extract::{State, Path},
+    extract::{Path, State},
     http::StatusCode,
     response::Json,
     routing::{get, post},
@@ -10,10 +10,10 @@ use uuid::Uuid;
 
 use hexactra_core::{OperationStatus, RunStatus, SessionStatus};
 
+use crate::auth::{validate_token, AuthContext, ResourceType, Scope};
 use crate::state::DbState;
-use crate::auth::{validate_token, AuthContext, Scope, ResourceType};
+use hexactra_telemetry::{track_session_created, track_session_terminated, Metrics};
 use tracing::instrument;
-use hexactra_telemetry::{Metrics, track_session_created, track_session_terminated};
 
 // ==================== Request/Response Types ====================
 
@@ -61,17 +61,22 @@ pub fn router() -> Router<DbState> {
 async fn extract_auth_context(
     headers: axum::http::HeaderMap,
 ) -> Result<AuthContext, (StatusCode, String)> {
-    let auth_header = headers.get("authorization")
-        .and_then(|h| h.to_str().ok());
-    
-    let token = auth_header.ok_or((StatusCode::UNAUTHORIZED, "Missing Authorization header".to_string()))?;
-    
+    let auth_header = headers.get("authorization").and_then(|h| h.to_str().ok());
+
+    let token = auth_header.ok_or((
+        StatusCode::UNAUTHORIZED,
+        "Missing Authorization header".to_string(),
+    ))?;
+
     if !token.starts_with("Bearer ") {
-        return Err((StatusCode::UNAUTHORIZED, "Invalid Authorization header format".to_string()));
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            "Invalid Authorization header format".to_string(),
+        ));
     }
-    
+
     let token = &token[7..];
-    
+
     match validate_token(token) {
         Ok(auth_context) => Ok(auth_context),
         Err(e) => Err((StatusCode::UNAUTHORIZED, format!("Invalid token: {}", e))),
@@ -84,82 +89,117 @@ fn check_ownership(auth_context: &AuthContext, owner_id: Uuid) -> bool {
 }
 
 #[axum::debug_handler]
-#[instrument(skip(db_state, headers), level = "info", fields(session_id = "control-plane"))]
+#[instrument(
+    skip(db_state, headers),
+    level = "info",
+    fields(session_id = "control-plane")
+)]
 async fn list_sessions(
     State(db_state): State<DbState>,
     headers: axum::http::HeaderMap,
 ) -> Result<Json<ListSessionsResponse>, (StatusCode, String)> {
     tracing::info!("Handling sessions.list request");
-    
+
     // Extract and validate auth context
     let auth_context = extract_auth_context(headers).await?;
-    
+
     // Check if user has permission to list sessions
     if !auth_context.authorize(ResourceType::Session, "read") {
-        return Err((StatusCode::FORBIDDEN, "Insufficient permissions to list sessions".to_string()));
+        return Err((
+            StatusCode::FORBIDDEN,
+            "Insufficient permissions to list sessions".to_string(),
+        ));
     }
-    
+
     let sessions = db_state.list_sessions().await.map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
     })?;
-    
-    let session_responses: Vec<SessionResponse> = sessions.iter().map(|s| SessionResponse {
-        id: s.id.as_uuid(),
-        profile_id: s.profile_id,
-        status: s.status.as_str_name().to_string(),
-        host_id: None,  // TODO: implement host_id
-        created_at: s.created_at.to_rfc3339(),
-        updated_at: s.updated_at.to_rfc3339(),
-    }).collect();
-    
-    Ok(Json(ListSessionsResponse { sessions: session_responses }))
+
+    let session_responses: Vec<SessionResponse> = sessions
+        .iter()
+        .map(|s| SessionResponse {
+            id: s.id.as_uuid(),
+            profile_id: s.profile_id,
+            status: s.status.as_str_name().to_string(),
+            host_id: None, // TODO: implement host_id
+            created_at: s.created_at.to_rfc3339(),
+            updated_at: s.updated_at.to_rfc3339(),
+        })
+        .collect();
+
+    Ok(Json(ListSessionsResponse {
+        sessions: session_responses,
+    }))
 }
 
 #[axum::debug_handler]
-#[instrument(skip(db_state, headers, request), level = "info", fields(session_id = "control-plane"))]
+#[instrument(
+    skip(db_state, headers, request),
+    level = "info",
+    fields(session_id = "control-plane")
+)]
 async fn create_session(
     State(db_state): State<DbState>,
     headers: axum::http::HeaderMap,
     Json(request): Json<CreateSessionRequest>,
 ) -> Result<Json<CreateSessionResponse>, (StatusCode, String)> {
     tracing::info!("Handling sessions.create request");
-    
+
     // Extract and validate auth context
     let auth_context = extract_auth_context(headers).await?;
-    
+
     // Check if user has permission to create sessions
     if !auth_context.authorize(ResourceType::Session, "write") {
-        return Err((StatusCode::FORBIDDEN, "Insufficient permissions to create sessions".to_string()));
+        return Err((
+            StatusCode::FORBIDDEN,
+            "Insufficient permissions to create sessions".to_string(),
+        ));
     }
-    
+
     // TODO: Implement session creation with host assignment
     // For now, just track that we attempted to create a session
     track_session_created(&Metrics::new());
-    
-    Err((StatusCode::NOT_IMPLEMENTED, "Session creation not yet implemented".to_string()))
+
+    Err((
+        StatusCode::NOT_IMPLEMENTED,
+        "Session creation not yet implemented".to_string(),
+    ))
 }
 
 #[axum::debug_handler]
-#[instrument(skip(db_state, headers, session_id), level = "info", fields(session_id = "control-plane"))]
+#[instrument(
+    skip(db_state, headers, session_id),
+    level = "info",
+    fields(session_id = "control-plane")
+)]
 async fn get_session(
     State(db_state): State<DbState>,
     headers: axum::http::HeaderMap,
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<SessionResponse>, (StatusCode, String)> {
     tracing::info!("Handling sessions.get request");
-    
+
     // Extract and validate auth context
     let auth_context = extract_auth_context(headers).await?;
-    
+
     // Check if user has permission to get session
     if !auth_context.authorize(ResourceType::Session, "read") {
-        return Err((StatusCode::FORBIDDEN, "Insufficient permissions to get session".to_string()));
+        return Err((
+            StatusCode::FORBIDDEN,
+            "Insufficient permissions to get session".to_string(),
+        ));
     }
-    
+
     let session = db_state.get_session(session_id).await.map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e))
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
     })?;
-    
+
     if let Some(session) = session {
         Ok(Json(SessionResponse {
             id: session.id.as_uuid(),

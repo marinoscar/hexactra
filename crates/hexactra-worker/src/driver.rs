@@ -133,22 +133,36 @@ pub struct DriverFactory;
 
 impl DriverFactory {
     /// Create a browser driver by type
-    pub fn create_browser_driver(driver_type: BrowserDriverType, _config: &DriverConfig) -> Result<Box<dyn BrowserDriver>> {
+    pub fn create_browser_driver(
+        driver_type: BrowserDriverType,
+        _config: &DriverConfig,
+    ) -> Result<Box<dyn BrowserDriver>> {
         match driver_type {
             BrowserDriverType::Chrome => Ok(Box::new(ChromeBrowserDriver::new())),
-            BrowserDriverType::Firefox => Err(anyhow::anyhow!("Firefox driver not yet implemented")),
+            BrowserDriverType::Firefox => {
+                Err(anyhow::anyhow!("Firefox driver not yet implemented"))
+            }
             BrowserDriverType::Edge => Err(anyhow::anyhow!("Edge driver not yet implemented")),
             BrowserDriverType::Safari => Err(anyhow::anyhow!("Safari driver not yet implemented")),
-            BrowserDriverType::WebDriver => Err(anyhow::anyhow!("WebDriver driver not yet implemented")),
+            BrowserDriverType::WebDriver => {
+                Err(anyhow::anyhow!("WebDriver driver not yet implemented"))
+            }
         }
     }
 
     /// Create a desktop driver by type
-    pub fn create_desktop_driver(driver_type: DesktopDriverType, _config: &DriverConfig) -> Result<Box<dyn DesktopDriver>> {
+    pub fn create_desktop_driver(
+        driver_type: DesktopDriverType,
+        _config: &DriverConfig,
+    ) -> Result<Box<dyn DesktopDriver>> {
         match driver_type {
             DesktopDriverType::VirtualDisplay => Ok(Box::new(VirtualDesktopDriver::new())),
-            DesktopDriverType::Native => Err(anyhow::anyhow!("Native desktop driver not yet implemented")),
-            DesktopDriverType::Accessibility => Err(anyhow::anyhow!("Accessibility driver not yet implemented")),
+            DesktopDriverType::Native => {
+                Err(anyhow::anyhow!("Native desktop driver not yet implemented"))
+            }
+            DesktopDriverType::Accessibility => {
+                Err(anyhow::anyhow!("Accessibility driver not yet implemented"))
+            }
         }
     }
 
@@ -382,7 +396,7 @@ mod tests {
     #[test]
     fn test_chrome_driver() {
         let mut driver = ChromeBrowserDriver::new();
-        
+
         // Test capabilities
         let caps = driver.get_capabilities();
         assert!(caps.supports_browser);
@@ -392,7 +406,7 @@ mod tests {
     #[test]
     fn test_virtual_desktop_driver() {
         let mut driver = VirtualDesktopDriver::new();
-        
+
         // Test capabilities
         let caps = driver.get_capabilities();
         assert!(caps.supports_screenshot);
@@ -403,7 +417,7 @@ mod tests {
     fn test_driver_factory() {
         let types = DriverFactory::list_browser_driver_types();
         assert!(types.contains(&BrowserDriverType::Chrome));
-        
+
         let types = DriverFactory::list_desktop_driver_types();
         assert!(types.contains(&DesktopDriverType::VirtualDisplay));
     }

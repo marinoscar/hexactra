@@ -2,7 +2,7 @@
 
 use super::*;
 use anyhow::Context;
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 use std::path::Path;
 
 /// Database connection wrapper
@@ -14,11 +14,12 @@ impl DbConnection {
     /// Create a new database connection
     pub fn new(db_path: &str) -> Result<Self> {
         let path = Path::new(db_path);
-        
+
         // Create parent directories if they don't exist
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create database directory: {}", parent.display()))?;
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create database directory: {}", parent.display())
+            })?;
         }
 
         let conn = Connection::open(db_path)
@@ -38,7 +39,7 @@ impl DbConnection {
     /// Insert a new run record
     pub fn insert_run(&self, record: &RunRecord) -> Result<()> {
         let status_str = record.status.as_str_name();
-        
+
         self.conn.execute(
             r#"
             INSERT INTO agent_runs (
@@ -92,16 +93,20 @@ impl DbConnection {
     /// Update run status
     pub fn update_status(&self, id: AgentRunId, status: RunStatus) -> Result<Option<RunRecord>> {
         let current = self.get_run(id)?;
-        
+
         if let Some(mut record) = current {
             record.status = status;
             record.last_heartbeat = Utc::now();
 
             let status_str = record.status.as_str_name();
-            
+
             self.conn.execute(
                 "UPDATE agent_runs SET status = ?1, last_heartbeat = ?2 WHERE id = ?3",
-                params![status_str, record.last_heartbeat.to_rfc3339(), record.id.as_uuid().to_string()],
+                params![
+                    status_str,
+                    record.last_heartbeat.to_rfc3339(),
+                    record.id.as_uuid().to_string()
+                ],
             )?;
 
             Ok(Some(record))
@@ -113,7 +118,7 @@ impl DbConnection {
     /// Record a step completion
     pub fn record_step(&self, id: AgentRunId, result: StepResult) -> Result<Option<RunRecord>> {
         let current = self.get_run(id)?;
-        
+
         if let Some(mut record) = current {
             record.step_count += 1;
             record.total_tokens += result.model_response.len() as u64 / 4; // Approximate token count
@@ -148,7 +153,7 @@ impl DbConnection {
 
         let mut records = Vec::new();
         let mut rows = stmt.query(params![session_id.to_string()])?;
-        
+
         while let Some(row) = rows.next()? {
             match self.deserialize_run(row) {
                 Ok(record) => records.push(record),
@@ -172,8 +177,11 @@ impl DbConnection {
         )?;
 
         let mut records = Vec::new();
-        let mut rows = stmt.query(params![RunStatus::Running.as_str_name(), RunStatus::Paused.as_str_name()])?;
-        
+        let mut rows = stmt.query(params![
+            RunStatus::Running.as_str_name(),
+            RunStatus::Paused.as_str_name()
+        ])?;
+
         while let Some(row) = rows.next()? {
             match self.deserialize_run(row) {
                 Ok(record) => records.push(record),
@@ -207,43 +215,107 @@ impl DbConnection {
 
         let id_uuid = match Uuid::parse_str(&id_str) {
             Ok(id) => id,
-            Err(e) => return Err(rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e))),
+            Err(e) => {
+                return Err(rusqlite::Error::FromSqlConversionFailure(
+                    0,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                ))
+            }
         };
         let session_uuid = match Uuid::parse_str(&session_id_str) {
             Ok(id) => id,
-            Err(e) => return Err(rusqlite::Error::FromSqlConversionFailure(1, rusqlite::types::Type::Text, Box::new(e))),
+            Err(e) => {
+                return Err(rusqlite::Error::FromSqlConversionFailure(
+                    1,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                ))
+            }
         };
         let owner_uuid = match Uuid::parse_str(&owner_id_str) {
             Ok(id) => id,
-            Err(e) => return Err(rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(e))),
+            Err(e) => {
+                return Err(rusqlite::Error::FromSqlConversionFailure(
+                    2,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                ))
+            }
         };
 
         let config = match serde_json::from_str(&config_json) {
             Ok(c) => c,
-            Err(e) => return Err(rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Text, Box::new(e))),
+            Err(e) => {
+                return Err(rusqlite::Error::FromSqlConversionFailure(
+                    4,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                ))
+            }
         };
 
         // Parse datetime - use parse_from_rfc3339 which handles the Z suffix
         let created_at = DateTime::parse_from_rfc3339(&created_at_str)
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Text, Box::new(e))).unwrap().with_timezone(&Utc);
+            .map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    5,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                )
+            })
+            .unwrap()
+            .with_timezone(&Utc);
 
         let started_at = started_at_opt.as_ref().map(|s| {
             DateTime::parse_from_rfc3339(s)
-                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(6, rusqlite::types::Type::Text, Box::new(e))).unwrap().with_timezone(&Utc)
+                .map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        6,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })
+                .unwrap()
+                .with_timezone(&Utc)
         });
 
         let completed_at = completed_at_opt.as_ref().map(|s| {
             DateTime::parse_from_rfc3339(s)
-                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(7, rusqlite::types::Type::Text, Box::new(e))).unwrap().with_timezone(&Utc)
+                .map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        7,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })
+                .unwrap()
+                .with_timezone(&Utc)
         });
 
         let paused_at = paused_at_opt.as_ref().map(|s| {
             DateTime::parse_from_rfc3339(s)
-                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(8, rusqlite::types::Type::Text, Box::new(e))).unwrap().with_timezone(&Utc)
+                .map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        8,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })
+                .unwrap()
+                .with_timezone(&Utc)
         });
 
         let last_heartbeat = DateTime::parse_from_rfc3339(&last_heartbeat_str)
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(9, rusqlite::types::Type::Text, Box::new(e))).unwrap().with_timezone(&Utc);
+            .map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    9,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                )
+            })
+            .unwrap()
+            .with_timezone(&Utc);
 
         Ok(RunRecord {
             id: AgentRunId::from_uuid(id_uuid),
@@ -301,7 +373,7 @@ mod tests {
     fn test_db_connection() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        
+
         let conn = DbConnection::new(db_path.to_str().unwrap());
         assert!(conn.is_ok());
     }
@@ -310,9 +382,9 @@ mod tests {
     fn test_insert_and_get_run() {
         let temp_dir = TempDir::new().unwrap();
         let db_path = temp_dir.path().join("test.db");
-        
+
         let conn = DbConnection::new(db_path.to_str().unwrap()).unwrap();
-        
+
         let record = RunRecord {
             id: AgentRunId::new(),
             session_id: Uuid::new_v4(),
@@ -330,10 +402,14 @@ mod tests {
         };
 
         conn.insert_run(&record).unwrap();
-        
+
         // Get the record by ID
         let retrieved = conn.get_run(record.id);
-        assert!(retrieved.is_ok(), "Failed to get run: {:?}", retrieved.err());
+        assert!(
+            retrieved.is_ok(),
+            "Failed to get run: {:?}",
+            retrieved.err()
+        );
         let retrieved = retrieved.unwrap();
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap().id, record.id);

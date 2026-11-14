@@ -19,7 +19,7 @@ impl BudgetTracker {
     pub fn new(total: Option<u32>) -> Self {
         match total {
             Some(0) => Self {
-                total: 0,  // 0 means zero budget (no budget available)
+                total: 0, // 0 means zero budget (no budget available)
                 remaining: 0,
                 used: 0,
             },
@@ -29,7 +29,7 @@ impl BudgetTracker {
                 used: 0,
             },
             None => Self {
-                total: u32::MAX,  // Max value indicates unlimited
+                total: u32::MAX, // Max value indicates unlimited
                 remaining: u32::MAX,
                 used: 0,
             },
@@ -94,7 +94,7 @@ mod tests {
     #[test]
     fn test_budget_tracker_unlimited() {
         let mut tracker = BudgetTracker::new(None);
-        
+
         assert!(tracker.has_budget());
         assert!(tracker.use_tokens(1000).unwrap());
         assert!(tracker.has_budget());
@@ -104,7 +104,7 @@ mod tests {
     #[test]
     fn test_budget_tracker_limited() {
         let mut tracker = BudgetTracker::new(Some(1000));
-        
+
         assert!(tracker.has_budget());
         assert_eq!(tracker.total(), 1000);
         assert_eq!(tracker.remaining(), 1000);
@@ -135,7 +135,7 @@ mod tests {
     #[test]
     fn test_budget_tracker_zero() {
         let tracker = BudgetTracker::new(Some(0));
-        
+
         // Zero budget means no budget available
         assert!(!tracker.has_budget());
         assert!(tracker.is_exhausted());
@@ -144,7 +144,7 @@ mod tests {
     #[test]
     fn test_budget_reset() {
         let mut tracker = BudgetTracker::new(Some(1000));
-        
+
         tracker.use_tokens(500).unwrap();
         assert_eq!(tracker.remaining(), 500);
 

@@ -45,7 +45,10 @@ async fn main() -> Result<()> {
     // Initialize logging
     let log_level = if cli.verbose { "debug" } else { "info" };
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::new(format!("hexactra_agent={}", log_level)))
+        .with_env_filter(tracing_subscriber::EnvFilter::new(format!(
+            "hexactra_agent={}",
+            log_level
+        )))
         .init();
 
     match cli.command {
@@ -66,7 +69,7 @@ async fn run_daemon() -> Result<()> {
 
     // Set up signal handlers for graceful shutdown
     let mut shutdown = signal::unix::signal(signal::unix::SignalKind::terminate())?;
-    
+
     tokio::select! {
         result = service.start() => {
             if let Err(e) = result {
@@ -134,7 +137,7 @@ mod tests {
     fn test_load_config() {
         // Test with default values (no env vars set)
         std::env::set_var("HEXACTRA_CONTROL_SOCKET", "/tmp/test.sock");
-        
+
         let config = load_config().unwrap();
         assert_eq!(config.control_socket_path, "/tmp/test.sock");
     }

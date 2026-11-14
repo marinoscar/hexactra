@@ -87,12 +87,30 @@ impl BrowserWorkerDispatcher {
         let params = BrowserActionParams {
             session_id: self.session_id,
             action_type,
-            selector: proposal.parameters.get("selector").and_then(|v| v.as_str().map(String::from)),
-            text: proposal.parameters.get("text").and_then(|v| v.as_str().map(String::from)),
-            url: proposal.parameters.get("url").and_then(|v| v.as_str().map(String::from)),
-            x_offset: proposal.parameters.get("x_offset").and_then(|v| v.as_i64().map(|x| x as i32)),
-            y_offset: proposal.parameters.get("y_offset").and_then(|v| v.as_i64().map(|y| y as i32)),
-            key: proposal.parameters.get("key").and_then(|v| v.as_str().map(String::from)),
+            selector: proposal
+                .parameters
+                .get("selector")
+                .and_then(|v| v.as_str().map(String::from)),
+            text: proposal
+                .parameters
+                .get("text")
+                .and_then(|v| v.as_str().map(String::from)),
+            url: proposal
+                .parameters
+                .get("url")
+                .and_then(|v| v.as_str().map(String::from)),
+            x_offset: proposal
+                .parameters
+                .get("x_offset")
+                .and_then(|v| v.as_i64().map(|x| x as i32)),
+            y_offset: proposal
+                .parameters
+                .get("y_offset")
+                .and_then(|v| v.as_i64().map(|y| y as i32)),
+            key: proposal
+                .parameters
+                .get("key")
+                .and_then(|v| v.as_str().map(String::from)),
         };
 
         Ok(params)
@@ -146,10 +164,10 @@ impl ProposalValidator {
         // Check if the action is allowed for this domain
         let binding = serde_json::Map::new();
         let params = proposal.parameters.as_object().unwrap_or(&binding);
-        
+
         // Example: check URL in parameters against domain
         let url_str = params.get("url").and_then(|v| v.as_str());
-        
+
         if let Some(url) = url_str {
             if !url.starts_with(domain) {
                 return Err(anyhow::anyhow!(
@@ -173,9 +191,18 @@ mod tests {
 
     #[test]
     fn test_browser_action_type_from_str() {
-        assert_eq!(BrowserActionType::from_str("click"), Some(BrowserActionType::Click));
-        assert_eq!(BrowserActionType::from_str("type"), Some(BrowserActionType::Type));
-        assert_eq!(BrowserActionType::from_str("navigate"), Some(BrowserActionType::Navigate));
+        assert_eq!(
+            BrowserActionType::from_str("click"),
+            Some(BrowserActionType::Click)
+        );
+        assert_eq!(
+            BrowserActionType::from_str("type"),
+            Some(BrowserActionType::Type)
+        );
+        assert_eq!(
+            BrowserActionType::from_str("navigate"),
+            Some(BrowserActionType::Navigate)
+        );
         assert_eq!(BrowserActionType::from_str("invalid"), None);
     }
 

@@ -13,8 +13,8 @@ use uuid::Uuid;
 
 use hexactra_core::{HostId, HostPlatform, ScheduleRunStatus, SessionId};
 
-use crate::state::DbState;
 use crate::scheduler::ScheduleService;
+use crate::state::DbState;
 
 // ==================== Profile Affinity Routes ====================
 
@@ -32,8 +32,8 @@ async fn get_profile_affinity(
     State(db_state): State<DbState>,
     profile_id: axum::extract::Path<String>,
 ) -> Result<Json<GetProfileAffinityResponse>, (StatusCode, String)> {
-    let uuid = Uuid::parse_str(&profile_id)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let uuid =
+        Uuid::parse_str(&profile_id).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let affinity = db_state
         .get_profile_affinity(uuid)
@@ -47,7 +47,10 @@ async fn get_profile_affinity(
             assigned_at: a.assigned_at.to_rfc3339(),
             assigned_by: a.assigned_by,
         })),
-        None => Err((StatusCode::NOT_FOUND, "Profile affinity not found".to_string())),
+        None => Err((
+            StatusCode::NOT_FOUND,
+            "Profile affinity not found".to_string(),
+        )),
     }
 }
 
@@ -64,14 +67,18 @@ async fn assign_profile(
     profile_id: axum::extract::Path<String>,
     Json(request): Json<AssignProfileRequest>,
 ) -> Result<Json<GetProfileAffinityResponse>, (StatusCode, String)> {
-    let profile_uuid = Uuid::parse_str(&profile_id)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let profile_uuid =
+        Uuid::parse_str(&profile_id).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
-    let host_uuid = Uuid::parse_str(&request.host_id)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let host_uuid =
+        Uuid::parse_str(&request.host_id).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     db_state
-        .assign_profile(profile_uuid, HostId::from_uuid(host_uuid), &request.assigned_by.unwrap_or_else(|| "api".to_string()))
+        .assign_profile(
+            profile_uuid,
+            HostId::from_uuid(host_uuid),
+            &request.assigned_by.unwrap_or_else(|| "api".to_string()),
+        )
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -80,7 +87,12 @@ async fn assign_profile(
         .get_profile_affinity(profile_uuid)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to retrieve affinity".to_string()))?;
+        .ok_or_else(|| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Failed to retrieve affinity".to_string(),
+            )
+        })?;
 
     Ok(Json(GetProfileAffinityResponse {
         profile_id: affinity.profile_id.to_string(),
@@ -96,8 +108,8 @@ async fn clear_profile_affinity(
     State(db_state): State<DbState>,
     profile_id: axum::extract::Path<String>,
 ) -> Result<Json<()>, (StatusCode, String)> {
-    let uuid = Uuid::parse_str(&profile_id)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let uuid =
+        Uuid::parse_str(&profile_id).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     db_state
         .clear_profile_affinity(uuid)
@@ -142,8 +154,8 @@ async fn create_schedule(
     State(db_state): State<DbState>,
     Json(request): Json<CreateScheduleRequest>,
 ) -> Result<Json<CreateScheduleResponse>, (StatusCode, String)> {
-    let owner_uuid = Uuid::parse_str(&request.owner_id)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let owner_uuid =
+        Uuid::parse_str(&request.owner_id).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let schedule_id = Uuid::new_v4();
     let schedule = hexactra_core::Schedule {
@@ -151,7 +163,10 @@ async fn create_schedule(
         owner_id: owner_uuid,
         name: request.schedule.name.clone(),
         cron_expression: request.schedule.cron_expression.clone(),
-        timezone: request.schedule.timezone.unwrap_or_else(|| "UTC".to_string()),
+        timezone: request
+            .schedule
+            .timezone
+            .unwrap_or_else(|| "UTC".to_string()),
         goal_definition: request.schedule.goal_definition.clone(),
         max_retries: request.schedule.max_retries.unwrap_or(3),
         retry_delay_seconds: request.schedule.retry_delay_seconds.unwrap_or(60),
@@ -184,8 +199,7 @@ async fn list_schedules(
     owner_id: axum::extract::Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<ListSchedulesResponse>, (StatusCode, String)> {
     let owner_uuid = if let Some(id) = owner_id.get("owner_id") {
-        Uuid::parse_str(id)
-            .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
+        Uuid::parse_str(id).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
     } else {
         return Err((StatusCode::BAD_REQUEST, "owner_id is required".to_string()));
     };
@@ -206,8 +220,7 @@ async fn get_host_extended(
     State(db_state): State<DbState>,
     host_id: axum::extract::Path<String>,
 ) -> Result<Json<hexactra_core::HostExtended>, (StatusCode, String)> {
-    let uuid = Uuid::parse_str(&host_id)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let uuid = Uuid::parse_str(&host_id).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let extended = db_state
         .get_host_extended(&HostId::from_uuid(uuid))
@@ -237,11 +250,19 @@ async fn make_scheduling_decision(
 ) -> Result<Json<hexactra_core::SchedulingDecision>, (StatusCode, String)> {
     let platform = request.platform.map(|p| HostPlatform::from_str_name(&p));
 
-    let profile_id = request.profile_id.as_ref().and_then(|s| Uuid::parse_str(s).ok());
+    let profile_id = request
+        .profile_id
+        .as_ref()
+        .and_then(|s| Uuid::parse_str(s).ok());
 
     let decision = db_state
         .make_scheduling_decision(
-            request.required_capabilities.iter().map(|s| s.as_str()).collect::<Vec<_>>().as_slice(),
+            request
+                .required_capabilities
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .as_slice(),
             platform,
             profile_id,
         )
@@ -250,7 +271,10 @@ async fn make_scheduling_decision(
 
     match decision {
         Some(d) => Ok(Json(d)),
-        None => Err((StatusCode::SERVICE_UNAVAILABLE, "No eligible hosts found".to_string())),
+        None => Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "No eligible hosts found".to_string(),
+        )),
     }
 }
 
@@ -262,7 +286,10 @@ pub fn router() -> Router<DbState> {
         // Profile affinity routes
         .route("/profile-affinity/{profile_id}", get(get_profile_affinity))
         .route("/profile-assign/{profile_id}", post(assign_profile))
-        .route("/profile-assign/{profile_id}", delete(clear_profile_affinity))
+        .route(
+            "/profile-assign/{profile_id}",
+            delete(clear_profile_affinity),
+        )
         // Schedule routes
         .route("/schedules", post(create_schedule))
         .route("/schedules", get(list_schedules))
@@ -289,8 +316,8 @@ async fn pause_schedule(
     State(db_state): State<DbState>,
     schedule_id: axum::extract::Path<String>,
 ) -> Result<Json<()>, (StatusCode, String)> {
-    let uuid = Uuid::parse_str(&schedule_id)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let uuid =
+        Uuid::parse_str(&schedule_id).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let schedule = db_state
         .get_schedule(uuid)
@@ -316,8 +343,8 @@ async fn resume_schedule(
     State(db_state): State<DbState>,
     schedule_id: axum::extract::Path<String>,
 ) -> Result<Json<()>, (StatusCode, String)> {
-    let uuid = Uuid::parse_str(&schedule_id)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let uuid =
+        Uuid::parse_str(&schedule_id).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let schedule = db_state
         .get_schedule(uuid)
@@ -361,8 +388,8 @@ async fn run_schedule(
     State(db_state): State<DbState>,
     schedule_id: axum::extract::Path<String>,
 ) -> Result<Json<CreateScheduleResponse>, (StatusCode, String)> {
-    let uuid = Uuid::parse_str(&schedule_id)
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    let uuid =
+        Uuid::parse_str(&schedule_id).map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
     let schedule = db_state
         .get_schedule(uuid)
@@ -391,9 +418,10 @@ async fn run_schedule(
         created_at: Utc::now(),
     };
 
-    db_state.create_schedule_run(&run).await.map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-    })?;
+    db_state
+        .create_schedule_run(&run)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(CreateScheduleResponse {
         schedule_id: uuid.to_string(),
@@ -476,7 +504,9 @@ async fn get_dashboard_summary(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .into_iter()
-        .filter(|r| r.created_at >= today_start && r.status != hexactra_core::ScheduleRunStatus::Skipped)
+        .filter(|r| {
+            r.created_at >= today_start && r.status != hexactra_core::ScheduleRunStatus::Skipped
+        })
         .count() as u64;
 
     Ok(Json(DashboardSummary {
@@ -518,8 +548,8 @@ async fn get_hosts_health(
             hostname: h.hostname,
             status: format!("{:?}", h.status),
             last_heartbeat: h.last_heartbeat.to_rfc3339(),
-            current_load: 0, // Will be populated from extended info
-            max_concurrent_sessions: 1, // Default value
+            current_load: 0,             // Will be populated from extended info
+            max_concurrent_sessions: 1,  // Default value
             platform: h.version.clone(), // Use version as placeholder for platform
         })
         .collect();

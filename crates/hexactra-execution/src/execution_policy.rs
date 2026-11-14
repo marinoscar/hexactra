@@ -39,7 +39,10 @@ impl Default for ExecutionPolicy {
                 "form_submit".to_string(),
                 "file_upload".to_string(),
                 "navigation".to_string(),
-            ].iter().map(|s| s.to_string()).collect(),
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
             max_retries: 3,
             action_cooldown: Duration::milliseconds(500),
         }
@@ -138,7 +141,7 @@ mod tests {
     #[test]
     fn test_execution_policy_default() {
         let policy = ExecutionPolicy::default();
-        
+
         assert_eq!(policy.max_steps, 100);
         assert_eq!(policy.budget_tokens, Some(100000));
         assert_eq!(policy.max_retries, 3);
@@ -147,7 +150,7 @@ mod tests {
     #[test]
     fn test_domain_allowlist() {
         let policy = ExecutionPolicy::default();
-        
+
         // Empty allowlist means all domains allowed
         assert!(policy.is_domain_allowed("example.com"));
         assert!(policy.is_domain_allowed("malicious.com"));
@@ -169,7 +172,7 @@ mod tests {
     #[test]
     fn test_high_impact_gate() {
         let policy = ExecutionPolicy::default();
-        
+
         assert!(policy.requires_high_impact_gate("delete_element"));
         assert!(policy.requires_high_impact_gate("form_submit"));
         assert!(!policy.requires_high_impact_gate("click"));

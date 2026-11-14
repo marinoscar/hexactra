@@ -8,7 +8,7 @@
 //! - HITL awareness (no auto-approval of pending requests)
 
 use anyhow::Result;
-use chrono::{Datelike, DateTime, Timelike, Utc};
+use chrono::{DateTime, Datelike, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -184,9 +184,9 @@ impl ScheduleService {
     fn cron_part_matches(&self, pattern: &str, value: i32, min: i32, max: i32) -> bool {
         match pattern {
             "*" => true,
-            _ if pattern.contains(',') => {
-                pattern.split(',').any(|p| self.cron_part_matches(p, value, min, max))
-            }
+            _ if pattern.contains(',') => pattern
+                .split(',')
+                .any(|p| self.cron_part_matches(p, value, min, max)),
             _ if pattern.contains('-') => {
                 let range: Vec<&str> = pattern.split('-').collect();
                 if range.len() == 2 {
@@ -229,7 +229,7 @@ impl ScheduleService {
     /// Create a schedule run record
     pub async fn create_schedule_run(&self, schedule: &Schedule) -> Result<Uuid> {
         let run_id = Uuid::new_v4();
-        
+
         // Get next run number
         let runs = self.db_state.list_schedule_runs(schedule.id).await?;
         let run_number = (runs.len() as u32) + 1;
@@ -295,9 +295,10 @@ impl ScheduleService {
 
         // Try to get an assigned host for this schedule's profile
         let profile_id = self.get_profile_for_schedule(schedule).await?;
-        
+
         // Make scheduling decision
-        let decision = self.db_state
+        let decision = self
+            .db_state
             .make_scheduling_decision(&[], None, profile_id)
             .await?;
 
@@ -332,7 +333,7 @@ impl ScheduleService {
     ) -> Result<ExecutionResult> {
         // Get host extended info to check capacity
         let host_extended = self.db_state.get_host_extended(&decision.host_id).await?;
-        
+
         if let Some(he) = &host_extended {
             if he.current_load >= he.max_concurrent_sessions {
                 return Err(anyhow::anyhow!("Host at capacity"));
@@ -346,7 +347,8 @@ impl ScheduleService {
 
         // Create session with profile
         let session_id = if let Some(profile_id) = decision.profile_id {
-            self.create_session_for_schedule(schedule, profile_id, decision.host_id).await?
+            self.create_session_for_schedule(schedule, profile_id, decision.host_id)
+                .await?
         } else {
             None
         };
@@ -357,7 +359,8 @@ impl ScheduleService {
             Some(started_at),
             None,
             None,
-        ).await?;
+        )
+        .await?;
 
         // Execute the goal
         let result = self.execute_goal(schedule, session_id).await;
@@ -380,7 +383,8 @@ impl ScheduleService {
             Some(started_at),
             Some(completed_at),
             error_message.clone(),
-        ).await?;
+        )
+        .await?;
 
         // Decrement host load
         let _ = self.db_state.decrement_host_load(&decision.host_id).await;
@@ -397,7 +401,7 @@ impl ScheduleService {
     ) -> Result<Option<Uuid>> {
         // Create a new session for this schedule execution
         let session_id = Uuid::new_v4();
-        
+
         // Note: This would normally use the session_lifecycle API
         // For now, we just return the session ID for tracking
         Ok(Some(session_id))
@@ -418,23 +422,19 @@ impl ScheduleService {
     }
 
     /// Retry a failed schedule run with exponential backoff
-    pub async fn retry_schedule_run(
-        &self,
-        run_id: Uuid,
-        attempt: u32,
-    ) -> Result<bool> {
+    pub async fn retry_schedule_run(&self, run_id: Uuid, attempt: u32) -> Result<bool> {
         let run = self.db_state.get_schedule_run(run_id).await?;
 
         if let Some(run) = run {
             let schedule = self.db_state.get_schedule(run.schedule_id).await?;
-            
+
             if let Some(schedule) = schedule {
                 if attempt >= schedule.max_retries {
                     return Ok(false); // Max retries reached
                 }
 
-                let delay_seconds = self.config.retry.delay_seconds * 
-                    (self.config.retry.backoff_multiplier.powi(attempt as i32) as u32);
+                let delay_seconds = self.config.retry.delay_seconds
+                    * (self.config.retry.backoff_multiplier.powi(attempt as i32) as u32);
 
                 tokio::time::sleep(std::time::Duration::from_secs(delay_seconds as u64)).await;
 
@@ -452,7 +452,7 @@ impl ScheduleService {
     /// Pause a schedule
     pub async fn pause_schedule(&self, schedule_id: Uuid) -> Result<bool> {
         let schedule = self.db_state.get_schedule(schedule_id).await?;
-        
+
         if let Some(mut schedule) = schedule {
             schedule.enabled = false;
             self.db_state.update_schedule(&schedule).await?;
@@ -465,7 +465,7 @@ impl ScheduleService {
     /// Resume a schedule
     pub async fn resume_schedule(&self, schedule_id: Uuid) -> Result<bool> {
         let schedule = self.db_state.get_schedule(schedule_id).await?;
-        
+
         if let Some(mut schedule) = schedule {
             schedule.enabled = true;
             self.db_state.update_schedule(&schedule).await?;
@@ -517,16 +517,16 @@ mod tests {
 
         let db_state = crate::state::DbState::new(pool);
         let scheduler = ScheduleService::new(db_state, None);
-        
+
         // Test minute wildcard
         assert!(scheduler.cron_matches("* * * * *", Utc::now(), "UTC"));
-        
+
         // Test specific minute
         let now = Utc::now();
         let minute = now.minute() as i32;
         let cron = format!("{} * * * *", minute);
         assert!(scheduler.cron_matches(&cron, now, "UTC"));
-        
+
         // Test hour wildcard with specific minute
         let now = Utc::now();
         let minute = now.minute() as i32;

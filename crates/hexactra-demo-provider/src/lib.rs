@@ -255,7 +255,9 @@ impl DemoProviderRegistry {
         DemoProviderRegistry {
             credential_provider: Some(std::sync::Arc::new(DemoCredentialProvider::new())),
             notification_provider: Some(std::sync::Arc::new(DemoNotificationProvider::new())),
-            human_interaction_provider: Some(std::sync::Arc::new(DemoHumanInteractionProvider::new())),
+            human_interaction_provider: Some(std::sync::Arc::new(
+                DemoHumanInteractionProvider::new(),
+            )),
         }
     }
 
@@ -288,7 +290,9 @@ impl DemoProviderRegistry {
     }
 
     /// Get the human interaction provider if enabled
-    pub fn human_interaction_provider(&self) -> Option<&std::sync::Arc<dyn HumanInteractionProvider>> {
+    pub fn human_interaction_provider(
+        &self,
+    ) -> Option<&std::sync::Arc<dyn HumanInteractionProvider>> {
         self.human_interaction_provider.as_ref()
     }
 }
@@ -320,7 +324,10 @@ mod tests {
 
         // Resolve credentials
         let response = provider.resolve_credentials(&request).await.unwrap();
-        assert_eq!(response.credentials.get("username").unwrap().as_str(), Some("demo_user"));
+        assert_eq!(
+            response.credentials.get("username").unwrap().as_str(),
+            Some("demo_user")
+        );
 
         // Test health
         assert_eq!(provider.health(), ProviderHealth::Healthy);
@@ -347,7 +354,10 @@ mod tests {
 
         // Send notification
         let response = provider.send_notification(&request).await.unwrap();
-        assert_eq!(response.status, hexactra_provider_sdk::NotificationStatus::Queued);
+        assert_eq!(
+            response.status,
+            hexactra_provider_sdk::NotificationStatus::Queued
+        );
         assert!(response.delivery_id.is_some());
 
         // Test health
@@ -374,8 +384,14 @@ mod tests {
         provider.send_interaction(&request).await.unwrap();
 
         // Wait for response
-        let response = provider.wait_for_response(request.request_id, 5000).await.unwrap();
-        assert_eq!(response.status, hexactra_provider_sdk::InteractionStatus::Approved);
+        let response = provider
+            .wait_for_response(request.request_id, 5000)
+            .await
+            .unwrap();
+        assert_eq!(
+            response.status,
+            hexactra_provider_sdk::InteractionStatus::Approved
+        );
 
         // Test health
         assert_eq!(provider.health(), ProviderHealth::Healthy);

@@ -26,8 +26,8 @@ pub struct Config {
 impl Config {
     /// Load configuration from environment variables with defaults
     pub fn load() -> Result<Self, ConfigError> {
-        let bind_address = env::var("HEXACTRA_BIND_ADDRESS")
-            .unwrap_or_else(|_| "127.0.0.1".to_string());
+        let bind_address =
+            env::var("HEXACTRA_BIND_ADDRESS").unwrap_or_else(|_| "127.0.0.1".to_string());
 
         let port = env::var("HEXACTRA_PORT")
             .ok()
@@ -45,8 +45,7 @@ impl Config {
             .and_then(|v| v.parse().ok())
             .unwrap_or(false);
 
-        let log_level = env::var("HEXACTRA_LOG_LEVEL")
-            .unwrap_or_else(|_| "info".to_string());
+        let log_level = env::var("HEXACTRA_LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
 
         Ok(Config {
             bind_address,

@@ -1,8 +1,8 @@
 //! Metrics and counters for Hexactra
 
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
 use std::sync::Arc;
+use std::time::Instant;
 
 /// Global metrics state - use Arc for sharing
 #[derive(Debug)]
@@ -70,18 +70,24 @@ where
 
 /// Track session lifecycle events
 pub fn track_session_created(metrics: &Metrics) {
-    metrics.total_sessions_created.fetch_add(1, Ordering::SeqCst);
+    metrics
+        .total_sessions_created
+        .fetch_add(1, Ordering::SeqCst);
     metrics.active_sessions.fetch_add(1, Ordering::SeqCst);
 }
 
 pub fn track_session_terminated(metrics: &Metrics) {
-    metrics.total_sessions_terminated.fetch_add(1, Ordering::SeqCst);
+    metrics
+        .total_sessions_terminated
+        .fetch_add(1, Ordering::SeqCst);
     let _ = metrics.active_sessions.fetch_sub(1, Ordering::SeqCst);
 }
 
 /// Track action execution
 pub fn track_action_executed(metrics: &Metrics) {
-    metrics.total_actions_executed.fetch_add(1, Ordering::SeqCst);
+    metrics
+        .total_actions_executed
+        .fetch_add(1, Ordering::SeqCst);
 }
 
 pub fn track_action_failed(metrics: &Metrics) {
@@ -91,7 +97,9 @@ pub fn track_action_failed(metrics: &Metrics) {
 /// Track model call
 pub fn track_model_call(metrics: &Metrics, tokens: u64) {
     metrics.total_model_calls.fetch_add(1, Ordering::SeqCst);
-    metrics.total_model_tokens.fetch_add(tokens, Ordering::SeqCst);
+    metrics
+        .total_model_tokens
+        .fetch_add(tokens, Ordering::SeqCst);
 }
 
 /// Track HITL decision

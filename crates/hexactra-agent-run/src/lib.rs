@@ -7,17 +7,17 @@
 //! - Progress event stream
 //! - Safe restart reconciliation
 
-pub mod state;
 pub mod db;
 pub mod policy;
+pub mod state;
 
 use anyhow::Result;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
 use tracing::info;
+use uuid::Uuid;
 
 /// Unique identifier for an agent run
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -144,14 +144,33 @@ pub struct RunRecord {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum RunEvent {
-    Created { record: RunRecord },
-    Started { record: RunRecord },
-    Paused { record: RunRecord },
-    Resumed { record: RunRecord },
-    StepCompleted { record: RunRecord, step_result: StepResult },
-    Completed { record: RunRecord, final_result: serde_json::Value },
-    Failed { record: RunRecord, error: String },
-    Cancelled { record: RunRecord },
+    Created {
+        record: RunRecord,
+    },
+    Started {
+        record: RunRecord,
+    },
+    Paused {
+        record: RunRecord,
+    },
+    Resumed {
+        record: RunRecord,
+    },
+    StepCompleted {
+        record: RunRecord,
+        step_result: StepResult,
+    },
+    Completed {
+        record: RunRecord,
+        final_result: serde_json::Value,
+    },
+    Failed {
+        record: RunRecord,
+        error: String,
+    },
+    Cancelled {
+        record: RunRecord,
+    },
 }
 
 /// Step result from agent execution
@@ -176,7 +195,12 @@ impl RunManager {
     }
 
     /// Start a new agent run
-    pub async fn start_run(&self, config: RunConfig, session_id: Uuid, owner_id: Uuid) -> Result<RunRecord> {
+    pub async fn start_run(
+        &self,
+        config: RunConfig,
+        session_id: Uuid,
+        owner_id: Uuid,
+    ) -> Result<RunRecord> {
         let record = RunRecord {
             id: AgentRunId::new(),
             session_id,

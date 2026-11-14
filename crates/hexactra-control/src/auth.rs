@@ -8,7 +8,7 @@ use anyhow::{anyhow, Result};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 
 /// Current protocol version for token validation
@@ -88,31 +88,31 @@ pub enum Scope {
     // Profile scopes
     ProfilesRead,
     ProfilesWrite,
-    
+
     // Session scopes
     SessionsRead,
     SessionsWrite,
-    SessionsControl,  // Start/stop/restart sessions
-    
+    SessionsControl, // Start/stop/restart sessions
+
     // Goal scopes
     GoalsRead,
     GoalsWrite,
-    
+
     // Operation scopes
     OperationsRead,
     OperationsWrite,
-    
+
     // Interaction request scopes (HITL)
     InteractionRead,
     InteractionWrite,
-    
+
     // Host scopes
     HostsRead,
     HostsWrite,
-    
+
     // Viewer scopes
     ViewerRead,
-    
+
     // Admin scopes
     Admin,
 }
@@ -267,7 +267,11 @@ impl AccessToken {
     /// Create a new access token with the given claims
     pub fn new(claims: AccessTokenClaims, secret: &str) -> Result<Self> {
         let header = Header::new(jsonwebtoken::Algorithm::HS256);
-        let token = encode(&header, &claims, &EncodingKey::from_secret(secret.as_bytes()))?;
+        let token = encode(
+            &header,
+            &claims,
+            &EncodingKey::from_secret(secret.as_bytes()),
+        )?;
         Ok(AccessToken { token, claims })
     }
 
@@ -279,7 +283,7 @@ impl AccessToken {
             &DecodingKey::from_secret(secret.as_bytes()),
             &validation,
         )?;
-        
+
         // Verify protocol version
         if token_data.claims.protocol_version != PROTOCOL_VERSION {
             return Err(anyhow!("Protocol version mismatch"));
@@ -385,7 +389,7 @@ pub struct HostEnrollmentState {
     pub hostname: String,
     pub version: String,
     pub capabilities: Vec<String>,
-    pub token_hash: String,  // SHA256 hash of the enrollment token
+    pub token_hash: String, // SHA256 hash of the enrollment token
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub expires_at: chrono::DateTime<chrono::Utc>,
 }
@@ -411,7 +415,10 @@ impl HostEnrollmentState {
         let token = AccessToken::new(claims, secret)?;
 
         // Compute token hash for storage (never store raw token)
-        let token_hash = format!("sha256:{}", hex::encode(Sha256::digest(token.token.as_bytes())));
+        let token_hash = format!(
+            "sha256:{}",
+            hex::encode(Sha256::digest(token.token.as_bytes()))
+        );
 
         Ok(HostEnrollmentState {
             host_id,
@@ -443,20 +450,21 @@ impl HostEnrollmentState {
 pub struct RevokedToken {
     pub token_hash: String,
     pub revoked_at: chrono::DateTime<chrono::Utc>,
-    pub expires_at: chrono::DateTime<chrono::Utc>,  // Original token expiry
+    pub expires_at: chrono::DateTime<chrono::Utc>, // Original token expiry
 }
 
 impl RevokedToken {
     /// Create a new revocation entry
     pub fn new(token: &AccessToken) -> Self {
-        let token_hash = format!("sha256:{}", hex::encode(Sha256::digest(token.token.as_bytes())));
+        let token_hash = format!(
+            "sha256:{}",
+            hex::encode(Sha256::digest(token.token.as_bytes()))
+        );
         RevokedToken {
             token_hash,
             revoked_at: Utc::now(),
-            expires_at: chrono::DateTime::<chrono::Utc>::from_timestamp(
-                token.claims.exp,
-                0,
-            ).unwrap(),
+            expires_at: chrono::DateTime::<chrono::Utc>::from_timestamp(token.claims.exp, 0)
+                .unwrap(),
         }
     }
 
@@ -481,7 +489,8 @@ pub fn set_token_secret(secret: &str) {
 /// Get the token secret key
 pub fn get_token_secret() -> Result<String> {
     unsafe {
-        TOKEN_SECRET.clone()
+        TOKEN_SECRET
+            .clone()
             .ok_or_else(|| anyhow!("Token secret not configured"))
     }
 }
@@ -527,7 +536,12 @@ pub fn validate_token(token: &str) -> Result<AuthContext> {
         "human" => IdentityType::Human,
         "client" => IdentityType::Client,
         "host" => IdentityType::Host,
-        _ => return Err(anyhow!("Unknown identity type: {}", access_token.claims.identity_type)),
+        _ => {
+            return Err(anyhow!(
+                "Unknown identity type: {}",
+                access_token.claims.identity_type
+            ))
+        }
     };
 
     // Parse identity ID
@@ -613,7 +627,7 @@ mod tests {
     #[test]
     fn test_host_enrollment() {
         let secret = "test-secret-key";
-        
+
         let request = HostEnrollmentRequest {
             hostname: "test-host".to_string(),
             version: "1.0.0".to_string(),

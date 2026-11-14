@@ -325,8 +325,19 @@ impl DesktopInputDriver for VirtualDisplayDriver {
                     timestamp: Utc::now(),
                 }
             }
-            DesktopAction::PointerDrag { start_x, start_y, end_x, end_y } => {
-                tracing::info!("Dragging from ({}, {}) to ({}, {})", start_x, start_y, end_x, end_y);
+            DesktopAction::PointerDrag {
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+            } => {
+                tracing::info!(
+                    "Dragging from ({}, {}) to ({}, {})",
+                    start_x,
+                    start_y,
+                    end_x,
+                    end_y
+                );
                 // TODO: Implement pointer drag via Xvfb
                 DesktopActionResult {
                     success: true,
@@ -335,7 +346,10 @@ impl DesktopInputDriver for VirtualDisplayDriver {
                     timestamp: Utc::now(),
                 }
             }
-            DesktopAction::ShowDialog { dialog_type, message } => {
+            DesktopAction::ShowDialog {
+                dialog_type,
+                message,
+            } => {
                 tracing::info!("Showing dialog {:?}: {}", dialog_type, message);
                 // TODO: Implement native dialog via Xvfb
                 DesktopActionResult {
@@ -455,7 +469,7 @@ mod tests {
     #[test]
     fn test_virtual_display_driver() {
         let driver = VirtualDisplayDriver::new();
-        
+
         // Test capabilities
         let caps = driver.get_capabilities();
         assert!(caps.supports_screenshot);
@@ -468,13 +482,15 @@ mod tests {
     #[test]
     fn test_test_driver() {
         let mut driver = TestDesktopDriver::new();
-        
+
         // Initialize
         assert!(driver.initialize().is_ok());
         assert!(driver.is_ready());
 
         // Execute a test action
-        let result = driver.execute(DesktopAction::Screenshot { output: None }).unwrap();
+        let result = driver
+            .execute(DesktopAction::Screenshot { output: None })
+            .unwrap();
         assert!(result.success);
         assert!(result.screenshot_id.is_some());
 
@@ -487,7 +503,7 @@ mod tests {
     fn test_desktop_action_serialization() {
         let action = DesktopAction::Screenshot { output: None };
         let json = serde_json::to_string(&action).unwrap();
-        
+
         // Verify it can be deserialized
         let deserialized: DesktopAction = serde_json::from_str(&json).unwrap();
         assert_eq!(action, deserialized);

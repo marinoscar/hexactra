@@ -6,10 +6,10 @@
 //! - Action: Validate and dispatch actions
 //! - Verify: Observe after-state and replan
 
+pub mod action_dispatcher;
 pub mod loop_state;
 pub mod observer;
 pub mod reasoner;
-pub mod action_dispatcher;
 pub mod verifier;
 
 // Re-export builders for convenience
@@ -22,8 +22,8 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-use uuid::Uuid;
 use tracing::{info, warn};
+use uuid::Uuid;
 
 /// Unique identifier for a planning loop iteration
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -228,7 +228,7 @@ mod tests {
         let run_id = Uuid::new_v4();
         let config = LoopConfig::default();
         let loop_instance = ManagedPlanningLoop::new(run_id, config);
-        
+
         assert_eq!(loop_instance.state.step_number, 0);
         assert!(loop_instance.should_continue());
     }

@@ -55,10 +55,7 @@ async fn main() {
     // Print summary
     println!("\n=== Benchmark Results ===");
     for fixture in &result.fixture_results {
-        println!(
-            "Fixture: {}",
-            fixture.url
-        );
+        println!("Fixture: {}", fixture.url);
         println!("  Success rate: {:.2}%", fixture.success_rate * 100.0);
         println!("  Avg latency: {:.2}ms", fixture.avg_latency_ms);
         println!("  Tokens used: {:.2}", fixture.avg_tokens);

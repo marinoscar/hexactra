@@ -9,10 +9,10 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use hexactra_core::{
-    BrowserAction, Capability, Goal, Host, HostId, HostStatus, InteractionKind,
-    InteractionRequestId, InteractionRequest, InteractionStatus, Lease, LeaseId, Operation,
-    OperationStatus, Profile, RunStatus, Session, SessionStatus, SessionId, HostPlatform, HostExtended,
-    ProfileAffinity, Schedule, ScheduleRun, ScheduleRunStatus, DistributedLease, SchedulingDecision,
+    BrowserAction, Capability, DistributedLease, Goal, Host, HostExtended, HostId, HostPlatform,
+    HostStatus, InteractionKind, InteractionRequest, InteractionRequestId, InteractionStatus,
+    Lease, LeaseId, Operation, OperationStatus, Profile, ProfileAffinity, RunStatus, Schedule,
+    ScheduleRun, ScheduleRunStatus, SchedulingDecision, Session, SessionId, SessionStatus,
 };
 
 /// Passkey challenge information
@@ -563,7 +563,10 @@ impl DbState {
         Ok(operations)
     }
 
-    pub async fn list_operations_by_status(&self, status: OperationStatus) -> Result<Vec<Operation>> {
+    pub async fn list_operations_by_status(
+        &self,
+        status: OperationStatus,
+    ) -> Result<Vec<Operation>> {
         let pool = self.pool.clone();
         let rows = sqlx::query(
             r#"
@@ -634,7 +637,11 @@ impl DbState {
         Ok(())
     }
 
-    pub async fn get_active_lease(&self, resource_type: &str, resource_id: &Uuid) -> Result<Option<Lease>> {
+    pub async fn get_active_lease(
+        &self,
+        resource_type: &str,
+        resource_id: &Uuid,
+    ) -> Result<Option<Lease>> {
         let pool = self.pool.clone();
         let row = sqlx::query(
             r#"
@@ -731,10 +738,7 @@ impl DbState {
 
     // ==================== Interaction Request Operations ====================
 
-    pub async fn create_interaction_request(
-        &self,
-        request: &InteractionRequest,
-    ) -> Result<()> {
+    pub async fn create_interaction_request(&self, request: &InteractionRequest) -> Result<()> {
         let pool = self.pool.clone();
         let details_json = serde_json::to_value(&request.details)?;
         sqlx::query(
@@ -759,10 +763,7 @@ impl DbState {
         Ok(())
     }
 
-    pub async fn get_interaction_request(
-        &self,
-        id: Uuid,
-    ) -> Result<Option<InteractionRequest>> {
+    pub async fn get_interaction_request(&self, id: Uuid) -> Result<Option<InteractionRequest>> {
         let pool = self.pool.clone();
         let row = sqlx::query(
             r#"
@@ -801,7 +802,9 @@ impl DbState {
                     row.get::<chrono::NaiveDateTime, _>(7).into(),
                     Utc,
                 ),
-                owner_id: row.get::<Option<String>, _>(8).and_then(|s| Uuid::parse_str(&s).ok()),
+                owner_id: row
+                    .get::<Option<String>, _>(8)
+                    .and_then(|s| Uuid::parse_str(&s).ok()),
                 origin_session_id: Uuid::parse_str(&row.get::<String, _>(9))?,
                 policy: hexactra_core::InteractionPolicy {
                     approval_level: hexactra_core::ApprovalLevel::Standard,
@@ -881,7 +884,9 @@ impl DbState {
                     row.get::<chrono::NaiveDateTime, _>(7).into(),
                     Utc,
                 ),
-                owner_id: row.get::<Option<String>, _>(8).and_then(|s| Uuid::parse_str(&s).ok()),
+                owner_id: row
+                    .get::<Option<String>, _>(8)
+                    .and_then(|s| Uuid::parse_str(&s).ok()),
                 origin_session_id: Uuid::parse_str(&row.get::<String, _>(9))?,
                 policy: hexactra_core::InteractionPolicy {
                     approval_level: hexactra_core::ApprovalLevel::Standard,
@@ -1093,7 +1098,7 @@ impl DbState {
         owner_id: Uuid,
     ) -> Result<bool> {
         let pool = self.pool.clone();
-        
+
         // Verify the response is coming from the owner
         let existing = sqlx::query(
             r#"
@@ -1143,11 +1148,11 @@ impl DbState {
         if let Some(row) = row {
             let expires_at: chrono::NaiveDateTime = row.get(0);
             let status: String = row.get(1);
-            
+
             // Check if expired and still pending
             let is_expired = Utc::now().naive_utc() > expires_at;
             let is_pending = status == "pending";
-            
+
             Ok(is_expired && is_pending)
         } else {
             Ok(false) // Request not found
@@ -1215,7 +1220,9 @@ impl DbState {
                     row.get::<chrono::NaiveDateTime, _>(7).into(),
                     Utc,
                 ),
-                owner_id: row.get::<Option<String>, _>(8).and_then(|s| Uuid::parse_str(&s).ok()),
+                owner_id: row
+                    .get::<Option<String>, _>(8)
+                    .and_then(|s| Uuid::parse_str(&s).ok()),
                 origin_session_id: Uuid::parse_str(&row.get::<String, _>(9))?,
                 policy: hexactra_core::InteractionPolicy {
                     approval_level: hexactra_core::ApprovalLevel::Standard,
@@ -1255,10 +1262,10 @@ impl DbState {
     ) -> Result<()> {
         let pool = self.pool.clone();
         let details_json = serde_json::to_value(&request.details)?;
-        
+
         // Calculate expiry time
         let expires_at = Utc::now() + chrono::Duration::minutes(ttl_minutes);
-        
+
         sqlx::query(
             r#"
             INSERT INTO interaction_requests (id, session_id, reason, details, created_at, status, kind, expires_at, owner_id, origin_session_id)
@@ -1701,7 +1708,11 @@ impl DbState {
             "#,
         )
         .bind(host_extended.platform.as_str_name())
-        .bind(if host_extended.display_available { 1 } else { 0 })
+        .bind(if host_extended.display_available {
+            1
+        } else {
+            0
+        })
         .bind(host_extended.max_concurrent_sessions as i64)
         .bind(host_extended.current_load as i64)
         .bind(host_extended.id.as_uuid().to_string())
@@ -1753,7 +1764,7 @@ impl DbState {
         assigned_by: &str,
     ) -> Result<()> {
         let pool = self.pool.clone();
-        
+
         // Use UPSERT pattern for SQLite
         sqlx::query(
             r#"
@@ -1827,7 +1838,7 @@ impl DbState {
     pub async fn create_schedule(&self, schedule: &Schedule) -> Result<()> {
         let pool = self.pool.clone();
         let goal_definition_json = serde_json::to_string(&schedule.goal_definition)?;
-        
+
         sqlx::query(
             r#"
             INSERT INTO schedules (id, owner_id, name, cron_expression, timezone, goal_definition, max_retries, retry_delay_seconds, enabled, created_at, updated_at)
@@ -1956,7 +1967,7 @@ impl DbState {
     pub async fn update_schedule(&self, schedule: &Schedule) -> Result<()> {
         let pool = self.pool.clone();
         let goal_definition_json = serde_json::to_string(&schedule.goal_definition)?;
-        
+
         sqlx::query(
             r#"
             UPDATE schedules 
@@ -1997,7 +2008,7 @@ impl DbState {
     /// Create a schedule run
     pub async fn create_schedule_run(&self, run: &ScheduleRun) -> Result<()> {
         let pool = self.pool.clone();
-        
+
         sqlx::query(
             r#"
             INSERT INTO schedule_runs (id, schedule_id, run_number, status, host_id, session_id, started_at, completed_at, error_message, created_at)
@@ -2048,10 +2059,20 @@ impl DbState {
                 schedule_id: Uuid::parse_str(&row.get::<String, _>(1))?,
                 run_number: row.get::<i64, _>(2) as u32,
                 status: ScheduleRunStatus::from_str_name(&row.get::<String, _>(3)),
-                host_id: row.get::<Option<String>, _>(4).and_then(|s| Uuid::parse_str(&s).ok()).map(HostId::from_uuid),
-                session_id: row.get::<Option<String>, _>(5).and_then(|s| Uuid::parse_str(&s).ok()).map(SessionId::from_uuid),
-                started_at: row.get::<Option<chrono::NaiveDateTime>, _>(6).map(|dt| DateTime::<Utc>::from_utc(dt.into(), Utc)),
-                completed_at: row.get::<Option<chrono::NaiveDateTime>, _>(7).map(|dt| DateTime::<Utc>::from_utc(dt.into(), Utc)),
+                host_id: row
+                    .get::<Option<String>, _>(4)
+                    .and_then(|s| Uuid::parse_str(&s).ok())
+                    .map(HostId::from_uuid),
+                session_id: row
+                    .get::<Option<String>, _>(5)
+                    .and_then(|s| Uuid::parse_str(&s).ok())
+                    .map(SessionId::from_uuid),
+                started_at: row
+                    .get::<Option<chrono::NaiveDateTime>, _>(6)
+                    .map(|dt| DateTime::<Utc>::from_utc(dt.into(), Utc)),
+                completed_at: row
+                    .get::<Option<chrono::NaiveDateTime>, _>(7)
+                    .map(|dt| DateTime::<Utc>::from_utc(dt.into(), Utc)),
                 error_message: row.get::<Option<String>, _>(8),
                 created_at: DateTime::<Utc>::from_utc(
                     row.get::<chrono::NaiveDateTime, _>(9).into(),
@@ -2095,10 +2116,20 @@ impl DbState {
                 schedule_id: Uuid::parse_str(&row.get::<String, _>(1))?,
                 run_number: row.get::<i64, _>(2) as u32,
                 status: ScheduleRunStatus::from_str_name(&row.get::<String, _>(3)),
-                host_id: row.get::<Option<String>, _>(4).and_then(|s| Uuid::parse_str(&s).ok()).map(HostId::from_uuid),
-                session_id: row.get::<Option<String>, _>(5).and_then(|s| Uuid::parse_str(&s).ok()).map(SessionId::from_uuid),
-                started_at: row.get::<Option<chrono::NaiveDateTime>, _>(6).map(|dt| DateTime::<Utc>::from_utc(dt.into(), Utc)),
-                completed_at: row.get::<Option<chrono::NaiveDateTime>, _>(7).map(|dt| DateTime::<Utc>::from_utc(dt.into(), Utc)),
+                host_id: row
+                    .get::<Option<String>, _>(4)
+                    .and_then(|s| Uuid::parse_str(&s).ok())
+                    .map(HostId::from_uuid),
+                session_id: row
+                    .get::<Option<String>, _>(5)
+                    .and_then(|s| Uuid::parse_str(&s).ok())
+                    .map(SessionId::from_uuid),
+                started_at: row
+                    .get::<Option<chrono::NaiveDateTime>, _>(6)
+                    .map(|dt| DateTime::<Utc>::from_utc(dt.into(), Utc)),
+                completed_at: row
+                    .get::<Option<chrono::NaiveDateTime>, _>(7)
+                    .map(|dt| DateTime::<Utc>::from_utc(dt.into(), Utc)),
                 error_message: row.get::<Option<String>, _>(8),
                 created_at: DateTime::<Utc>::from_utc(
                     row.get::<chrono::NaiveDateTime, _>(9).into(),
@@ -2120,7 +2151,7 @@ impl DbState {
         error_message: Option<String>,
     ) -> Result<()> {
         let pool = self.pool.clone();
-        
+
         sqlx::query(
             r#"
             UPDATE schedule_runs 
@@ -2142,7 +2173,7 @@ impl DbState {
     /// Create a distributed lease
     pub async fn create_distributed_lease(&self, lease: &DistributedLease) -> Result<()> {
         let pool = self.pool.clone();
-        
+
         sqlx::query(
             r#"
             INSERT INTO distributed_leases (id, resource_type, resource_id, holder_id, expires_at, created_at)
@@ -2211,7 +2242,11 @@ impl DbState {
     }
 
     /// Release a distributed lease
-    pub async fn release_distributed_lease(&self, resource_type: &str, resource_id: &str) -> Result<u64> {
+    pub async fn release_distributed_lease(
+        &self,
+        resource_type: &str,
+        resource_id: &str,
+    ) -> Result<u64> {
         let pool = self.pool.clone();
         let result = sqlx::query(
             r#"
@@ -2233,7 +2268,7 @@ impl DbState {
         platform: Option<HostPlatform>,
     ) -> Result<Vec<Host>> {
         let pool = self.pool.clone();
-        
+
         // Build query with optional filters
         let mut query = String::from(
             r#"
@@ -2287,13 +2322,17 @@ impl DbState {
     ) -> Result<Option<SchedulingDecision>> {
         // Get profile affinity if provided
         let assigned_host = if let Some(profile_id) = profile_id {
-            self.get_profile_affinity(profile_id).await?.map(|a| a.assigned_host_id)
+            self.get_profile_affinity(profile_id)
+                .await?
+                .map(|a| a.assigned_host_id)
         } else {
             None
         };
 
         // Find eligible hosts
-        let mut eligible_hosts = self.find_eligible_hosts(required_capabilities, platform).await?;
+        let mut eligible_hosts = self
+            .find_eligible_hosts(required_capabilities, platform)
+            .await?;
 
         // If there's an assigned host and it's still eligible, prefer it
         if let Some(assigned_host_id) = assigned_host {
@@ -2320,7 +2359,7 @@ impl DbState {
             } else {
                 1.0 // Default score if no extended info available
             };
-            
+
             Ok(Some(SchedulingDecision {
                 host_id: host.id,
                 profile_id,
@@ -2352,7 +2391,7 @@ impl DbState {
     /// Increment host load
     pub async fn increment_host_load(&self, host_id: &HostId) -> Result<u32> {
         let pool = self.pool.clone();
-        
+
         // Get current load
         let row = sqlx::query(
             r#"
@@ -2366,13 +2405,13 @@ impl DbState {
         if let Some(row) = row {
             let current_load: i64 = row.get(0);
             let max_sessions: i64 = row.get(1);
-            
+
             if current_load >= max_sessions {
                 return Err(anyhow::anyhow!("Host at capacity"));
             }
-            
+
             let new_load = (current_load + 1) as u32;
-            
+
             sqlx::query(
                 r#"
                 UPDATE hosts SET current_load = ? WHERE id = ?
@@ -2382,7 +2421,7 @@ impl DbState {
             .bind(host_id.as_uuid().to_string())
             .execute(&*pool)
             .await?;
-            
+
             Ok(new_load)
         } else {
             Err(anyhow::anyhow!("Host not found"))
@@ -2392,7 +2431,7 @@ impl DbState {
     /// Decrement host load
     pub async fn decrement_host_load(&self, host_id: &HostId) -> Result<u32> {
         let pool = self.pool.clone();
-        
+
         let row = sqlx::query(
             r#"
             SELECT current_load FROM hosts WHERE id = ?
@@ -2404,7 +2443,7 @@ impl DbState {
 
         if let Some(row) = row {
             let current_load: i64 = row.get(0);
-            
+
             if current_load > 0 {
                 sqlx::query(
                     r#"
@@ -2415,7 +2454,7 @@ impl DbState {
                 .bind(host_id.as_uuid().to_string())
                 .execute(&*pool)
                 .await?;
-                
+
                 Ok((current_load - 1) as u32)
             } else {
                 Ok(0)
@@ -2471,12 +2510,11 @@ impl ProviderHealth {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use hexactra_core::{GoalId, SessionId};
+    use tempfile::TempDir;
 
     async fn setup_test_db() -> DbState {
         // Use in-memory database for tests
@@ -2625,10 +2663,12 @@ mod tests {
                 max_retries: 3,
             },
         };
-        
 
         state.create_interaction_request(&request).await.unwrap();
-        let retrieved = state.get_interaction_request(request.id.as_uuid()).await.unwrap();
+        let retrieved = state
+            .get_interaction_request(request.id.as_uuid())
+            .await
+            .unwrap();
 
         assert!(retrieved.is_some());
         let retrieved = retrieved.unwrap();
@@ -2676,17 +2716,22 @@ mod tests {
                 max_retries: 3,
             },
         };
-        
 
         state.create_interaction_request(&request).await.unwrap();
 
         // First claim should succeed
         let owner1 = Uuid::new_v4();
-        assert!(state.claim_interaction_request(request.id.as_uuid(), owner1).await.unwrap());
+        assert!(state
+            .claim_interaction_request(request.id.as_uuid(), owner1)
+            .await
+            .unwrap());
 
         // Second claim should fail (single-claim semantics)
         let owner2 = Uuid::new_v4();
-        assert!(!state.claim_interaction_request(request.id.as_uuid(), owner2).await.unwrap());
+        assert!(!state
+            .claim_interaction_request(request.id.as_uuid(), owner2)
+            .await
+            .unwrap());
     }
 
     #[tokio::test]
@@ -2729,13 +2774,15 @@ mod tests {
                 max_retries: 3,
             },
         };
-        
 
         state.create_interaction_request(&request).await.unwrap();
 
         // Claim the request
         let owner = Uuid::new_v4();
-        assert!(state.claim_interaction_request(request.id.as_uuid(), owner).await.unwrap());
+        assert!(state
+            .claim_interaction_request(request.id.as_uuid(), owner)
+            .await
+            .unwrap());
 
         // Respond with correct owner should succeed
         assert!(state
@@ -2744,7 +2791,10 @@ mod tests {
             .unwrap());
 
         // Verify status changed
-        let retrieved = state.get_interaction_request(request.id.as_uuid()).await.unwrap();
+        let retrieved = state
+            .get_interaction_request(request.id.as_uuid())
+            .await
+            .unwrap();
         assert_eq!(retrieved.unwrap().status, InteractionStatus::Approved);
     }
 
@@ -2791,7 +2841,6 @@ mod tests {
                 max_retries: 3,
             },
         };
-        
 
         state.create_interaction_request(&request).await.unwrap();
 
@@ -2807,7 +2856,10 @@ mod tests {
         assert!(expired_count > 0);
 
         // Verify status changed to expired
-        let retrieved = state.get_interaction_request(request.id.as_uuid()).await.unwrap();
+        let retrieved = state
+            .get_interaction_request(request.id.as_uuid())
+            .await
+            .unwrap();
         assert_eq!(retrieved.unwrap().status, InteractionStatus::Expired);
     }
 
@@ -2859,13 +2911,24 @@ mod tests {
             .await
             .unwrap();
 
-        let provider = state.get_provider("test-provider-1").await.unwrap().unwrap();
+        let provider = state
+            .get_provider("test-provider-1")
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(provider.health_status, ProviderHealth::Healthy);
 
         // Disable the provider
-        state.set_provider_enabled("test-provider-1", false).await.unwrap();
+        state
+            .set_provider_enabled("test-provider-1", false)
+            .await
+            .unwrap();
 
-        let provider = state.get_provider("test-provider-1").await.unwrap().unwrap();
+        let provider = state
+            .get_provider("test-provider-1")
+            .await
+            .unwrap()
+            .unwrap();
         assert!(!provider.enabled);
 
         // Delete the provider
@@ -2919,5 +2982,4 @@ mod tests {
 
         assert!(result.is_err());
     }
-
 }

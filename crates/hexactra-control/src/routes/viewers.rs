@@ -4,13 +4,13 @@ use axum::{
     extract::State,
     http::StatusCode,
     response::Json,
-    routing::{get, post, delete},
+    routing::{delete, get, post},
     Router,
 };
 use chrono::Utc;
 use uuid::Uuid;
 
-use hexactra_core::{ViewerPermissions, InputLease};
+use hexactra_core::{InputLease, ViewerPermissions};
 use serde::{Deserialize, Serialize};
 
 use crate::state::DbState;
@@ -129,7 +129,13 @@ async fn release_input_lease(
 pub fn router() -> Router<DbState> {
     Router::new()
         .route("/viewers/token", post(generate_token))
-        .route("/viewers/token/{token_id}", get(validate_token).delete(revoke_token))
+        .route(
+            "/viewers/token/{token_id}",
+            get(validate_token).delete(revoke_token),
+        )
         .route("/viewers/input-lease", post(acquire_input_lease))
-        .route("/viewers/input-lease/{session_id}", delete(release_input_lease))
+        .route(
+            "/viewers/input-lease/{session_id}",
+            delete(release_input_lease),
+        )
 }

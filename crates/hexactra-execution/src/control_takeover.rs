@@ -85,12 +85,12 @@ impl ControlTakeoverManager {
     pub fn take_control_for_human(&mut self) -> HumanLeaseId {
         let lease_id = HumanLeaseId::new();
         let expires_at = Utc::now() + self.lease_duration;
-        
+
         self.state = ControlState::Human {
             lease_id,
             expires_at,
         };
-        
+
         lease_id
     }
 
@@ -104,9 +104,10 @@ impl ControlTakeoverManager {
     /// Check if a lease is still valid
     pub fn is_lease_valid(&self, lease_id: HumanLeaseId) -> bool {
         match &self.state {
-            ControlState::Human { lease_id: current_lease_id, expires_at } => {
-                *current_lease_id == lease_id && Utc::now() < *expires_at
-            }
+            ControlState::Human {
+                lease_id: current_lease_id,
+                expires_at,
+            } => *current_lease_id == lease_id && Utc::now() < *expires_at,
             ControlState::Agent => false,
         }
     }
@@ -152,7 +153,7 @@ impl ControlTakeoverManager {
     /// Take control with a reason (for pausing agent)
     pub fn takeover_with_reason(&mut self) -> PauseReason {
         let lease_id = self.take_control_for_human();
-        
+
         // Return the appropriate pause reason based on state
         PauseReason::HumanLeaseActive
     }
@@ -165,7 +166,7 @@ mod tests {
     #[test]
     fn test_control_takeover_initial_state() {
         let manager = ControlTakeoverManager::new();
-        
+
         assert_eq!(manager.state(), &ControlState::Agent);
         assert!(!manager.human_has_control());
     }
@@ -173,9 +174,9 @@ mod tests {
     #[test]
     fn test_human_lease_creation() {
         let mut manager = ControlTakeoverManager::new();
-        
+
         let lease_id = manager.take_control_for_human();
-        
+
         assert!(manager.human_has_control());
         match &manager.state {
             ControlState::Human { lease_id: lid, .. } => {
@@ -188,7 +189,7 @@ mod tests {
     #[test]
     fn test_release_control() {
         let mut manager = ControlTakeoverManager::new();
-        
+
         manager.take_control_for_human();
         assert!(manager.human_has_control());
 
@@ -200,9 +201,9 @@ mod tests {
     #[test]
     fn test_lease_validation() {
         let mut manager = ControlTakeoverManager::new();
-        
+
         let lease_id = manager.take_control_for_human();
-        
+
         // Valid lease
         assert!(manager.is_lease_valid(lease_id));
 
@@ -214,12 +215,12 @@ mod tests {
     #[test]
     fn test_lease_extension() {
         let mut manager = ControlTakeoverManager::new();
-        
+
         let lease_id = manager.take_control_for_human();
-        
+
         // Extend the lease
         assert!(manager.extend_lease(lease_id));
-        
+
         // Try to extend invalid lease
         let invalid_lease = HumanLeaseId::new();
         assert!(!manager.extend_lease(invalid_lease));
@@ -228,9 +229,9 @@ mod tests {
     #[test]
     fn test_takeover_with_reason() {
         let mut manager = ControlTakeoverManager::new();
-        
+
         let reason = manager.takeover_with_reason();
-        
+
         assert_eq!(reason, PauseReason::HumanLeaseActive);
         assert!(manager.human_has_control());
     }

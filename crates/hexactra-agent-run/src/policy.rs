@@ -26,7 +26,7 @@ impl Default for RunPolicy {
     fn default() -> Self {
         let mut allowlist = HashSet::new();
         allowlist.insert("localhost".to_string());
-        
+
         let mut approval_required = HashSet::new();
         approval_required.insert("file_write".to_string());
         approval_required.insert("system_command".to_string());
@@ -48,10 +48,10 @@ impl RunPolicy {
         if self.allowlist_domains.is_empty() {
             return true;
         }
-        
-        self.allowlist_domains.iter().any(|allowed| {
-            domain.ends_with(allowed) || domain == allowed
-        })
+
+        self.allowlist_domains
+            .iter()
+            .any(|allowed| domain.ends_with(allowed) || domain == allowed)
     }
 
     /// Check if an action requires human approval
@@ -134,7 +134,7 @@ mod tests {
     fn test_domain_allowlist() {
         let mut policy = RunPolicy::default();
         policy.allowlist_domains.insert("example.com".to_string());
-        
+
         assert!(policy.is_domain_allowed("sub.example.com"));
         assert!(!policy.is_domain_allowed("malicious.com"));
     }
@@ -142,7 +142,7 @@ mod tests {
     #[test]
     fn test_step_limit() {
         let policy = RunPolicy::default();
-        
+
         assert_eq!(policy.check_steps(50), PolicyResult::Allowed);
         match policy.check_steps(100) {
             PolicyResult::Denied(_) => {}

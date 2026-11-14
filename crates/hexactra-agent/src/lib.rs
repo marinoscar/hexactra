@@ -9,9 +9,9 @@ pub mod platform;
 
 use anyhow::Result;
 use std::path::Path;
+use tokio::io::AsyncWriteExt;
 use tokio::net::UnixListener;
 use tokio::signal;
-use tokio::io::AsyncWriteExt;
 use tracing::{error, info, warn};
 
 /// Agent configuration
@@ -87,7 +87,7 @@ impl AgentService {
     /// Validate the control socket path and ensure parent directory exists
     fn validate_socket_path(&self) -> Result<()> {
         let path = Path::new(&self.config.control_socket_path);
-        
+
         if let Some(parent) = path.parent() {
             if !parent.exists() {
                 std::fs::create_dir_all(parent).map_err(|e| {
@@ -97,7 +97,7 @@ impl AgentService {
                     ))
                 })?;
             }
-            
+
             // Set secure permissions on the directory
             #[cfg(unix)]
             {
@@ -105,14 +105,14 @@ impl AgentService {
                 std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o750))?;
             }
         }
-        
+
         Ok(())
     }
 
     /// Start the agent service
     pub async fn start(&mut self) -> Result<()> {
         info!("Starting Hexactra host agent service");
-        
+
         // Drop privileges if configured
         if self.config.service_uid.is_some() || self.config.service_gid.is_some() {
             self.drop_privileges()?;
@@ -123,7 +123,7 @@ impl AgentService {
 
         // Create control socket with secure permissions
         let socket_path = &self.config.control_socket_path;
-        
+
         // Remove existing socket if present (for restart scenarios)
         if Path::new(socket_path).exists() {
             std::fs::remove_file(socket_path)?;
@@ -141,10 +141,7 @@ impl AgentService {
             std::fs::set_permissions(socket_path, std::fs::Permissions::from_mode(0o660))?;
         }
 
-        info!(
-            "Agent service started, control socket: {}",
-            socket_path
-        );
+        info!("Agent service started, control socket: {}", socket_path);
 
         self.running = true;
 
@@ -158,7 +155,7 @@ impl AgentService {
     /// Handle incoming connections on the control socket
     async fn handle_connections(&mut self, listener: UnixListener) -> Result<()> {
         let mut shutdown = signal::unix::signal(signal::unix::SignalKind::terminate())?;
-        
+
         loop {
             tokio::select! {
                 accept_result = listener.accept() => {
