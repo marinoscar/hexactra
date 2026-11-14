@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Hexactra Fixture Persist</title></head>
+<body>
+  <h1>Persistent profile check</h1>
+  <p id="visits"></p>
+  <script>
+    const n = Number(localStorage.getItem('hexactra-visits') || '0') + 1;
+    localStorage.setItem('hexactra-visits', String(n));
+    document.getElementById('visits').textContent = 'visits: ' + n;
+  </script>
+</body>
+</html>

@@ -333,8 +333,16 @@ async fn run() -> Result<()> {
             }
             for h in hosts {
                 println!(
-                    "host {} {:<20} online={} browser={}",
-                    h.id, h.name, h.online, h.browser_connected
+                    "host {} {:<20} online={} browser={} on_demand={}{}",
+                    h.id,
+                    h.name,
+                    h.online,
+                    h.browser_connected,
+                    h.on_demand,
+                    h.viewer_url
+                        .as_deref()
+                        .map(|u| format!(" viewer={u}"))
+                        .unwrap_or_default()
                 );
             }
             return Ok(());

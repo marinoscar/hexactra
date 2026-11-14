@@ -249,7 +249,7 @@ try {
   // Chromium refuses to run as root with its sandbox (containers only).
   if (process.getuid?.() === 0) chromeArgs.push('--no-sandbox');
   chromeArgs.push('about:blank');
-  start('chromium', chromium, chromeArgs);
+  const attachedChromium = start('chromium', chromium, chromeArgs);
 
   // --- scenario --------------------------------------------------------------
   await step('extension connects through the native host to the agent', async () => {
@@ -437,6 +437,51 @@ try {
     agent = startAgent();
     await until('browser reconnected', async () => /browser=true/.test((await cli('status')).out), 30_000);
     assert.match(await ok('navigate', `${site}/index.html`), /Hexactra Fixture Home/);
+  });
+  await step('launch mode: the agent starts Chromium on demand, idles it out, keeps the profile', async () => {
+    // Replace the attach-mode setup with an agent that owns the browser.
+    stop(agent);
+    await new Promise((r) => agent.once('exit', r));
+    stop(attachedChromium);
+    await sleep(1_000);
+    const launchProfile = join(work, 'launch-profile');
+    const launchArgs = [
+      'daemon', '--url', controlUrl, '--name', 'e2e-launch-host',
+      '--browser', chromium,
+      '--profile-dir', launchProfile,
+      '--extension-dir', extensionDir,
+      '--native-host', join(binDir, 'hexactra-native-host'),
+      '--idle-shutdown-s', '4',
+      '--viewer-url', 'https://viewer.example.test/vnc.html',
+      '--browser-arg=--disable-gpu',
+      '--browser-arg=--window-size=1280,900',
+    ];
+    if (process.getuid?.() === 0) launchArgs.push('--browser-arg=--no-sandbox');
+    agent = start('agent', join(binDir, 'hexactra-agent'), launchArgs);
+    await until('on-demand host', async () => /on_demand=true/.test((await cli('status')).out), 30_000);
+    assert.match((await cli('status')).out, /viewer=https:\/\/viewer\.example\.test/);
+    const browserRunning = () =>
+      spawnSync('pgrep', ['-f', `user-data-dir=${launchProfile}`]).status === 0;
+    assert.equal(browserRunning(), false, 'browser should not start before it is needed');
+
+    // First action launches the browser.
+    await ok('session', 'create');
+    assert.match(await ok('navigate', `${site}/persist.html`), /Hexactra Fixture Persist/);
+    assert.match(await ok('text', '--selector', '#visits'), /visits: 1/);
+    assert.equal(browserRunning(), true);
+
+    // Idle shutdown closes it.
+    await until('idle shutdown', async () => !browserRunning(), 30_000);
+
+    // Next action relaunches it with the same profile (localStorage survived).
+    assert.match(await ok('navigate', `${site}/persist.html`), /Hexactra Fixture Persist/);
+    assert.match(await ok('text', '--selector', '#visits'), /visits: 2/);
+
+    // Handoffs point the person at the viewer.
+    const id = (await ok('handoff', 'request', '--kind', 'captcha', '--prompt', 'Solve it in the viewer')).trim();
+    const shown = JSON.parse(await ok('--json', 'handoff', 'show', id));
+    assert.equal(shown.viewer_url, 'https://viewer.example.test/vnc.html');
+    await ok('handoff', 'cancel', id);
   });
 } catch (e) {
   failed = true;
