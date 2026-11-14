@@ -194,20 +194,19 @@ impl ChromeManager {
         fs::create_dir_all("/tmp/hexactra-runtime").await?;
 
         // Build Chrome command line
+        // Keep the Chrome sandbox and extensions enabled: the Hexactra
+        // extension is how the agent drives the browser, and the profile may
+        // hold a signed-in account. Pass `--load-extension=<dir>` through
+        // `extra_args` when the extension is not installed in the profile.
         let mut args = vec![
             format!("--user-data-dir={}", self.config.user_data_dir),
-            "--no-sandbox".to_string(),
             "--disable-dev-shm-usage".to_string(),
-            "--disable-gpu".to_string(), // Will be re-enabled if GPU is requested
-            "--disable-extensions".to_string(),
-            "--disable-plugins".to_string(),
-            "--disable-background-networking".to_string(),
-            "--disable-sync".to_string(),
-            "--disable-translate".to_string(),
-            "--metrics-recording-only".to_string(),
             "--no-first-run".to_string(),
-            "--safebrowsing-disable-auto-update".to_string(),
+            "--no-default-browser-check".to_string(),
         ];
+        if !self.config.enable_gpu {
+            args.push("--disable-gpu".to_string());
+        }
 
         // Add GPU flag if enabled
         if self.config.enable_gpu {

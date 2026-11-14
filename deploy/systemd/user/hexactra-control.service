@@ -1,0 +1,14 @@
+[Unit]
+Description=Hexactra control plane (remote browser control API)
+Documentation=https://github.com/marinoscar/hexactra/blob/main/docs/remote-control-quickstart.md
+
+[Service]
+# Listens on 127.0.0.1:8787. Reach it remotely through an SSH tunnel or a
+# private network; see the quickstart before changing HEXACTRA_BIND.
+ExecStart=%h/.local/bin/hexactra-control serve
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

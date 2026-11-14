@@ -1,63 +1,173 @@
-//! CLI integration tests
+//! CLI tests: argument handling, and real commands against an in-process
+//! control plane with a fake host.
+
+use std::time::Duration;
 
 use assert_cmd::prelude::*;
+use hexactra_client::HostClient;
+use hexactra_control::runtime::{self, ApiState, RuntimeStore};
+use hexactra_core::remote::{OperationResult, RegisterHostRequest, RemoteAction};
 use predicates::prelude::*;
+use serde_json::json;
 use std::process::Command;
 
-#[test]
-fn test_help() {
-    let mut cmd = Command::cargo_bin("hexactra").unwrap();
-    cmd.arg("--help");
-    cmd.assert().success();
-}
+const TOKEN: &str = "cli-test-token-0123456789abcdef";
 
 #[test]
-fn test_version() {
-    let mut cmd = Command::cargo_bin("hexactra").unwrap();
-    cmd.arg("version");
-    cmd.assert()
+fn help_and_version() {
+    Command::cargo_bin("hexactra")
+        .unwrap()
+        .arg("--help")
+        .assert()
         .success()
-        .stdout(predicates::str::contains("hexactra-cli"));
+        .stdout(predicate::str::contains("navigate"));
+    Command::cargo_bin("hexactra")
+        .unwrap()
+        .arg("version")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("hexactra-cli"));
 }
 
 #[test]
-fn test_session_help() {
-    let mut cmd = Command::cargo_bin("hexactra").unwrap();
-    cmd.arg("session").arg("--help");
-    cmd.assert().success();
+fn rejects_non_web_url_before_contacting_server() {
+    Command::cargo_bin("hexactra")
+        .unwrap()
+        .env("HEXACTRA_API_TOKEN", TOKEN)
+        .args([
+            "--url",
+            "http://127.0.0.1:9",
+            "navigate",
+            "file:///etc/passwd",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("only http(s)"));
 }
 
 #[test]
-fn test_profile_help() {
-    let mut cmd = Command::cargo_bin("hexactra").unwrap();
-    cmd.arg("profile").arg("--help");
-    cmd.assert().success();
+fn missing_token_is_explained() {
+    let dir = tempfile::tempdir().unwrap();
+    Command::cargo_bin("hexactra")
+        .unwrap()
+        .env_remove("HEXACTRA_API_TOKEN")
+        .env("XDG_CONFIG_HOME", dir.path())
+        .arg("status")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("HEXACTRA_API_TOKEN"));
+}
+
+/// Start a control plane and a fake host that answers every action.
+fn start_stack() -> String {
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async move {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let url = format!("http://{}", listener.local_addr().unwrap());
+            tokio::spawn(runtime::serve(
+                listener,
+                ApiState::new(RuntimeStore::new(), TOKEN),
+                std::future::pending(),
+            ));
+            let host = HostClient::new(&url, TOKEN).unwrap();
+            let id = host
+                .register(&RegisterHostRequest {
+                    name: "fake".into(),
+                    version: "0".into(),
+                    host_id: None,
+                })
+                .await
+                .unwrap()
+                .host_id;
+            host.next(id, true, Duration::from_millis(10))
+                .await
+                .unwrap();
+            tx.send(url).unwrap();
+            loop {
+                let Some(op) = host.next(id, true, Duration::from_secs(5)).await.unwrap() else {
+                    continue;
+                };
+                let result = match op.action {
+                    RemoteAction::Navigate { url, .. } => OperationResult {
+                        ok: true,
+                        result: Some(json!({"url": url, "title": "Fixture"})),
+                        error: None,
+                    },
+                    RemoteAction::Text { .. } => OperationResult {
+                        ok: true,
+                        result: Some(json!({"text": "hello from the page"})),
+                        error: None,
+                    },
+                    RemoteAction::Screenshot { .. } => OperationResult {
+                        ok: true,
+                        result: Some(json!({"mime": "image/jpeg", "data": "/9j/AA=="})),
+                        error: None,
+                    },
+                    _ => OperationResult {
+                        ok: false,
+                        result: None,
+                        error: Some("no element matches #missing".into()),
+                    },
+                };
+                host.report(id, op.id, &result).await.unwrap();
+            }
+        });
+    });
+    rx.recv_timeout(Duration::from_secs(10)).unwrap()
 }
 
 #[test]
-fn test_host_help() {
-    let mut cmd = Command::cargo_bin("hexactra").unwrap();
-    cmd.arg("host").arg("--help");
-    cmd.assert().success();
-}
+fn drives_a_session_end_to_end() {
+    let url = start_stack();
+    let cfg = tempfile::tempdir().unwrap();
+    let cli = || {
+        let mut c = Command::cargo_bin("hexactra").unwrap();
+        c.env("HEXACTRA_API_TOKEN", TOKEN)
+            .env("HEXACTRA_URL", &url)
+            .env("XDG_CONFIG_HOME", cfg.path())
+            .env_remove("HEXACTRA_SESSION");
+        c
+    };
 
-#[test]
-fn test_action_help() {
-    let mut cmd = Command::cargo_bin("hexactra").unwrap();
-    cmd.arg("action").arg("--help");
-    cmd.assert().success();
-}
+    cli()
+        .arg("status")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("browser=true"));
 
-#[test]
-fn test_agent_help() {
-    let mut cmd = Command::cargo_bin("hexactra").unwrap();
-    cmd.arg("agent").arg("--help");
-    cmd.assert().success();
-}
+    // First action creates and saves a session.
+    cli()
+        .args(["navigate", "https://example.test/"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Fixture"))
+        .stderr(predicate::str::contains("started session"));
+    assert!(cfg.path().join("hexactra/current-session").exists());
 
-#[test]
-fn test_hitl_help() {
-    let mut cmd = Command::cargo_bin("hexactra").unwrap();
-    cmd.arg("hitl").arg("--help");
-    cmd.assert().success();
+    // Second action reuses it.
+    cli()
+        .arg("text")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("hello from the page"))
+        .stderr(predicate::str::contains("started session").not());
+
+    // Browser-side failure exits non-zero with the reason.
+    cli()
+        .args(["click", "#missing"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("no element matches #missing"));
+
+    // Screenshot is written to a file.
+    let shot = cfg.path().join("shot.jpg");
+    cli()
+        .args(["screenshot", "-o", shot.to_str().unwrap()])
+        .assert()
+        .success();
+    assert_eq!(std::fs::read(&shot).unwrap(), vec![0xff, 0xd8, 0xff, 0x00]);
+
+    cli().args(["session", "end"]).assert().success();
 }

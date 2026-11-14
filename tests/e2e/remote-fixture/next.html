@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Hexactra Fixture Next</title></head>
+<body>
+  <h1>Next page</h1>
+  <p id="later-host"></p>
+  <script>
+    setTimeout(() => {
+      const p = document.createElement('p');
+      p.id = 'arrived';
+      p.textContent = 'Arrived after a delay';
+      document.body.appendChild(p);
+    }, 500);
+  </script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Hexactra Fixture Home</title></head>
+<body>
+  <h1>Fixture home</h1>
+  <form id="search">
+    <label for="q">Query</label>
+    <input id="q" name="q" type="text" placeholder="Search the fixture">
+    <button id="go" type="submit">Go</button>
+  </form>
+  <p id="out">nothing yet</p>
+  <button id="counter" type="button">Clicked 0</button>
+  <a id="next" href="next.html">Next page</a>
+  <div style="height: 2000px"></div>
+  <p id="bottom">bottom of page</p>
+  <script>
+    document.getElementById('search').addEventListener('submit', (e) => {
+      e.preventDefault();
+      document.getElementById('out').textContent = 'searched: ' + document.getElementById('q').value;
+    });
+    let n = 0;
+    document.getElementById('counter').addEventListener('click', (e) => {
+      n += 1;
+      e.target.textContent = 'Clicked ' + n;
+    });
+  </script>
+</body>
+</html>

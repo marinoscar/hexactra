@@ -2,17 +2,33 @@
 
 This is the monorepo for Hexactra, an AI-powered browser automation runtime.
 
+## Remote browser control: start here
+
+Drive your own signed-in Chrome on a Linux machine from anywhere, through the `hexactra` CLI (and, next, MCP for AI agents):
+
+```bash
+scripts/install-remote-control.sh   # build, install to ~/.local/bin, start user services
+# load apps/chrome-extension/dist in Chrome (Developer mode -> Load unpacked)
+hexactra status
+hexactra navigate https://example.com && hexactra screenshot -o page.jpg
+```
+
+- Quickstart, remote access and safety: [docs/remote-control-quickstart.md](docs/remote-control-quickstart.md)
+- `/v1` API: [docs/remote-control-api.md](docs/remote-control-api.md)
+- Proven by a real-Chromium end-to-end test in CI: `tests/e2e/remote-control.e2e.mjs`
+
 ## Structure
 
 ### Rust Crates (`crates/`)
 
 - `hexactra-core` - Core types and traits
 - `hexactra-telemetry` - Telemetry and tracing utilities
-- `hexactra-control` - Control plane API
-- `hexactra-agent` - Host agent
-- `hexactra-worker` - Session worker
-- `hexactra-native-host` - Chrome Native Messaging host
-- `hexactra-cli` - CLI tool
+- `hexactra-control` - Control plane (`hexactra-control serve`: the `/v1` remote control API)
+- `hexactra-client` - HTTP client for the `/v1` API
+- `hexactra-agent` - Host agent (`hexactra-agent daemon`: attaches to your Chrome via the extension)
+- `hexactra-worker` - Session worker (earlier scaffolding; not on the remote control path)
+- `hexactra-native-host` - Chrome Native Messaging host (relays the extension to the agent)
+- `hexactra-cli` - `hexactra` CLI
 - `hexactra-mcp` - MCP server
 
 ### TypeScript Packages (`packages/`)

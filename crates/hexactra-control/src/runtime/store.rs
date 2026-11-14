@@ -102,6 +102,9 @@ impl RuntimeStore {
                 h.name = name;
                 h.version = version;
                 h.last_seen = now;
+                // A re-registering agent has a fresh bridge; it reports the
+                // browser as connected on its next poll.
+                h.browser_connected = false;
             }
             None => {
                 inner.hosts.insert(
@@ -453,6 +456,9 @@ mod tests {
             .unwrap()
             .is_none());
         assert_eq!(s.create_session(None, None).unwrap().host_id, h);
+        // Re-registration clears the browser flag until the next poll.
+        s.register_host(Some(h), "h".into(), "0".into());
+        assert!(!s.list_hosts()[0].browser_connected);
     }
 
     #[tokio::test]
