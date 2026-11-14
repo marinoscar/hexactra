@@ -1,6 +1,6 @@
 {
   "description": "Hexactra MCP server (hexactra-mcp): operate the user's browser through the control plane /v1 API.",
-  "instructions": "These tools operate a real Chrome browser that belongs to the user and is signed in to their accounts. Typical loop: browser_navigate, then browser_elements to get CSS selectors, then browser_click / browser_type, then browser_text or browser_screenshot to check the result. Act at a human pace and only on the user's own behalf. If a page shows a CAPTCHA, a verification code, a passkey prompt, a payment confirmation or any other security check, stop and ask the user to complete it in their browser; do not try to bypass it.",
+  "instructions": "These tools operate a real Chrome browser that belongs to the user and is signed in to their accounts. Typical loop: browser_navigate, then browser_elements to get CSS selectors, then browser_click / browser_type, then browser_text or browser_screenshot to check the result. Act at a human pace and only on the user's own behalf. If a page shows a CAPTCHA, a verification code, a passkey prompt, a payment confirmation or any other security check, call browser_request_human and wait for the person; never try to solve or bypass the check yourself. Browser actions are paused while a request to the person is open.",
   "name": "hexactra",
   "tools": [
     {
@@ -312,6 +312,81 @@
         "type": "object"
       },
       "name": "browser_reload"
+    },
+    {
+      "description": "Pause and ask the user to do something only a person should do: solve a CAPTCHA, enter a one-time code, approve a passkey, sign in, or confirm a purchase. The user is reached on their configured channels (chat, email link, ...). With wait=true (default) this returns the outcome and, for input text/secret/choice, the person's answer. Use input=secret for one-time codes: type the value into the page and do not repeat it elsewhere.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "choices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "input": {
+            "description": "none: the person acts in the browser and marks it done.",
+            "enum": [
+              "none",
+              "text",
+              "secret",
+              "choice"
+            ],
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "captcha",
+              "code",
+              "passkey",
+              "login",
+              "confirmation",
+              "other"
+            ],
+            "type": "string"
+          },
+          "prompt": {
+            "description": "What the person should do, in plain words.",
+            "type": "string"
+          },
+          "timeout_s": {
+            "maximum": 86400,
+            "minimum": 10,
+            "type": "integer"
+          },
+          "wait": {
+            "description": "Wait for the answer (default true).",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "prompt"
+        ],
+        "type": "object"
+      },
+      "name": "browser_request_human"
+    },
+    {
+      "description": "Check (and optionally wait for) a request created by browser_request_human with wait=false.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "handoff_id": {
+            "type": "string"
+          },
+          "wait_s": {
+            "maximum": 3600,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "handoff_id"
+        ],
+        "type": "object"
+      },
+      "name": "browser_handoff_status"
     }
   ],
   "version": "0.1.0"

@@ -111,15 +111,54 @@ The token is read from `HEXACTRA_API_TOKEN` or `~/.config/hexactra/api-token`. F
 - `hexactra screenshot` returns the visible tab as JPEG.
 - For a live view or to take over by hand, use the desktop's own remote desktop: GNOME **Settings → Sharing → Remote Desktop**, or `x11vnc` reached through the same SSH tunnel. A built-in viewer is follow-up work on #173.
 
-## 6. Sign-ins, CAPTCHAs and bot checks
+## 6. CAPTCHAs, codes and approvals: handing off to you
 
-Hexactra acts in your real Chrome profile, so sites see your normal browser, cookies and sign-ins. It does **not** try to defeat bot detection. When a site asks for a CAPTCHA, a one-time code, a passkey or another check:
+Hexactra acts in your real Chrome profile, so sites see your normal browser, cookies and sign-ins. It does **not** try to defeat bot detection. When a site asks for something only you should do, the agent opens a **handoff**:
 
-1. The action fails or the page shows the challenge (`hexactra screenshot` shows it).
-2. Complete it yourself through remote desktop.
-3. Continue with the next command.
+1. The session pauses. Browser actions return `handoff_pending` until you answer.
+2. Every webhook channel you registered gets a signed `handoff.created` event. The event holds the prompt, the page, and a single-use link and token to answer with.
+3. You answer from any channel: tap the link and fill in the small form, reply through your bot, or run `hexactra handoff respond`. For a CAPTCHA or passkey, act in the browser through remote desktop, then tap **I've done it**.
+4. The agent gets the answer (for example the one-time code) and carries on.
 
-Wiring these handoffs into the human-in-the-loop inbox is follow-up work. Respect each site's terms of use, and keep automated use of your own accounts at a human pace.
+With MCP, the agent does this through the `browser_request_human` tool. The server instructions tell it to use the tool for any CAPTCHA, code, passkey, sign-in or purchase confirmation.
+
+From the CLI:
+
+```bash
+hexactra handoff request --kind code --prompt "Enter the code the airline texted you" --input secret --wait
+hexactra handoff list                 # pending requests
+hexactra handoff respond <id> --value 123456
+hexactra handoff cancel <id>
+```
+
+### Add channels (webhooks)
+
+Run the control plane with a public URL so payloads contain clickable links. For channels on your LAN or tailnet, also allow insecure targets:
+
+```bash
+systemctl --user edit hexactra-control
+#   [Service]
+#   Environment=HEXACTRA_PUBLIC_URL=https://hexactra.your-tailnet.ts.net
+#   Environment=HEXACTRA_WEBHOOK_ALLOW_INSECURE=1     # only for http or private-address channels
+systemctl --user restart hexactra-control
+
+hexactra webhook add https://hooks.example.test/hexactra --description "phone"
+# prints the id and the whsec_ signing secret (shown once)
+hexactra webhook test <id> && hexactra webhook deliveries <id>
+```
+
+Channel recipes:
+
+| Channel | How |
+|---|---|
+| **n8n / Zapier / Make** | Webhook trigger, then send `data.handoff.prompt` and `data.respond.form_url` to Telegram, Slack, SMS or email. Tapping the link opens the answer form. |
+| **Chat bot (Slack, Telegram, Discord)** | Your bot receives the webhook, verifies `webhook-signature`, posts the prompt with buttons or a reply box, and answers with `POST data.respond.url` with body `{ "value", "channel": "slack", "response_token": data.respond.token }`. |
+| **Email or SMS** | Send `data.respond.form_url`. The page works on a phone. A secret field is masked and offers your keyboard's one-time-code autofill. |
+| **Your own app** | Use `/v1/handoffs` directly with the API token. |
+
+Several channels can be active at once. The first answer wins and the token then stops working everywhere. Every registered channel receives a token that can answer, so register only channels you control. Payload and signature reference: [remote-control-api.md](remote-control-api.md#webhooks-channels-that-reach-a-person).
+
+Respect each site's terms of use, and keep automated use of your own accounts at a human pace.
 
 ## 7. Security checklist
 
@@ -135,6 +174,8 @@ Wiring these handoffs into the human-in-the-loop inbox is follow-up work. Respec
 | `browser=false` | Is the extension loaded with id `afamapffbfhaafbjnneoachpknjpmiof`? Run `ls ~/.config/google-chrome/NativeMessagingHosts/com.hexactra.nativehost.json`, then `journalctl --user -u hexactra-agent`. |
 | `no_host_available` | `systemctl --user status hexactra-agent`; the agent must reach the control plane URL. |
 | `cannot act on this page` | Chrome blocks extensions on `chrome://` pages and the Web Store. Navigate to a normal site first. |
+| `handoff_pending` | The agent asked you for something. Run `hexactra handoff list`, then answer or cancel. |
+| Webhook never arrives | Run `hexactra webhook deliveries <id>`. A target on http or a private address needs `HEXACTRA_WEBHOOK_ALLOW_INSECURE=1`. |
 | `Cannot find a next page in history` | Chrome's back button skips entries made without a user gesture; Hexactra falls back to the page's own history, but there may be nothing to go back to. |
 
 ## Running the end-to-end test
