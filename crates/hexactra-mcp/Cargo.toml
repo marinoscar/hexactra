@@ -24,7 +24,8 @@ async-trait.workspace = true
 clap.workspace = true
 
 hexactra-core = { path = "../hexactra-core" }
-hexactra-telemetry = { path = "../hexactra-telemetry" }
+hexactra-client = { path = "../hexactra-client" }
 
 [dev-dependencies]
+hexactra-control = { path = "../hexactra-control" }
 tempfile.workspace = true

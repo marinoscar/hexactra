@@ -1,0 +1,414 @@
+//! MCP JSON-RPC handling and the browser tools.
+
+use std::time::Duration;
+
+use hexactra_client::{ClientError, ControlClient};
+use hexactra_core::remote::{CreateSessionRequest, OperationState, RemoteAction};
+use serde_json::{json, Map, Value};
+use tokio::sync::Mutex;
+use uuid::Uuid;
+
+const PROTOCOL_VERSION: &str = "2025-06-18";
+const TOOL_PREFIX: &str = "browser_";
+
+const INSTRUCTIONS: &str =
+    "These tools operate a real Chrome browser that belongs to the user and is \
+signed in to their accounts. Typical loop: browser_navigate, then browser_elements to get CSS \
+selectors, then browser_click / browser_type, then browser_text or browser_screenshot to check the \
+result. Act at a human pace and only on the user's own behalf. If a page shows a CAPTCHA, a \
+verification code, a passkey prompt, a payment confirmation or any other security check, stop and \
+ask the user to complete it in their browser; do not try to bypass it.";
+
+fn tab_prop() -> Value {
+    json!({"type": "integer", "description": "Tab id from browser_tabs; defaults to the active tab."})
+}
+
+fn tool(name: &str, description: &str, props: Value, required: &[&str]) -> Value {
+    json!({
+        "name": name,
+        "description": description,
+        "inputSchema": {
+            "type": "object",
+            "properties": props,
+            "required": required,
+            "additionalProperties": false,
+        }
+    })
+}
+
+/// Tool catalog. Tool `browser_<x>` maps to remote action type `<x>`.
+pub fn tools() -> Vec<Value> {
+    vec![
+        tool("browser_status", "Show whether the user's browser is connected.", json!({}), &[]),
+        tool(
+            "browser_navigate",
+            "Open an http(s) URL in the current tab and wait for it to load. Returns the final URL and title.",
+            json!({"url": {"type": "string"}, "tab_id": tab_prop()}),
+            &["url"],
+        ),
+        tool(
+            "browser_elements",
+            "List visible interactive elements (links, buttons, inputs) with a CSS selector, tag and label for each. Call this before clicking or typing.",
+            json!({"max_elements": {"type": "integer", "minimum": 1, "maximum": 500}, "tab_id": tab_prop()}),
+            &[],
+        ),
+        tool(
+            "browser_click",
+            "Click the first element matching a CSS selector.",
+            json!({"selector": {"type": "string"}, "tab_id": tab_prop()}),
+            &["selector"],
+        ),
+        tool(
+            "browser_type",
+            "Type text into an input, textarea or editable element. Set clear to replace the existing value and submit to press Enter / submit the form.",
+            json!({
+                "selector": {"type": "string"},
+                "text": {"type": "string"},
+                "clear": {"type": "boolean"},
+                "submit": {"type": "boolean"},
+                "tab_id": tab_prop()
+            }),
+            &["selector", "text"],
+        ),
+        tool(
+            "browser_press",
+            "Press a key such as Enter, Escape, Tab or ArrowDown on the focused element or on selector.",
+            json!({"key": {"type": "string"}, "selector": {"type": "string"}, "tab_id": tab_prop()}),
+            &["key"],
+        ),
+        tool(
+            "browser_scroll",
+            "Scroll the page by dx/dy pixels, or scroll selector into view.",
+            json!({"dx": {"type": "integer"}, "dy": {"type": "integer"}, "selector": {"type": "string"}, "tab_id": tab_prop()}),
+            &[],
+        ),
+        tool(
+            "browser_text",
+            "Read the visible text of the page or of selector.",
+            json!({"selector": {"type": "string"}, "max_chars": {"type": "integer", "minimum": 1}, "tab_id": tab_prop()}),
+            &[],
+        ),
+        tool(
+            "browser_screenshot",
+            "Capture the visible part of the tab as an image.",
+            json!({"tab_id": tab_prop()}),
+            &[],
+        ),
+        tool(
+            "browser_wait_for",
+            "Wait until an element matching selector exists (timeout_ms up to 60000).",
+            json!({"selector": {"type": "string"}, "timeout_ms": {"type": "integer", "minimum": 0, "maximum": 60000}, "tab_id": tab_prop()}),
+            &["selector"],
+        ),
+        tool("browser_tabs", "List open tabs with ids, titles and URLs.", json!({}), &[]),
+        tool(
+            "browser_new_tab",
+            "Open a new tab, optionally at an http(s) URL.",
+            json!({"url": {"type": "string"}}),
+            &[],
+        ),
+        tool(
+            "browser_activate_tab",
+            "Switch to a tab.",
+            json!({"tab_id": {"type": "integer"}}),
+            &["tab_id"],
+        ),
+        tool(
+            "browser_close_tab",
+            "Close a tab.",
+            json!({"tab_id": {"type": "integer"}}),
+            &["tab_id"],
+        ),
+        tool("browser_back", "Go back in history.", json!({"tab_id": tab_prop()}), &[]),
+        tool("browser_forward", "Go forward in history.", json!({"tab_id": tab_prop()}), &[]),
+        tool("browser_reload", "Reload the tab.", json!({"tab_id": tab_prop()}), &[]),
+    ]
+}
+
+/// Build a remote action from a tool name and its arguments.
+pub fn action_for(name: &str, args: &Map<String, Value>) -> Result<RemoteAction, String> {
+    let kind = name
+        .strip_prefix(TOOL_PREFIX)
+        .ok_or_else(|| format!("unknown tool {name}"))?;
+    if !tools().iter().any(|t| t["name"] == name) {
+        return Err(format!("unknown tool {name}"));
+    }
+    let mut obj = args.clone();
+    obj.insert("type".into(), Value::String(kind.into()));
+    let action: RemoteAction = serde_json::from_value(Value::Object(obj))
+        .map_err(|e| format!("invalid arguments for {name}: {e}"))?;
+    action.validate().map_err(|e| e.0)?;
+    Ok(action)
+}
+
+fn text_result(text: impl Into<String>, is_error: bool) -> Value {
+    json!({"content": [{"type": "text", "text": text.into()}], "isError": is_error})
+}
+
+/// MCP server state.
+pub struct Server {
+    client: ControlClient,
+    session: Mutex<Option<Uuid>>,
+}
+
+impl Server {
+    pub fn new(client: ControlClient) -> Self {
+        Self {
+            client,
+            session: Mutex::new(None),
+        }
+    }
+
+    /// Handle one JSON-RPC line; `None` for notifications.
+    pub async fn handle_line(&self, line: &str) -> Option<Value> {
+        let msg: Value = match serde_json::from_str(line) {
+            Ok(v) => v,
+            Err(e) => {
+                return Some(json!({"jsonrpc": "2.0", "id": null,
+                    "error": {"code": -32700, "message": format!("parse error: {e}")}}))
+            }
+        };
+        let id = msg.get("id").cloned();
+        let method = msg.get("method").and_then(Value::as_str).unwrap_or("");
+        let params = msg.get("params").cloned().unwrap_or(Value::Null);
+        let id = id?; // notifications get no response
+
+        let result = match method {
+            "initialize" => {
+                let version = params
+                    .get("protocolVersion")
+                    .and_then(Value::as_str)
+                    .unwrap_or(PROTOCOL_VERSION);
+                Ok(json!({
+                    "protocolVersion": version,
+                    "capabilities": {"tools": {"listChanged": false}},
+                    "serverInfo": {"name": "hexactra", "version": env!("CARGO_PKG_VERSION")},
+                    "instructions": INSTRUCTIONS,
+                }))
+            }
+            "ping" => Ok(json!({})),
+            "tools/list" => Ok(json!({"tools": tools()})),
+            "tools/call" => Ok(self.call_tool(&params).await),
+            _ => Err((-32601, format!("method not found: {method}"))),
+        };
+        Some(match result {
+            Ok(r) => json!({"jsonrpc": "2.0", "id": id, "result": r}),
+            Err((code, message)) => {
+                json!({"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}})
+            }
+        })
+    }
+
+    async fn session(&self, fresh: bool) -> Result<Uuid, ClientError> {
+        let mut guard = self.session.lock().await;
+        if let (Some(id), false) = (*guard, fresh) {
+            return Ok(id);
+        }
+        let s = self
+            .client
+            .create_session(&CreateSessionRequest {
+                host_id: None,
+                label: Some("mcp".into()),
+            })
+            .await?;
+        *guard = Some(s.id);
+        Ok(s.id)
+    }
+
+    async fn call_tool(&self, params: &Value) -> Value {
+        let name = params.get("name").and_then(Value::as_str).unwrap_or("");
+        let empty = Map::new();
+        let args = params
+            .get("arguments")
+            .and_then(Value::as_object)
+            .unwrap_or(&empty);
+
+        if name == "browser_status" {
+            return match self.client.hosts().await {
+                Ok(hosts) => text_result(
+                    serde_json::to_string_pretty(&json!({"hosts": hosts})).unwrap_or_default(),
+                    false,
+                ),
+                Err(e) => text_result(e.to_string(), true),
+            };
+        }
+
+        let action = match action_for(name, args) {
+            Ok(a) => a,
+            Err(e) => return text_result(e, true),
+        };
+        let timeout = match &action {
+            RemoteAction::WaitFor { timeout_ms, .. } => {
+                Duration::from_millis(timeout_ms.unwrap_or(10_000) + 5_000)
+            }
+            _ => Duration::from_secs(45),
+        };
+
+        let mut fresh = false;
+        let op = loop {
+            let session = match self.session(fresh).await {
+                Ok(s) => s,
+                Err(e) => return text_result(format!("no browser session: {e}"), true),
+            };
+            match self
+                .client
+                .act(session, action.clone(), Some(timeout))
+                .await
+            {
+                // Session ended or unknown (control plane restarted): retry once.
+                Err(e) if !fresh && matches!(e.status(), Some(404) | Some(409)) => fresh = true,
+                Err(e) => return text_result(e.to_string(), true),
+                Ok(op) => break op,
+            }
+        };
+
+        if op.state != OperationState::Succeeded {
+            return text_result(
+                format!(
+                    "{} {:?}: {}",
+                    action.kind(),
+                    op.state,
+                    op.error.unwrap_or_default()
+                ),
+                true,
+            );
+        }
+        let result = op.result.unwrap_or(Value::Null);
+        if let RemoteAction::Screenshot { .. } = action {
+            let data = result["data"].as_str().unwrap_or_default().to_string();
+            let mime = result["mime"].as_str().unwrap_or("image/jpeg").to_string();
+            let caption = format!(
+                "{}  {}",
+                result["url"].as_str().unwrap_or(""),
+                result["title"].as_str().unwrap_or("")
+            );
+            return json!({
+                "content": [
+                    {"type": "image", "data": data, "mimeType": mime},
+                    {"type": "text", "text": caption.trim().to_string()}
+                ],
+                "isError": false
+            });
+        }
+        if let RemoteAction::Text { .. } = action {
+            if let Some(t) = result["text"].as_str() {
+                return text_result(t.to_string(), false);
+            }
+        }
+        text_result(
+            serde_json::to_string_pretty(&result).unwrap_or_default(),
+            false,
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_tool_maps_to_an_action_or_is_status() {
+        for t in tools() {
+            let name = t["name"].as_str().unwrap();
+            if name == "browser_status" {
+                continue;
+            }
+            // Build minimal valid arguments from the required list.
+            let mut args = Map::new();
+            for r in t["inputSchema"]["required"].as_array().unwrap() {
+                let r = r.as_str().unwrap();
+                let v = match r {
+                    "url" => json!("https://example.test/"),
+                    "tab_id" => json!(1),
+                    "key" => json!("Enter"),
+                    _ => json!("#x"),
+                };
+                args.insert(r.into(), v);
+            }
+            let a = action_for(name, &args).unwrap_or_else(|e| panic!("{name}: {e}"));
+            assert_eq!(format!("browser_{}", a.kind()), name);
+        }
+    }
+
+    #[test]
+    fn bad_arguments_and_policy_are_reported() {
+        assert!(action_for("browser_click", &Map::new())
+            .unwrap_err()
+            .contains("invalid arguments"));
+        let mut a = Map::new();
+        a.insert("url".into(), json!("javascript:alert(1)"));
+        assert!(action_for("browser_navigate", &a)
+            .unwrap_err()
+            .contains("http"));
+        assert!(action_for("browser_execute_script", &Map::new()).is_err());
+        assert!(action_for("other", &Map::new()).is_err());
+    }
+
+    /// `api/mcp-schemas.json` must list exactly the tools this server
+    /// serves. Regenerate with `HEXACTRA_UPDATE_CONTRACTS=1 cargo test -p hexactra-mcp`.
+    #[test]
+    fn published_mcp_contract_matches_tools() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../api/mcp-schemas.json");
+        let expected = json!({
+            "name": "hexactra",
+            "description": "Hexactra MCP server (hexactra-mcp): operate the user's browser through the control plane /v1 API.",
+            "version": env!("CARGO_PKG_VERSION"),
+            "instructions": INSTRUCTIONS,
+            "tools": tools(),
+        });
+        if std::env::var("HEXACTRA_UPDATE_CONTRACTS").as_deref() == Ok("1") {
+            let text = serde_json::to_string_pretty(&expected).unwrap() + "\n";
+            std::fs::write(path, text).unwrap();
+        }
+        let actual: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        assert_eq!(
+            actual, expected,
+            "api/mcp-schemas.json is stale; run HEXACTRA_UPDATE_CONTRACTS=1 cargo test -p hexactra-mcp"
+        );
+    }
+
+    fn server() -> Server {
+        Server::new(ControlClient::new("http://127.0.0.1:9", "t").unwrap())
+    }
+
+    #[tokio::test]
+    async fn initialize_list_and_errors() {
+        let s = server();
+        let r = s
+            .handle_line(r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26"}}"#)
+            .await
+            .unwrap();
+        assert_eq!(r["result"]["protocolVersion"], "2025-03-26");
+        assert!(r["result"]["instructions"]
+            .as_str()
+            .unwrap()
+            .contains("CAPTCHA"));
+
+        assert!(s
+            .handle_line(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#)
+            .await
+            .is_none());
+
+        let r = s
+            .handle_line(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#)
+            .await
+            .unwrap();
+        assert!(r["result"]["tools"].as_array().unwrap().len() >= 15);
+
+        let r = s
+            .handle_line(r#"{"jsonrpc":"2.0","id":3,"method":"nope"}"#)
+            .await
+            .unwrap();
+        assert_eq!(r["error"]["code"], -32601);
+
+        let r = s.handle_line("{not json").await.unwrap();
+        assert_eq!(r["error"]["code"], -32700);
+
+        // Policy errors become tool errors without contacting the server.
+        let r = s
+            .handle_line(r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"browser_navigate","arguments":{"url":"file:///etc/passwd"}}}"#)
+            .await
+            .unwrap();
+        assert_eq!(r["result"]["isError"], true);
+    }
+}
