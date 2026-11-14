@@ -1,0 +1,494 @@
+//! Wire contract for remote browser control (epic #173).
+//!
+//! These types are shared by the control plane, the host agent, the CLI, the
+//! MCP server and the Chrome extension (which mirrors them in TypeScript).
+//! The flow is:
+//!
+//! ```text
+//! client --POST /v1/sessions/{id}/actions--> control plane
+//! host agent --GET /v1/hosts/{id}/next (long-poll)--> control plane
+//! host agent --native messaging--> extension --> page
+//! host agent --POST /v1/operations/{id}/result--> control plane --> client
+//! ```
+//!
+//! There is deliberately no "execute arbitrary JavaScript" action: remote
+//! callers can only perform the bounded operations listed here.
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use uuid::Uuid;
+
+/// Maximum length of a CSS selector accepted from a remote caller.
+pub const MAX_SELECTOR_LEN: usize = 2_000;
+/// Maximum text a single `type` action may carry.
+pub const MAX_TYPE_TEXT_LEN: usize = 100_000;
+/// Maximum wait a single `wait_for` action may request.
+pub const MAX_WAIT_MS: u64 = 60_000;
+/// Maximum URL length accepted for navigation.
+pub const MAX_URL_LEN: usize = 8_192;
+
+/// A single bounded browser operation.
+///
+/// `tab_id` is optional everywhere: when absent the extension uses the active
+/// tab of the last focused window.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum RemoteAction {
+    /// Navigate a tab to an `http(s)` URL (or `about:blank`).
+    Navigate {
+        url: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Click the first element matching a CSS selector.
+    Click {
+        selector: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Type text into an input, textarea or contenteditable element.
+    Type {
+        selector: String,
+        text: String,
+        /// Clear the existing value first.
+        #[serde(default)]
+        clear: bool,
+        /// Press Enter / submit the enclosing form after typing.
+        #[serde(default)]
+        submit: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Press a key (e.g. `Enter`, `Escape`, `Tab`, `ArrowDown`) on the focused
+    /// element or on `selector` when given.
+    Press {
+        key: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        selector: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Scroll the page by a delta, or scroll `selector` into view.
+    Scroll {
+        #[serde(default)]
+        dx: i64,
+        #[serde(default)]
+        dy: i64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        selector: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Capture the visible area of a tab. Result: `{ "mime": ..., "data": <base64> }`.
+    Screenshot {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Read visible text of the page or of `selector`.
+    Text {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        selector: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_chars: Option<usize>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// List interactive elements (links, buttons, inputs) with selectors an
+    /// agent can use in follow-up actions.
+    Elements {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        max_elements: Option<usize>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Wait until an element matching `selector` exists.
+    WaitFor {
+        selector: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        timeout_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// List open tabs.
+    Tabs,
+    /// Open a new tab (optionally at a URL) and make it active.
+    NewTab {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        url: Option<String>,
+    },
+    /// Make a tab active and focus its window.
+    ActivateTab { tab_id: i64 },
+    /// Close a tab.
+    CloseTab { tab_id: i64 },
+    /// History back.
+    Back {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// History forward.
+    Forward {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Reload a tab.
+    Reload {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+}
+
+/// Validation failure for a remote action.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{0}")]
+pub struct ActionValidationError(pub String);
+
+fn check_selector(selector: &str) -> Result<(), ActionValidationError> {
+    if selector.trim().is_empty() {
+        return Err(ActionValidationError("selector must not be empty".into()));
+    }
+    if selector.len() > MAX_SELECTOR_LEN {
+        return Err(ActionValidationError(format!(
+            "selector longer than {MAX_SELECTOR_LEN} characters"
+        )));
+    }
+    Ok(())
+}
+
+/// Only web pages may be opened remotely: `http`, `https` and `about:blank`.
+/// `javascript:`, `file:`, `chrome:`, `data:` and extension URLs are refused.
+pub fn check_navigable_url(url: &str) -> Result<(), ActionValidationError> {
+    if url.len() > MAX_URL_LEN {
+        return Err(ActionValidationError(format!(
+            "url longer than {MAX_URL_LEN} characters"
+        )));
+    }
+    if url == "about:blank" {
+        return Ok(());
+    }
+    let lower = url.trim().to_ascii_lowercase();
+    if lower.starts_with("http://") || lower.starts_with("https://") {
+        let rest = &lower[lower.find("://").map(|i| i + 3).unwrap_or(0)..];
+        if rest.is_empty() || rest.starts_with('/') {
+            return Err(ActionValidationError("url has no host".into()));
+        }
+        return Ok(());
+    }
+    Err(ActionValidationError(
+        "only http(s) URLs and about:blank may be opened".into(),
+    ))
+}
+
+impl RemoteAction {
+    /// Short, content-free name used in logs and telemetry. Never includes
+    /// typed text, selectors or URLs.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            RemoteAction::Navigate { .. } => "navigate",
+            RemoteAction::Click { .. } => "click",
+            RemoteAction::Type { .. } => "type",
+            RemoteAction::Press { .. } => "press",
+            RemoteAction::Scroll { .. } => "scroll",
+            RemoteAction::Screenshot { .. } => "screenshot",
+            RemoteAction::Text { .. } => "text",
+            RemoteAction::Elements { .. } => "elements",
+            RemoteAction::WaitFor { .. } => "wait_for",
+            RemoteAction::Tabs => "tabs",
+            RemoteAction::NewTab { .. } => "new_tab",
+            RemoteAction::ActivateTab { .. } => "activate_tab",
+            RemoteAction::CloseTab { .. } => "close_tab",
+            RemoteAction::Back { .. } => "back",
+            RemoteAction::Forward { .. } => "forward",
+            RemoteAction::Reload { .. } => "reload",
+        }
+    }
+
+    /// Validate bounds and URL policy before an action is queued.
+    pub fn validate(&self) -> Result<(), ActionValidationError> {
+        match self {
+            RemoteAction::Navigate { url, .. } => check_navigable_url(url),
+            RemoteAction::NewTab { url: Some(url) } => check_navigable_url(url),
+            RemoteAction::Click { selector, .. } => check_selector(selector),
+            RemoteAction::Type { selector, text, .. } => {
+                check_selector(selector)?;
+                if text.len() > MAX_TYPE_TEXT_LEN {
+                    return Err(ActionValidationError(format!(
+                        "text longer than {MAX_TYPE_TEXT_LEN} characters"
+                    )));
+                }
+                Ok(())
+            }
+            RemoteAction::Press { key, selector, .. } => {
+                if key.is_empty() || key.len() > 32 {
+                    return Err(ActionValidationError("key must be 1-32 characters".into()));
+                }
+                selector.as_deref().map(check_selector).unwrap_or(Ok(()))
+            }
+            RemoteAction::Scroll { selector, .. } | RemoteAction::Text { selector, .. } => {
+                selector.as_deref().map(check_selector).unwrap_or(Ok(()))
+            }
+            RemoteAction::WaitFor {
+                selector,
+                timeout_ms,
+                ..
+            } => {
+                check_selector(selector)?;
+                if timeout_ms.unwrap_or(0) > MAX_WAIT_MS {
+                    return Err(ActionValidationError(format!(
+                        "timeout_ms must be at most {MAX_WAIT_MS}"
+                    )));
+                }
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
+/// Lifecycle of a queued operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OperationState {
+    /// Waiting for the host agent to pick it up.
+    Queued,
+    /// Handed to a host agent; result not yet reported.
+    Dispatched,
+    /// Completed successfully; `result` is set.
+    Succeeded,
+    /// The browser reported an error; `error` is set.
+    Failed,
+    /// No result arrived in time. The action may or may not have run.
+    TimedOut,
+    /// The session ended before the operation ran.
+    Cancelled,
+}
+
+impl OperationState {
+    /// True once the operation can no longer change.
+    pub fn is_terminal(self) -> bool {
+        !matches!(self, OperationState::Queued | OperationState::Dispatched)
+    }
+}
+
+/// An operation as reported to clients.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OperationView {
+    pub id: Uuid,
+    pub session_id: Uuid,
+    pub host_id: Uuid,
+    pub action: RemoteAction,
+    pub state: OperationState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    pub created_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// Session status.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RemoteSessionStatus {
+    Active,
+    Ended,
+}
+
+/// A remote-control session bound to one host.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionView {
+    pub id: Uuid,
+    pub host_id: Uuid,
+    pub status: RemoteSessionStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    pub created_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ended_at: Option<DateTime<Utc>>,
+}
+
+/// A host agent as seen by the control plane.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostView {
+    pub id: Uuid,
+    pub name: String,
+    pub version: String,
+    /// Polled the control plane recently.
+    pub online: bool,
+    /// The Chrome extension is connected to this host's native bridge.
+    pub browser_connected: bool,
+    pub last_seen: DateTime<Utc>,
+}
+
+/// `POST /v1/sessions`
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct CreateSessionRequest {
+    /// Pin the session to a host; otherwise the control plane picks an online
+    /// host with a connected browser.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+}
+
+/// `POST /v1/sessions/{id}/actions`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ActionRequest {
+    pub action: RemoteAction,
+    /// How long to wait for a result before the operation times out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_ms: Option<u64>,
+}
+
+/// `POST /v1/hosts/register`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RegisterHostRequest {
+    pub name: String,
+    pub version: String,
+    /// Re-register with a previously issued id to keep sessions bound to it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_id: Option<Uuid>,
+}
+
+/// Response to host registration.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RegisterHostResponse {
+    pub host_id: Uuid,
+}
+
+/// An operation handed to a host agent by `GET /v1/hosts/{id}/next`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DispatchedOperation {
+    pub id: Uuid,
+    pub session_id: Uuid,
+    pub action: RemoteAction,
+    /// Deadline the host should respect when executing.
+    pub deadline: DateTime<Utc>,
+}
+
+/// `POST /v1/operations/{id}/result`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OperationResult {
+    pub ok: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+/// Error body returned by the `/v1` API.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ApiError {
+    pub error: String,
+    pub message: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn action_wire_format_is_tagged_snake_case() {
+        let a: RemoteAction =
+            serde_json::from_value(json!({"type": "type", "selector": "#q", "text": "hi"}))
+                .unwrap();
+        assert_eq!(
+            a,
+            RemoteAction::Type {
+                selector: "#q".into(),
+                text: "hi".into(),
+                clear: false,
+                submit: false,
+                tab_id: None
+            }
+        );
+        let v = serde_json::to_value(RemoteAction::WaitFor {
+            selector: "a".into(),
+            timeout_ms: Some(5),
+            tab_id: None,
+        })
+        .unwrap();
+        assert_eq!(
+            v,
+            json!({"type": "wait_for", "selector": "a", "timeout_ms": 5})
+        );
+        assert_eq!(
+            serde_json::to_value(RemoteAction::Tabs).unwrap(),
+            json!({"type": "tabs"})
+        );
+    }
+
+    #[test]
+    fn unknown_action_is_rejected() {
+        let r: Result<RemoteAction, _> =
+            serde_json::from_value(json!({"type": "execute_script", "script": "1"}));
+        assert!(r.is_err());
+    }
+
+    #[test]
+    fn navigation_policy() {
+        for ok in [
+            "https://example.test/a",
+            "http://localhost:8080",
+            "about:blank",
+        ] {
+            assert!(check_navigable_url(ok).is_ok(), "{ok}");
+        }
+        for bad in [
+            "javascript:alert(1)",
+            "file:///etc/passwd",
+            "chrome://settings",
+            "data:text/html,hi",
+            "chrome-extension://abc/x.html",
+            "https://",
+            "ftp://example.test",
+        ] {
+            assert!(check_navigable_url(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn validation_bounds() {
+        assert!(RemoteAction::Click {
+            selector: " ".into(),
+            tab_id: None
+        }
+        .validate()
+        .is_err());
+        assert!(RemoteAction::WaitFor {
+            selector: "a".into(),
+            timeout_ms: Some(MAX_WAIT_MS + 1),
+            tab_id: None
+        }
+        .validate()
+        .is_err());
+        assert!(RemoteAction::Press {
+            key: "Enter".into(),
+            selector: None,
+            tab_id: None
+        }
+        .validate()
+        .is_ok());
+    }
+
+    #[test]
+    fn kind_never_contains_content() {
+        let a = RemoteAction::Type {
+            selector: "#password".into(),
+            text: "secret".into(),
+            clear: true,
+            submit: false,
+            tab_id: None,
+        };
+        assert_eq!(a.kind(), "type");
+    }
+
+    #[test]
+    fn terminal_states() {
+        assert!(!OperationState::Queued.is_terminal());
+        assert!(!OperationState::Dispatched.is_terminal());
+        assert!(OperationState::TimedOut.is_terminal());
+    }
+}
