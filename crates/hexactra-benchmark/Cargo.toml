@@ -10,7 +10,6 @@ path = "src/main.rs"
 [[bin]]
 name = "fixture-server"
 path = "src/fixture_server.rs"
-harness = false
 
 [dependencies]
 hexactra-core = { path = "../hexactra-core" }

@@ -5,18 +5,18 @@ pub mod driver;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use hexactra_core::{BrowserAction, SessionId};
+use hexactra_telemetry::{start_span, track_action_executed, Metrics};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::Duration;
-use tokio::sync::mpsc;
-use tokio::net::UnixStream;
-use tokio::io::AsyncWriteExt;
-use uuid::Uuid;
 use std::path::Path;
-use hexactra_telemetry::{start_span, Metrics, track_action_executed};
+use std::time::Duration;
+use tokio::io::AsyncWriteExt;
+use tokio::net::UnixStream;
+use tokio::sync::mpsc;
+use uuid::Uuid;
 
 // Re-export secret transport for integration
-pub use hexactra_core::secret_transport::{SecretStore, SecretTransport, SecretReference};
+pub use hexactra_core::secret_transport::{SecretReference, SecretStore, SecretTransport};
 
 /// Worker configuration
 #[derive(Debug, Clone)]
@@ -186,11 +186,11 @@ impl SessionWorker {
         let _span = start_span("worker.send_action", &self.config.session_id.to_string());
         let action_id = Uuid::new_v4();
         let action_clone = action.clone();
-        
+
         if let Some(tx) = &self.action_tx {
             tx.send(action).await?;
         }
-        
+
         // Track pending operation
         self.pending_operations.insert(
             action_id,
@@ -238,30 +238,26 @@ impl SessionWorker {
     /// Wait for pending operations to complete
     async fn wait_for_pending(&mut self) -> Result<()> {
         // Wait for all pending operations to complete or timeout
-        let timeout = tokio::time::sleep(self.config.action_timeout);
-        tokio::pin!(timeout);
-
-        loop {
-            if self.pending_operations.is_empty() {
-                break;
-            }
-
-            tokio::select! {
-                _ = &mut timeout => {
-                    // Timeout - mark all pending operations as unknown
-                    for (_op_id, op) in &mut self.pending_operations {
-                        op.status = ActionStatus::Unknown;
-                    }
-                    break;
-                }
-            }
+        if self.pending_operations.is_empty() {
+            return Ok(());
+        }
+        // Completions are applied through `complete_action`; anything still
+        // pending after the action timeout has an unknown outcome.
+        tokio::time::sleep(self.config.action_timeout).await;
+        for op in self.pending_operations.values_mut() {
+            op.status = ActionStatus::Unknown;
         }
 
         Ok(())
     }
 
     /// Mark an action as completed
-    pub fn complete_action(&mut self, action_id: Uuid, status: ActionStatus, error: Option<String>) {
+    pub fn complete_action(
+        &mut self,
+        action_id: Uuid,
+        status: ActionStatus,
+        error: Option<String>,
+    ) {
         if let Some(op) = self.pending_operations.remove(&action_id) {
             self.completed_actions.push(ActionResult {
                 action_id,
@@ -318,19 +314,25 @@ impl SessionWorker {
 
     /// Verify a secret reference is still valid before use
     pub async fn verify_secret(&self, ref_: &SecretReference) -> Result<bool> {
-        self.secret_transport.verify_secret_reference(ref_).await
+        self.secret_transport
+            .verify_secret_reference(ref_)
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to verify secret: {}", e))
     }
 
     /// Retrieve and consume a secret (removes it from store)
     pub async fn retrieve_secret(&self, ref_: &SecretReference) -> Result<Option<String>> {
-        self.secret_transport.retrieve_secret_from_reference(ref_).await
+        self.secret_transport
+            .retrieve_secret_from_reference(ref_)
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to retrieve secret: {}", e))
     }
 
     /// Cleanup expired secrets from the transport
     pub async fn cleanup_secrets(&self) -> Result<u64> {
-        self.secret_transport.cleanup().await
+        self.secret_transport
+            .cleanup()
+            .await
             .map_err(|e| anyhow::anyhow!("Failed to cleanup secrets: {}", e))
     }
 }
@@ -370,7 +372,7 @@ impl NativeMessagingBridge {
         }
 
         let mut stream = UnixStream::connect(&self.socket_path).await?;
-        
+
         // Send hello message
         let hello = serde_json::json!({
             "type": "hello",
@@ -378,7 +380,7 @@ impl NativeMessagingBridge {
         });
         let message = format!("{}\n", serde_json::to_string(&hello)?);
         stream.write_all(message.as_bytes()).await?;
-        
+
         self.connected = true;
         self.reconnect_attempts = 0;
         Ok(())
@@ -401,8 +403,11 @@ impl NativeMessagingBridge {
         }
 
         self.disconnect();
-        tokio::time::sleep(Duration::from_millis(100 * (self.reconnect_attempts + 1) as u64)).await;
-        
+        tokio::time::sleep(Duration::from_millis(
+            100 * (self.reconnect_attempts + 1) as u64,
+        ))
+        .await;
+
         self.connect().await?;
         self.reconnect_attempts += 1;
         Ok(())
@@ -459,7 +464,7 @@ mod tests {
     fn test_worker_state() {
         let config = WorkerConfig::default();
         let worker = SessionWorker::new(config);
-        
+
         // Initial state should be Initializing
         assert_eq!(worker.state(), WorkerState::Initializing);
     }
@@ -485,7 +490,10 @@ mod tests {
 
         // Store a secret
         let secret_value = "test-password-123";
-        let ref_ = worker.store_secret(secret_value.to_string(), 15).await.unwrap();
+        let ref_ = worker
+            .store_secret(secret_value.to_string(), 15)
+            .await
+            .unwrap();
 
         // Verify the secret can be retrieved
         let retrieved = worker.retrieve_secret(&ref_).await.unwrap();
@@ -502,7 +510,10 @@ mod tests {
         let worker = SessionWorker::new(config);
 
         // Store a secret
-        let ref_ = worker.store_secret("verify-test".to_string(), 15).await.unwrap();
+        let ref_ = worker
+            .store_secret("verify-test".to_string(), 15)
+            .await
+            .unwrap();
 
         // Verify should work
         assert!(worker.verify_secret(&ref_).await.unwrap());
@@ -518,8 +529,14 @@ mod tests {
         let worker = SessionWorker::new(config);
 
         // Store multiple secrets
-        let _ref1 = worker.store_secret("secret1".to_string(), 15).await.unwrap();
-        let _ref2 = worker.store_secret("secret2".to_string(), -1).await.unwrap(); // Expired
+        let _ref1 = worker
+            .store_secret("secret1".to_string(), 15)
+            .await
+            .unwrap();
+        let _ref2 = worker
+            .store_secret("secret2".to_string(), -1)
+            .await
+            .unwrap(); // Expired
 
         // Cleanup should remove expired ones
         let removed = worker.cleanup_secrets().await.unwrap();
