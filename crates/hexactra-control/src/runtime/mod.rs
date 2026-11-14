@@ -3,6 +3,8 @@
 //! `hexactra-control` binary.
 
 pub mod api;
+pub mod handoff;
+mod handoff_api;
 pub mod store;
 
 use std::net::SocketAddr;

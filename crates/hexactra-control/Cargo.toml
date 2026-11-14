@@ -36,6 +36,7 @@ rand = "0.8"
 futures-util.workspace = true
 async-stream = "0.3"
 dirs.workspace = true
+serde_urlencoded = "0.7"
 tracing-subscriber.workspace = true
 
 hexactra-core = { path = "../hexactra-core" }
