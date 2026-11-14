@@ -12,7 +12,13 @@ export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-hexactra-e2e}"
 COMPOSE=(docker compose -f compose.yml -f compose.test.yml)
 
 pass() { printf 'ok   %s\n' "$*"; }
-fail() { printf 'FAIL %s\n' "$*" >&2; "${COMPOSE[@]}" logs --tail 80 >&2 || true; exit 1; }
+fail() {
+    printf 'FAIL %s\n' "$*" >&2
+    "${COMPOSE[@]}" logs --tail 80 >&2 || true
+    echo "----- browser log -----" >&2
+    "${COMPOSE[@]}" exec -T host tail -60 /data/profile/hexactra-browser.log >&2 || true
+    exit 1
+}
 
 cleanup() {
     if [[ "${KEEP:-0}" != 1 ]]; then "${COMPOSE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true; fi
