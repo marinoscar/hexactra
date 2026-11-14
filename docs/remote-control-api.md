@@ -76,6 +76,50 @@ Policy enforced before an action is queued:
 
 `queued` → `dispatched` → `succeeded` | `failed`, or `timed_out` (no result in time; the error says whether the action may have run) or `cancelled` (the session ended first).
 
+## Human handoff
+
+When an agent meets something only a person should do (a CAPTCHA, a one-time code, a passkey, a purchase to approve), it opens a **handoff**. The session pauses: actions return `409 handoff_pending` until a person answers or the handoff expires. Hexactra never tries to solve or bypass these checks.
+
+| Method and path | Auth | Purpose |
+|---|---|---|
+| `POST /v1/sessions/{id}/handoffs` | API token | Open a handoff. Returns `{ handoff, response_token, respond_path }` |
+| `GET /v1/handoffs?pending=true&session_id=` | API token | List handoffs |
+| `GET /v1/handoffs/{id}?wait_ms=` | API token | Read one, waiting up to 120 s for it to resolve |
+| `POST /v1/handoffs/{id}/claim` | API token | Return a `secret` answer once, then erase it |
+| `POST /v1/handoffs/{id}/cancel` | API token | Cancel |
+| `POST /v1/handoffs/{id}/respond` | API token **or** response token | Answer as JSON: `{ "outcome": "completed" \| "cancelled", "value"?, "channel"?, "response_token"? }`. The token can also go in the `X-Hexactra-Response-Token` header |
+| `GET /v1/handoffs/{id}/respond?token=` | response token | A minimal HTML page with the prompt and a form, for channels that can only send a link (email, SMS, chat) |
+
+Create body:
+
+```json
+{
+  "kind": "code",
+  "prompt": "Enter the 6-digit code the airline sent to your phone",
+  "input": "secret",
+  "timeout_ms": 600000,
+  "page": { "url": "https://example.test/login", "title": "Sign in" }
+}
+```
+
+- `kind` is one of `captcha`, `code`, `passkey`, `login`, `confirmation` or `other`.
+- `input` is one of:
+  - `none`: the person acts in the browser and clicks "done".
+  - `text`: a free-text answer.
+  - `secret`: an answer that is withheld from reads and payloads and claimed once.
+  - `choice`: one of `choices` (1 to 10 options).
+- The timeout defaults to 10 minutes and can be set from 10 seconds to 24 hours.
+
+Rules:
+
+- The response token is 256 bits, stored only as a SHA-256 digest, and **single use**. It stops working once the handoff resolves, is cancelled or expires.
+- A response token can only answer its own handoff. It cannot call any other route.
+- `secret` values never appear in `GET` responses, logs or event payloads.
+- Ending a session cancels its open handoff.
+- The HTML page escapes all agent-provided text. It is served with a `default-src 'none'` CSP, `no-store`, `no-referrer` and `DENY` framing.
+
+Statuses: `pending` → `completed` | `cancelled` | `expired`.
+
 ## Limitations of this release
 
 - State is in memory: restarting `hexactra-control` drops sessions and operations. Durable sessions and the audit trail are follow-up work on #173.
