@@ -33,14 +33,14 @@ Every route except `GET /v1/health` requires `Authorization: Bearer <token>`. A 
 | Method and path | Who | Purpose |
 |---|---|---|
 | `GET /v1/health` | anyone | Liveness and version |
-| `GET /v1/hosts` | client | Hosts, with `online` and `browser_connected` |
-| `POST /v1/sessions` | client | Create a session; body `{ "host_id"?, "label"? }`. Without `host_id` the most recently seen host with a connected browser is chosen. `503 no_host_available` if none |
+| `GET /v1/hosts` | client | Hosts, with `online`, `browser_connected`, `on_demand` (launches its browser when needed) and `viewer_url` |
+| `POST /v1/sessions` | client | Create a session; body `{ "host_id"?, "label"? }`. Without `host_id` the control plane picks the most recently seen host that has a connected browser or launches one on demand. `503 no_host_available` if none |
 | `GET /v1/sessions`, `GET /v1/sessions/{id}` | client | List or read sessions |
 | `DELETE /v1/sessions/{id}` | client | End a session; queued operations become `cancelled` |
 | `POST /v1/sessions/{id}/actions` | client | Run one action. Body `{ "action": {...}, "timeout_ms"? }`. Waits for a terminal state and returns the operation. `?async=true` returns `202` at once |
 | `GET /v1/operations/{id}?wait_ms=` | client | Read an operation, optionally waiting for it to finish |
-| `POST /v1/hosts/register` | host | Register; body `{ "name", "version", "host_id"? }` |
-| `GET /v1/hosts/{id}/next?wait_ms=&browser_connected=` | host | Long-poll (max 30 s) for the next operation; `204` when none |
+| `POST /v1/hosts/register` | host | Register; body `{ "name", "version", "host_id"?, "viewer_url"? }` |
+| `GET /v1/hosts/{id}/next?wait_ms=&browser_connected=&on_demand=` | host | Long-poll (max 30 s) for the next operation; `204` when none |
 | `POST /v1/hosts/{id}/operations/{op}/result` | host | Report `{ "ok", "result"?, "error"? }`. Only the host the operation was dispatched to may report, once |
 
 An action that fails in the browser returns `200` with `state: "failed"` and an `error`. Request problems return `400` (invalid action), `404`, `409` (session ended, duplicate result) or `422` (malformed JSON or an unknown action type).
@@ -116,6 +116,7 @@ Rules:
 - A response token can only answer its own handoff. It cannot call any other route.
 - `secret` values never appear in `GET` responses, logs or event payloads.
 - Ending a session cancels its open handoff.
+- When the session's host registered a `viewer_url`, the handoff carries it. The answer page and webhook payloads then link to the remote browser, so a person can solve a CAPTCHA or approve a passkey there.
 - The HTML page escapes all agent-provided text. It is served with a `default-src 'none'` CSP, `no-store`, `no-referrer` and `DENY` framing.
 
 Statuses: `pending` → `completed` | `cancelled` | `expired`.

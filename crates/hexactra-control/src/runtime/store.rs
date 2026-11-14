@@ -43,11 +43,13 @@ pub enum StoreError {
     Forbidden,
 }
 
-struct HostEntry {
+pub(super) struct HostEntry {
     name: String,
     version: String,
     last_seen: DateTime<Utc>,
     browser_connected: bool,
+    on_demand: bool,
+    pub(super) viewer_url: Option<String>,
     queue: VecDeque<Uuid>,
     notify: Arc<Notify>,
 }
@@ -60,7 +62,7 @@ struct OperationEntry {
 
 #[derive(Default)]
 pub(super) struct Inner {
-    hosts: HashMap<Uuid, HostEntry>,
+    pub(super) hosts: HashMap<Uuid, HostEntry>,
     pub(super) sessions: HashMap<Uuid, SessionView>,
     operations: HashMap<Uuid, OperationEntry>,
     pub(super) handoffs: HashMap<Uuid, HandoffEntry>,
@@ -95,6 +97,8 @@ fn host_view(id: Uuid, h: &HostEntry, now: DateTime<Utc>) -> HostView {
         version: h.version.clone(),
         online,
         browser_connected: online && h.browser_connected,
+        on_demand: online && h.on_demand,
+        viewer_url: h.viewer_url.clone(),
         last_seen: h.last_seen,
     }
 }
@@ -125,6 +129,7 @@ impl RuntimeStore {
                 // A re-registering agent has a fresh bridge; it reports the
                 // browser as connected on its next poll.
                 h.browser_connected = false;
+                h.on_demand = false;
             }
             None => {
                 inner.hosts.insert(
@@ -134,6 +139,8 @@ impl RuntimeStore {
                         version,
                         last_seen: now,
                         browser_connected: false,
+                        on_demand: false,
+                        viewer_url: None,
                         queue: VecDeque::new(),
                         notify: Arc::new(Notify::new()),
                     },
@@ -141,6 +148,28 @@ impl RuntimeStore {
             }
         }
         id
+    }
+
+    /// Record a host's viewer URL (from registration).
+    pub fn set_host_viewer_url(&self, id: Uuid, url: Option<String>) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let h = inner
+            .hosts
+            .get_mut(&id)
+            .ok_or(StoreError::NotFound("host"))?;
+        h.viewer_url = url;
+        Ok(())
+    }
+
+    /// Record whether a host launches its browser on demand (from polls).
+    pub fn set_host_on_demand(&self, id: Uuid, on_demand: bool) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let h = inner
+            .hosts
+            .get_mut(&id)
+            .ok_or(StoreError::NotFound("host"))?;
+        h.on_demand = on_demand;
+        Ok(())
     }
 
     pub fn list_hosts(&self) -> Vec<HostView> {
@@ -227,7 +256,7 @@ impl RuntimeStore {
                 .hosts
                 .iter()
                 .map(|(id, h)| host_view(*id, h, now))
-                .filter(|h| h.browser_connected)
+                .filter(|h| h.browser_connected || h.on_demand)
                 .max_by_key(|h| h.last_seen)
                 .map(|h| h.id)
                 .ok_or(StoreError::NoHostAvailable)?,
@@ -487,6 +516,23 @@ mod tests {
         // Re-registration clears the browser flag until the next poll.
         s.register_host(Some(h), "h".into(), "0".into());
         assert!(!s.list_hosts()[0].browser_connected);
+    }
+
+    #[tokio::test]
+    async fn on_demand_host_takes_sessions_while_browser_is_stopped() {
+        let s = RuntimeStore::new();
+        let h = s.register_host(None, "h".into(), "0".into());
+        assert!(s.create_session(None, None).is_err());
+        s.set_host_on_demand(h, true).unwrap();
+        s.set_host_viewer_url(h, Some("https://viewer.example.test/".into()))
+            .unwrap();
+        let v = &s.list_hosts()[0];
+        assert!(v.on_demand && !v.browser_connected);
+        assert_eq!(
+            v.viewer_url.as_deref(),
+            Some("https://viewer.example.test/")
+        );
+        assert_eq!(s.create_session(None, None).unwrap().host_id, h);
     }
 
     #[tokio::test]

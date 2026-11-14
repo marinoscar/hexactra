@@ -13,6 +13,21 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 /// Name the extension uses with `chrome.runtime.connectNative`.
 pub const NATIVE_HOST_NAME: &str = "com.hexactra.nativehost";
 
+/// Id of the Hexactra extension, pinned by the public key in its manifest.
+pub const EXTENSION_ID: &str = "afamapffbfhaafbjnneoachpknjpmiof";
+
+/// Native messaging host manifest for `binary`, allowing only the Hexactra
+/// extension.
+pub fn native_host_manifest(binary: &std::path::Path) -> serde_json::Value {
+    serde_json::json!({
+        "name": NATIVE_HOST_NAME,
+        "description": "Hexactra remote control bridge",
+        "path": binary,
+        "type": "stdio",
+        "allowed_origins": [format!("chrome-extension://{EXTENSION_ID}/")],
+    })
+}
+
 /// Chrome refuses messages larger than 1 MiB from a native host.
 pub const MAX_TO_EXTENSION: usize = 1024 * 1024;
 

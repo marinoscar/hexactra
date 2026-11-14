@@ -14,6 +14,7 @@ use hexactra_core::remote::{OperationResult, RegisterHostRequest};
 use uuid::Uuid;
 
 use crate::browser_bridge::BrowserBridge;
+use crate::launcher::{BrowserLauncher, LaunchConfig};
 
 /// Daemon configuration.
 #[derive(Debug, Clone)]
@@ -30,6 +31,12 @@ pub struct DaemonConfig {
     pub bridge_socket: PathBuf,
     /// Long-poll duration.
     pub poll_wait: Duration,
+    /// Launch mode: the agent starts and supervises the browser itself.
+    pub launch: Option<LaunchConfig>,
+    /// Start the browser at startup instead of on the first operation.
+    pub launch_eagerly: bool,
+    /// Web viewer URL for this host's browser (reported to the control plane).
+    pub viewer_url: Option<String>,
 }
 
 fn load_host_id(file: &Option<PathBuf>) -> Option<Uuid> {
@@ -55,6 +62,7 @@ async fn register(client: &HostClient, cfg: &DaemonConfig, previous: Option<Uuid
             name: cfg.host_name.clone(),
             version: env!("CARGO_PKG_VERSION").to_string(),
             host_id: previous,
+            viewer_url: cfg.viewer_url.clone(),
         };
         match client.register(&req).await {
             Ok(r) => {
@@ -95,27 +103,58 @@ pub async fn run(cfg: DaemonConfig) -> Result<()> {
         .context("starting browser bridge")?;
     let client = HostClient::new(&cfg.control_url, &cfg.token).context("control plane URL")?;
 
+    let launcher = cfg
+        .launch
+        .clone()
+        .map(|l| BrowserLauncher::new(l, bridge.clone()));
+    if let Some(l) = &launcher {
+        l.spawn_idle_watcher();
+        if cfg.launch_eagerly {
+            if let Err(e) = l.ensure_running().await {
+                tracing::error!(error = %e, "could not start the browser; will retry on the next operation");
+            }
+        }
+    }
+
     let mut host_id = register(&client, &cfg, load_host_id(&cfg.host_id_file)).await;
     let mut backoff = Duration::from_secs(1);
     let mut was_connected = false;
     loop {
         let connected = bridge.is_connected();
+        let on_demand = launcher.is_some();
         if connected != was_connected {
             tracing::info!(connected, "browser extension connection changed");
             was_connected = connected;
         }
         // Poll briefly while the extension is absent so the control plane
         // learns quickly when it connects.
-        let wait = if connected {
+        let wait = if connected || on_demand {
             cfg.poll_wait
         } else {
             Duration::from_secs(2)
         };
-        match client.next(host_id, connected, wait).await {
+        match client.next_with(host_id, connected, on_demand, wait).await {
             Ok(Some(op)) => {
                 backoff = Duration::from_secs(1);
                 tracing::info!(op_id = %op.id, kind = op.action.kind(), "executing operation");
-                let result = bridge.execute(op.id, &op.action, op.deadline).await;
+                let result = match &launcher {
+                    Some(l) => match l.ensure_running().await {
+                        Ok(()) => {
+                            let r = bridge.execute(op.id, &op.action, op.deadline).await;
+                            l.touch().await;
+                            r
+                        }
+                        Err(e) => {
+                            tracing::error!(error = %e, "browser unavailable");
+                            hexactra_core::remote::OperationResult {
+                                ok: false,
+                                result: None,
+                                error: Some(format!("browser unavailable: {e:#}")),
+                            }
+                        }
+                    },
+                    None => bridge.execute(op.id, &op.action, op.deadline).await,
+                };
                 tracing::info!(op_id = %op.id, ok = result.ok, "operation finished");
                 report(&client, host_id, op.id, &result).await;
             }

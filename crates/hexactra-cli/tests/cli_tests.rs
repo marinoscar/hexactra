@@ -77,6 +77,7 @@ fn start_stack() -> String {
                     name: "fake".into(),
                     version: "0".into(),
                     host_id: None,
+                    viewer_url: None,
                 })
                 .await
                 .unwrap()

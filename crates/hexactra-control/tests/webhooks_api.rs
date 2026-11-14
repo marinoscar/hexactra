@@ -87,6 +87,7 @@ async fn start(allow_insecure: bool) -> (String, ControlClient, uuid::Uuid) {
             name: "h".into(),
             version: "0".into(),
             host_id: None,
+            viewer_url: None,
         })
         .await
         .unwrap()

@@ -119,6 +119,7 @@ impl RuntimeStore {
                 return Err(StoreError::Conflict("session has ended".into()));
             }
             let host_id = session.host_id;
+            let viewer_url = inner.hosts.get(&host_id).and_then(|h| h.viewer_url.clone());
             if let Some(h) = Self::pending_handoff(&inner, session_id) {
                 return Err(StoreError::HandoffPending(h));
             }
@@ -138,6 +139,7 @@ impl RuntimeStore {
                 expires_at: now + chrono::Duration::milliseconds(timeout as i64),
                 resolved_at: None,
                 response: None,
+                viewer_url,
             };
             let (tx, _) = watch::channel(HandoffStatus::Pending);
             inner.handoffs.insert(

@@ -294,6 +294,16 @@ async fn form(
             )
         })
         .unwrap_or_default();
+    let viewer = h
+        .viewer_url
+        .as_deref()
+        .map(|u| {
+            format!(
+                r#"<p><a href="{0}" target="_blank" rel="noopener noreferrer">Open the remote browser</a> to do this, then come back here.</p>"#,
+                esc(u)
+            )
+        })
+        .unwrap_or_default();
     let done_label = if h.input == HandoffInput::None {
         "I've done it"
     } else {
@@ -301,7 +311,7 @@ async fn form(
     };
     let body = format!(
         r#"<p class=kind>{kind:?} · expires {expires}</p>
-<p class=prompt>{prompt}</p>{page_info}
+<p class=prompt>{prompt}</p>{page_info}{viewer}
 <form method="post" action="respond">
 <input type="hidden" name="token" value="{token}">
 {field}
