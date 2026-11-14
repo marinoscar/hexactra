@@ -377,6 +377,224 @@ pub struct OperationResult {
     pub error: Option<String>,
 }
 
+// ------------------------------------------------------------------------
+// Human handoff (epic #186)
+
+/// Longest prompt a handoff may carry.
+pub const MAX_HANDOFF_PROMPT: usize = 2_000;
+/// Longest value a human may submit.
+pub const MAX_HANDOFF_VALUE: usize = 4_096;
+/// Default and bounds for how long a handoff waits for a human.
+pub const DEFAULT_HANDOFF_TIMEOUT_MS: u64 = 10 * 60 * 1000;
+pub const MIN_HANDOFF_TIMEOUT_MS: u64 = 10 * 1000;
+pub const MAX_HANDOFF_TIMEOUT_MS: u64 = 24 * 60 * 60 * 1000;
+
+/// Why the agent needs a human.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HandoffKind {
+    /// A CAPTCHA or "are you human" check.
+    Captcha,
+    /// A one-time code (SMS, email, authenticator).
+    Code,
+    /// A passkey, security key or phone prompt.
+    Passkey,
+    /// Sign-in the agent should not perform.
+    Login,
+    /// A purchase, payment or other irreversible step to approve.
+    Confirmation,
+    /// Anything else needing human judgement.
+    Other,
+}
+
+/// What the human is asked to provide.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HandoffInput {
+    /// Nothing: the human acts in the browser and marks the handoff done.
+    #[default]
+    None,
+    /// Free text returned to the agent.
+    Text,
+    /// Sensitive text (e.g. a one-time code): returned once to the API
+    /// caller via `claim`, never shown in reads, logs or webhook payloads.
+    Secret,
+    /// One of `choices`.
+    Choice,
+}
+
+/// Lifecycle of a handoff.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HandoffStatus {
+    Pending,
+    Completed,
+    Cancelled,
+    Expired,
+}
+
+impl HandoffStatus {
+    pub fn is_terminal(self) -> bool {
+        self != HandoffStatus::Pending
+    }
+}
+
+/// Page the agent was on when it asked for help (informational only).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct HandoffPage {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+}
+
+/// `POST /v1/sessions/{id}/handoffs`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CreateHandoffRequest {
+    pub kind: HandoffKind,
+    /// What the human should do, in plain words.
+    pub prompt: String,
+    #[serde(default)]
+    pub input: HandoffInput,
+    /// Options for `input: "choice"`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub choices: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<HandoffPage>,
+}
+
+impl CreateHandoffRequest {
+    /// Validate bounds before the handoff is created.
+    pub fn validate(&self) -> Result<(), ActionValidationError> {
+        let p = self.prompt.trim();
+        if p.is_empty() || p.len() > MAX_HANDOFF_PROMPT {
+            return Err(ActionValidationError(format!(
+                "prompt must be 1-{MAX_HANDOFF_PROMPT} characters"
+            )));
+        }
+        match self.input {
+            HandoffInput::Choice => {
+                if self.choices.is_empty() || self.choices.len() > 10 {
+                    return Err(ActionValidationError(
+                        "choice input needs 1-10 choices".into(),
+                    ));
+                }
+                if self
+                    .choices
+                    .iter()
+                    .any(|c| c.trim().is_empty() || c.len() > 100)
+                {
+                    return Err(ActionValidationError(
+                        "each choice must be 1-100 characters".into(),
+                    ));
+                }
+            }
+            _ if !self.choices.is_empty() => {
+                return Err(ActionValidationError(
+                    "choices are only allowed with input \"choice\"".into(),
+                ))
+            }
+            _ => {}
+        }
+        if let Some(t) = self.timeout_ms {
+            if !(MIN_HANDOFF_TIMEOUT_MS..=MAX_HANDOFF_TIMEOUT_MS).contains(&t) {
+                return Err(ActionValidationError(format!(
+                    "timeout_ms must be between {MIN_HANDOFF_TIMEOUT_MS} and {MAX_HANDOFF_TIMEOUT_MS}"
+                )));
+            }
+        }
+        if let Some(page) = &self.page {
+            if page.url.as_deref().map(str::len).unwrap_or(0) > MAX_URL_LEN
+                || page.title.as_deref().map(str::len).unwrap_or(0) > 500
+            {
+                return Err(ActionValidationError("page url or title too long".into()));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// The human's answer as visible to readers.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HandoffResponse {
+    /// The submitted value for `text` and `choice` inputs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    /// True for `secret` inputs: the value exists but is only available
+    /// once through `POST /v1/handoffs/{id}/claim`.
+    #[serde(default)]
+    pub value_withheld: bool,
+    /// Which channel answered (free-form label, e.g. "slack", "web-form").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel: Option<String>,
+}
+
+/// A handoff as reported by the API and in webhook payloads.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HandoffView {
+    pub id: Uuid,
+    pub session_id: Uuid,
+    pub host_id: Uuid,
+    pub kind: HandoffKind,
+    pub prompt: String,
+    pub input: HandoffInput,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub choices: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page: Option<HandoffPage>,
+    pub status: HandoffStatus,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resolved_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub response: Option<HandoffResponse>,
+}
+
+/// Response to creating a handoff.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CreateHandoffResponse {
+    pub handoff: HandoffView,
+    /// Single-use token any channel can use to answer this handoff.
+    pub response_token: String,
+    /// Path of the respond endpoint (JSON POST, or GET for an HTML form
+    /// with `?token=`).
+    pub respond_path: String,
+}
+
+/// How the human resolved the handoff.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HandoffOutcome {
+    #[default]
+    Completed,
+    Cancelled,
+}
+
+/// `POST /v1/handoffs/{id}/respond`
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct RespondHandoffRequest {
+    #[serde(default)]
+    pub outcome: HandoffOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    /// The handoff's response token (alternatively sent as the
+    /// `X-Hexactra-Response-Token` header). Not needed with the API token.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub response_token: Option<String>,
+    /// Label of the answering channel, for the record.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel: Option<String>,
+}
+
+/// `POST /v1/handoffs/{id}/claim`: the secret value, returned once.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ClaimedHandoffValue {
+    pub value: String,
+}
+
 /// Error body returned by the `/v1` API.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ApiError {
@@ -483,6 +701,36 @@ mod tests {
             tab_id: None,
         };
         assert_eq!(a.kind(), "type");
+    }
+
+    #[test]
+    fn handoff_request_validation() {
+        let base = CreateHandoffRequest {
+            kind: HandoffKind::Code,
+            prompt: "Enter the code sent to your phone".into(),
+            input: HandoffInput::Secret,
+            choices: vec![],
+            timeout_ms: None,
+            page: None,
+        };
+        assert!(base.validate().is_ok());
+        let mut r = base.clone();
+        r.prompt = " ".into();
+        assert!(r.validate().is_err());
+        let mut r = base.clone();
+        r.input = HandoffInput::Choice;
+        assert!(r.validate().is_err());
+        r.choices = vec!["Approve".into(), "Reject".into()];
+        assert!(r.validate().is_ok());
+        let mut r = base.clone();
+        r.choices = vec!["x".into()];
+        assert!(r.validate().is_err());
+        let mut r = base;
+        r.timeout_ms = Some(1);
+        assert!(r.validate().is_err());
+        let v: CreateHandoffRequest =
+            serde_json::from_value(json!({"kind": "captcha", "prompt": "Solve it"})).unwrap();
+        assert_eq!(v.input, HandoffInput::None);
     }
 
     #[test]
