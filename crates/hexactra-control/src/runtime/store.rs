@@ -14,8 +14,10 @@ use hexactra_core::remote::{
     DispatchedOperation, HostView, OperationResult, OperationState, OperationView, RemoteAction,
     RemoteSessionStatus, SessionView,
 };
-use tokio::sync::{watch, Notify};
+use tokio::sync::{broadcast, watch, Notify};
 use uuid::Uuid;
+
+use super::handoff::{HandoffEntry, RuntimeEvent};
 
 /// A host counts as online if it polled within this window.
 pub const HOST_ONLINE_WINDOW: Duration = Duration::from_secs(45);
@@ -33,6 +35,12 @@ pub enum StoreError {
     Conflict(String),
     #[error("no online host with a connected browser")]
     NoHostAvailable,
+    #[error("session is waiting for a human (handoff {0}); resolve or cancel it first")]
+    HandoffPending(Uuid),
+    #[error("{0}")]
+    Invalid(String),
+    #[error("invalid or already used response token")]
+    Forbidden,
 }
 
 struct HostEntry {
@@ -51,16 +59,28 @@ struct OperationEntry {
 }
 
 #[derive(Default)]
-struct Inner {
+pub(super) struct Inner {
     hosts: HashMap<Uuid, HostEntry>,
-    sessions: HashMap<Uuid, SessionView>,
+    pub(super) sessions: HashMap<Uuid, SessionView>,
     operations: HashMap<Uuid, OperationEntry>,
+    pub(super) handoffs: HashMap<Uuid, HandoffEntry>,
 }
 
 /// Shared runtime store.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct RuntimeStore {
     inner: Arc<Mutex<Inner>>,
+    pub(super) events: broadcast::Sender<RuntimeEvent>,
+}
+
+impl Default for RuntimeStore {
+    fn default() -> Self {
+        let (events, _) = broadcast::channel(256);
+        Self {
+            inner: Arc::new(Mutex::new(Inner::default())),
+            events,
+        }
+    }
 }
 
 fn host_view(id: Uuid, h: &HostEntry, now: DateTime<Utc>) -> HostView {
@@ -84,7 +104,7 @@ impl RuntimeStore {
         Self::default()
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
+    pub(super) fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
         // A poisoned lock means a panic mid-update; the maps are still
         // structurally valid, so keep serving.
         self.inner.lock().unwrap_or_else(|e| e.into_inner())
@@ -259,6 +279,11 @@ impl RuntimeStore {
                 let _ = op.tx.send(OperationState::Cancelled);
             }
         }
+        let cancelled = Self::cancel_session_handoffs(&mut inner, id, now);
+        drop(inner);
+        for ev in cancelled {
+            let _ = self.events.send(ev);
+        }
         Ok(ended)
     }
 
@@ -278,6 +303,9 @@ impl RuntimeStore {
             .ok_or(StoreError::NotFound("session"))?;
         if session.status != RemoteSessionStatus::Active {
             return Err(StoreError::Conflict("session has ended".into()));
+        }
+        if let Some(h) = Self::pending_handoff(&inner, session_id) {
+            return Err(StoreError::HandoffPending(h));
         }
         let host_id = session.host_id;
         let now = Utc::now();

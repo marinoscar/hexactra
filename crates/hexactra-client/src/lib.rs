@@ -6,8 +6,10 @@
 use std::time::Duration;
 
 use hexactra_core::remote::{
-    ActionRequest, ApiError, CreateSessionRequest, DispatchedOperation, HostView, OperationResult,
-    OperationView, RegisterHostRequest, RegisterHostResponse, RemoteAction, SessionView,
+    ActionRequest, ApiError, ClaimedHandoffValue, CreateHandoffRequest, CreateHandoffResponse,
+    CreateSessionRequest, DispatchedOperation, HandoffView, HostView, OperationResult,
+    OperationView, RegisterHostRequest, RegisterHostResponse, RemoteAction, RespondHandoffRequest,
+    SessionView,
 };
 use reqwest::{Method, StatusCode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -213,6 +215,96 @@ impl ControlClient {
         self.http
             .json(Method::GET, &format!("v1/operations/{id}"), NO_BODY, None)
             .await
+    }
+
+    // ------------------------------------------------------------ handoffs
+
+    /// Pause a session for a human. The response carries the single-use
+    /// response token channels use to answer.
+    pub async fn create_handoff(
+        &self,
+        session_id: Uuid,
+        req: &CreateHandoffRequest,
+    ) -> Result<CreateHandoffResponse> {
+        self.http
+            .json(
+                Method::POST,
+                &format!("v1/sessions/{session_id}/handoffs"),
+                Some(req),
+                None,
+            )
+            .await
+    }
+
+    pub async fn handoffs(&self, pending_only: bool) -> Result<Vec<HandoffView>> {
+        #[derive(Deserialize)]
+        struct L {
+            handoffs: Vec<HandoffView>,
+        }
+        let l: L = self
+            .http
+            .json(
+                Method::GET,
+                &format!("v1/handoffs?pending={pending_only}"),
+                NO_BODY,
+                None,
+            )
+            .await?;
+        Ok(l.handoffs)
+    }
+
+    /// Read a handoff, waiting up to `wait` (max 120 s) for it to resolve.
+    pub async fn handoff(&self, id: Uuid, wait: Option<Duration>) -> Result<HandoffView> {
+        let ms = wait.map(|w| w.as_millis() as u64).unwrap_or(0);
+        self.http
+            .json(
+                Method::GET,
+                &format!("v1/handoffs/{id}?wait_ms={ms}"),
+                NO_BODY,
+                Some(wait.unwrap_or_default() + Duration::from_secs(10)),
+            )
+            .await
+    }
+
+    /// Answer a handoff as the operator (API token).
+    pub async fn respond_handoff(
+        &self,
+        id: Uuid,
+        req: &RespondHandoffRequest,
+    ) -> Result<HandoffView> {
+        self.http
+            .json(
+                Method::POST,
+                &format!("v1/handoffs/{id}/respond"),
+                Some(req),
+                None,
+            )
+            .await
+    }
+
+    pub async fn cancel_handoff(&self, id: Uuid) -> Result<HandoffView> {
+        self.http
+            .json(
+                Method::POST,
+                &format!("v1/handoffs/{id}/cancel"),
+                NO_BODY,
+                None,
+            )
+            .await
+    }
+
+    /// Retrieve a `secret` answer once.
+    pub async fn claim_handoff_secret(&self, id: Uuid) -> Result<String> {
+        let v: ClaimedHandoffValue = self
+            .http
+            .json(
+                Method::POST,
+                &format!("v1/handoffs/{id}/claim"),
+                NO_BODY,
+                None,
+            )
+            .await?;
+        Ok(v.value)
     }
 }
 

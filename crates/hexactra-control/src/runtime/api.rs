@@ -51,7 +51,7 @@ impl ApiState {
     }
 
     /// Constant-time token check (compares SHA-256 digests).
-    fn token_matches(&self, presented: &str) -> bool {
+    pub(super) fn token_matches(&self, presented: &str) -> bool {
         let d: [u8; 32] = Sha256::digest(presented.as_bytes()).into();
         d.iter()
             .zip(self.token_digest.iter())
@@ -61,7 +61,7 @@ impl ApiState {
 }
 
 /// API error with a stable machine-readable code.
-pub struct AppError(StatusCode, &'static str, String);
+pub struct AppError(pub StatusCode, pub &'static str, pub String);
 
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
@@ -86,6 +86,13 @@ impl From<StoreError> for AppError {
                 "no_host_available",
                 e.to_string(),
             ),
+            StoreError::HandoffPending(_) => {
+                AppError(StatusCode::CONFLICT, "handoff_pending", e.to_string())
+            }
+            StoreError::Invalid(_) => {
+                AppError(StatusCode::BAD_REQUEST, "invalid_request", e.to_string())
+            }
+            StoreError::Forbidden => AppError(StatusCode::FORBIDDEN, "forbidden", e.to_string()),
         }
     }
 }
@@ -121,9 +128,11 @@ pub fn router(state: ApiState) -> Router {
         .route("/v1/sessions/{id}", get(get_session).delete(end_session))
         .route("/v1/sessions/{id}/actions", post(run_action))
         .route("/v1/operations/{id}", get(get_operation))
+        .merge(super::handoff_api::protected_routes())
         .route_layer(middleware::from_fn_with_state(state.clone(), require_token));
     Router::new()
         .route("/v1/health", get(health))
+        .merge(super::handoff_api::public_routes())
         .merge(protected)
         .with_state(state)
 }
