@@ -6,6 +6,8 @@ pub mod api;
 pub mod handoff;
 mod handoff_api;
 pub mod store;
+mod webhook_api;
+pub mod webhooks;
 
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -99,6 +101,7 @@ pub async fn serve(
     state: ApiState,
     shutdown: impl std::future::Future<Output = ()> + Send + 'static,
 ) -> Result<()> {
+    state.webhooks.spawn_dispatcher(&state.store);
     axum::serve(listener, router(state))
         .with_graceful_shutdown(shutdown)
         .await

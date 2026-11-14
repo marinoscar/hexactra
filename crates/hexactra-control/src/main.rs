@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use hexactra_control::runtime::webhooks::{WebhookConfig, Webhooks};
 use hexactra_control::runtime::{self, ApiState, RuntimeStore};
 
 #[derive(Parser)]
@@ -29,6 +30,17 @@ enum Command {
         /// `$XDG_CONFIG_HOME/hexactra/api-token`, generated on first start.
         #[arg(long, env = "HEXACTRA_TOKEN_FILE")]
         token_file: Option<PathBuf>,
+        /// External base URL of this server (e.g. https://hexactra.example.test),
+        /// used to put clickable respond links in webhook payloads.
+        #[arg(long, env = "HEXACTRA_PUBLIC_URL")]
+        public_url: Option<String>,
+        /// Webhook registry file. Defaults to `$XDG_CONFIG_HOME/hexactra/webhooks.json`.
+        #[arg(long, env = "HEXACTRA_WEBHOOKS_FILE")]
+        webhooks_file: Option<PathBuf>,
+        /// Allow webhook targets over http or on private, loopback or CGNAT
+        /// (Tailscale) addresses. Link-local and metadata addresses stay blocked.
+        #[arg(long, env = "HEXACTRA_WEBHOOK_ALLOW_INSECURE")]
+        webhook_allow_insecure: bool,
     },
     /// Print the path of the default token file.
     TokenPath,
@@ -58,6 +70,9 @@ async fn main() -> Result<()> {
             bind,
             allow_remote_bind,
             token_file,
+            public_url,
+            webhooks_file,
+            webhook_allow_insecure,
         } => {
             runtime::check_bind(&bind, allow_remote_bind)?;
             let explicit = std::env::var("HEXACTRA_API_TOKEN").ok();
@@ -70,7 +85,17 @@ async fn main() -> Result<()> {
                 .await
                 .with_context(|| format!("binding {bind}"))?;
             tracing::info!(addr = %listener.local_addr()?, "hexactra-control listening");
-            let state = ApiState::new(RuntimeStore::new(), &token);
+            let webhooks = Webhooks::load(WebhookConfig {
+                file: Some(
+                    webhooks_file
+                        .unwrap_or_else(|| default_token_file().with_file_name("webhooks.json")),
+                ),
+                public_url,
+                allow_insecure: webhook_allow_insecure,
+                ..Default::default()
+            })?;
+            tracing::info!(count = webhooks.list().len(), "webhooks loaded");
+            let state = ApiState::with_webhooks(RuntimeStore::new(), &token, webhooks);
             runtime::serve(listener, state, async {
                 let _ = tokio::signal::ctrl_c().await;
             })

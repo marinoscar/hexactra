@@ -7,9 +7,9 @@ use std::time::Duration;
 
 use hexactra_core::remote::{
     ActionRequest, ApiError, ClaimedHandoffValue, CreateHandoffRequest, CreateHandoffResponse,
-    CreateSessionRequest, DispatchedOperation, HandoffView, HostView, OperationResult,
-    OperationView, RegisterHostRequest, RegisterHostResponse, RemoteAction, RespondHandoffRequest,
-    SessionView,
+    CreateSessionRequest, CreateWebhookRequest, CreatedWebhook, DispatchedOperation, HandoffView,
+    HostView, OperationResult, OperationView, RegisterHostRequest, RegisterHostResponse,
+    RemoteAction, RespondHandoffRequest, SessionView, WebhookDelivery, WebhookView,
 };
 use reqwest::{Method, StatusCode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -291,6 +291,65 @@ impl ControlClient {
                 None,
             )
             .await
+    }
+
+    // ------------------------------------------------------------ webhooks
+
+    pub async fn add_webhook(&self, req: &CreateWebhookRequest) -> Result<CreatedWebhook> {
+        self.http
+            .json(Method::POST, "v1/webhooks", Some(req), None)
+            .await
+    }
+
+    pub async fn webhooks(&self) -> Result<Vec<WebhookView>> {
+        #[derive(Deserialize)]
+        struct L {
+            webhooks: Vec<WebhookView>,
+        }
+        let l: L = self
+            .http
+            .json(Method::GET, "v1/webhooks", NO_BODY, None)
+            .await?;
+        Ok(l.webhooks)
+    }
+
+    pub async fn remove_webhook(&self, id: Uuid) -> Result<()> {
+        self.http
+            .send(Method::DELETE, &format!("v1/webhooks/{id}"), NO_BODY, None)
+            .await?;
+        Ok(())
+    }
+
+    /// Send a `webhook.test` event; returns its event id.
+    pub async fn test_webhook(&self, id: Uuid) -> Result<String> {
+        let v: serde_json::Value = self
+            .http
+            .json(
+                Method::POST,
+                &format!("v1/webhooks/{id}/test"),
+                NO_BODY,
+                None,
+            )
+            .await?;
+        Ok(v["event_id"].as_str().unwrap_or_default().to_string())
+    }
+
+    /// Most recent delivery attempts first.
+    pub async fn webhook_deliveries(&self, id: Uuid) -> Result<Vec<WebhookDelivery>> {
+        #[derive(Deserialize)]
+        struct L {
+            deliveries: Vec<WebhookDelivery>,
+        }
+        let l: L = self
+            .http
+            .json(
+                Method::GET,
+                &format!("v1/webhooks/{id}/deliveries"),
+                NO_BODY,
+                None,
+            )
+            .await?;
+        Ok(l.deliveries)
     }
 
     /// Retrieve a `secret` answer once.

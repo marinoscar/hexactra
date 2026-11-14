@@ -38,14 +38,26 @@ const RESULT_BODY_LIMIT: usize = 25 * 1024 * 1024;
 #[derive(Clone)]
 pub struct ApiState {
     pub store: RuntimeStore,
+    pub webhooks: super::webhooks::Webhooks,
     token_digest: Arc<[u8; 32]>,
 }
 
 impl ApiState {
-    /// Build state with the bearer token clients and hosts must present.
+    /// Build state with the bearer token clients and hosts must present and
+    /// a memory-only webhook registry.
     pub fn new(store: RuntimeStore, token: &str) -> Self {
+        Self::with_webhooks(store, token, super::webhooks::Webhooks::in_memory())
+    }
+
+    /// Build state with a configured webhook registry.
+    pub fn with_webhooks(
+        store: RuntimeStore,
+        token: &str,
+        webhooks: super::webhooks::Webhooks,
+    ) -> Self {
         Self {
             store,
+            webhooks,
             token_digest: Arc::new(Sha256::digest(token.as_bytes()).into()),
         }
     }
@@ -129,6 +141,7 @@ pub fn router(state: ApiState) -> Router {
         .route("/v1/sessions/{id}/actions", post(run_action))
         .route("/v1/operations/{id}", get(get_operation))
         .merge(super::handoff_api::protected_routes())
+        .merge(super::webhook_api::routes())
         .route_layer(middleware::from_fn_with_state(state.clone(), require_token));
     Router::new()
         .route("/v1/health", get(health))
