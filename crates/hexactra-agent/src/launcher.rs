@@ -170,12 +170,17 @@ impl BrowserLauncher {
 
         self.prepare_profile()?;
         tracing::info!(browser = %self.cfg.browser.display(), profile = %self.cfg.profile_dir.display(), "launching browser");
+        // Browser output goes to a log next to the profile, replaced on each
+        // launch, so startup failures can be explained.
+        let log_path = self.log_path();
+        let log = std::fs::File::create(&log_path)
+            .with_context(|| format!("creating {}", log_path.display()))?;
         let child = Command::new(&self.cfg.browser)
             .args(self.args())
             .env(BRIDGE_SOCKET_ENV, &self.cfg.bridge_socket)
             .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stdout(log.try_clone()?)
+            .stderr(log)
             .kill_on_drop(true)
             .spawn()
             .with_context(|| format!("starting {}", self.cfg.browser.display()))?;
@@ -183,20 +188,44 @@ impl BrowserLauncher {
         st.launches += 1;
         drop(st);
 
-        if self.bridge.wait_connected(self.cfg.startup_timeout).await {
-            tracing::info!("browser ready");
-            return Ok(());
+        // Wait for the extension, but fail fast if the browser exits.
+        let deadline = Instant::now() + self.cfg.startup_timeout;
+        loop {
+            if self.bridge.is_connected() {
+                tracing::info!("browser ready");
+                return Ok(());
+            }
+            {
+                let mut st = self.state.lock().await;
+                if !Self::alive(&mut st) {
+                    let tail = self.log_tail(15);
+                    tracing::error!(log = %tail, "browser exited during startup");
+                    bail!(
+                        "browser exited during startup (check DISPLAY, sandbox and profile permissions); last output:\n{tail}"
+                    );
+                }
+                if Instant::now() >= deadline {
+                    Self::stop(&mut st).await;
+                    bail!(
+                        "browser started but the Hexactra extension did not connect within {:?}; last output:\n{}",
+                        self.cfg.startup_timeout,
+                        self.log_tail(15)
+                    );
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(200)).await;
         }
-        let mut st = self.state.lock().await;
-        let exited = !Self::alive(&mut st);
-        Self::stop(&mut st).await;
-        if exited {
-            bail!("browser exited during startup (check DISPLAY, sandbox and profile permissions)");
-        }
-        bail!(
-            "browser started but the Hexactra extension did not connect within {:?}",
-            self.cfg.startup_timeout
-        )
+    }
+
+    /// Browser output log for the current launch.
+    pub fn log_path(&self) -> PathBuf {
+        self.cfg.profile_dir.join("hexactra-browser.log")
+    }
+
+    fn log_tail(&self, lines: usize) -> String {
+        let text = std::fs::read_to_string(self.log_path()).unwrap_or_default();
+        let v: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+        v[v.len().saturating_sub(lines)..].join("\n")
     }
 
     /// Record activity (keeps an idle browser alive).
@@ -392,6 +421,44 @@ while True:
         assert!(!l.is_running().await);
         assert_eq!(run_action(&l, &b).await["launches"], 2);
         l.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn startup_crash_fails_fast_with_browser_output() {
+        let dir = tempfile::tempdir().unwrap();
+        let browser = dir.path().join("crashing-browser");
+        std::fs::write(
+            &browser,
+            "#!/bin/sh\necho 'FATAL: No usable sandbox!' >&2\nexit 1\n",
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&browser, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let socket = dir.path().join("b.sock");
+        let bridge = BrowserBridge::bind(&socket).await.unwrap();
+        let l = BrowserLauncher::new(
+            LaunchConfig {
+                browser,
+                profile_dir: dir.path().join("p"),
+                extension_dir: None,
+                extra_args: vec![],
+                idle_shutdown: None,
+                native_host: PathBuf::from("/x"),
+                bridge_socket: socket,
+                startup_timeout: Duration::from_secs(30),
+            },
+            bridge,
+        );
+        let started = std::time::Instant::now();
+        let e = l.ensure_running().await.unwrap_err().to_string();
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "did not fail fast"
+        );
+        assert!(e.contains("No usable sandbox"), "{e}");
     }
 
     #[tokio::test]
