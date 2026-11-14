@@ -166,7 +166,7 @@ impl PolicyManager {
         // Check if there's a specific policy for this action type
         // For now, use default policy with elevated approval level for high-impact actions
         let mut policy = self.default_policy.clone();
-        
+
         match action {
             HighImpactAction::TransferFunds
             | HighImpactAction::DeleteResource
@@ -174,8 +174,7 @@ impl PolicyManager {
                 policy.approval_level = ApprovalLevel::OobConfirmation;
                 policy.verify_origin = true;
             }
-            HighImpactAction::GrantPermissions
-            | HighImpactAction::IrreversibleOperation => {
+            HighImpactAction::GrantPermissions | HighImpactAction::IrreversibleOperation => {
                 policy.approval_level = ApprovalLevel::HumanTakeover;
                 policy.verify_origin = true;
             }
@@ -188,8 +187,9 @@ impl PolicyManager {
     /// Check if rate limiting allows a request
     pub fn check_rate_limit(&mut self, origin: &str, policy: &ActionPolicy) -> bool {
         let now = Utc::now();
-        
-        let state = self.rate_limit_states
+
+        let state = self
+            .rate_limit_states
             .entry(origin.to_string())
             .or_insert_with(RateLimitState::new);
 
@@ -234,7 +234,7 @@ mod tests {
         let action = HighImpactAction::TransferFunds;
         let json = serde_json::to_string(&action).unwrap();
         assert_eq!(json, "\"transfer_funds\"");
-        
+
         let parsed: HighImpactAction = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, action);
     }
@@ -244,7 +244,7 @@ mod tests {
         let level = ApprovalLevel::OobConfirmation;
         let json = serde_json::to_string(&level).unwrap();
         assert_eq!(json, "\"oob_confirmation\"");
-        
+
         let parsed: ApprovalLevel = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed, level);
     }
@@ -252,10 +252,13 @@ mod tests {
     #[test]
     fn test_policy_manager_high_impact_actions() {
         let manager = PolicyManager::new();
-        
+
         // High-impact actions should have elevated approval requirements
         let transfer_policy = manager.get_policy(&HighImpactAction::TransferFunds);
-        assert_eq!(transfer_policy.approval_level, ApprovalLevel::OobConfirmation);
+        assert_eq!(
+            transfer_policy.approval_level,
+            ApprovalLevel::OobConfirmation
+        );
         assert!(transfer_policy.verify_origin);
 
         let delete_policy = manager.get_policy(&HighImpactAction::DeleteResource);
@@ -265,7 +268,7 @@ mod tests {
     #[test]
     fn test_rate_limiting() {
         let mut manager = PolicyManager::new();
-        
+
         let origin = "https://example.com".to_string();
         let policy = ActionPolicy {
             rate_limit_window_seconds: 60,

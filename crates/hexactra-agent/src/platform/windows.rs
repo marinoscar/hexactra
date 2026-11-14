@@ -38,36 +38,48 @@ impl HostPlatform for WindowsPlatform {
 
     fn spawn_process(config: ProcessConfig) -> Result<SpawnedProcess> {
         use std::os::windows::process::CommandExt;
-        
+
         let mut cmd = std::process::Command::new(&config.command);
-        
+
         if let Some(cwd) = config.cwd {
             cmd.current_dir(cwd);
         }
-        
+
         for (key, value) in config.env {
             cmd.env(key, value);
         }
-        
+
         cmd.args(&config.args)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
-        
+
         // On Windows, use CREATE_NO_WINDOW for detached processes
         if config.detached {
             unsafe {
                 cmd.creation_flags(winapi::um::winbase::CREATE_NO_WINDOW);
             }
         }
-        
+
         let child = cmd.spawn()?;
-        
+
         Ok(SpawnedProcess {
             pid: child.id() as u32,
-            stdin: Some(child.stdin.ok_or_else(|| anyhow::anyhow!("Failed to get stdin"))?),
-            stdout: Some(child.stdout.ok_or_else(|| anyhow::anyhow!("Failed to get stdout"))?),
-            stderr: Some(child.stderr.ok_or_else(|| anyhow::anyhow!("Failed to get stderr"))?),
+            stdin: Some(
+                child
+                    .stdin
+                    .ok_or_else(|| anyhow::anyhow!("Failed to get stdin"))?,
+            ),
+            stdout: Some(
+                child
+                    .stdout
+                    .ok_or_else(|| anyhow::anyhow!("Failed to get stdout"))?,
+            ),
+            stderr: Some(
+                child
+                    .stderr
+                    .ok_or_else(|| anyhow::anyhow!("Failed to get stderr"))?,
+            ),
         })
     }
 
@@ -93,14 +105,18 @@ impl HostPlatform for WindowsPlatform {
         // Windows would use named pipes
         match endpoint.endpoint_type {
             IpcType::NamedPipe => Ok(Box::new(WindowsIpcServer::new(endpoint.path)?)),
-            IpcType::Unix => Err(anyhow::anyhow!("Unix domain sockets not supported on Windows")),
+            IpcType::Unix => Err(anyhow::anyhow!(
+                "Unix domain sockets not supported on Windows"
+            )),
         }
     }
 
     fn connect_to_ipc(endpoint: IpcEndpoint) -> Result<Box<dyn IpcClient>> {
         match endpoint.endpoint_type {
             IpcType::NamedPipe => Ok(Box::new(WindowsIpcClient::new(endpoint.path)?)),
-            IpcType::Unix => Err(anyhow::anyhow!("Unix domain sockets not supported on Windows")),
+            IpcType::Unix => Err(anyhow::anyhow!(
+                "Unix domain sockets not supported on Windows"
+            )),
         }
     }
 

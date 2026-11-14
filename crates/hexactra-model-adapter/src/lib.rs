@@ -9,10 +9,10 @@ pub mod error;
 pub mod types;
 
 use async_trait::async_trait;
+use hexactra_telemetry::start_span;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tracing::info;
-use hexactra_telemetry::start_span;
 
 /// Configuration for the OpenAI-compatible model adapter
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -166,10 +166,7 @@ pub enum ModelAdapterError {
     #[error("Network error: {0}")]
     Network(String),
     #[error("HTTP error: {status} - {body}")]
-    HttpError {
-        status: u32,
-        body: String,
-    },
+    HttpError { status: u32, body: String },
     #[error("Timeout error")]
     Timeout,
     #[error("Invalid response format: {0}")]

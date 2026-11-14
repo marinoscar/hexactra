@@ -45,7 +45,12 @@ pub struct NotificationScope {
 
 impl NotificationScope {
     /// Create a new notification scope
-    pub fn new(owner_id: Uuid, channel_type: impl Into<String>, channel_identifier: impl Into<String>, purpose: impl Into<String>) -> Self {
+    pub fn new(
+        owner_id: Uuid,
+        channel_type: impl Into<String>,
+        channel_identifier: impl Into<String>,
+        purpose: impl Into<String>,
+    ) -> Self {
         NotificationScope {
             owner_id,
             channel_type: channel_type.into(),
@@ -195,13 +200,19 @@ pub trait NotificationStore: Send + Sync {
     ) -> NotificationDeliveryResult<()>;
 
     /// Retrieve a notification by request_id
-    async fn retrieve_notification(&self, request_id: Uuid) -> NotificationDeliveryResult<serde_json::Value>;
+    async fn retrieve_notification(
+        &self,
+        request_id: Uuid,
+    ) -> NotificationDeliveryResult<serde_json::Value>;
 
     /// Mark a notification as delivered
     async fn mark_delivered(&self, request_id: Uuid) -> NotificationDeliveryResult<()>;
 
     /// Revoke a notification for a scope
-    async fn revoke_notification(&self, scope: &NotificationScope) -> NotificationDeliveryResult<()>;
+    async fn revoke_notification(
+        &self,
+        scope: &NotificationScope,
+    ) -> NotificationDeliveryResult<()>;
 }
 
 // ==================== Scoped Notification Delivery ====================
@@ -255,7 +266,9 @@ impl ScopedNotificationDelivery {
         })?;
 
         // Store the notification in the store
-        store.store_notification(&request.scope, request.request_id, "pending").await?;
+        store
+            .store_notification(&request.scope, request.request_id, "pending")
+            .await?;
 
         // Create a secure response link for user response
         let encrypted_response = serde_json::to_string(&serde_json::json!({
@@ -327,7 +340,10 @@ impl ScopedNotificationDelivery {
     }
 
     /// Validate that a response link is valid for use
-    pub fn validate_response_link(&self, link_id: ResponseLinkId) -> NotificationDeliveryResult<()> {
+    pub fn validate_response_link(
+        &self,
+        link_id: ResponseLinkId,
+    ) -> NotificationDeliveryResult<()> {
         let links = self
             .response_links
             .lock()
@@ -410,20 +426,30 @@ pub mod mock_store {
         ) -> NotificationDeliveryResult<()> {
             let key = format!(
                 "{}:{}:{}:{}:{}",
-                scope.owner_id, scope.channel_type, scope.channel_identifier, scope.purpose, request_id
+                scope.owner_id,
+                scope.channel_type,
+                scope.channel_identifier,
+                scope.purpose,
+                request_id
             );
             self.notifications
                 .lock()
                 .map_err(|e| NotificationDeliveryError::Internal(e.to_string()))?
-                .insert(key, serde_json::json!({
-                    "request_id": request_id,
-                    "encrypted_response": encrypted_response,
-                    "created_at": Utc::now().to_rfc3339(),
-                }));
+                .insert(
+                    key,
+                    serde_json::json!({
+                        "request_id": request_id,
+                        "encrypted_response": encrypted_response,
+                        "created_at": Utc::now().to_rfc3339(),
+                    }),
+                );
             Ok(())
         }
 
-        async fn retrieve_notification(&self, request_id: Uuid) -> NotificationDeliveryResult<serde_json::Value> {
+        async fn retrieve_notification(
+            &self,
+            request_id: Uuid,
+        ) -> NotificationDeliveryResult<serde_json::Value> {
             // Search for notification by request_id
             let notifications = self
                 .notifications
@@ -465,7 +491,10 @@ pub mod mock_store {
             )))
         }
 
-        async fn revoke_notification(&self, scope: &NotificationScope) -> NotificationDeliveryResult<()> {
+        async fn revoke_notification(
+            &self,
+            scope: &NotificationScope,
+        ) -> NotificationDeliveryResult<()> {
             let key_prefix = format!(
                 "{}:{}:{}:{}:",
                 scope.owner_id, scope.channel_type, scope.channel_identifier, scope.purpose
@@ -530,7 +559,12 @@ mod tests {
         let owner_id = Uuid::new_v4();
 
         // Valid scope
-        let scope = NotificationScope::new(owner_id, "email".to_string(), "user@example.com".to_string(), "otp".to_string());
+        let scope = NotificationScope::new(
+            owner_id,
+            "email".to_string(),
+            "user@example.com".to_string(),
+            "otp".to_string(),
+        );
         assert!(scope.validate().is_ok());
 
         // Invalid: nil owner_id
@@ -573,7 +607,12 @@ mod tests {
     #[test]
     fn test_response_link_expiry() {
         let now = Utc::now();
-        let scope = NotificationScope::new(Uuid::new_v4(), "email".to_string(), "user@example.com".to_string(), "otp".to_string());
+        let scope = NotificationScope::new(
+            Uuid::new_v4(),
+            "email".to_string(),
+            "user@example.com".to_string(),
+            "otp".to_string(),
+        );
 
         // Create a link that expired 1 minute ago
         let expired_link = ResponseLink {
@@ -599,15 +638,26 @@ mod tests {
     async fn test_mock_store() {
         let store = mock_store::MockStore::new();
         let owner_id = Uuid::new_v4();
-        let scope = NotificationScope::new(owner_id, "email".to_string(), "user@example.com".to_string(), "otp".to_string());
+        let scope = NotificationScope::new(
+            owner_id,
+            "email".to_string(),
+            "user@example.com".to_string(),
+            "otp".to_string(),
+        );
         let request_id = Uuid::new_v4();
 
         // Store notification
-        store.store_notification(&scope, request_id, "pending").await.unwrap();
+        store
+            .store_notification(&scope, request_id, "pending")
+            .await
+            .unwrap();
 
         // Retrieve notification
         let retrieved = store.retrieve_notification(request_id).await.unwrap();
-        assert_eq!(retrieved.get("request_id").unwrap().as_str(), Some(request_id.to_string().as_str()));
+        assert_eq!(
+            retrieved.get("request_id").unwrap().as_str(),
+            Some(request_id.to_string().as_str())
+        );
 
         // Mark as delivered
         store.mark_delivered(request_id).await.unwrap();

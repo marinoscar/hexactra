@@ -7,6 +7,7 @@
 //! - Handles auth failures gracefully
 //! - Supports event streaming and timeouts
 
+use axum::Error as AxumError;
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
@@ -14,21 +15,20 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use axum::Error as AxumError;
 use chrono::Utc;
 use futures_util::{stream, StreamExt};
 use serde::{Deserialize, Serialize};
+use std::sync::LazyLock;
 use std::time::Duration;
 use tokio::sync::Mutex;
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 use uuid::Uuid;
-use std::sync::LazyLock;
 
-use hexactra_core::{SessionId, GoalId, BrowserAction, InteractionKind, InteractionStatus};
+use hexactra_core::{BrowserAction, GoalId, InteractionKind, InteractionStatus, SessionId};
 
-use crate::state::DbState;
-use crate::auth::{validate_token, AuthContext, Scope, ResourceType};
+use crate::auth::{validate_token, AuthContext, ResourceType, Scope};
 use crate::config::Config;
+use crate::state::DbState;
 
 // ==================== Request/Response Types ====================
 
@@ -89,20 +89,23 @@ pub fn router(_db_state: DbState) -> Router<DbState> {
 }
 
 /// Extract auth context from Bearer token
-async fn extract_auth_context(
-    headers: &HeaderMap,
-) -> Result<AuthContext, (StatusCode, String)> {
-    let auth_header = headers.get("authorization")
-        .and_then(|h| h.to_str().ok());
-    
-    let token = auth_header.ok_or((StatusCode::UNAUTHORIZED, "Missing Authorization header".to_string()))?;
-    
+async fn extract_auth_context(headers: &HeaderMap) -> Result<AuthContext, (StatusCode, String)> {
+    let auth_header = headers.get("authorization").and_then(|h| h.to_str().ok());
+
+    let token = auth_header.ok_or((
+        StatusCode::UNAUTHORIZED,
+        "Missing Authorization header".to_string(),
+    ))?;
+
     if !token.starts_with("Bearer ") {
-        return Err((StatusCode::UNAUTHORIZED, "Invalid Authorization header format".to_string()));
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            "Invalid Authorization header format".to_string(),
+        ));
     }
-    
+
     let token = &token[7..];
-    
+
     match validate_token(token) {
         Ok(auth_context) => Ok(auth_context),
         Err(e) => Err((StatusCode::UNAUTHORIZED, format!("Invalid token: {}", e))),
@@ -124,7 +127,7 @@ async fn handle_mcp_request(
 ) -> Json<McpResponse> {
     // Validate authentication
     let auth_result = extract_auth_context(&headers).await;
-    
+
     if let Err((status, message)) = auth_result {
         return Json(McpResponse {
             jsonrpc: "2.0".to_string(),
@@ -137,9 +140,9 @@ async fn handle_mcp_request(
             id: request.id.clone().unwrap_or(serde_json::Value::Null),
         });
     }
-    
+
     let _auth_context = auth_result.unwrap();
-    
+
     // Check origin (currently allows all origins in development)
     if let Err((status, message)) = check_origin(&headers, &Config::load().unwrap_or_default()) {
         return Json(McpResponse {
@@ -153,7 +156,7 @@ async fn handle_mcp_request(
             id: request.id.clone().unwrap_or(serde_json::Value::Null),
         });
     }
-    
+
     // Process the request based on method
     match request.method.as_str() {
         "tools/call" => handle_tool_call(request, _auth_context).await,
@@ -171,16 +174,13 @@ async fn handle_mcp_request(
 }
 
 /// Handle tool calls
-async fn handle_tool_call(
-    request: McpRequest,
-    _auth_context: AuthContext,
-) -> Json<McpResponse> {
+async fn handle_tool_call(request: McpRequest, _auth_context: AuthContext) -> Json<McpResponse> {
     let params = request.params.unwrap_or_default();
-    
+
     // Extract tool name and arguments
     let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
     let arguments = params.get("arguments").cloned().unwrap_or_default();
-    
+
     let result = match tool_name {
         "session_start" => handle_session_start(arguments).await,
         "session_status" => handle_session_status(arguments).await,
@@ -196,7 +196,7 @@ async fn handle_tool_call(
             }
         }),
     };
-    
+
     Json(McpResponse {
         jsonrpc: "2.0".to_string(),
         result: Some(result),
@@ -209,12 +209,12 @@ async fn handle_tool_call(
 async fn handle_session_start(_arguments: serde_json::Value) -> serde_json::Value {
     let mut sessions = SESSIONS.lock().await;
     let session_id = format!("session-{}", Uuid::new_v4().simple());
-    
+
     sessions.push(McpSession {
         id: session_id.clone(),
         status: "running".to_string(),
     });
-    
+
     serde_json::json!({
         "sessionId": session_id,
         "status": "running"
@@ -224,8 +224,11 @@ async fn handle_session_start(_arguments: serde_json::Value) -> serde_json::Valu
 /// Handle session_status tool
 async fn handle_session_status(arguments: serde_json::Value) -> serde_json::Value {
     let sessions = SESSIONS.lock().await;
-    let session_id = arguments.get("sessionId").and_then(|s| s.as_str()).unwrap_or("default");
-    
+    let session_id = arguments
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .unwrap_or("default");
+
     if let Some(session) = sessions.iter().find(|s| s.id == session_id) {
         serde_json::json!({
             "sessionId": session_id,
@@ -244,8 +247,11 @@ async fn handle_session_status(arguments: serde_json::Value) -> serde_json::Valu
 /// Handle session_stop tool
 async fn handle_session_stop(arguments: serde_json::Value) -> serde_json::Value {
     let mut sessions = SESSIONS.lock().await;
-    let session_id = arguments.get("sessionId").and_then(|s| s.as_str()).unwrap_or("default");
-    
+    let session_id = arguments
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .unwrap_or("default");
+
     if let Some(pos) = sessions.iter().position(|s| s.id == session_id) {
         sessions.remove(pos);
         serde_json::json!({
@@ -265,9 +271,12 @@ async fn handle_session_stop(arguments: serde_json::Value) -> serde_json::Value 
 /// Handle navigate tool
 async fn handle_navigate(arguments: serde_json::Value) -> serde_json::Value {
     let sessions = SESSIONS.lock().await;
-    let session_id = arguments.get("sessionId").and_then(|s| s.as_str()).unwrap_or("default");
+    let session_id = arguments
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .unwrap_or("default");
     let url = arguments.get("url").and_then(|u| u.as_str()).unwrap_or("");
-    
+
     if sessions.iter().any(|s| s.id == session_id) {
         serde_json::json!({
             "success": true,
@@ -286,9 +295,15 @@ async fn handle_navigate(arguments: serde_json::Value) -> serde_json::Value {
 /// Handle click tool
 async fn handle_click(arguments: serde_json::Value) -> serde_json::Value {
     let sessions = SESSIONS.lock().await;
-    let session_id = arguments.get("sessionId").and_then(|s| s.as_str()).unwrap_or("default");
-    let selector = arguments.get("selector").and_then(|s| s.as_str()).unwrap_or("");
-    
+    let session_id = arguments
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .unwrap_or("default");
+    let selector = arguments
+        .get("selector")
+        .and_then(|s| s.as_str())
+        .unwrap_or("");
+
     if sessions.iter().any(|s| s.id == session_id) {
         serde_json::json!({
             "success": true,
@@ -307,10 +322,16 @@ async fn handle_click(arguments: serde_json::Value) -> serde_json::Value {
 /// Handle type_text tool
 async fn handle_type_text(arguments: serde_json::Value) -> serde_json::Value {
     let sessions = SESSIONS.lock().await;
-    let session_id = arguments.get("sessionId").and_then(|s| s.as_str()).unwrap_or("default");
-    let selector = arguments.get("selector").and_then(|s| s.as_str()).unwrap_or("");
+    let session_id = arguments
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .unwrap_or("default");
+    let selector = arguments
+        .get("selector")
+        .and_then(|s| s.as_str())
+        .unwrap_or("");
     let text = arguments.get("text").and_then(|t| t.as_str()).unwrap_or("");
-    
+
     if sessions.iter().any(|s| s.id == session_id) {
         serde_json::json!({
             "success": true,
@@ -329,8 +350,11 @@ async fn handle_type_text(arguments: serde_json::Value) -> serde_json::Value {
 /// Handle screenshot tool
 async fn handle_screenshot(arguments: serde_json::Value) -> serde_json::Value {
     let sessions = SESSIONS.lock().await;
-    let session_id = arguments.get("sessionId").and_then(|s| s.as_str()).unwrap_or("default");
-    
+    let session_id = arguments
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .unwrap_or("default");
+
     if sessions.iter().any(|s| s.id == session_id) {
         serde_json::json!({
             "success": true,
@@ -347,36 +371,41 @@ async fn handle_screenshot(arguments: serde_json::Value) -> serde_json::Value {
 }
 
 /// Handle MCP stream (Server-Sent Events)
-async fn mcp_stream(
-    headers: HeaderMap,
-) -> Sse<impl StreamExt<Item = Result<Event, AxumError>>> {
+async fn mcp_stream(headers: HeaderMap) -> Sse<impl StreamExt<Item = Result<Event, AxumError>>> {
     use futures_util::stream::BoxStream;
-    
+
     // Validate authentication
     let auth_result = extract_auth_context(&headers).await;
-    
+
     if let Err((status, message)) = auth_result {
         // For error case, return a single event with error
-        let error_event = Event::default().json_data(serde_json::json!({
-            "error": {
-                "code": status.as_u16() as i64,
-                "message": message
-            }
-        })).expect("Failed to create error event");
-        
-        let error_stream: BoxStream<'_, Result<Event, AxumError>> = stream::once(async move { Ok(error_event) }).boxed();
+        let error_event = Event::default()
+            .json_data(serde_json::json!({
+                "error": {
+                    "code": status.as_u16() as i64,
+                    "message": message
+                }
+            }))
+            .expect("Failed to create error event");
+
+        let error_stream: BoxStream<'_, Result<Event, AxumError>> =
+            stream::once(async move { Ok(error_event) }).boxed();
         return Sse::new(error_stream);
     }
-    
+
     // Create a stream of events with interval
-    let event_stream: BoxStream<'_, Result<Event, AxumError>> = stream::unfold((), |()| async move {
-        tokio::time::sleep(Duration::from_secs(5)).await;
-        let event = Event::default().json_data(serde_json::json!({
-            "type": "ping",
-            "timestamp": Utc::now().to_rfc3339()
-        })).expect("Failed to create ping event");
-        Some((Ok(event), ()))
-    }).boxed();
-    
+    let event_stream: BoxStream<'_, Result<Event, AxumError>> =
+        stream::unfold((), |()| async move {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            let event = Event::default()
+                .json_data(serde_json::json!({
+                    "type": "ping",
+                    "timestamp": Utc::now().to_rfc3339()
+                }))
+                .expect("Failed to create ping event");
+            Some((Ok(event), ()))
+        })
+        .boxed();
+
     Sse::new(event_stream)
 }

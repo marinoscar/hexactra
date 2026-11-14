@@ -18,12 +18,12 @@ use uuid::Uuid;
 #[cfg(unix)]
 mod flock {
     use std::os::unix::io::RawFd;
-    
+
     pub const LOCK_EX: i32 = 2;
     pub const LOCK_SH: i32 = 1;
     pub const LOCK_NB: i32 = 4;
     pub const LOCK_UN: i32 = 8;
-    
+
     pub unsafe fn flock(fd: RawFd, operation: i32) -> Result<(), std::io::Error> {
         let result = libc::flock(fd, operation);
         if result == 0 {
@@ -107,7 +107,8 @@ impl ProfileLock {
                 #[cfg(unix)]
                 {
                     use std::os::unix::io::AsRawFd;
-                    match unsafe { flock::flock(file.as_raw_fd(), flock::LOCK_EX | flock::LOCK_NB) } {
+                    match unsafe { flock::flock(file.as_raw_fd(), flock::LOCK_EX | flock::LOCK_NB) }
+                    {
                         Ok(()) => {
                             self.lock_file = Some(file);
                             Ok(true)
@@ -140,7 +141,9 @@ impl ProfileLock {
             #[cfg(unix)]
             {
                 use std::os::unix::io::AsRawFd;
-                unsafe { flock::flock(file.as_raw_fd(), flock::LOCK_UN)?; }
+                unsafe {
+                    flock::flock(file.as_raw_fd(), flock::LOCK_UN)?;
+                }
             }
 
             // Remove the lock file
@@ -154,7 +157,7 @@ impl ProfileLock {
     /// Check if a profile is locked
     pub fn is_locked(profile_path: &Path) -> Result<bool> {
         let lock_path = profile_path.join(".hexactra.lock");
-        
+
         if !lock_path.exists() {
             return Ok(false);
         }
@@ -165,10 +168,13 @@ impl ProfileLock {
                 #[cfg(unix)]
                 {
                     use std::os::unix::io::AsRawFd;
-                    match unsafe { flock::flock(file.as_raw_fd(), flock::LOCK_SH | flock::LOCK_NB) } {
+                    match unsafe { flock::flock(file.as_raw_fd(), flock::LOCK_SH | flock::LOCK_NB) }
+                    {
                         Ok(()) => {
                             // Lock is not held exclusively
-                            unsafe { flock::flock(file.as_raw_fd(), flock::LOCK_UN)?; }
+                            unsafe {
+                                flock::flock(file.as_raw_fd(), flock::LOCK_UN)?;
+                            }
                             Ok(false)
                         }
                         Err(e) => {
@@ -410,7 +416,7 @@ impl ProfileRegistry {
     /// Acquire exclusive lock for a profile
     pub async fn acquire_profile_lock(&self, profile_path: &Path) -> Result<ProfileLock> {
         let mut lock = ProfileLock::new(profile_path);
-        
+
         // Try to acquire lock with retry
         for _ in 0..10 {
             if lock.try_lock()? {

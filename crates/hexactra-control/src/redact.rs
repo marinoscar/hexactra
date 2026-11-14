@@ -16,9 +16,7 @@ pub fn redact_value(value: &Value) -> Value {
             }
             Value::Object(new_map)
         }
-        Value::Array(arr) => {
-            Value::Array(arr.iter().map(redact_value).collect())
-        }
+        Value::Array(arr) => Value::Array(arr.iter().map(redact_value).collect()),
         _ => value.clone(),
     }
 }
@@ -27,9 +25,18 @@ pub fn redact_value(value: &Value) -> Value {
 fn is_secret_key(key: &str) -> bool {
     let lower = key.to_lowercase();
     [
-        "password", "secret", "token", "api_key", "apikey", "credential",
-        "auth", "bearer", "session_id"
-    ].iter().any(|s| lower.contains(s))
+        "password",
+        "secret",
+        "token",
+        "api_key",
+        "apikey",
+        "credential",
+        "auth",
+        "bearer",
+        "session_id",
+    ]
+    .iter()
+    .any(|s| lower.contains(s))
 }
 
 #[cfg(test)]
@@ -45,7 +52,7 @@ mod tests {
         });
 
         let redacted = redact_value(&value);
-        
+
         assert_eq!(redacted["username"], "user123");
         assert_eq!(redacted["password"], "[REDACTED]");
         assert_eq!(redacted["token"], "[REDACTED]");

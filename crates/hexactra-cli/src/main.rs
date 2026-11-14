@@ -79,7 +79,10 @@ enum ProfileCommands {
     /// Show profile details
     Status { profile_id: String },
     /// Create a new profile
-    Create { name: String, chrome_profile_path: Option<String> },
+    Create {
+        name: String,
+        chrome_profile_path: Option<String>,
+    },
     /// Delete a profile
     Delete { profile_id: String },
 }
@@ -97,9 +100,16 @@ enum HostCommands {
 #[derive(Subcommand, Debug)]
 enum ActionCommands {
     /// Execute a click action
-    Click { session_id: String, selector: String },
+    Click {
+        session_id: String,
+        selector: String,
+    },
     /// Execute a type action
-    Type { session_id: String, selector: String, text: String },
+    Type {
+        session_id: String,
+        selector: String,
+        text: String,
+    },
     /// Execute a navigate action
     Navigate { session_id: String, url: String },
     /// Take a screenshot
@@ -125,9 +135,15 @@ enum HitlCommands {
     /// Show HITL request details
     Status { request_id: String },
     /// Approve a HITL request
-    Approve { request_id: String, owner_id: String },
+    Approve {
+        request_id: String,
+        owner_id: String,
+    },
     /// Reject a HITL request
-    Reject { request_id: String, owner_id: String },
+    Reject {
+        request_id: String,
+        owner_id: String,
+    },
 }
 
 #[tokio::main]
@@ -215,8 +231,14 @@ async fn handle_profile_command(cmd: ProfileCommands, config: &Config) -> Result
             warn!("Profile status not yet implemented");
             Ok(())
         }
-        ProfileCommands::Create { name, chrome_profile_path } => {
-            info!("Creating profile: {} with path: {:?}", name, chrome_profile_path);
+        ProfileCommands::Create {
+            name,
+            chrome_profile_path,
+        } => {
+            info!(
+                "Creating profile: {} with path: {:?}",
+                name, chrome_profile_path
+            );
             // TODO: Implement profile creation
             warn!("Profile creation not yet implemented");
             Ok(())
@@ -249,13 +271,23 @@ async fn handle_host_command(cmd: HostCommands, config: &Config) -> Result<()> {
 
 async fn handle_action_command(cmd: ActionCommands, _config: &Config) -> Result<()> {
     match cmd {
-        ActionCommands::Click { session_id, selector } => {
-            info!("Executing click action on {} in session {}", selector, session_id);
+        ActionCommands::Click {
+            session_id,
+            selector,
+        } => {
+            info!(
+                "Executing click action on {} in session {}",
+                selector, session_id
+            );
             // TODO: Implement click action
             warn!("Click action not yet implemented");
             Ok(())
         }
-        ActionCommands::Type { session_id, selector, text } => {
+        ActionCommands::Type {
+            session_id,
+            selector,
+            text,
+        } => {
             info!(
                 "Executing type action on {} with text '{}' in session {}",
                 selector, text, session_id
@@ -265,7 +297,10 @@ async fn handle_action_command(cmd: ActionCommands, _config: &Config) -> Result<
             Ok(())
         }
         ActionCommands::Navigate { session_id, url } => {
-            info!("Executing navigate action to {} in session {}", url, session_id);
+            info!(
+                "Executing navigate action to {} in session {}",
+                url, session_id
+            );
             // TODO: Implement navigate action
             warn!("Navigate action not yet implemented");
             Ok(())
@@ -282,7 +317,10 @@ async fn handle_action_command(cmd: ActionCommands, _config: &Config) -> Result<
 async fn handle_agent_command(cmd: AgentCommands, _config: &Config) -> Result<()> {
     match cmd {
         AgentCommands::Start { session_id, goal } => {
-            info!("Starting agent run with goal: '{}' in session {}", goal, session_id);
+            info!(
+                "Starting agent run with goal: '{}' in session {}",
+                goal, session_id
+            );
             // TODO: Implement agent start
             warn!("Agent start not yet implemented");
             Ok(())
@@ -316,14 +354,26 @@ async fn handle_hitl_command(cmd: HitlCommands, _config: &Config) -> Result<()> 
             warn!("HITL status not yet implemented");
             Ok(())
         }
-        HitlCommands::Approve { request_id, owner_id } => {
-            info!("Approving HITL request {} by owner {}", request_id, owner_id);
+        HitlCommands::Approve {
+            request_id,
+            owner_id,
+        } => {
+            info!(
+                "Approving HITL request {} by owner {}",
+                request_id, owner_id
+            );
             // TODO: Implement HITL approve
             warn!("HITL approve not yet implemented");
             Ok(())
         }
-        HitlCommands::Reject { request_id, owner_id } => {
-            info!("Rejecting HITL request {} by owner {}", request_id, owner_id);
+        HitlCommands::Reject {
+            request_id,
+            owner_id,
+        } => {
+            info!(
+                "Rejecting HITL request {} by owner {}",
+                request_id, owner_id
+            );
             // TODO: Implement HITL reject
             warn!("HITL reject not yet implemented");
             Ok(())

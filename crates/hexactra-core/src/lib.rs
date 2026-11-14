@@ -8,10 +8,10 @@
 //! - InteractionRequest for HITL (Human-in-the-Loop) workflow
 //! - Experience events for Agent Experience Framework (AEF) integration
 
+pub mod experience;
+pub mod policy;
 pub mod profile;
 pub mod viewer;
-pub mod policy;
-pub mod experience;
 
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
@@ -854,7 +854,7 @@ pub struct SchedulingDecision {
 }
 
 // Re-export viewer types for convenience
-pub use viewer::{ViewerToken, ViewerPermissions, InputLease};
+pub use viewer::{InputLease, ViewerPermissions, ViewerToken};
 
 // Re-export secret transport for integration
 pub mod secret_transport;

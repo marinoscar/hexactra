@@ -42,7 +42,10 @@ pub struct ListInteractionRequestsResponse {
 
 pub fn router() -> Router {
     Router::new()
-        .route("/", get(list_interaction_requests).post(create_interaction_request))
+        .route(
+            "/",
+            get(list_interaction_requests).post(create_interaction_request),
+        )
         .route("/{request_id}", get(get_interaction_request))
 }
 

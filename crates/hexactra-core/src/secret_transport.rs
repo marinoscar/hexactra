@@ -99,17 +99,17 @@ impl SecretStore {
     pub async fn store_secret(&self, value: String, ttl_minutes: i64) -> SecretId {
         let secret = SecretContent::new(value, ttl_minutes);
         let id = SecretId::new();
-        
+
         let mut store = self.secrets.write().await;
         store.insert(id, secret);
-        
+
         id
     }
 
     /// Retrieve a secret (consumes it)
     pub async fn retrieve_secret(&self, id: SecretId) -> Result<Option<String>> {
         let mut store = self.secrets.write().await;
-        
+
         if let Some(secret) = store.get_mut(&id) {
             if secret.can_be_used() {
                 secret.mark_used();
@@ -126,7 +126,7 @@ impl SecretStore {
     /// Verify a secret exists and is valid (without consuming it)
     pub async fn verify_secret(&self, id: SecretId) -> Result<bool> {
         let store = self.secrets.read().await;
-        
+
         if let Some(secret) = store.get(&id) {
             Ok(secret.can_be_used())
         } else {
@@ -137,7 +137,7 @@ impl SecretStore {
     /// Delete a secret immediately
     pub async fn delete_secret(&self, id: SecretId) -> Result<bool> {
         let mut store = self.secrets.write().await;
-        
+
         if store.remove(&id).is_some() {
             Ok(true)
         } else {
@@ -149,7 +149,7 @@ impl SecretStore {
     pub async fn cleanup_expired(&self) -> Result<u64> {
         let now = Utc::now();
         let mut store = self.secrets.write().await;
-        
+
         let expired_ids: Vec<SecretId> = store
             .iter()
             .filter(|(_, secret)| secret.is_expired())
@@ -166,7 +166,7 @@ impl SecretStore {
     /// Get count of active secrets
     pub async fn active_count(&self) -> usize {
         let store = self.secrets.read().await;
-        
+
         store
             .iter()
             .filter(|(_, secret)| secret.can_be_used())
@@ -219,12 +219,15 @@ impl SecretTransport {
         ttl_minutes: i64,
     ) -> Result<SecretReference> {
         let id = self.store.store_secret(value, ttl_minutes).await;
-        
+
         Ok(SecretReference::new(id, session_id, action_id, ttl_minutes))
     }
 
     /// Retrieve secret from reference
-    pub async fn retrieve_secret_from_reference(&self, ref_: &SecretReference) -> Result<Option<String>> {
+    pub async fn retrieve_secret_from_reference(
+        &self,
+        ref_: &SecretReference,
+    ) -> Result<Option<String>> {
         self.store.retrieve_secret(ref_.id).await
     }
 
@@ -252,13 +255,13 @@ mod tests {
     #[tokio::test]
     async fn test_store_and_retrieve_secret() {
         let store = SecretStore::new();
-        
+
         let secret_id = store.store_secret("test-password".to_string(), 15).await;
-        
+
         // Retrieve should work
         let retrieved = store.retrieve_secret(secret_id).await.unwrap();
         assert_eq!(retrieved, Some("test-password".to_string()));
-        
+
         // Retrieve again should fail (single-use)
         let retrieved_again = store.retrieve_secret(secret_id).await.unwrap();
         assert_eq!(retrieved_again, None);
@@ -267,10 +270,10 @@ mod tests {
     #[tokio::test]
     async fn test_secret_expiry() {
         let store = SecretStore::new();
-        
+
         // Store with very short TTL
         let secret_id = store.store_secret("expired-test".to_string(), -1).await;
-        
+
         // Should be expired
         let retrieved = store.retrieve_secret(secret_id).await.unwrap();
         assert_eq!(retrieved, None);
@@ -279,15 +282,15 @@ mod tests {
     #[tokio::test]
     async fn test_cleanup_expired() {
         let store = SecretStore::new();
-        
+
         // Store multiple secrets with different TTLs
         let _id1 = store.store_secret("secret1".to_string(), 15).await;
         let _id2 = store.store_secret("secret2".to_string(), -1).await;
-        
+
         // Cleanup should remove expired ones
         let removed = store.cleanup_expired().await.unwrap();
         assert_eq!(removed, 1);
-        
+
         // Active count should be 1
         assert_eq!(store.active_count().await, 1);
     }
@@ -295,21 +298,24 @@ mod tests {
     #[tokio::test]
     async fn test_secret_transport() {
         let transport = SecretTransport::new();
-        
+
         let session_id = Uuid::new_v4();
         let action_id = Uuid::new_v4();
-        
+
         // Create reference
         let ref_ = transport
             .create_secret_reference("test-secret".to_string(), session_id, action_id, 15)
             .await
             .unwrap();
-        
+
         assert_eq!(ref_.session_id, session_id);
         assert_eq!(ref_.action_id, action_id);
-        
+
         // Retrieve should work
-        let secret = transport.retrieve_secret_from_reference(&ref_).await.unwrap();
+        let secret = transport
+            .retrieve_secret_from_reference(&ref_)
+            .await
+            .unwrap();
         assert_eq!(secret, Some("test-secret".to_string()));
     }
 }

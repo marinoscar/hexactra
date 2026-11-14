@@ -149,11 +149,17 @@ impl AuditEvent {
     pub fn auth(principal: impl Into<String>, owner_id: Uuid, success: bool) -> Self {
         let mut event = Self::new(
             AuditEventType::Auth,
-            if success { AuditSeverity::Info } else { AuditSeverity::Security },
+            if success {
+                AuditSeverity::Info
+            } else {
+                AuditSeverity::Security
+            },
             principal,
             owner_id,
         );
-        event.details.insert("success".to_string(), serde_json::json!(success));
+        event
+            .details
+            .insert("success".to_string(), serde_json::json!(success));
         event
     }
 
@@ -171,7 +177,9 @@ impl AuditEvent {
             owner_id,
         );
         event.session_id = Some(session_id);
-        event.details.insert("action".to_string(), serde_json::json!(action.into()));
+        event
+            .details
+            .insert("action".to_string(), serde_json::json!(action.into()));
         event
     }
 
@@ -189,7 +197,10 @@ impl AuditEvent {
             owner_id,
         );
         event.session_id = Some(session_id);
-        event.details.insert("action_type".to_string(), serde_json::json!(action_type.into()));
+        event.details.insert(
+            "action_type".to_string(),
+            serde_json::json!(action_type.into()),
+        );
         event
     }
 
@@ -203,12 +214,18 @@ impl AuditEvent {
         let decision_str = decision.into();
         let mut event = Self::new(
             AuditEventType::HITL,
-            if decision_str == "approved" { AuditSeverity::Info } else { AuditSeverity::Warning },
+            if decision_str == "approved" {
+                AuditSeverity::Info
+            } else {
+                AuditSeverity::Warning
+            },
             principal,
             owner_id,
         );
         event.session_id = Some(session_id);
-        event.details.insert("decision".to_string(), serde_json::json!(decision_str));
+        event
+            .details
+            .insert("decision".to_string(), serde_json::json!(decision_str));
         event
     }
 }
@@ -242,13 +259,13 @@ pub struct AuditDb {
 impl AuditDb {
     /// Create or open the audit database
     pub fn new(db_path: &str) -> Result<Self, anyhow::Error> {
-        let conn = Connection::open(db_path)
-            .map_err(|e| anyhow!("Failed to open database: {}", e))?;
-        
+        let conn =
+            Connection::open(db_path).map_err(|e| anyhow!("Failed to open database: {}", e))?;
+
         // Create the audit table if it doesn't exist
         conn.execute_batch(AUDIT_TABLE_SQL)
             .map_err(|e| anyhow!("Failed to create audit table: {}", e))?;
-        
+
         Ok(Self { conn })
     }
 
@@ -259,22 +276,24 @@ impl AuditDb {
         let json_correlation_id = event.correlation_id.map(|id| id.to_string());
         let json_session_id = event.session_id.map(|id| id.to_string());
 
-        self.conn.execute(
-            AUDIT_INSERT_SQL,
-            params![
-                event.id.to_string(),
-                event.event_type.as_str_name(),
-                event.severity.as_str_name(),
-                event.timestamp.to_rfc3339(),
-                event.principal,
-                event.owner_id.to_string(),
-                json_session_id,
-                json_details,
-                json_correlation_id,
-                event.ip_address,
-                event.user_agent,
-            ],
-        ).map_err(|e| anyhow!("Failed to insert audit event: {}", e))?;
+        self.conn
+            .execute(
+                AUDIT_INSERT_SQL,
+                params![
+                    event.id.to_string(),
+                    event.event_type.as_str_name(),
+                    event.severity.as_str_name(),
+                    event.timestamp.to_rfc3339(),
+                    event.principal,
+                    event.owner_id.to_string(),
+                    json_session_id,
+                    json_details,
+                    json_correlation_id,
+                    event.ip_address,
+                    event.user_agent,
+                ],
+            )
+            .map_err(|e| anyhow!("Failed to insert audit event: {}", e))?;
 
         Ok(())
     }
@@ -301,16 +320,20 @@ impl AuditDb {
         }
 
         query.push_str(" ORDER BY timestamp DESC");
-        
+
         if let Some(lim) = limit {
             query.push_str(&format!(" LIMIT {}", lim));
         }
 
-        let mut stmt = self.conn.prepare(&query)
+        let mut stmt = self
+            .conn
+            .prepare(&query)
             .map_err(|e| anyhow!("Failed to prepare query: {}", e))?;
-        let events = stmt.query_map(params_from_iter(params.iter()), |row| {
-            Ok(self.row_to_event(row)?)
-        }).map_err(|e| anyhow!("Failed to execute query: {}", e))?;
+        let events = stmt
+            .query_map(params_from_iter(params.iter()), |row| {
+                Ok(self.row_to_event(row)?)
+            })
+            .map_err(|e| anyhow!("Failed to execute query: {}", e))?;
 
         let mut result = Vec::new();
         for event in events {
@@ -334,27 +357,51 @@ impl AuditDb {
         };
         let event_type_str: String = match row.get(1) {
             Ok(s) => s,
-            Err(_) => return Err(rusqlite::Error::InvalidParameterName("event_type".to_string())),
+            Err(_) => {
+                return Err(rusqlite::Error::InvalidParameterName(
+                    "event_type".to_string(),
+                ))
+            }
         };
         let severity_str: String = match row.get(2) {
             Ok(s) => s,
-            Err(_) => return Err(rusqlite::Error::InvalidParameterName("severity".to_string())),
+            Err(_) => {
+                return Err(rusqlite::Error::InvalidParameterName(
+                    "severity".to_string(),
+                ))
+            }
         };
         let timestamp_str: String = match row.get(3) {
             Ok(s) => s,
-            Err(_) => return Err(rusqlite::Error::InvalidParameterName("timestamp".to_string())),
+            Err(_) => {
+                return Err(rusqlite::Error::InvalidParameterName(
+                    "timestamp".to_string(),
+                ))
+            }
         };
         let principal: String = match row.get(4) {
             Ok(s) => s,
-            Err(_) => return Err(rusqlite::Error::InvalidParameterName("principal".to_string())),
+            Err(_) => {
+                return Err(rusqlite::Error::InvalidParameterName(
+                    "principal".to_string(),
+                ))
+            }
         };
         let owner_id_str: String = match row.get(5) {
             Ok(s) => s,
-            Err(_) => return Err(rusqlite::Error::InvalidParameterName("owner_id".to_string())),
+            Err(_) => {
+                return Err(rusqlite::Error::InvalidParameterName(
+                    "owner_id".to_string(),
+                ))
+            }
         };
         let session_id_opt: Option<String> = match row.get(6) {
             Ok(s) => s,
-            Err(_) => return Err(rusqlite::Error::InvalidParameterName("session_id".to_string())),
+            Err(_) => {
+                return Err(rusqlite::Error::InvalidParameterName(
+                    "session_id".to_string(),
+                ))
+            }
         };
         let details_json: String = match row.get(7) {
             Ok(s) => s,
@@ -362,37 +409,64 @@ impl AuditDb {
         };
         let correlation_id_opt: Option<String> = match row.get(8) {
             Ok(s) => s,
-            Err(_) => return Err(rusqlite::Error::InvalidParameterName("correlation_id".to_string())),
+            Err(_) => {
+                return Err(rusqlite::Error::InvalidParameterName(
+                    "correlation_id".to_string(),
+                ))
+            }
         };
         let ip_address_opt: Option<String> = match row.get(9) {
             Ok(s) => s,
-            Err(_) => return Err(rusqlite::Error::InvalidParameterName("ip_address".to_string())),
+            Err(_) => {
+                return Err(rusqlite::Error::InvalidParameterName(
+                    "ip_address".to_string(),
+                ))
+            }
         };
         let user_agent_opt: Option<String> = match row.get(10) {
             Ok(s) => s,
-            Err(_) => return Err(rusqlite::Error::InvalidParameterName("user_agent".to_string())),
+            Err(_) => {
+                return Err(rusqlite::Error::InvalidParameterName(
+                    "user_agent".to_string(),
+                ))
+            }
         };
 
         let id = match Uuid::parse_str(&id_str) {
             Ok(id) => id,
-            Err(_) => return Err(rusqlite::Error::InvalidParameterName("id_parse".to_string())),
+            Err(_) => {
+                return Err(rusqlite::Error::InvalidParameterName(
+                    "id_parse".to_string(),
+                ))
+            }
         };
-        let event_type = parse_audit_event_type(&event_type_str)
-            .unwrap_or(AuditEventType::Session);
-        let severity = parse_audit_severity(&severity_str)
-            .unwrap_or(AuditSeverity::Info);
+        let event_type = parse_audit_event_type(&event_type_str).unwrap_or(AuditEventType::Session);
+        let severity = parse_audit_severity(&severity_str).unwrap_or(AuditSeverity::Info);
         let timestamp = match DateTime::parse_from_rfc3339(&timestamp_str) {
             Ok(dt) => dt.into(),
-            Err(_) => return Err(rusqlite::Error::InvalidParameterName("timestamp_parse".to_string())),
+            Err(_) => {
+                return Err(rusqlite::Error::InvalidParameterName(
+                    "timestamp_parse".to_string(),
+                ))
+            }
         };
         let owner_id = match Uuid::parse_str(&owner_id_str) {
             Ok(id) => id,
-            Err(_) => return Err(rusqlite::Error::InvalidParameterName("owner_id_parse".to_string())),
+            Err(_) => {
+                return Err(rusqlite::Error::InvalidParameterName(
+                    "owner_id_parse".to_string(),
+                ))
+            }
         };
         let session_id = session_id_opt.and_then(|s| Uuid::parse_str(&s).ok());
-        let details: HashMap<String, serde_json::Value> = match serde_json::from_str(&details_json) {
+        let details: HashMap<String, serde_json::Value> = match serde_json::from_str(&details_json)
+        {
             Ok(d) => d,
-            Err(_) => return Err(rusqlite::Error::InvalidParameterName("details_parse".to_string())),
+            Err(_) => {
+                return Err(rusqlite::Error::InvalidParameterName(
+                    "details_parse".to_string(),
+                ))
+            }
         };
 
         Ok(AuditEvent {
@@ -505,7 +579,10 @@ mod tests {
         event = event.add_detail("username", serde_json::json!("john"));
 
         let details = &event.details;
-        assert_eq!(details.get("password"), Some(&serde_json::json!("[REDACTED]")));
+        assert_eq!(
+            details.get("password"),
+            Some(&serde_json::json!("[REDACTED]"))
+        );
         assert_eq!(details.get("username"), Some(&serde_json::json!("john")));
     }
 

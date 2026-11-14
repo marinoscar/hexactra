@@ -8,16 +8,16 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::io::{self, Write};
-use tracing::{info, error, warn, debug};
+use tracing::{debug, error, info, warn};
 
-mod protocol;
 mod bridge;
+mod protocol;
 
-use protocol::{
-    read_message, write_message, write_error, validate_envelope, create_error_message,
-    create_ready_message, HostId, CorrelationId,
-};
 use bridge::worker_ready;
+use protocol::{
+    create_error_message, create_ready_message, read_message, validate_envelope, write_error,
+    write_message, CorrelationId, HostId,
+};
 
 #[derive(Parser, Debug)]
 #[command(name = "hexactra-native-host")]
@@ -63,7 +63,7 @@ async fn main() -> Result<()> {
 
                 // Start a span for message handling
                 let _span = hexactra_telemetry::start_span("native-host.message", "native-host");
-                
+
                 // Parse and validate the envelope
                 match serde_json::from_str::<protocol::Envelope>(&message) {
                     Ok(envelope) => {
@@ -74,7 +74,9 @@ async fn main() -> Result<()> {
                                 &format!("Validation failed: {}", e),
                                 envelope.correlation_id,
                             );
-                            if let Err(e) = write_message(&mut stdout, &serde_json::to_string(&error_msg)?) {
+                            if let Err(e) =
+                                write_message(&mut stdout, &serde_json::to_string(&error_msg)?)
+                            {
                                 error!("Failed to write error response: {}", e);
                             }
                             continue;
@@ -89,11 +91,11 @@ async fn main() -> Result<()> {
                             }
                             Err(e) => {
                                 error!("Message handling failed: {}", e);
-                                let error_msg = create_error_message(
-                                    &e.to_string(),
-                                    envelope.correlation_id,
-                                );
-                                if let Err(e) = write_message(&mut stdout, &serde_json::to_string(&error_msg)?) {
+                                let error_msg =
+                                    create_error_message(&e.to_string(), envelope.correlation_id);
+                                if let Err(e) =
+                                    write_message(&mut stdout, &serde_json::to_string(&error_msg)?)
+                                {
                                     error!("Failed to write error response: {}", e);
                                 }
                             }
@@ -106,7 +108,9 @@ async fn main() -> Result<()> {
                             &format!("Parse failed: {}", e),
                             CorrelationId::new(),
                         );
-                        if let Err(e) = write_message(&mut stdout, &serde_json::to_string(&error_msg)?) {
+                        if let Err(e) =
+                            write_message(&mut stdout, &serde_json::to_string(&error_msg)?)
+                        {
                             error!("Failed to write error response: {}", e);
                         }
                     }
@@ -145,7 +149,7 @@ async fn handle_message(
     host_id: HostId,
 ) -> Result<String> {
     debug!("Handling message type: {}", envelope.message_type);
-    
+
     let _span = hexactra_telemetry::start_span("native-host.handle", "native-host");
 
     match envelope.message_type.as_str() {
@@ -227,10 +231,7 @@ async fn handle_message(
 }
 
 /// Forward a message to the session worker via Unix socket
-async fn forward_to_worker(
-    envelope: &protocol::Envelope,
-    socket_path: &str,
-) -> Result<String> {
+async fn forward_to_worker(envelope: &protocol::Envelope, socket_path: &str) -> Result<String> {
     // TODO: Implement actual worker connection and message forwarding
     // For now, return a mock response
 
@@ -264,21 +265,25 @@ async fn forward_to_worker(
 
 /// Handle secret storage request from Chrome extension
 async fn handle_store_secret(envelope: &protocol::Envelope) -> Result<String> {
-    let payload = envelope.payload.as_ref()
+    let payload = envelope
+        .payload
+        .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Missing payload for store_secret"))?;
-    
-    let value = payload.get("value")
+
+    let value = payload
+        .get("value")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing 'value' in payload"))?;
-    
-    let ttl_minutes = payload.get("ttl_minutes")
+
+    let ttl_minutes = payload
+        .get("ttl_minutes")
         .and_then(|v| v.as_i64())
         .unwrap_or(15); // Default 15 minutes
 
     // Store the secret in memory (never persisted)
     // In production, this would use a secure in-memory store
     debug!("Storing secret with TTL {} minutes", ttl_minutes);
-    
+
     // For now, we just acknowledge the storage request
     // The actual secret handling would be done by the worker via IPC
     let response = protocol::Envelope {
@@ -302,22 +307,25 @@ async fn handle_store_secret(envelope: &protocol::Envelope) -> Result<String> {
             "ttl_minutes": ttl_minutes
         })),
     };
-    
+
     serde_json::to_string(&response).context("Failed to serialize store_secret response")
 }
 
 /// Handle secret retrieval request from Chrome extension
 async fn handle_retrieve_secret(envelope: &protocol::Envelope) -> Result<String> {
-    let payload = envelope.payload.as_ref()
+    let payload = envelope
+        .payload
+        .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Missing payload for retrieve_secret"))?;
-    
-    let secret_id = payload.get("secret_id")
+
+    let secret_id = payload
+        .get("secret_id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing 'secret_id' in payload"))?;
 
     // Retrieve the secret (consumes it)
     debug!("Retrieving secret: {}", secret_id);
-    
+
     // In production, this would retrieve from the worker's secret store
     let response = protocol::Envelope {
         version: envelope.version.clone(),
@@ -340,22 +348,25 @@ async fn handle_retrieve_secret(envelope: &protocol::Envelope) -> Result<String>
             "secret_id": secret_id
         })),
     };
-    
+
     serde_json::to_string(&response).context("Failed to serialize retrieve_secret response")
 }
 
 /// Handle secret verification request from Chrome extension
 async fn handle_verify_secret(envelope: &protocol::Envelope) -> Result<String> {
-    let payload = envelope.payload.as_ref()
+    let payload = envelope
+        .payload
+        .as_ref()
         .ok_or_else(|| anyhow::anyhow!("Missing payload for verify_secret"))?;
-    
-    let secret_id = payload.get("secret_id")
+
+    let secret_id = payload
+        .get("secret_id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("Missing 'secret_id' in payload"))?;
 
     // Verify the secret is still valid
     debug!("Verifying secret: {}", secret_id);
-    
+
     let response = protocol::Envelope {
         version: envelope.version.clone(),
         message_type: "success".to_string(),
@@ -377,6 +388,6 @@ async fn handle_verify_secret(envelope: &protocol::Envelope) -> Result<String> {
             "secret_id": secret_id
         })),
     };
-    
+
     serde_json::to_string(&response).context("Failed to serialize verify_secret response")
 }

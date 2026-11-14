@@ -122,7 +122,7 @@ impl ArtifactStore {
         Self {
             storage_root: root,
             max_artifact_size: 10 * 1024 * 1024, // 10 MB default limit
-            default_retention_days: 7, // 7 days default retention
+            default_retention_days: 7,           // 7 days default retention
         }
     }
 
@@ -174,11 +174,10 @@ impl ArtifactStore {
 
         let artifact_id = Uuid::new_v4();
         let path = self.artifact_path(owner_id, &artifact_id);
-        
+
         // Create parent directories
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| anyhow!("Failed to create directory: {}", e))?;
+            fs::create_dir_all(parent).map_err(|e| anyhow!("Failed to create directory: {}", e))?;
         }
 
         // Write artifact data
@@ -187,7 +186,7 @@ impl ArtifactStore {
             .map_err(|e| anyhow!("Failed to write artifact: {}", e))?;
 
         let metadata = std::fs::metadata(&path)?;
-        
+
         let artifact = Artifact {
             id: artifact_id,
             owner_id,
@@ -207,7 +206,7 @@ impl ArtifactStore {
     /// Retrieve an artifact
     pub fn retrieve(&self, artifact_id: Uuid, owner_id: Uuid) -> Result<Vec<u8>, anyhow::Error> {
         let path = self.artifact_path(owner_id, &artifact_id);
-        
+
         if !path.exists() {
             return Err(anyhow!("Artifact not found"));
         }
@@ -220,8 +219,7 @@ impl ArtifactStore {
             }
         }
 
-        fs::read(&path)
-            .map_err(|e| anyhow!("Failed to read artifact: {}", e))
+        fs::read(&path).map_err(|e| anyhow!("Failed to read artifact: {}", e))
     }
 
     /// Get artifact metadata
@@ -237,7 +235,10 @@ impl ArtifactStore {
             owner_id,
             session_id: None,
             artifact_type: ArtifactType::Data,
-            path: self.artifact_path(owner_id, &artifact_id).to_string_lossy().to_string(),
+            path: self
+                .artifact_path(owner_id, &artifact_id)
+                .to_string_lossy()
+                .to_string(),
             size_bytes: 0,
             expires_at: Some(Utc::now() + chrono::Duration::days(self.default_retention_days)),
             permission: ArtifactPermission::Owner,
@@ -249,13 +250,12 @@ impl ArtifactStore {
     /// Delete an artifact
     pub fn delete(&self, artifact_id: Uuid, owner_id: Uuid) -> Result<(), anyhow::Error> {
         let path = self.artifact_path(owner_id, &artifact_id);
-        
+
         if !path.exists() {
             return Err(anyhow!("Artifact not found"));
         }
 
-        fs::remove_file(&path)
-            .map_err(|e| anyhow!("Failed to delete artifact: {}", e))?;
+        fs::remove_file(&path).map_err(|e| anyhow!("Failed to delete artifact: {}", e))?;
 
         Ok(())
     }
@@ -271,10 +271,10 @@ impl ArtifactStore {
     /// Clean up expired artifacts
     pub fn cleanup_expired(&self) -> Result<usize, anyhow::Error> {
         let mut cleaned = 0;
-        
+
         // In production, this would query the database for expired artifacts
         // and delete them from storage
-        
+
         Ok(cleaned)
     }
 
@@ -310,9 +310,9 @@ mod tests {
     fn test_artifact_store_init() {
         let tmp_dir = TempDir::new().unwrap();
         let store = ArtifactStore::new(tmp_dir.path());
-        
+
         store.init().unwrap();
-        
+
         assert!(tmp_dir.path().exists());
     }
 
@@ -322,14 +322,16 @@ mod tests {
         let store = ArtifactStore::new(tmp_dir.path())
             .with_max_size(1024 * 1024)
             .with_retention_days(7);
-        
+
         store.init().unwrap();
-        
+
         let owner_id = Uuid::new_v4();
         let data = b"test artifact data";
-        
-        let artifact = store.store(owner_id, ArtifactType::Data, data, None).unwrap();
-        
+
+        let artifact = store
+            .store(owner_id, ArtifactType::Data, data, None)
+            .unwrap();
+
         assert_eq!(artifact.owner_id, owner_id);
         assert_eq!(artifact.artifact_type, ArtifactType::Data);
         assert_eq!(artifact.size_bytes, data.len() as u64);
@@ -339,10 +341,10 @@ mod tests {
     fn test_artifact_redaction() {
         let tmp_dir = TempDir::new().unwrap();
         let store = ArtifactStore::new(tmp_dir.path());
-        
+
         let original = b"password: secret123";
         let redacted = store.redact_screenshot(original).unwrap();
-        
+
         // For now, redaction is a no-op in tests
         assert_eq!(redacted, original.to_vec());
     }

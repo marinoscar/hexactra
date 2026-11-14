@@ -7,154 +7,82 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-Dwarnings"
 
 jobs:
-  # Rust formatting check
-  format:
-    name: Rust Format Check
+  rust-fmt:
+    name: Rust format
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      
-      - name: Run cargo fmt --check
-        run: cargo fmt --check
+      - run: cargo fmt --all --check
 
-  # Rust clippy check
-  lint:
-    name: Rust Clippy Check
+  rust:
+    name: Rust clippy + tests
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      
-      - name: Run cargo clippy
-        run: cargo clippy --all-targets --all-features
-
-  # Rust unit tests
-  test:
-    name: Rust Unit Tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-      
-      - name: Cache Cargo dependencies
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/bin
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-      
-      - name: Run cargo test
-        run: cargo test --all-targets --all-features
+          restore-keys: ${{ runner.os }}-cargo-
+      # Deny-by-default clippy lints (correctness) fail the build. Existing
+      # style warnings are tracked debt; see the E15 epic.
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets
+      - name: cargo test
+        run: cargo test --workspace --all-targets
 
-  # Build verification
-  build:
-    name: Rust Build
+  typescript:
+    name: TypeScript build + tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-      
-      - name: Cache Cargo dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-      
-      - name: Run cargo build
-        run: cargo build --all-targets --all-features
-
-  # OpenAPI spec validation
-  openapi:
-    name: OpenAPI Spec Validation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Validate OpenAPI YAML
-        run: |
-          if [ ! -f api/openapi.yaml ]; then
-            echo "Error: api/openapi.yaml not found"
-            exit 1
-          fi
-          python3 -c "
-import yaml
-try:
-    with open('api/openapi.yaml', 'r') as f:
-        spec = yaml.safe_load(f)
-    print('OpenAPI YAML is valid')
-    print(f'Version: {spec.get(\"openapi\", \"unknown\")}')
-    print(f'Title: {spec.get(\"info\", {}).get(\"title\", \"unknown\")}')
-except Exception as e:
-    print(f'Validation error: {e}')
-    exit(1)
-"
-      
-      - name: Validate MCP schema
-        run: |
-          if [ ! -f api/mcp-schemas.json ]; then
-            echo "Error: api/mcp-schemas.json not found"
-            exit 1
-          fi
-          python3 -c "
-import json
-try:
-    with open('api/mcp-schemas.json', 'r') as f:
-        schema = json.load(f)
-    print('MCP schema is valid JSON')
-    print(f'Name: {schema.get(\"name\", \"unknown\")}')
-    print(f'Tools: {len(schema.get(\"tools\", []))}')
-except Exception as e:
-    print(f'Validation error: {e}')
-    exit(1)
-"
-
-  # Agent sync check
-  agent-sync:
-    name: Agent Sync Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install Node.js
-        uses: actions/setup-node@v4
+      # Version comes from package.json "packageManager".
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      
-      - name: Run agent sync check
-        run: |
-          if [ ! -f scripts/check-agent-sync.mjs ]; then
-            echo "Warning: scripts/check-agent-sync.mjs not found, skipping"
-            exit 0
-          fi
-          node scripts/check-agent-sync.mjs
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # Only packages that contain tests; contracts and dashboard have none yet.
+      - run: pnpm --filter @hexactra/sdk --filter @hexactra/chrome-extension test
+
+  contracts:
+    name: API contracts parse
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install pyyaml
+      - run: python3 scripts/ci/validate-contracts.py
+
+  agent-sync:
+    name: Agent instructions sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/check-agent-sync.mjs

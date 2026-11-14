@@ -73,10 +73,12 @@ async fn get_operation_full(
     State(db_state): State<DbState>,
     operation_id: axum::extract::Path<Uuid>,
 ) -> Result<Json<Operation>, (StatusCode, String)> {
-    let operation = db_state
-        .get_operation(*operation_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+    let operation = db_state.get_operation(*operation_id).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
 
     match operation {
         Some(o) => Ok(Json(o)),
@@ -100,10 +102,12 @@ async fn create_operation(
         completed_at: None,
     };
 
-    db_state
-        .create_operation(&operation)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create operation: {}", e)))?;
+    db_state.create_operation(&operation).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create operation: {}", e),
+        )
+    })?;
 
     // Append event for audit trail
     let _ = db_state
@@ -129,11 +133,19 @@ async fn acknowledge_operation(
     let mut operation = db_state
         .get_operation(request.operation_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Database error: {}", e),
+            )
+        })?
         .ok_or_else(|| (StatusCode::NOT_FOUND, "Operation not found".to_string()))?;
 
     if operation.status != OperationStatus::Queued {
-        return Err((StatusCode::BAD_REQUEST, "Operation already acknowledged".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Operation already acknowledged".to_string(),
+        ));
     }
 
     operation.status = OperationStatus::InProgress;
@@ -147,7 +159,12 @@ async fn acknowledge_operation(
             operation.completed_at,
         )
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update operation: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to update operation: {}", e),
+            )
+        })?;
 
     // Append event for audit trail
     let _ = db_state
@@ -176,7 +193,12 @@ async fn update_operation_status(
     let operation = db_state
         .get_operation(*operation_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Database error: {}", e),
+            )
+        })?
         .ok_or_else(|| (StatusCode::NOT_FOUND, "Operation not found".to_string()))?;
 
     let started_at = if status == OperationStatus::InProgress {
@@ -185,7 +207,8 @@ async fn update_operation_status(
         None
     };
 
-    let completed_at = if status == OperationStatus::Completed || status == OperationStatus::Failed {
+    let completed_at = if status == OperationStatus::Completed || status == OperationStatus::Failed
+    {
         Some(Utc::now())
     } else {
         None
@@ -194,7 +217,12 @@ async fn update_operation_status(
     db_state
         .update_operation_status(operation.id.as_uuid(), status, started_at, completed_at)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update operation: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to update operation: {}", e),
+            )
+        })?;
 
     // Append event for audit trail
     let _ = db_state
@@ -224,10 +252,18 @@ async fn acquire_lease(
     let existing_lease = db_state
         .get_active_lease(&request.resource_type, &request.resource_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Database error: {}", e),
+            )
+        })?;
 
     if existing_lease.is_some() {
-        return Err((StatusCode::CONFLICT, "Resource is already leased".to_string()));
+        return Err((
+            StatusCode::CONFLICT,
+            "Resource is already leased".to_string(),
+        ));
     }
 
     // Store lease in database
@@ -240,7 +276,12 @@ async fn acquire_lease(
             expires_at,
         )
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to acquire lease: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to acquire lease: {}", e),
+            )
+        })?;
 
     Ok(Json(AcquireLeaseResponse {
         lease_id,
@@ -260,13 +301,23 @@ async fn release_lease(
     let lease = db_state
         .get_lease(LeaseId::from_uuid(request.lease_id))
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Database error: {}", e),
+            )
+        })?
         .ok_or_else(|| (StatusCode::NOT_FOUND, "Lease not found".to_string()))?;
 
     db_state
         .release_lease(LeaseId::from_uuid(request.lease_id))
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to release lease: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to release lease: {}", e),
+            )
+        })?;
 
     Ok(Json(AcquireLeaseResponse {
         lease_id: request.lease_id,
@@ -289,7 +340,12 @@ async fn get_events_since(
     let events = db_state
         .get_events_since(cursor, limit)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Database error: {}", e),
+            )
+        })?;
 
     let mut result = Vec::new();
     for (id, event_type, resource_id, resource_type, payload) in events {
@@ -298,7 +354,10 @@ async fn get_events_since(
         event.insert("event_type".to_string(), event_type.into());
         event.insert("resource_id".to_string(), resource_id.into());
         event.insert("resource_type".to_string(), resource_type.into());
-        event.insert("payload".to_string(), serde_json::from_str(&payload).unwrap_or(serde_json::Value::Null));
+        event.insert(
+            "payload".to_string(),
+            serde_json::from_str(&payload).unwrap_or(serde_json::Value::Null),
+        );
         result.push(serde_json::Value::Object(event));
     }
 
@@ -314,7 +373,12 @@ async fn reconcile_operations(
     let operations = db_state
         .list_operations_by_status(OperationStatus::InProgress)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Database error: {}", e),
+            )
+        })?;
 
     Ok(Json(operations))
 }

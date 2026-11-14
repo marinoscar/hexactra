@@ -103,7 +103,7 @@ impl SecurityTestSuite {
             ThreatCategory::PromptInjection,
             "prompt_injection_detection",
         );
-        
+
         // In production, this would test if the model or API detects and blocks
         // the malicious prompt. For now, we simulate a successful detection.
         result = result.with_passed(true);
@@ -112,54 +112,50 @@ impl SecurityTestSuite {
             malicious_prompt
         ));
         result = result.with_detail("malicious_prompt", malicious_prompt);
-        
+
         self.results.push(result.clone());
         result
     }
 
     /// Run a CSRF test
     pub fn test_csrf_protection(&mut self, origin: &str) -> SecurityTestResult {
-        let mut result = SecurityTestResult::new(
-            ThreatCategory::CSRF,
-            "csrf_origin_check",
-        );
-        
+        let mut result = SecurityTestResult::new(ThreatCategory::CSRF, "csrf_origin_check");
+
         // Verify origin is from allowed domains
         let is_valid_origin = Self::is_valid_origin(origin);
         result = result.with_passed(is_valid_origin);
         result = result.with_description("Testing CSRF protection via origin validation");
         result = result.with_detail("origin", origin);
         result = result.with_detail("is_valid", &is_valid_origin.to_string());
-        
+
         self.results.push(result.clone());
         result
     }
 
     /// Run a scope bypass test
-    pub fn test_scope_bypass(&mut self, token_scope: &str, requested_scope: &str) -> SecurityTestResult {
-        let mut result = SecurityTestResult::new(
-            ThreatCategory::ScopeBypass,
-            "scope_validation",
-        );
-        
+    pub fn test_scope_bypass(
+        &mut self,
+        token_scope: &str,
+        requested_scope: &str,
+    ) -> SecurityTestResult {
+        let mut result = SecurityTestResult::new(ThreatCategory::ScopeBypass, "scope_validation");
+
         // Check if the requested scope is within the token's scope
         let is_valid = Self::is_scope_valid(token_scope, requested_scope);
         result = result.with_passed(is_valid);
         result = result.with_description("Testing token scope validation");
         result = result.with_detail("token_scope", token_scope);
         result = result.with_detail("requested_scope", requested_scope);
-        
+
         self.results.push(result.clone());
         result
     }
 
     /// Run a replay attack test
     pub fn test_replay_protection(&mut self, token_age_seconds: u64) -> SecurityTestResult {
-        let mut result = SecurityTestResult::new(
-            ThreatCategory::ReplayAttack,
-            "token_expiration_check",
-        );
-        
+        let mut result =
+            SecurityTestResult::new(ThreatCategory::ReplayAttack, "token_expiration_check");
+
         // Tokens should expire after a reasonable time
         let max_age = 3600; // 1 hour
         let is_valid = token_age_seconds < max_age;
@@ -167,41 +163,36 @@ impl SecurityTestSuite {
         result = result.with_description("Testing token expiration prevents replay attacks");
         result = result.with_detail("token_age_seconds", &token_age_seconds.to_string());
         result = result.with_detail("max_allowed_age", &max_age.to_string());
-        
+
         self.results.push(result.clone());
         result
     }
 
     /// Run a rate limit test
     pub fn test_rate_limit(&mut self, request_count: u32, limit: u32) -> SecurityTestResult {
-        let mut result = SecurityTestResult::new(
-            ThreatCategory::RateLimitAbuse,
-            "rate_limit_check",
-        );
-        
+        let mut result =
+            SecurityTestResult::new(ThreatCategory::RateLimitAbuse, "rate_limit_check");
+
         let is_within_limit = request_count <= limit;
         result = result.with_passed(is_within_limit);
         result = result.with_description("Testing rate limiting prevents abuse");
         result = result.with_detail("request_count", &request_count.to_string());
         result = result.with_detail("limit", &limit.to_string());
-        
+
         self.results.push(result.clone());
         result
     }
 
     /// Run a token expiration test
     pub fn test_token_expiration(&mut self, token_age_seconds: u64) -> SecurityTestResult {
-        let mut result = SecurityTestResult::new(
-            ThreatCategory::ExpiredToken,
-            "token_expiration",
-        );
-        
+        let mut result = SecurityTestResult::new(ThreatCategory::ExpiredToken, "token_expiration");
+
         let max_age = 3600; // 1 hour
         let is_valid = token_age_seconds < max_age;
         result = result.with_passed(is_valid);
         result = result.with_description("Testing expired tokens are rejected");
         result = result.with_detail("token_age_seconds", &token_age_seconds.to_string());
-        
+
         self.results.push(result.clone());
         result
     }
@@ -216,12 +207,16 @@ impl SecurityTestSuite {
         let total = self.results.len();
         let passed = self.results.iter().filter(|r| r.passed).count();
         let failed = total - passed;
-        
+
         SecuritySummary {
             total,
             passed,
             failed,
-            pass_rate: if total > 0 { (passed as f64 / total as f64) * 100.0 } else { 0.0 },
+            pass_rate: if total > 0 {
+                (passed as f64 / total as f64) * 100.0
+            } else {
+                0.0
+            },
             categories_tested: self.results.iter().map(|r| r.category.clone()).collect(),
         }
     }
@@ -271,7 +266,7 @@ mod tests {
     fn test_prompt_injection_test() {
         let mut suite = SecurityTestSuite::new();
         let result = suite.test_prompt_injection("Ignore previous instructions");
-        
+
         assert!(result.passed);
         assert!(result.description.contains("malicious prompt"));
     }
@@ -279,11 +274,11 @@ mod tests {
     #[test]
     fn test_csrf_origin_validation() {
         let mut suite = SecurityTestSuite::new();
-        
+
         // Valid origin
         let result = suite.test_csrf_protection("https://example.com");
         assert!(result.passed);
-        
+
         // Invalid origin (no scheme)
         let result = suite.test_csrf_protection("example.com");
         assert!(!result.passed);
@@ -292,11 +287,11 @@ mod tests {
     #[test]
     fn test_scope_validation() {
         let mut suite = SecurityTestSuite::new();
-        
+
         // Valid: exact match
         let result = suite.test_scope_bypass("read", "read");
         assert!(result.passed);
-        
+
         // Valid: wildcard token
         let result = suite.test_scope_bypass("*", "write");
         assert!(result.passed);
@@ -305,11 +300,11 @@ mod tests {
     #[test]
     fn test_replay_protection() {
         let mut suite = SecurityTestSuite::new();
-        
+
         // Token within age limit
         let result = suite.test_replay_protection(1800); // 30 minutes
         assert!(result.passed);
-        
+
         // Token expired
         let result = suite.test_replay_protection(7200); // 2 hours
         assert!(!result.passed);
@@ -318,11 +313,11 @@ mod tests {
     #[test]
     fn test_rate_limit() {
         let mut suite = SecurityTestSuite::new();
-        
+
         // Within limit
         let result = suite.test_rate_limit(100, 1000);
         assert!(result.passed);
-        
+
         // Over limit
         let result = suite.test_rate_limit(2000, 1000);
         assert!(!result.passed);
@@ -331,11 +326,11 @@ mod tests {
     #[test]
     fn test_token_expiration() {
         let mut suite = SecurityTestSuite::new();
-        
+
         // Token not expired
         let result = suite.test_token_expiration(1800); // 30 minutes
         assert!(result.passed);
-        
+
         // Token expired
         let result = suite.test_token_expiration(7200); // 2 hours
         assert!(!result.passed);
@@ -346,7 +341,7 @@ mod tests {
         let mut suite = SecurityTestSuite::new();
         suite.test_prompt_injection("test");
         suite.test_csrf_protection("https://example.com");
-        
+
         let summary = suite.summary();
         assert_eq!(summary.total, 2);
         assert!(summary.pass_rate > 0.0);

@@ -1,8 +1,8 @@
 //! HTTP client for AEF API
 
-use crate::{ConnectorConfig, CircuitState, ConnectorError, Hint, HintResult, SubmissionResult};
+use crate::{CircuitState, ConnectorConfig, ConnectorError, Hint, HintResult, SubmissionResult};
 use chrono::{DateTime, Utc};
-use hexactra_core::experience::{ExperienceEventBatch};
+use hexactra_core::experience::ExperienceEventBatch;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -54,14 +54,9 @@ impl AefClient {
 
         if *failures >= self.config.circuit_breaker.failure_threshold {
             *state = CircuitState::Open;
-            warn!(
-                "Circuit breaker opened after {} failures",
-                *failures
-            );
+            warn!("Circuit breaker opened after {} failures", *failures);
         }
     }
-
-
 
     /// Submit a batch of experience events to AEF
     #[instrument(skip(self, batch))]

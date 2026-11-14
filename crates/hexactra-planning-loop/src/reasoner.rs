@@ -77,7 +77,9 @@ impl<A: ModelAdapter> Reasoner<A> {
         observations: &[Observation],
         context: &ReasoningContext,
     ) -> Result<ActionProposal> {
-        self.model_adapter.get_action_proposal(observations, context).await
+        self.model_adapter
+            .get_action_proposal(observations, context)
+            .await
     }
 }
 
@@ -150,11 +152,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_reasoner() {
-        let observations = vec![
-            ObservationBuilder::new(Uuid::new_v4())
-                .page_url("https://example.com")
-                .build(),
-        ];
+        let observations = vec![ObservationBuilder::new(Uuid::new_v4())
+            .page_url("https://example.com")
+            .build()];
 
         let context = ReasoningContext::new(Uuid::new_v4(), "Click the submit button")
             .with_current_step(1)
@@ -181,14 +181,8 @@ mod tests {
 
         assert_eq!(proposal.step_number, 5);
         assert_eq!(proposal.action_type, "type");
-        assert_eq!(
-            proposal.parameters,
-            serde_json::json!({"text": "hello"})
-        );
-        assert_eq!(
-            proposal.reasoning,
-            "Type hello into the input field"
-        );
+        assert_eq!(proposal.parameters, serde_json::json!({"text": "hello"}));
+        assert_eq!(proposal.reasoning, "Type hello into the input field");
     }
 
     #[test]

@@ -10,7 +10,9 @@ pub struct StateMachine {
 impl StateMachine {
     /// Create a new state machine with the given initial state
     pub fn new(initial: RunStatus) -> Self {
-        Self { current_state: initial }
+        Self {
+            current_state: initial,
+        }
     }
 
     /// Get the current state
@@ -38,11 +40,14 @@ impl StateMachine {
             ),
             RunStatus::Paused => matches!(
                 new_state,
-                RunStatus::Running | RunStatus::Cancelled | RunStatus::Completed | RunStatus::Failed
+                RunStatus::Running
+                    | RunStatus::Cancelled
+                    | RunStatus::Completed
+                    | RunStatus::Failed
             ),
             RunStatus::Completed => false, // Terminal state
-            RunStatus::Failed => false,      // Terminal state
-            RunStatus::Cancelled => false,   // Terminal state
+            RunStatus::Failed => false,    // Terminal state
+            RunStatus::Cancelled => false, // Terminal state
         }
     }
 

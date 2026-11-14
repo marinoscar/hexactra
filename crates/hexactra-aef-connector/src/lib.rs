@@ -26,10 +26,7 @@ pub enum ConnectorError {
     Network(#[from] reqwest::Error),
 
     #[error("HTTP error: {status} - {message}")]
-    Http {
-        status: u16,
-        message: String,
-    },
+    Http { status: u16, message: String },
 
     #[error("Queue error: {0}")]
     Queue(String),
@@ -97,7 +94,7 @@ fn default_flush_interval_ms() -> u64 {
 }
 
 /// Circuit breaker configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CircuitBreakerConfig {
     /// Number of failures before opening circuit
     #[serde(default = "default_failure_threshold")]
@@ -135,7 +132,7 @@ fn default_half_open_requests() -> u32 {
 }
 
 /// Backoff configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BackoffConfig {
     /// Minimum backoff time in milliseconds
     #[serde(default = "default_backoff_min_ms")]

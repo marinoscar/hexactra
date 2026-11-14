@@ -52,7 +52,9 @@ impl RetryManager {
         if self.current_retry == 0 {
             0
         } else {
-            100u64.checked_shl((self.current_retry - 1) as u32).unwrap_or(1000)
+            100u64
+                .checked_shl((self.current_retry - 1) as u32)
+                .unwrap_or(1000)
         }
     }
 
@@ -74,7 +76,7 @@ mod tests {
     #[test]
     fn test_retry_manager_creation() {
         let manager = RetryManager::new(3);
-        
+
         assert_eq!(manager.max_retries(), 3);
         assert_eq!(manager.current_retry(), 0);
         assert!(manager.can_retry());

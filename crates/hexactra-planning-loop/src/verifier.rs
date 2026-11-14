@@ -11,7 +11,11 @@ use crate::{ActionResult, Observation, VerificationResult};
 /// Verification strategy interface
 #[async_trait]
 pub trait VerificationStrategy: Send + Sync {
-    async fn verify(&self, action_result: &ActionResult, previous_observation: &Observation) -> Result<VerificationResult>;
+    async fn verify(
+        &self,
+        action_result: &ActionResult,
+        previous_observation: &Observation,
+    ) -> Result<VerificationResult>;
 }
 
 /// DOM-based verification strategy
@@ -80,7 +84,7 @@ impl VerificationStrategy for GoalVerificationStrategy {
     ) -> Result<VerificationResult> {
         // Check if the action result indicates goal completion
         let success = action_result.success;
-        
+
         Ok(VerificationResult {
             step_number: 0,
             success,
@@ -109,7 +113,9 @@ impl<S: VerificationStrategy> Verifier<S> {
         action_result: &ActionResult,
         previous_observation: &Observation,
     ) -> Result<VerificationResult> {
-        self.strategy.verify(action_result, previous_observation).await
+        self.strategy
+            .verify(action_result, previous_observation)
+            .await
     }
 }
 
@@ -174,7 +180,7 @@ mod tests {
         let observation = ObservationBuilder::new(Uuid::new_v4()).build();
 
         let result = strategy.verify(&action_result, &observation).await;
-        
+
         assert!(result.is_ok());
         let verification = result.unwrap();
         assert!(verification.success);
@@ -191,7 +197,7 @@ mod tests {
         let observation = ObservationBuilder::new(Uuid::new_v4()).build();
 
         let result = strategy.verify(&action_result, &observation).await;
-        
+
         assert!(result.is_ok());
         let verification = result.unwrap();
         assert!(!verification.success);
@@ -212,7 +218,7 @@ mod tests {
         let observation = ObservationBuilder::new(Uuid::new_v4()).build();
 
         let result = strategy.verify(&action_result, &observation).await;
-        
+
         assert!(result.is_ok());
         let verification = result.unwrap();
         assert!(verification.success);

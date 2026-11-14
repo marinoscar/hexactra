@@ -2,8 +2,8 @@
 
 use super::*;
 use anyhow::Context;
+use hexactra_telemetry::{start_span, track_model_call, Metrics};
 use std::time::Instant;
-use hexactra_telemetry::{start_span, Metrics, track_model_call};
 
 /// OpenAI-compatible HTTP client
 pub struct OpenAIClient {
@@ -17,7 +17,9 @@ impl OpenAIClient {
         let client = reqwest::Client::builder()
             .timeout(config.request_timeout)
             .build()
-            .map_err(|e| ModelAdapterError::InvalidConfig(format!("Failed to build HTTP client: {}", e)))?;
+            .map_err(|e| {
+                ModelAdapterError::InvalidConfig(format!("Failed to build HTTP client: {}", e))
+            })?;
 
         Ok(Self { config, client })
     }
@@ -36,16 +38,18 @@ impl OpenAIClient {
         }
 
         // Try to parse the URL to validate it
-        url::Url::parse(&self.config.base_url).map_err(|e| {
-            ModelAdapterError::InvalidConfig(format!("Invalid base_url: {}", e))
-        })?;
+        url::Url::parse(&self.config.base_url)
+            .map_err(|e| ModelAdapterError::InvalidConfig(format!("Invalid base_url: {}", e)))?;
 
         Ok(())
     }
 
     /// Build the request URL for completions
     fn build_url(&self) -> String {
-        format!("{}/chat/completions", self.config.base_url.trim_end_matches('/'))
+        format!(
+            "{}/chat/completions",
+            self.config.base_url.trim_end_matches('/')
+        )
     }
 
     /// Build headers for the request
@@ -75,7 +79,7 @@ impl OpenAIClient {
         tools: Option<Vec<Tool>>,
     ) -> Result<ChatCompletionResponse> {
         let _span = start_span("model.chat_completion", &self.config.model_id);
-        
+
         self.validate()?;
 
         let url = self.build_url();
@@ -127,9 +131,10 @@ impl OpenAIClient {
         }
 
         // Parse the response
-        let completion: ChatCompletionResponse = serde_json::from_str(&response_body).map_err(|e| {
-            ModelAdapterError::InvalidResponse(format!("Failed to parse response: {}", e))
-        })?;
+        let completion: ChatCompletionResponse =
+            serde_json::from_str(&response_body).map_err(|e| {
+                ModelAdapterError::InvalidResponse(format!("Failed to parse response: {}", e))
+            })?;
 
         info!(
             "Chat completion completed in {:?}, model: {}",
@@ -169,7 +174,7 @@ impl OpenAIClient {
     /// Test the connection to the model endpoint
     pub async fn test_connection(&self) -> Result<()> {
         let _span = start_span("model.test_connection", &self.config.model_id);
-        
+
         let url = self.build_url();
         let headers = self.build_headers();
 

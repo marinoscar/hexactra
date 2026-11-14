@@ -662,7 +662,7 @@ mod tests {
     fn test_experience_event_creation() {
         let origin = ExperienceOrigin {
             site_url: "https://example.com".to_string(),
-            session_id: SessionId::new(),
+            session_id: SessionId::new().to_string(),
             profile_id: None,
         };
 
@@ -698,7 +698,7 @@ mod tests {
         );
 
         assert_eq!(event.schema_version, EXPERIENCE_SCHEMA_VERSION);
-        assert!(event.event_id.as_uuid().is_v4());
+        assert!(event.event_id.as_uuid().get_version_num() == 4);
     }
 
     #[test]
@@ -706,7 +706,7 @@ mod tests {
         let event = ExperienceEvent::new(
             ExperienceOrigin {
                 site_url: "https://example.com".to_string(),
-                session_id: SessionId::new(),
+                session_id: SessionId::new().to_string(),
                 profile_id: None,
             },
             TaskType::Navigation,
@@ -734,7 +734,7 @@ mod tests {
 
         let batch = ExperienceEventBatch::new(Uuid::new_v4(), vec![event]);
 
-        assert!(batch.batch_id.is_v4());
+        assert!(batch.batch_id.get_version_num() == 4);
         assert_eq!(batch.events.len(), 1);
     }
 

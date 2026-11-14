@@ -162,6 +162,9 @@ mod tests {
         };
 
         assert_eq!(result.success_rate, 0.95);
-        assert_eq!(result.total_tasks, result.successful_tasks + result.failed_tasks);
+        assert_eq!(
+            result.total_tasks,
+            result.successful_tasks + result.failed_tasks
+        );
     }
 }

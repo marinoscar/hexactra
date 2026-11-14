@@ -4,7 +4,7 @@ use crate::{BackoffConfig, CircuitBreakerConfig};
 use serde::{Deserialize, Serialize};
 
 /// Configuration for the AEF connector
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ConnectorConfig {
     /// AEF API endpoint URL
     pub api_url: String,

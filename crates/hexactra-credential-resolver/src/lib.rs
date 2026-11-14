@@ -251,9 +251,10 @@ impl ScopedCredentialResolver {
         request.scope.validate()?;
 
         // Check if we have a vault that can handle this scope
-        let vault_name = self.default_vault.as_ref().ok_or_else(|| {
-            CredentialResolverError::Internal("No vault registered".to_string())
-        })?;
+        let vault_name = self
+            .default_vault
+            .as_ref()
+            .ok_or_else(|| CredentialResolverError::Internal("No vault registered".to_string()))?;
 
         let vault = self.vaults.get(vault_name).ok_or_else(|| {
             CredentialResolverError::Internal(format!("Vault not found: {}", vault_name))
@@ -329,7 +330,10 @@ impl ScopedCredentialResolver {
     }
 
     /// Validate that a secret handle is valid for use
-    pub fn validate_secret_handle(&self, handle_id: SecretHandleId) -> CredentialResolverResult<()> {
+    pub fn validate_secret_handle(
+        &self,
+        handle_id: SecretHandleId,
+    ) -> CredentialResolverResult<()> {
         let handles = self
             .secret_handles
             .lock()
@@ -411,7 +415,10 @@ pub mod mock_vault {
         ) -> CredentialResolverResult<()> {
             let key = format!(
                 "{}:{}:{}:{}",
-                scope.owner_id, scope.origin, scope.profile.as_deref().unwrap_or(""), scope.purpose
+                scope.owner_id,
+                scope.origin,
+                scope.profile.as_deref().unwrap_or(""),
+                scope.purpose
             );
             self.credentials
                 .lock()
@@ -426,7 +433,10 @@ pub mod mock_vault {
         ) -> CredentialResolverResult<serde_json::Value> {
             let key = format!(
                 "{}:{}:{}:{}",
-                scope.owner_id, scope.origin, scope.profile.as_deref().unwrap_or(""), scope.purpose
+                scope.owner_id,
+                scope.origin,
+                scope.profile.as_deref().unwrap_or(""),
+                scope.purpose
             );
             let creds = self
                 .credentials
@@ -438,10 +448,16 @@ pub mod mock_vault {
             Ok(creds)
         }
 
-        async fn revoke_credentials(&self, scope: &CredentialScope) -> CredentialResolverResult<()> {
+        async fn revoke_credentials(
+            &self,
+            scope: &CredentialScope,
+        ) -> CredentialResolverResult<()> {
             let key = format!(
                 "{}:{}:{}:{}",
-                scope.owner_id, scope.origin, scope.profile.as_deref().unwrap_or(""), scope.purpose
+                scope.owner_id,
+                scope.origin,
+                scope.profile.as_deref().unwrap_or(""),
+                scope.purpose
             );
             self.credentials
                 .lock()
@@ -477,7 +493,11 @@ pub fn scopes_match(scope1: &CredentialScope, scope2: &CredentialScope) -> bool 
 }
 
 /// Create a credential scope for testing
-pub fn test_scope(owner_id: Uuid, origin: impl Into<String>, purpose: impl Into<String>) -> CredentialScope {
+pub fn test_scope(
+    owner_id: Uuid,
+    origin: impl Into<String>,
+    purpose: impl Into<String>,
+) -> CredentialScope {
     CredentialScope {
         owner_id,
         origin: origin.into(),
@@ -493,9 +513,13 @@ mod tests {
     #[test]
     fn test_credential_scope_validation() {
         let owner_id = Uuid::new_v4();
-        
+
         // Valid scope
-        let scope = CredentialScope::new(owner_id, "https://example.com".to_string(), "login".to_string());
+        let scope = CredentialScope::new(
+            owner_id,
+            "https://example.com".to_string(),
+            "login".to_string(),
+        );
         assert!(scope.validate().is_ok());
 
         // Invalid: nil owner_id
@@ -529,8 +553,12 @@ mod tests {
     #[test]
     fn test_secret_handle_expiry() {
         let now = Utc::now();
-        let scope = CredentialScope::new(Uuid::new_v4(), "https://example.com".to_string(), "login".to_string());
-        
+        let scope = CredentialScope::new(
+            Uuid::new_v4(),
+            "https://example.com".to_string(),
+            "login".to_string(),
+        );
+
         // Create a handle that expired 1 minute ago
         let expired_handle = SecretHandle {
             id: SecretHandleId::new(),
@@ -541,7 +569,7 @@ mod tests {
             used: false,
             audit_metadata: None,
         };
-        
+
         assert!(expired_handle.is_expired());
         assert!(!expired_handle.is_valid());
 
@@ -555,7 +583,11 @@ mod tests {
     async fn test_mock_vault() {
         let vault = mock_vault::MockVault::new();
         let owner_id = Uuid::new_v4();
-        let scope = CredentialScope::new(owner_id, "https://example.com".to_string(), "login".to_string());
+        let scope = CredentialScope::new(
+            owner_id,
+            "https://example.com".to_string(),
+            "login".to_string(),
+        );
 
         // Store credentials
         let credentials = serde_json::json!({
@@ -570,7 +602,7 @@ mod tests {
 
         // Revoke credentials
         vault.revoke_credentials(&scope).await.unwrap();
-        
+
         // Try to retrieve again (should fail)
         assert!(vault.retrieve_credentials(&scope).await.is_err());
     }

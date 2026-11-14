@@ -9,7 +9,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use hexactra_core::{InteractionKind, InteractionRequestId, InteractionRequest, InteractionStatus};
+use hexactra_core::{InteractionKind, InteractionRequest, InteractionRequestId, InteractionStatus};
 
 use crate::state::DbState;
 
@@ -201,9 +201,12 @@ async fn create_request(
     Json(payload): Json<CreateInteractionRequestRequest>,
 ) -> Result<Json<CreateInteractionRequestResponse>, (StatusCode, String)> {
     // Validate session exists by trying to get it
-    if state.get_session(payload.session_id).await.map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-    })?.is_none() {
+    if state
+        .get_session(payload.session_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .is_none()
+    {
         return Err((StatusCode::NOT_FOUND, "Session not found".to_string()));
     }
 
@@ -231,9 +234,15 @@ async fn create_request(
         },
     };
 
-    state.create_interaction_request(&request).await.map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create request: {}", e))
-    })?;
+    state
+        .create_interaction_request(&request)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to create request: {}", e),
+            )
+        })?;
 
     Ok(Json(CreateInteractionRequestResponse {
         request: InteractionRequestResponse {
@@ -355,14 +364,23 @@ async fn request_oob_confirmation(
         },
     };
 
-    state.create_interaction_request(&request).await.map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create request: {}", e))
-    })?;
+    state
+        .create_interaction_request(&request)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to create request: {}", e),
+            )
+        })?;
 
     // Generate OOB channel info
     let channel_id = Uuid::new_v4().to_string();
     let verification_code = generate_verification_code();
-    let verification_uri = format!("https://hexactra.example.com/verify?code={}", verification_code);
+    let verification_uri = format!(
+        "https://hexactra.example.com/verify?code={}",
+        verification_code
+    );
 
     Ok(Json(RequestOobConfirmationResponse {
         request: InteractionRequestResponse {
@@ -422,9 +440,15 @@ async fn request_passkey(
         },
     };
 
-    state.create_interaction_request(&request).await.map_err(|e| {
-        (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create request: {}", e))
-    })?;
+    state
+        .create_interaction_request(&request)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to create request: {}", e),
+            )
+        })?;
 
     // Generate passkey challenge
     let challenge_id = Uuid::new_v4().to_string();

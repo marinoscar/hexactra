@@ -466,10 +466,14 @@ pub mod builtin_human_provider {
         pub fn new() -> Self {
             BuiltInHumanProvider {
                 metadata: ProviderMetadata {
-                    id: ProviderId::from_uuid(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap()),
+                    id: ProviderId::from_uuid(
+                        uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap(),
+                    ),
                     name: "BuiltInHumanProvider".to_string(),
                     version: "1.0.0".to_string(),
-                    description: Some("Default human interaction provider via in-app UI".to_string()),
+                    description: Some(
+                        "Default human interaction provider via in-app UI".to_string(),
+                    ),
                     capabilities: ProviderCapabilities {
                         human_interaction: true,
                         credential_resolution: false,
@@ -506,7 +510,9 @@ pub mod builtin_human_provider {
             _timeout_ms: u64,
         ) -> ProviderResult<HumanInteractionResponse> {
             // In a real implementation, this would wait for user action in the UI
-            Err(ProviderError::Unavailable("BuiltInHumanProvider does not block for responses".to_string()))
+            Err(ProviderError::Unavailable(
+                "BuiltInHumanProvider does not block for responses".to_string(),
+            ))
         }
 
         async fn cancel_interaction(&self, _request_id: uuid::Uuid) -> ProviderResult<()> {
@@ -551,13 +557,19 @@ pub fn scopes_match(scope1: &CredentialScope, scope2: &CredentialScope) -> bool 
 /// Validate a credential scope
 pub fn validate_scope(scope: &CredentialScope) -> ProviderResult<()> {
     if scope.owner_id.is_nil() {
-        return Err(ProviderError::InvalidData("owner_id cannot be nil".to_string()));
+        return Err(ProviderError::InvalidData(
+            "owner_id cannot be nil".to_string(),
+        ));
     }
     if scope.origin.is_empty() {
-        return Err(ProviderError::InvalidData("origin cannot be empty".to_string()));
+        return Err(ProviderError::InvalidData(
+            "origin cannot be empty".to_string(),
+        ));
     }
     if scope.purpose.is_empty() {
-        return Err(ProviderError::InvalidData("purpose cannot be empty".to_string()));
+        return Err(ProviderError::InvalidData(
+            "purpose cannot be empty".to_string(),
+        ));
     }
     Ok(())
 }

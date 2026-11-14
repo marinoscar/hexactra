@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::env;
 use std::io::stdin;
 use tokio::sync::Mutex;
-use tracing::{info, error};
+use tracing::{error, info};
 use uuid::Uuid;
 
 /// Hexactra MCP configuration
@@ -148,25 +148,21 @@ async fn handle_request(
     let params = parsed.get("params");
 
     match method {
-        Some("tools/call") => {
-            handle_tool_call(params, state).await
-        }
-        Some("initialize") => {
-            Ok(serde_json::json!({
-                "jsonrpc": "2.0",
-                "id": parsed.get("id").cloned().unwrap_or_default(),
-                "result": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {
-                        "tools": {}
-                    },
-                    "serverInfo": {
-                        "name": "hexactra-mcp",
-                        "version": env!("CARGO_PKG_VERSION")
-                    }
+        Some("tools/call") => handle_tool_call(params, state).await,
+        Some("initialize") => Ok(serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": parsed.get("id").cloned().unwrap_or_default(),
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {}
+                },
+                "serverInfo": {
+                    "name": "hexactra-mcp",
+                    "version": env!("CARGO_PKG_VERSION")
                 }
-            }))
-        }
+            }
+        })),
         _ => Ok(serde_json::json!({
             "error": {
                 "code": -32601,
@@ -232,7 +228,10 @@ async fn handle_session_status(
     args: serde_json::Value,
     state: &Mutex<ServerState>,
 ) -> Result<serde_json::Value, anyhow::Error> {
-    let session_id = args.get("sessionId").and_then(|s| s.as_str()).unwrap_or("default");
+    let session_id = args
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .unwrap_or("default");
     let state = state.lock().await;
 
     if let Some(session) = state.sessions.get(session_id) {
@@ -254,7 +253,10 @@ async fn handle_session_stop(
     args: serde_json::Value,
     state: &Mutex<ServerState>,
 ) -> Result<serde_json::Value, anyhow::Error> {
-    let session_id = args.get("sessionId").and_then(|s| s.as_str()).unwrap_or("default");
+    let session_id = args
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .unwrap_or("default");
     let mut state = state.lock().await;
 
     if state.sessions.remove(session_id).is_some() {
@@ -276,7 +278,10 @@ async fn handle_navigate(
     args: serde_json::Value,
     state: &Mutex<ServerState>,
 ) -> Result<serde_json::Value, anyhow::Error> {
-    let session_id = args.get("sessionId").and_then(|s| s.as_str()).unwrap_or("default");
+    let session_id = args
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .unwrap_or("default");
     let url = args.get("url").and_then(|u| u.as_str()).unwrap_or("");
 
     let state = state.lock().await;
@@ -299,7 +304,10 @@ async fn handle_click(
     args: serde_json::Value,
     state: &Mutex<ServerState>,
 ) -> Result<serde_json::Value, anyhow::Error> {
-    let session_id = args.get("sessionId").and_then(|s| s.as_str()).unwrap_or("default");
+    let session_id = args
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .unwrap_or("default");
     let selector = args.get("selector").and_then(|s| s.as_str()).unwrap_or("");
 
     let state = state.lock().await;
@@ -322,7 +330,10 @@ async fn handle_type_text(
     args: serde_json::Value,
     state: &Mutex<ServerState>,
 ) -> Result<serde_json::Value, anyhow::Error> {
-    let session_id = args.get("sessionId").and_then(|s| s.as_str()).unwrap_or("default");
+    let session_id = args
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .unwrap_or("default");
     let selector = args.get("selector").and_then(|s| s.as_str()).unwrap_or("");
     let text = args.get("text").and_then(|t| t.as_str()).unwrap_or("");
 
@@ -346,7 +357,10 @@ async fn handle_screenshot(
     args: serde_json::Value,
     state: &Mutex<ServerState>,
 ) -> Result<serde_json::Value, anyhow::Error> {
-    let session_id = args.get("sessionId").and_then(|s| s.as_str()).unwrap_or("default");
+    let session_id = args
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .unwrap_or("default");
 
     let state = state.lock().await;
     if state.sessions.contains_key(session_id) {
@@ -368,7 +382,10 @@ async fn handle_agent_run(
     args: serde_json::Value,
     state: &Mutex<ServerState>,
 ) -> Result<serde_json::Value, anyhow::Error> {
-    let session_id = args.get("sessionId").and_then(|s| s.as_str()).unwrap_or("default");
+    let session_id = args
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .unwrap_or("default");
     let goal = args.get("goal").and_then(|g| g.as_str()).unwrap_or("");
 
     let state = state.lock().await;
@@ -391,7 +408,10 @@ async fn handle_agent_status(
     args: serde_json::Value,
     state: &Mutex<ServerState>,
 ) -> Result<serde_json::Value, anyhow::Error> {
-    let session_id = args.get("sessionId").and_then(|s| s.as_str()).unwrap_or("default");
+    let session_id = args
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .unwrap_or("default");
 
     let state = state.lock().await;
     if state.sessions.contains_key(session_id) {
@@ -413,7 +433,10 @@ async fn handle_agent_cancel(
     args: serde_json::Value,
     state: &Mutex<ServerState>,
 ) -> Result<serde_json::Value, anyhow::Error> {
-    let session_id = args.get("sessionId").and_then(|s| s.as_str()).unwrap_or("default");
+    let session_id = args
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .unwrap_or("default");
 
     let state = state.lock().await;
     if state.sessions.contains_key(session_id) {
@@ -435,7 +458,10 @@ async fn handle_hitl_status(
     args: serde_json::Value,
     state: &Mutex<ServerState>,
 ) -> Result<serde_json::Value, anyhow::Error> {
-    let session_id = args.get("sessionId").and_then(|s| s.as_str()).unwrap_or("default");
+    let session_id = args
+        .get("sessionId")
+        .and_then(|s| s.as_str())
+        .unwrap_or("default");
 
     let state = state.lock().await;
     if state.sessions.contains_key(session_id) {

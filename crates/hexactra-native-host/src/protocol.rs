@@ -109,23 +109,45 @@ pub enum MessageType {
     Ready,
     Goodbye,
     /// Action messages
-    Navigate { url: String },
-    Click { selector: String },
-    Type { selector: String, text: String },
+    Navigate {
+        url: String,
+    },
+    Click {
+        selector: String,
+    },
+    Type {
+        selector: String,
+        text: String,
+    },
     Screenshot,
     /// Secret transport messages
-    StoreSecret { value: String, ttl_minutes: i64 },
-    RetrieveSecret { secret_id: String },
-    VerifySecret { secret_id: String },
+    StoreSecret {
+        value: String,
+        ttl_minutes: i64,
+    },
+    RetrieveSecret {
+        secret_id: String,
+    },
+    VerifySecret {
+        secret_id: String,
+    },
     /// Response messages
-    Success { data: Option<serde_json::Value> },
-    Error { message: String },
+    Success {
+        data: Option<serde_json::Value>,
+    },
+    Error {
+        message: String,
+    },
     /// Protocol control messages
     Heartbeat,
-    Reconnect { session_id: SessionId },
+    Reconnect {
+        session_id: SessionId,
+    },
     /// Capability negotiation
     GetCapabilities,
-    Capabilities { capabilities: Vec<String> },
+    Capabilities {
+        capabilities: Vec<String>,
+    },
 }
 
 impl Display for MessageType {

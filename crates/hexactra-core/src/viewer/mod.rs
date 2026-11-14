@@ -144,11 +144,7 @@ impl ViewerService {
     }
 
     /// Acquire an input lease for a session
-    pub fn acquire_input_lease(
-        &mut self,
-        session_id: Uuid,
-        owner_id: Uuid,
-    ) -> Result<InputLease> {
+    pub fn acquire_input_lease(&mut self, session_id: Uuid, owner_id: Uuid) -> Result<InputLease> {
         // Check if there's an existing lease for this session
         if let Some(lease) = self.input_leases.get(&session_id) {
             if !lease.is_expired() {

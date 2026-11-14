@@ -25,10 +25,7 @@ pub enum LoopState {
     /// Completed successfully
     Completed,
     /// Failed with an error
-    Failed {
-        error: String,
-        last_step: u32,
-    },
+    Failed { error: String, last_step: u32 },
 }
 
 /// Full state of the planning loop
@@ -94,14 +91,8 @@ impl LoopStateContainer {
 /// State transition error
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum StateTransitionError {
-    InvalidTransition {
-        from: LoopState,
-        to: LoopState,
-    },
-    InvalidStep {
-        current: u32,
-        expected: u32,
-    },
+    InvalidTransition { from: LoopState, to: LoopState },
+    InvalidStep { current: u32, expected: u32 },
     InvalidObservation,
     InvalidProposal,
 }
@@ -113,7 +104,11 @@ impl std::fmt::Display for StateTransitionError {
                 write!(f, "Invalid transition from {:?} to {:?}", from, to)
             }
             StateTransitionError::InvalidStep { current, expected } => {
-                write!(f, "Invalid step: current={}, expected={}", current, expected)
+                write!(
+                    f,
+                    "Invalid step: current={}, expected={}",
+                    current, expected
+                )
             }
             StateTransitionError::InvalidObservation => {
                 write!(f, "Invalid observation")
@@ -264,7 +259,7 @@ mod tests {
 
         // Test valid transitions
         assert!(machine.can_transition_to(LoopState::Observing).is_ok());
-        
+
         machine = machine.transition_to(LoopState::Observing).unwrap();
         assert!(machine.can_transition_to(LoopState::Reasoning).is_ok());
 
@@ -295,7 +290,7 @@ mod tests {
         let mut machine = LoopStateMachine::new(run_id, iteration_id, 100);
 
         assert_eq!(machine.step_number(), 0);
-        
+
         machine.advance_step().unwrap();
         assert_eq!(machine.step_number(), 1);
 
@@ -311,7 +306,7 @@ mod tests {
 
         machine.advance_step().unwrap();
         machine.advance_step().unwrap();
-        
+
         // Third step should fail
         assert!(machine.advance_step().is_err());
     }
@@ -346,7 +341,7 @@ mod tests {
         let machine = machine.transition_to(LoopState::Reasoning).unwrap();
         let machine = machine.transition_to(LoopState::Dispatching).unwrap();
         let machine = machine.transition_to(LoopState::Verifying).unwrap();
-        
+
         let completed = machine.clone().complete();
         assert_eq!(completed.current_state(), &LoopState::Completed);
 

@@ -14,8 +14,8 @@ use hexactra_core::{HostId, HostStatus, Session, SessionId, SessionStatus};
 use serde::{Deserialize, Serialize};
 
 use crate::state::DbState;
+use hexactra_telemetry::{track_session_created, track_session_terminated, Metrics};
 use tracing::instrument;
-use hexactra_telemetry::{Metrics, track_session_created, track_session_terminated};
 
 /// Request to start a session
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,17 +52,23 @@ pub struct UpdateSessionStatusRequest {
 
 /// Get session by ID with full details
 #[axum::debug_handler]
-#[instrument(skip(db_state, session_id), level = "info", fields(session_id = "control-plane"))]
+#[instrument(
+    skip(db_state, session_id),
+    level = "info",
+    fields(session_id = "control-plane")
+)]
 async fn get_session_full(
     State(db_state): State<DbState>,
     session_id: axum::extract::Path<Uuid>,
 ) -> Result<Json<Session>, (StatusCode, String)> {
     tracing::info!("Handling session_lifecycle.get request");
-    
-    let session = db_state
-        .get_session(*session_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+
+    let session = db_state.get_session(*session_id).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
 
     match session {
         Some(s) => Ok(Json(s)),
@@ -72,18 +78,27 @@ async fn get_session_full(
 
 /// Start a new session
 #[axum::debug_handler]
-#[instrument(skip(db_state, request), level = "info", fields(session_id = "control-plane"))]
+#[instrument(
+    skip(db_state, request),
+    level = "info",
+    fields(session_id = "control-plane")
+)]
 async fn start_session(
     State(db_state): State<DbState>,
     Json(request): Json<StartSessionRequest>,
 ) -> Result<Json<StartSessionResponse>, (StatusCode, String)> {
     tracing::info!("Handling session_lifecycle.start request");
-    
+
     // Check if profile exists
     let profile = db_state
         .get_profile(request.profile_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Database error: {}", e),
+            )
+        })?;
 
     if profile.is_none() {
         return Err((StatusCode::NOT_FOUND, "Profile not found".to_string()));
@@ -94,7 +109,12 @@ async fn start_session(
         let host = db_state
             .get_host(&HostId::from_uuid(host_id))
             .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Database error: {}", e),
+                )
+            })?;
 
         match host {
             Some(h) => {
@@ -118,10 +138,12 @@ async fn start_session(
         updated_at: Utc::now(),
     };
 
-    db_state
-        .create_session(&session)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create session: {}", e)))?;
+    db_state.create_session(&session).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create session: {}", e),
+        )
+    })?;
 
     // Track session creation
     track_session_created(&Metrics::new());
@@ -134,17 +156,23 @@ async fn start_session(
 
 /// Stop a session
 #[axum::debug_handler]
-#[instrument(skip(db_state, session_id), level = "info", fields(session_id = "control-plane"))]
+#[instrument(
+    skip(db_state, session_id),
+    level = "info",
+    fields(session_id = "control-plane")
+)]
 async fn stop_session(
     State(db_state): State<DbState>,
     session_id: axum::extract::Path<Uuid>,
 ) -> Result<Json<StartSessionResponse>, (StatusCode, String)> {
     tracing::info!("Handling session_lifecycle.stop request");
-    
-    let session = db_state
-        .get_session(*session_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+
+    let session = db_state.get_session(*session_id).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
 
     match session {
         Some(mut s) => {
@@ -154,7 +182,12 @@ async fn stop_session(
             db_state
                 .update_session_status(s.id.as_uuid(), s.status)
                 .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to stop session: {}", e)))?;
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Failed to stop session: {}", e),
+                    )
+                })?;
 
             // Track session termination
             track_session_terminated(&Metrics::new());
@@ -170,24 +203,33 @@ async fn stop_session(
 
 /// Restart a session
 #[axum::debug_handler]
-#[instrument(skip(db_state, session_id, request), level = "info", fields(session_id = "control-plane"))]
+#[instrument(
+    skip(db_state, session_id, request),
+    level = "info",
+    fields(session_id = "control-plane")
+)]
 async fn restart_session(
     State(db_state): State<DbState>,
     session_id: axum::extract::Path<Uuid>,
     Json(request): Json<RestartSessionRequest>,
 ) -> Result<Json<StartSessionResponse>, (StatusCode, String)> {
     tracing::info!("Handling session_lifecycle.restart request");
-    
-    let session = db_state
-        .get_session(*session_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+
+    let session = db_state.get_session(*session_id).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
 
     match session {
         Some(mut s) => {
             // Force restart can override status checks
             if !request.force && s.status != SessionStatus::Ended {
-                return Err((StatusCode::BAD_REQUEST, "Session must be ended before restart".to_string()));
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    "Session must be ended before restart".to_string(),
+                ));
             }
 
             s.status = SessionStatus::Initializing;
@@ -196,7 +238,12 @@ async fn restart_session(
             db_state
                 .update_session_status(s.id.as_uuid(), s.status)
                 .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to restart session: {}", e)))?;
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Failed to restart session: {}", e),
+                    )
+                })?;
 
             Ok(Json(StartSessionResponse {
                 session_id: s.id.as_uuid(),
@@ -209,20 +256,26 @@ async fn restart_session(
 
 /// Update session status (e.g., from host)
 #[axum::debug_handler]
-#[instrument(skip(db_state, session_id, request), level = "info", fields(session_id = "control-plane"))]
+#[instrument(
+    skip(db_state, session_id, request),
+    level = "info",
+    fields(session_id = "control-plane")
+)]
 async fn update_session_status(
     State(db_state): State<DbState>,
     session_id: axum::extract::Path<Uuid>,
     Json(request): Json<UpdateSessionStatusRequest>,
 ) -> Result<Json<StartSessionResponse>, (StatusCode, String)> {
     tracing::info!("Handling session_lifecycle.update_status request");
-    
+
     let status = SessionStatus::from_str_name(&request.status);
 
-    let session = db_state
-        .get_session(*session_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+    let session = db_state.get_session(*session_id).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
 
     match session {
         Some(mut s) => {
@@ -232,7 +285,12 @@ async fn update_session_status(
             db_state
                 .update_session_status(s.id.as_uuid(), status)
                 .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update session status: {}", e)))?;
+                .map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Failed to update session status: {}", e),
+                    )
+                })?;
 
             Ok(Json(StartSessionResponse {
                 session_id: s.id.as_uuid(),
@@ -251,7 +309,12 @@ async fn get_sessions_by_profile(
     let sessions = db_state
         .list_sessions_by_profile(*profile_id)
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Database error: {}", e),
+            )
+        })?;
 
     Ok(Json(sessions))
 }
@@ -261,15 +324,20 @@ async fn check_session_readiness(
     State(db_state): State<DbState>,
     session_id: axum::extract::Path<Uuid>,
 ) -> Result<Json<Session>, (StatusCode, String)> {
-    let session = db_state
-        .get_session(*session_id)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e)))?;
+    let session = db_state.get_session(*session_id).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
 
     match session {
         Some(s) => {
             if s.status != SessionStatus::Running {
-                return Err((StatusCode::BAD_REQUEST, "Session must be running to check readiness".to_string()));
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    "Session must be running to check readiness".to_string(),
+                ));
             }
             Ok(Json(s))
         }

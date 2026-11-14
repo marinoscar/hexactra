@@ -41,9 +41,18 @@ pub fn test_provider_health() {
     let notification_provider = hexactra_demo_provider::DemoNotificationProvider::new();
     let hitl_provider = hexactra_demo_provider::DemoHumanInteractionProvider::new();
 
-    assert_eq!(credential_provider.health(), hexactra_provider_sdk::ProviderHealth::Healthy);
-    assert_eq!(notification_provider.health(), hexactra_provider_sdk::ProviderHealth::Healthy);
-    assert_eq!(hitl_provider.health(), hexactra_provider_sdk::ProviderHealth::Healthy);
+    assert_eq!(
+        credential_provider.health(),
+        hexactra_provider_sdk::ProviderHealth::Healthy
+    );
+    assert_eq!(
+        notification_provider.health(),
+        hexactra_provider_sdk::ProviderHealth::Healthy
+    );
+    assert_eq!(
+        hitl_provider.health(),
+        hexactra_provider_sdk::ProviderHealth::Healthy
+    );
 }
 
 /// Test that providers correctly report supported scopes/recipient types
@@ -99,8 +108,14 @@ async fn test_credential_resolution_flow() {
 
     assert_eq!(response.request_id, request.request_id);
     assert!(!response.from_cache);
-    assert_eq!(response.credentials.get("username").unwrap().as_str(), Some("demo_user"));
-    assert_eq!(response.credentials.get("password").unwrap().as_str(), Some("demo_password"));
+    assert_eq!(
+        response.credentials.get("username").unwrap().as_str(),
+        Some("demo_user")
+    );
+    assert_eq!(
+        response.credentials.get("password").unwrap().as_str(),
+        Some("demo_password")
+    );
 }
 
 #[tokio::test]
@@ -122,7 +137,10 @@ async fn test_notification_delivery_flow() {
     let response = provider.send_notification(&request).await.unwrap();
 
     assert_eq!(response.request_id, request.request_id);
-    assert_eq!(response.status, hexactra_provider_sdk::NotificationStatus::Queued);
+    assert_eq!(
+        response.status,
+        hexactra_provider_sdk::NotificationStatus::Queued
+    );
     assert!(response.delivery_id.is_some());
 }
 
@@ -143,12 +161,24 @@ async fn test_hitl_flow() {
     provider.send_interaction(&request).await.unwrap();
 
     // Wait for response
-    let response = provider.wait_for_response(request.request_id, 5000).await.unwrap();
+    let response = provider
+        .wait_for_response(request.request_id, 5000)
+        .await
+        .unwrap();
 
-    assert_eq!(response.status, hexactra_provider_sdk::InteractionStatus::Approved);
+    assert_eq!(
+        response.status,
+        hexactra_provider_sdk::InteractionStatus::Approved
+    );
     assert!(response.data.is_some());
     assert_eq!(
-        response.data.as_ref().unwrap().get("action").unwrap().as_str(),
+        response
+            .data
+            .as_ref()
+            .unwrap()
+            .get("action")
+            .unwrap()
+            .as_str(),
         Some("confirmed")
     );
 }
@@ -158,7 +188,7 @@ async fn test_hitl_flow() {
 #[test]
 fn test_provider_registry_with_none_enabled() {
     let registry = DemoProviderRegistry::with_none_enabled();
-    
+
     assert!(registry.credential_provider().is_none());
     assert!(registry.notification_provider().is_none());
     assert!(registry.human_interaction_provider().is_none());
@@ -167,7 +197,7 @@ fn test_provider_registry_with_none_enabled() {
 #[test]
 fn test_provider_registry_with_credentials_only() {
     let registry = DemoProviderRegistry::with_credentials_only();
-    
+
     assert!(registry.credential_provider().is_some());
     assert!(registry.notification_provider().is_none());
     assert!(registry.human_interaction_provider().is_none());
@@ -176,7 +206,7 @@ fn test_provider_registry_with_credentials_only() {
 #[test]
 fn test_provider_registry_with_all_enabled() {
     let registry = DemoProviderRegistry::with_all_enabled();
-    
+
     assert!(registry.credential_provider().is_some());
     assert!(registry.notification_provider().is_some());
     assert!(registry.human_interaction_provider().is_some());
@@ -189,7 +219,7 @@ mod integration_tests {
     #[tokio::test]
     async fn test_full_workflow() {
         let registry = DemoProviderRegistry::with_all_enabled();
-        
+
         // 1. Resolve credentials
         let cred_provider = registry.credential_provider().unwrap();
         let cred_request = hexactra_provider_sdk::CredentialRequest {
@@ -203,10 +233,16 @@ mod integration_tests {
             allow_cache: false,
             max_cache_age_ms: 0,
         };
-        
-        let cred_response = cred_provider.resolve_credentials(&cred_request).await.unwrap();
-        assert_eq!(cred_response.credentials.get("username").unwrap().as_str(), Some("demo_user"));
-        
+
+        let cred_response = cred_provider
+            .resolve_credentials(&cred_request)
+            .await
+            .unwrap();
+        assert_eq!(
+            cred_response.credentials.get("username").unwrap().as_str(),
+            Some("demo_user")
+        );
+
         // 2. Send notification
         let notif_provider = registry.notification_provider().unwrap();
         let notif_request = hexactra_provider_sdk::NotificationRequest {
@@ -221,10 +257,16 @@ mod integration_tests {
             max_attempts: 3,
             ttl_ms: 300000,
         };
-        
-        let notif_response = notif_provider.send_notification(&notif_request).await.unwrap();
-        assert_eq!(notif_response.status, hexactra_provider_sdk::NotificationStatus::Queued);
-        
+
+        let notif_response = notif_provider
+            .send_notification(&notif_request)
+            .await
+            .unwrap();
+        assert_eq!(
+            notif_response.status,
+            hexactra_provider_sdk::NotificationStatus::Queued
+        );
+
         // 3. Handle HITL
         let hitl_provider = registry.human_interaction_provider().unwrap();
         let hitl_request = hexactra_provider_sdk::HumanInteractionRequest {
@@ -236,17 +278,23 @@ mod integration_tests {
             timeout_ms: 5000,
             verify_origin: false,
         };
-        
+
         hitl_provider.send_interaction(&hitl_request).await.unwrap();
-        let hitl_response = hitl_provider.wait_for_response(hitl_request.request_id, 5000).await.unwrap();
-        assert_eq!(hitl_response.status, hexactra_provider_sdk::InteractionStatus::Approved);
+        let hitl_response = hitl_provider
+            .wait_for_response(hitl_request.request_id, 5000)
+            .await
+            .unwrap();
+        assert_eq!(
+            hitl_response.status,
+            hexactra_provider_sdk::InteractionStatus::Approved
+        );
     }
 
     #[tokio::test]
     async fn test_provider_failure_handling() {
         // Test that provider failures are handled gracefully
         let registry = DemoProviderRegistry::with_none_enabled();
-        
+
         // When no providers are enabled, the registry should return None
         assert!(registry.credential_provider().is_none());
         assert!(registry.notification_provider().is_none());

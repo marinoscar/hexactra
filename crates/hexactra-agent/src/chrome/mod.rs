@@ -72,7 +72,7 @@ impl VirtualDisplayManager {
     /// Create a new virtual display manager
     pub fn new(display_num: &str) -> Self {
         let display_dir = Path::new("/tmp").join(format!(".X11-unix/X{}", &display_num[1..]));
-        
+
         Self {
             display_num: display_num.to_string(),
             xvfb_path: "/usr/bin/Xvfb".to_string(),
@@ -83,7 +83,7 @@ impl VirtualDisplayManager {
     /// Start the virtual display server
     pub async fn start(&self) -> Result<()> {
         info!("Starting virtual display {}", self.display_num);
-        
+
         // Check if Xvfb is available
         if !Path::new(&self.xvfb_path).exists() {
             return Err(anyhow::anyhow!(
@@ -110,18 +110,22 @@ impl VirtualDisplayManager {
             .spawn()
             .with_context(|| format!("Failed to start Xvfb on {}", self.display_num))?;
 
-        info!("Virtual display {} started with PID {}", self.display_num, child.id());
-        
+        info!(
+            "Virtual display {} started with PID {}",
+            self.display_num,
+            child.id()
+        );
+
         // Wait a moment for Xvfb to initialize
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        
+
         Ok(())
     }
 
     /// Stop the virtual display server
     pub async fn stop(&self) -> Result<()> {
         info!("Stopping virtual display {}", self.display_num);
-        
+
         // Kill Xvfb process
         let output = Command::new("pkill")
             .arg("-f")
@@ -131,7 +135,7 @@ impl VirtualDisplayManager {
         if !output.status.success() {
             warn!("Xvfb stop command returned non-zero: {}", output.status);
         }
-        
+
         Ok(())
     }
 
@@ -157,7 +161,7 @@ impl ChromeManager {
     /// Create a new Chrome manager with the given configuration
     pub fn new(config: ChromeConfig) -> Self {
         let display_manager = VirtualDisplayManager::new(&config.display);
-        
+
         Self {
             config,
             display_manager,
@@ -167,13 +171,19 @@ impl ChromeManager {
 
     /// Start Chrome with the configured profile
     pub async fn start_chrome(&mut self) -> Result<()> {
-        info!("Starting Chrome with profile: {}", self.config.user_data_dir);
-        
+        info!(
+            "Starting Chrome with profile: {}",
+            self.config.user_data_dir
+        );
+
         // Ensure user data directory exists
         let user_data_path = Path::new(&self.config.user_data_dir);
         if !user_data_path.exists() {
             fs::create_dir_all(user_data_path).await?;
-            info!("Created Chrome profile directory: {}", self.config.user_data_dir);
+            info!(
+                "Created Chrome profile directory: {}",
+                self.config.user_data_dir
+            );
         }
 
         // Set up environment
@@ -188,7 +198,7 @@ impl ChromeManager {
             format!("--user-data-dir={}", self.config.user_data_dir),
             "--no-sandbox".to_string(),
             "--disable-dev-shm-usage".to_string(),
-            "--disable-gpu".to_string(),  // Will be re-enabled if GPU is requested
+            "--disable-gpu".to_string(), // Will be re-enabled if GPU is requested
             "--disable-extensions".to_string(),
             "--disable-plugins".to_string(),
             "--disable-background-networking".to_string(),
@@ -221,10 +231,10 @@ impl ChromeManager {
 
         self.chrome_pid = Some(child.id());
         info!("Chrome started with PID {}", child.id());
-        
+
         // Wait a moment for Chrome to initialize
         tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-        
+
         Ok(())
     }
 
@@ -232,7 +242,7 @@ impl ChromeManager {
     fn start_chrome_with_limits(&self, args: &[String]) -> Result<std::process::Child> {
         let memory_mb = self.config.resource_limits.memory_mb;
         let max_open_files = self.config.resource_limits.max_open_files;
-        
+
         let mut cmd = Command::new(&self.config.chrome_binary);
         cmd.args(args);
 
@@ -240,7 +250,7 @@ impl ChromeManager {
         #[cfg(unix)]
         {
             use std::os::unix::process::CommandExt;
-            
+
             unsafe {
                 cmd.pre_exec(move || {
                     // Set memory limit (soft and hard)
@@ -266,17 +276,15 @@ impl ChromeManager {
             }
         }
 
-        cmd.spawn().map_err(|e| anyhow::anyhow!(
-            "Failed to start Chrome: {}",
-            e
-        ))
+        cmd.spawn()
+            .map_err(|e| anyhow::anyhow!("Failed to start Chrome: {}", e))
     }
 
     /// Stop Chrome gracefully
     pub async fn stop_chrome(&mut self) -> Result<()> {
         if let Some(pid) = self.chrome_pid {
             info!("Stopping Chrome with PID {}", pid);
-            
+
             // Try graceful termination first
             let status = Command::new("kill")
                 .arg("-TERM")
@@ -285,10 +293,7 @@ impl ChromeManager {
 
             if !status.success() {
                 warn!("Graceful termination failed, forcing kill");
-                let _ = Command::new("kill")
-                    .arg("-9")
-                    .arg(pid.to_string())
-                    .status();
+                let _ = Command::new("kill").arg("-9").arg(pid.to_string()).status();
             }
 
             self.chrome_pid = None;
