@@ -7,6 +7,10 @@ license.workspace = true
 repository.workspace = true
 description.workspace = true
 
+[[bin]]
+name = "hexactra-control"
+path = "src/main.rs"
+
 [dependencies]
 tokio.workspace = true
 tokio-stream.workspace = true
@@ -31,11 +35,15 @@ hex = "0.4"
 rand = "0.8"
 futures-util.workspace = true
 async-stream = "0.3"
+dirs.workspace = true
+tracing-subscriber.workspace = true
 
 hexactra-core = { path = "../hexactra-core" }
 hexactra-telemetry = { path = "../hexactra-telemetry" }
 
 [dev-dependencies]
+hexactra-client = { path = "../hexactra-client" }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tokio-test.workspace = true
 tempfile.workspace = true
 mockall.workspace = true
