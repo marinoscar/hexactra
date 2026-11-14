@@ -1218,6 +1218,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "axum",
+ "base64 0.21.7",
  "chrono",
  "chrono-tz",
  "clap",
@@ -1227,6 +1228,7 @@ dependencies = [
  "hexactra-client",
  "hexactra-core",
  "hexactra-telemetry",
+ "hmac",
  "hyper",
  "jsonwebtoken",
  "mockall",
@@ -1246,6 +1248,7 @@ dependencies = [
  "tower",
  "tracing",
  "tracing-subscriber",
+ "url",
  "uuid",
 ]
 

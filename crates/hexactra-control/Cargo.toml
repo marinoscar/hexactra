@@ -37,6 +37,10 @@ futures-util.workspace = true
 async-stream = "0.3"
 dirs.workspace = true
 serde_urlencoded = "0.7"
+hmac = "0.12"
+base64.workspace = true
+url = "2"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tracing-subscriber.workspace = true
 
 hexactra-core = { path = "../hexactra-core" }
@@ -44,7 +48,6 @@ hexactra-telemetry = { path = "../hexactra-telemetry" }
 
 [dev-dependencies]
 hexactra-client = { path = "../hexactra-client" }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tokio-test.workspace = true
 tempfile.workspace = true
 mockall.workspace = true
