@@ -595,6 +595,73 @@ pub struct ClaimedHandoffValue {
     pub value: String,
 }
 
+// ------------------------------------------------------------------------
+// Webhooks (epic #186)
+
+/// Event types a webhook can subscribe to.
+pub const WEBHOOK_EVENTS: &[&str] = &[
+    "handoff.created",
+    "handoff.resolved",
+    "handoff.cancelled",
+    "handoff.expired",
+    "webhook.test",
+];
+
+/// True if `filter` (`*`, `handoff.*`, or an exact name) selects `event`.
+pub fn webhook_filter_matches(filter: &str, event: &str) -> bool {
+    filter == "*"
+        || filter == event
+        || filter
+            .strip_suffix(".*")
+            .map(|p| event.starts_with(p) && event[p.len()..].starts_with('.'))
+            .unwrap_or(false)
+}
+
+/// `POST /v1/webhooks`
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct CreateWebhookRequest {
+    pub url: String,
+    /// Event filters; defaults to `["handoff.*"]`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub events: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+/// A webhook endpoint (never includes the secret).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WebhookView {
+    pub id: Uuid,
+    pub url: String,
+    pub events: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Response to creating a webhook: the signing secret is shown only here.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CreatedWebhook {
+    pub webhook: WebhookView,
+    /// Standard Webhooks secret (`whsec_<base64>`).
+    pub secret: String,
+}
+
+/// One delivery attempt.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WebhookDelivery {
+    pub event_id: String,
+    pub event_type: String,
+    pub attempt: u32,
+    pub at: DateTime<Utc>,
+    /// `succeeded`, `retrying` or `failed`.
+    pub outcome: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub http_status: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
 /// Error body returned by the `/v1` API.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ApiError {
@@ -701,6 +768,19 @@ mod tests {
             tab_id: None,
         };
         assert_eq!(a.kind(), "type");
+    }
+
+    #[test]
+    fn webhook_filters() {
+        assert!(webhook_filter_matches("*", "handoff.created"));
+        assert!(webhook_filter_matches("handoff.*", "handoff.expired"));
+        assert!(webhook_filter_matches("handoff.created", "handoff.created"));
+        assert!(!webhook_filter_matches(
+            "handoff.created",
+            "handoff.resolved"
+        ));
+        assert!(!webhook_filter_matches("hand.*", "handoff.created"));
+        assert!(!webhook_filter_matches("handoff.*", "webhook.test"));
     }
 
     #[test]
