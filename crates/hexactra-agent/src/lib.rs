@@ -7,6 +7,7 @@
 pub mod browser_bridge;
 pub mod chrome;
 pub mod platform;
+pub mod remote_daemon;
 
 use anyhow::Result;
 use std::path::Path;

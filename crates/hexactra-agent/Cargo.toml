@@ -24,6 +24,7 @@ chrono.workspace = true
 
 hexactra-core = { path = "../hexactra-core" }
 hexactra-telemetry = { path = "../hexactra-telemetry" }
+hexactra-client = { path = "../hexactra-client" }
 
 # Optional Windows support
 [target.'cfg(target_os = "windows")'.dependencies]

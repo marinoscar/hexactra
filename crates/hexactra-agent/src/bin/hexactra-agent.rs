@@ -1,123 +1,117 @@
-//! Hexactra Host Agent CLI
-//!
-//! This binary provides the command-line interface for managing the Hexactra host agent service.
+//! `hexactra-agent`: host agent that lets the control plane drive the
+//! operator's own Chrome (#177).
 
-use anyhow::Result;
-use clap::{Parser, Subcommand};
-use hexactra_agent::{AgentConfig, AgentService};
 use std::path::PathBuf;
-use tokio::signal;
-use tracing::{error, info, warn};
+use std::time::Duration;
 
-/// Hexactra Host Agent
+use anyhow::{Context, Result};
+use clap::{Parser, Subcommand};
+use hexactra_agent::remote_daemon::{self, DaemonConfig};
+use hexactra_core::bridge::bridge_socket_path;
+
 #[derive(Parser)]
-#[command(name = "hexactra-agent")]
-#[command(about = "Hexactra Host Agent Service", long_about = None)]
+#[command(name = "hexactra-agent", version, about = "Hexactra host agent")]
 struct Cli {
-    /// Path to the configuration file
-    #[arg(short, long)]
-    config: Option<PathBuf>,
-
-    /// Enable verbose output (debug level)
-    #[arg(short, long)]
-    verbose: bool,
-
     #[command(subcommand)]
     command: Commands,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Run the agent daemon
-    Daemon,
-    /// Show health status
-    Health,
-    /// Stop the agent service
-    Stop,
-    /// Show version information
+    /// Connect to the control plane and serve browser operations (attach mode).
+    Daemon {
+        /// Control plane URL.
+        #[arg(long, env = "HEXACTRA_URL", default_value = "http://127.0.0.1:8787")]
+        url: String,
+        /// File with the API token (default: $XDG_CONFIG_HOME/hexactra/api-token).
+        /// `HEXACTRA_API_TOKEN` overrides it.
+        #[arg(long, env = "HEXACTRA_TOKEN_FILE")]
+        token_file: Option<PathBuf>,
+        /// Display name for this host (default: the machine's hostname).
+        #[arg(long, env = "HEXACTRA_HOST_NAME")]
+        name: Option<String>,
+        /// Unix socket the native messaging host connects to.
+        #[arg(long, env = "HEXACTRA_BRIDGE_SOCKET")]
+        bridge_socket: Option<PathBuf>,
+    },
+    /// Print the bridge socket path the native host will use.
+    SocketPath,
+    /// Print version.
     Version,
+}
+
+fn config_dir() -> PathBuf {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("hexactra")
+}
+
+fn hostname() -> String {
+    std::fs::read_to_string("/etc/hostname")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "hexactra-host".to_string())
+}
+
+fn read_token(token_file: Option<PathBuf>) -> Result<String> {
+    if let Ok(t) = std::env::var("HEXACTRA_API_TOKEN") {
+        if !t.trim().is_empty() {
+            return Ok(t.trim().to_string());
+        }
+    }
+    let file = token_file.unwrap_or_else(|| config_dir().join("api-token"));
+    let t = std::fs::read_to_string(&file).with_context(|| {
+        format!(
+            "reading API token from {} (set HEXACTRA_API_TOKEN or --token-file)",
+            file.display()
+        )
+    })?;
+    Ok(t.trim().to_string())
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let cli = Cli::parse();
-
-    // Initialize logging
-    let log_level = if cli.verbose { "debug" } else { "info" };
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::new(format!(
-            "hexactra_agent={}",
-            log_level
-        )))
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
+        )
         .init();
 
-    match cli.command {
-        Commands::Daemon => run_daemon().await,
-        Commands::Health => show_health().await,
-        Commands::Stop => stop_service().await,
-        Commands::Version => show_version(),
-    }
-}
-
-async fn run_daemon() -> Result<()> {
-    info!("Starting Hexactra Host Agent daemon");
-
-    // Load configuration
-    let config = load_config()?;
-
-    let mut service = AgentService::new(config);
-
-    // Set up signal handlers for graceful shutdown
-    let mut shutdown = signal::unix::signal(signal::unix::SignalKind::terminate())?;
-
-    tokio::select! {
-        result = service.start() => {
-            if let Err(e) = result {
-                error!("Agent service failed: {}", e);
-                return Err(e);
+    match Cli::parse().command {
+        Commands::Version => {
+            println!("hexactra-agent {}", env!("CARGO_PKG_VERSION"));
+            Ok(())
+        }
+        Commands::SocketPath => {
+            println!("{}", bridge_socket_path().display());
+            Ok(())
+        }
+        Commands::Daemon {
+            url,
+            token_file,
+            name,
+            bridge_socket,
+        } => {
+            let cfg = DaemonConfig {
+                control_url: url,
+                token: read_token(token_file)?,
+                host_name: name.unwrap_or_else(hostname),
+                host_id_file: Some(config_dir().join("host-id")),
+                bridge_socket: bridge_socket.unwrap_or_else(bridge_socket_path),
+                poll_wait: Duration::from_secs(25),
+            };
+            tokio::select! {
+                r = remote_daemon::run(cfg) => r,
+                _ = tokio::signal::ctrl_c() => {
+                    tracing::info!("shutting down");
+                    Ok(())
+                }
             }
         }
-        _ = shutdown.recv() => {
-            info!("Received shutdown signal");
-            service.stop().await?;
-        }
     }
-
-    Ok(())
-}
-
-async fn show_health() -> Result<()> {
-    // For now, just log that health check would be implemented
-    info!("Health check endpoint would be available at /health");
-    Ok(())
-}
-
-async fn stop_service() -> Result<()> {
-    warn!("Stop command would send signal to running daemon");
-    Ok(())
-}
-
-fn show_version() -> Result<()> {
-    println!("hexactra-agent {}", env!("CARGO_PKG_VERSION"));
-    Ok(())
-}
-
-fn load_config() -> Result<AgentConfig> {
-    // Load from environment variables with fallback to defaults
-    let config = AgentConfig {
-        control_socket_path: std::env::var("HEXACTRA_CONTROL_SOCKET")
-            .unwrap_or_else(|_| "/run/hexactra/agent.sock".to_string()),
-        chrome_profile_path: std::env::var("HEXACTRA_CHROME_PROFILE_PATH").ok(),
-        service_uid: std::env::var("HEXACTRA_SERVICE_UID")
-            .ok()
-            .and_then(|s| s.parse::<u32>().ok()),
-        service_gid: std::env::var("HEXACTRA_SERVICE_GID")
-            .ok()
-            .and_then(|s| s.parse::<u32>().ok()),
-        health_endpoint_path: "/health".to_string(),
-    };
-
-    Ok(config)
 }
 
 #[cfg(test)]
@@ -125,20 +119,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_cli_parsing() {
-        let cli = Cli::parse_from(["hexactra-agent", "daemon"]);
-        match cli.command {
-            Commands::Daemon => (),
-            _ => panic!("Expected Daemon command"),
-        }
-    }
-
-    #[test]
-    fn test_load_config() {
-        // Test with default values (no env vars set)
-        std::env::set_var("HEXACTRA_CONTROL_SOCKET", "/tmp/test.sock");
-
-        let config = load_config().unwrap();
-        assert_eq!(config.control_socket_path, "/tmp/test.sock");
+    fn cli_parses_daemon() {
+        let cli = Cli::parse_from(["hexactra-agent", "daemon", "--url", "http://h:1"]);
+        assert!(matches!(cli.command, Commands::Daemon { .. }));
     }
 }
