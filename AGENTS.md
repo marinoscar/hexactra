@@ -4,28 +4,35 @@ Shared instructions for all coding agents in this repository (Claude Code, OpenC
 
 ## Repository state
 
-Hexactra is currently **documentation-only**. There is no application code, build system, linter, or test suite yet. The repo contains:
+Hexactra is a Cargo + pnpm monorepo with a large amount of scaffolding. **Most v1 issues are closed, but the end-to-end remote-control path was stubbed** (audit in epic #173). Treat closed issues as "code exists", not "capability works", until an end-to-end test proves it.
 
-- `VISION.MD` — the authoritative product vision and technical architecture (~1,470 lines, 25 sections). Treat it as the source of truth; it describes a *proposed* design, not shipped capability.
-- `README.md` — one-line description.
-- `scripts/link-github-subissues.mjs` + `.github/workflows/link-hexactra-subissues.yml` — the only executable code: an idempotent Node script (no dependencies, Node 22) that attaches existing epic issues (hard-coded `epicChildren` map, epics #1–#93) as native GitHub sub-issues. It refuses to run against any repo other than `marinoscar/hexactra`.
+- `VISION.MD` — product vision and architecture (25 sections). A proposal, not a statement of shipped capability.
+- `crates/` — Rust workspace (control plane, host agent, worker, native host, CLI, MCP, core types, telemetry, providers, AEF connector, fleet scheduling).
+- `apps/chrome-extension` (MV3 extension, standalone side-panel AI works), `apps/dashboard`, `packages/sdk`, `packages/contracts`.
+- `api/openapi.yaml`, `api/*.json` — contracts (CI checks they parse).
+- `scripts/link-github-subissues.mjs` — idempotent script linking epics to sub-issues (`epicChildren` map); refuses any repo but `marinoscar/hexactra`.
 
 Commands:
 
 ```bash
-GITHUB_TOKEN=... node scripts/link-github-subissues.mjs --check   # dry run
-GITHUB_TOKEN=... node scripts/link-github-subissues.mjs           # apply (needs Issues:write)
+cargo fmt --all --check
+cargo clippy --workspace --all-targets      # deny-level lints fail; style warnings are tracked debt
+cargo test --workspace --all-targets
+pnpm install --frozen-lockfile && pnpm build
+pnpm --filter @hexactra/sdk --filter @hexactra/chrome-extension test
+python3 scripts/ci/validate-contracts.py
+GITHUB_TOKEN=... node scripts/link-github-subissues.mjs --check   # dry run of sub-issue linking
 ```
 
-The workflow runs on push when the workflow file itself changes, or via `workflow_dispatch`.
+CI (`.github/workflows/ci.yml`) runs all of the above. A workflow step must never report success for a test that does not exist.
 
 ## Work tracking
 
-The backlog lives in GitHub issues (#1–#93): 15 epics, each with 5–6 child tasks, linked as native sub-issues. Titles use `[EPIC Exx]` / `[Exx.n]`.
+The backlog lives in GitHub issues (#1–#93, plus epic #173 and its children): 16 epics, each with 5–6 child tasks, linked as native sub-issues. Titles use `[EPIC Exx]` / `[Exx.n]`.
 
 - **v1 (E00–E10):** E00 foundation/contracts/CI → E01 standalone Chrome driver → E02 standalone AI agent + side-panel chat → E03 unattended Linux host → E04 native messaging + worker → E05 remote control plane → E06 managed AI goal runner → E07 HITL → E08 SDK/CLI/MCP → E09 OTel/audit/security → E10 release.
 - **post-v1 (E11–E14):** vault/notification providers, Windows/macOS hosts, AEF integration, fleet orchestration. Don't pull these into v1 work.
-- Start with E00.1 (bootstrap the Cargo + pnpm monorepo); the tooling choices below are not yet pinned anywhere.
+- **E15 (#173)** is the current priority: the remote-control vertical slice (control plane → agent → native host → extension) with a real e2e test.
 
 ## MANDATORY: Issue-driven development
 
