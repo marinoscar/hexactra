@@ -86,3 +86,41 @@ jobs:
         with:
           node-version: '22'
       - run: node scripts/check-agent-sync.mjs
+
+  e2e-remote-control:
+    name: Remote control e2e (real Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            target
+          key: ${{ runner.os }}-cargo-e2e-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @hexactra/chrome-extension build
+      - run: cargo build -p hexactra-cli -p hexactra-control -p hexactra-agent -p hexactra-native-host
+      # Chromium (not branded Chrome) honours --load-extension.
+      - name: Install Chromium and Xvfb
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb
+          npx -y playwright@1.49.1 install --with-deps chromium
+          # Ubuntu 24.04 restricts unprivileged user namespaces, which the
+          # Chromium sandbox needs; allow them instead of disabling the sandbox.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+      - name: Run e2e
+        run: |
+          CHROMIUM_PATH=$(find ~/.cache/ms-playwright -type f -name chrome -path '*/chromium-*' | grep -v headless | head -1)
+          echo "Chromium: $CHROMIUM_PATH"
+          CHROMIUM_PATH="$CHROMIUM_PATH" xvfb-run -a node tests/e2e/remote-control.e2e.mjs
