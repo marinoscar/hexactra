@@ -1,0 +1,15 @@
+[Unit]
+Description=Hexactra host agent (drives this user's Chrome through the Hexactra extension)
+Documentation=https://github.com/marinoscar/hexactra/blob/main/docs/remote-control-quickstart.md
+After=hexactra-control.service
+
+[Service]
+# Runs in the user session so its bridge socket ($XDG_RUNTIME_DIR/hexactra)
+# is the one Chrome's native messaging host connects to.
+ExecStart=%h/.local/bin/hexactra-agent daemon
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target
