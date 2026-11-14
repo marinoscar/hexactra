@@ -37,6 +37,25 @@ hexactra status
 
 The extension's toolbar badge shows **ON** while a remote controller is connected.
 
+### Launch mode: the agent opens the browser for you
+
+By default the agent attaches to the Chrome you run yourself. In **launch mode** it starts a visible browser on demand with a persistent profile, restarts it after a crash, and can close it when idle. No one needs to be logged in or open Chrome:
+
+```bash
+hexactra-agent daemon \
+  --browser /usr/bin/chromium \
+  --profile-dir ~/.local/share/hexactra/profiles/default \
+  --extension-dir ~/hexactra/apps/chrome-extension/dist \
+  --idle-shutdown-s 900          # close after 15 idle minutes; 0 keeps it open
+```
+
+- The browser needs a display. Use your desktop session, or Xvfb on a headless machine.
+- Use Chromium or Chrome for Testing: branded Google Chrome ignores `--extension-dir` (`--load-extension`).
+- The launched profile is separate from your everyday Chrome profile. Sign in to the sites you need once, through the browser or its viewer.
+- Add `--viewer-url` when you have a web viewer (noVNC). Handoffs then link people straight to the browser.
+
+The container host (#195) packages all of this so it runs on an always-on machine even when your desktop is off.
+
 ## 2. Use it locally
 
 ```bash
