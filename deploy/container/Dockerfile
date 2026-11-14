@@ -59,13 +59,18 @@ ENTRYPOINT ["/usr/bin/tini", "--", "hexactra-control", "serve"]
 
 # --------------------------------------------------------------- target: host
 FROM runtime-base AS host
+# chrome-sandbox is the only binary left setuid: the SYS_ADMIN capability the
+# browser sandbox needs (see compose.yml) is then not reachable through su,
+# mount and friends.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       chromium chromium-sandbox \
       xvfb openbox x11vnc novnc websockify \
       fonts-liberation fonts-dejavu-core fonts-noto-color-emoji \
  && rm -rf /var/lib/apt/lists/* \
- && mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix
+ && mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix \
+ && find / -xdev -perm -4000 -type f ! -path /usr/lib/chromium/chrome-sandbox -exec chmod u-s {} + \
+ && test -u /usr/lib/chromium/chrome-sandbox
 COPY --from=rust-build /out/hexactra-agent /out/hexactra-native-host /usr/local/bin/
 COPY --from=ext-build /src/apps/chrome-extension/dist /opt/hexactra/extension
 COPY deploy/container/host-entrypoint.sh /usr/local/bin/hexactra-host

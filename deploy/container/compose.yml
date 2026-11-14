@@ -39,6 +39,13 @@ services:
     hostname: hexactra-host
     # Chromium needs more shared memory than Docker's 64 MB default.
     shm_size: 1gb
+    # Chromium's sandbox creates namespaces, which Docker's default seccomp
+    # profile only allows with CAP_SYS_ADMIN. The browser itself runs as an
+    # unprivileged user without effective capabilities; only the setuid
+    # chrome-sandbox helper (the image's sole setuid binary) uses it. This
+    # keeps the browser sandbox on instead of running with --no-sandbox.
+    cap_add:
+      - SYS_ADMIN
     environment:
       HEXACTRA_URL: http://control:8787
       HEXACTRA_API_TOKEN: ${HEXACTRA_API_TOKEN:?run ./setup.sh first}
