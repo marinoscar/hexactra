@@ -3,7 +3,10 @@
 use std::time::Duration;
 
 use hexactra_client::{ClientError, ControlClient};
-use hexactra_core::remote::{CreateSessionRequest, OperationState, RemoteAction};
+use hexactra_core::remote::{
+    CreateHandoffRequest, CreateSessionRequest, HandoffInput, HandoffPage, HandoffStatus,
+    OperationState, RemoteAction,
+};
 use serde_json::{json, Map, Value};
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -16,8 +19,9 @@ const INSTRUCTIONS: &str =
 signed in to their accounts. Typical loop: browser_navigate, then browser_elements to get CSS \
 selectors, then browser_click / browser_type, then browser_text or browser_screenshot to check the \
 result. Act at a human pace and only on the user's own behalf. If a page shows a CAPTCHA, a \
-verification code, a passkey prompt, a payment confirmation or any other security check, stop and \
-ask the user to complete it in their browser; do not try to bypass it.";
+verification code, a passkey prompt, a payment confirmation or any other security check, call \
+browser_request_human and wait for the person; never try to solve or bypass the check yourself. \
+Browser actions are paused while a request to the person is open.";
 
 fn tab_prop() -> Value {
     json!({"type": "integer", "description": "Tab id from browser_tabs; defaults to the active tab."})
@@ -122,8 +126,35 @@ pub fn tools() -> Vec<Value> {
         tool("browser_back", "Go back in history.", json!({"tab_id": tab_prop()}), &[]),
         tool("browser_forward", "Go forward in history.", json!({"tab_id": tab_prop()}), &[]),
         tool("browser_reload", "Reload the tab.", json!({"tab_id": tab_prop()}), &[]),
+        tool(
+            "browser_request_human",
+            "Pause and ask the user to do something only a person should do: solve a CAPTCHA, enter a one-time code, approve a passkey, sign in, or confirm a purchase. The user is reached on their configured channels (chat, email link, ...). With wait=true (default) this returns the outcome and, for input text/secret/choice, the person's answer. Use input=secret for one-time codes: type the value into the page and do not repeat it elsewhere.",
+            json!({
+                "kind": {"type": "string", "enum": ["captcha", "code", "passkey", "login", "confirmation", "other"]},
+                "prompt": {"type": "string", "description": "What the person should do, in plain words."},
+                "input": {"type": "string", "enum": ["none", "text", "secret", "choice"], "description": "none: the person acts in the browser and marks it done."},
+                "choices": {"type": "array", "items": {"type": "string"}},
+                "timeout_s": {"type": "integer", "minimum": 10, "maximum": 86400},
+                "wait": {"type": "boolean", "description": "Wait for the answer (default true)."}
+            }),
+            &["kind", "prompt"],
+        ),
+        tool(
+            "browser_handoff_status",
+            "Check (and optionally wait for) a request created by browser_request_human with wait=false.",
+            json!({"handoff_id": {"type": "string"}, "wait_s": {"type": "integer", "minimum": 0, "maximum": 3600}}),
+            &["handoff_id"],
+        ),
     ]
 }
+
+/// Tools that are not browser actions.
+#[cfg(test)]
+const NON_ACTION_TOOLS: &[&str] = &[
+    "browser_status",
+    "browser_request_human",
+    "browser_handoff_status",
+];
 
 /// Build a remote action from a tool name and its arguments.
 pub fn action_for(name: &str, args: &Map<String, Value>) -> Result<RemoteAction, String> {
@@ -215,6 +246,125 @@ impl Server {
         Ok(s.id)
     }
 
+    /// Create a handoff on the current session and, unless `wait` is false,
+    /// wait for the person.
+    async fn request_human(&self, args: &Map<String, Value>) -> Value {
+        let mut obj = args.clone();
+        let wait = obj.remove("wait").and_then(|v| v.as_bool()).unwrap_or(true);
+        let timeout_s = obj
+            .remove("timeout_s")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(600);
+        obj.insert("timeout_ms".into(), json!(timeout_s * 1000));
+        let mut req: CreateHandoffRequest = match serde_json::from_value(Value::Object(obj)) {
+            Ok(r) => r,
+            Err(e) => return text_result(format!("invalid arguments: {e}"), true),
+        };
+        if let Err(e) = req.validate() {
+            return text_result(e.0, true);
+        }
+        let mut fresh = false;
+        let created = loop {
+            let session = match self.session(fresh).await {
+                Ok(s) => s,
+                Err(e) => return text_result(format!("no browser session: {e}"), true),
+            };
+            // Tell the person which page this is about.
+            if req.page.is_none() {
+                if let Ok(op) = self
+                    .client
+                    .act(session, RemoteAction::Tabs, Some(Duration::from_secs(10)))
+                    .await
+                {
+                    let active = op.result.as_ref().and_then(|r| {
+                        r["tabs"]
+                            .as_array()?
+                            .iter()
+                            .find(|t| t["active"] == true)
+                            .cloned()
+                    });
+                    if let Some(t) = active {
+                        req.page = Some(HandoffPage {
+                            url: t["url"].as_str().map(|s| s.chars().take(2000).collect()),
+                            title: t["title"].as_str().map(|s| s.chars().take(200).collect()),
+                        });
+                    }
+                }
+            }
+            match self.client.create_handoff(session, &req).await {
+                Err(e) if !fresh && matches!(e.status(), Some(404)) => fresh = true,
+                Err(e) => return text_result(e.to_string(), true),
+                Ok(c) => break c,
+            }
+        };
+        if !wait {
+            return text_result(
+                format!(
+                    "Asked the person (handoff_id {}). Browser actions are paused until they answer; call browser_handoff_status to check.",
+                    created.handoff.id
+                ),
+                false,
+            );
+        }
+        self.handoff_outcome(created.handoff.id, Duration::from_secs(timeout_s + 5))
+            .await
+    }
+
+    async fn handoff_outcome(&self, id: Uuid, wait: Duration) -> Value {
+        let end = tokio::time::Instant::now() + wait;
+        let h = loop {
+            let left = end.saturating_duration_since(tokio::time::Instant::now());
+            match self
+                .client
+                .handoff(id, Some(left.min(Duration::from_secs(110))))
+                .await
+            {
+                Ok(h) if h.status != HandoffStatus::Pending || left.is_zero() => break h,
+                Ok(_) => continue,
+                Err(e) => return text_result(e.to_string(), true),
+            }
+        };
+        match h.status {
+            HandoffStatus::Pending => text_result(
+                format!("Still waiting for the person (handoff_id {id})."),
+                false,
+            ),
+            HandoffStatus::Completed => {
+                let channel = h
+                    .response
+                    .as_ref()
+                    .and_then(|r| r.channel.clone())
+                    .map(|c| format!(" via {c}"))
+                    .unwrap_or_default();
+                let value = if h.input == HandoffInput::Secret {
+                    match self.client.claim_handoff_secret(id).await {
+                        Ok(v) => Some(v),
+                        Err(e) => return text_result(format!("answer could not be claimed: {e}"), true),
+                    }
+                } else {
+                    h.response.as_ref().and_then(|r| r.value.clone())
+                };
+                let mut out = json!({ "status": "completed", "handoff_id": id });
+                if let Some(v) = value {
+                    out["value"] = json!(v);
+                }
+                text_result(
+                    format!(
+                        "The person completed the request{channel}. Browser actions are resumed.\n{}",
+                        out
+                    ),
+                    false,
+                )
+            }
+            other => text_result(
+                format!(
+                    "The request was {other:?}. Stop this task and tell the user; do not retry the check yourself."
+                ),
+                true,
+            ),
+        }
+    }
+
     async fn call_tool(&self, params: &Value) -> Value {
         let name = params.get("name").and_then(Value::as_str).unwrap_or("");
         let empty = Map::new();
@@ -223,6 +373,21 @@ impl Server {
             .and_then(Value::as_object)
             .unwrap_or(&empty);
 
+        if name == "browser_request_human" {
+            return self.request_human(args).await;
+        }
+        if name == "browser_handoff_status" {
+            let id = match args
+                .get("handoff_id")
+                .and_then(Value::as_str)
+                .map(str::parse::<Uuid>)
+            {
+                Some(Ok(id)) => id,
+                _ => return text_result("handoff_id must be a UUID", true),
+            };
+            let wait = Duration::from_secs(args.get("wait_s").and_then(Value::as_u64).unwrap_or(0));
+            return self.handoff_outcome(id, wait).await;
+        }
         if name == "browser_status" {
             return match self.client.hosts().await {
                 Ok(hosts) => text_result(
@@ -310,7 +475,7 @@ mod tests {
     fn every_tool_maps_to_an_action_or_is_status() {
         for t in tools() {
             let name = t["name"].as_str().unwrap();
-            if name == "browser_status" {
+            if NON_ACTION_TOOLS.contains(&name) {
                 continue;
             }
             // Build minimal valid arguments from the required list.
