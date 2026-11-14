@@ -18,6 +18,7 @@
 
 import { spawn, spawnSync, execFile } from 'node:child_process';
 import { createServer } from 'node:http';
+import crypto from 'node:crypto';
 import { mkdtempSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, extname } from 'node:path';
@@ -118,6 +119,84 @@ async function until(what, fn, timeoutMs = 30_000) {
   }
 }
 
+
+// Minimal MCP stdio client.
+function mcpClient() {
+  const proc = spawn(join(binDir, 'hexactra-mcp'), [], {
+    env: { ...env, HEXACTRA_URL: controlUrl },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  children.push(proc);
+  let buf = '';
+  const pending = new Map();
+  proc.stdout.on('data', (d) => {
+    buf += d.toString();
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const msg = JSON.parse(buf.slice(0, i));
+      buf = buf.slice(i + 1);
+      pending.get(msg.id)?.(msg);
+      pending.delete(msg.id);
+    }
+  });
+  let nextId = 1;
+  const rpc = (method, params, timeoutMs = 60_000) =>
+    new Promise((resolve, reject) => {
+      const id = nextId++;
+      const t = setTimeout(() => reject(new Error(`MCP ${method} timed out`)), timeoutMs);
+      pending.set(id, (m) => {
+        clearTimeout(t);
+        resolve(m);
+      });
+      proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
+    });
+  const call = async (name, args, timeoutMs) => (await rpc('tools/call', { name, arguments: args }, timeoutMs)).result;
+  return { proc, rpc, call };
+}
+
+// A webhook receiver playing the person's channel (chat bot, automation):
+// verifies Standard Webhooks signatures and answers handoffs from the payload.
+async function startChannel() {
+  const state = { secret: null, events: [], badSignatures: 0 };
+  const server = createServer((req, res) => {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8');
+      const key = Buffer.from((state.secret ?? '').replace(/^whsec_/, ''), 'base64');
+      const signed = `${req.headers['webhook-id']}.${req.headers['webhook-timestamp']}.${raw}`;
+      const expected = 'v1,' + crypto.createHmac('sha256', key).update(signed).digest('base64');
+      if (req.headers['webhook-signature'] !== expected) {
+        state.badSignatures += 1;
+        res.writeHead(401).end();
+        return;
+      }
+      res.writeHead(204).end();
+      const event = JSON.parse(raw);
+      state.events.push(event);
+      if (event.type !== 'handoff.created') return;
+      const h = event.data.handoff;
+      const answer = { channel: 'e2e-channel', response_token: event.data.respond.token };
+      if (h.input === 'secret') answer.value = '424242';
+      if (h.input === 'text') answer.value = 'from the channel';
+      if (h.input === 'choice') answer.value = h.choices[0];
+      // A person takes a moment to answer.
+      const delay = h.kind === 'captcha' ? 2_000 : 300;
+      setTimeout(() => {
+        fetch(event.data.respond.url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(answer),
+        }).catch(() => undefined);
+      }, delay);
+    });
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  state.url = `http://127.0.0.1:${server.address().port}/hook`;
+  state.close = () => server.close();
+  return state;
+}
+
 const results = [];
 async function step(name, fn) {
   const t = Date.now();
@@ -129,7 +208,15 @@ async function step(name, fn) {
 let failed = false;
 try {
   // --- stack -----------------------------------------------------------------
-  start('control', join(binDir, 'hexactra-control'), ['serve', '--bind', `127.0.0.1:${controlPort}`]);
+  start('control', join(binDir, 'hexactra-control'), [
+    'serve',
+    '--bind',
+    `127.0.0.1:${controlPort}`,
+    '--public-url',
+    controlUrl,
+    // The test's webhook receiver listens on loopback over http.
+    '--webhook-allow-insecure',
+  ]);
   await until('control plane', () => fetch(`${controlUrl}/v1/health`).then((r) => r.ok).catch(() => false));
 
   const startAgent = () =>
@@ -290,6 +377,58 @@ try {
     assert.equal(bad.result.isError, true);
     assert.match(bad.result.content[0].text, /no element matches #nope/);
     mcp.stdin.end();
+  });
+
+  await step('a webhook channel answers handoffs for the CLI and an MCP agent', async () => {
+    const channel = await startChannel();
+    try {
+      const added = JSON.parse(await ok('--json', 'webhook', 'add', channel.url, '--description', 'e2e channel'));
+      channel.secret = added.secret;
+      assert.match(channel.secret, /^whsec_/);
+
+      // CLI: a choice answered by the channel.
+      const out = await ok(
+        'handoff', 'request', '--kind', 'confirmation', '--prompt', 'Approve the test purchase?',
+        '--input', 'choice', '--choice', 'Approve', '--choice', 'Reject', '--wait', '--timeout-s', '60',
+      );
+      assert.match(out, /completed via e2e-channel/);
+      assert.match(out, /Approve/);
+
+      // While a handoff is open, browser actions are paused.
+      const id = (await ok('handoff', 'request', '--kind', 'captcha', '--prompt', 'Solve the CAPTCHA')).trim();
+      const blocked = await cli('text');
+      assert.notEqual(blocked.code, 0);
+      assert.match(blocked.err, /handoff_pending/);
+      assert.match(await ok('handoff', 'show', id, '--wait-s', '20'), /Completed/);
+      await ok('text');
+
+      // MCP agent: asks for a one-time code and types it into the page.
+      const { proc, rpc, call } = mcpClient();
+      await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e', version: '0' } });
+      assert.equal((await call('browser_navigate', { url: `${site}/index.html` })).isError, false);
+      const asked = await call('browser_request_human', {
+        kind: 'code',
+        prompt: 'Enter the verification code sent to your phone',
+        input: 'secret',
+        timeout_s: 60,
+      }, 90_000);
+      assert.equal(asked.isError, false, JSON.stringify(asked));
+      const code = JSON.parse(asked.content[0].text.split('\n').pop()).value;
+      assert.equal(code, '424242');
+      assert.equal((await call('browser_type', { selector: '#q', text: code, submit: true })).isError, false);
+      assert.match((await call('browser_text', { selector: '#out' })).content[0].text, /searched: 424242/);
+      proc.stdin.end();
+
+      // The handoff.created event carried the page the agent was on.
+      const codeEvent = channel.events.find((e) => e.type === 'handoff.created' && e.data.handoff.kind === 'code');
+      assert.equal(codeEvent.data.handoff.page.title, 'Hexactra Fixture Home');
+      // The secret never travelled in an event.
+      assert.ok(!JSON.stringify(channel.events).includes('424242'));
+      assert.equal(channel.badSignatures, 0);
+      assert.match(await ok('webhook', 'deliveries', added.webhook.id), /succeeded/);
+    } finally {
+      channel.close();
+    }
   });
 
   await step('the extension reconnects after the agent restarts', async () => {
