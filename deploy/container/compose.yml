@@ -1,0 +1,59 @@
+# Hexactra always-on stack (#197): control plane + containerized browser host.
+#
+#   cd deploy/container && ./setup.sh && docker compose up -d --build
+#
+# Both ports are published on 127.0.0.1 only. Reach them from other devices
+# through Tailscale (tailscale serve) or an SSH tunnel; see
+# docs/container-host.md.
+name: hexactra
+
+services:
+  control:
+    build:
+      context: ../..
+      dockerfile: deploy/container/Dockerfile
+      target: control
+    image: hexactra-control:local
+    restart: unless-stopped
+    environment:
+      HEXACTRA_API_TOKEN: ${HEXACTRA_API_TOKEN:?run ./setup.sh first}
+      HEXACTRA_PUBLIC_URL: ${HEXACTRA_PUBLIC_URL:-}
+      HEXACTRA_WEBHOOK_ALLOW_INSECURE: ${HEXACTRA_WEBHOOK_ALLOW_INSECURE:-false}
+      RUST_LOG: ${RUST_LOG:-info}
+    ports:
+      - "${HEXACTRA_API_BIND:-127.0.0.1}:${HEXACTRA_API_PORT:-8787}:8787"
+    volumes:
+      - control-data:/data
+
+  host:
+    build:
+      context: ../..
+      dockerfile: deploy/container/Dockerfile
+      target: host
+    image: hexactra-host:local
+    restart: unless-stopped
+    depends_on:
+      control:
+        condition: service_healthy
+    # A fixed hostname keeps Chromium's profile lock stable across restarts.
+    hostname: hexactra-host
+    # Chromium needs more shared memory than Docker's 64 MB default.
+    shm_size: 1gb
+    environment:
+      HEXACTRA_URL: http://control:8787
+      HEXACTRA_API_TOKEN: ${HEXACTRA_API_TOKEN:?run ./setup.sh first}
+      HEXACTRA_HOST_NAME: ${HEXACTRA_HOST_NAME:-container-host}
+      HEXACTRA_VIEWER_PASSWORD: ${HEXACTRA_VIEWER_PASSWORD:-}
+      HEXACTRA_VIEWER_URL: ${HEXACTRA_VIEWER_URL:-}
+      HEXACTRA_IDLE_SHUTDOWN_S: ${HEXACTRA_IDLE_SHUTDOWN_S:-900}
+      HEXACTRA_LAUNCH_EAGERLY: ${HEXACTRA_LAUNCH_EAGERLY:-false}
+      HEXACTRA_SCREEN: ${HEXACTRA_SCREEN:-1440x900x24}
+      RUST_LOG: ${RUST_LOG:-info}
+    ports:
+      - "${HEXACTRA_VIEWER_BIND:-127.0.0.1}:${HEXACTRA_VIEWER_PORT:-6080}:6080"
+    volumes:
+      - host-data:/data
+
+volumes:
+  control-data:
+  host-data:
