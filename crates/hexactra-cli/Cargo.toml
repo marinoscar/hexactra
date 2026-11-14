@@ -23,12 +23,15 @@ anyhow.workspace = true
 async-trait.workspace = true
 clap.workspace = true
 
+base64.workspace = true
+chrono.workspace = true
+
 hexactra-core = { path = "../hexactra-core" }
-hexactra-telemetry = { path = "../hexactra-telemetry" }
-hexactra-control = { path = "../hexactra-control" }
-hexactra-agent = { path = "../hexactra-agent" }
+hexactra-client = { path = "../hexactra-client" }
 
 [dev-dependencies]
+hexactra-control = { path = "../hexactra-control" }
+hexactra-client = { path = "../hexactra-client" }
 tempfile.workspace = true
 assert_cmd = "2.0"
 predicates = "3.0"

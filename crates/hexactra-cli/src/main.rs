@@ -1,382 +1,553 @@
-//! Hexactra CLI - A command-line interface for the Hexactra browser automation runtime
+//! `hexactra`: drive a remote browser through the Hexactra control plane.
 //!
-//! The CLI provides remote session management, browser actions, AI goal execution,
-//! and HITL (Human in the Loop) interaction through a secure, typed interface.
+//! ```text
+//! hexactra status
+//! hexactra navigate https://example.test
+//! hexactra elements
+//! hexactra click 'a[href="/next"]'
+//! hexactra type '#q' 'hello' --submit
+//! hexactra screenshot -o page.jpg
+//! ```
+//!
+//! Session selection: `--session`, then `HEXACTRA_SESSION`, then the session
+//! saved by the last `hexactra session create`; if none exists or it has
+//! ended, a new session is created and saved.
 
-use anyhow::Result;
-use clap::{Parser, Subcommand};
 use std::path::PathBuf;
-use tracing::{info, warn};
+use std::time::Duration;
 
-// Re-export types from hexactra-control for convenience
-use hexactra_control::config::Config;
+use anyhow::{bail, Context, Result};
+use base64::Engine;
+use clap::{Parser, Subcommand};
+use hexactra_client::ControlClient;
+use hexactra_core::remote::{
+    CreateSessionRequest, OperationState, OperationView, RemoteAction, RemoteSessionStatus,
+};
+use uuid::Uuid;
 
-/// Hexactra CLI configuration
 #[derive(Parser, Debug)]
-#[command(name = "hexactra")]
-#[command(about = "Hexactra CLI for browser automation runtime", long_about = None)]
+#[command(
+    name = "hexactra",
+    version,
+    about = "Drive a remote browser through Hexactra"
+)]
 struct Cli {
-    /// Path to config file (optional)
-    #[arg(short, long)]
-    config: Option<PathBuf>,
+    /// Control plane URL.
+    #[arg(
+        long = "url",
+        global = true,
+        env = "HEXACTRA_URL",
+        default_value = "http://127.0.0.1:8787"
+    )]
+    control_url: String,
+    /// File holding the API token (default: $XDG_CONFIG_HOME/hexactra/api-token).
+    /// `HEXACTRA_API_TOKEN` overrides it.
+    #[arg(long, global = true, env = "HEXACTRA_TOKEN_FILE")]
+    token_file: Option<PathBuf>,
+    /// Session to act in.
+    #[arg(long, short = 's', global = true, env = "HEXACTRA_SESSION")]
+    session: Option<Uuid>,
+    /// Print raw JSON.
+    #[arg(long, global = true)]
+    json: bool,
+    /// Action timeout in milliseconds.
+    #[arg(long, global = true, default_value_t = 30_000)]
+    timeout_ms: u64,
 
-    /// Verbose output (multiple -v increases verbosity)
-    #[arg(short, long, action = clap::ArgAction::Count)]
-    verbose: u8,
-
-    /// Output format (json or text)
-    #[arg(short, long, default_value = "text")]
-    output: String,
-
-    /// Subcommand to execute
     #[command(subcommand)]
     command: Commands,
 }
 
-/// Available CLI commands
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Session management commands
+    /// Control plane health and connected hosts.
+    Status,
+    /// List hosts.
+    Hosts,
+    /// Manage sessions.
     #[command(subcommand)]
-    Session(SessionCommands),
-    /// Profile management commands
-    #[command(subcommand)]
-    Profile(ProfileCommands),
-    /// Host management commands
-    #[command(subcommand)]
-    Host(HostCommands),
-    /// Browser action commands
-    #[command(subcommand)]
-    Action(ActionCommands),
-    /// Agent run commands
-    #[command(subcommand)]
-    Agent(AgentCommands),
-    /// HITL (Human in the Loop) commands
-    #[command(subcommand)]
-    Hitl(HitlCommands),
-    /// Show version information
+    Session(SessionCmd),
+    /// Open a URL in the current tab.
+    Navigate {
+        url: String,
+        #[arg(long)]
+        tab: Option<i64>,
+    },
+    /// Click the element matching a CSS selector.
+    Click {
+        selector: String,
+        #[arg(long)]
+        tab: Option<i64>,
+    },
+    /// Type text into an element.
+    Type {
+        selector: String,
+        text: String,
+        /// Replace the current value.
+        #[arg(long)]
+        clear: bool,
+        /// Submit (Enter) after typing.
+        #[arg(long)]
+        submit: bool,
+        #[arg(long)]
+        tab: Option<i64>,
+    },
+    /// Press a key (Enter, Escape, Tab, ArrowDown, ...).
+    Press {
+        key: String,
+        #[arg(long)]
+        selector: Option<String>,
+        #[arg(long)]
+        tab: Option<i64>,
+    },
+    /// Scroll by a delta or bring an element into view.
+    Scroll {
+        #[arg(long, default_value_t = 0, allow_hyphen_values = true)]
+        dx: i64,
+        #[arg(long, default_value_t = 600, allow_hyphen_values = true)]
+        dy: i64,
+        #[arg(long)]
+        selector: Option<String>,
+        #[arg(long)]
+        tab: Option<i64>,
+    },
+    /// Save a screenshot of the visible tab (JPEG).
+    Screenshot {
+        /// Output file (default: screenshot-<time>.jpg).
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        #[arg(long)]
+        tab: Option<i64>,
+    },
+    /// Print the visible text of the page or an element.
+    Text {
+        #[arg(long)]
+        selector: Option<String>,
+        #[arg(long)]
+        max_chars: Option<usize>,
+        #[arg(long)]
+        tab: Option<i64>,
+    },
+    /// List interactive elements with selectors to use in other commands.
+    Elements {
+        #[arg(long)]
+        max: Option<usize>,
+        #[arg(long)]
+        tab: Option<i64>,
+    },
+    /// Wait until an element exists.
+    WaitFor {
+        selector: String,
+        #[arg(long, default_value_t = 10_000)]
+        wait_ms: u64,
+        #[arg(long)]
+        tab: Option<i64>,
+    },
+    /// List open tabs.
+    Tabs,
+    /// Open a new tab.
+    NewTab { url: Option<String> },
+    /// Activate a tab.
+    ActivateTab { tab_id: i64 },
+    /// Close a tab.
+    CloseTab { tab_id: i64 },
+    /// History back.
+    Back {
+        #[arg(long)]
+        tab: Option<i64>,
+    },
+    /// History forward.
+    Forward {
+        #[arg(long)]
+        tab: Option<i64>,
+    },
+    /// Reload.
+    Reload {
+        #[arg(long)]
+        tab: Option<i64>,
+    },
+    /// Print version.
     Version,
 }
 
-/// Session management commands
 #[derive(Subcommand, Debug)]
-enum SessionCommands {
-    /// List all sessions
-    List,
-    /// Show session details
-    Status { session_id: String },
-    /// Create a new session
-    Create { profile_id: String },
-    /// Stop a session
-    Stop { session_id: String },
-}
-
-/// Profile management commands
-#[derive(Subcommand, Debug)]
-enum ProfileCommands {
-    /// List all profiles
-    List,
-    /// Show profile details
-    Status { profile_id: String },
-    /// Create a new profile
+enum SessionCmd {
+    /// Create a session and make it current.
     Create {
-        name: String,
-        chrome_profile_path: Option<String>,
+        #[arg(long)]
+        host: Option<Uuid>,
+        #[arg(long)]
+        label: Option<String>,
     },
-    /// Delete a profile
-    Delete { profile_id: String },
-}
-
-/// Host management commands
-#[derive(Subcommand, Debug)]
-enum HostCommands {
-    /// List all hosts
+    /// List sessions.
     List,
-    /// Show host details
-    Status { host_id: String },
+    /// Make an existing session current.
+    Use { id: Uuid },
+    /// End a session (default: the current one).
+    End { id: Option<Uuid> },
 }
 
-/// Browser action commands
-#[derive(Subcommand, Debug)]
-enum ActionCommands {
-    /// Execute a click action
-    Click {
-        session_id: String,
-        selector: String,
-    },
-    /// Execute a type action
-    Type {
-        session_id: String,
-        selector: String,
-        text: String,
-    },
-    /// Execute a navigate action
-    Navigate { session_id: String, url: String },
-    /// Take a screenshot
-    Screenshot { session_id: String },
+fn config_dir() -> PathBuf {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("hexactra")
 }
 
-/// Agent run commands
-#[derive(Subcommand, Debug)]
-enum AgentCommands {
-    /// Start an agent run
-    Start { session_id: String, goal: String },
-    /// Show agent run status
-    Status { session_id: String },
-    /// Stop an agent run
-    Stop { session_id: String },
+fn current_session_file() -> PathBuf {
+    config_dir().join("current-session")
 }
 
-/// HITL (Human in the Loop) commands
-#[derive(Subcommand, Debug)]
-enum HitlCommands {
-    /// List pending HITL requests
-    List { session_id: String },
-    /// Show HITL request details
-    Status { request_id: String },
-    /// Approve a HITL request
-    Approve {
-        request_id: String,
-        owner_id: String,
-    },
-    /// Reject a HITL request
-    Reject {
-        request_id: String,
-        owner_id: String,
-    },
+fn read_token(file: &Option<PathBuf>) -> Result<String> {
+    if let Ok(t) = std::env::var("HEXACTRA_API_TOKEN") {
+        if !t.trim().is_empty() {
+            return Ok(t.trim().to_string());
+        }
+    }
+    let f = file
+        .clone()
+        .unwrap_or_else(|| config_dir().join("api-token"));
+    Ok(std::fs::read_to_string(&f)
+        .with_context(|| {
+            format!(
+                "reading API token from {} (set HEXACTRA_API_TOKEN or --token-file)",
+                f.display()
+            )
+        })?
+        .trim()
+        .to_string())
+}
+
+fn save_current(id: Uuid) {
+    let f = current_session_file();
+    if let Some(d) = f.parent() {
+        let _ = std::fs::create_dir_all(d);
+    }
+    let _ = std::fs::write(f, format!("{id}\n"));
+}
+
+async fn resolve_session(cli: &Cli, client: &ControlClient) -> Result<Uuid> {
+    if let Some(id) = cli.session {
+        return Ok(id);
+    }
+    if let Some(id) = std::fs::read_to_string(current_session_file())
+        .ok()
+        .and_then(|s| s.trim().parse::<Uuid>().ok())
+    {
+        if let Ok(s) = client.session(id).await {
+            if s.status == RemoteSessionStatus::Active {
+                return Ok(id);
+            }
+        }
+    }
+    let s = client
+        .create_session(&CreateSessionRequest {
+            host_id: None,
+            label: Some("cli".into()),
+        })
+        .await
+        .context("creating a session")?;
+    save_current(s.id);
+    eprintln!("started session {}", s.id);
+    Ok(s.id)
+}
+
+fn print_json<T: serde::Serialize>(v: &T) -> Result<()> {
+    println!("{}", serde_json::to_string_pretty(v)?);
+    Ok(())
+}
+
+/// Print a finished operation; error if it did not succeed.
+fn finish(
+    cli: &Cli,
+    op: &OperationView,
+    text: impl FnOnce(&serde_json::Value) -> String,
+) -> Result<()> {
+    if cli.json {
+        print_json(op)?;
+    }
+    match op.state {
+        OperationState::Succeeded => {
+            if !cli.json {
+                let out = text(op.result.as_ref().unwrap_or(&serde_json::Value::Null));
+                if !out.is_empty() {
+                    println!("{out}");
+                }
+            }
+            Ok(())
+        }
+        state => bail!(
+            "{} {:?}: {}",
+            op.action.kind(),
+            state,
+            op.error.as_deref().unwrap_or("no details")
+        ),
+    }
+}
+
+fn ok_text(_: &serde_json::Value) -> String {
+    "ok".into()
 }
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() {
+    if let Err(e) = run().await {
+        eprintln!("error: {e:#}");
+        std::process::exit(1);
+    }
+}
+
+async fn run() -> Result<()> {
     let cli = Cli::parse();
-
-    // Set up logging based on verbosity
-    let log_level = match cli.verbose {
-        0 => "warn",
-        1 => "info",
-        2 => "debug",
-        _ => "trace",
-    };
-
-    tracing_subscriber::fmt()
-        .with_max_level(match log_level {
-            "trace" => tracing::Level::TRACE,
-            "debug" => tracing::Level::DEBUG,
-            "info" => tracing::Level::INFO,
-            "warn" => tracing::Level::WARN,
-            _ => tracing::Level::INFO,
-        })
-        .init();
-
-    info!("Hexactra CLI starting");
-    info!("Log level: {}", log_level);
-
-    // Load configuration
-    let config = Config::load()?;
-
-    match cli.command {
-        Commands::Session(cmd) => handle_session_command(cmd, &config).await,
-        Commands::Profile(cmd) => handle_profile_command(cmd, &config).await,
-        Commands::Host(cmd) => handle_host_command(cmd, &config).await,
-        Commands::Action(cmd) => handle_action_command(cmd, &config).await,
-        Commands::Agent(cmd) => handle_agent_command(cmd, &config).await,
-        Commands::Hitl(cmd) => handle_hitl_command(cmd, &config).await,
-        Commands::Version => {
-            println!("hexactra-cli {}", env!("CARGO_PKG_VERSION"));
-            Ok(())
-        }
+    if let Commands::Version = cli.command {
+        println!("hexactra-cli {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
     }
-}
+    let client = ControlClient::new(&cli.control_url, &read_token(&cli.token_file)?)?;
+    let timeout = Some(Duration::from_millis(cli.timeout_ms));
 
-async fn handle_session_command(cmd: SessionCommands, config: &Config) -> Result<()> {
-    match cmd {
-        SessionCommands::List => {
-            info!("Listing sessions (config: {:?})", config.redacted());
-            // TODO: Implement session listing
-            warn!("Session list not yet implemented");
-            Ok(())
-        }
-        SessionCommands::Status { session_id } => {
-            info!("Getting session status: {}", session_id);
-            // TODO: Implement session status
-            warn!("Session status not yet implemented");
-            Ok(())
-        }
-        SessionCommands::Create { profile_id } => {
-            info!("Creating session with profile: {}", profile_id);
-            // TODO: Implement session creation
-            warn!("Session creation not yet implemented");
-            Ok(())
-        }
-        SessionCommands::Stop { session_id } => {
-            info!("Stopping session: {}", session_id);
-            // TODO: Implement session stop
-            warn!("Session stop not yet implemented");
-            Ok(())
-        }
-    }
-}
-
-async fn handle_profile_command(cmd: ProfileCommands, config: &Config) -> Result<()> {
-    match cmd {
-        ProfileCommands::List => {
-            info!("Listing profiles (config: {:?})", config.redacted());
-            // TODO: Implement profile listing
-            warn!("Profile list not yet implemented");
-            Ok(())
-        }
-        ProfileCommands::Status { profile_id } => {
-            info!("Getting profile status: {}", profile_id);
-            // TODO: Implement profile status
-            warn!("Profile status not yet implemented");
-            Ok(())
-        }
-        ProfileCommands::Create {
-            name,
-            chrome_profile_path,
-        } => {
-            info!(
-                "Creating profile: {} with path: {:?}",
-                name, chrome_profile_path
+    let action = match &cli.command {
+        Commands::Version => unreachable!(),
+        Commands::Status => {
+            let health = client.health().await?;
+            let hosts = client.hosts().await?;
+            if cli.json {
+                return print_json(&serde_json::json!({"health": health, "hosts": hosts}));
+            }
+            println!(
+                "control plane {} ({})",
+                cli.control_url,
+                health["version"].as_str().unwrap_or("?")
             );
-            // TODO: Implement profile creation
-            warn!("Profile creation not yet implemented");
-            Ok(())
+            if hosts.is_empty() {
+                println!("no hosts registered");
+            }
+            for h in hosts {
+                println!(
+                    "host {} {:<20} online={} browser={}",
+                    h.id, h.name, h.online, h.browser_connected
+                );
+            }
+            return Ok(());
         }
-        ProfileCommands::Delete { profile_id } => {
-            info!("Deleting profile: {}", profile_id);
-            // TODO: Implement profile deletion
-            warn!("Profile deletion not yet implemented");
-            Ok(())
+        Commands::Hosts => {
+            let hosts = client.hosts().await?;
+            if cli.json {
+                return print_json(&hosts);
+            }
+            for h in hosts {
+                println!(
+                    "{}\t{}\tonline={}\tbrowser={}",
+                    h.id, h.name, h.online, h.browser_connected
+                );
+            }
+            return Ok(());
         }
-    }
-}
-
-async fn handle_host_command(cmd: HostCommands, config: &Config) -> Result<()> {
-    match cmd {
-        HostCommands::List => {
-            info!("Listing hosts (config: {:?})", config.redacted());
-            // TODO: Implement host listing
-            warn!("Host list not yet implemented");
-            Ok(())
+        Commands::Session(cmd) => {
+            match cmd {
+                SessionCmd::Create { host, label } => {
+                    let s = client
+                        .create_session(&CreateSessionRequest {
+                            host_id: *host,
+                            label: label.clone(),
+                        })
+                        .await?;
+                    save_current(s.id);
+                    if cli.json {
+                        print_json(&s)?;
+                    } else {
+                        println!("{}", s.id);
+                    }
+                }
+                SessionCmd::List => {
+                    let list = client.sessions().await?;
+                    if cli.json {
+                        print_json(&list)?;
+                    } else {
+                        for s in list {
+                            println!(
+                                "{}\t{:?}\thost={}\t{}",
+                                s.id,
+                                s.status,
+                                s.host_id,
+                                s.label.unwrap_or_default()
+                            );
+                        }
+                    }
+                }
+                SessionCmd::Use { id } => {
+                    client.session(*id).await?;
+                    save_current(*id);
+                }
+                SessionCmd::End { id } => {
+                    let id = match id.or(cli.session) {
+                        Some(id) => id,
+                        None => std::fs::read_to_string(current_session_file())
+                            .ok()
+                            .and_then(|s| s.trim().parse().ok())
+                            .context("no current session")?,
+                    };
+                    client.end_session(id).await?;
+                    if !cli.json {
+                        println!("ended {id}");
+                    }
+                }
+            }
+            return Ok(());
         }
-        HostCommands::Status { host_id } => {
-            info!("Getting host status: {}", host_id);
-            // TODO: Implement host status
-            warn!("Host status not yet implemented");
-            Ok(())
-        }
-    }
-}
-
-async fn handle_action_command(cmd: ActionCommands, _config: &Config) -> Result<()> {
-    match cmd {
-        ActionCommands::Click {
-            session_id,
-            selector,
-        } => {
-            info!(
-                "Executing click action on {} in session {}",
-                selector, session_id
-            );
-            // TODO: Implement click action
-            warn!("Click action not yet implemented");
-            Ok(())
-        }
-        ActionCommands::Type {
-            session_id,
+        Commands::Navigate { url, tab } => RemoteAction::Navigate {
+            url: url.clone(),
+            tab_id: *tab,
+        },
+        Commands::Click { selector, tab } => RemoteAction::Click {
+            selector: selector.clone(),
+            tab_id: *tab,
+        },
+        Commands::Type {
             selector,
             text,
-        } => {
-            info!(
-                "Executing type action on {} with text '{}' in session {}",
-                selector, text, session_id
-            );
-            // TODO: Implement type action
-            warn!("Type action not yet implemented");
-            Ok(())
-        }
-        ActionCommands::Navigate { session_id, url } => {
-            info!(
-                "Executing navigate action to {} in session {}",
-                url, session_id
-            );
-            // TODO: Implement navigate action
-            warn!("Navigate action not yet implemented");
-            Ok(())
-        }
-        ActionCommands::Screenshot { session_id } => {
-            info!("Taking screenshot for session {}", session_id);
-            // TODO: Implement screenshot action
-            warn!("Screenshot action not yet implemented");
-            Ok(())
-        }
-    }
-}
+            clear,
+            submit,
+            tab,
+        } => RemoteAction::Type {
+            selector: selector.clone(),
+            text: text.clone(),
+            clear: *clear,
+            submit: *submit,
+            tab_id: *tab,
+        },
+        Commands::Press { key, selector, tab } => RemoteAction::Press {
+            key: key.clone(),
+            selector: selector.clone(),
+            tab_id: *tab,
+        },
+        Commands::Scroll {
+            dx,
+            dy,
+            selector,
+            tab,
+        } => RemoteAction::Scroll {
+            dx: *dx,
+            dy: *dy,
+            selector: selector.clone(),
+            tab_id: *tab,
+        },
+        Commands::Screenshot { tab, .. } => RemoteAction::Screenshot { tab_id: *tab },
+        Commands::Text {
+            selector,
+            max_chars,
+            tab,
+        } => RemoteAction::Text {
+            selector: selector.clone(),
+            max_chars: *max_chars,
+            tab_id: *tab,
+        },
+        Commands::Elements { max, tab } => RemoteAction::Elements {
+            max_elements: *max,
+            tab_id: *tab,
+        },
+        Commands::WaitFor {
+            selector,
+            wait_ms,
+            tab,
+        } => RemoteAction::WaitFor {
+            selector: selector.clone(),
+            timeout_ms: Some(*wait_ms),
+            tab_id: *tab,
+        },
+        Commands::Tabs => RemoteAction::Tabs,
+        Commands::NewTab { url } => RemoteAction::NewTab { url: url.clone() },
+        Commands::ActivateTab { tab_id } => RemoteAction::ActivateTab { tab_id: *tab_id },
+        Commands::CloseTab { tab_id } => RemoteAction::CloseTab { tab_id: *tab_id },
+        Commands::Back { tab } => RemoteAction::Back { tab_id: *tab },
+        Commands::Forward { tab } => RemoteAction::Forward { tab_id: *tab },
+        Commands::Reload { tab } => RemoteAction::Reload { tab_id: *tab },
+    };
 
-async fn handle_agent_command(cmd: AgentCommands, _config: &Config) -> Result<()> {
-    match cmd {
-        AgentCommands::Start { session_id, goal } => {
-            info!(
-                "Starting agent run with goal: '{}' in session {}",
-                goal, session_id
-            );
-            // TODO: Implement agent start
-            warn!("Agent start not yet implemented");
-            Ok(())
-        }
-        AgentCommands::Status { session_id } => {
-            info!("Getting agent status for session {}", session_id);
-            // TODO: Implement agent status
-            warn!("Agent status not yet implemented");
-            Ok(())
-        }
-        AgentCommands::Stop { session_id } => {
-            info!("Stopping agent run for session {}", session_id);
-            // TODO: Implement agent stop
-            warn!("Agent stop not yet implemented");
-            Ok(())
-        }
-    }
-}
+    action
+        .validate()
+        .map_err(|e| anyhow::anyhow!("invalid {}: {e}", action.kind()))?;
+    let session = resolve_session(&cli, &client).await?;
+    let op = client.act(session, action, timeout).await?;
 
-async fn handle_hitl_command(cmd: HitlCommands, _config: &Config) -> Result<()> {
-    match cmd {
-        HitlCommands::List { session_id } => {
-            info!("Listing HITL requests for session {}", session_id);
-            // TODO: Implement HITL list
-            warn!("HITL list not yet implemented");
-            Ok(())
+    match &cli.command {
+        Commands::Navigate { .. } => finish(&cli, &op, |r| {
+            format!(
+                "{}  {}",
+                r["url"].as_str().unwrap_or(""),
+                r["title"].as_str().unwrap_or("")
+            )
+        }),
+        Commands::Screenshot { output, .. } => {
+            if op.state == OperationState::Succeeded && !cli.json {
+                let data = op
+                    .result
+                    .as_ref()
+                    .and_then(|r| r["data"].as_str())
+                    .context("screenshot result has no data")?;
+                let bytes = base64::engine::general_purpose::STANDARD
+                    .decode(data)
+                    .context("decoding screenshot")?;
+                let path = output.clone().unwrap_or_else(|| {
+                    PathBuf::from(format!(
+                        "screenshot-{}.jpg",
+                        chrono::Utc::now().format("%Y%m%d-%H%M%S")
+                    ))
+                });
+                std::fs::write(&path, &bytes)
+                    .with_context(|| format!("writing {}", path.display()))?;
+                println!("{} ({} bytes)", path.display(), bytes.len());
+                return Ok(());
+            }
+            finish(&cli, &op, ok_text)
         }
-        HitlCommands::Status { request_id } => {
-            info!("Getting HITL request status: {}", request_id);
-            // TODO: Implement HITL status
-            warn!("HITL status not yet implemented");
-            Ok(())
+        Commands::Text { .. } => {
+            finish(&cli, &op, |r| r["text"].as_str().unwrap_or("").to_string())
         }
-        HitlCommands::Approve {
-            request_id,
-            owner_id,
-        } => {
-            info!(
-                "Approving HITL request {} by owner {}",
-                request_id, owner_id
-            );
-            // TODO: Implement HITL approve
-            warn!("HITL approve not yet implemented");
-            Ok(())
-        }
-        HitlCommands::Reject {
-            request_id,
-            owner_id,
-        } => {
-            info!(
-                "Rejecting HITL request {} by owner {}",
-                request_id, owner_id
-            );
-            // TODO: Implement HITL reject
-            warn!("HITL reject not yet implemented");
-            Ok(())
-        }
+        Commands::Elements { .. } => finish(&cli, &op, |r| {
+            r["elements"]
+                .as_array()
+                .map(|els| {
+                    els.iter()
+                        .map(|e| {
+                            format!(
+                                "{:<8} {:<50} {}",
+                                e["tag"].as_str().unwrap_or(""),
+                                e["selector"].as_str().unwrap_or(""),
+                                e["text"].as_str().unwrap_or("")
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                })
+                .unwrap_or_default()
+        }),
+        Commands::Tabs => finish(&cli, &op, |r| {
+            r["tabs"]
+                .as_array()
+                .map(|tabs| {
+                    tabs.iter()
+                        .map(|t| {
+                            format!(
+                                "{}{}\t{}\t{}",
+                                if t["active"].as_bool() == Some(true) {
+                                    "*"
+                                } else {
+                                    " "
+                                },
+                                t["id"],
+                                t["title"].as_str().unwrap_or(""),
+                                t["url"].as_str().unwrap_or("")
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                })
+                .unwrap_or_default()
+        }),
+        Commands::NewTab { .. } => finish(&cli, &op, |r| format!("tab {}", r["tab_id"])),
+        Commands::Scroll { .. } => finish(&cli, &op, |r| format!("x={} y={}", r["x"], r["y"])),
+        _ => finish(&cli, &op, ok_text),
     }
 }
