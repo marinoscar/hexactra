@@ -8,6 +8,7 @@
 //! - InteractionRequest for HITL (Human-in-the-Loop) workflow
 //! - Experience events for Agent Experience Framework (AEF) integration
 
+pub mod bridge;
 pub mod experience;
 pub mod policy;
 pub mod profile;

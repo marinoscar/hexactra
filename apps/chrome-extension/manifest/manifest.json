@@ -27,8 +27,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_end"
     }
   ],
@@ -37,11 +41,5 @@
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
-  "native_manifests": {
-    "com.hexactra.nativehost": {
-      "allowed_origins": [
-        "chrome-extension://YOUR_EXTENSION_ID_HERE/"
-      ]
-    }
-  }
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuNh2mrjf2RCCs9Rh+zELyBBL4Lm6LbnoKzkLvWkkHqKpEl8/+Txt6rQTaIWX6jaIDnrSLklkq1apQ9qs1388TULJ21S4hA+wgiZvfwaSQEIKlj3oNwu5zH8sXPaGWgTRw2FhXS6nqGlF3pTdbwm93gIxIkPcFOXiA1Nuwcil6MUhSmlqynitDhlT14Mm6yF9fSp/Jb2GN7hnDRmUOBIPv1pVpoghTfTqCFnPHfGLdd45dPeSK6s3qVyy49wXr3Dy1Z88YI5B64fC/8O2NsxPccoCA263+ojKHSP2vcHc2wOSEYr9mI0vCutJWNbh+PZsB5jzw3J4z6yy89XNuIGppQIDAQAB"
 }

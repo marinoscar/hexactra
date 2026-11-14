@@ -4,6 +4,7 @@
 //! independent of login/display session, with structured config, health endpoint,
 //! private Unix socket, graceful shutdown, and least-privilege service account.
 
+pub mod browser_bridge;
 pub mod chrome;
 pub mod platform;
 
