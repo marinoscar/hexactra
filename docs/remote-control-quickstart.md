@@ -81,12 +81,37 @@ export HEXACTRA_URL=http://100.x.y.z:8787
 
 Never bind to a public interface. The token controls a browser signed in to your accounts.
 
-## 4. Seeing the screen
+## 4. Let an AI agent drive it (MCP)
+
+`hexactra-mcp` is an MCP server (stdio) that exposes the browser as tools: `browser_navigate`, `browser_elements`, `browser_click`, `browser_type`, `browser_press`, `browser_scroll`, `browser_text`, `browser_screenshot` (returned as an image), `browser_wait_for`, `browser_tabs`, `browser_new_tab`, `browser_activate_tab`, `browser_close_tab`, `browser_back`, `browser_forward`, `browser_reload` and `browser_status`.
+
+The install script puts it in `~/.local/bin`. Register it with any MCP client, for example Claude Code:
+
+```bash
+claude mcp add hexactra --env HEXACTRA_URL=http://127.0.0.1:8787 -- ~/.local/bin/hexactra-mcp
+```
+
+or in a JSON MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "hexactra": {
+      "command": "/home/you/.local/bin/hexactra-mcp",
+      "env": { "HEXACTRA_URL": "http://127.0.0.1:8787" }
+    }
+  }
+}
+```
+
+The token is read from `HEXACTRA_API_TOKEN` or `~/.config/hexactra/api-token`. From another machine, point `HEXACTRA_URL` at the SSH tunnel or private address from section 3. The server tells the agent to stop and ask you when it meets a CAPTCHA, a verification code, a passkey or a payment confirmation.
+
+## 5. Seeing the screen
 
 - `hexactra screenshot` returns the visible tab as JPEG.
 - For a live view or to take over by hand, use the desktop's own remote desktop: GNOME **Settings → Sharing → Remote Desktop**, or `x11vnc` reached through the same SSH tunnel. A built-in viewer is follow-up work on #173.
 
-## 5. Sign-ins, CAPTCHAs and bot checks
+## 6. Sign-ins, CAPTCHAs and bot checks
 
 Hexactra acts in your real Chrome profile, so sites see your normal browser, cookies and sign-ins. It does **not** try to defeat bot detection. When a site asks for a CAPTCHA, a one-time code, a passkey or another check:
 
@@ -96,7 +121,7 @@ Hexactra acts in your real Chrome profile, so sites see your normal browser, coo
 
 Wiring these handoffs into the human-in-the-loop inbox is follow-up work. Respect each site's terms of use, and keep automated use of your own accounts at a human pace.
 
-## 6. Security checklist
+## 7. Security checklist
 
 - The token file (`~/.config/hexactra/api-token`, mode `0600`) is the only credential. Rotate it by deleting the file and restarting `hexactra-control` (it generates a new one), then restart `hexactra-agent`.
 - The bridge socket lives in `$XDG_RUNTIME_DIR/hexactra` (mode `0700`) and refuses other Unix users.

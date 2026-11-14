@@ -4,7 +4,7 @@ This is the monorepo for Hexactra, an AI-powered browser automation runtime.
 
 ## Remote browser control: start here
 
-Drive your own signed-in Chrome on a Linux machine from anywhere, through the `hexactra` CLI (and, next, MCP for AI agents):
+Drive your own signed-in Chrome on a Linux machine from anywhere, through the `hexactra` CLI or, for AI agents, the `hexactra-mcp` MCP server:
 
 ```bash
 scripts/install-remote-control.sh   # build, install to ~/.local/bin, start user services
@@ -29,7 +29,7 @@ hexactra navigate https://example.com && hexactra screenshot -o page.jpg
 - `hexactra-worker` - Session worker (earlier scaffolding; not on the remote control path)
 - `hexactra-native-host` - Chrome Native Messaging host (relays the extension to the agent)
 - `hexactra-cli` - `hexactra` CLI
-- `hexactra-mcp` - MCP server
+- `hexactra-mcp` - MCP server (stdio) exposing the browser as tools for AI agents
 
 ### TypeScript Packages (`packages/`)
 
