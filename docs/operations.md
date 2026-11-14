@@ -44,8 +44,8 @@ Hexactra consists of several components:
 # Start the service
 sudo systemctl start hexactra-agent
 
-# Or if using Docker
-docker-compose up -d
+# Or with the container stack (from deploy/container)
+docker compose up -d
 ```
 
 ### Stopping the Service
@@ -54,8 +54,8 @@ docker-compose up -d
 # Stop the service
 sudo systemctl stop hexactra-agent
 
-# Or if using Docker
-docker-compose down
+# Or with the container stack (from deploy/container)
+docker compose down
 ```
 
 ### Restarting the Service
@@ -64,8 +64,8 @@ docker-compose down
 # Restart the service
 sudo systemctl restart hexactra-agent
 
-# Or if using Docker
-docker-compose restart
+# Or with the container stack (from deploy/container)
+docker compose restart
 ```
 
 ### Checking Status

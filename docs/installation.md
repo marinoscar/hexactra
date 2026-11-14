@@ -96,30 +96,12 @@ sudo systemctl enable hexactra-agent
 sudo systemctl start hexactra-agent
 ```
 
-### Method 3: Docker Container
+### Method 3: Containers (always-on host)
 
-#### Using Docker Compose
-
-```bash
-# Clone the repository
-git clone https://github.com/marinoscar/hexactra.git
-cd hexactra
-
-# Start with Docker Compose
-docker-compose up -d
-```
-
-#### Using Docker Directly
+Run the control plane and a containerized browser host with Docker Compose. See [deploy/container/README.md](../deploy/container/README.md):
 
 ```bash
-docker run -d \
-  --name hexactra-agent \
-  --cap-add=SYS_PTRACE \
-  --security-opt seccomp=unconfined \
-  -v /var/lib/hexactra:/var/lib/hexactra \
-  -v /run/hexactra:/run/hexactra \
-  -p 8080:8080 \
-  hexactra:latest
+cd deploy/container && ./setup.sh && docker compose up -d --build
 ```
 
 ## Post-Installation Configuration
