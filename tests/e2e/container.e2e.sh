@@ -60,7 +60,18 @@ hx session create >/dev/null
 hx --timeout-ms 60000 navigate http://fixture/persist.html | grep -q 'Hexactra Fixture Persist' || fail "navigate failed"
 hx text --selector '#visits' | grep -q 'visits: 1' || fail "first visit not recorded"
 chromium_running || fail "browser not running after the first action"
-pass "first action launched Chromium in the container (sandboxed, non-root)"
+# The sandbox is really on: renderers live in their own PID namespace and
+# nothing runs with --no-sandbox; the browser runs as the unprivileged user.
+"${COMPOSE[@]}" exec -T host sh -c '
+  set -e
+  ! pgrep -af -- "--no-sandbox" | grep -q chromium
+  main=$(pgrep -o -f "user-data-dir=/data/profile")
+  rend=$(pgrep -f -- "--type=renderer" | head -1)
+  [ -n "$rend" ]
+  [ "$(readlink /proc/$main/ns/pid)" != "$(readlink /proc/$rend/ns/pid)" ]
+  [ "$(stat -c %u /proc/$main)" = 1000 ]
+' || fail "Chromium sandbox is not active"
+pass "first action launched Chromium in the container: sandboxed (renderer in its own PID namespace), uid 1000"
 
 hx navigate http://fixture/index.html >/dev/null
 hx type '#q' 'from the container' --submit >/dev/null
