@@ -20,12 +20,14 @@ async-trait.workspace = true
 clap.workspace = true
 tokio-native-tls.workspace = true
 libc = "0.2"
-# Optional Windows support
-[target.'cfg(target_os = "windows")'.dependencies]
-winapi = { version = "0.3", features = ["winbase"] }
+chrono.workspace = true
 
 hexactra-core = { path = "../hexactra-core" }
 hexactra-telemetry = { path = "../hexactra-telemetry" }
+
+# Optional Windows support
+[target.'cfg(target_os = "windows")'.dependencies]
+winapi = { version = "0.3", features = ["winbase"] }
 
 [dev-dependencies]
 tokio-test.workspace = true
