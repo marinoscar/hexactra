@@ -1195,6 +1195,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "hexactra-client"
+version = "0.1.0"
+dependencies = [
+ "hexactra-core",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "hexactra-control"
 version = "0.1.0"
 dependencies = [
@@ -1205,14 +1218,17 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "clap",
+ "dirs",
  "futures-util",
  "hex",
+ "hexactra-client",
  "hexactra-core",
  "hexactra-telemetry",
  "hyper",
  "jsonwebtoken",
  "mockall",
  "rand 0.8.8",
+ "reqwest",
  "schemars",
  "serde",
  "serde_json",
@@ -1225,6 +1241,7 @@ dependencies = [
  "tokio-test",
  "tower",
  "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
