@@ -120,6 +120,89 @@ Rules:
 
 Statuses: `pending` → `completed` | `cancelled` | `expired`.
 
+## Webhooks: channels that reach a person
+
+Webhooks let any number of channels hear about handoffs and answer them: a Slack or Telegram bot, an n8n or Zapier flow, an email or SMS gateway, your own service.
+
+| Method and path | Purpose |
+|---|---|
+| `POST /v1/webhooks` | Register `{ "url", "events"?, "description"? }`. `events` defaults to `["handoff.*"]`. Returns `{ webhook, secret }`; the `whsec_…` secret is shown **only once** |
+| `GET /v1/webhooks` | List endpoints (no secrets) |
+| `DELETE /v1/webhooks/{id}` | Remove an endpoint |
+| `POST /v1/webhooks/{id}/test` | Send a `webhook.test` event |
+| `GET /v1/webhooks/{id}/deliveries` | The last 50 attempts: outcome, HTTP status, error |
+
+Events: `handoff.created`, `handoff.resolved`, `handoff.cancelled`, `handoff.expired`, `webhook.test`. Filters accept an exact name, `handoff.*` or `*`.
+
+### Payload
+
+```json
+{
+  "id": "evt_3f2c…",
+  "type": "handoff.created",
+  "created_at": "2026-11-14T21:30:00Z",
+  "data": {
+    "handoff": { "id": "…", "kind": "code", "prompt": "Enter the code…", "input": "secret", "status": "pending", "expires_at": "…", "page": { "url": "…", "title": "…" } },
+    "respond": {
+      "token": "<single-use response token>",
+      "path": "/v1/handoffs/<id>/respond",
+      "method": "POST",
+      "token_header": "x-hexactra-response-token",
+      "url": "https://hexactra.example.test/v1/handoffs/<id>/respond",
+      "form_url": "https://hexactra.example.test/v1/handoffs/<id>/respond?token=<token>"
+    }
+  }
+}
+```
+
+- `respond` appears only on `handoff.created`.
+- `url` and `form_url` are present when the server runs with `--public-url` (`HEXACTRA_PUBLIC_URL`).
+- A channel can answer in either of two ways:
+  - `POST` JSON `{ "value": "…", "channel": "slack", "response_token": "<token>" }` to `url`;
+  - send the person `form_url`, which opens a small page where they type the answer or click done.
+- The first answer from any channel wins. The token then stops working for every channel.
+- `secret` answers never appear in later events.
+
+### Signature
+
+Deliveries follow [Standard Webhooks](https://www.standardwebhooks.com/). Headers:
+
+- `webhook-id`: the event id, which stays the same across retries;
+- `webhook-timestamp`: Unix seconds;
+- `webhook-signature`: `v1,<base64>`.
+
+The signature is HMAC-SHA256 over `"{webhook-id}.{webhook-timestamp}.{raw body}"`, keyed with the base64-decoded part of the secret after `whsec_`. Reject timestamps more than 5 minutes old.
+
+```js
+import crypto from 'node:crypto';
+function verify(secret, headers, rawBody) {
+  const key = Buffer.from(secret.replace(/^whsec_/, ''), 'base64');
+  const signed = `${headers['webhook-id']}.${headers['webhook-timestamp']}.${rawBody}`;
+  const expected = 'v1,' + crypto.createHmac('sha256', key).update(signed).digest('base64');
+  const fresh = Math.abs(Date.now() / 1000 - Number(headers['webhook-timestamp'])) < 300;
+  return fresh && headers['webhook-signature'].split(' ').some((s) =>
+    s.length === expected.length && crypto.timingSafeEqual(Buffer.from(s), Buffer.from(expected)));
+}
+```
+
+```python
+import base64, hashlib, hmac, time
+def verify(secret, headers, raw_body: bytes) -> bool:
+    key = base64.b64decode(secret.removeprefix("whsec_"))
+    signed = f"{headers['webhook-id']}.{headers['webhook-timestamp']}.".encode() + raw_body
+    expected = "v1," + base64.b64encode(hmac.new(key, signed, hashlib.sha256).digest()).decode()
+    fresh = abs(time.time() - int(headers["webhook-timestamp"])) < 300
+    return fresh and any(hmac.compare_digest(s, expected) for s in headers["webhook-signature"].split())
+```
+
+### Delivery and safety
+
+- Retries: up to 5 attempts, after 0 s, 5 s, 30 s, 2 min and 10 min. Any 2xx counts as delivered. Each attempt times out after 10 s, and redirects are not followed.
+- Targets must be `https` and resolve to public addresses. Start the server with `--webhook-allow-insecure` (`HEXACTRA_WEBHOOK_ALLOW_INSECURE=1`) to allow `http` and private, loopback or Tailscale (CGNAT) addresses, for example an n8n instance on your LAN.
+- Link-local, multicast and unspecified addresses, which include cloud metadata endpoints, are always refused. The resolved address is pinned for the request.
+- The registry is saved to `$XDG_CONFIG_HOME/hexactra/webhooks.json` (mode `0600`, because it holds secrets), or to the path given by `--webhooks-file`.
+- Every subscribed endpoint receives a token that can answer the handoff, so register only channels you trust.
+
 ## Limitations of this release
 
 - State is in memory: restarting `hexactra-control` drops sessions and operations. Durable sessions and the audit trail are follow-up work on #173.
