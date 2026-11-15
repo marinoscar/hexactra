@@ -10,10 +10,16 @@ import { SchedulesService } from '../src/schedules/schedules.service';
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
 
+// No job worker in this app: a worker would pick the scheduled runs up and
+// fail them (there is no fabric here) while the test still expects them live.
+const workerMode = process.env.JOBS_WORKER_MODE;
 beforeAll(async () => {
+  process.env.JOBS_WORKER_MODE = 'off';
   app = await createApp();
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
+  if (workerMode === undefined) delete process.env.JOBS_WORKER_MODE;
+  else process.env.JOBS_WORKER_MODE = workerMode;
 });
 afterAll(async () => {
   await app?.close();
@@ -42,6 +48,9 @@ describe('schedules', () => {
     const s = created.json<{ data: { id: string; nextRunAt: string } }>().data;
     expect(new Date(s.nextRunAt).getTime()).toBeGreaterThan(Date.now());
 
+    // Only this schedule takes part (a kept database holds earlier runs' schedules).
+    await prisma.taskSchedule.updateMany({ where: { id: { not: s.id } }, data: { enabled: false } });
+
     // Fake clock: the firing is due.
     const now = new Date(new Date(s.nextRunAt).getTime() + 1_000);
     const first = await schedules.tick(now);
@@ -52,7 +61,7 @@ describe('schedules', () => {
     const job = await prisma.job.findFirst({ where: { type: 'browser.goal.run', subjectId: runs[0]!.id } });
     expect(job).not.toBeNull();
 
-    // The next firing comes while that run is still live: skipped.
+    // The next firing comes while that run is still live (no worker runs it here): skipped.
     const after = await prisma.taskSchedule.findUniqueOrThrow({ where: { id: s.id } });
     const second = await schedules.tick(new Date(after.nextRunAt!.getTime() + 1_000));
     expect(second.skipped).toBeGreaterThanOrEqual(1);
