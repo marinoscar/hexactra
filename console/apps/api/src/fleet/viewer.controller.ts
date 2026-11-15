@@ -36,13 +36,23 @@ export class ViewerController {
   @Public()
   @HttpCode(204)
   auth(
-    @Headers('x-viewer-ticket') ticket: string | undefined,
+    @Headers('x-original-uri') originalUri: string | undefined,
     @Headers('x-viewer-cookie') cookie: string | undefined,
     @Res({ passthrough: true }) reply: FastifyReply,
   ): void {
     if (this.tickets.validSession(cookie)) return;
-    const session = this.tickets.exchange(ticket);
+    const session = this.tickets.exchange(ticketFrom(originalUri));
     if (!session) throw new UnauthorizedException({ code: 'VIEWER_UNAUTHORIZED', message: 'Open the viewer from the Fleet page' });
     reply.header('x-viewer-set-cookie', this.tickets.cookieHeader(session, (process.env.APP_URL ?? '').startsWith('https://')));
+  }
+}
+
+/** The `ticket` query parameter of the viewer URL nginx forwards, if any. */
+export function ticketFrom(originalUri: string | undefined): string | undefined {
+  if (!originalUri || originalUri.length > 4096) return undefined;
+  try {
+    return new URL(originalUri, 'http://viewer.invalid').searchParams.get('ticket') ?? undefined;
+  } catch {
+    return undefined;
   }
 }

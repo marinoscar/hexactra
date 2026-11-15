@@ -69,15 +69,16 @@ code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 [ "$(code -H 'Cookie: hx_viewer=c.9999999999.x.forged' "$base/viewer/local/vnc.html")" = 401 ] || fail "forged cookie accepted"
 pass "viewer refuses unauthenticated, forged-ticket and forged-cookie requests"
 
-# A real ticket, signed like ViewerTicketService with the stack's JWT_SECRET.
-secret=$(grep '^JWT_SECRET=' .env | cut -d= -f2-)
-ticket=$(JWT_SECRET="$secret" node -e '
+# A real ticket, signed like ViewerTicketService, inside the api container
+# with the JWT_SECRET the API itself was started with.
+ticket=$(dc exec -T api node -e '
   const c=require("node:crypto");
   const key=c.createHmac("sha256",process.env.JWT_SECRET).update("hexactra-viewer-v1").digest();
   const body=`t.${Math.floor(Date.now()/1000)+60}.${c.randomBytes(12).toString("base64url")}`;
-  process.stdout.write(`${body}.${c.createHmac("sha256",key).update(body).digest("base64url")}`);')
+  process.stdout.write(`${body}.${c.createHmac("sha256",key).update(body).digest("base64url")}`);') || fail "could not sign a ticket"
 jar=$(mktemp)
-[ "$(code -c "$jar" "$base/viewer/local/vnc.html?ticket=$ticket")" = 200 ] || fail "a valid ticket does not open the viewer"
+got=$(code -c "$jar" "$base/viewer/local/vnc.html?ticket=$ticket")
+[ "$got" = 200 ] || fail "a valid ticket does not open the viewer (HTTP $got)"
 grep -q hx_viewer "$jar" || fail "no viewer cookie set"
 [ "$(code -b "$jar" "$base/viewer/local/vnc.html")" = 200 ] || fail "the viewer cookie does not work"
 [ "$(code "$base/viewer/local/vnc.html?ticket=$ticket")" = 401 ] || fail "a ticket worked twice"
