@@ -2,6 +2,7 @@ import type { EmailTemplate, EmailTemplateEntry } from '@marinoscar/platform-api
 
 import { notesArchivedEmail, type NotesArchivedEmailData } from './notes-archived.email';
 import { orgInvitationEmail, type OrgInvitationEmailData } from './org-invitation.email';
+import { questionAskedEmail, type QuestionAskedEmailData } from './question-asked.email';
 import { runNeedsYouEmail, type RunNeedsYouEmailData } from './run-needs-you.email';
 
 // =============================================================================
@@ -21,6 +22,7 @@ declare module '@marinoscar/platform-api/email' {
     'org-invitation': OrgInvitationEmailData;
     'notes-archived': NotesArchivedEmailData;
     'run-needs-you': RunNeedsYouEmailData;
+    'question-asked': QuestionAskedEmailData;
   }
 }
 
@@ -29,6 +31,7 @@ export const EMAIL_SLICE_TEMPLATES: readonly EmailTemplateEntry[] = [
   { name: 'org-invitation', render: orgInvitationEmail as EmailTemplate<never>, registrant: 'identity' },
   { name: 'notes-archived', render: notesArchivedEmail as EmailTemplate<never>, registrant: 'notes' },
   { name: 'run-needs-you', render: runNeedsYouEmail as EmailTemplate<never>, registrant: 'runs' },
+  { name: 'question-asked', render: questionAskedEmail as EmailTemplate<never>, registrant: 'questions' },
 ];
 
 export { notesArchivedEmail, orgInvitationEmail };

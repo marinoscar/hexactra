@@ -4,7 +4,8 @@
     "GET /api/fleet/viewer-auth": "nginx's auth_request for the viewer, not a client operation",
     "POST /api/mcp": "the MCP transport itself",
     "GET /api/mcp": "the MCP transport itself (405)",
-    "POST /api/notification-actions": "the notification buttons' token-authenticated channel from the service worker; on every surface the same actions are runs.cancel and inbox.answer"
+    "POST /api/notification-actions": "the notification buttons' token-authenticated channel from the service worker; on every surface the same actions are runs.cancel and inbox.answer",
+    "POST /api/questions/{id}/answer-by-token": "the webhook channel's single-use token answer for a receiver with no session; on every surface the same action is questions.answer"
   },
   "capabilities": [
     {
