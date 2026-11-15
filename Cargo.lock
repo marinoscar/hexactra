@@ -1234,6 +1234,7 @@ dependencies = [
  "mockall",
  "rand 0.8.8",
  "reqwest",
+ "rusqlite",
  "schemars",
  "serde",
  "serde_json",

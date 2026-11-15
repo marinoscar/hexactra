@@ -55,19 +55,19 @@ pub struct EnrollmentView {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct ServiceTokenRecord {
+pub(crate) struct ServiceTokenRecord {
     pub view: ServiceTokenView,
     pub digest: [u8; 32],
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct EnrollmentRecord {
+pub(crate) struct EnrollmentRecord {
     pub view: EnrollmentView,
     pub digest: [u8; 32],
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(super) struct HostCredentialRecord {
+pub(crate) struct HostCredentialRecord {
     pub host_id: Uuid,
     pub digest: [u8; 32],
     pub created_at: DateTime<Utc>,
@@ -75,7 +75,7 @@ pub(super) struct HostCredentialRecord {
 
 /// Everything persisted for credentials (digests only).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub(super) struct CredentialState {
+pub(crate) struct CredentialState {
     pub service: Vec<ServiceTokenRecord>,
     pub enrollments: Vec<EnrollmentRecord>,
     pub hosts: Vec<HostCredentialRecord>,
@@ -126,14 +126,12 @@ impl Credentials {
         self.state.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Snapshot for persistence (used by durable state, #211).
-    #[allow(dead_code)]
+    /// Snapshot for persistence.
     pub(super) fn export(&self) -> CredentialState {
         self.lock().clone()
     }
 
-    /// Restore from persistence (used by durable state, #211).
-    #[allow(dead_code)]
+    /// Restore from persistence.
     pub(super) fn import(&self, s: CredentialState) {
         *self.lock() = s;
     }

@@ -5,8 +5,11 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use hexactra_control::runtime::credentials::Credentials;
+use hexactra_control::runtime::persist::StateDb;
 use hexactra_control::runtime::webhooks::{WebhookConfig, Webhooks};
 use hexactra_control::runtime::{self, ApiState, RuntimeStore};
+use std::time::Duration;
 
 #[derive(Parser)]
 #[command(name = "hexactra-control", version, about = "Hexactra control plane")]
@@ -41,9 +44,28 @@ enum Command {
         /// (Tailscale) addresses. Link-local and metadata addresses stay blocked.
         #[arg(long, env = "HEXACTRA_WEBHOOK_ALLOW_INSECURE")]
         webhook_allow_insecure: bool,
+        /// State database (hosts, sessions, handoffs, credentials). Defaults
+        /// to `$XDG_DATA_HOME/hexactra/control.db`.
+        #[arg(long, env = "HEXACTRA_STATE_DB")]
+        state_db: Option<PathBuf>,
     },
     /// Print the path of the default token file.
     TokenPath,
+}
+
+/// Resolves on SIGTERM (docker stop, systemd) or Ctrl-C.
+async fn stop_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        let mut term = signal(SignalKind::terminate()).expect("SIGTERM handler");
+        tokio::select! {
+            _ = term.recv() => {}
+            _ = tokio::signal::ctrl_c() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = tokio::signal::ctrl_c().await;
 }
 
 fn default_token_file() -> PathBuf {
@@ -73,6 +95,7 @@ async fn main() -> Result<()> {
             public_url,
             webhooks_file,
             webhook_allow_insecure,
+            state_db,
         } => {
             runtime::check_bind(&bind, allow_remote_bind)?;
             let explicit = std::env::var("HEXACTRA_API_TOKEN").ok();
@@ -95,11 +118,22 @@ async fn main() -> Result<()> {
                 ..Default::default()
             })?;
             tracing::info!(count = webhooks.list().len(), "webhooks loaded");
-            let state = ApiState::with_webhooks(RuntimeStore::new(), &token, webhooks);
-            runtime::serve(listener, state, async {
-                let _ = tokio::signal::ctrl_c().await;
-            })
-            .await
+            let store = RuntimeStore::new();
+            let credentials = Credentials::new(&token);
+            let db_path = state_db.unwrap_or_else(|| {
+                dirs::data_dir()
+                    .unwrap_or_else(|| PathBuf::from("."))
+                    .join("hexactra")
+                    .join("control.db")
+            });
+            let db = StateDb::open(&db_path)?;
+            db.restore(&store, &credentials)?;
+            db.spawn_saver(store.clone(), credentials.clone(), Duration::from_secs(1));
+            let state = ApiState::with_parts(store.clone(), webhooks, credentials.clone());
+            let result = runtime::serve(listener, state, stop_signal()).await;
+            db.flush(&store, &credentials);
+            tracing::info!(path = %db.path().display(), "state saved; stopped");
+            result
         }
     }
 }

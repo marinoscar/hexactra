@@ -7,6 +7,7 @@ pub mod credentials;
 mod credentials_api;
 pub mod handoff;
 mod handoff_api;
+pub mod persist;
 pub mod store;
 mod webhook_api;
 pub mod webhooks;
