@@ -1,4 +1,5 @@
 import { Body, Controller, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { ApiTags } from '@nestjs/swagger';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { JobsService } from '@marinoscar/platform-api/jobs';
@@ -9,6 +10,7 @@ import { profileNameSchema } from '../fleet/fleet.schemas';
 import { PrismaService } from '../prisma/prisma.service';
 import { TasksService } from '../tasks/tasks.service';
 import { enqueueGoalRun } from './goal-runner.jobs';
+import { RunResponseDto } from '../openapi/console.responses';
 
 const startRunSchema = z.object({
   goal: z.string().trim().min(1).max(4000),
@@ -34,6 +36,7 @@ export class RunsStartController {
 
   /** Run a saved task now. */
   @Post('tasks/:id/runs')
+  @ApiDataResponse(RunResponseDto, { status: 201 })
   @Auth({ permissions: ['runs:write'] })
   async runTask(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string) {
     const task = await this.tasks.getTask(user.id, id);
@@ -47,6 +50,7 @@ export class RunsStartController {
 
   /** Run an ad-hoc goal (default policy: any http(s) site, 40 steps, 15 minutes). */
   @Post('runs')
+  @ApiDataResponse(RunResponseDto, { status: 201 })
   @Auth({ permissions: ['runs:write'] })
   async start(@CurrentUser() user: Principal, @Body() body: StartRunDto) {
     const run = await this.prisma.forUser({ userId: user.id }).run.create({

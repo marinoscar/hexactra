@@ -1,5 +1,7 @@
 # @hexactra/sdk
 
+> **Talking to the Hexactra Console?** Use `@hexactra/console-sdk` (`console/packages/sdk`): it is generated from the console's OpenAPI document. This package keeps the planning loop and the OpenAI-compatible client the Chrome extension uses; its HTTP client targets the fabric's early routes and is superseded.
+
 Hexactra TypeScript SDK for browser automation runtime
 
 ## Installation

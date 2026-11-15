@@ -1,9 +1,11 @@
 import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { ApiTags } from '@nestjs/swagger';
 import { Auth } from '@marinoscar/platform-api/identity';
 
 import { CreateEnrollmentDto, CreateProfileDto, DrainDto, profileNameSchema, type FleetCommandResult, type FleetEnrollment, type FleetHost } from './fleet.schemas';
 import { FleetService } from './fleet.service';
+import { FleetHostResponseDto } from '../openapi/console.responses';
 
 /** A profile name from the path, validated like the fabric does. */
 function profile(name: string): string {
@@ -22,12 +24,14 @@ export class FleetController {
   constructor(private readonly fleet: FleetService) {}
 
   @Get('hosts')
+  @ApiDataResponse(FleetHostResponseDto, { isArray: true })
   @Auth({ permissions: ['fleet:read'] })
   hosts(): Promise<FleetHost[]> {
     return this.fleet.hosts();
   }
 
   @Get('hosts/:id')
+  @ApiDataResponse(FleetHostResponseDto)
   @Auth({ permissions: ['fleet:read'] })
   host(@Param('id', ParseUUIDPipe) id: string): Promise<FleetHost> {
     return this.fleet.host(id);
