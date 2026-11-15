@@ -101,6 +101,7 @@ export class GoalRunnerService {
       await this.tasks.transition(userId, run.id, 'running', { handoffId: null, transcript: memory as never });
     } else {
       await this.tasks.transition(userId, run.id, 'running');
+      await this.notifier?.started?.(userId, run);
     }
 
     let sessionId = run.sessionId;

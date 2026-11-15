@@ -4,11 +4,13 @@ import { jobsAdminSections } from '@marinoscar/platform-web/jobs/ui';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { DANGER_ZONE_GROUP_LABEL } from '@marinoscar/platform-web/user-data/headless';
 import { factoryResetSettingsPage } from '@marinoscar/platform-web/user-data/ui';
+import { webhooksAdminSections } from '@marinoscar/platform-web/webhooks/ui';
 
 import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
 
 import { composeSections } from '../slices/sections';
 import { sliceAdminCards } from '../slices/manifest';
+import { WEBHOOKS_ENABLED } from './userSettingsSections';
 
 /**
  * The core's admin groups. `General` is empty on purpose: the optional slices
@@ -35,6 +37,7 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
       // The fleet page needs the nodes control plane, which the starter does not mount.
       ...jobsAdminSections.operations.filter((card) => card.path !== '/admin/settings/workers'),
       { ...doctorSettingsPage.card, Icon: doctorSettingsPage.Icon },
+      ...(WEBHOOKS_ENABLED ? webhooksAdminSections.operations : []),
     ],
   },
   // `Danger Zone` stays LAST (docs/specs/settings-ui.md): new groups go above it.

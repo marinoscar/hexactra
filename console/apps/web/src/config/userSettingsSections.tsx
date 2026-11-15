@@ -3,8 +3,12 @@ import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { DANGER_ZONE_GROUP_LABEL } from '@marinoscar/platform-web/user-data/headless';
 import { dangerZoneSettingsPage } from '@marinoscar/platform-web/user-data/ui';
+import { webhooksUserSettingsSections } from '@marinoscar/platform-web/webhooks/ui';
 
-import { sliceUserCards } from '../slices/manifest';
+import { isSliceEnabled, sliceUserCards } from '../slices/manifest';
+
+/** Outbound webhooks are mounted with the credentials and notifications slices (apps/api/src/app.module.ts). */
+export const WEBHOOKS_ENABLED = isSliceEnabled('credentials') && isSliceEnabled('notifications');
 import { composeSections } from '../slices/sections';
 
 /**
@@ -29,6 +33,7 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
     ],
   },
   // `Danger Zone` stays LAST (docs/specs/settings-ui.md): add new groups above it.
+  ...(WEBHOOKS_ENABLED ? [{ label: 'Integrations', cards: [...webhooksUserSettingsSections.integrations] }] : []),
   { label: DANGER_ZONE_GROUP_LABEL, cards: [{ ...dangerZoneSettingsPage.card, Icon: dangerZoneSettingsPage.Icon }] },
 ];
 

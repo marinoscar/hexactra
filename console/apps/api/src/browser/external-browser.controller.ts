@@ -121,6 +121,7 @@ export class ExternalBrowserController {
       transcript: { log: [], chunks: 0, allowedDomains: body.allowedDomains } as never,
     });
     this.log.log(`external session opened by ${body.actor}: run ${run.id}`);
+    await this.notifier?.started(userId, run);
     return { runId: run.id, profile: body.profile };
   }
 
