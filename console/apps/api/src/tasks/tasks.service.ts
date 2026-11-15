@@ -6,6 +6,7 @@ import { assertTransition, isTerminal, type RunStatus } from './run-status';
 import type { CreateTaskDto, ListRunsDto, UpdateTaskDto } from './tasks.schemas';
 import { FabricClient } from '../fabric/fabric.client';
 import { RunMetrics } from './run-metrics';
+import { STOP_WAITING, startWaiting } from './reminder-schedule';
 
 /** Fields a status change may set. */
 export interface RunPatch {
@@ -14,6 +15,8 @@ export interface RunPatch {
   sessionId?: string | null;
   handoffId?: string | null;
   transcript?: Prisma.InputJsonValue;
+  /** With `waiting_human`: when the fabric handoff expires (schedules the reminders). */
+  handoffExpiresAt?: Date | null;
 }
 
 /**
@@ -88,12 +91,15 @@ export class TasksService {
       if (!run) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
       assertTransition(run.status as RunStatus, to);
       const now = new Date();
+      const { handoffExpiresAt, ...fields } = patch;
       // Compare-and-set on the old status, so two writers cannot both win.
       const { count } = await db.run.updateMany({
         where: { id, status: run.status },
         data: {
           status: to,
-          ...patch,
+          ...fields,
+          // Reminders while it waits for its person (run-reminders.ts).
+          ...(to === 'waiting_human' ? startWaiting(now, handoffExpiresAt ?? null) : run.status === 'waiting_human' ? STOP_WAITING : {}),
           ...(to === 'running' && !run.startedAt ? { startedAt: now } : {}),
           ...(isTerminal(to) ? { finishedAt: now } : {}),
         },

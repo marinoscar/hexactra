@@ -3,8 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { WebhooksService } from '@marinoscar/platform-api/webhooks';
 
-import { RUN_FINISHED_EVENT, RUN_NEEDS_YOU_EVENT, SCHEDULE_FAILING_EVENT } from '../platform/notifications/hexactra.notifications';
+import { RUN_FINISHED_EVENT, RUN_NEEDS_YOU_EVENT, RUN_REMINDER_EVENT, SCHEDULE_FAILING_EVENT } from '../platform/notifications/hexactra.notifications';
 import { RunActionTokens } from './run-action-token';
+import { FINAL_WINDOW_MS, canSnooze } from './reminder-schedule';
 import { RUN_FINISHED_WEBHOOK, RUN_STARTED_WEBHOOK, RUN_WAITING_WEBHOOK, SCHEDULE_FAILING_WEBHOOK } from '../platform/webhooks/hexactra.webhook-events';
 
 /** A run as the events describe it. */
@@ -63,19 +64,46 @@ export class RunNotifier {
     }
   }
 
-  async needsYou(userId: string, run: RunRef & { handoffId?: string | null }, prompt: string, kind: string, input = 'none'): Promise<void> {
-    // The notification's buttons: Stop run always; Approve only for a plain confirmation.
+  /** The buttons' token and flags: Approve for a plain confirmation; Remind me in 15 min while there is time for it. */
+  private buttons(userId: string, run: RunRef & { handoffId?: string | null }, kind: string, input: string, snoozable: boolean) {
     const approvable = kind === 'confirmation' && input === 'none' && Boolean(run.handoffId);
     const actionToken = this.actions?.issue(userId, run.id, approvable ? (run.handoffId ?? null) : null);
+    return actionToken ? { actionToken, approvable, snoozable: !approvable && snoozable } : {};
+  }
+
+  async needsYou(userId: string, run: RunRef & { handoffId?: string | null }, prompt: string, kind: string, input = 'none', expiresAt: Date | null = null): Promise<void> {
     await this.send(RUN_NEEDS_YOU_EVENT, userId, {
       runId: run.id,
       goal: run.goal.slice(0, 300),
       prompt: prompt.slice(0, 1000),
       kind,
       inboxUrl: this.url('/inbox'),
-      ...(actionToken ? { actionToken, approvable } : {}),
+      ...this.buttons(userId, run, kind, input, canSnooze(expiresAt, new Date())),
     });
     await this.hook(RUN_WAITING_WEBHOOK, userId, { ...this.runData(run, 'waiting_human'), prompt: prompt.slice(0, 1000), kind });
+  }
+
+  /**
+   * A request is still unanswered (run-reminders.ts): the same notification
+   * again (same tag), with fresh buttons. No webhook: the request itself was
+   * already announced.
+   */
+  async reminder(
+    userId: string,
+    run: RunRef & { handoffId?: string | null },
+    ask: { prompt: string; kind: string; input: string },
+    when: { expiresAt: Date | null; reminderCount: number; now: Date },
+  ): Promise<void> {
+    const left = when.expiresAt ? (when.expiresAt.getTime() - when.now.getTime()) / 60_000 : null;
+    await this.send(RUN_REMINDER_EVENT, userId, {
+      runId: run.id,
+      goal: run.goal.slice(0, 300),
+      prompt: ask.prompt.slice(0, 1000),
+      kind: ask.kind,
+      inboxUrl: this.url('/inbox'),
+      ...(left !== null ? { minutesLeft: Math.max(1, Math.round(left)), final: left * 60_000 <= FINAL_WINDOW_MS } : {}),
+      ...this.buttons(userId, run, ask.kind, ask.input, canSnooze(when.expiresAt, when.now, when.reminderCount)),
+    });
   }
 
   async finished(userId: string, run: RunRef, status: string, result?: string | null): Promise<void> {
