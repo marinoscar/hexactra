@@ -22,7 +22,7 @@ import {
   type NotificationsServiceWorkerScope,
 } from '@marinoscar/platform-web/notifications/service-worker';
 
-import { handleActionClick, type ActionClickEvent, type ActionScope } from './notificationActions';
+import { handleActionClick, withRunRenotify, type ActionClickEvent, type ActionScope } from './notificationActions';
 
 /** The members of the worker's global scope this file uses beyond the handlers'. */
 type WorkerScope = NotificationsServiceWorkerScope & {
@@ -41,11 +41,13 @@ scope.addEventListener('activate', (event: NotificationsExtendableEvent) => even
 const ICONS = { icon: '/icons/icon-192.png', badge: '/icons/badge-96.png' };
 
 // The platform's three listeners, with one addition on click: the buttons of a
-// "needs you" notification (Stop run, Approve) act without opening the app
+// "needs you" notification (Stop run, Approve, Remind me in 15 min) act without opening the app
 // (./notificationActions.ts); every other click opens the notification's link.
 scope.addEventListener('notificationclick', (event: NotificationsClickEvent) => {
   if (handleActionClick(scope as unknown as ActionScope, event as unknown as ActionClickEvent, fetch, ICONS)) return;
   handleNotificationClick(scope, event);
 });
-scope.addEventListener('push', (event: NotificationsPushEvent) => event.waitUntil(handlePushEvent(scope, event, ICONS)));
+// A pushed notification that replaces one of the same run alerts again (renotify).
+const pushScope = withRunRenotify(scope);
+scope.addEventListener('push', (event: NotificationsPushEvent) => event.waitUntil(handlePushEvent(pushScope, event, ICONS)));
 scope.addEventListener('pushsubscriptionchange', (event: NotificationsPushSubscriptionChangeEvent) => event.waitUntil(handlePushSubscriptionChange(scope, event)));
