@@ -78,6 +78,25 @@ pub enum Responder<'a> {
 }
 
 impl RuntimeStore {
+    /// Publish a handoff event to webhooks and the event log. The event-log
+    /// copy is content-free (no prompt, no answer, no token).
+    pub(super) fn publish(&self, ev: RuntimeEvent) {
+        let h = &ev.handoff;
+        self.log.emit(
+            ev.kind,
+            serde_json::json!({
+                "handoff_id": h.id,
+                "session_id": h.session_id,
+                "host_id": h.host_id,
+                "profile": h.profile,
+                "kind": h.kind,
+                "input": h.input,
+                "status": h.status,
+            }),
+        );
+        let _ = self.events.send(ev);
+    }
+
     /// Subscribe to runtime events (handoff lifecycle).
     pub fn subscribe_events(&self) -> tokio::sync::broadcast::Receiver<RuntimeEvent> {
         self.events.subscribe()
@@ -163,7 +182,7 @@ impl RuntimeStore {
             );
             view
         };
-        let _ = self.events.send(RuntimeEvent::new(
+        self.publish(RuntimeEvent::new(
             "handoff.created",
             view.clone(),
             Some(token.clone()),
@@ -235,7 +254,7 @@ impl RuntimeStore {
             RuntimeEvent::new("handoff.expired", h.view.clone(), None)
         };
         tracing::info!(handoff_id = %id, "handoff expired");
-        let _ = self.events.send(ev);
+        self.publish(ev);
     }
 
     pub fn get_handoff(&self, id: Uuid) -> Result<HandoffView, StoreError> {
@@ -393,7 +412,7 @@ impl RuntimeStore {
         };
         tracing::info!(handoff_id = %id, status = ?ev.handoff.status, "handoff resolved");
         let view = ev.handoff.clone();
-        let _ = self.events.send(ev);
+        self.publish(ev);
         Ok(view)
     }
 

@@ -15,6 +15,7 @@ use hexactra_core::remote::{
     OperationView, RemoteAction, RemoteSessionStatus, SessionView, DEFAULT_PROFILE,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tokio::sync::{broadcast, watch, Notify};
 use uuid::Uuid;
 
@@ -108,6 +109,8 @@ const ENDED_SESSION_RETENTION_DAYS: i64 = 7;
 pub struct RuntimeStore {
     inner: Arc<Mutex<Inner>>,
     pub(super) events: broadcast::Sender<RuntimeEvent>,
+    /// Content-free event log for `GET /v1/events`.
+    pub log: super::events::EventLog,
 }
 
 impl Default for RuntimeStore {
@@ -116,8 +119,21 @@ impl Default for RuntimeStore {
         Self {
             inner: Arc::new(Mutex::new(Inner::default())),
             events,
+            log: Default::default(),
         }
     }
+}
+
+/// Content-free operation event payload (no action arguments).
+fn op_event(v: &OperationView) -> serde_json::Value {
+    json!({
+        "op_id": v.id,
+        "session_id": v.session_id,
+        "host_id": v.host_id,
+        "kind": v.action.kind(),
+        "state": v.state,
+        "error": v.error,
+    })
 }
 
 fn host_view(id: Uuid, h: &HostEntry, now: DateTime<Utc>) -> HostView {
@@ -268,6 +284,8 @@ impl RuntimeStore {
                 );
             }
         }
+        drop(inner);
+        self.log.emit("host.registered", json!({ "host_id": id }));
         id
     }
 
@@ -279,6 +297,7 @@ impl RuntimeStore {
             if inner.hosts.remove(&id).is_none() {
                 return false;
             }
+            self.log.emit("host.removed", json!({ "host_id": id }));
             inner
                 .sessions
                 .values()
@@ -303,6 +322,7 @@ impl RuntimeStore {
         h.last_seen = DateTime::<Utc>::UNIX_EPOCH;
         h.browser_connected = false;
         h.running_profiles.clear();
+        self.log.emit("host.offline", json!({ "host_id": id }));
         Ok(())
     }
 
@@ -384,9 +404,24 @@ impl RuntimeStore {
                     .hosts
                     .get_mut(&host_id)
                     .ok_or(StoreError::NotFound("host"))?;
+                let was_online = now
+                    .signed_duration_since(host.last_seen)
+                    .to_std()
+                    .map(|d| d <= HOST_ONLINE_WINDOW)
+                    .unwrap_or(true);
+                let browser_changed = host.browser_connected != browser_connected;
                 host.last_seen = now;
                 host.browser_connected = browser_connected;
                 let notify = host.notify.clone();
+                if !was_online {
+                    self.log.emit("host.online", json!({ "host_id": host_id }));
+                }
+                if browser_changed {
+                    self.log.emit(
+                        "host.browser",
+                        json!({ "host_id": host_id, "connected": browser_connected }),
+                    );
+                }
                 let mut queue = std::mem::take(&mut host.queue);
                 let mut found = None;
                 while let Some(op_id) = queue.pop_front() {
@@ -405,6 +440,7 @@ impl RuntimeStore {
                             let op = inner.operations.get_mut(&op_id).expect("checked above");
                             op.view.state = OperationState::Dispatched;
                             let _ = op.tx.send(OperationState::Dispatched);
+                            self.log.emit("operation.dispatched", op_event(&op.view));
                             found = Some(DispatchedOperation {
                                 id: op.view.id,
                                 session_id: op.view.session_id,
@@ -524,6 +560,10 @@ impl RuntimeStore {
             ended_at: None,
         };
         inner.sessions.insert(session.id, session.clone());
+        self.log.emit(
+            "session.created",
+            json!({ "session_id": session.id, "host_id": session.host_id, "profile": session.profile }),
+        );
         Ok(session)
     }
 
@@ -560,12 +600,17 @@ impl RuntimeStore {
                 op.view.error = Some("session ended".into());
                 op.view.completed_at = Some(now);
                 let _ = op.tx.send(OperationState::Cancelled);
+                self.log.emit("operation.cancelled", op_event(&op.view));
             }
         }
+        self.log.emit(
+            "session.ended",
+            json!({ "session_id": id, "host_id": ended.host_id, "profile": ended.profile }),
+        );
         let cancelled = Self::cancel_session_handoffs(&mut inner, id, now);
         drop(inner);
         for ev in cancelled {
-            let _ = self.events.send(ev);
+            self.publish(ev);
         }
         Ok(ended)
     }
@@ -619,6 +664,7 @@ impl RuntimeStore {
             .ok_or(StoreError::NotFound("host"))?;
         host.queue.push_back(view.id);
         host.notify.notify_one();
+        self.log.emit("operation.queued", op_event(&view));
         if inner.operations.len() > PRUNE_THRESHOLD {
             Self::prune(&mut inner, now);
         }
@@ -689,6 +735,14 @@ impl RuntimeStore {
         };
         op.view.completed_at = Some(Utc::now());
         let _ = op.tx.send(state);
+        self.log.emit(
+            if state == OperationState::Succeeded {
+                "operation.succeeded"
+            } else {
+                "operation.failed"
+            },
+            op_event(&op.view),
+        );
         Ok(op.view.clone())
     }
 
@@ -706,6 +760,7 @@ impl RuntimeStore {
             });
             op.view.completed_at = Some(Utc::now());
             let _ = op.tx.send(OperationState::TimedOut);
+            self.log.emit("operation.timed_out", op_event(&op.view));
         }
         Some(op.view.clone())
     }

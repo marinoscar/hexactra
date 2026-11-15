@@ -5,6 +5,8 @@
 pub mod api;
 pub mod credentials;
 mod credentials_api;
+pub mod events;
+mod events_api;
 pub mod handoff;
 mod handoff_api;
 pub mod persist;
