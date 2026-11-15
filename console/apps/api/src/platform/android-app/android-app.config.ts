@@ -1,6 +1,6 @@
 // The Android companion, configured once: trusted apps and
-// `/.well-known/assetlinks.json` (the starter's nginx serves the path to the
-// API), hosted APK releases in object storage, the `android_app` notification
+// `/.well-known/assetlinks.json` (nginx serves the path to the API through
+// infra/nginx/app.d/locations/android-app.conf), hosted APK releases in object storage, the `android_app` notification
 // channel's sender and the Doctor checks. The Android identity (application id,
 // deep-link scheme, APK name) derives from `identity.json` exactly as the
 // Gradle build derives it, so the API, the web app, the CLI and the APK name
