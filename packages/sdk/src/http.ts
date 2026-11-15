@@ -75,7 +75,10 @@ export class HttpClient {
     this.baseUrl = config.baseUrl.replace(/\/+$/, '');
     this.token = config.token;
     this.timeout = config.timeout ?? 30000;
-    this.fetchImpl = config.fetch ?? fetch;
+    // Resolve the global fetch at call time and call it unbound: storing
+    // `fetch` itself and calling it as a method throws "Illegal invocation"
+    // in browsers.
+    this.fetchImpl = config.fetch ?? ((input, init) => fetch(input, init));
   }
 
   /**

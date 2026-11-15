@@ -156,3 +156,47 @@ describe('Error Code Mapping', () => {
     expect(ErrorCode.NotFound).toBe('NOT_FOUND');
   });
 });
+
+describe('HttpClient default fetch', () => {
+  it('calls the global fetch unbound, resolved at call time', async () => {
+    const client = new HttpClient({ baseUrl: 'http://localhost:3000' });
+    const seen: unknown[] = [];
+    const later = vi.fn(function (this: unknown) {
+      seen.push(this);
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers({ 'Content-Type': 'application/json' }),
+        json: () => Promise.resolve({ ok: 1 }),
+      });
+    });
+    global.fetch = later as unknown as typeof fetch;
+
+    const res = await client.get<{ ok: number }>('/x');
+
+    expect(later).toHaveBeenCalledTimes(1);
+    expect(res.body.ok).toBe(1);
+    // Never called with the HttpClient as `this` (browsers reject that).
+    expect(seen[0]).not.toBe(client);
+  });
+
+  it('sends extra headers on POST', async () => {
+    const client = new HttpClient({ baseUrl: 'http://localhost:3000', token: 't' });
+    mockFetch.mockReset();
+    global.fetch = mockFetch;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: new Headers({ 'Content-Type': 'application/json' }),
+      json: () => Promise.resolve({}),
+    });
+
+    await client.post('/y', { a: 1 }, { 'x-extra': 'v' });
+
+    const init = mockFetch.mock.calls[0][1];
+    expect(init.headers['x-extra']).toBe('v');
+    expect(init.headers['Authorization']).toBe('Bearer t');
+  });
+});
