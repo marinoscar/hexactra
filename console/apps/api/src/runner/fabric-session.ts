@@ -40,10 +40,16 @@ export class FabricSession {
   }
 
   async createHandoff(sessionId: string, req: { kind: string; prompt: string; input: string; choices?: string[]; timeoutMs?: number }): Promise<string> {
-    const r = await this.fabric.request<{ handoff: { id: string } }>('POST', `/v1/sessions/${sessionId}/handoffs`, {
+    return (await this.openHandoff(sessionId, req)).id;
+  }
+
+  /** Ask a person; with the request's expiry (`null` when the fabric gives none), which schedules the reminders. */
+  async openHandoff(sessionId: string, req: { kind: string; prompt: string; input: string; choices?: string[]; timeoutMs?: number }): Promise<{ id: string; expiresAt: Date | null }> {
+    const r = await this.fabric.request<{ handoff: { id: string; expires_at?: string } }>('POST', `/v1/sessions/${sessionId}/handoffs`, {
       body: { kind: req.kind, prompt: req.prompt, input: req.input, choices: req.choices ?? [], timeout_ms: req.timeoutMs },
     });
-    return r.handoff.id;
+    const exp = r.handoff.expires_at ? new Date(r.handoff.expires_at) : null;
+    return { id: r.handoff.id, expiresAt: exp && !Number.isNaN(exp.getTime()) ? exp : null };
   }
 
   getHandoff(id: string): Promise<FabricHandoff> {

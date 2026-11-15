@@ -7,6 +7,7 @@ import {
   HEXACTRA_NOTIFICATIONS,
   RUN_FINISHED_EVENT,
   RUN_NEEDS_YOU_EVENT,
+  RUN_REMINDER_EVENT,
   SCHEDULE_FAILING_EVENT,
   hexactraPushPayload,
 } from '../src/platform/notifications/hexactra.notifications';
@@ -36,7 +37,7 @@ describe('push payloads of the console events', () => {
   });
 
   it('reaches the Android app (android_app) and Web Push on every console event', () => {
-    for (const key of [RUN_NEEDS_YOU_EVENT, RUN_FINISHED_EVENT, SCHEDULE_FAILING_EVENT]) {
+    for (const key of [RUN_NEEDS_YOU_EVENT, RUN_REMINDER_EVENT, RUN_FINISHED_EVENT, SCHEDULE_FAILING_EVENT]) {
       expect(event(key).channels).toEqual(expect.arrayContaining(['push', 'android_app']));
     }
   });
@@ -55,5 +56,31 @@ describe('push payloads of the console events', () => {
     ]);
     const code = { ...data, kind: 'code', approvable: false };
     expect(sanitizePushExtras(hexactraPushPayload(event(RUN_NEEDS_YOU_EVENT), code)).payload.actions).toEqual([{ action: 'cancel', title: 'Stop run' }]);
+  });
+
+  it('a request that needs the app offers Remind me in 15 min while there is time for it', () => {
+    const code = { runId: RUN, prompt: 'Enter the code', kind: 'code', actionToken: 'tok.sig', approvable: false, snoozable: true };
+    expect(sanitizePushExtras(hexactraPushPayload(event(RUN_NEEDS_YOU_EVENT), code)).payload.actions).toEqual([
+      { action: 'snooze', title: 'Remind me in 15 min' },
+      { action: 'cancel', title: 'Stop run' },
+    ]);
+    // A one-tap answer keeps Approve and Stop run (two buttons at most).
+    const confirm = { ...code, kind: 'confirmation', approvable: true };
+    expect(sanitizePushExtras(hexactraPushPayload(event(RUN_NEEDS_YOU_EVENT), confirm)).payload.actions!.map((a: { action: string }) => a.action)).toEqual(['approve', 'cancel']);
+  });
+
+  it('a reminder replaces the request (same tag), urgent, says when it expires, with fresh buttons', () => {
+    const data = { runId: RUN, goal: 'Find a fare', prompt: 'Enter the code', kind: 'code', minutesLeft: 5, final: true, actionToken: 'tok2.sig', approvable: false, snoozable: false };
+    expect(reg(RUN_REMINDER_EVENT).browserTemplate!(data as never)).toEqual({
+      title: 'Expires in 5 min: an agent needs you',
+      body: 'Enter the code',
+      link: `/inbox?run=${RUN}&a=tok2.sig`,
+    });
+    expect(sanitizePushExtras(hexactraPushPayload(event(RUN_REMINDER_EVENT), data))).toEqual({
+      payload: { tag: `run-${RUN}`, actions: [{ action: 'cancel', title: 'Stop run' }] },
+      urgency: 'high',
+    });
+    expect(reg(RUN_REMINDER_EVENT).browserTemplate!({ runId: RUN, prompt: 'Solve the CAPTCHA' } as never).title).toBe('Still waiting for you');
+    expect(event(RUN_REMINDER_EVENT).channels).not.toContain('email');
   });
 });

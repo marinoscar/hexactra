@@ -55153,7 +55153,8 @@
             "type": "string",
             "enum": [
               "cancel",
-              "approve"
+              "approve",
+              "snooze"
             ]
           }
         },

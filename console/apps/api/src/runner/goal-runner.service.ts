@@ -127,6 +127,7 @@ export class GoalRunnerService {
       stop: null as StopLoop['reason'] | null,
       finished: null as { success: boolean; result: string } | null,
       handoffId: null as string | null,
+      handoffExpiresAt: null as Date | null,
       handoffAsk: null as { prompt: string; kind: string; input: string } | null,
       labels: new Map<string, string>(),
     };
@@ -278,7 +279,9 @@ export class GoalRunnerService {
         execute: async ({ kind, prompt, input, choices }) => {
           const started = Date.now();
           try {
-            state.handoffId = await session.createHandoff(sessionId!, { kind, prompt, input, choices: choices ?? [] });
+            const h = await session.openHandoff(sessionId!, { kind, prompt, input, choices: choices ?? [] });
+            state.handoffId = h.id;
+            state.handoffExpiresAt = h.expiresAt;
           } catch (e) {
             await record('handoff', null, null, false, `could not ask a person: ${e instanceof Error ? e.message : String(e)}`, started);
             return 'Could not reach a person right now.';
@@ -372,8 +375,8 @@ export class GoalRunnerService {
         return 'cancelled';
       }
       if (state.stop === 'pause' && state.handoffId) {
-        await this.tasks.transition(userId, run.id, 'waiting_human', { handoffId: state.handoffId });
-        await this.notifier?.needsYou(userId, { ...run, handoffId: state.handoffId ?? null }, state.handoffAsk?.prompt ?? 'The agent needs you.', state.handoffAsk?.kind ?? 'other', state.handoffAsk?.input ?? 'none');
+        await this.tasks.transition(userId, run.id, 'waiting_human', { handoffId: state.handoffId, handoffExpiresAt: state.handoffExpiresAt });
+        await this.notifier?.needsYou(userId, { ...run, handoffId: state.handoffId ?? null }, state.handoffAsk?.prompt ?? 'The agent needs you.', state.handoffAsk?.kind ?? 'other', state.handoffAsk?.input ?? 'none', state.handoffExpiresAt);
         return 'waiting_human';
       }
       if (state.stop === 'finish' && state.finished) {

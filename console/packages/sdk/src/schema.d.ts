@@ -11428,7 +11428,7 @@ export interface components {
         NotificationActionDto: {
             token: string;
             /** @enum {string} */
-            action: "cancel" | "approve";
+            action: "cancel" | "approve" | "snooze";
         };
         StartRunDto: {
             goal: string;
