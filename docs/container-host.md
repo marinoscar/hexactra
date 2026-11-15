@@ -84,7 +84,7 @@ The container's browser has its own profile. Your desktop Chrome profile cannot 
 3. Sign in to each site, completing any 2-step verification.
 4. Optionally set `HEXACTRA_IDLE_SHUTDOWN_S=0` while you do this, so the browser stays open.
 
-Cookies and sign-ins stay in the `host-data` volume across idle shutdowns, container restarts and upgrades. Debian's Chromium has no Chrome Sync, but signing in to websites, Google included, works normally. Sites may sign you out over time; when that happens, the agent asks you through a handoff.
+Each profile lives in `/data/profiles/<name>` on the `host-data` volume. A volume from the single-profile release (`/data/profile`) is moved to `/data/profiles/default` automatically. Cookies and sign-ins stay in the volume across idle shutdowns, container restarts and upgrades. Debian's Chromium has no Chrome Sync, but signing in to websites, Google included, works normally. Sites may sign you out over time; when that happens, the agent asks you through a handoff.
 
 ## 5. When a site challenges the agent
 
@@ -96,9 +96,10 @@ The agent opens a handoff, and your webhook channels get the prompt, the answer 
 |---|---|---|
 | `HEXACTRA_IDLE_SHUTDOWN_S` | `900` | Close the browser after 15 idle minutes. The next action starts it again in a few seconds with the same profile. `0` keeps it open. |
 | `HEXACTRA_LAUNCH_EAGERLY` | `false` | Start the browser when the container starts. |
+| `HEXACTRA_MAX_BROWSERS` | `1` | Profiles whose browsers may be open at once. Each needs about 300–600 MB. At the limit, the least recently used idle browser closes to make room. |
 | `HEXACTRA_SCREEN` | `1440x900x24` | Virtual display size. |
 
-The containers restart automatically after a crash or reboot (`restart: unless-stopped`). Enable Docker at boot with `sudo systemctl enable docker`.
+Browsers close gracefully, through the extension, when idle, when evicted and when the container stops (`stop_grace_period: 30s`). Chromium therefore writes cookies to disk and reopens with its last tabs. The containers restart automatically after a crash or reboot (`restart: unless-stopped`). Enable Docker at boot with `sudo systemctl enable docker`.
 
 ## 7. Operate
 
