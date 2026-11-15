@@ -2,7 +2,10 @@
 
 The mark, the wordmark and the color theme used by every hexactra surface: the Console (web and Android), the Chrome extension and the dashboard. Tracked in #283.
 
-![hexactra app icon](hexactra-app-icon-512.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="hexactra-banner-dark.png">
+  <img src="hexactra-banner.png" alt="hexactra" width="100%">
+</picture>
 
 ## The idea
 
@@ -10,17 +13,34 @@ hexactra lets an agent operate a computer the way a person does. The **Trace** m
 
 ## Files
 
+### Masters (SVG, edit these)
+
 | File | Use |
 |---|---|
 | `hexactra-mark.svg` | Mark on light backgrounds |
 | `hexactra-mark-dark.svg` | Mark on dark backgrounds |
 | `hexactra-mark-mono.svg` | One color (`currentColor`): notification badges, themed icons, print |
-| `hexactra-app-icon.svg` | App icon: the white mark on an indigo plate (favicon, PWA, extension 48 and 128 px) |
+| `hexactra-app-icon.svg` | App icon: the white mark on a rounded indigo plate (favicon, PWA "any" icons, extension 48 and 128 px) |
 | `hexactra-app-icon-small.svg` | Heavier strokes for 16 and 32 px |
-| `hexactra-app-icon-512.png` | Raster preview |
-| `hexactra-lockup.svg`, `hexactra-lockup-dark.svg` | Mark and wordmark side by side |
+| `hexactra-icon-maskable.svg` | Full-bleed, mark inside the safe zone: PWA "maskable" icons that Android and Chrome crop |
+| `hexactra-icon-square.svg` | Full-bleed square: the iOS home-screen icon (iOS rounds it) |
+| `hexactra-lockup.svg`, `hexactra-lockup-dark.svg` | Mark and wordmark side by side (wordmark as live text) |
 
-The lockups set the wordmark as live text in Space Grotesk. Before using them outside a browser (print, slides), convert the text to outlines in a design tool.
+### Exports (PNG, generated, use these anywhere)
+
+| File | Size | Use |
+|---|---|---|
+| `hexactra-banner.png`, `hexactra-banner-dark.png` | 1600×440 | README header (light and dark) |
+| `hexactra-app-icon-512.png` | 512 | Quick preview |
+| `png/hexactra-app-icon-1024.png` | 1024 | Store listings, slides |
+| `png/hexactra-icon-maskable-1024.png` | 1024 | Platforms that mask the icon |
+| `png/hexactra-mark-512.png`, `png/hexactra-mark-1024.png` | 512, 1024 | Mark on transparent, light backgrounds |
+| `png/hexactra-mark-dark-1024.png` | 1024 | Mark on transparent, dark backgrounds |
+| `png/hexactra-mark-black-1024.png`, `png/hexactra-mark-white-1024.png` | 1024 | One-color mark |
+| `png/hexactra-lockup.png`, `png/hexactra-lockup-dark.png` | 940×240 | Lockup on transparent, light and dark |
+| `png/hexactra-social-preview.png`, `png/hexactra-social-preview-dark.png` | 1280×640 | GitHub social preview (Settings → General → Social preview) and link cards |
+
+The SVG lockups set the wordmark as live text in Space Grotesk, which only renders where that font is installed. Use the PNG lockups elsewhere, or convert the text to outlines in a design tool.
 
 ## Regenerating icons
 
@@ -30,7 +50,7 @@ Every raster icon comes from these SVGs. After changing one, run:
 node scripts/brand/render-icons.mjs   # needs Playwright with Chromium
 ```
 
-It writes the Console PWA icons and push badge, the Chrome extension icons and the 512 px preview, and copies the favicon to the Console and the dashboard. Commit what it writes. The Android launcher, themed and notification icons are vector drawables in `console/apps/android/app/src/main/res/drawable/`, drawn on the same 120-unit grid: change them by hand alongside the SVGs.
+It needs Playwright with Chromium and the console's installed fonts (`cd console && npm ci`). It writes the Console PWA icons (any, maskable, iOS, favicon, push badge), the Chrome extension icons, the PNG exports and banners above, and copies the favicon to the Console and the dashboard. Commit what it writes. The Android launcher, themed and notification icons are vector drawables in `console/apps/android/app/src/main/res/drawable/`, drawn on the same 120-unit grid: change them by hand alongside the SVGs.
 
 ## Wordmark
 
