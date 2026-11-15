@@ -27,6 +27,7 @@ import { ADMIN_SECTIONS } from './config/adminSections';
 import { NAVIGATION } from './config/navigation';
 import { USER_SETTINGS_SECTIONS } from './config/userSettingsSections';
 import { FabricConnectionPage } from './pages/FabricConnectionPage';
+import { FleetPage } from './pages/FleetPage';
 import { NotesPage } from './pages/NotesPage';
 import { AppPlatformHost } from './platformHost';
 import {
@@ -160,6 +161,7 @@ export function AppRoutes() {
         <Route element={shell}>
           <Route index element={<Home />} />
           <Route path="notes" element={<Gate permission="notes:read"><NotesPage /></Gate>} />
+          <Route path="fleet" element={<Gate permission="fleet:read"><FleetPage /></Gate>} />
           <Route path="settings" element={<Hub sections={USER_SETTINGS_SECTIONS} hubKey="user-settings-hub" title="Settings" subtitle="Manage your account preferences." />} />
           <Route path="settings/tokens" element={<UserTokensPage />} />
           <Route path="admin/settings" element={<Hub sections={ADMIN_SECTIONS} hubKey="admin-settings-hub" title="Administration" subtitle="Users, background jobs and the health of this deployment." />} />

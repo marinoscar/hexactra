@@ -15,10 +15,11 @@
 import type { PlatformPermissionOptions } from '@marinoscar/platform-api/manifest';
 
 import { FABRIC_PERMISSIONS } from '../fabric/fabric.permissions';
+import { FLEET_PERMISSIONS } from '../fleet/fleet.permissions';
 import { NOTES_PERMISSIONS } from '../notes/notes.permissions';
 import { enabledPermissionSlices } from './slices/manifest';
 
 export const PERMISSION_OPTIONS = {
   slices: ['identity', 'settings', 'jobs', 'nodes', 'user-data', ...enabledPermissionSlices()],
-  app: { permissions: [NOTES_PERMISSIONS, FABRIC_PERMISSIONS] },
+  app: { permissions: [NOTES_PERMISSIONS, FABRIC_PERMISSIONS, FLEET_PERMISSIONS] },
 } satisfies PlatformPermissionOptions;

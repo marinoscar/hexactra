@@ -1,7 +1,7 @@
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
+import DnsOutlinedIcon from '@mui/icons-material/DnsOutlined';
 import HomeIcon from '@mui/icons-material/Home';
 import SettingsIcon from '@mui/icons-material/Settings';
-import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import type { ShellNavigation } from '@marinoscar/platform-web/shell/headless';
 
 import { sliceConsolePermissions } from '../slices/manifest';
@@ -15,10 +15,10 @@ import { USER_SETTINGS_SECTIONS } from './userSettingsSections';
  * `/admin/*` (Console mode). Every `permission` is the exact string the API
  * enforces; the Console shows for anyone who can open one of its cards.
  */
-export const NAVIGATION: ShellNavigation<'home' | 'notes' | 'settings' | 'console'> = {
+export const NAVIGATION: ShellNavigation<'home' | 'fleet' | 'settings' | 'console'> = {
   destinations: [
     { key: 'home', label: 'Home', compactLabel: 'Home', Icon: HomeIcon, path: '/' },
-    { key: 'notes', label: 'Notes', compactLabel: 'Notes', Icon: StickyNote2OutlinedIcon, path: '/notes', permission: 'notes:read' },
+    { key: 'fleet', label: 'Fleet', compactLabel: 'Fleet', Icon: DnsOutlinedIcon, path: '/fleet', permission: 'fleet:read' },
     { key: 'settings', label: 'Settings', compactLabel: 'Settings', Icon: SettingsIcon, path: '/settings' },
     {
       key: 'console',
@@ -30,7 +30,7 @@ export const NAVIGATION: ShellNavigation<'home' | 'notes' | 'settings' | 'consol
       pinned: true,
     },
   ],
-  destinationRoutes: { home: ['/'], notes: ['/notes'], settings: ['/settings'], console: ['/admin'] },
+  destinationRoutes: { home: ['/'], fleet: ['/fleet'], settings: ['/settings'], console: ['/admin'] },
   settingsSurfaces: [
     { sections: ADMIN_SECTIONS, hubPath: '/admin/settings', hubTitle: 'Administration' },
     { sections: USER_SETTINGS_SECTIONS, hubPath: '/settings', hubTitle: 'Settings' },
