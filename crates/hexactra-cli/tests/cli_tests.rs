@@ -15,23 +15,23 @@ const TOKEN: &str = "cli-test-token-0123456789abcdef";
 
 #[test]
 fn help_and_version() {
-    Command::cargo_bin("hexactra")
+    Command::cargo_bin("hexactra-fabric")
         .unwrap()
         .arg("--help")
         .assert()
         .success()
         .stdout(predicate::str::contains("navigate"));
-    Command::cargo_bin("hexactra")
+    Command::cargo_bin("hexactra-fabric")
         .unwrap()
         .arg("version")
         .assert()
         .success()
-        .stdout(predicate::str::contains("hexactra-cli"));
+        .stdout(predicate::str::contains("hexactra-fabric"));
 }
 
 #[test]
 fn rejects_non_web_url_before_contacting_server() {
-    Command::cargo_bin("hexactra")
+    Command::cargo_bin("hexactra-fabric")
         .unwrap()
         .env("HEXACTRA_API_TOKEN", TOKEN)
         .args([
@@ -48,7 +48,7 @@ fn rejects_non_web_url_before_contacting_server() {
 #[test]
 fn missing_token_is_explained() {
     let dir = tempfile::tempdir().unwrap();
-    Command::cargo_bin("hexactra")
+    Command::cargo_bin("hexactra-fabric")
         .unwrap()
         .env_remove("HEXACTRA_API_TOKEN")
         .env("XDG_CONFIG_HOME", dir.path())
@@ -124,7 +124,7 @@ fn drives_a_session_end_to_end() {
     let url = start_stack();
     let cfg = tempfile::tempdir().unwrap();
     let cli = || {
-        let mut c = Command::cargo_bin("hexactra").unwrap();
+        let mut c = Command::cargo_bin("hexactra-fabric").unwrap();
         c.env("HEXACTRA_API_TOKEN", TOKEN)
             .env("HEXACTRA_URL", &url)
             .env("XDG_CONFIG_HOME", cfg.path())
@@ -178,7 +178,7 @@ fn handoff_and_webhook_commands() {
     let url = start_stack();
     let cfg = tempfile::tempdir().unwrap();
     let cli = || {
-        let mut c = Command::cargo_bin("hexactra").unwrap();
+        let mut c = Command::cargo_bin("hexactra-fabric").unwrap();
         c.env("HEXACTRA_API_TOKEN", TOKEN)
             .env("HEXACTRA_URL", &url)
             .env("XDG_CONFIG_HOME", cfg.path())
