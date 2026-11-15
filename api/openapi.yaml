@@ -354,7 +354,7 @@ paths:
           type: string
           format: uuid
       requestBody:
-        description: 'JSON with `Authorization: Bearer <response token>`, or an HTML form with `token`, `outcome` and `value`'
+        description: 'JSON with the response token (`response_token` or the `X-Hexactra-Response-Token` header) or an operator or service token (`Authorization: Bearer`), or an HTML form with `token`, `outcome`, `value` and `values` (repeated)'
         content:
           application/json:
             schema:
@@ -1068,8 +1068,23 @@ components:
         choices:
           type: array
           items:
-            type: string
-          description: 'Options for `input: "choice"`.'
+            $ref: '#/components/schemas/HandoffChoiceSpec'
+          description: |-
+            Options for `choice` and `multi_choice` (1-10): bare strings or
+            `{id, label, description?}` objects.
+        confirm_label:
+          type:
+          - string
+          - 'null'
+          description: '`confirm`: label of the approve button (at most 40 characters).'
+        constraints:
+          $ref: '#/components/schemas/HandoffConstraints'
+          description: Bounds on the answer (see `HandoffConstraints`).
+        deny_label:
+          type:
+          - string
+          - 'null'
+          description: '`confirm`: label of the deny button (at most 40 characters).'
         input:
           $ref: '#/components/schemas/HandoffInput'
         kind:
@@ -1081,6 +1096,11 @@ components:
         prompt:
           type: string
           description: What the human should do, in plain words.
+        risk:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/HandoffRisk'
+            description: '`confirm`: how risky approving is (default `high`).'
         timeout_ms:
           type:
           - integer
@@ -1326,6 +1346,93 @@ components:
         type:
           type: string
           description: e.g. `operation.completed`, `session.created`, `host.offline`.
+    HandoffChoice:
+      type: object
+      description: One option of a `choice` or `multi_choice` question, as returned.
+      required:
+      - id
+      - label
+      properties:
+        description:
+          type:
+          - string
+          - 'null'
+        id:
+          type: string
+          description: What the answer carries (exact match).
+        label:
+          type: string
+          description: What the human sees.
+    HandoffChoiceSpec:
+      oneOf:
+      - type: string
+        description: A bare label, also used as the id.
+      - $ref: '#/components/schemas/HandoffChoice'
+        description: An option with its own id.
+      description: |-
+        An option as a caller may send it: a bare string (used as both id and
+        label) or `{id, label, description?}`.
+    HandoffConstraints:
+      type: object
+      description: |-
+        Bounds on an answer. Each field applies only to some inputs; sending one
+        that does not apply is a validation error.
+      properties:
+        max:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: '`number`: largest accepted value.'
+        max_length:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: '`text` (1-4096, default 4096) and `secret`: longest answer in characters.'
+          minimum: 0
+        max_selections:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: '`multi_choice`: most options to select (default: all of them).'
+          minimum: 0
+        min:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: '`number`: smallest accepted value.'
+        min_selections:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: '`multi_choice`: fewest options to select (default 1).'
+          minimum: 0
+        multiline:
+          type:
+          - boolean
+          - 'null'
+          description: '`text`: show a multi-line box; when `false`, newlines are rejected.'
+        pattern:
+          type:
+          - string
+          - 'null'
+          description: '`text`: regex the whole answer must match (at most 200 characters).'
+        step:
+          type:
+          - number
+          - 'null'
+          format: double
+          description: '`number`: the answer must be `min` (or 0) plus a multiple of `step`.'
+        unit:
+          type:
+          - string
+          - 'null'
+          description: '`number`: unit shown next to the field (at most 20 characters).'
+      additionalProperties: false
     HandoffInput:
       type: string
       description: What the human is asked to provide.
@@ -1334,6 +1441,10 @@ components:
       - text
       - secret
       - choice
+      - multi_choice
+      - number
+      - confirm
+      - takeover
     HandoffKind:
       type: string
       description: Why the agent needs a human.
@@ -1375,21 +1486,53 @@ components:
       type: object
       description: The human's answer as visible to readers.
       properties:
+        answered_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        by:
+          type:
+          - string
+          - 'null'
+          description: |-
+            Who answered: `operator`, `service:<name>`, `token` (a response-token
+            holder), or the `answered_by` an authenticated caller recorded.
         channel:
           type:
           - string
           - 'null'
           description: Which channel answered (free-form label, e.g. "slack", "web-form").
+        outcome:
+          $ref: '#/components/schemas/HandoffOutcome'
+          description: |-
+            `completed`, or `cancelled` when the human declined. A `deny` on a
+            `confirm` question is a completed answer.
         value:
           type:
           - string
           - 'null'
-          description: The submitted value for `text` and `choice` inputs.
+          description: |-
+            The answer for `text`, `choice` (option id), `number` (canonical
+            decimal string) and `confirm` (`approve` or `deny`).
         value_withheld:
           type: boolean
           description: |-
             True for `secret` inputs: the value exists but is only available
             once through `POST /v1/handoffs/{id}/claim`.
+        values:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+          description: The selected option ids for `multi_choice`.
+    HandoffRisk:
+      type: string
+      description: How risky approving a `confirm` question is (a UI hint).
+      enum:
+      - low
+      - high
     HandoffStatus:
       type: string
       description: Lifecycle of a handoff.
@@ -1415,10 +1558,21 @@ components:
         choices:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/HandoffChoice'
+          description: Options for `choice` and `multi_choice`, always as objects.
+        confirm_label:
+          type:
+          - string
+          - 'null'
+        constraints:
+          $ref: '#/components/schemas/HandoffConstraints'
         created_at:
           type: string
           format: date-time
+        deny_label:
+          type:
+          - string
+          - 'null'
         expires_at:
           type: string
           format: date-time
@@ -1450,6 +1604,11 @@ components:
           oneOf:
           - type: 'null'
           - $ref: '#/components/schemas/HandoffResponse'
+        risk:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/HandoffRisk'
+            description: Set for `confirm` (default `high`).
         session_id:
           type: string
           format: uuid
@@ -2043,6 +2202,14 @@ components:
       type: object
       description: '`POST /v1/handoffs/{id}/respond`'
       properties:
+        answered_by:
+          type:
+          - string
+          - 'null'
+          description: |-
+            Who answered (e.g. `user:<id>`, at most 128 characters), recorded as
+            the response's `by`. Honoured only with an operator or service
+            token; ignored for response-token answers.
         channel:
           type:
           - string
@@ -2061,6 +2228,16 @@ components:
           type:
           - string
           - 'null'
+          description: |-
+            The answer for `text`, `secret`, `choice` (option id), `number`
+            (decimal string) and `confirm` (`approve` or `deny`).
+        values:
+          type:
+          - array
+          - 'null'
+          items:
+            type: string
+          description: The selected option ids for `multi_choice`.
     ServiceTokenList:
       type: object
       required:

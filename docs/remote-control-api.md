@@ -202,7 +202,7 @@ When an agent meets something only a person should do (a CAPTCHA, a one-time cod
 | `GET /v1/handoffs/{id}?wait_ms=` | API token | Read one, waiting up to 120 s for it to resolve |
 | `POST /v1/handoffs/{id}/claim` | API token | Return a `secret` answer once, then erase it |
 | `POST /v1/handoffs/{id}/cancel` | API token | Cancel |
-| `POST /v1/handoffs/{id}/respond` | API token **or** response token | Answer as JSON: `{ "outcome": "completed" \| "cancelled", "value"?, "channel"?, "response_token"? }`. The token can also go in the `X-Hexactra-Response-Token` header |
+| `POST /v1/handoffs/{id}/respond` | API token **or** response token | Answer as JSON: `{ "outcome": "completed" \| "cancelled", "value"?, "values"?, "channel"?, "answered_by"?, "response_token"? }`. The token can also go in the `X-Hexactra-Response-Token` header |
 | `GET /v1/handoffs/{id}/respond?token=` | response token | A minimal HTML page with the prompt and a form, for channels that can only send a link (email, SMS, chat) |
 
 Create body:
@@ -219,10 +219,16 @@ Create body:
 
 - `kind` is one of `captcha`, `code`, `passkey`, `login`, `confirmation` or `other`.
 - `input` is one of:
-  - `none`: the person acts in the browser and clicks "done".
-  - `text`: a free-text answer.
-  - `secret`: an answer that is withheld from reads and payloads and claimed once.
-  - `choice`: one of `choices` (1 to 10 options).
+  - `none`: the person acts in the browser and clicks "Done".
+  - `takeover`: the person operates the browser themselves, then clicks "Done".
+  - `text`: a free-text answer. Constraints: `max_length` (1 to 4096, default 4096), `pattern` (a regex of at most 200 characters the whole answer must match), `multiline` (`false` rejects newlines).
+  - `secret`: an answer that is withheld from reads and payloads and claimed once. Constraint: `max_length`.
+  - `choice`: one of `choices`; the answer's `value` is the option id.
+  - `multi_choice`: several of `choices`; the answer's `values` are option ids, unique, between `min_selections` (default 1) and `max_selections` (default: all).
+  - `number`: a decimal string, returned in canonical form (`02.50` becomes `2.5`). Constraints: `min`, `max`, `step` (the answer is `min`, or 0, plus a multiple of it), `unit` (a label, at most 20 characters).
+  - `confirm`: `value` is `approve` or `deny`. Optional `confirm_label` and `deny_label` (at most 40 characters each) and `risk` (`low` or `high`, default `high`). A `deny` is a completed answer, not a cancellation.
+- `choices` (1 to 10) are strings or `{ "id", "label", "description"? }` objects; an id matches `[A-Za-z0-9_-]{1,64}`, a label is at most 100 characters and a description at most 200. A string is both the id and the label. Handoffs always return options as objects.
+- `constraints` is an object; a constraint that does not apply to the `input` is a `400`, as are `choices` on other inputs and the confirm fields on anything but `confirm`.
 - The timeout defaults to 10 minutes and can be set from 10 seconds to 24 hours.
 
 Rules:
@@ -235,6 +241,8 @@ Rules:
 - The HTML page escapes all agent-provided text. It is served with a `default-src 'none'` CSP, `no-store`, `no-referrer` and `DENY` framing.
 
 Statuses: `pending` → `completed` | `cancelled` | `expired`.
+
+An answered handoff carries `response`: `{ "outcome": "completed" | "cancelled", "value"?, "values"?, "value_withheld", "channel"?, "by", "answered_at" }`. `by` is `operator`, `service:<token name>`, `token` (the response-token holder), or the `answered_by` an operator or service caller sent (at most 128 characters, e.g. `user:42`); `answered_by` from a response-token answer is ignored. `cancelled` means the person declined. Handoffs saved before these fields existed read back with `outcome` taken from the status and `answered_at` from `resolved_at`.
 
 ## Webhooks: channels that reach a person
 

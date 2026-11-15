@@ -242,6 +242,102 @@ fn handoff_and_webhook_commands() {
     assert!(stdout.contains("completed via cli"), "{stdout}");
     assert!(stdout.contains("12A"), "{stdout}");
 
+    // Typed questions: multi-choice with option ids, answered with --values.
+    let out = cli()
+        .args([
+            "handoff",
+            "request",
+            "--prompt",
+            "Which extras?",
+            "--input",
+            "multi-choice",
+            "--choice",
+            "bag=Checked bag",
+            "--choice",
+            "Window seat",
+            "--max-selections",
+            "2",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let id = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    cli()
+        .args(["handoff", "respond", &id, "--values", "nope"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not one of the choices"));
+    cli()
+        .args([
+            "handoff",
+            "respond",
+            &id,
+            "--values",
+            "bag",
+            "--values",
+            "Window seat",
+            "--answered-by",
+            "user:7",
+        ])
+        .assert()
+        .success();
+    let out = cli()
+        .args(["--json", "handoff", "show", &id])
+        .output()
+        .unwrap();
+    let h: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(
+        h["choices"][0],
+        json!({"id": "bag", "label": "Checked bag"})
+    );
+    assert_eq!(h["response"]["values"], json!(["bag", "Window seat"]));
+    assert_eq!(h["response"]["by"], "user:7");
+    assert_eq!(h["response"]["outcome"], "completed");
+
+    // A number with a negative minimum and a step; the server checks bounds.
+    let out = cli()
+        .args([
+            "handoff", "request", "--prompt", "Offset?", "--input", "number", "--min", "-5",
+            "--max", "5", "--step", "0.5", "--unit", "h",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let id = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    cli()
+        .args(["handoff", "respond", &id, "--value", "-5.25"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("between"));
+    cli()
+        .args(["handoff", "respond", &id, "--value", "-4.5"])
+        .assert()
+        .success();
+    cli()
+        .args(["handoff", "show", &id])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("value: -4.5").and(predicate::str::contains("by: operator")),
+        );
+
+    // Constraints that do not apply to the input are refused.
+    cli()
+        .args([
+            "handoff", "request", "--prompt", "Approve?", "--input", "confirm", "--min", "1",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("does not apply"));
+
     // Webhooks: http is refused by default; https is registered and listed without its secret.
     cli()
         .args(["webhook", "add", "http://hooks.example.test/x"])

@@ -343,23 +343,116 @@
       "name": "browser_reload"
     },
     {
-      "description": "Pause and ask the user to do something only a person should do: solve a CAPTCHA, enter a one-time code, approve a passkey, sign in, or confirm a purchase. The user is reached on their configured channels (chat, email link, ...). With wait=true (default) this returns the outcome and, for input text/secret/choice, the person's answer. Use input=secret for one-time codes: type the value into the page and do not repeat it elsewhere.",
+      "description": "Pause and ask the user to do something only a person should do, or a question only they can answer: solve a CAPTCHA, enter a one-time code, approve a passkey, sign in, confirm a purchase, pick from options. The user is reached on their configured channels (chat, email link, ...). With wait=true (default) this returns the outcome and the person's answer: `value` for text, secret, choice (the option id), number (a decimal string) and confirm (`approve` or `deny`), `values` (option ids) for multi_choice. Use input=secret for one-time codes: type the value into the page and do not repeat it elsewhere. Use input=takeover when the person must operate the browser themselves.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
           "choices": {
+            "description": "Options for choice and multi_choice: a string (used as id and label) or {id, label, description}.",
             "items": {
-              "type": "string"
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "maxLength": 200,
+                      "type": "string"
+                    },
+                    "id": {
+                      "pattern": "^[A-Za-z0-9_-]{1,64}$",
+                      "type": "string"
+                    },
+                    "label": {
+                      "maxLength": 100,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label"
+                  ],
+                  "type": "object"
+                }
+              ]
             },
+            "maxItems": 10,
+            "minItems": 1,
             "type": "array"
           },
+          "confirm_label": {
+            "description": "confirm: approve button label",
+            "maxLength": 40,
+            "type": "string"
+          },
+          "constraints": {
+            "additionalProperties": false,
+            "description": "Bounds on the answer; only those that apply to the input are allowed.",
+            "properties": {
+              "max": {
+                "description": "number",
+                "type": "number"
+              },
+              "max_length": {
+                "description": "text, secret",
+                "maximum": 4096,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "max_selections": {
+                "description": "multi_choice (default all)",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "min": {
+                "description": "number",
+                "type": "number"
+              },
+              "min_selections": {
+                "description": "multi_choice (default 1)",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "multiline": {
+                "description": "text: false rejects newlines",
+                "type": "boolean"
+              },
+              "pattern": {
+                "description": "text: regex the whole answer must match",
+                "maxLength": 200,
+                "type": "string"
+              },
+              "step": {
+                "description": "number",
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              "unit": {
+                "description": "number",
+                "maxLength": 20,
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "deny_label": {
+            "description": "confirm: deny button label",
+            "maxLength": 40,
+            "type": "string"
+          },
           "input": {
-            "description": "none: the person acts in the browser and marks it done.",
+            "description": "none: the person acts in the browser and marks it done. takeover: the person operates the browser, then marks it done. confirm: approve or deny.",
             "enum": [
               "none",
               "text",
               "secret",
-              "choice"
+              "choice",
+              "multi_choice",
+              "number",
+              "confirm",
+              "takeover"
             ],
             "type": "string"
           },
@@ -376,6 +469,14 @@
           },
           "prompt": {
             "description": "What the person should do, in plain words.",
+            "type": "string"
+          },
+          "risk": {
+            "description": "confirm: how risky approving is (default high)",
+            "enum": [
+              "low",
+              "high"
+            ],
             "type": "string"
           },
           "timeout_s": {

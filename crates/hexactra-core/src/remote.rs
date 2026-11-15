@@ -609,13 +609,51 @@ pub enum HandoffInput {
     /// Nothing: the human acts in the browser and marks the handoff done.
     #[default]
     None,
-    /// Free text returned to the agent.
+    /// Free text returned to the agent (`constraints`: `max_length`,
+    /// `pattern`, `multiline`).
     Text,
     /// Sensitive text (e.g. a one-time code): returned once to the API
-    /// caller via `claim`, never shown in reads, logs or webhook payloads.
+    /// caller via `claim`, never shown in reads, logs or webhook payloads
+    /// (`constraints`: `max_length`).
     Secret,
-    /// One of `choices`.
+    /// One of `choices`: the answer's `value` is the option id.
     Choice,
+    /// Several of `choices`: the answer's `values` are option ids
+    /// (`constraints`: `min_selections`, `max_selections`).
+    MultiChoice,
+    /// A number, answered as a decimal string (`constraints`: `min`, `max`,
+    /// `step`, `unit`).
+    Number,
+    /// Approve or deny: the answer's `value` is `approve` or `deny`
+    /// (`confirm_label`, `deny_label`, `risk`).
+    Confirm,
+    /// The human takes over the browser and marks the handoff done.
+    Takeover,
+}
+
+impl HandoffInput {
+    /// True for inputs answered with `choices`.
+    pub fn has_choices(self) -> bool {
+        matches!(self, HandoffInput::Choice | HandoffInput::MultiChoice)
+    }
+
+    /// True for inputs answered without any value (`none`, `takeover`).
+    pub fn is_valueless(self) -> bool {
+        matches!(self, HandoffInput::None | HandoffInput::Takeover)
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            HandoffInput::None => "none",
+            HandoffInput::Text => "text",
+            HandoffInput::Secret => "secret",
+            HandoffInput::Choice => "choice",
+            HandoffInput::MultiChoice => "multi_choice",
+            HandoffInput::Number => "number",
+            HandoffInput::Confirm => "confirm",
+            HandoffInput::Takeover => "takeover",
+        }
+    }
 }
 
 /// Lifecycle of a handoff.
@@ -645,6 +683,202 @@ pub struct HandoffPage {
     pub title: Option<String>,
 }
 
+/// Most options a `choice` or `multi_choice` question may offer.
+pub const MAX_HANDOFF_CHOICES: usize = 10;
+/// Longest regex a `text` question may carry as its `pattern`.
+pub const MAX_HANDOFF_PATTERN: usize = 200;
+/// Longest `answered_by` label an authenticated caller may record.
+pub const MAX_HANDOFF_ANSWERED_BY: usize = 128;
+
+/// One option of a `choice` or `multi_choice` question, as returned.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HandoffChoice {
+    /// What the answer carries (exact match).
+    pub id: String,
+    /// What the human sees.
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+/// An option as a caller may send it: a bare string (used as both id and
+/// label) or `{id, label, description?}`.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum HandoffChoiceSpec {
+    /// A bare label, also used as the id.
+    Label(String),
+    /// An option with its own id.
+    Option(HandoffChoice),
+}
+
+impl From<&str> for HandoffChoiceSpec {
+    fn from(s: &str) -> Self {
+        HandoffChoiceSpec::Label(s.to_string())
+    }
+}
+
+impl From<String> for HandoffChoiceSpec {
+    fn from(s: String) -> Self {
+        HandoffChoiceSpec::Label(s)
+    }
+}
+
+impl From<HandoffChoice> for HandoffChoiceSpec {
+    fn from(c: HandoffChoice) -> Self {
+        HandoffChoiceSpec::Option(c)
+    }
+}
+
+impl HandoffChoiceSpec {
+    /// The option in its returned (object) form.
+    pub fn to_choice(&self) -> HandoffChoice {
+        match self {
+            HandoffChoiceSpec::Label(s) => HandoffChoice {
+                id: s.clone(),
+                label: s.clone(),
+                description: None,
+            },
+            HandoffChoiceSpec::Option(c) => c.clone(),
+        }
+    }
+}
+
+/// Saved handoffs (before typed questions) store choices as bare strings;
+/// read either form.
+fn de_choices<'de, D>(d: D) -> Result<Vec<HandoffChoice>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let v: Vec<HandoffChoiceSpec> = Deserialize::deserialize(d)?;
+    Ok(v.iter().map(HandoffChoiceSpec::to_choice).collect())
+}
+
+/// How risky approving a `confirm` question is (a UI hint).
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HandoffRisk {
+    Low,
+    #[default]
+    High,
+}
+
+/// Bounds on an answer. Each field applies only to some inputs; sending one
+/// that does not apply is a validation error.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HandoffConstraints {
+    /// `text` (1-4096, default 4096) and `secret`: longest answer in characters.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_length: Option<u32>,
+    /// `text`: regex the whole answer must match (at most 200 characters).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pattern: Option<String>,
+    /// `text`: show a multi-line box; when `false`, newlines are rejected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub multiline: Option<bool>,
+    /// `number`: smallest accepted value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min: Option<f64>,
+    /// `number`: largest accepted value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<f64>,
+    /// `number`: the answer must be `min` (or 0) plus a multiple of `step`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub step: Option<f64>,
+    /// `number`: unit shown next to the field (at most 20 characters).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit: Option<String>,
+    /// `multi_choice`: fewest options to select (default 1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_selections: Option<u32>,
+    /// `multi_choice`: most options to select (default: all of them).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_selections: Option<u32>,
+}
+
+impl HandoffConstraints {
+    pub fn is_empty(&self) -> bool {
+        self == &HandoffConstraints::default()
+    }
+
+    /// Names of the constraints that are set.
+    fn set_names(&self) -> Vec<&'static str> {
+        let mut v = Vec::new();
+        if self.max_length.is_some() {
+            v.push("max_length");
+        }
+        if self.pattern.is_some() {
+            v.push("pattern");
+        }
+        if self.multiline.is_some() {
+            v.push("multiline");
+        }
+        if self.min.is_some() {
+            v.push("min");
+        }
+        if self.max.is_some() {
+            v.push("max");
+        }
+        if self.step.is_some() {
+            v.push("step");
+        }
+        if self.unit.is_some() {
+            v.push("unit");
+        }
+        if self.min_selections.is_some() {
+            v.push("min_selections");
+        }
+        if self.max_selections.is_some() {
+            v.push("max_selections");
+        }
+        v
+    }
+
+    /// Effective longest text answer.
+    pub fn text_max_length(&self) -> usize {
+        self.max_length
+            .map(|n| n as usize)
+            .unwrap_or(MAX_HANDOFF_VALUE)
+    }
+
+    /// Effective `(min, max)` selections for `n` choices.
+    pub fn selection_bounds(&self, n: usize) -> (usize, usize) {
+        (
+            self.min_selections.map(|v| v as usize).unwrap_or(1),
+            self.max_selections.map(|v| v as usize).unwrap_or(n),
+        )
+    }
+}
+
+fn invalid<T>(msg: impl Into<String>) -> Result<T, ActionValidationError> {
+    Err(ActionValidationError(msg.into()))
+}
+
+fn valid_choice_id(id: &str) -> bool {
+    (1..=64).contains(&id.len())
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
+/// Compile a `text` pattern with full-match semantics.
+pub fn compile_handoff_pattern(pattern: &str) -> Result<regex::Regex, ActionValidationError> {
+    if pattern.is_empty() || pattern.chars().count() > MAX_HANDOFF_PATTERN {
+        return invalid(format!(
+            "pattern must be 1-{MAX_HANDOFF_PATTERN} characters"
+        ));
+    }
+    regex::RegexBuilder::new(&format!("^(?:{pattern})$"))
+        .size_limit(1 << 20)
+        .build()
+        .map_err(|e| ActionValidationError(format!("pattern is not a valid regex: {e}")))
+}
+
 /// `POST /v1/sessions/{id}/handoffs`
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -654,9 +888,22 @@ pub struct CreateHandoffRequest {
     pub prompt: String,
     #[serde(default)]
     pub input: HandoffInput,
-    /// Options for `input: "choice"`.
+    /// Options for `choice` and `multi_choice` (1-10): bare strings or
+    /// `{id, label, description?}` objects.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub choices: Vec<String>,
+    pub choices: Vec<HandoffChoiceSpec>,
+    /// Bounds on the answer (see `HandoffConstraints`).
+    #[serde(default, skip_serializing_if = "HandoffConstraints::is_empty")]
+    pub constraints: HandoffConstraints,
+    /// `confirm`: label of the approve button (at most 40 characters).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirm_label: Option<String>,
+    /// `confirm`: label of the deny button (at most 40 characters).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deny_label: Option<String>,
+    /// `confirm`: how risky approving is (default `high`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk: Option<HandoffRisk>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeout_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -664,50 +911,172 @@ pub struct CreateHandoffRequest {
 }
 
 impl CreateHandoffRequest {
+    /// A request with no options or constraints.
+    pub fn new(kind: HandoffKind, prompt: impl Into<String>, input: HandoffInput) -> Self {
+        Self {
+            kind,
+            prompt: prompt.into(),
+            input,
+            choices: vec![],
+            constraints: HandoffConstraints::default(),
+            confirm_label: None,
+            deny_label: None,
+            risk: None,
+            timeout_ms: None,
+            page: None,
+        }
+    }
+
     /// Validate bounds before the handoff is created.
     pub fn validate(&self) -> Result<(), ActionValidationError> {
         let p = self.prompt.trim();
         if p.is_empty() || p.len() > MAX_HANDOFF_PROMPT {
-            return Err(ActionValidationError(format!(
-                "prompt must be 1-{MAX_HANDOFF_PROMPT} characters"
-            )));
+            return invalid(format!("prompt must be 1-{MAX_HANDOFF_PROMPT} characters"));
         }
-        match self.input {
-            HandoffInput::Choice => {
-                if self.choices.is_empty() || self.choices.len() > 10 {
-                    return Err(ActionValidationError(
-                        "choice input needs 1-10 choices".into(),
-                    ));
-                }
-                if self
-                    .choices
-                    .iter()
-                    .any(|c| c.trim().is_empty() || c.len() > 100)
-                {
-                    return Err(ActionValidationError(
-                        "each choice must be 1-100 characters".into(),
-                    ));
-                }
-            }
-            _ if !self.choices.is_empty() => {
-                return Err(ActionValidationError(
-                    "choices are only allowed with input \"choice\"".into(),
-                ))
-            }
-            _ => {}
-        }
+        self.validate_choices()?;
+        self.validate_constraints()?;
+        self.validate_confirm()?;
         if let Some(t) = self.timeout_ms {
             if !(MIN_HANDOFF_TIMEOUT_MS..=MAX_HANDOFF_TIMEOUT_MS).contains(&t) {
-                return Err(ActionValidationError(format!(
+                return invalid(format!(
                     "timeout_ms must be between {MIN_HANDOFF_TIMEOUT_MS} and {MAX_HANDOFF_TIMEOUT_MS}"
-                )));
+                ));
             }
         }
         if let Some(page) = &self.page {
             if page.url.as_deref().map(str::len).unwrap_or(0) > MAX_URL_LEN
                 || page.title.as_deref().map(str::len).unwrap_or(0) > 500
             {
-                return Err(ActionValidationError("page url or title too long".into()));
+                return invalid("page url or title too long");
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_choices(&self) -> Result<(), ActionValidationError> {
+        if !self.input.has_choices() {
+            if !self.choices.is_empty() {
+                return invalid(
+                    "choices are only allowed with input \"choice\" or \"multi_choice\"",
+                );
+            }
+            return Ok(());
+        }
+        if self.choices.is_empty() || self.choices.len() > MAX_HANDOFF_CHOICES {
+            return invalid(format!(
+                "{} input needs 1-{MAX_HANDOFF_CHOICES} choices",
+                self.input.name()
+            ));
+        }
+        let mut ids = std::collections::HashSet::new();
+        for c in &self.choices {
+            let id = match c {
+                HandoffChoiceSpec::Label(s) => {
+                    if s.trim().is_empty() || s.chars().count() > 100 {
+                        return invalid("each choice must be 1-100 characters");
+                    }
+                    s
+                }
+                HandoffChoiceSpec::Option(o) => {
+                    if !valid_choice_id(&o.id) {
+                        return invalid(format!(
+                            "choice id {:?} must match [A-Za-z0-9_-]{{1,64}}",
+                            o.id
+                        ));
+                    }
+                    if o.label.trim().is_empty() || o.label.chars().count() > 100 {
+                        return invalid("each choice label must be 1-100 characters");
+                    }
+                    if o.description
+                        .as_deref()
+                        .map(|d| d.chars().count())
+                        .unwrap_or(0)
+                        > 200
+                    {
+                        return invalid("a choice description must be at most 200 characters");
+                    }
+                    &o.id
+                }
+            };
+            if !ids.insert(id.as_str()) {
+                return invalid(format!("duplicate choice id {id:?}"));
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_constraints(&self) -> Result<(), ActionValidationError> {
+        let c = &self.constraints;
+        let allowed: &[&str] = match self.input {
+            HandoffInput::Text => &["max_length", "pattern", "multiline"],
+            HandoffInput::Secret => &["max_length"],
+            HandoffInput::Number => &["min", "max", "step", "unit"],
+            HandoffInput::MultiChoice => &["min_selections", "max_selections"],
+            _ => &[],
+        };
+        if let Some(bad) = c.set_names().into_iter().find(|n| !allowed.contains(n)) {
+            return invalid(format!(
+                "constraint {bad} does not apply to input \"{}\"",
+                self.input.name()
+            ));
+        }
+        if let Some(n) = c.max_length {
+            if !(1..=MAX_HANDOFF_VALUE as u32).contains(&n) {
+                return invalid(format!("max_length must be 1-{MAX_HANDOFF_VALUE}"));
+            }
+        }
+        if let Some(p) = &c.pattern {
+            compile_handoff_pattern(p)?;
+        }
+        for (name, v) in [("min", c.min), ("max", c.max), ("step", c.step)] {
+            if v.is_some_and(|v| !v.is_finite()) {
+                return invalid(format!("{name} must be a finite number"));
+            }
+        }
+        if let (Some(min), Some(max)) = (c.min, c.max) {
+            if min > max {
+                return invalid("min must not be greater than max");
+            }
+        }
+        if c.step.is_some_and(|s| s <= 0.0) {
+            return invalid("step must be greater than 0");
+        }
+        if let Some(u) = &c.unit {
+            if u.trim().is_empty() || u.chars().count() > 20 {
+                return invalid("unit must be 1-20 characters");
+            }
+        }
+        if self.input == HandoffInput::MultiChoice {
+            let n = self.choices.len();
+            let (min, max) = c.selection_bounds(n);
+            if max < 1 || max > n {
+                return invalid(format!("max_selections must be 1-{n}"));
+            }
+            if min > max {
+                return invalid("min_selections must not be greater than max_selections");
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_confirm(&self) -> Result<(), ActionValidationError> {
+        let set = self.confirm_label.is_some() || self.deny_label.is_some() || self.risk.is_some();
+        if self.input != HandoffInput::Confirm {
+            if set {
+                return invalid(
+                    "confirm_label, deny_label and risk are only allowed with input \"confirm\"",
+                );
+            }
+            return Ok(());
+        }
+        for (name, l) in [
+            ("confirm_label", &self.confirm_label),
+            ("deny_label", &self.deny_label),
+        ] {
+            if let Some(l) = l {
+                if l.trim().is_empty() || l.chars().count() > 40 {
+                    return invalid(format!("{name} must be 1-40 characters"));
+                }
             }
         }
         Ok(())
@@ -718,9 +1087,17 @@ impl CreateHandoffRequest {
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HandoffResponse {
-    /// The submitted value for `text` and `choice` inputs.
+    /// `completed`, or `cancelled` when the human declined. A `deny` on a
+    /// `confirm` question is a completed answer.
+    #[serde(default)]
+    pub outcome: HandoffOutcome,
+    /// The answer for `text`, `choice` (option id), `number` (canonical
+    /// decimal string) and `confirm` (`approve` or `deny`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
+    /// The selected option ids for `multi_choice`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub values: Option<Vec<String>>,
     /// True for `secret` inputs: the value exists but is only available
     /// once through `POST /v1/handoffs/{id}/claim`.
     #[serde(default)]
@@ -728,6 +1105,12 @@ pub struct HandoffResponse {
     /// Which channel answered (free-form label, e.g. "slack", "web-form").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel: Option<String>,
+    /// Who answered: `operator`, `service:<name>`, `token` (a response-token
+    /// holder), or the `answered_by` an authenticated caller recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answered_at: Option<DateTime<Utc>>,
 }
 
 /// A handoff as reported by the API and in webhook payloads.
@@ -743,8 +1126,22 @@ pub struct HandoffView {
     pub kind: HandoffKind,
     pub prompt: String,
     pub input: HandoffInput,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub choices: Vec<String>,
+    /// Options for `choice` and `multi_choice`, always as objects.
+    #[serde(
+        default,
+        skip_serializing_if = "Vec::is_empty",
+        deserialize_with = "de_choices"
+    )]
+    pub choices: Vec<HandoffChoice>,
+    #[serde(default, skip_serializing_if = "HandoffConstraints::is_empty")]
+    pub constraints: HandoffConstraints,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confirm_label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deny_label: Option<String>,
+    /// Set for `confirm` (default `high`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk: Option<HandoffRisk>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub page: Option<HandoffPage>,
     pub status: HandoffStatus,
@@ -758,6 +1155,150 @@ pub struct HandoffView {
     /// solve a CAPTCHA or approve a passkey in the remote browser.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewer_url: Option<String>,
+}
+
+/// A validated answer to a handoff's question.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct HandoffAnswer {
+    pub value: Option<String>,
+    pub values: Option<Vec<String>>,
+}
+
+/// Format a number answer canonically (`1.5`, `100`, `-0.25`).
+fn canonical_number(v: f64) -> String {
+    let v = if v == 0.0 { 0.0 } else { v };
+    format!("{v}")
+}
+
+impl HandoffView {
+    /// Check a completed answer against the question. Values are trimmed;
+    /// a `number` comes back in canonical form.
+    pub fn check_answer(
+        &self,
+        value: Option<String>,
+        values: Option<Vec<String>>,
+    ) -> Result<HandoffAnswer, ActionValidationError> {
+        let value = value
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty());
+        let values: Option<Vec<String>> =
+            values.map(|vs| vs.into_iter().map(|v| v.trim().to_string()).collect());
+        if self.input != HandoffInput::MultiChoice && values.as_ref().is_some_and(|v| !v.is_empty())
+        {
+            return invalid(format!(
+                "values are only accepted for input \"multi_choice\"; send value for \"{}\"",
+                self.input.name()
+            ));
+        }
+        let c = &self.constraints;
+        let need = |what: &str| ActionValidationError(format!("this handoff needs {what}"));
+        let v = match self.input {
+            HandoffInput::None | HandoffInput::Takeover => {
+                if value.is_some() {
+                    return invalid(format!(
+                        "input \"{}\" takes no value: mark it done",
+                        self.input.name()
+                    ));
+                }
+                return Ok(HandoffAnswer::default());
+            }
+            HandoffInput::MultiChoice => {
+                if value.is_some() {
+                    return invalid("multi_choice is answered with values, not value");
+                }
+                let vs = values.unwrap_or_default();
+                let mut seen = std::collections::HashSet::new();
+                for v in &vs {
+                    if !self.choices.iter().any(|c| &c.id == v) {
+                        return invalid(format!("{v:?} is not one of the choices"));
+                    }
+                    if !seen.insert(v.as_str()) {
+                        return invalid(format!("{v:?} is selected more than once"));
+                    }
+                }
+                let (min, max) = c.selection_bounds(self.choices.len());
+                if vs.len() < min || vs.len() > max {
+                    return invalid(format!("select between {min} and {max} choices"));
+                }
+                return Ok(HandoffAnswer {
+                    value: None,
+                    values: Some(vs),
+                });
+            }
+            HandoffInput::Text => {
+                let v = value.ok_or_else(|| need("a value"))?;
+                if v.chars().count() > c.text_max_length() {
+                    return invalid(format!(
+                        "value longer than {} characters",
+                        c.text_max_length()
+                    ));
+                }
+                if c.multiline == Some(false) && v.contains(['\n', '\r']) {
+                    return invalid("value must be a single line");
+                }
+                if let Some(p) = &c.pattern {
+                    if !compile_handoff_pattern(p)?.is_match(&v) {
+                        return invalid("value does not match the required format");
+                    }
+                }
+                v
+            }
+            HandoffInput::Secret => {
+                let v = value.ok_or_else(|| need("a value"))?;
+                if v.chars().count() > c.text_max_length() {
+                    return invalid(format!(
+                        "value longer than {} characters",
+                        c.text_max_length()
+                    ));
+                }
+                v
+            }
+            HandoffInput::Choice => {
+                let v = value.ok_or_else(|| need("a choice"))?;
+                if !self.choices.iter().any(|c| c.id == v) {
+                    return invalid("value is not one of the choices");
+                }
+                v
+            }
+            HandoffInput::Number => {
+                let raw = value.ok_or_else(|| need("a number"))?;
+                let n: f64 = raw
+                    .parse()
+                    .ok()
+                    .filter(|n: &f64| n.is_finite())
+                    .ok_or_else(|| ActionValidationError("value must be a finite number".into()))?;
+                if c.min.is_some_and(|m| n < m) || c.max.is_some_and(|m| n > m) {
+                    return invalid(format!(
+                        "value must be between {} and {}",
+                        c.min.map(canonical_number).unwrap_or_else(|| "-inf".into()),
+                        c.max.map(canonical_number).unwrap_or_else(|| "inf".into())
+                    ));
+                }
+                if let Some(step) = c.step {
+                    let k = (n - c.min.unwrap_or(0.0)) / step;
+                    if (k - k.round()).abs() > 1e-9 * k.abs().max(1.0) {
+                        return invalid(format!(
+                            "value must be a multiple of {} (from {})",
+                            canonical_number(step),
+                            canonical_number(c.min.unwrap_or(0.0))
+                        ));
+                    }
+                }
+                canonical_number(n)
+            }
+            HandoffInput::Confirm => {
+                let v = value.ok_or_else(|| need("approve or deny"))?;
+                if v != "approve" && v != "deny" {
+                    return invalid("value must be \"approve\" or \"deny\"");
+                }
+                v
+            }
+        };
+        Ok(HandoffAnswer {
+            value: Some(v),
+            values: None,
+        })
+    }
 }
 
 /// Response to creating a handoff.
@@ -788,8 +1329,13 @@ pub enum HandoffOutcome {
 pub struct RespondHandoffRequest {
     #[serde(default)]
     pub outcome: HandoffOutcome,
+    /// The answer for `text`, `secret`, `choice` (option id), `number`
+    /// (decimal string) and `confirm` (`approve` or `deny`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
+    /// The selected option ids for `multi_choice`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub values: Option<Vec<String>>,
     /// The handoff's response token (alternatively sent as the
     /// `X-Hexactra-Response-Token` header). Not needed with the API token.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -797,6 +1343,11 @@ pub struct RespondHandoffRequest {
     /// Label of the answering channel, for the record.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel: Option<String>,
+    /// Who answered (e.g. `user:<id>`, at most 128 characters), recorded as
+    /// the response's `by`. Honoured only with an operator or service
+    /// token; ignored for response-token answers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub answered_by: Option<String>,
 }
 
 /// `POST /v1/handoffs/{id}/claim`: the secret value, returned once.
@@ -1026,14 +1577,11 @@ mod tests {
 
     #[test]
     fn handoff_request_validation() {
-        let base = CreateHandoffRequest {
-            kind: HandoffKind::Code,
-            prompt: "Enter the code sent to your phone".into(),
-            input: HandoffInput::Secret,
-            choices: vec![],
-            timeout_ms: None,
-            page: None,
-        };
+        let base = CreateHandoffRequest::new(
+            HandoffKind::Code,
+            "Enter the code sent to your phone",
+            HandoffInput::Secret,
+        );
         assert!(base.validate().is_ok());
         let mut r = base.clone();
         r.prompt = " ".into();
@@ -1052,6 +1600,344 @@ mod tests {
         let v: CreateHandoffRequest =
             serde_json::from_value(json!({"kind": "captcha", "prompt": "Solve it"})).unwrap();
         assert_eq!(v.input, HandoffInput::None);
+    }
+
+    fn q(input: HandoffInput) -> CreateHandoffRequest {
+        CreateHandoffRequest::new(HandoffKind::Other, "Question?", input)
+    }
+
+    fn parse(v: Value) -> CreateHandoffRequest {
+        serde_json::from_value(v).unwrap()
+    }
+
+    fn err(r: &CreateHandoffRequest) -> String {
+        r.validate().unwrap_err().0
+    }
+
+    #[test]
+    fn handoff_choices_accept_strings_and_objects() {
+        let r = parse(json!({
+            "kind": "other", "prompt": "Pick", "input": "choice",
+            "choices": ["Yes, continue", {"id": "no", "label": "No", "description": "Stop here"}]
+        }));
+        assert!(r.validate().is_ok());
+        let c: Vec<HandoffChoice> = r.choices.iter().map(|c| c.to_choice()).collect();
+        assert_eq!(c[0].id, "Yes, continue");
+        assert_eq!(c[0].label, "Yes, continue");
+        assert_eq!(c[1].id, "no");
+        assert_eq!(c[1].description.as_deref(), Some("Stop here"));
+        // Returned as objects.
+        let out = serde_json::to_value(&c[0]).unwrap();
+        assert_eq!(
+            out,
+            json!({"id": "Yes, continue", "label": "Yes, continue"})
+        );
+
+        let mut r = q(HandoffInput::Choice);
+        let opt = |id: &str, label: &str| HandoffChoice {
+            id: id.into(),
+            label: label.into(),
+            description: None,
+        };
+        for bad in ["", "has space", "a,b", &"x".repeat(65)] {
+            r.choices = vec![opt(bad, "Label").into()];
+            assert!(err(&r).contains("must match"), "{bad:?}");
+        }
+        r.choices = vec![opt("a", "").into()];
+        assert!(r.validate().is_err());
+        r.choices = vec![opt("a", &"l".repeat(101)).into()];
+        assert!(r.validate().is_err());
+        r.choices = vec![HandoffChoice {
+            description: Some("d".repeat(201)),
+            ..opt("a", "A")
+        }
+        .into()];
+        assert!(r.validate().is_err());
+        // Duplicate ids, across both forms.
+        r.choices = vec![opt("a", "A").into(), "a".into()];
+        assert!(err(&r).contains("duplicate"));
+        r.choices = vec!["".into()];
+        assert!(r.validate().is_err());
+        r.choices = (0..11).map(|i| format!("c{i}").into()).collect();
+        assert!(r.validate().is_err());
+        // Choices on other inputs.
+        let mut r = q(HandoffInput::Text);
+        r.choices = vec!["a".into()];
+        assert!(err(&r).contains("only allowed"));
+    }
+
+    #[test]
+    fn handoff_constraints_apply_only_to_their_inputs() {
+        let with = |input, c: Value| {
+            let mut v = json!({"kind": "other", "prompt": "Q", "input": input, "constraints": c});
+            if input == "multi_choice" || input == "choice" {
+                v["choices"] = json!(["a", "b", "c"]);
+            }
+            serde_json::from_value::<CreateHandoffRequest>(v).unwrap()
+        };
+        for (input, c) in [
+            (
+                "text",
+                json!({"max_length": 10, "pattern": "[0-9]+", "multiline": false}),
+            ),
+            ("secret", json!({"max_length": 8})),
+            (
+                "number",
+                json!({"min": 0, "max": 10, "step": 0.5, "unit": "kg"}),
+            ),
+            (
+                "multi_choice",
+                json!({"min_selections": 0, "max_selections": 2}),
+            ),
+        ] {
+            assert!(with(input, c.clone()).validate().is_ok(), "{input} {c}");
+        }
+        for (input, c) in [
+            ("text", json!({"min": 1})),
+            ("secret", json!({"pattern": "x"})),
+            ("number", json!({"max_length": 3})),
+            ("choice", json!({"min_selections": 1})),
+            ("none", json!({"multiline": true})),
+            ("confirm", json!({"unit": "x"})),
+            ("takeover", json!({"max_length": 1})),
+        ] {
+            let e = err(&with(input, c.clone()));
+            assert!(e.contains("does not apply"), "{input} {c}: {e}");
+        }
+        // Unknown constraint names are rejected at parse time.
+        assert!(serde_json::from_value::<CreateHandoffRequest>(json!({
+            "kind": "other", "prompt": "Q", "input": "text", "constraints": {"maxLength": 3}
+        }))
+        .is_err());
+        // Bounds of the constraints themselves.
+        for c in [
+            json!({"max_length": 0}),
+            json!({"max_length": 4097}),
+            json!({"pattern": "("}),
+            json!({"pattern": ""}),
+            json!({"pattern": "a".repeat(201)}),
+        ] {
+            assert!(with("text", c.clone()).validate().is_err(), "{c}");
+        }
+        for c in [
+            json!({"min": 5, "max": 1}),
+            json!({"step": 0}),
+            json!({"step": -1}),
+            json!({"unit": ""}),
+            json!({"unit": "u".repeat(21)}),
+        ] {
+            assert!(with("number", c.clone()).validate().is_err(), "{c}");
+        }
+        for c in [
+            json!({"max_selections": 4}),
+            json!({"max_selections": 0}),
+            json!({"min_selections": 3, "max_selections": 2}),
+            json!({"min_selections": 4}),
+        ] {
+            assert!(with("multi_choice", c.clone()).validate().is_err(), "{c}");
+        }
+    }
+
+    #[test]
+    fn handoff_confirm_fields() {
+        let mut r = q(HandoffInput::Confirm);
+        assert!(r.validate().is_ok());
+        r.confirm_label = Some("Pay now".into());
+        r.deny_label = Some("Don't pay".into());
+        r.risk = Some(HandoffRisk::Low);
+        assert!(r.validate().is_ok());
+        r.confirm_label = Some("x".repeat(41));
+        assert!(r.validate().is_err());
+        r.confirm_label = Some(" ".into());
+        assert!(r.validate().is_err());
+        let mut r = q(HandoffInput::Text);
+        r.risk = Some(HandoffRisk::High);
+        assert!(err(&r).contains("only allowed"));
+        let mut r = q(HandoffInput::Choice);
+        r.choices = vec!["a".into()];
+        r.deny_label = Some("No".into());
+        assert!(r.validate().is_err());
+    }
+
+    /// A view of a validated request, as the control plane builds it.
+    fn view(r: CreateHandoffRequest) -> HandoffView {
+        r.validate().unwrap();
+        serde_json::from_value(json!({
+            "id": Uuid::nil(), "session_id": Uuid::nil(), "host_id": Uuid::nil(),
+            "kind": r.kind, "prompt": r.prompt, "input": r.input,
+            "choices": r.choices, "constraints": r.constraints,
+            "status": "pending",
+            "created_at": "2026-01-01T00:00:00Z", "expires_at": "2026-01-01T00:10:00Z"
+        }))
+        .unwrap()
+    }
+
+    fn ans(v: &HandoffView, value: &str) -> Result<HandoffAnswer, ActionValidationError> {
+        v.check_answer(Some(value.into()), None)
+    }
+
+    fn pick(v: &HandoffView, values: &[&str]) -> Result<HandoffAnswer, ActionValidationError> {
+        v.check_answer(None, Some(values.iter().map(|s| s.to_string()).collect()))
+    }
+
+    #[test]
+    fn handoff_answers_text() {
+        let mut r = q(HandoffInput::Text);
+        r.constraints.max_length = Some(7);
+        r.constraints.pattern = Some("[0-9]{3}-?[0-9]{3}".into());
+        r.constraints.multiline = Some(false);
+        let v = view(r);
+        assert_eq!(
+            ans(&v, " 123-456 ").unwrap().value.as_deref(),
+            Some("123-456")
+        );
+        assert!(ans(&v, "123456").is_ok());
+        // Full match: a matching substring is not enough.
+        assert!(ans(&v, "x123456").is_err());
+        assert!(ans(&v, "1234567").is_err());
+        assert!(v.check_answer(None, None).is_err());
+        assert!(v.check_answer(Some("  ".into()), None).is_err());
+        assert!(pick(&v, &["123456"]).is_err());
+
+        let mut r = q(HandoffInput::Text);
+        r.constraints.multiline = Some(false);
+        assert!(ans(&view(r), "a\nb").is_err());
+        let mut r = q(HandoffInput::Text);
+        r.constraints.multiline = Some(true);
+        assert!(ans(&view(r), "a\nb").is_ok());
+        // Default: newlines allowed, 4096 characters.
+        let v = view(q(HandoffInput::Text));
+        assert!(ans(&v, "a\nb").is_ok());
+        assert!(ans(&v, &"é".repeat(4096)).is_ok());
+        assert!(ans(&v, &"é".repeat(4097)).is_err());
+    }
+
+    #[test]
+    fn handoff_answers_secret_choice_confirm_and_valueless() {
+        let mut r = q(HandoffInput::Secret);
+        r.constraints.max_length = Some(6);
+        let v = view(r);
+        assert_eq!(ans(&v, "123456").unwrap().value.as_deref(), Some("123456"));
+        assert!(ans(&v, "1234567").is_err());
+
+        let mut r = q(HandoffInput::Choice);
+        r.choices = vec![
+            "Yes, continue".into(),
+            HandoffChoice {
+                id: "no".into(),
+                label: "No".into(),
+                description: None,
+            }
+            .into(),
+        ];
+        let v = view(r);
+        assert!(ans(&v, "Yes, continue").is_ok());
+        assert!(ans(&v, "no").is_ok());
+        assert!(ans(&v, "No").is_err(), "labels are not ids");
+        assert!(ans(&v, "maybe").is_err());
+
+        let v = view(q(HandoffInput::Confirm));
+        assert_eq!(
+            ans(&v, "approve").unwrap().value.as_deref(),
+            Some("approve")
+        );
+        assert_eq!(ans(&v, "deny").unwrap().value.as_deref(), Some("deny"));
+        assert!(ans(&v, "yes").is_err());
+        assert!(v.check_answer(None, None).is_err());
+
+        for input in [HandoffInput::None, HandoffInput::Takeover] {
+            let v = view(q(input));
+            assert_eq!(
+                v.check_answer(None, None).unwrap(),
+                HandoffAnswer::default()
+            );
+            assert_eq!(
+                v.check_answer(Some(" ".into()), Some(vec![])).unwrap(),
+                HandoffAnswer::default()
+            );
+            assert!(ans(&v, "x").unwrap_err().0.contains("takes no value"));
+            assert!(pick(&v, &["x"]).is_err());
+        }
+    }
+
+    #[test]
+    fn handoff_answers_number() {
+        let mut r = q(HandoffInput::Number);
+        r.constraints.min = Some(1.0);
+        r.constraints.max = Some(10.0);
+        r.constraints.step = Some(0.1);
+        let v = view(r);
+        assert_eq!(ans(&v, "1.3").unwrap().value.as_deref(), Some("1.3"));
+        assert_eq!(ans(&v, "02.50").unwrap().value.as_deref(), Some("2.5"));
+        assert_eq!(ans(&v, "1e1").unwrap().value.as_deref(), Some("10"));
+        assert!(ans(&v, "1.25").unwrap_err().0.contains("multiple"));
+        assert!(ans(&v, "0.9").unwrap_err().0.contains("between"));
+        assert!(ans(&v, "10.1").is_err());
+        for bad in ["abc", "NaN", "inf", "-inf", "1e999", "1,5"] {
+            assert!(ans(&v, bad).is_err(), "{bad}");
+        }
+        // Step counted from 0 without min.
+        let mut r = q(HandoffInput::Number);
+        r.constraints.step = Some(5.0);
+        let v = view(r);
+        assert_eq!(ans(&v, "-15").unwrap().value.as_deref(), Some("-15"));
+        assert_eq!(ans(&v, "-0").unwrap().value.as_deref(), Some("0"));
+        assert!(ans(&v, "7").is_err());
+    }
+
+    #[test]
+    fn handoff_answers_multi_choice() {
+        let mut r = q(HandoffInput::MultiChoice);
+        r.choices = vec!["a".into(), "b".into(), "c".into()];
+        r.constraints.max_selections = Some(2);
+        let v = view(r);
+        assert_eq!(
+            pick(&v, &["c", "a"]).unwrap().values,
+            Some(vec!["c".to_string(), "a".to_string()])
+        );
+        assert!(pick(&v, &[]).unwrap_err().0.contains("between 1 and 2"));
+        assert!(pick(&v, &["a", "b", "c"]).is_err());
+        assert!(pick(&v, &["a", "a"])
+            .unwrap_err()
+            .0
+            .contains("more than once"));
+        assert!(pick(&v, &["z"]).is_err());
+        assert!(ans(&v, "a").is_err(), "multi_choice takes values");
+
+        let mut r = q(HandoffInput::MultiChoice);
+        r.choices = vec!["a".into(), "b".into()];
+        r.constraints.min_selections = Some(0);
+        let v = view(r);
+        assert_eq!(pick(&v, &[]).unwrap().values, Some(vec![]));
+        assert_eq!(v.check_answer(None, None).unwrap().values, Some(vec![]));
+        assert!(pick(&v, &["a", "b"]).is_ok());
+    }
+
+    #[test]
+    fn old_saved_handoff_view_still_loads() {
+        let v: HandoffView = serde_json::from_value(json!({
+            "id": Uuid::nil(), "session_id": Uuid::nil(), "host_id": Uuid::nil(),
+            "kind": "confirmation", "prompt": "Go?", "input": "choice",
+            "choices": ["Approve", "Reject"], "status": "completed",
+            "created_at": "2026-01-01T00:00:00Z", "expires_at": "2026-01-01T00:10:00Z",
+            "resolved_at": "2026-01-01T00:01:00Z",
+            "response": {"value": "Approve", "value_withheld": false, "channel": "web-form"}
+        }))
+        .unwrap();
+        assert_eq!(v.choices[1].id, "Reject");
+        assert!(v.constraints.is_empty());
+        let r = v.response.as_ref().unwrap();
+        assert_eq!(r.outcome, HandoffOutcome::Completed);
+        assert_eq!(r.by, None);
+        // Round-trips in the new form.
+        let again: HandoffView = serde_json::from_value(serde_json::to_value(&v).unwrap()).unwrap();
+        assert_eq!(again, v);
+        let out = serde_json::to_value(&v).unwrap();
+        assert_eq!(
+            out["choices"][0],
+            json!({"id": "Approve", "label": "Approve"})
+        );
+        assert!(out.get("constraints").is_none());
     }
 
     #[test]

@@ -6,8 +6,9 @@ use anyhow::{bail, Result};
 use clap::{Subcommand, ValueEnum};
 use hexactra_client::ControlClient;
 use hexactra_core::remote::{
-    CreateHandoffRequest, CreateWebhookRequest, HandoffInput, HandoffKind, HandoffOutcome,
-    HandoffStatus, HandoffView, RespondHandoffRequest,
+    CreateHandoffRequest, CreateWebhookRequest, HandoffChoice, HandoffChoiceSpec,
+    HandoffConstraints, HandoffInput, HandoffKind, HandoffOutcome, HandoffRisk, HandoffStatus,
+    HandoffView, RespondHandoffRequest,
 };
 use uuid::Uuid;
 
@@ -40,6 +41,11 @@ pub enum InputArg {
     Text,
     Secret,
     Choice,
+    #[value(alias = "multi_choice")]
+    MultiChoice,
+    Number,
+    Confirm,
+    Takeover,
 }
 
 impl From<InputArg> for HandoffInput {
@@ -49,6 +55,96 @@ impl From<InputArg> for HandoffInput {
             InputArg::Text => HandoffInput::Text,
             InputArg::Secret => HandoffInput::Secret,
             InputArg::Choice => HandoffInput::Choice,
+            InputArg::MultiChoice => HandoffInput::MultiChoice,
+            InputArg::Number => HandoffInput::Number,
+            InputArg::Confirm => HandoffInput::Confirm,
+            InputArg::Takeover => HandoffInput::Takeover,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum RiskArg {
+    Low,
+    High,
+}
+
+impl From<RiskArg> for HandoffRisk {
+    fn from(r: RiskArg) -> Self {
+        match r {
+            RiskArg::Low => HandoffRisk::Low,
+            RiskArg::High => HandoffRisk::High,
+        }
+    }
+}
+
+/// `--choice` value: `id=label` when the part before `=` is a valid option
+/// id, else the whole string (used as both id and label).
+fn parse_choice(s: &str) -> HandoffChoiceSpec {
+    match s.split_once('=') {
+        Some((id, label))
+            if !label.trim().is_empty()
+                && (1..=64).contains(&id.len())
+                && id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-') =>
+        {
+            HandoffChoice {
+                id: id.into(),
+                label: label.into(),
+                description: None,
+            }
+            .into()
+        }
+        _ => s.into(),
+    }
+}
+
+/// Answer bounds for `handoff request`; the server rejects any that do
+/// not apply to `--input`.
+#[derive(clap::Args, Debug, Clone, Default)]
+pub struct ConstraintArgs {
+    /// text/secret: longest answer in characters (1-4096).
+    #[arg(long)]
+    max_length: Option<u32>,
+    /// text: regex the whole answer must match.
+    #[arg(long)]
+    pattern: Option<String>,
+    /// text: multi-line answer (`--multiline false` rejects newlines).
+    #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+    multiline: Option<bool>,
+    /// number: smallest value.
+    #[arg(long, allow_negative_numbers = true)]
+    min: Option<f64>,
+    /// number: largest value.
+    #[arg(long, allow_negative_numbers = true)]
+    max: Option<f64>,
+    /// number: the answer must be min (or 0) plus a multiple of this.
+    #[arg(long)]
+    step: Option<f64>,
+    /// number: unit shown next to the field.
+    #[arg(long)]
+    unit: Option<String>,
+    /// multi-choice: fewest options to select (default 1).
+    #[arg(long)]
+    min_selections: Option<u32>,
+    /// multi-choice: most options to select (default all).
+    #[arg(long)]
+    max_selections: Option<u32>,
+}
+
+impl From<ConstraintArgs> for HandoffConstraints {
+    fn from(a: ConstraintArgs) -> Self {
+        HandoffConstraints {
+            max_length: a.max_length,
+            pattern: a.pattern,
+            multiline: a.multiline,
+            min: a.min,
+            max: a.max,
+            step: a.step,
+            unit: a.unit,
+            min_selections: a.min_selections,
+            max_selections: a.max_selections,
         }
     }
 }
@@ -64,9 +160,21 @@ pub enum HandoffCmd {
         prompt: String,
         #[arg(long, value_enum, default_value = "none")]
         input: InputArg,
-        /// An option for --input choice (repeat).
+        /// An option for --input choice or multi-choice (repeat); `id=label`
+        /// gives the option its own id.
         #[arg(long = "choice")]
         choices: Vec<String>,
+        #[command(flatten)]
+        constraints: ConstraintArgs,
+        /// confirm: label of the approve button.
+        #[arg(long)]
+        confirm_label: Option<String>,
+        /// confirm: label of the deny button.
+        #[arg(long)]
+        deny_label: Option<String>,
+        /// confirm: how risky approving is (default high).
+        #[arg(long, value_enum)]
+        risk: Option<RiskArg>,
         /// How long to wait for a person, in seconds.
         #[arg(long, default_value_t = 600)]
         timeout_s: u64,
@@ -88,8 +196,15 @@ pub enum HandoffCmd {
     /// Answer a handoff as the operator.
     Respond {
         id: Uuid,
-        #[arg(long)]
+        /// The answer (text, secret, choice id, number, approve/deny).
+        #[arg(long, allow_hyphen_values = true)]
         value: Option<String>,
+        /// A selected option id for multi-choice (repeat).
+        #[arg(long = "values", conflicts_with = "value")]
+        values: Vec<String>,
+        /// Who answered, recorded as the response's `by` (e.g. user:42).
+        #[arg(long)]
+        answered_by: Option<String>,
     },
     /// Cancel a handoff.
     Cancel { id: Uuid },
@@ -148,7 +263,14 @@ async fn report(client: &ControlClient, h: &HandoffView, json: bool) -> Result<(
     if json {
         return print_json(&serde_json::json!({ "handoff": h, "secret_value": secret }));
     }
-    let value = secret.or_else(|| h.response.as_ref().and_then(|r| r.value.clone()));
+    let value = secret
+        .or_else(|| h.response.as_ref().and_then(|r| r.value.clone()))
+        .or_else(|| {
+            h.response
+                .as_ref()
+                .and_then(|r| r.values.as_ref())
+                .map(|v| v.join("\n"))
+        });
     let channel = h
         .response
         .as_ref()
@@ -186,6 +308,10 @@ pub async fn handoff(
             prompt,
             input,
             choices,
+            constraints,
+            confirm_label,
+            deny_label,
+            risk,
             timeout_s,
             wait,
         } => {
@@ -197,7 +323,11 @@ pub async fn handoff(
                         kind: kind.into(),
                         prompt,
                         input: input.into(),
-                        choices,
+                        choices: choices.iter().map(|c| parse_choice(c)).collect(),
+                        constraints: constraints.into(),
+                        confirm_label,
+                        deny_label,
+                        risk: risk.map(Into::into),
                         timeout_ms: Some(timeout_s * 1000),
                         page: None,
                     },
@@ -247,21 +377,34 @@ pub async fn handoff(
                 if let Some(v) = &r.value {
                     println!("value: {v}");
                 }
+                if let Some(v) = &r.values {
+                    println!("values: {}", v.join(", "));
+                }
+                if let Some(by) = &r.by {
+                    println!("by: {by}");
+                }
                 if r.value_withheld {
                     println!("value: (secret; claimed by the requesting agent)");
                 }
             }
             Ok(())
         }
-        HandoffCmd::Respond { id, value } => {
+        HandoffCmd::Respond {
+            id,
+            value,
+            values,
+            answered_by,
+        } => {
             let h = client
                 .respond_handoff(
                     id,
                     &RespondHandoffRequest {
                         outcome: HandoffOutcome::Completed,
                         value,
-                        response_token: None,
+                        values: (!values.is_empty()).then_some(values),
+                        answered_by,
                         channel: Some("cli".into()),
+                        ..Default::default()
                     },
                 )
                 .await?;
@@ -356,5 +499,32 @@ pub async fn webhook(cmd: WebhookCmd, client: &ControlClient, json: bool) -> Res
             }
             Ok(())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn choice_arg_forms() {
+        assert_eq!(
+            parse_choice("Yes, continue"),
+            HandoffChoiceSpec::Label("Yes, continue".into())
+        );
+        assert_eq!(
+            parse_choice("stop=Stop the task"),
+            HandoffChoiceSpec::Option(HandoffChoice {
+                id: "stop".into(),
+                label: "Stop the task".into(),
+                description: None,
+            })
+        );
+        // Not a valid id before `=`: the whole string is the option.
+        assert_eq!(
+            parse_choice("a b=c"),
+            HandoffChoiceSpec::Label("a b=c".into())
+        );
+        assert_eq!(parse_choice("x="), HandoffChoiceSpec::Label("x=".into()));
     }
 }
