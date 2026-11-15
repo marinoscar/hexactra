@@ -51,10 +51,10 @@ docker compose $F ps                   # everything running; db and fabric servi
 
 ## 3. Connect the console to the fabric
 
-Mint a service token for the console. It runs inside the API container, which already has the operator token:
+Mint a service token for the console with the fabric's admin CLI. It runs inside `fabric-control`, which already holds the operator token:
 
 ```bash
-docker compose $F exec api node -e "fetch('http://fabric-control:8787/v1/admin/service-tokens',{method:'POST',headers:{authorization:'Bearer '+process.env.HEXACTRA_FABRIC_OPERATOR_TOKEN,'content-type':'application/json'},body:JSON.stringify({name:'console'})}).then(r=>r.json()).then(j=>console.log(j.token))"
+docker compose $F exec fabric-control hexactra-fabric --url http://127.0.0.1:8787 admin service-token-create console
 ```
 
 Then, signed in as admin:

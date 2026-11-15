@@ -86,7 +86,7 @@ After installation, verify the binaries:
 
 ```bash
 # Check version
-hexactra --version
+hexactra-fabric --version
 
 # Check service status
 systemctl status hexactra-agent

@@ -14,7 +14,7 @@ laptop / phone / AI agent ──(Tailscale or SSH)──▶ control  (API :8787)
   - the browser starts on the first action, closes after an idle period, and keeps its profile in a volume;
   - a password-protected web viewer (noVNC) lets you see and use that browser from any device, to sign in or to solve a CAPTCHA.
 
-Your desktop setup (attach mode) still works. Both hosts can be registered at once; pick one with `hexactra session create --host <id>`.
+Your desktop setup (attach mode) still works. Both hosts can be registered at once; pick one with `hexactra-fabric session create --host <id>`.
 
 ## 1. Pick a machine
 
@@ -44,7 +44,7 @@ git clone https://github.com/marinoscar/hexactra && cd hexactra/deploy/container
 ./setup.sh                      # creates .env (0600) with an API token and viewer password
 docker compose up -d --build    # first build takes a few minutes
 docker compose ps               # both services "healthy"
-docker compose exec control hexactra --url http://127.0.0.1:8787 status
+docker compose exec control hexactra-fabric --url http://127.0.0.1:8787 status
 # host … container-host  online=true browser=false on_demand=true
 ```
 
@@ -80,8 +80,8 @@ On your laptop, point the CLI and MCP at it:
 ```bash
 export HEXACTRA_URL=https://<machine>.<tailnet>.ts.net     # or http://127.0.0.1:8787 over SSH
 export HEXACTRA_API_TOKEN=<value of HEXACTRA_API_TOKEN in .env>
-hexactra status
-claude mcp add hexactra --env HEXACTRA_URL=$HEXACTRA_URL --env HEXACTRA_API_TOKEN=$HEXACTRA_API_TOKEN -- hexactra-mcp
+hexactra-fabric status
+claude mcp add hexactra-fabric --env HEXACTRA_URL=$HEXACTRA_URL --env HEXACTRA_API_TOKEN=$HEXACTRA_API_TOKEN -- hexactra-mcp
 ```
 
 ## 4. Profiles: one per set of sign-ins
@@ -89,26 +89,26 @@ claude mcp add hexactra --env HEXACTRA_URL=$HEXACTRA_URL --env HEXACTRA_API_TOKE
 Keep separate profiles for separate identities or purposes, for example `personal`, `travel` and `work`. Each profile is its own browser, with its own cookies, sign-ins and storage, in `/data/profiles/<name>`.
 
 ```bash
-hexactra --profile travel session create --create     # make a new profile (opens signed out)
-hexactra --profile travel navigate https://accounts.google.com
-hexactra profile list                                 # container-host: default, travel*   (* = open now)
-hexactra --profile travel screenshot -o travel.jpg    # every command takes --profile (or HEXACTRA_PROFILE)
+hexactra-fabric --profile travel session create --create     # make a new profile (opens signed out)
+hexactra-fabric --profile travel navigate https://accounts.google.com
+hexactra-fabric profile list                                 # container-host: default, travel*   (* = open now)
+hexactra-fabric --profile travel screenshot -o travel.jpg    # every command takes --profile (or HEXACTRA_PROFILE)
 ```
 
 - **Names** are 1–32 characters of lowercase letters, digits, `-` and `_`. A typo is refused rather than silently creating a new, signed-out profile.
 - **Browsers open at once:** `HEXACTRA_MAX_BROWSERS` (default `1`) caps it. Switching to another profile closes the least recently used idle browser, which flushes its cookies first, and the switch takes a few seconds. With 4 GB RAM, `2` keeps two profiles warm.
 - **MCP agents** start on `HEXACTRA_PROFILE` (for example `--env HEXACTRA_PROFILE=travel` in `claude mcp add`). They can list profiles with `browser_profiles` and switch with `browser_use_profile`. They create a profile only when you ask.
 - **Manage profiles remotely:**
-  - `hexactra profile create NAME`, `hexactra profile close NAME`, `hexactra profile restart NAME`;
-  - `hexactra profile delete NAME --yes` removes the profile and its sign-ins;
-  - `hexactra host drain HOST` stops new sessions before maintenance, and `hexactra host undrain HOST` resumes them.
+  - `hexactra-fabric profile create NAME`, `hexactra-fabric profile close NAME`, `hexactra-fabric profile restart NAME`;
+  - `hexactra-fabric profile delete NAME --yes` removes the profile and its sign-ins;
+  - `hexactra-fabric host drain HOST` stops new sessions before maintenance, and `hexactra-fabric host undrain HOST` resumes them.
 - **Each CLI profile keeps its own current session.** In the viewer, window titles start with `Hexactra: <profile>`.
 
 ## 4a. Sign in once through the viewer
 
 The container's browser has its own profile. Your desktop Chrome profile cannot be copied, because its cookies are encrypted with your desktop keyring. Sign in to the sites you need once:
 
-1. Start the profile's browser: `hexactra --profile <name> navigate https://accounts.google.com`.
+1. Start the profile's browser: `hexactra-fabric --profile <name> navigate https://accounts.google.com`.
 2. Open the viewer (`…/vnc.html`) and enter the viewer password from `.env`.
 3. Sign in to each site, completing any 2-step verification.
 4. Optionally set `HEXACTRA_IDLE_SHUTDOWN_S=0` while you do this, so the browser stays open.

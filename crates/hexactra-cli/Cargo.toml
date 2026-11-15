@@ -8,7 +8,7 @@ repository.workspace = true
 description.workspace = true
 
 [[bin]]
-name = "hexactra"
+name = "hexactra-fabric"
 path = "src/main.rs"
 
 [dependencies]

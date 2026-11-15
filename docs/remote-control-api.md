@@ -63,6 +63,17 @@ The agent exchanges the enrollment token once, saves its host credential to `$XD
 
 The operator token still works on host routes, so existing single-token setups keep working.
 
+## The `hexactra-fabric` CLI
+
+The Rust CLI for the fabric is `hexactra-fabric`, which drives sessions directly and administers the fabric. The user-facing `hexactra` CLI is the console's (`console/`).
+
+| Command | Does |
+|---|---|
+| `hexactra-fabric admin service-token-create NAME` | Mint an `hxs_` service token, e.g. for the console (needs the operator token; printed once) |
+| `hexactra-fabric admin service-token-list`, `service-token-revoke ID` | List (never the tokens) and revoke |
+| `hexactra-fabric admin enroll [--name N] [--ttl-minutes M]` | Single-use `hxe_` enrollment plus the `hexactra-agent daemon …` command |
+| `hexactra-fabric admin revoke-host ID` | Revoke a host's credential and remove it |
+
 ## Endpoints
 
 The full reference is [`api/openapi.yaml`](../api/openapi.yaml) (OpenAPI 3.1).
@@ -137,8 +148,8 @@ Host commands manage a host's profiles and browsers rather than act in a session
 - **Agent support.** Agents ask for commands with `commands=true` on their poll. An older agent never receives one, and the command times out with an error saying it did not run.
 - **Effects show at once.** A successful `create_profile` or `delete_profile` updates the host's `profiles` without waiting for its next poll.
 - **CLI:**
-  - `hexactra profile create|delete|close|restart NAME [--host ID]`. `delete` needs `--yes`.
-  - `hexactra host drain|undrain|commands HOST`.
+  - `hexactra-fabric profile create|delete|close|restart NAME [--host ID]`. `delete` needs `--yes`.
+  - `hexactra-fabric host drain|undrain|commands HOST`.
 
 ## Actions
 
@@ -174,7 +185,7 @@ Screenshots do not travel inside operation results. The control plane keeps the 
 - **Fetch:** `GET /v1/artifacts/{id}` (client token) returns the bytes with their `Content-Type` and `Cache-Control: no-store`.
 - **Lifetime:** handles last 15 minutes. The control plane keeps at most 256 MiB, dropping the oldest first. After that, or after a restart, the handle returns `404`. Artifacts are never written to disk.
 - **Migration flag:** send `"inline_artifacts": true` in the action body, or `?inline_artifacts=true`, to also get the base64 `data` as before.
-- **CLI and MCP** fetch the bytes by handle, so `hexactra screenshot -o file.jpg` and `browser_screenshot` work unchanged.
+- **CLI and MCP** fetch the bytes by handle, so `hexactra-fabric screenshot -o file.jpg` and `browser_screenshot` work unchanged.
 
 ## Operation states
 

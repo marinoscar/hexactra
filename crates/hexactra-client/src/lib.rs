@@ -336,6 +336,26 @@ impl ControlClient {
             .await
     }
 
+    /// List service tokens (operator only; never includes the tokens).
+    pub async fn list_service_tokens(&self) -> Result<serde_json::Value> {
+        self.http
+            .json(Method::GET, "v1/admin/service-tokens", NO_BODY, None)
+            .await
+    }
+
+    /// Revoke a service token (operator only).
+    pub async fn revoke_service_token(&self, id: Uuid) -> Result<()> {
+        self.http
+            .send(
+                Method::DELETE,
+                &format!("v1/admin/service-tokens/{id}"),
+                NO_BODY,
+                None,
+            )
+            .await?;
+        Ok(())
+    }
+
     // ------------------------------------------------------------ handoffs
 
     /// Pause a session for a human. The response carries the single-use

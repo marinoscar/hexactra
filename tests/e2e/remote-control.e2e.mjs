@@ -32,7 +32,7 @@ const fixtureDir = join(root, 'tests', 'e2e', 'remote-fixture');
 const chromium = process.env.CHROMIUM_PATH;
 const keep = process.env.HEXACTRA_E2E_KEEP === '1';
 
-for (const b of ['hexactra', 'hexactra-control', 'hexactra-agent', 'hexactra-native-host', 'hexactra-mcp']) {
+for (const b of ['hexactra-fabric', 'hexactra-control', 'hexactra-agent', 'hexactra-native-host', 'hexactra-mcp']) {
   if (!existsSync(join(binDir, b))) throw new Error(`missing binary ${join(binDir, b)}; run cargo build first`);
 }
 if (!existsSync(join(extensionDir, 'manifest.json'))) throw new Error('extension not built; run pnpm build');
@@ -121,7 +121,7 @@ const controlUrl = `http://127.0.0.1:${controlPort}`;
 function cli(...args) {
   return new Promise((resolve) => {
     execFile(
-      join(binDir, 'hexactra'),
+      join(binDir, 'hexactra-fabric'),
       ['--url', controlUrl, ...args],
       { env, encoding: 'utf8', timeout: 60_000 },
       (err, stdout, stderr) => {
@@ -134,7 +134,7 @@ function cli(...args) {
 
 async function ok(...args) {
   const r = await cli(...args);
-  assert.equal(r.code, 0, `hexactra ${args.join(' ')} failed:\n${r.err}${r.out}`);
+  assert.equal(r.code, 0, `hexactra-fabric ${args.join(' ')} failed:\n${r.err}${r.out}`);
   return r.out;
 }
 
@@ -645,6 +645,20 @@ try {
     assert.notEqual(refused.code, 0);
     assert.match(refused.err, /attaches to a Chrome you run yourself/);
     stop(attachAgent);
+  });
+  await step('hexactra-fabric admin mints and revokes service tokens and enrollments', async () => {
+    const token = (await ok('admin', 'service-token-create', 'e2e-console')).trim();
+    assert.match(token, /^hxs_/);
+    const listed = JSON.parse(await ok('--json', 'admin', 'service-token-list')).service_tokens;
+    const mine = listed.find((t) => t.name === 'e2e-console');
+    assert.ok(mine, JSON.stringify(listed));
+    assert.ok(!JSON.stringify(listed).includes(token), 'list must never include the token');
+    // The new token works for client routes.
+    assert.equal((await fetch(`${controlUrl}/v1/hosts`, { headers: { authorization: `Bearer ${token}` } })).status, 200);
+    await ok('admin', 'service-token-revoke', mine.id);
+    assert.equal((await fetch(`${controlUrl}/v1/hosts`, { headers: { authorization: `Bearer ${token}` } })).status, 401);
+    const enroll = await ok('admin', 'enroll', '--name', 'e2e-later');
+    assert.match(enroll, /^hexactra-agent daemon --url http:\/\/127\.0\.0\.1:\d+ --enrollment-token hxe_\S+ --name 'e2e-later'/);
   });
   await step('one OTLP trace spans the control plane and the agent', async () => {
     const traceId = crypto.randomBytes(16).toString('hex');

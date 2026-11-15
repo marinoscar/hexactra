@@ -1,16 +1,16 @@
-//! `hexactra`: drive a remote browser through the Hexactra control plane.
+//! `hexactra-fabric`: drive a remote browser through the Hexactra control plane.
 //!
 //! ```text
-//! hexactra status
-//! hexactra navigate https://example.test
-//! hexactra elements
-//! hexactra click 'a[href="/next"]'
-//! hexactra type '#q' 'hello' --submit
-//! hexactra screenshot -o page.jpg
+//! hexactra-fabric status
+//! hexactra-fabric navigate https://example.test
+//! hexactra-fabric elements
+//! hexactra-fabric click 'a[href="/next"]'
+//! hexactra-fabric type '#q' 'hello' --submit
+//! hexactra-fabric screenshot -o page.jpg
 //! ```
 //!
 //! Session selection: `--session`, then `HEXACTRA_SESSION`, then the session
-//! saved by the last `hexactra session create`; if none exists or it has
+//! saved by the last `hexactra-fabric session create`; if none exists or it has
 //! ended, a new session is created and saved.
 
 mod human;
@@ -29,7 +29,7 @@ use uuid::Uuid;
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "hexactra",
+    name = "hexactra-fabric",
     version,
     about = "Drive a remote browser through Hexactra"
 )]
@@ -76,6 +76,9 @@ enum Commands {
     /// Manage a host: drain it, list its commands.
     #[command(subcommand)]
     Host(HostCmd),
+    /// Fabric administration: service tokens and host enrollment.
+    #[command(subcommand)]
+    Admin(AdminCmd),
     /// Manage sessions.
     #[command(subcommand)]
     Session(SessionCmd),
@@ -191,7 +194,7 @@ enum Commands {
 #[derive(Subcommand, Debug)]
 enum ProfileCmd {
     /// List profiles per host (* = browser running). Create one with
-    /// `hexactra --profile NAME session create --create`.
+    /// `hexactra-fabric --profile NAME session create --create`.
     List,
     /// Create an empty (signed-out) profile on a launch-mode host.
     Create {
@@ -220,6 +223,28 @@ enum ProfileCmd {
         #[arg(long)]
         host: Option<Uuid>,
     },
+}
+
+#[derive(Subcommand, Debug)]
+enum AdminCmd {
+    /// Create a service token (hxs_…) for a client such as the console.
+    /// Needs the operator token. The token is printed once.
+    ServiceTokenCreate { name: String },
+    /// List service tokens (never the tokens themselves).
+    ServiceTokenList,
+    /// Revoke a service token.
+    ServiceTokenRevoke { id: Uuid },
+    /// Create a single-use host enrollment token (hxe_…) and print the agent command.
+    Enroll {
+        /// Name for the new host.
+        #[arg(long)]
+        name: Option<String>,
+        /// Minutes the token stays valid (default 60).
+        #[arg(long)]
+        ttl_minutes: Option<u64>,
+    },
+    /// Revoke a host's credential and remove it (its sessions end).
+    RevokeHost { id: Uuid },
 }
 
 #[derive(Subcommand, Debug)]
@@ -424,8 +449,8 @@ async fn resolve_session(cli: &Cli, client: &ControlClient) -> Result<Uuid> {
     {
         Ok(s) => s,
         Err(e) if e.to_string().contains("profile_not_found") => bail!(
-            "no host has a profile named {profile:?}. List profiles with `hexactra profile list`, \
-             or create it with `hexactra --profile {profile} session create --create`"
+            "no host has a profile named {profile:?}. List profiles with `hexactra-fabric profile list`, \
+             or create it with `hexactra-fabric --profile {profile} session create --create`"
         ),
         Err(e) => return Err(e).context("creating a session"),
     };
@@ -482,7 +507,7 @@ async fn main() {
 async fn run() -> Result<()> {
     let cli = Cli::parse();
     if let Commands::Version = cli.command {
-        println!("hexactra-cli {}", env!("CARGO_PKG_VERSION"));
+        println!("hexactra-fabric {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
     let client = ControlClient::new(&cli.control_url, &read_token(&cli.token_file)?)?;
@@ -601,6 +626,61 @@ async fn run() -> Result<()> {
                     c.state,
                     c.error.unwrap_or_default()
                 );
+            }
+            return Ok(());
+        }
+        Commands::Admin(cmd) => {
+            match cmd {
+                AdminCmd::ServiceTokenCreate { name } => {
+                    let v = client.create_service_token(name).await?;
+                    if cli.json {
+                        return print_json(&v);
+                    }
+                    println!("{}", v["token"].as_str().unwrap_or_default());
+                    eprintln!("(shown once; store it as the client's service token)");
+                }
+                AdminCmd::ServiceTokenList => {
+                    let v = client.list_service_tokens().await?;
+                    if cli.json {
+                        return print_json(&v);
+                    }
+                    for t in v["service_tokens"].as_array().into_iter().flatten() {
+                        println!(
+                            "{}\t{}\t{}",
+                            t["id"].as_str().unwrap_or_default(),
+                            t["name"].as_str().unwrap_or_default(),
+                            t["created_at"].as_str().unwrap_or_default()
+                        );
+                    }
+                }
+                AdminCmd::ServiceTokenRevoke { id } => {
+                    client.revoke_service_token(*id).await?;
+                    println!("revoked");
+                }
+                AdminCmd::Enroll { name, ttl_minutes } => {
+                    let v = client
+                        .create_enrollment(
+                            name.as_deref(),
+                            ttl_minutes.map(|m| std::time::Duration::from_secs(m * 60)),
+                        )
+                        .await?;
+                    if cli.json {
+                        return print_json(&v);
+                    }
+                    let token = v["enrollment_token"].as_str().unwrap_or_default();
+                    let mut cmdline = format!(
+                        "hexactra-agent daemon --url {} --enrollment-token {token}",
+                        cli.control_url
+                    );
+                    if let Some(n) = name {
+                        cmdline.push_str(&format!(" --name '{}'", n.replace('\'', "")));
+                    }
+                    println!("{cmdline}");
+                }
+                AdminCmd::RevokeHost { id } => {
+                    client.revoke_host(*id).await?;
+                    println!("revoked");
+                }
             }
             return Ok(());
         }
