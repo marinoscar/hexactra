@@ -35,7 +35,7 @@ Re-running the same command updates it in place. Before it builds, it prints the
 Check it:
 
 ```bash
-hexactra --version     # 0.1.1 (platform 0.1.0-next.33)
+hexactra --version     # 0.1.2 (platform 0.1.0-next.34)
 hexactra --help
 ```
 
