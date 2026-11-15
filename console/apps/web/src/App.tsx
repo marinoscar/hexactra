@@ -18,6 +18,7 @@ import { registerSettingsFeature, useSettingsFeatures } from '@marinoscar/platfo
 import { SettingsHub, type SettingsHubProps } from '@marinoscar/platform-web/settings/ui';
 import { FactoryResetPage, OffboardOrganizationButton, UserDangerZonePage, factoryResetSettingsPage } from '@marinoscar/platform-web/user-data/ui';
 import { ShellProviders, type ShellProvider } from '@marinoscar/platform-web/shell/headless';
+import { InstallPrompt } from '@marinoscar/platform-web/host/ui';
 import { ShellAppBar, ShellLayout, ShellUserMenu } from '@marinoscar/platform-web/shell/ui';
 import { UserTimeZoneSync } from '@marinoscar/platform-web/timezone/headless';
 import type { ReactElement } from 'react';
@@ -29,7 +30,7 @@ import { USER_SETTINGS_SECTIONS } from './config/userSettingsSections';
 import { WebhooksPage } from '@marinoscar/platform-web/webhooks/ui';
 import { AlertsPage } from '@marinoscar/platform-web/alerts/ui';
 
-import { BrandLogo } from './components/BrandLogo';
+import { BrandLogo, BrandMark } from './components/BrandLogo';
 import { ALERTS_ENABLED, WEBHOOKS_ENABLED } from './config/userSettingsSections';
 import { FabricConnectionPage } from './pages/FabricConnectionPage';
 import { FleetPage } from './pages/FleetPage';
@@ -113,7 +114,13 @@ function AppShell() {
         />
       }
       banners={<Slot components={sliceBanners} />}
-      overlays={<Slot components={sliceOverlays} />}
+      overlays={
+        <>
+          <Slot components={sliceOverlays} />
+          {/* The PWA install offer (Chrome and Edge fire beforeinstallprompt; it stays hidden once installed). */}
+          <InstallPrompt appName={APP_NAME} icon={<BrandMark size={32} />} />
+        </>
+      }
     >
       {/* Slice pages are lazy: the shell stays mounted while one loads. */}
       <Suspense fallback={spinner}>
