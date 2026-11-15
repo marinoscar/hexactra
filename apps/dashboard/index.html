@@ -3,7 +3,69 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hexactra Dashboard</title>
+    <meta name="theme-color" content="#4b4be8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>hexactra dashboard</title>
+    <style>
+      /* hexactra brand tokens (docs/brand/README.md); dark follows the system setting. */
+      :root {
+        color-scheme: light dark;
+        --hx-primary: #4b4be8;
+        --hx-on-primary: #ffffff;
+        --hx-accent: #ff6b4a;
+        --hx-danger: #c2412a;
+        --hx-on-danger: #ffffff;
+        --hx-bg: #f6f6fb;
+        --hx-surface: #ffffff;
+        --hx-surface-2: #eeeef6;
+        --hx-surface-2-hover: #e3e4ef;
+        --hx-selected: #e4e4fb;
+        --hx-text: #12131c;
+        --hx-muted: #5a5e72;
+        --hx-border: #e3e4ef;
+        --hx-warn-bg: #ffe3db;
+        --hx-warn-text: #8a2a12;
+        --hx-ok-bg: #dff3e6;
+        --hx-ok-text: #1d6a3a;
+        --hx-focus: rgba(75, 75, 232, 0.25);
+        --hx-display: 'Space Grotesk', 'Inter', 'Helvetica Neue', Arial, sans-serif;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --hx-primary: #8c8cff;
+          --hx-on-primary: #0d0e17;
+          --hx-accent: #ff8a6e;
+          --hx-danger: #ff8a6e;
+          --hx-on-danger: #0d0e17;
+          --hx-bg: #0d0e17;
+          --hx-surface: #181a28;
+          --hx-surface-2: #23263a;
+          --hx-surface-2-hover: #2e3149;
+          --hx-selected: #23236b;
+          --hx-text: #ecedf7;
+          --hx-muted: #a3a7bd;
+          --hx-border: #2a2d42;
+          --hx-warn-bg: #4a1d12;
+          --hx-warn-text: #ffd2c6;
+          --hx-ok-bg: #133a24;
+          --hx-ok-text: #bfeccf;
+          --hx-focus: rgba(140, 140, 255, 0.35);
+        }
+      }
+      body {
+        margin: 0;
+        background: var(--hx-bg);
+        color: var(--hx-text);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Ubuntu, sans-serif;
+      }
+      .app-header { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--hx-border); background: var(--hx-surface); }
+      .app-header .trace { stroke: var(--hx-primary); }
+      .app-header .start { fill: var(--hx-accent); }
+      .app-header h1 { margin: 0; font-family: var(--hx-display); font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+      .nav { padding: 12px 20px 0; }
+      .nav a { color: var(--hx-primary); font-weight: 600; text-decoration: none; }
+      .nav a:hover { text-decoration: underline; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
