@@ -151,3 +151,23 @@ describe('hexactra tasks and runs', () => {
     expect(runOut).toContain('result: $120');
   });
 });
+
+describe('RunsScreen', () => {
+  it('lists runs, opens one, and cancels it with c', async () => {
+    const { RunsScreen } = await import('./runs.screen.js');
+    const R = '55555555-5555-4555-8555-555555555555';
+    const calls = fakeApi({
+      'GET /runs': [{ id: R, status: 'running', goal: 'Find a fare', stepCount: 2 }],
+      [`GET /runs/${R}`]: { id: R, status: 'running', goal: 'Find a fare', stepCount: 2, steps: [{ seq: 1, kind: 'action', action: 'navigate', ok: true, summary: 'at https://f.example.test/' }] },
+      [`POST /runs/${R}/cancel`]: { id: R, status: 'running', cancelRequested: true },
+    });
+    const screen = await renderTuiScreen(RunsScreen, { columns: 100 });
+    await screen.waitForFrame((f) => stripAnsi(f).includes('running'));
+    await screen.press('enter');
+    await screen.waitForFrame((f) => stripAnsi(f).includes('1. navigate: at https://f.example.test/'));
+    await screen.press('c');
+    await screen.waitForFrame((f) => stripAnsi(f).includes('cancel requested'));
+    expect(calls.some((c) => c.method === 'POST' && c.path === `/runs/${R}/cancel`)).toBe(true);
+    screen.unmount();
+  });
+});

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Chip, Container, List, ListItemButton, ListItemText, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, Container, List, ListItemButton, ListItemText, Paper, Stack, Typography } from '@mui/material';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
+
+import { fetchRunScreenshot, subscribeRun } from '../live';
 
 export type RunStatus = 'queued' | 'running' | 'waiting_human' | 'succeeded' | 'failed' | 'cancelled';
 
@@ -87,12 +89,26 @@ export function RunsPage() {
   );
 }
 
-/** `/runs/:id`: one run, its steps, and cancel. Refreshes while it is live. */
+/** Where a person can watch and take over the run's browser. */
+interface RunViewer {
+  hostName: string | null;
+  viewerUrl: string | null;
+  local: boolean;
+}
+
+/**
+ * `/runs/:id`: one run, live. Steps and status arrive over the run's event
+ * stream; while the run is live, the browser's screenshot refreshes every
+ * 2 s and the viewer link lets a person take over.
+ */
 export function RunDetailPage() {
   const { api, viewer } = usePlatformHost();
   const { id } = useParams<{ id: string }>();
   const [run, setRun] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [shot, setShot] = useState<string | null>(null);
+  const [watch, setWatch] = useState(true);
+  const [where, setWhere] = useState<RunViewer | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -105,11 +121,65 @@ export function RunDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const isLive = run ? live(run.status) : false;
+
+  // Live updates over SSE: a reconnect refetches, a step appends, a run event merges.
   useEffect(() => {
-    if (!run || !live(run.status)) return;
-    const t = setInterval(() => void load(), 2_000);
-    return () => clearInterval(t);
-  }, [run, load]);
+    if (!id || !isLive) return;
+    return subscribeRun(id, (e) => {
+      if (e.type === 'open') return void load();
+      if (e.type === 'step') {
+        const step = e.data as RunStep;
+        setRun((r) => (r && !(r.steps ?? []).some((s) => s.seq === step.seq) ? { ...r, steps: [...(r.steps ?? []), step], stepCount: Math.max(r.stepCount, step.seq) } : r));
+      }
+      if (e.type === 'run') setRun((r) => (r ? { ...r, ...(e.data as Partial<Run>) } : r));
+    });
+  }, [id, isLive, load]);
+
+  // The browser, every 2 s while watching a live run.
+  useEffect(() => {
+    if (!id || !isLive || !watch) return;
+    let stopped = false;
+    let current: string | null = null;
+    const next = async () => {
+      const url = await fetchRunScreenshot(id).catch(() => null);
+      if (stopped) {
+        if (url) URL.revokeObjectURL(url);
+        return;
+      }
+      if (url) {
+        if (current) URL.revokeObjectURL(current);
+        current = url;
+        setShot(url);
+      }
+      timer = setTimeout(() => void next(), 2_000);
+    };
+    let timer = setTimeout(() => void next(), 0);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      if (current) URL.revokeObjectURL(current);
+    };
+  }, [id, isLive, watch]);
+
+  useEffect(() => {
+    if (!id || !isLive) return;
+    void api.get<RunViewer>(`/runs/${id}/viewer`).then(setWhere).catch(() => setWhere(null));
+  }, [api, id, isLive]);
+
+  const takeOver = async () => {
+    if (!where?.viewerUrl) return;
+    if (!where.local) return void window.open(where.viewerUrl, '_blank', 'noopener');
+    const tab = window.open('', '_blank');
+    try {
+      const { url } = await api.post<{ url: string }>('/fleet/viewer-ticket', {});
+      if (tab) tab.location.href = url;
+    } catch (e) {
+      tab?.close();
+      setError(e instanceof Error ? e.message : 'Could not open the viewer');
+    }
+  };
 
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!run) return null;
@@ -126,11 +196,26 @@ export function RunDetailPage() {
       </Typography>
       {run.result && <Alert severity={run.status === 'succeeded' ? 'success' : 'info'} sx={{ my: 2 }}>{run.result}</Alert>}
       {run.error && <Alert severity="error" sx={{ my: 2 }}>{run.error}</Alert>}
-      {run.status === 'waiting_human' && <Alert severity="warning" sx={{ my: 2 }}>The agent is waiting for you. Answer the request it sent you.</Alert>}
-      {live(run.status) && viewer.hasPermission('runs:write') && (
-        <Button color="error" variant="outlined" disabled={run.cancelRequested} onClick={() => void api.post(`/runs/${run.id}/cancel`, {}).then(load)} sx={{ mb: 2 }}>
-          {run.cancelRequested ? 'Cancelling…' : 'Cancel run'}
-        </Button>
+      {run.status === 'waiting_human' && <Alert severity="warning" sx={{ my: 2 }}>The agent is waiting for you. Answer its request in the Inbox.</Alert>}
+      {isLive && (
+        <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
+          {viewer.hasPermission('runs:write') && (
+            <Button color="error" variant="outlined" disabled={run.cancelRequested} onClick={() => void api.post(`/runs/${run.id}/cancel`, {}).then(load)}>
+              {run.cancelRequested ? 'Cancelling…' : 'Cancel run'}
+            </Button>
+          )}
+          <Button variant="outlined" onClick={() => setWatch((w) => !w)}>
+            {watch ? 'Stop watching' : 'Watch the browser'}
+          </Button>
+          {where?.viewerUrl && (!where.local || viewer.hasPermission('fleet:write')) && (
+            <Button variant="outlined" onClick={() => void takeOver()}>
+              Take over{where.hostName ? ` on ${where.hostName}` : ''}
+            </Button>
+          )}
+        </Stack>
+      )}
+      {isLive && watch && shot && (
+        <Box component="img" src={shot} alt="The run's browser, live" sx={{ width: '100%', borderRadius: 1, border: 1, borderColor: 'divider', mb: 2 }} />
       )}
       <Paper variant="outlined">
         <List aria-label="Steps" dense>
