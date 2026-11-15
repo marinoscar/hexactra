@@ -15,7 +15,9 @@ use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
-use hexactra_core::remote::{valid_profile_name, OperationResult, RemoteAction, DEFAULT_PROFILE};
+use hexactra_core::remote::{
+    valid_profile_name, HostCommand, OperationResult, RemoteAction, DEFAULT_PROFILE,
+};
 use tokio::sync::Mutex;
 use tokio::time::Instant;
 use uuid::Uuid;
@@ -241,6 +243,94 @@ impl BrowserPool {
             .await
     }
 
+    /// Run a host command (#213). `drain` is handled by the control plane.
+    pub async fn run_command(
+        &self,
+        command: &HostCommand,
+        deadline: DateTime<Utc>,
+    ) -> OperationResult {
+        if let Err(e) = command.validate() {
+            return failure(e.0);
+        }
+        let left = (deadline - Utc::now()).to_std().unwrap_or(Duration::ZERO);
+        let r = match command {
+            HostCommand::CreateProfile { profile } => self.create_profile(profile),
+            HostCommand::DeleteProfile { profile } => self.delete_profile(profile, left).await,
+            HostCommand::RestartBrowser { profile } => self.restart_browser(profile, left).await,
+            HostCommand::CloseBrowser { profile } => self.close_browser(profile, left).await,
+            HostCommand::Drain { .. } => Ok(serde_json::json!({})),
+        };
+        match r {
+            Ok(v) => OperationResult {
+                ok: true,
+                result: Some(v),
+                error: None,
+            },
+            Err(e) => failure(format!("{}: {e:#}", command.kind())),
+        }
+    }
+
+    fn exists(&self, name: &str) -> bool {
+        name == DEFAULT_PROFILE || self.profile_dir(name).is_dir()
+    }
+
+    /// Create an empty profile directory.
+    pub fn create_profile(&self, name: &str) -> Result<serde_json::Value> {
+        let dir = self.profile_dir(name);
+        let created = !dir.exists();
+        std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+        Ok(serde_json::json!({ "profile": name, "created": created }))
+    }
+
+    /// Close a profile's browser, waiting (up to `wait`) for a running action.
+    pub async fn close_browser(&self, name: &str, wait: Duration) -> Result<serde_json::Value> {
+        if !self.exists(name) {
+            bail!("profile {name:?} not found on this host");
+        }
+        let entry = self
+            .entries
+            .lock()
+            .await
+            .get(name)
+            .map(|e| (e.launcher.clone(), e.busy.clone()));
+        let Some((launcher, busy)) = entry else {
+            return Ok(serde_json::json!({ "profile": name, "closed": false }));
+        };
+        let _busy = tokio::time::timeout(wait, busy.lock())
+            .await
+            .map_err(|_| anyhow::anyhow!("the browser is busy with an action; try again"))?;
+        let was_running = launcher.is_running().await;
+        launcher.shutdown().await;
+        Ok(serde_json::json!({ "profile": name, "closed": was_running }))
+    }
+
+    /// Close a profile's browser and start it again.
+    pub async fn restart_browser(&self, name: &str, wait: Duration) -> Result<serde_json::Value> {
+        let start = Instant::now();
+        self.close_browser(name, wait).await?;
+        let left = wait
+            .saturating_sub(start.elapsed())
+            .max(Duration::from_secs(5));
+        self.start(name, left).await?;
+        Ok(serde_json::json!({ "profile": name, "running": true }))
+    }
+
+    /// Close a profile's browser and delete its directory.
+    pub async fn delete_profile(&self, name: &str, wait: Duration) -> Result<serde_json::Value> {
+        if name == DEFAULT_PROFILE {
+            bail!("the default profile cannot be deleted");
+        }
+        if !self.exists(name) {
+            bail!("profile {name:?} not found on this host");
+        }
+        self.close_browser(name, wait).await?;
+        self.entries.lock().await.remove(name);
+        let dir = self.profile_dir(name);
+        std::fs::remove_dir_all(&dir).with_context(|| format!("removing {}", dir.display()))?;
+        let _ = std::fs::remove_file(self.cfg.socket_dir.join(format!("bridge-{name}.sock")));
+        Ok(serde_json::json!({ "profile": name, "deleted": true }))
+    }
+
     /// Close every browser (in parallel).
     pub async fn shutdown(&self) {
         let launchers: Vec<_> = self
@@ -386,6 +476,84 @@ mod tests {
         assert!(old.exists());
         assert!(profiles.join("default/Default/Cookies").exists());
         migrate_single_profile(None, &profiles).unwrap();
+    }
+
+    #[tokio::test]
+    async fn host_commands_manage_profiles_and_browsers() {
+        if !python_available() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let p = pool(dir.path(), 2);
+        let deadline = || Utc::now() + chrono::Duration::seconds(15);
+        let run = |c: HostCommand| {
+            let p = p.clone();
+            async move { p.run_command(&c, deadline()).await }
+        };
+        let r = run(HostCommand::CreateProfile {
+            profile: "travel".into(),
+        })
+        .await;
+        assert!(r.ok, "{:?}", r.error);
+        assert_eq!(r.result.unwrap()["created"], true);
+        assert_eq!(p.profiles(), vec!["default", "travel"]);
+
+        // Restart starts the browser (a second launch after an action).
+        act(&p, "travel").await;
+        let r = run(HostCommand::RestartBrowser {
+            profile: "travel".into(),
+        })
+        .await;
+        assert!(r.ok, "{:?}", r.error);
+        assert_eq!(p.running().await, vec!["travel"]);
+        assert_eq!(act(&p, "travel").await["launches"], 2);
+
+        let r = run(HostCommand::CloseBrowser {
+            profile: "travel".into(),
+        })
+        .await;
+        assert!(r.ok && r.result.unwrap()["closed"] == true);
+        assert!(p.running().await.is_empty());
+
+        let r = run(HostCommand::DeleteProfile {
+            profile: "travel".into(),
+        })
+        .await;
+        assert!(r.ok, "{:?}", r.error);
+        assert_eq!(p.profiles(), vec!["default"]);
+        assert!(!dir.path().join("profiles/travel").exists());
+
+        for (c, msg) in [
+            (
+                HostCommand::DeleteProfile {
+                    profile: "travel".into(),
+                },
+                "not found",
+            ),
+            (
+                HostCommand::DeleteProfile {
+                    profile: "default".into(),
+                },
+                "default profile",
+            ),
+            (
+                HostCommand::CloseBrowser {
+                    profile: "nope".into(),
+                },
+                "not found",
+            ),
+            (
+                HostCommand::CreateProfile {
+                    profile: "../x".into(),
+                },
+                "invalid profile",
+            ),
+        ] {
+            let r = run(c).await;
+            assert!(!r.ok);
+            assert!(r.error.as_deref().unwrap().contains(msg), "{:?}", r.error);
+        }
+        p.shutdown().await;
     }
 
     #[tokio::test]

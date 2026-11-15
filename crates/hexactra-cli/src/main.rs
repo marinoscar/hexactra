@@ -23,7 +23,8 @@ use base64::Engine;
 use clap::{Parser, Subcommand};
 use hexactra_client::ControlClient;
 use hexactra_core::remote::{
-    CreateSessionRequest, OperationState, OperationView, RemoteAction, RemoteSessionStatus,
+    CreateSessionRequest, HostCommand, HostCommandRequest, OperationState, OperationView,
+    RemoteAction, RemoteSessionStatus,
 };
 use uuid::Uuid;
 
@@ -73,6 +74,9 @@ enum Commands {
     /// Browser profiles on the hosts.
     #[command(subcommand)]
     Profile(ProfileCmd),
+    /// Manage a host: drain it, list its commands.
+    #[command(subcommand)]
+    Host(HostCmd),
     /// Manage sessions.
     #[command(subcommand)]
     Session(SessionCmd),
@@ -190,6 +194,120 @@ enum ProfileCmd {
     /// List profiles per host (* = browser running). Create one with
     /// `hexactra --profile NAME session create --create`.
     List,
+    /// Create an empty (signed-out) profile on a launch-mode host.
+    Create {
+        name: String,
+        #[arg(long)]
+        host: Option<Uuid>,
+    },
+    /// Close the profile's browser and delete the profile (its cookies and
+    /// sign-ins). Needs --yes.
+    Delete {
+        name: String,
+        #[arg(long)]
+        host: Option<Uuid>,
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Close the profile's browser (it starts again on the next action).
+    Close {
+        name: String,
+        #[arg(long)]
+        host: Option<Uuid>,
+    },
+    /// Close the profile's browser and start it again.
+    Restart {
+        name: String,
+        #[arg(long)]
+        host: Option<Uuid>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum HostCmd {
+    /// Stop placing new sessions on a host (existing sessions keep working).
+    Drain { host: Uuid },
+    /// Place new sessions on a drained host again.
+    Undrain { host: Uuid },
+    /// Recent commands sent to a host.
+    Commands { host: Uuid },
+}
+
+/// Pick the host for a profile command: the one given, else the only
+/// online host that has the profile (or, to create one, the only online
+/// launch-mode host).
+async fn pick_host(
+    client: &ControlClient,
+    host: Option<Uuid>,
+    profile: &str,
+    creating: bool,
+) -> anyhow::Result<Uuid> {
+    if let Some(h) = host {
+        return Ok(h);
+    }
+    let hosts = client.hosts().await?;
+    let candidates: Vec<_> = hosts
+        .iter()
+        .filter(|h| h.online)
+        .filter(|h| {
+            if creating {
+                h.on_demand
+            } else {
+                h.profiles.iter().any(|p| p == profile)
+            }
+        })
+        .collect();
+    match candidates.as_slice() {
+        [one] => Ok(one.id),
+        [] => anyhow::bail!(
+            "no online host {}; pass --host",
+            if creating {
+                "launches browsers (launch mode)".to_string()
+            } else {
+                format!("has profile {profile:?}")
+            }
+        ),
+        _ => anyhow::bail!(
+            "several hosts match: {}; pass --host",
+            candidates
+                .iter()
+                .map(|h| format!("{} ({})", h.name, h.id))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
+}
+
+async fn host_command(
+    client: &ControlClient,
+    host: Uuid,
+    command: HostCommand,
+    timeout_ms: u64,
+    json: bool,
+) -> anyhow::Result<()> {
+    let v = client
+        .host_command(
+            host,
+            &HostCommandRequest {
+                command,
+                timeout_ms: Some(timeout_ms.max(60_000)),
+            },
+        )
+        .await?;
+    if json {
+        print_json(&v)?;
+    } else if v.state == OperationState::Succeeded {
+        println!("{} done", v.command.kind());
+    }
+    if v.state != OperationState::Succeeded {
+        anyhow::bail!(
+            "{} {:?}: {}",
+            v.command.kind(),
+            v.state,
+            v.error.unwrap_or_default()
+        );
+    }
+    Ok(())
 }
 
 #[derive(Subcommand, Debug)]
@@ -389,12 +507,13 @@ async fn run() -> Result<()> {
             }
             for h in hosts {
                 println!(
-                    "host {} {:<20} online={} browser={} on_demand={}{}",
+                    "host {} {:<20} online={} browser={} on_demand={}{}{}",
                     h.id,
                     h.name,
                     h.online,
                     h.browser_connected,
                     h.on_demand,
+                    if h.draining { " draining" } else { "" },
                     h.viewer_url
                         .as_deref()
                         .map(|u| format!(" viewer={u}"))
@@ -424,6 +543,64 @@ async fn run() -> Result<()> {
                     h.name,
                     if h.online { "online" } else { "offline" },
                     profile_summary(&h)
+                );
+            }
+            return Ok(());
+        }
+        Commands::Profile(ProfileCmd::Create { name, host }) => {
+            let h = pick_host(&client, *host, name, true).await?;
+            let c = HostCommand::CreateProfile {
+                profile: name.clone(),
+            };
+            return host_command(&client, h, c, cli.timeout_ms, cli.json).await;
+        }
+        Commands::Profile(ProfileCmd::Delete { name, host, yes }) => {
+            if !yes {
+                anyhow::bail!(
+                    "deleting profile {name:?} removes its cookies and sign-ins; pass --yes"
+                );
+            }
+            let h = pick_host(&client, *host, name, false).await?;
+            let c = HostCommand::DeleteProfile {
+                profile: name.clone(),
+            };
+            return host_command(&client, h, c, cli.timeout_ms, cli.json).await;
+        }
+        Commands::Profile(ProfileCmd::Close { name, host }) => {
+            let h = pick_host(&client, *host, name, false).await?;
+            let c = HostCommand::CloseBrowser {
+                profile: name.clone(),
+            };
+            return host_command(&client, h, c, cli.timeout_ms, cli.json).await;
+        }
+        Commands::Profile(ProfileCmd::Restart { name, host }) => {
+            let h = pick_host(&client, *host, name, false).await?;
+            let c = HostCommand::RestartBrowser {
+                profile: name.clone(),
+            };
+            return host_command(&client, h, c, cli.timeout_ms, cli.json).await;
+        }
+        Commands::Host(HostCmd::Drain { host }) => {
+            let c = HostCommand::Drain { enabled: true };
+            return host_command(&client, *host, c, cli.timeout_ms, cli.json).await;
+        }
+        Commands::Host(HostCmd::Undrain { host }) => {
+            let c = HostCommand::Drain { enabled: false };
+            return host_command(&client, *host, c, cli.timeout_ms, cli.json).await;
+        }
+        Commands::Host(HostCmd::Commands { host }) => {
+            let list = client.host_commands(*host).await?;
+            if cli.json {
+                return print_json(&list);
+            }
+            for c in list {
+                println!(
+                    "{}\t{}\t{}\t{:?}\t{}",
+                    c.created_at.format("%Y-%m-%d %H:%M:%S"),
+                    c.command.kind(),
+                    c.command.profile().unwrap_or("-"),
+                    c.state,
+                    c.error.unwrap_or_default()
                 );
             }
             return Ok(());

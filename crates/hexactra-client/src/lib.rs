@@ -7,9 +7,10 @@ use std::time::Duration;
 
 use hexactra_core::remote::{
     ActionRequest, ApiError, ClaimedHandoffValue, CreateHandoffRequest, CreateHandoffResponse,
-    CreateSessionRequest, CreateWebhookRequest, CreatedWebhook, DispatchedOperation, HandoffView,
-    HostView, OperationResult, OperationView, RegisterHostRequest, RegisterHostResponse,
-    RemoteAction, RespondHandoffRequest, SessionView, WebhookDelivery, WebhookView,
+    CreateSessionRequest, CreateWebhookRequest, CreatedWebhook, HandoffView, HostCommandRequest,
+    HostCommandView, HostView, HostWork, OperationResult, OperationView, RegisterHostRequest,
+    RegisterHostResponse, RemoteAction, RespondHandoffRequest, SessionView, WebhookDelivery,
+    WebhookView,
 };
 use reqwest::{Method, StatusCode};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -168,6 +169,45 @@ impl ControlClient {
             .json(Method::GET, "v1/sessions", NO_BODY, None)
             .await?;
         Ok(s.sessions)
+    }
+
+    /// Run a host command (#213) and wait for its result (bounded by the
+    /// request's timeout).
+    pub async fn host_command(
+        &self,
+        host_id: Uuid,
+        req: &HostCommandRequest,
+    ) -> Result<HostCommandView> {
+        let wait = Duration::from_millis(
+            req.timeout_ms
+                .unwrap_or(hexactra_core::remote::DEFAULT_HOST_COMMAND_TIMEOUT_MS),
+        ) + Duration::from_secs(10);
+        self.http
+            .json(
+                Method::POST,
+                &format!("v1/hosts/{host_id}/commands"),
+                Some(req),
+                Some(wait),
+            )
+            .await
+    }
+
+    /// Recent commands for a host, newest first.
+    pub async fn host_commands(&self, host_id: Uuid) -> Result<Vec<HostCommandView>> {
+        #[derive(Deserialize)]
+        struct List {
+            commands: Vec<HostCommandView>,
+        }
+        let l: List = self
+            .http
+            .json(
+                Method::GET,
+                &format!("v1/hosts/{host_id}/commands"),
+                NO_BODY,
+                None,
+            )
+            .await?;
+        Ok(l.commands)
     }
 
     pub async fn create_session(&self, req: &CreateSessionRequest) -> Result<SessionView> {
@@ -422,6 +462,8 @@ pub struct HostPollStatus {
     pub on_demand: bool,
     /// `(profiles the host has, profiles running now)`.
     pub profiles: Option<(Vec<String>, Vec<String>)>,
+    /// The agent runs host commands (#213); the poll may then return one.
+    pub accepts_commands: bool,
 }
 
 /// Client used by a host agent.
@@ -492,7 +534,7 @@ impl HostClient {
         host_id: Uuid,
         browser_connected: bool,
         wait: Duration,
-    ) -> Result<Option<DispatchedOperation>> {
+    ) -> Result<Option<hexactra_core::remote::DispatchedOperation>> {
         self.next_with(host_id, browser_connected, false, wait)
             .await
     }
@@ -504,17 +546,22 @@ impl HostClient {
         browser_connected: bool,
         on_demand: bool,
         wait: Duration,
-    ) -> Result<Option<DispatchedOperation>> {
+    ) -> Result<Option<hexactra_core::remote::DispatchedOperation>> {
         self.poll(
             host_id,
             &HostPollStatus {
                 browser_connected,
                 on_demand,
                 profiles: None,
+                accepts_commands: false,
             },
             wait,
         )
         .await
+        .map(|w| match w {
+            Some(HostWork::Operation(op)) => Some(op),
+            _ => None,
+        })
     }
 
     /// Long-poll with the host's full status.
@@ -523,12 +570,13 @@ impl HostClient {
         host_id: Uuid,
         status: &HostPollStatus,
         wait: Duration,
-    ) -> Result<Option<DispatchedOperation>> {
+    ) -> Result<Option<HostWork>> {
         let mut path = format!(
-            "v1/hosts/{host_id}/next?wait_ms={}&browser_connected={}&on_demand={}",
+            "v1/hosts/{host_id}/next?wait_ms={}&browser_connected={}&on_demand={}&commands={}",
             wait.as_millis(),
             status.browser_connected,
             status.on_demand,
+            status.accepts_commands,
         );
         if let Some((profiles, running)) = &status.profiles {
             // Profile names are [a-z0-9_-], so they need no escaping.
@@ -551,6 +599,24 @@ impl HostClient {
             return Ok(None);
         }
         Ok(Some(resp.json().await?))
+    }
+
+    /// Report a host command's result.
+    pub async fn report_command(
+        &self,
+        host_id: Uuid,
+        command_id: Uuid,
+        result: &OperationResult,
+    ) -> Result<()> {
+        self.http
+            .send(
+                Method::POST,
+                &format!("v1/hosts/{host_id}/commands/{command_id}/result"),
+                Some(result),
+                None,
+            )
+            .await?;
+        Ok(())
     }
 
     pub async fn report(&self, host_id: Uuid, op_id: Uuid, result: &OperationResult) -> Result<()> {

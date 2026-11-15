@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use hexactra_core::remote::{
-    valid_profile_name, DispatchedOperation, HostView, OperationResult, OperationState,
+    valid_profile_name, DispatchedOperation, HostView, HostWork, OperationResult, OperationState,
     OperationView, RemoteAction, RemoteSessionStatus, SessionView, DEFAULT_PROFILE,
 };
 use serde::{Deserialize, Serialize};
@@ -58,10 +58,15 @@ pub(super) struct HostEntry {
     pub(super) viewer_url: Option<String>,
     /// Profiles the host reported; empty means a host that only knows the
     /// default profile (older agents).
-    profiles: Vec<String>,
-    running_profiles: Vec<String>,
+    pub(super) profiles: Vec<String>,
+    pub(super) running_profiles: Vec<String>,
     queue: VecDeque<Uuid>,
-    notify: Arc<Notify>,
+    pub(super) notify: Arc<Notify>,
+    /// No new sessions are placed here (#213).
+    pub(super) draining: bool,
+    /// The agent polls with `commands=true` and can run host commands.
+    pub(super) accepts_commands: bool,
+    pub(super) command_queue: VecDeque<Uuid>,
 }
 
 struct OperationEntry {
@@ -76,6 +81,7 @@ pub(super) struct Inner {
     pub(super) sessions: HashMap<Uuid, SessionView>,
     operations: HashMap<Uuid, OperationEntry>,
     pub(super) handoffs: HashMap<Uuid, HandoffEntry>,
+    pub(super) commands: HashMap<Uuid, super::host_commands::CommandEntry>,
 }
 
 /// A host as persisted (no queue, no connection state).
@@ -88,6 +94,8 @@ pub(crate) struct HostRecord {
     pub on_demand: bool,
     pub viewer_url: Option<String>,
     pub profiles: Vec<String>,
+    #[serde(default)]
+    pub draining: bool,
 }
 
 /// Everything the store persists (#211). Operations are not persisted:
@@ -152,6 +160,7 @@ fn host_view(id: Uuid, h: &HostEntry, now: DateTime<Utc>) -> HostView {
         viewer_url: h.viewer_url.clone(),
         profiles: h.known_profiles(),
         running_profiles: h.running_profiles.clone(),
+        draining: h.draining,
         last_seen: h.last_seen,
     }
 }
@@ -190,6 +199,7 @@ impl RuntimeStore {
                 on_demand: h.on_demand,
                 viewer_url: h.viewer_url.clone(),
                 profiles: h.profiles.clone(),
+                draining: h.draining,
             })
             .collect();
         hosts.sort_by_key(|h| h.id);
@@ -230,6 +240,9 @@ impl RuntimeStore {
                         running_profiles: Vec::new(),
                         queue: VecDeque::new(),
                         notify: Arc::new(Notify::new()),
+                        draining: h.draining,
+                        accepts_commands: false,
+                        command_queue: VecDeque::new(),
                     },
                 );
             }
@@ -280,6 +293,9 @@ impl RuntimeStore {
                         running_profiles: Vec::new(),
                         queue: VecDeque::new(),
                         notify: Arc::new(Notify::new()),
+                        draining: false,
+                        accepts_commands: false,
+                        command_queue: VecDeque::new(),
                     },
                 );
             }
@@ -395,6 +411,26 @@ impl RuntimeStore {
         browser_connected: bool,
         wait: Duration,
     ) -> Result<Option<DispatchedOperation>, StoreError> {
+        Ok(
+            match self
+                .next_work(host_id, browser_connected, false, wait)
+                .await?
+            {
+                Some(HostWork::Operation(op)) => Some(op),
+                _ => None,
+            },
+        )
+    }
+
+    /// Long-poll for the next operation or, when the agent accepts them,
+    /// host command (commands first).
+    pub async fn next_work(
+        &self,
+        host_id: Uuid,
+        browser_connected: bool,
+        accepts_commands: bool,
+        wait: Duration,
+    ) -> Result<Option<HostWork>, StoreError> {
         let deadline = tokio::time::Instant::now() + wait;
         loop {
             let notify = {
@@ -412,6 +448,7 @@ impl RuntimeStore {
                 let browser_changed = host.browser_connected != browser_connected;
                 host.last_seen = now;
                 host.browser_connected = browser_connected;
+                host.accepts_commands = accepts_commands;
                 let notify = host.notify.clone();
                 if !was_online {
                     self.log.emit("host.online", json!({ "host_id": host_id }));
@@ -422,6 +459,15 @@ impl RuntimeStore {
                         json!({ "host_id": host_id, "connected": browser_connected }),
                     );
                 }
+                if accepts_commands {
+                    if let Some(cmd) = Self::dispatch_next_command(&mut inner, host_id, &self.log) {
+                        return Ok(Some(HostWork::Command { command: cmd }));
+                    }
+                }
+                let host = inner
+                    .hosts
+                    .get_mut(&host_id)
+                    .ok_or(StoreError::NotFound("host"))?;
                 let mut queue = std::mem::take(&mut host.queue);
                 let mut found = None;
                 while let Some(op_id) = queue.pop_front() {
@@ -455,8 +501,8 @@ impl RuntimeStore {
                 if let Some(host) = inner.hosts.get_mut(&host_id) {
                     host.queue = queue;
                 }
-                if found.is_some() {
-                    return Ok(found);
+                if let Some(op) = found {
+                    return Ok(Some(HostWork::Operation(op)));
                 }
                 notify
             };
@@ -499,6 +545,11 @@ impl RuntimeStore {
         let host_id = match host_id {
             Some(id) => {
                 let h = inner.hosts.get(&id).ok_or(StoreError::NotFound("host"))?;
+                if h.draining {
+                    return Err(StoreError::Conflict(
+                        "host is draining: it takes no new sessions (undrain it first)".into(),
+                    ));
+                }
                 if !h.has_profile(&profile) {
                     let on_demand = host_view(id, h, now).on_demand;
                     if !create_profile {
@@ -524,7 +575,7 @@ impl RuntimeStore {
                             h.running_profiles.iter().any(|r| r == &profile),
                         )
                     })
-                    .filter(|(v, _, _)| v.browser_connected || v.on_demand)
+                    .filter(|(v, _, _)| (v.browser_connected || v.on_demand) && !v.draining)
                     .collect();
                 if usable.is_empty() {
                     return Err(StoreError::NoHostAvailable);

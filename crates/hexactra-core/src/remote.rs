@@ -352,6 +352,9 @@ pub struct HostView {
     /// Profiles whose browser is running now.
     #[serde(default)]
     pub running_profiles: Vec<String>,
+    /// New sessions are not placed on this host (see [`HostCommand::Drain`]).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub draining: bool,
     pub last_seen: DateTime<Utc>,
 }
 
@@ -422,6 +425,121 @@ pub struct OperationResult {
     pub result: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+// ------------------------------------------------------------------------
+// Host commands (#213)
+
+/// Default and longest time a host command may take.
+pub const DEFAULT_HOST_COMMAND_TIMEOUT_MS: u64 = 60_000;
+pub const MAX_HOST_COMMAND_TIMEOUT_MS: u64 = 5 * 60_000;
+
+/// A management command for a host rather than an action in a session.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum HostCommand {
+    /// Create an empty profile (signed out).
+    CreateProfile { profile: String },
+    /// Close the profile's browser and delete its directory (cookies,
+    /// sign-ins, storage). The `default` profile cannot be deleted.
+    DeleteProfile { profile: String },
+    /// Close the profile's browser and start it again.
+    RestartBrowser { profile: String },
+    /// Close the profile's browser (it starts again on the next action).
+    CloseBrowser { profile: String },
+    /// Stop (or resume) placing new sessions on the host. Existing sessions
+    /// keep working. Handled by the control plane; never sent to the host.
+    Drain {
+        #[serde(default = "default_true")]
+        enabled: bool,
+    },
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl HostCommand {
+    /// Stable name, e.g. `create_profile`.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            HostCommand::CreateProfile { .. } => "create_profile",
+            HostCommand::DeleteProfile { .. } => "delete_profile",
+            HostCommand::RestartBrowser { .. } => "restart_browser",
+            HostCommand::CloseBrowser { .. } => "close_browser",
+            HostCommand::Drain { .. } => "drain",
+        }
+    }
+
+    /// Profile the command targets, if any.
+    pub fn profile(&self) -> Option<&str> {
+        match self {
+            HostCommand::CreateProfile { profile }
+            | HostCommand::DeleteProfile { profile }
+            | HostCommand::RestartBrowser { profile }
+            | HostCommand::CloseBrowser { profile } => Some(profile),
+            HostCommand::Drain { .. } => None,
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), ActionValidationError> {
+        if let Some(p) = self.profile() {
+            if !valid_profile_name(p) {
+                return Err(ActionValidationError(format!(
+                    "invalid profile name {p:?}: use 1-32 of a-z, 0-9, '-' and '_'"
+                )));
+            }
+        }
+        if let HostCommand::DeleteProfile { profile } = self {
+            if profile == DEFAULT_PROFILE {
+                return Err(ActionValidationError(
+                    "the default profile cannot be deleted".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// `POST /v1/hosts/{id}/commands`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostCommandRequest {
+    pub command: HostCommand,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_ms: Option<u64>,
+}
+
+/// A host command as reported to clients. States are those of operations.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HostCommandView {
+    pub id: Uuid,
+    pub host_id: Uuid,
+    pub command: HostCommand,
+    pub state: OperationState,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    pub created_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// A command handed to a host on its poll.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DispatchedCommand {
+    pub id: Uuid,
+    pub command: HostCommand,
+    pub deadline: DateTime<Utc>,
+}
+
+/// What `GET /v1/hosts/{id}/next` returns: an operation, or (to agents that
+/// poll with `commands=true`) a host command wrapped as `{"command": …}`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum HostWork {
+    Command { command: DispatchedCommand },
+    Operation(DispatchedOperation),
 }
 
 // ------------------------------------------------------------------------

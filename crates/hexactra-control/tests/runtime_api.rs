@@ -240,6 +240,7 @@ async fn profiles_over_http() {
             browser_connected: false,
             on_demand: true,
             profiles: Some((vec!["default".into(), "travel".into()], vec![])),
+            accepts_commands: false,
         },
         Duration::from_millis(10),
     )

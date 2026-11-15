@@ -10,7 +10,9 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use hexactra_client::{ClientError, HostClient, HostPollStatus};
-use hexactra_core::remote::{OperationResult, RegisterHostRequest, DEFAULT_PROFILE};
+use hexactra_core::remote::{
+    HostCommand, HostWork, OperationResult, RegisterHostRequest, DEFAULT_PROFILE,
+};
 use uuid::Uuid;
 
 use crate::browser_bridge::BrowserBridge;
@@ -91,6 +93,30 @@ async fn report(client: &HostClient, host_id: Uuid, op_id: Uuid, result: &Operat
             }
             Err(e) => {
                 tracing::warn!(error = %e, %op_id, attempt, "reporting result failed");
+                tokio::time::sleep(Duration::from_millis(500 * (attempt as u64 + 1))).await;
+            }
+        }
+    }
+}
+
+/// Why an attach-mode host cannot run a host command.
+pub fn attach_mode_refusal(command: &HostCommand) -> String {
+    format!(
+        "{}: this host attaches to a Chrome you run yourself, so it cannot manage profiles or browsers; run the agent in launch mode (--browser) or manage the browser on that machine",
+        command.kind()
+    )
+}
+
+async fn report_command(client: &HostClient, host_id: Uuid, id: Uuid, result: &OperationResult) {
+    for attempt in 0..3u32 {
+        match client.report_command(host_id, id, result).await {
+            Ok(()) => return,
+            Err(e @ ClientError::Api { .. }) => {
+                tracing::warn!(error = %e, command_id = %id, "command result rejected");
+                return;
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, command_id = %id, attempt, "reporting command result failed");
                 tokio::time::sleep(Duration::from_millis(500 * (attempt as u64 + 1))).await;
             }
         }
@@ -180,6 +206,7 @@ async fn run_attach_mode(cfg: DaemonConfig, client: HostClient) -> Result<()> {
         let status = HostPollStatus {
             browser_connected: connected,
             on_demand: false,
+            accepts_commands: true,
             profiles: Some((
                 vec![DEFAULT_PROFILE.to_string()],
                 if connected {
@@ -190,7 +217,13 @@ async fn run_attach_mode(cfg: DaemonConfig, client: HostClient) -> Result<()> {
             )),
         };
         match client.poll(host_id, &status, wait).await {
-            Ok(Some(op)) => {
+            Ok(Some(HostWork::Command { command })) => {
+                backoff = Duration::from_secs(1);
+                tracing::info!(command_id = %command.id, kind = command.command.kind(), "refusing host command");
+                let result = failure(attach_mode_refusal(&command.command));
+                report_command(&client, host_id, command.id, &result).await;
+            }
+            Ok(Some(HostWork::Operation(op))) => {
                 backoff = Duration::from_secs(1);
                 tracing::info!(op_id = %op.id, kind = op.action.kind(), "executing operation");
                 let result = if op.profile != DEFAULT_PROFILE {
@@ -256,12 +289,24 @@ async fn run_launch_mode(
         let status = HostPollStatus {
             browser_connected: pool.any_connected().await,
             on_demand: true,
+            accepts_commands: true,
             profiles: Some((pool.profiles(), pool.running().await)),
         };
         // Short polls keep the reported running profiles fresh.
         let wait = cfg.poll_wait.min(Duration::from_secs(10));
         match client.poll(host_id, &status, wait).await {
-            Ok(Some(op)) => {
+            Ok(Some(HostWork::Command { command })) => {
+                backoff = Duration::from_secs(1);
+                tracing::info!(command_id = %command.id, kind = command.command.kind(), profile = ?command.command.profile(), "running host command");
+                let pool = pool.clone();
+                let client = client.clone();
+                tokio::spawn(async move {
+                    let result = pool.run_command(&command.command, command.deadline).await;
+                    tracing::info!(command_id = %command.id, ok = result.ok, error = ?result.error, "host command finished");
+                    report_command(&client, host_id, command.id, &result).await;
+                });
+            }
+            Ok(Some(HostWork::Operation(op))) => {
                 backoff = Duration::from_secs(1);
                 tracing::info!(op_id = %op.id, kind = op.action.kind(), profile = %op.profile, "executing operation");
                 let pool = pool.clone();
