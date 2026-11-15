@@ -1,0 +1,18 @@
+# =============================================================================
+# App overlay: the platform's published stack-agent image (APP-OWNED)
+# =============================================================================
+# vps.compose.yml builds the stack-agent sidecar from apps/stack-agent, which
+# only the platform's own repository has: an app started from the starter does
+# not ship it. `hexactra deploy` applies this overlay after every platform
+# file (VPS only), so the deployment runs the platform's signed image instead
+# of failing to build. Pin it to the version of the @marinoscar/platform-*
+# packages in package-lock.json, and move both in the same pull request
+# (apps/cli/src/deploy.test.ts checks they match). Everything else about the
+# service (socket mount, DEPLOY_ROOT, STACK_AGENT_TOKEN, read-only root, no
+# ports) comes from vps.compose.yml unchanged. Needs Docker Compose 2.24+.
+# =============================================================================
+
+services:
+  stack-agent:
+    build: !reset null
+    image: ghcr.io/marinoscar/enterpriseappbase-stack-agent:0.1.0-next.29

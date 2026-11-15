@@ -13,6 +13,56 @@ you (web, Android, CLI, MCP) ──HTTPS──▶ host proxy / Tailscale ──�
 api ──http://fabric-control:8787 (hxs_ service token)──▶ fabric-control ◀── long-poll ── fabric-host (and your other hosts)
 ```
 
+## Deploy with the CLI (recommended)
+
+`hexactra deploy` installs and updates the console exactly as it does for every platform app. That covers the TLS certificate and vhost on the shared host proxy, the database role, migrations, the seed and health checks, plus the fabric and the bundled browser host. The full reference is the platform's [deploy-to-vps runbook](https://github.com/marinoscar/EnterpriseAppBase/blob/main/docs/runbooks/deploy-to-vps.md). Sections 1 and 2 below are the same steps by hand.
+
+**What this repository adds to the platform deploy:**
+- The console lives in `console/`, so the CLI declares `deploy: { appDir: 'console' }` (`apps/cli/src/app.ts`).
+  - The deploy keeps one checkout of the whole repository under `<deploy root>/repo` and builds from `repo/console/infra/compose`.
+  - The fabric images build from the repository root.
+- The deploy generates `HEXACTRA_FABRIC_OPERATOR_TOKEN` and `HEXACTRA_VIEWER_PASSWORD` without asking.
+- `infra/compose/app.vps.stack-agent-image.compose.yml` runs the platform's published stack-agent image, because only the platform repository ships `apps/stack-agent`.
+
+**Before you start** (`deploy doctor` checks each one):
+- a DNS A record for the domain, pointing at the server;
+- Docker with Compose 2.24 or later, git, and Node.js 24;
+- an external PostgreSQL 16 the server can reach;
+- a Google OAuth client whose redirect URI is `https://<domain>/api/auth/google/callback`.
+
+**Install** (on the server, as an ordinary user, never with `sudo`):
+
+```bash
+git clone https://github.com/marinoscar/hexactra && cd hexactra/console
+npm ci && npm run build --workspace=cli
+node apps/cli/dist/cli.js deploy doctor --domain hexactra.example.test
+node apps/cli/dist/cli.js deploy install --domain hexactra.example.test
+```
+
+The install asks for:
+- the database credentials;
+- the Google OAuth client;
+- `INITIAL_ADMIN_EMAIL`.
+
+It generates every other secret. Add `--staging` while you are still working out DNS and the proxy, so you stay clear of Let's Encrypt's rate limits.
+
+**Then connect the console to the fabric** (once). Mint the service token inside `fabric-control`, then follow section 3 from step 1:
+
+```bash
+docker exec "$(docker ps -qf name=fabric-control)" hexactra-fabric --url http://127.0.0.1:8787 admin service-token-create console
+```
+
+**Update** (safe to run from cron; it exits 0 when nothing moved):
+
+```bash
+cd hexactra/console && git pull && npm ci && npm run build --workspace=cli
+node apps/cli/dist/cli.js deploy update
+```
+
+`deploy status`, `deploy about`, `deploy certs` and `deploy list` inspect the deployment.
+
+**Version bumps.** By default `install` and `update` bump the console's patch version, commit it, and push the commit to the deployed branch. The bumped files are `console/apps/*/package.json`, `console/packages/shared/package.json` and `console/package-lock.json`. If the server cannot push to that branch, for example because `main` accepts changes only through pull requests, add `--no-version-bump`. The version then comes from the commit you deploy.
+
 ## 1. Configure
 
 ```bash
