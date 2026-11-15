@@ -71,7 +71,7 @@ hexactra screenshot -o page.jpg
 hexactra tabs
 ```
 
-The first action creates a session and saves it as current. `hexactra session create`, `session list` and `session end` manage sessions explicitly. Add `--json` for machine-readable output.
+Add `--profile <name>` (or set `HEXACTRA_PROFILE`) to act in another browser profile. Run `hexactra profile list` to see them, and `hexactra --profile <name> session create --create` to make a new one; see [container-host.md §4](container-host.md#4-profiles-one-per-set-of-sign-ins). The first action creates a session and saves it as current. `hexactra session create`, `session list` and `session end` manage sessions explicitly. Add `--json` for machine-readable output.
 
 ## 3. Use it from another machine
 
@@ -104,7 +104,7 @@ Never bind to a public interface. The token controls a browser signed in to your
 
 ## 4. Let an AI agent drive it (MCP)
 
-`hexactra-mcp` is an MCP server (stdio) that exposes the browser as tools: `browser_navigate`, `browser_elements`, `browser_click`, `browser_type`, `browser_press`, `browser_scroll`, `browser_text`, `browser_screenshot` (returned as an image), `browser_wait_for`, `browser_tabs`, `browser_new_tab`, `browser_activate_tab`, `browser_close_tab`, `browser_back`, `browser_forward`, `browser_reload` and `browser_status`.
+`hexactra-mcp` is an MCP server (stdio) that exposes the browser as tools: `browser_navigate`, `browser_elements`, `browser_click`, `browser_type`, `browser_press`, `browser_scroll`, `browser_text`, `browser_screenshot` (returned as an image), `browser_wait_for`, `browser_tabs`, `browser_new_tab`, `browser_activate_tab`, `browser_close_tab`, `browser_back`, `browser_forward`, `browser_reload`, `browser_status`, `browser_profiles` and `browser_use_profile`.
 
 The install script puts it in `~/.local/bin`. Register it with any MCP client, for example Claude Code:
 
