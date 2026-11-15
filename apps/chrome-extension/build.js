@@ -60,16 +60,15 @@ for (const file of files) {
   }
 }
 
-// Create icons directory if it doesn't exist
+// Copy the brand icons (rendered from docs/brand by scripts/brand/render-icons.mjs)
+const iconsSrc = path.join(__dirname, 'icons');
 const iconsDir = path.join(distDir, 'icons');
-if (!fs.existsSync(iconsDir)) {
-  fs.mkdirSync(iconsDir, { recursive: true });
-  console.log('Created icons directory');
-
-  // Create placeholder icons
-  createPlaceholderIcon(path.join(iconsDir, 'icon-16.png'), 16);
-  createPlaceholderIcon(path.join(iconsDir, 'icon-48.png'), 48);
-  createPlaceholderIcon(path.join(iconsDir, 'icon-128.png'), 128);
+fs.mkdirSync(iconsDir, { recursive: true });
+for (const file of fs.readdirSync(iconsSrc)) {
+  if (file.endsWith('.png')) {
+    fs.copyFileSync(path.join(iconsSrc, file), path.join(iconsDir, file));
+    console.log(`Copied icons/${file}`);
+  }
 }
 
 console.log('Build complete! Output in:', distDir);
@@ -78,16 +77,3 @@ console.log('1. Open chrome://extensions/');
 console.log('2. Enable "Developer mode"');
 console.log('3. Click "Load unpacked"');
 console.log('4. Select the', distDir, 'directory');
-
-/**
- * Create a simple placeholder SVG icon
- */
-function createPlaceholderIcon(filePath, size) {
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
-  <rect width="${size}" height="${size}" fill="#667eea"/>
-  <text x="50%" y="50%" text-anchor="middle" dy=".3em" fill="white" font-family="sans-serif" font-size="${size/2}">H</text>
-</svg>`;
-  
-  fs.writeFileSync(filePath, svg);
-}

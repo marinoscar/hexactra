@@ -1,12 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A neutral placeholder mark (a rounded square), drawn in white on the generated
-     ic_launcher_background (identity.json's themeColor). Replace it with the product's mark. -->
+<!-- The hexactra Trace mark (docs/brand/hexactra-mark.svg): a white line drawing a hexagon
+     from a coral starting point, on the generated ic_launcher_background (identity.json's
+     themeColor). Drawn on the mark's 120-unit grid, scaled into the 66dp safe zone. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M40,34h28a6,6 0,0 1,6 6v28a6,6 0,0 1,-6 6h-28a6,6 0,0 1,-6 -6v-28a6,6 0,0 1,6 -6z" />
+    <group
+        android:scaleX="0.45"
+        android:scaleY="0.45"
+        android:translateX="27"
+        android:translateY="27">
+        <path
+            android:pathData="M60,60V108L18.4,84V36L60,12L101.6,36V84L80,96.5"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="12"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:fillColor="#FFFF6B4A"
+            android:pathData="M60,46a14,14 0,1 1,0 28a14,14 0,1 1,0 -28z" />
+    </group>
 </vector>

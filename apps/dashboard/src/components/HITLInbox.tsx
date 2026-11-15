@@ -299,15 +299,16 @@ export function HITLInbox({ apiBase, authHeader }: InboxProps) {
       <style>{`
         .hitl-inbox {
           padding: 20px;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+          font-family: inherit;
         }
         .hitl-inbox h2 {
           margin-top: 0;
-          color: #333;
+          font-family: var(--hx-display);
+          color: var(--hx-text);
         }
         .error-message {
-          background-color: #ffebee;
-          color: #c62828;
+          background-color: var(--hx-warn-bg);
+          color: var(--hx-warn-text);
           padding: 12px;
           border-radius: 4px;
           margin-bottom: 20px;
@@ -325,19 +326,20 @@ export function HITLInbox({ apiBase, authHeader }: InboxProps) {
           margin: 0;
         }
         .request-item {
-          background-color: #f5f5f5;
-          border-radius: 8px;
+          background-color: var(--hx-surface-2);
+          border: 2px solid transparent;
+          border-radius: 12px;
           padding: 16px;
           margin-bottom: 12px;
           cursor: pointer;
           transition: background-color 0.2s;
         }
         .request-item:hover {
-          background-color: #e0e0e0;
+          background-color: var(--hx-surface-2-hover);
         }
         .request-item.selected {
-          background-color: #e3f2fd;
-          border: 2px solid #2196f3;
+          background-color: var(--hx-selected);
+          border-color: var(--hx-primary);
         }
         .request-header {
           display: flex;
@@ -347,39 +349,40 @@ export function HITLInbox({ apiBase, authHeader }: InboxProps) {
         }
         .kind {
           font-weight: bold;
-          color: #1976d2;
+          color: var(--hx-primary);
         }
         .status {
-          padding: 4px 8px;
-          border-radius: 4px;
+          padding: 4px 10px;
+          border-radius: 999px;
           font-size: 0.8em;
+          font-weight: 600;
         }
         .status.pending {
-          background-color: #fff3e0;
-          color: #ef6c00;
+          background-color: var(--hx-warn-bg);
+          color: var(--hx-warn-text);
         }
         .status.approved {
-          background-color: #e8f5e9;
-          color: #2e7d32;
+          background-color: var(--hx-ok-bg);
+          color: var(--hx-ok-text);
         }
         .status.rejected {
-          background-color: #ffebee;
-          color: #c62828;
+          background-color: var(--hx-surface-2-hover);
+          color: var(--hx-muted);
         }
         .reason {
           margin: 0;
-          color: #555;
+          color: var(--hx-text);
         }
         .expires {
           margin: 4px 0 0;
           font-size: 0.9em;
-          color: #777;
+          color: var(--hx-muted);
         }
         .request-details {
-          background-color: #fff;
-          border-radius: 8px;
+          background-color: var(--hx-surface);
+          border: 1px solid var(--hx-border);
+          border-radius: 12px;
           padding: 20px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .request-info {
           margin-bottom: 20px;
@@ -388,17 +391,17 @@ export function HITLInbox({ apiBase, authHeader }: InboxProps) {
           display: flex;
           justify-content: space-between;
           padding: 8px 0;
-          border-bottom: 1px solid #eee;
+          border-bottom: 1px solid var(--hx-border);
         }
         .info-item:last-child {
           border-bottom: none;
         }
         .label {
           font-weight: 500;
-          color: #666;
+          color: var(--hx-muted);
         }
         .value {
-          color: #333;
+          color: var(--hx-text);
         }
         .form-group {
           margin-bottom: 16px;
@@ -407,24 +410,26 @@ export function HITLInbox({ apiBase, authHeader }: InboxProps) {
           display: block;
           margin-bottom: 4px;
           font-weight: 500;
-          color: #333;
+          color: var(--hx-text);
         }
         .secret-input-field {
           width: 100%;
           padding: 12px;
-          border: 1px solid #ddd;
-          border-radius: 4px;
+          background-color: var(--hx-surface);
+          color: var(--hx-text);
+          border: 1px solid var(--hx-border);
+          border-radius: 8px;
           font-size: 1em;
         }
         .secret-input-field:focus {
           outline: none;
-          border-color: #2196f3;
-          box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+          border-color: var(--hx-primary);
+          box-shadow: 0 0 0 3px var(--hx-focus);
         }
         .security-note {
           margin: 8px 0 0;
           font-size: 0.8em;
-          color: #666;
+          color: var(--hx-muted);
         }
         .actions {
           display: flex;
@@ -434,28 +439,30 @@ export function HITLInbox({ apiBase, authHeader }: InboxProps) {
         .btn {
           padding: 10px 20px;
           border: none;
-          border-radius: 4px;
+          border-radius: 8px;
           cursor: pointer;
           font-size: 1em;
+          font-weight: 600;
+          font-family: inherit;
           transition: background-color 0.2s;
         }
         .btn:hover {
           opacity: 0.9;
         }
         .btn.approve {
-          background-color: #2e7d32;
-          color: white;
+          background-color: var(--hx-primary);
+          color: var(--hx-on-primary);
         }
         .btn.deny {
-          background-color: #c62828;
-          color: white;
+          background-color: var(--hx-danger);
+          color: var(--hx-on-danger);
         }
         .btn.expire {
-          background-color: #f57c00;
-          color: white;
+          background-color: var(--hx-surface-2);
+          color: var(--hx-text);
         }
         .btn:disabled {
-          background-color: #ccc;
+          opacity: 0.5;
           cursor: not-allowed;
         }
       `}</style>

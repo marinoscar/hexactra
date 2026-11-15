@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TWA splash image: the Trace mark in brand colours (docs/brand/hexactra-mark.svg),
+     shown on SPLASH_SCREEN_BACKGROUND_COLOR while the browser opens the app. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <path
+        android:pathData="M60,60V108L18.4,84V36L60,12L101.6,36V84L80,96.5"
+        android:strokeColor="@color/brand_primary"
+        android:strokeWidth="10"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#FFFF6B4A"
+        android:pathData="M60,48a12,12 0,1 1,0 24a12,12 0,1 1,0 -24z" />
+</vector>

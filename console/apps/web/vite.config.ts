@@ -8,6 +8,10 @@ import { build as viteBuild, defineConfig, type Plugin } from 'vite';
 /** The identity fields the page shell and the manifest show (packages/shared/identity.json). */
 export interface WebIdentity {
   productName: string;
+  /** The manifest's description. */
+  tagline?: string;
+  /** The home-screen label (short_name): the CLI name, lowercase like the wordmark. */
+  cliName?: string;
   themeColor: string;
   backgroundColor: string;
 }
@@ -71,24 +75,39 @@ function serviceWorkerPlugin(): Plugin {
   };
 }
 
-/** `index.html` with the identity in its `<title>` and theme colour. */
+/** `index.html` with the identity in its `<title>`, home-screen title and theme colour. */
 export function renderIndexHtml(html: string, identity: WebIdentity): string {
   const escape = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-  return html.replaceAll('%APP_NAME%', escape(identity.productName)).replaceAll('%APP_THEME_COLOR%', identity.themeColor);
+  return html
+    .replaceAll('%APP_NAME%', escape(identity.productName))
+    .replaceAll('%APP_SHORT_NAME%', escape(identity.cliName ?? identity.productName))
+    .replaceAll('%APP_THEME_COLOR%', identity.themeColor);
 }
 
-/** The web app manifest, from the same identity. */
+/**
+ * The web app manifest, from the same identity. Icons come from docs/brand
+ * (scripts/brand/render-icons.mjs): `any` icons with rounded plates, and
+ * full-bleed `maskable` ones that Android and Chrome crop to their own shape.
+ */
 export function renderManifest(identity: WebIdentity): string {
   const manifest = {
+    id: '/',
     name: identity.productName,
-    short_name: identity.productName,
+    short_name: identity.cliName ?? identity.productName,
+    description: identity.tagline,
     start_url: '/',
+    scope: '/',
     display: 'standalone',
+    orientation: 'any',
+    categories: ['productivity', 'utilities'],
     theme_color: identity.themeColor,
     background_color: identity.backgroundColor,
     icons: [
-      { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml' },
-      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
+      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/icons/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+      { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
     ],
   };
   return `${JSON.stringify(manifest, null, 2)}\n`;

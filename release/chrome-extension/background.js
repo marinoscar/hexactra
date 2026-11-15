@@ -5,6 +5,8 @@ let initialized = false;
 import { loadCurrentTask, saveCurrentTask, createCheckpoint, updateCheckpoint, } from './checkpoint.js';
 // Import HITL module
 import { initHitl } from './hitl.js';
+// Remote control bridge (native messaging to the Hexactra host agent)
+import { startRemoteBridge } from './remote.js';
 /**
  * Initialize the extension background worker
  */
@@ -1126,4 +1128,8 @@ async function handleStopTask(sender, msg) {
         });
     }
 }
+// Service worker entry point. Both run on every service-worker start, so the
+// remote bridge reconnects after a browser restart.
+startRemoteBridge();
+init().catch((e) => console.error('Hexactra: init failed', e));
 //# sourceMappingURL=background.js.map

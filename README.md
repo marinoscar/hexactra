@@ -1,10 +1,90 @@
-# Hexactra Monorepo
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/hexactra-banner-dark.png">
+    <img src="docs/brand/hexactra-banner.png" alt="hexactra: AI agents that operate real browsers, the way a person does." width="100%">
+  </picture>
+</p>
 
-This is the monorepo for Hexactra, an AI-powered browser automation runtime.
+<p align="center">
+  <a href="https://github.com/marinoscar/hexactra/actions/workflows/ci.yml"><img src="https://github.com/marinoscar/hexactra/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/marinoscar/hexactra/actions/workflows/console.yml"><img src="https://github.com/marinoscar/hexactra/actions/workflows/console.yml/badge.svg" alt="Console CI"></a>
+  <a href="https://github.com/marinoscar/hexactra/actions/workflows/console-android.yml"><img src="https://github.com/marinoscar/hexactra/actions/workflows/console-android.yml/badge.svg" alt="Android CI"></a>
+</p>
 
-## Remote browser control: start here
+**hexactra** is a self-hosted computer-use runtime. It lets AI agents operate real, visible Chrome browsers with persistent sign-ins, the way a person would: they click, type, read the page and wait for you when they need a human. You assign the work from the web, your phone, a terminal or your own agent framework, and you watch every step.
 
-Drive your own signed-in Chrome on a Linux machine from anywhere, through the `hexactra` CLI or, for AI agents, the `hexactra-mcp` MCP server:
+- **Real browsers, not headless scripts.** Each browser profile keeps its cookies and sign-ins, on your desktop or an always-on server.
+- **A human in the loop by design.** CAPTCHAs, one-time codes, sign-ins and purchases come to you as handoffs; your answer resumes the run.
+- **The model never sees secrets.** You type codes and passwords into a handoff, and the runner types them into the page.
+- **One capability, every surface.** Web app (installable PWA), Android app, CLI and TUI, REST with a TypeScript SDK, and MCP for agent frameworks.
+
+---
+
+## What you can do with it
+
+| Capability | What it means |
+|---|---|
+| **Tasks** | Save a goal with a browser profile, the sites it may visit, step and time budgets, and confirmation before purchases. |
+| **Runs (the AI goal runner)** | Start a task and the server-side runner works the browser step by step: observe, reason, act, verify. Every run is a durable state machine you can cancel at any time. |
+| **Live run view** | Watch steps stream in with a live screenshot, and take over the browser yourself when you want to. |
+| **Inbox (handoffs)** | Everything agents are waiting for (a CAPTCHA, a code, a sign-in, a confirmation) in one place. Answer it and the run continues. |
+| **Schedules** | Run tasks on a cron schedule in your time zone. |
+| **Notifications** | Run results and handoffs by web notification, email, Web Push and the Android app. Stop a run or approve a step straight from the notification. |
+| **Webhooks and alerts** | Signed outbound webhooks for run and schedule events. Alerts fire for an offline browser host, a schedule failing several times in a row, or a user over a token or budget limit. |
+| **External agents** | Your own agent drives a browser through the console, and the console records it as a run: you see each step, can stop it, and answer its handoffs. |
+| **Fleet** | Enroll browser hosts, run several named profiles per host, drain, revoke and restart them, and open a gated web viewer on any browser. |
+| **Standalone extension** | The Chrome extension is also an AI browser assistant on its own: side-panel chat with your own OpenAI-compatible provider, no server required. |
+| **Operations** | Sign-in with roles and personal access tokens, an encrypted credential store, OpenTelemetry traces and metrics with a browser-agent dashboard, the admin Doctor, database backup and restore. |
+
+## Use it from anywhere
+
+| Surface | Where |
+|---|---|
+| **Web app**, installable as a PWA (desktop and mobile) | The console at `/` ([console/README.md](console/README.md)) |
+| **Android app**: a Trusted Web Activity with deep links and actionable notifications | [console/docs/runbooks/android-app.md](console/docs/runbooks/android-app.md) |
+| **CLI and terminal UI**: `hexactra tasks`, `runs`, `inbox`, `fleet`, ... | `console/apps/cli` |
+| **REST API**, OpenAPI at `/api/docs`, with a generated TypeScript SDK | `console/packages/sdk` |
+| **MCP** for agent frameworks: `POST /api/mcp` (Streamable HTTP) or `hexactra mcp serve` (stdio) | [console/docs/mcp.md](console/docs/mcp.md), [console/docs/agent-frameworks.md](console/docs/agent-frameworks.md) |
+| **Chrome extension**: the hand inside each browser, and a standalone AI assistant | [apps/chrome-extension/DEMO_GUIDE.md](apps/chrome-extension/DEMO_GUIDE.md) |
+
+`console/packages/shared/capabilities.json` is the parity registry: each surface's tests fail when a capability is missing from it without a recorded reason.
+
+## How it fits together
+
+```mermaid
+flowchart LR
+  subgraph Clients
+    W[Web PWA]
+    A[Android app]
+    C[CLI / TUI]
+    M[MCP / SDK / REST]
+  end
+  subgraph Console["hexactra Console (console/)"]
+    API[API + AI goal runner<br/>tasks, runs, inbox, schedules,<br/>notifications, webhooks, alerts]
+  end
+  subgraph Fabric["hexactra Fabric (crates/)"]
+    CP[Control plane /v1]
+    HA[Host agent]
+    NH[Native host]
+  end
+  EXT[Chrome extension<br/>in a real Chrome profile]
+
+  W & A & C & M --> API
+  API -- service token --> CP
+  CP <-- long poll --> HA
+  HA <--> NH <--> EXT
+```
+
+- **The Console** is the single user-facing control point. It holds identity, roles, tasks, runs and the AI goal runner, and it is the only client that holds the fabric's service token.
+- **The Fabric** is the browser execution layer: a Rust control plane with durable state, and host agents that keep one Chromium per profile on a desktop, a VPS container or any machine.
+- Architecture in depth: [VISION.MD §26](VISION.MD) (console and fabric) and §5 to §6.
+
+## Get started
+
+**Run the whole stack on a server** (console, fabric and a browser host in one Compose stack):
+[console/docs/runbooks/vps-stack.md](console/docs/runbooks/vps-stack.md)
+
+**Drive your own signed-in Chrome on a Linux desktop**, from the `hexactra-fabric` CLI or the `hexactra-mcp` MCP server:
 
 ```bash
 scripts/install-remote-control.sh   # build, install to ~/.local/bin, start user services
@@ -14,78 +94,94 @@ hexactra-fabric navigate https://example.com && hexactra-fabric screenshot -o pa
 ```
 
 - Quickstart, remote access and safety: [docs/remote-control-quickstart.md](docs/remote-control-quickstart.md)
-- Desktop off? Run the always-on container host (`deploy/container`, browser on demand plus web viewer): [docs/container-host.md](docs/container-host.md)
-- `/v1` API: [docs/remote-control-api.md](docs/remote-control-api.md)
+- Desktop off? Run the always-on container host (browser on demand, plus a web viewer): [docs/container-host.md](docs/container-host.md)
+- Fabric `/v1` API: [docs/remote-control-api.md](docs/remote-control-api.md)
 - Proven by a real-Chromium end-to-end test in CI: `tests/e2e/remote-control.e2e.mjs`
 
-## Structure
+**Use the extension on its own**: build it (`pnpm --filter @hexactra/chrome-extension build`), load `apps/chrome-extension/dist` unpacked, and add your model provider in the side panel.
 
-### Rust Crates (`crates/`)
+## Repository layout
 
-- `hexactra-core` - Core types and traits
-- `hexactra-telemetry` - Telemetry and tracing utilities
-- `hexactra-control` - Control plane (`hexactra-control serve`: the `/v1` remote control API)
-- `hexactra-client` - HTTP client for the `/v1` API
-- `hexactra-agent` - Host agent (`hexactra-agent daemon`: attaches to your Chrome via the extension)
-- `hexactra-worker` - Session worker (earlier scaffolding; not on the remote control path)
-- `hexactra-native-host` - Chrome Native Messaging host (relays the extension to the agent)
-- `hexactra-cli` - `hexactra` CLI
-- `hexactra-mcp` - MCP server (stdio) exposing the browser as tools for AI agents
+```
+console/            hexactra Console: NestJS API, React web app (PWA), CLI/TUI, Android TWA shell, TypeScript SDK
+                    (an EnterpriseAppBase starter app; its own README and AGENTS.md apply inside it)
+crates/             hexactra Fabric (Rust)
+apps/
+  chrome-extension/ MV3 extension: the in-browser driver, and the standalone side-panel assistant
+  dashboard/        early standalone HITL inbox (the console's Inbox is the main one)
+packages/           @hexactra/sdk (TypeScript SDK), @hexactra/contracts (OpenAPI and MCP contracts)
+api/                openapi.yaml and JSON schemas (CI checks they parse)
+deploy/             systemd units, container images and Compose for hosts
+docs/               guides, runbooks and the brand (docs/brand/)
+release/            built release artifacts
+scripts/            install, build, release and brand scripts
+tests/              end-to-end tests
+```
 
-### TypeScript Packages (`packages/`)
+<details>
+<summary>The Rust crates</summary>
 
-- `@hexactra/sdk` - TypeScript SDK
-- `@hexactra/contracts` - OpenAPI and MCP contracts
+| Crate | Role |
+|---|---|
+| `hexactra-control` | Control plane: `hexactra-control serve`, the `/v1` API with durable state |
+| `hexactra-agent` | Host agent: keeps a Chromium per profile, long-polls the control plane |
+| `hexactra-native-host` | Chrome Native Messaging host: relays the extension to the agent |
+| `hexactra-cli` | The `hexactra-fabric` CLI |
+| `hexactra-mcp` | MCP server (stdio) exposing the fabric's browsers as tools |
+| `hexactra-client` | HTTP client for the `/v1` API |
+| `hexactra-core` | Core types and traits |
+| `hexactra-agent-run`, `hexactra-planning-loop`, `hexactra-execution` | Durable run state machine; observe, reason, act, verify loop; execution policy, budgets, retries and takeover |
+| `hexactra-model-adapter` | OpenAI-compatible model adapter |
+| `hexactra-credential-resolver`, `hexactra-notification-delivery` | Secret resolution; notification delivery |
+| `hexactra-provider-sdk`, `hexactra-provider-tests`, `hexactra-demo-provider` | Provider SDK, conformance tests and a demo provider |
+| `hexactra-desktop-input` | Desktop input driver |
+| `hexactra-telemetry`, `hexactra-otel` | Tracing; OpenTelemetry setup and trace-context propagation |
+| `hexactra-aef-connector`, `hexactra-benchmark` | Optional Agent Experience Framework connector and its benchmarks |
+| `hexactra-worker` | Earlier session-worker scaffolding (not on the remote-control path) |
 
-### Applications (`apps/`)
-
-- `@hexactra/chrome-extension` - Chrome extension
-- `@hexactra/dashboard` - Web dashboard
+</details>
 
 ## Development
 
-### Prerequisites
-
-- Rust (stable)
-- Node.js 22+
-- pnpm
-
-### Setup
+Prerequisites: Rust (stable), Node.js 22+ with pnpm for the workspace, Node 24 and Docker for the console.
 
 ```bash
-# Install Rust dependencies
-cargo build --workspace
+# Rust
+cargo fmt --all --check
+cargo clippy --workspace --all-targets
+cargo test --workspace --all-targets
 
-# Install TypeScript dependencies
-pnpm install
+# TypeScript workspace (SDK, contracts, extension, dashboard)
+pnpm install --frozen-lockfile && pnpm build
+pnpm --filter @hexactra/sdk --filter @hexactra/chrome-extension test
+python3 scripts/ci/validate-contracts.py
 
-# Build everything
-pnpm build
-
-# Run tests
-pnpm test
+# Console (Node 24)
+cd console && npm ci && npm run platform:check && npm run typecheck && npm test && npm run build
 ```
 
-### Running the fixture server
+CI runs all of the above (`.github/workflows/ci.yml`, `console.yml`), plus the Android build (`console-android.yml`).
 
-```bash
-node scripts/fixture-server.js
-```
+Work is tracked in GitHub issues (epics `[EPIC Exx]` with child tasks). Contributor and agent rules: [AGENTS.md](AGENTS.md).
 
 ## Documentation
 
-For detailed documentation, see the `docs/` directory:
+| Topic | Read |
+|---|---|
+| Product vision and architecture | [VISION.MD](VISION.MD) |
+| Console: features, layout, run it locally | [console/README.md](console/README.md) |
+| Console operations, capacity, VPS stack, Android app | [console/docs/runbooks/](console/docs/runbooks/) |
+| MCP and agent-framework recipes | [console/docs/mcp.md](console/docs/mcp.md), [console/docs/agent-frameworks.md](console/docs/agent-frameworks.md) |
+| Fabric: install, operations, API, security, recovery | [docs/installation.md](docs/installation.md), [docs/operations.md](docs/operations.md), [docs/api.md](docs/api.md), [docs/security.md](docs/security.md), [docs/recovery.md](docs/recovery.md) |
+| Fleet orchestration | [docs/fleet-orchestration.md](docs/fleet-orchestration.md) |
+| Deploying hosts (systemd, containers) | [deploy/README.md](deploy/README.md), [docs/container-host.md](docs/container-host.md) |
+| Releases | [docs/release-checklist.md](docs/release-checklist.md) |
+| Brand: logo, colors, type, icons | [docs/brand/README.md](docs/brand/README.md) |
 
-- [Installation Guide](docs/installation.md) - Install Hexactra on Linux with systemd or Docker
-- [Operations Guide](docs/operations.md) - Daily operations, monitoring, and maintenance
-- [API Documentation](docs/api.md) - REST API and MCP tools reference
-- [Security Guide](docs/security.md) - Security principles and best practices
-- [Recovery Guide](docs/recovery.md) - Backup, restore, and disaster recovery
+## Brand
 
-## CI
+<img src="docs/brand/hexactra-app-icon-512.png" alt="hexactra app icon" width="96" align="left">
 
-The CI pipeline runs on push and pull requests:
+The **Trace** mark is one continuous line that starts at a single point and traces a hexagon: the path a person's hand takes. The wordmark is always lowercase **hexactra**. Logos, PNG exports, the color tokens (primary `#4B4BE8`, accent `#FF6B4A`) and usage rules are in [docs/brand/](docs/brand/README.md).
 
-- Rust: clippy, fmt, tests
-- TypeScript: build, lint, test
-- Contracts: schema roundtrip check
+<br clear="left">
