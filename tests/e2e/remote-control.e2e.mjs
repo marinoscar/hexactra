@@ -582,7 +582,6 @@ try {
   await step('host commands manage profiles and browsers; attach hosts refuse them', async () => {
     const hosts = JSON.parse(await ok('--json', 'hosts'));
     const launch = hosts.find((h) => h.name === 'e2e-launch-host');
-    const attach = hosts.find((h) => h.name === 'e2e-host' && h.online);
     const running = (p) => spawnSync('pgrep', ['-f', `user-data-dir=${join(work_dir_profiles, p)}`]).status === 0;
 
     await ok('profile', 'create', 'scratch', '--host', launch.id);
@@ -606,11 +605,19 @@ try {
     await ok('host', 'undrain', launch.id);
     assert.match(await ok('host', 'commands', launch.id), /delete_profile\tscratch\tSucceeded/);
 
-    if (attach) {
-      const refused = await cli('profile', 'close', 'default', '--host', attach.id);
-      assert.notEqual(refused.code, 0);
-      assert.match(refused.err, /attaches to a Chrome you run yourself/);
-    }
+    // An attach-mode agent (no browser needed) refuses profile and browser commands.
+    const attachAgent = start(
+      'attach-agent',
+      join(binDir, 'hexactra-agent'),
+      ['daemon', '--url', controlUrl, '--name', 'e2e-attach-only'],
+      { HEXACTRA_BRIDGE_SOCKET: join(work, 'run', 'attach-only.sock'), XDG_CONFIG_HOME: join(work, 'config-attach-only') },
+    );
+    const attachOnly = async () => JSON.parse(await ok('--json', 'hosts')).find((h) => h.name === 'e2e-attach-only' && h.online);
+    await until('attach-only agent online', async () => Boolean(await attachOnly()), 20_000);
+    const refused = await cli('profile', 'close', 'default', '--host', (await attachOnly()).id);
+    assert.notEqual(refused.code, 0);
+    assert.match(refused.err, /attaches to a Chrome you run yourself/);
+    stop(attachAgent);
   });
 } catch (e) {
   failed = true;
