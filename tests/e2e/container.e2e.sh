@@ -95,6 +95,18 @@ hx --timeout-ms 60000 navigate http://fixture/persist.html >/dev/null || fail "n
 [ "$(visits)" -ge 3 ] || fail "profile did not survive the container restart"
 pass "profile survives a container restart (stale lock cleared)"
 
+hx --profile travel session create --create >/dev/null
+hx --profile travel navigate http://fixture/persist.html >/dev/null
+hx --profile travel text --selector '#visits' | grep -q 'visits: 1' || fail "new profile does not have its own storage"
+"${COMPOSE[@]}" exec -T host test -d /data/profiles/travel || fail "profile directory missing"
+browsers() { "${COMPOSE[@]}" exec -T host sh -c "pgrep -af 'user-data-dir=/data/profiles/' | grep -cv -- '--type='" || true; }
+[ "$(browsers)" -eq 1 ] || fail "expected one browser at HEXACTRA_MAX_BROWSERS=1, found $(browsers)"
+hx navigate http://fixture/persist.html >/dev/null
+[ "$(visits)" -ge 4 ] || fail "default profile lost its storage after switching profiles"
+[ "$(browsers)" -eq 1 ] || fail "switching back did not close the travel browser"
+hx profile list | grep -q 'travel' || fail "profile list does not show travel"
+pass "a second profile has its own storage; profiles share one browser slot"
+
 id="$(hx handoff request --kind captcha --prompt 'Solve it in the viewer' 2>/dev/null)"
 hx --json handoff show "$id" | grep -q '"viewer_url": "http://127.0.0.1:6080/vnc.html"' || fail "handoff has no viewer link"
 hx handoff cancel "$id" >/dev/null
