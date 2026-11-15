@@ -1,0 +1,65 @@
+# =============================================================================
+# App overlay: the Hexactra Fabric inside the console's stack (APP-OWNED)
+# =============================================================================
+# Adds the fabric control plane and one containerized browser host to every
+# mode built on base.compose.yml. Neither publishes a port: the console API
+# reaches the fabric at http://fabric-control:8787 on app-network (set it at
+# Administration → Fabric connection), and nginx proxies the host's viewer at
+# /viewer/local/ behind viewer tickets (infra/nginx/app.d/locations/viewer.conf).
+# More hosts (your desktop, other machines) enroll from the Fleet page and
+# reach the fabric over Tailscale; see docs/runbooks/vps-stack.md.
+# =============================================================================
+
+services:
+  fabric-control:
+    build:
+      context: ../../..
+      dockerfile: deploy/container/Dockerfile
+      target: control
+    image: hexactra-control:local
+    restart: unless-stopped
+    environment:
+      HEXACTRA_API_TOKEN: ${HEXACTRA_FABRIC_OPERATOR_TOKEN:?set HEXACTRA_FABRIC_OPERATOR_TOKEN in infra/compose/.env}
+      HEXACTRA_PUBLIC_URL: ${APP_URL:-}
+      RUST_LOG: ${RUST_LOG:-info}
+    volumes:
+      - fabric-control-data:/data
+    networks:
+      - app-network
+
+  fabric-host:
+    build:
+      context: ../../..
+      dockerfile: deploy/container/Dockerfile
+      target: host
+    image: hexactra-host:local
+    restart: unless-stopped
+    depends_on:
+      fabric-control:
+        condition: service_healthy
+    # Time to close browsers cleanly (flushing cookies) on stop or reboot.
+    stop_grace_period: 30s
+    hostname: hexactra-host
+    shm_size: 1gb
+    # Chromium's sandbox needs namespaces; Docker's seccomp profile allows them
+    # only with CAP_SYS_ADMIN, used by the setuid chrome-sandbox helper alone
+    # (docs/container-host.md, security checklist).
+    cap_add:
+      - SYS_ADMIN
+    environment:
+      HEXACTRA_URL: http://fabric-control:8787
+      HEXACTRA_API_TOKEN: ${HEXACTRA_FABRIC_OPERATOR_TOKEN:?set HEXACTRA_FABRIC_OPERATOR_TOKEN in infra/compose/.env}
+      HEXACTRA_HOST_NAME: ${HEXACTRA_FABRIC_HOST_NAME:-local}
+      HEXACTRA_VIEWER_PASSWORD: ${HEXACTRA_VIEWER_PASSWORD:-}
+      # The console turns this into a one-time ticket link (Fleet page).
+      HEXACTRA_VIEWER_URL: ${APP_URL:-http://localhost:3535}/viewer/local/vnc.html
+      HEXACTRA_MAX_BROWSERS: ${HEXACTRA_MAX_BROWSERS:-1}
+      RUST_LOG: ${RUST_LOG:-info}
+    volumes:
+      - fabric-host-data:/data
+    networks:
+      - app-network
+
+volumes:
+  fabric-control-data:
+  fabric-host-data:

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { PlatformHostProvider } from '@marinoscar/platform-web/core';
 import { createTestPlatformHost } from '@marinoscar/platform-web/testing';
+import { vi } from 'vitest';
 
 import { FleetPage, type FleetEnrollment, type FleetHost } from '../pages/FleetPage';
 
@@ -44,6 +45,23 @@ describe('FleetPage', () => {
     expect(within(card).getByRole('link', { name: 'Open the viewer' })).toHaveAttribute('href', 'https://viewer.example.test/vnc.html');
     expect(screen.queryByRole('button', { name: 'Enroll host' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Drain' })).not.toBeInTheDocument();
+  });
+
+  it('opens the bundled host through a one-time viewer ticket', async () => {
+    const local = { ...hosts[0]!, viewerUrl: 'http://localhost:3535/viewer/local/vnc.html' };
+    const tab = { location: { href: '' }, close: vi.fn() };
+    vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+    const host = createTestPlatformHost({
+      permissions: ['fleet:read', 'fleet:write'],
+      responses: { 'GET /fleet/hosts': [local], 'POST /fleet/viewer-ticket': { url: '/viewer/local/vnc.html?ticket=t.1.n.s' } },
+    });
+    render(
+      <PlatformHostProvider host={host}>
+        <FleetPage />
+      </PlatformHostProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Open the viewer' }));
+    await vi.waitFor(() => expect(tab.location.href).toBe('/viewer/local/vnc.html?ticket=t.1.n.s'));
   });
 
   it('drains a host, manages profiles and enrolls a new host for a writer', async () => {

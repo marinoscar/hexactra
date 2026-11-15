@@ -4,10 +4,10 @@ name: Console CI
 on:
   push:
     branches: [main]
-    paths: ['console/**', '.github/workflows/console.yml']
+    paths: ['console/**', 'deploy/container/**', 'crates/**', 'apps/chrome-extension/**', '.github/workflows/console.yml']
   pull_request:
     branches: [main]
-    paths: ['console/**', '.github/workflows/console.yml']
+    paths: ['console/**', 'deploy/container/**', 'crates/**', 'apps/chrome-extension/**', '.github/workflows/console.yml']
   workflow_dispatch:
 
 concurrency:
@@ -87,3 +87,23 @@ jobs:
       - run: npm run prisma:migrate --workspace=api
       - run: npm run prisma:seed --workspace=api
       - run: npm run test:db --workspace=api
+
+  stack:
+    name: Console VPS stack (console + fabric + browser host)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: console
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: console/package-lock.json
+      - run: npm ci
+      - run: npm run build --workspace=cli
+      # Builds every image, brings the stack up, and checks health, the private
+      # fabric, the bundled host and the /viewer/local/ ticket gate.
+      - run: bash scripts/stack-smoke.sh

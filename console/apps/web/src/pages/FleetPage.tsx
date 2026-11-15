@@ -48,6 +48,9 @@ export interface FleetEnrollment {
   command: string;
 }
 
+/** The bundled host's viewer, proxied by the console behind one-time tickets. */
+const LOCAL_VIEWER = '/viewer/local/';
+
 const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 
 function message(e: unknown, fallback: string): string {
@@ -93,6 +96,19 @@ export function FleetPage() {
     }
   };
 
+  /** A one-time ticket link (fleet:write), opened in a new tab. */
+  const openLocalViewer = async () => {
+    const tab = window.open('', '_blank');
+    try {
+      const { url } = await api.post<{ url: string }>('/fleet/viewer-ticket', {});
+      if (tab) tab.location.href = url;
+      else window.location.assign(url);
+    } catch (e) {
+      tab?.close();
+      setError(message(e, 'Could not open the viewer'));
+    }
+  };
+
   const enroll = async () => {
     try {
       setEnrollment(await api.post<FleetEnrollment>('/fleet/enrollments', enrollName.trim() ? { name: enrollName.trim() } : {}));
@@ -135,10 +151,18 @@ export function FleetPage() {
                   v{h.version}
                 </Typography>
               </Stack>
-              {h.viewerUrl && (
-                <Link href={h.viewerUrl} target="_blank" rel="noopener noreferrer" variant="body2">
-                  Open the viewer
-                </Link>
+              {h.viewerUrl && h.viewerUrl.includes(LOCAL_VIEWER) ? (
+                canWrite && (
+                  <Button size="small" onClick={() => void openLocalViewer()}>
+                    Open the viewer
+                  </Button>
+                )
+              ) : (
+                h.viewerUrl && (
+                  <Link href={h.viewerUrl} target="_blank" rel="noopener noreferrer" variant="body2">
+                    Open the viewer
+                  </Link>
+                )
               )}
               <List dense aria-label={`Profiles on ${h.name}`}>
                 {h.profiles.map((p) => (
