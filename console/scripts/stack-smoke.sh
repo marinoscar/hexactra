@@ -49,7 +49,8 @@ for i in $(seq 1 30); do curl -fsS "$base/api/health" >/dev/null 2>&1 && break; 
 curl -fsS "$base/api/health" >/dev/null || fail "/api/health"
 pass "console API answers through nginx"
 
-dc port fabric-control 8787 >/dev/null 2>&1 && fail "the fabric control plane is published"
+[ -z "$(docker port "$(dc ps -q fabric-control)" 2>/dev/null)" ] || fail "the fabric control plane is published"
+[ -z "$(docker port "$(dc ps -q fabric-host)" 2>/dev/null)" ] || fail "the browser host is published"
 dc exec -T api node -e "fetch('http://fabric-control:8787/v1/health').then(r=>{if(!r.ok)process.exit(1)})" || fail "API cannot reach the fabric"
 pass "fabric unpublished, reachable from the API on the private network"
 
