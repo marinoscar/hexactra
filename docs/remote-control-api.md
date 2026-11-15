@@ -34,16 +34,25 @@ Every route except `GET /v1/health` requires `Authorization: Bearer <token>`. A 
 |---|---|---|
 | `GET /v1/health` | anyone | Liveness and version |
 | `GET /v1/hosts` | client | Hosts, with `online`, `browser_connected`, `on_demand` (launches its browser when needed) and `viewer_url` |
-| `POST /v1/sessions` | client | Create a session; body `{ "host_id"?, "label"? }`. Without `host_id` the control plane picks the most recently seen host that has a connected browser or launches one on demand. `503 no_host_available` if none |
+| `POST /v1/sessions` | client | Create a session; body `{ "host_id"?, "label"?, "profile"?, "create_profile"? }`. `profile` defaults to `default`. Without `host_id` the control plane picks the most recently seen host that has a connected browser or launches one on demand. `503 no_host_available` if none |
 | `GET /v1/sessions`, `GET /v1/sessions/{id}` | client | List or read sessions |
 | `DELETE /v1/sessions/{id}` | client | End a session; queued operations become `cancelled` |
 | `POST /v1/sessions/{id}/actions` | client | Run one action. Body `{ "action": {...}, "timeout_ms"? }`. Waits for a terminal state and returns the operation. `?async=true` returns `202` at once |
 | `GET /v1/operations/{id}?wait_ms=` | client | Read an operation, optionally waiting for it to finish |
 | `POST /v1/hosts/register` | host | Register; body `{ "name", "version", "host_id"?, "viewer_url"? }` |
-| `GET /v1/hosts/{id}/next?wait_ms=&browser_connected=&on_demand=` | host | Long-poll (max 30 s) for the next operation; `204` when none |
+| `GET /v1/hosts/{id}/next?wait_ms=&browser_connected=&on_demand=&profiles=&running=` | host | Long-poll (max 30 s) for the next operation; `204` when none |
 | `POST /v1/hosts/{id}/operations/{op}/result` | host | Report `{ "ok", "result"?, "error"? }`. Only the host the operation was dispatched to may report, once |
 
 An action that fails in the browser returns `200` with `state: "failed"` and an `error`. Request problems return `400` (invalid action), `404`, `409` (session ended, duplicate result) or `422` (malformed JSON or an unknown action type).
+
+## Profiles
+
+A host can keep several named browser profiles, each with its own cookies and sign-ins. Names are 1–32 characters of lowercase letters, digits, `-` and `_`.
+
+- **Hosts report their profiles.** Each poll lists the profiles the host has (`profiles`) and which are running (`running`). `GET /v1/hosts` shows them. A host that reports nothing has only `default`.
+- **Sessions pick a profile.** Without `host_id`, the control plane picks an online host that has the profile, preferring one where it is already running.
+- **Unknown profiles are refused** with `404 profile_not_found`. Pass `create_profile: true` to let an on-demand host create it, so a typo never silently creates a new, signed-out profile. Attach-mode hosts cannot create profiles.
+- **Operations and handoffs carry the session's `profile`.**
 
 ## Actions
 
