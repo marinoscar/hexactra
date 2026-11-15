@@ -22,11 +22,20 @@ Any always-on Linux machine with Docker works: a home server, mini PC, NAS that 
 
 | Need | Recommended |
 |---|---|
-| CPU and memory | 2 vCPU, 2 GB RAM (about 600 MB while the browser is open, about 60 MB when idle) |
-| Disk | 5 GB for images and the profile |
+| CPU and memory | 2 vCPU and 2 GB RAM for one open browser. Add about 600 MB for each extra browser you allow open at once (`HEXACTRA_MAX_BROWSERS`). Idle uses about 60 MB. |
+| Disk | 5 GB for the images, plus 200–500 MB per profile |
 | Network | Outbound internet. Nothing needs to be exposed publicly. |
 
 A home machine keeps your home IP, which looks like you to most sites. A VPS IP sits in a data-centre range and is more likely to face extra checks. Hexactra hands those checks to you; it does not try to get around them.
+
+### On a VPS
+
+- **Choose a region near you.** Sites compare your location with your account history, and a nearby region causes fewer "new sign-in" checks.
+- **Expose nothing publicly.** Keep the defaults (ports on `127.0.0.1`) and use Tailscale. Your cloud firewall can then block all inbound traffic except SSH, or even SSH if you use Tailscale SSH.
+- **Expect more checks at first.** The first sign-in to each site from a new data-centre IP usually triggers a verification. Do it once through the viewer; the profile then remembers the device.
+- **Keep the IP stable.** Use a static or reserved IP if your provider offers one. Changing IPs re-triggers checks.
+- **Back up profiles** (section 7). Rebuilding a VPS without the `host-data` volume means signing in everywhere again.
+- **Check the architecture.** The images build for whatever CPU the VPS has; ARM VPSs build natively.
 
 ## 2. Install
 
@@ -75,11 +84,27 @@ hexactra status
 claude mcp add hexactra --env HEXACTRA_URL=$HEXACTRA_URL --env HEXACTRA_API_TOKEN=$HEXACTRA_API_TOKEN -- hexactra-mcp
 ```
 
-## 4. Sign in once through the viewer
+## 4. Profiles: one per set of sign-ins
+
+Keep separate profiles for separate identities or purposes, for example `personal`, `travel` and `work`. Each profile is its own browser, with its own cookies, sign-ins and storage, in `/data/profiles/<name>`.
+
+```bash
+hexactra --profile travel session create --create     # make a new profile (opens signed out)
+hexactra --profile travel navigate https://accounts.google.com
+hexactra profile list                                 # container-host: default, travel*   (* = open now)
+hexactra --profile travel screenshot -o travel.jpg    # every command takes --profile (or HEXACTRA_PROFILE)
+```
+
+- **Names** are 1–32 characters of lowercase letters, digits, `-` and `_`. A typo is refused rather than silently creating a new, signed-out profile.
+- **Browsers open at once:** `HEXACTRA_MAX_BROWSERS` (default `1`) caps it. Switching to another profile closes the least recently used idle browser, which flushes its cookies first, and the switch takes a few seconds. With 4 GB RAM, `2` keeps two profiles warm.
+- **MCP agents** start on `HEXACTRA_PROFILE` (for example `--env HEXACTRA_PROFILE=travel` in `claude mcp add`). They can list profiles with `browser_profiles` and switch with `browser_use_profile`. They create a profile only when you ask.
+- **Each CLI profile keeps its own current session.** In the viewer, window titles start with `Hexactra: <profile>`.
+
+## 4a. Sign in once through the viewer
 
 The container's browser has its own profile. Your desktop Chrome profile cannot be copied, because its cookies are encrypted with your desktop keyring. Sign in to the sites you need once:
 
-1. Start the browser: `hexactra navigate https://accounts.google.com`.
+1. Start the profile's browser: `hexactra --profile <name> navigate https://accounts.google.com`.
 2. Open the viewer (`…/vnc.html`) and enter the viewer password from `.env`.
 3. Sign in to each site, completing any 2-step verification.
 4. Optionally set `HEXACTRA_IDLE_SHUTDOWN_S=0` while you do this, so the browser stays open.

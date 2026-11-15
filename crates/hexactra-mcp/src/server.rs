@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use hexactra_client::{ClientError, ControlClient};
 use hexactra_core::remote::{
-    CreateHandoffRequest, CreateSessionRequest, HandoffInput, HandoffPage, HandoffStatus,
-    OperationState, RemoteAction,
+    valid_profile_name, CreateHandoffRequest, CreateSessionRequest, HandoffInput, HandoffPage,
+    HandoffStatus, OperationState, RemoteAction,
 };
 use serde_json::{json, Map, Value};
 use tokio::sync::Mutex;
@@ -44,6 +44,18 @@ fn tool(name: &str, description: &str, props: Value, required: &[&str]) -> Value
 pub fn tools() -> Vec<Value> {
     vec![
         tool("browser_status", "Show whether the user's browser is connected.", json!({}), &[]),
+        tool(
+            "browser_profiles",
+            "List the user's browser profiles (each has its own sign-ins, e.g. personal, travel, work) and which one this agent is using.",
+            json!({}),
+            &[],
+        ),
+        tool(
+            "browser_use_profile",
+            "Switch to another browser profile. Pick the profile that is signed in to the site the task needs. create=true makes a new, signed-out profile; only do that when the user asks.",
+            json!({"profile": {"type": "string"}, "create": {"type": "boolean"}}),
+            &["profile"],
+        ),
         tool(
             "browser_navigate",
             "Open an http(s) URL in the current tab and wait for it to load. Returns the final URL and title.",
@@ -152,6 +164,8 @@ pub fn tools() -> Vec<Value> {
 #[cfg(test)]
 const NON_ACTION_TOOLS: &[&str] = &[
     "browser_status",
+    "browser_profiles",
+    "browser_use_profile",
     "browser_request_human",
     "browser_handoff_status",
 ];
@@ -177,16 +191,33 @@ fn text_result(text: impl Into<String>, is_error: bool) -> Value {
 }
 
 /// MCP server state.
+struct SessionState {
+    profile: String,
+    /// Create the profile if no host has it (set by browser_use_profile).
+    create: bool,
+    id: Option<Uuid>,
+}
+
 pub struct Server {
     client: ControlClient,
-    session: Mutex<Option<Uuid>>,
+    session: Mutex<SessionState>,
 }
 
 impl Server {
+    #[cfg(test)]
     pub fn new(client: ControlClient) -> Self {
+        Self::with_profile(client, hexactra_core::remote::DEFAULT_PROFILE.to_string())
+    }
+
+    /// Start on a given browser profile (e.g. from `HEXACTRA_PROFILE`).
+    pub fn with_profile(client: ControlClient, profile: String) -> Self {
         Self {
             client,
-            session: Mutex::new(None),
+            session: Mutex::new(SessionState {
+                profile,
+                create: false,
+                id: None,
+            }),
         }
     }
 
@@ -232,7 +263,7 @@ impl Server {
 
     async fn session(&self, fresh: bool) -> Result<Uuid, ClientError> {
         let mut guard = self.session.lock().await;
-        if let (Some(id), false) = (*guard, fresh) {
+        if let (Some(id), false) = (guard.id, fresh) {
             return Ok(id);
         }
         let s = self
@@ -240,11 +271,65 @@ impl Server {
             .create_session(&CreateSessionRequest {
                 host_id: None,
                 label: Some("mcp".into()),
-                ..Default::default()
+                profile: Some(guard.profile.clone()),
+                create_profile: guard.create,
             })
             .await?;
-        *guard = Some(s.id);
+        guard.id = Some(s.id);
         Ok(s.id)
+    }
+
+    async fn list_profiles(&self) -> Value {
+        let current = self.session.lock().await.profile.clone();
+        match self.client.hosts().await {
+            Ok(hosts) => {
+                let hosts: Vec<Value> = hosts
+                    .iter()
+                    .filter(|h| h.online)
+                    .map(|h| json!({"host": h.name, "profiles": h.profiles, "running": h.running_profiles}))
+                    .collect();
+                text_result(
+                    serde_json::to_string_pretty(
+                        &json!({"current_profile": current, "hosts": hosts}),
+                    )
+                    .unwrap_or_default(),
+                    false,
+                )
+            }
+            Err(e) => text_result(e.to_string(), true),
+        }
+    }
+
+    async fn use_profile(&self, args: &Map<String, Value>) -> Value {
+        let Some(profile) = args.get("profile").and_then(Value::as_str) else {
+            return text_result("profile is required", true);
+        };
+        if !valid_profile_name(profile) {
+            return text_result(
+                "profile names are 1-32 characters: lowercase letters, digits, '-' and '_'",
+                true,
+            );
+        }
+        let create = args.get("create").and_then(Value::as_bool).unwrap_or(false);
+        {
+            let mut g = self.session.lock().await;
+            g.profile = profile.to_string();
+            g.create = create;
+            g.id = None;
+        }
+        match self.session(true).await {
+            Ok(id) => text_result(
+                format!("Now using browser profile {profile:?} (session {id})."),
+                false,
+            ),
+            Err(e) if e.to_string().contains("profile_not_found") => text_result(
+                format!(
+                    "No host has a profile named {profile:?}. Ask the user whether to create it (browser_use_profile with create=true opens a new, signed-out browser)."
+                ),
+                true,
+            ),
+            Err(e) => text_result(e.to_string(), true),
+        }
     }
 
     /// Create a handoff on the current session and, unless `wait` is false,
@@ -388,6 +473,12 @@ impl Server {
             };
             let wait = Duration::from_secs(args.get("wait_s").and_then(Value::as_u64).unwrap_or(0));
             return self.handoff_outcome(id, wait).await;
+        }
+        if name == "browser_profiles" {
+            return self.list_profiles().await;
+        }
+        if name == "browser_use_profile" {
+            return self.use_profile(args).await;
         }
         if name == "browser_status" {
             return match self.client.hosts().await {

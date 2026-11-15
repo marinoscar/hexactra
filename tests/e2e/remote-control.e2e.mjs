@@ -122,9 +122,9 @@ async function until(what, fn, timeoutMs = 30_000) {
 
 
 // Minimal MCP stdio client.
-function mcpClient() {
+function mcpClient(extraEnv = {}) {
   const proc = spawn(join(binDir, 'hexactra-mcp'), [], {
-    env: { ...env, HEXACTRA_URL: controlUrl },
+    env: { ...env, HEXACTRA_URL: controlUrl, ...extraEnv },
     stdio: ['pipe', 'pipe', 'pipe'],
   });
   children.push(proc);
@@ -528,6 +528,42 @@ try {
 
     const host = (await api('GET', '/v1/hosts')).body.hosts.find((h) => h.name === 'e2e-launch-host');
     for (const p of ['default', 'travel', 'work']) assert.ok(host.profiles.includes(p), JSON.stringify(host));
+  });
+  await step('CLI and MCP pick profiles by name', async () => {
+    const list = await ok('profile', 'list');
+    assert.match(list, /e2e-launch-host \(online\): .*travel.*work/);
+
+    // --profile keeps its own current session per profile.
+    await ok('--profile', 'travel', 'navigate', `${site}/persist.html`);
+    const t1 = visits(await ok('--profile', 'travel', 'text', '--selector', '#visits'));
+    await ok('--profile', 'work', 'navigate', `${site}/persist.html`);
+    const w1 = visits(await ok('--profile', 'work', 'text', '--selector', '#visits'));
+    assert.ok(t1 >= 4 && w1 >= 2 && t1 !== w1, `travel=${t1} work=${w1}`);
+    assert.match(await ok('session', 'list'), /profile=travel/);
+
+    // Unknown profiles are not created by accident.
+    const typo = await cli('--profile', 'trvel', 'navigate', `${site}/persist.html`);
+    assert.notEqual(typo.code, 0);
+    assert.match(typo.err, /no host has a profile named "trvel"/);
+    await ok('--profile', 'shop', 'session', 'create', '--create');
+    await ok('--profile', 'shop', 'navigate', `${site}/persist.html`);
+    // Hosts report new profiles on their next poll.
+    await until('shop listed', async () => /shop/.test((await cli('profile', 'list')).out), 20_000);
+
+    // MCP starts on HEXACTRA_PROFILE and can switch.
+    const { proc, rpc, call } = mcpClient({ HEXACTRA_PROFILE: 'work' });
+    await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e', version: '0' } });
+    const profiles = JSON.parse((await call('browser_profiles', {})).content[0].text);
+    assert.equal(profiles.current_profile, 'work');
+    await call('browser_navigate', { url: `${site}/persist.html` });
+    assert.ok(visits((await call('browser_text', { selector: '#visits' })).content[0].text) > w1);
+    const ghost = await call('browser_use_profile', { profile: 'ghost' });
+    assert.equal(ghost.isError, true);
+    assert.match(ghost.content[0].text, /No host has a profile named "ghost"/);
+    assert.equal((await call('browser_use_profile', { profile: 'travel' })).isError, false);
+    await call('browser_navigate', { url: `${site}/persist.html` });
+    assert.ok(visits((await call('browser_text', { selector: '#visits' })).content[0].text) > t1);
+    proc.stdin.end();
   });
 } catch (e) {
   failed = true;

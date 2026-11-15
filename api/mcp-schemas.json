@@ -14,6 +14,35 @@
       "name": "browser_status"
     },
     {
+      "description": "List the user's browser profiles (each has its own sign-ins, e.g. personal, travel, work) and which one this agent is using.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "browser_profiles"
+    },
+    {
+      "description": "Switch to another browser profile. Pick the profile that is signed in to the site the task needs. create=true makes a new, signed-out profile; only do that when the user asks.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "create": {
+            "type": "boolean"
+          },
+          "profile": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile"
+        ],
+        "type": "object"
+      },
+      "name": "browser_use_profile"
+    },
+    {
       "description": "Open an http(s) URL in the current tab and wait for it to load. Returns the final URL and title.",
       "inputSchema": {
         "additionalProperties": false,
