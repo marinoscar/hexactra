@@ -1,6 +1,6 @@
 {
   "description": "Hexactra MCP server (hexactra-mcp): operate the user's browser through the control plane /v1 API.",
-  "instructions": "These tools operate a real Chrome browser that belongs to the user and is signed in to their accounts. Typical loop: browser_navigate, then browser_elements to get CSS selectors, then browser_click / browser_type, then browser_text or browser_screenshot to check the result. Act at a human pace and only on the user's own behalf. If a page shows a CAPTCHA, a verification code, a passkey prompt, a payment confirmation or any other security check, call browser_request_human and wait for the person; never try to solve or bypass the check yourself. Browser actions are paused while a request to the person is open.",
+  "instructions": "These tools operate a real Chrome browser that belongs to the user and is signed in to their accounts. Typical loop: browser_navigate, then browser_elements to get CSS selectors, then browser_click / browser_type, then browser_text or browser_screenshot to check the result. Act at a human pace and only on the user's own behalf. If a page shows a CAPTCHA, a verification code, a passkey prompt, a payment confirmation or any other security check, call browser_request_human and wait for the person; never try to solve or bypass the check yourself. Browser actions are paused while a request to the person is open. A secret the person gives (input=secret) is never shown to you: type it with browser_type_secret.",
   "name": "hexactra",
   "tools": [
     {
@@ -131,6 +131,37 @@
         "type": "object"
       },
       "name": "browser_type"
+    },
+    {
+      "description": "Type the secret (one-time code, password) a person gave to a browser_request_human request with input=secret. The browser fabric types it for you; you never see the value. Each answer can be typed once; if typing it fails, ask the person again.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "clear": {
+            "type": "boolean"
+          },
+          "handoff_id": {
+            "description": "The handoff_id browser_request_human returned.",
+            "type": "string"
+          },
+          "selector": {
+            "type": "string"
+          },
+          "submit": {
+            "type": "boolean"
+          },
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "handoff_id",
+          "selector"
+        ],
+        "type": "object"
+      },
+      "name": "browser_type_secret"
     },
     {
       "description": "Press a key such as Enter, Escape, Tab or ArrowDown on the focused element or on selector.",
@@ -343,7 +374,7 @@
       "name": "browser_reload"
     },
     {
-      "description": "Pause and ask the user to do something only a person should do, or a question only they can answer: solve a CAPTCHA, enter a one-time code, approve a passkey, sign in, confirm a purchase, pick from options. The user is reached on their configured channels (chat, email link, ...). With wait=true (default) this returns the outcome and the person's answer: `value` for text, secret, choice (the option id), number (a decimal string) and confirm (`approve` or `deny`), `values` (option ids) for multi_choice. Use input=secret for one-time codes: type the value into the page and do not repeat it elsewhere. Use input=takeover when the person must operate the browser themselves.",
+      "description": "Pause and ask the user to do something only a person should do, or a question only they can answer: solve a CAPTCHA, enter a one-time code, approve a passkey, sign in, confirm a purchase, pick from options. The user is reached on their configured channels (chat, email link, ...). With wait=true (default) this returns the outcome and the person's answer: `value` for text, choice (the option id), number (a decimal string) and confirm (`approve` or `deny`), `values` (option ids) for multi_choice. Use input=secret for one-time codes and passwords: the answer is never returned (`value_withheld`); type it into the page with browser_type_secret and the handoff_id. Use input=takeover when the person must operate the browser themselves.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
