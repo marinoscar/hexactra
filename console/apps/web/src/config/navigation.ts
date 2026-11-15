@@ -3,6 +3,7 @@ import AssignmentOutlinedIcon from '@mui/icons-material/AssignmentOutlined';
 import DnsOutlinedIcon from '@mui/icons-material/DnsOutlined';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutlined';
 import HomeIcon from '@mui/icons-material/Home';
+import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
 import SettingsIcon from '@mui/icons-material/Settings';
 import type { ShellNavigation } from '@marinoscar/platform-web/shell/headless';
 
@@ -17,9 +18,10 @@ import { USER_SETTINGS_SECTIONS } from './userSettingsSections';
  * `/admin/*` (Console mode). Every `permission` is the exact string the API
  * enforces; the Console shows for anyone who can open one of its cards.
  */
-export const NAVIGATION: ShellNavigation<'home' | 'tasks' | 'runs' | 'fleet' | 'settings' | 'console'> = {
+export const NAVIGATION: ShellNavigation<'home' | 'inbox' | 'tasks' | 'runs' | 'fleet' | 'settings' | 'console'> = {
   destinations: [
     { key: 'home', label: 'Home', compactLabel: 'Home', Icon: HomeIcon, path: '/' },
+    { key: 'inbox', label: 'Inbox', compactLabel: 'Inbox', Icon: InboxOutlinedIcon, path: '/inbox', permission: 'runs:read' },
     { key: 'tasks', label: 'Tasks', compactLabel: 'Tasks', Icon: AssignmentOutlinedIcon, path: '/tasks', permission: 'tasks:read' },
     { key: 'runs', label: 'Runs', compactLabel: 'Runs', Icon: PlayCircleOutlineIcon, path: '/runs', permission: 'runs:read' },
     { key: 'fleet', label: 'Fleet', compactLabel: 'Fleet', Icon: DnsOutlinedIcon, path: '/fleet', permission: 'fleet:read' },
@@ -34,7 +36,7 @@ export const NAVIGATION: ShellNavigation<'home' | 'tasks' | 'runs' | 'fleet' | '
       pinned: true,
     },
   ],
-  destinationRoutes: { home: ['/'], tasks: ['/tasks'], runs: ['/runs'], fleet: ['/fleet'], settings: ['/settings'], console: ['/admin'] },
+  destinationRoutes: { home: ['/'], inbox: ['/inbox'], tasks: ['/tasks'], runs: ['/runs'], fleet: ['/fleet'], settings: ['/settings'], console: ['/admin'] },
   settingsSurfaces: [
     { sections: ADMIN_SECTIONS, hubPath: '/admin/settings', hubTitle: 'Administration' },
     { sections: USER_SETTINGS_SECTIONS, hubPath: '/settings', hubTitle: 'Settings' },

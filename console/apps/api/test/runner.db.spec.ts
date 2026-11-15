@@ -8,6 +8,7 @@ import { createApp } from '../src/main';
 import { PrismaService } from '../src/prisma/prisma.service';
 import type { FabricClient } from '../src/fabric/fabric.client';
 import { GoalRunnerService } from '../src/runner/goal-runner.service';
+import { InboxController } from '../src/runner/inbox.controller';
 import { TasksService } from '../src/tasks/tasks.service';
 
 let app: NestFastifyApplication;
@@ -153,5 +154,38 @@ describe('the goal runner', () => {
     } as unknown as AiService);
     expect(await runner.advance(run.id, userId, null)).toBe('cancelled');
     expect(fabric.ended()).toBe(1);
+  });
+});
+
+describe('the inbox', () => {
+  it('lists what runs wait for and answers the fabric, then resumes the run', async () => {
+    const userId = await login(`inbox-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const hid = '00000000-0000-4000-8000-0000000000f1';
+    const waiting = await db.run.create({ data: { userId, goal: 'Pay the bill', status: 'waiting_human', handoffId: hid } });
+    const fabricCalls: [string, string, unknown][] = [];
+    const fabric = {
+      request: async (method: string, path: string, opts?: { body?: unknown }) => {
+        fabricCalls.push([method, path, opts?.body]);
+        if (method === 'GET') return { id: hid, kind: 'code', prompt: 'Enter the code', input: 'secret', choices: [], status: 'pending', created_at: 'x', expires_at: 'y' };
+        return {};
+      },
+    } as unknown as FabricClient;
+    const enqueued: unknown[] = [];
+    const jobs = { enqueue: async (j: unknown) => void enqueued.push(j) };
+    const inbox = new InboxController(prisma, fabric, jobs as never);
+
+    const items = await inbox.list(userId);
+    expect(items).toEqual([expect.objectContaining({ runId: waiting.id, kind: 'code', input: 'secret', prompt: 'Enter the code' })]);
+
+    await inbox.respond({ id: userId }, waiting.id, { outcome: 'completed', value: SECRET });
+    expect(fabricCalls.at(-1)).toEqual(['POST', `/v1/handoffs/${hid}/respond`, { outcome: 'completed', value: SECRET }]);
+    expect(enqueued).toEqual([expect.objectContaining({ type: 'browser.goal.run', subjectId: waiting.id })]);
+    // The secret went to the fabric only.
+    expect(JSON.stringify(await db.run.findFirstOrThrow({ where: { id: waiting.id } }))).not.toContain(SECRET);
+
+    const other = await login(`inbox-other-${stamp}@example.test`);
+    await expect(inbox.respond({ id: other }, waiting.id, { outcome: 'completed' })).rejects.toThrow(/Run not found/);
   });
 });
