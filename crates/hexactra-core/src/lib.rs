@@ -857,6 +857,3 @@ pub struct SchedulingDecision {
 
 // Re-export viewer types for convenience
 pub use viewer::{InputLease, ViewerPermissions, ViewerToken};
-
-// Re-export secret transport for integration
-pub mod secret_transport;
