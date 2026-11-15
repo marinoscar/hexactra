@@ -1,6 +1,8 @@
 //! HTTP routes for human handoffs (#189).
 //!
-//! Protected (API token): create, list, read/wait, claim a secret, cancel.
+//! Protected (API token): create, list, read/wait, cancel, and the
+//! deprecated claim of a secret (operator and service tokens only; a
+//! `type_secret` action types a secret without returning it, #287).
 //! Public (own auth): `/v1/handoffs/{id}/respond` accepts the API token or the
 //! handoff's single-use response token, as JSON or as an HTML form, so any
 //! channel (chat bot, automation, emailed link) can answer.
@@ -32,6 +34,7 @@ use super::handoff::Responder;
 pub const RESPONSE_TOKEN_HEADER: &str = "x-hexactra-response-token";
 const MAX_HANDOFF_WAIT: Duration = Duration::from_secs(120);
 
+#[allow(deprecated)] // `claim` stays served while callers move to `type_secret`.
 pub(super) fn protected_routes() -> Router<ApiState> {
     Router::new()
         .route("/v1/sessions/{id}/handoffs", post(create))
@@ -125,15 +128,31 @@ async fn read(
     path = "/v1/handoffs/{id}/claim",
     tag = "handoffs",
     params(("id" = Uuid, Path,)),
-    responses((status = 200, body = ClaimedHandoffValue), (status = 404, description = "Nothing to claim"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+    description = "Deprecated: returns a `secret` answer to the caller, once. Use a `type_secret` action (`POST /v1/sessions/{id}/actions`) instead: the control plane types the secret into the page and never returns it. Operator and service tokens only.",
+    responses((status = 200, body = ClaimedHandoffValue), (status = 404, description = "Unknown handoff"), (status = 409, description = "`secret_unavailable`: not answered yet, already used, erased or expired"), (status = 422, description = "`handoff_not_secret`"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
 )]
+#[deprecated(note = "use a type_secret action; it never returns the secret")]
 async fn claim(
     State(s): State<ApiState>,
+    Extension(p): Extension<Principal>,
     Path(id): Path<Uuid>,
-) -> Result<Json<ClaimedHandoffValue>, AppError> {
+) -> Result<Response, AppError> {
+    // The client router already admits only operator and service tokens;
+    // keep the check here so a routing change cannot widen it.
+    if !p.is_client() {
+        return Err(AppError(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "only operator and service tokens may claim a secret".into(),
+        ));
+    }
     let value = s.store.claim_handoff_secret(id)?;
-    tracing::info!(handoff_id = %id, "handoff secret claimed");
-    Ok(Json(ClaimedHandoffValue { value }))
+    tracing::warn!(handoff_id = %id, "handoff secret claimed through the deprecated claim route");
+    let mut resp = Json(ClaimedHandoffValue { value }).into_response();
+    let h = resp.headers_mut();
+    h.insert("deprecation", HeaderValue::from_static("true"));
+    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    Ok(resp)
 }
 
 #[utoipa::path(

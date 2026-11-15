@@ -491,7 +491,9 @@ impl ControlClient {
         Ok(l.deliveries)
     }
 
-    /// Retrieve a `secret` answer once.
+    /// Retrieve a `secret` answer once. Deprecated on the server: prefer a
+    /// `type_secret` action ([`RemoteAction::TypeSecret`]), which types the
+    /// value without returning it.
     pub async fn claim_handoff_secret(&self, id: Uuid) -> Result<String> {
         let v: ClaimedHandoffValue = self
             .http

@@ -115,6 +115,12 @@ impl From<StoreError> for AppError {
             StoreError::ProfileNotFound(_) => {
                 AppError(StatusCode::NOT_FOUND, "profile_not_found", e.to_string())
             }
+            StoreError::Unprocessable(code, _) => {
+                AppError(StatusCode::UNPROCESSABLE_ENTITY, code, e.to_string())
+            }
+            StoreError::SecretUnavailable(_) => {
+                AppError(StatusCode::CONFLICT, "secret_unavailable", e.to_string())
+            }
         }
     }
 }
@@ -545,7 +551,8 @@ struct ActionQuery {
     tag = "sessions",
     params(("id" = Uuid, Path,), ("async" = Option<bool>, Query, description = "Return 202 at once"), ("inline_artifacts" = Option<bool>, Query, description = "Also return screenshot bytes inline")),
     request_body = ActionRequest,
-    responses((status = 200, description = "Final state (succeeded, failed, timed_out, cancelled)", body = OperationView), (status = 202, description = "Queued (`?async=true`)", body = OperationView), (status = 400, description = "Invalid action"), (status = 409, description = "Session ended or a handoff is pending"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+    description = "Queue an action on the session's host. A `type_secret` action types the answer of a `secret` handoff of this session: the control plane consumes the value once and the operation, events and logs show `[secret]`, never the value. A `type` action with `sensitive: true` is reported the same way.",
+    responses((status = 200, description = "Final state (succeeded, failed, timed_out, cancelled)", body = OperationView), (status = 202, description = "Queued (`?async=true`)", body = OperationView), (status = 400, description = "Invalid action"), (status = 404, description = "Unknown session, or (`type_secret`) unknown handoff"), (status = 409, description = "Session ended, a handoff is pending, or (`type_secret`, `secret_unavailable`) the secret is not answered, already used, erased or expired"), (status = 422, description = "`type_secret`: `handoff_wrong_session` or `handoff_not_secret`"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
 )]
 async fn run_action(
     State(s): State<ApiState>,
