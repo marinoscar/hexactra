@@ -43,6 +43,35 @@ describe('notification buttons in the service worker', () => {
     expect(handleActionClick(t.scope, t.event, t.fetchImpl as never)).toBe(false);
     expect(t.fetchImpl).not.toHaveBeenCalled();
   });
+
+  describe('a question\'s quick answers', () => {
+    const Q = '22222222-2222-4222-8222-222222222222';
+    const qlink = `/inbox/q/${Q}?a=qtok.sig`;
+
+    it('reads the question and the token from its deep link', () => {
+      expect(actionTarget({ link: qlink })).toEqual({ questionId: Q, token: 'qtok.sig', link: qlink });
+      expect(actionTarget({ link: `/inbox/q/${Q}` })).toBeNull();
+    });
+
+    it('answer-0 posts the token without a session and confirms', async () => {
+      const t = setup('answer-0', { link: qlink });
+      expect(handleActionClick(t.scope, t.event, t.fetchImpl as never)).toBe(true);
+      await Promise.all(t.waits);
+      expect(t.fetchImpl).toHaveBeenCalledWith('/api/notification-actions', expect.objectContaining({ credentials: 'omit', body: JSON.stringify({ token: 'qtok.sig', action: 'answer-0' }) }));
+      expect(t.scope.registration.showNotification).toHaveBeenCalledWith('Answered', expect.objectContaining({ tag: `question-${Q}` }));
+    });
+
+    it('a refused answer opens the question; run buttons do nothing on a question', async () => {
+      const t = setup('answer-1', { link: qlink }, false);
+      handleActionClick(t.scope, t.event, t.fetchImpl as never);
+      await Promise.all(t.waits);
+      expect(t.scope.clients.openWindow).toHaveBeenCalledWith(`/inbox/q/${Q}`);
+      const c = setup('cancel', { link: qlink });
+      expect(handleActionClick(c.scope, c.event, c.fetchImpl as never)).toBe(false);
+      const a = setup('answer-0', { link });
+      expect(handleActionClick(a.scope, a.event, a.fetchImpl as never)).toBe(false);
+    });
+  });
 });
 
 describe('Remind me in 15 min', () => {
