@@ -80,6 +80,29 @@ The operator token still works on host routes, so existing single-token setups k
 
 An action that fails in the browser returns `200` with `state: "failed"` and an `error`. Request problems return `400` (invalid action), `404`, `409` (session ended, duplicate result) or `422` (malformed JSON or an unknown action type).
 
+## Event stream
+
+`GET /v1/events` (operator or service token) is a [server-sent events](https://html.spec.whatwg.org/multipage/server-sent-events.html) stream of what happens in the fabric. It lets the console and other clients follow along without polling.
+
+```text
+id: 42
+event: operation.succeeded
+data: {"seq":42,"type":"operation.succeeded","at":"…","data":{"op_id":"…","session_id":"…","host_id":"…","kind":"navigate","state":"succeeded","error":null}}
+```
+
+| Type | When |
+|---|---|
+| `host.registered`, `host.online`, `host.offline`, `host.removed`, `host.browser` | Host lifecycle; `host.browser` fires when the extension connects or disconnects |
+| `session.created`, `session.ended` | Session lifecycle |
+| `operation.queued`, `operation.dispatched`, `operation.succeeded`, `operation.failed`, `operation.timed_out`, `operation.cancelled` | Each action |
+| `handoff.created`, `handoff.resolved`, `handoff.cancelled`, `handoff.expired` | Human handoffs |
+| `reset` | You missed events. Re-read state and continue from the new position |
+
+- **Resume after a disconnect** with the `Last-Event-ID` header, or with `?after=<seq>`. The last 2,000 events are kept for replay. A client further behind, or one resuming with a sequence number from before a control-plane restart, gets `reset` first.
+- **Filter** with `?types=operation.*,handoff.*`, using the same matching rules as webhooks.
+- **Payloads are content-free:** ids, action kinds, states and error messages. They never include typed text, selectors, action URLs, screenshots, handoff prompts, answers or tokens. Read details through the regular endpoints.
+- A keep-alive comment is sent every 15 seconds.
+
 ## Profiles
 
 A host can keep several named browser profiles, each with its own cookies and sign-ins. Names are 1–32 characters of lowercase letters, digits, `-` and `_`.
