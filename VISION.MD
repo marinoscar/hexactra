@@ -1529,7 +1529,7 @@ The TypeScript SDK (`console/packages/sdk`) is generated from the same OpenAPI d
 - **Each advance is a queue job.** The runner calls the model in chunks, with the transcript persisted after each chunk.
 - **Waits release the worker.** A run waiting for a person ends its job, and the answered handoff enqueues the continuation.
 - **Policy is enforced server-side before every action:** allowed sites, step and time budgets, and confirmation before irreversible steps.
-- **The model never sees secrets.** A person types codes and passwords into a handoff, and the runner types them into the page.
+- **The model never sees secrets.** A person types codes and passwords into a handoff, and the runner asks the fabric to type them into the page (`type_secret`), so neither the model nor the console holds them (Section 11.6).
 - **External agents are recorded the same way.** An agent driving a browser directly through the console is recorded as a run of trigger `external`, so the person sees every step and can stop it.
 
 ### 26.4 Deployment
