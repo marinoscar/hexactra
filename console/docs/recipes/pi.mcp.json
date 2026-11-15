@@ -3,7 +3,7 @@
     "hexactra": {
       "url": "https://console.example.test/api/mcp",
       "headers": { "Authorization": "Bearer ${HEXACTRA_TOKEN}" },
-      "description": "Run goals in real browsers, watch runs and answer the person's handoffs through the Hexactra Console",
+      "description": "Run goals in real browsers, watch runs, ask the person typed questions (ask_human) and relay their answers through the Hexactra Console",
       "timeout": 300
     }
   }

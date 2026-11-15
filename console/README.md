@@ -18,6 +18,7 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 | Tasks: saved goals with a profile, allowed sites, step and time budgets, confirm-before-purchase | `/tasks` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
 | Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel | `/runs`, `/runs/:id` | `/api/runs`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` |
 | Inbox: what agents wait for (CAPTCHA, code, sign-in, confirmation); answers resume the run | `/inbox` | `GET /api/inbox`, `POST /api/inbox/:runId/respond` | `hexactra inbox list\|answer RUN --done\|--value\|--choice\|--secret-stdin\|--decline`; TUI **Inbox** | `runs:read` / `runs:write` |
+| Questions: an agent asks its user a typed question (text, choice, multi-choice, number, confirm, none, takeover; a secret only in a browser session) and waits for the typed answer; the person answers on any channel, the first answer wins ([docs/questions.md](docs/questions.md)) | `/inbox`, `/inbox/q/:id` | `/api/questions`, `POST /api/questions/:id/answer\|cancel\|answer-by-token` | `hexactra questions ask\|list\|show\|answer`; TUI **Inbox** | `runs:read` / `runs:write` |
 | Live run view: steps over SSE, live screenshot, take over | `/runs/:id` | `GET /api/runs/:id/stream\|screenshot\|viewer` | `hexactra runs watch`; TUI **Runs** | `runs:read` |
 | External agents: a browser session through the console, recorded as a run (trigger `external`); the user sees each step, can stop it, and answers its handoffs | `/runs` | `POST /api/browser/sessions`, `…/:runId/actions\|handoffs\|artifacts/:id`, `DELETE …/:runId` | via MCP | `runs:read` / `runs:write` |
 | MCP server for agent frameworks: delegate goals or drive browsers, with every call going through the REST API as the user ([docs/mcp.md](docs/mcp.md)) | — | `POST /api/mcp` (Streamable HTTP) | `hexactra mcp serve` (stdio) | the tools' routes |
@@ -28,7 +29,7 @@ Run it all on a VPS (console, fabric and a browser host in one stack): [docs/run
 
 **The goal runner**:
 - It uses the AI slice: feature `browser_agent`, a model with `tools`. Configure a provider at Administration → AI.
-- The model never sees secrets: codes and passwords come from handoffs and are typed by the runner.
+- The model never sees secrets: codes and passwords come from handoffs, and the fabric types them into the page (`type_secret`); the console never holds them.
 - Steps store redacted arguments only.
 - Sites outside a task's allowed list are refused, and purchases wait for your confirmation unless you turn that off.
 

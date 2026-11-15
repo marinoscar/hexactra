@@ -3,6 +3,8 @@
 # HEXACTRA_TOKEN (a personal access token of the agent's console user) in
 # ~/.hermes/.env. Hermes expands ${VAR} in headers at connect time.
 # Check it with: hermes mcp test hexactra
+# The agent can ask you a typed question with ask_human (a choice, a number,
+# a confirmation...) and wait for your answer; see ../agent-frameworks.md.
 mcp_servers:
   hexactra:
     url: "${HEXACTRA_CONSOLE_URL}/api/mcp"
