@@ -1,3 +1,4 @@
+import { alertsAdminCards } from '@marinoscar/platform-web/alerts/ui';
 import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
 import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
 import { jobsAdminSections } from '@marinoscar/platform-web/jobs/ui';
@@ -10,7 +11,7 @@ import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
 
 import { composeSections } from '../slices/sections';
 import { sliceAdminCards } from '../slices/manifest';
-import { WEBHOOKS_ENABLED } from './userSettingsSections';
+import { ALERTS_ENABLED, WEBHOOKS_ENABLED } from './userSettingsSections';
 
 /**
  * The core's admin groups. `General` is empty on purpose: the optional slices
@@ -38,6 +39,9 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
       ...jobsAdminSections.operations.filter((card) => card.path !== '/admin/settings/workers'),
       { ...doctorSettingsPage.card, Icon: doctorSettingsPage.Icon },
       ...(WEBHOOKS_ENABLED ? webhooksAdminSections.operations : []),
+      // Alerts: rules (browser host offline, schedule failing, run budget, …) and incidents.
+      // `alerts:read` is what every read route of `/api/admin/alerts` enforces; writes are gated in the page.
+      ...(ALERTS_ENABLED ? alertsAdminCards : []),
     ],
   },
   // `Danger Zone` stays LAST (docs/specs/settings-ui.md): new groups go above it.

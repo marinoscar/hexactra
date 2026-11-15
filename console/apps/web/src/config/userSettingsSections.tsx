@@ -9,6 +9,8 @@ import { isSliceEnabled, sliceUserCards } from '../slices/manifest';
 
 /** Outbound webhooks are mounted with the credentials and notifications slices (apps/api/src/app.module.ts). */
 export const WEBHOOKS_ENABLED = isSliceEnabled('credentials') && isSliceEnabled('notifications');
+/** Alerts are mounted with the notifications and email slices (apps/api/src/platform/alerts/alerts.enabled.ts). */
+export const ALERTS_ENABLED = isSliceEnabled('notifications') && isSliceEnabled('email');
 import { composeSections } from '../slices/sections';
 
 /**

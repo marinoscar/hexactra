@@ -18,6 +18,7 @@ import { FABRIC_PERMISSIONS } from '../fabric/fabric.permissions';
 import { FLEET_PERMISSIONS } from '../fleet/fleet.permissions';
 import { NOTES_PERMISSIONS } from '../notes/notes.permissions';
 import { TASKS_PERMISSIONS } from '../tasks/tasks.permissions';
+import { alertsMounted } from './alerts/alerts.enabled';
 import { enabledPermissionSlices, isSliceEnabled } from './slices/manifest';
 
 export const PERMISSION_OPTIONS = {
@@ -29,6 +30,7 @@ export const PERMISSION_OPTIONS = {
     'user-data',
     ...enabledPermissionSlices(),
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? (['webhooks'] as const) : []),
+    ...(alertsMounted() ? (['alerts'] as const) : []),
   ],
   app: { permissions: [NOTES_PERMISSIONS, FABRIC_PERMISSIONS, FLEET_PERMISSIONS, TASKS_PERMISSIONS] },
 } satisfies PlatformPermissionOptions;
