@@ -19,7 +19,6 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
-use base64::Engine;
 use clap::{Parser, Subcommand};
 use hexactra_client::ControlClient;
 use hexactra_core::remote::{
@@ -774,14 +773,11 @@ async fn run() -> Result<()> {
         }),
         Commands::Screenshot { output, .. } => {
             if op.state == OperationState::Succeeded && !cli.json {
-                let data = op
-                    .result
-                    .as_ref()
-                    .and_then(|r| r["data"].as_str())
-                    .context("screenshot result has no data")?;
-                let bytes = base64::engine::general_purpose::STANDARD
-                    .decode(data)
-                    .context("decoding screenshot")?;
+                let result = op.result.as_ref().context("screenshot has no result")?;
+                let (_, bytes) = client
+                    .screenshot_bytes(result)
+                    .await
+                    .context("fetching the screenshot")?;
                 let path = output.clone().unwrap_or_else(|| {
                     PathBuf::from(format!(
                         "screenshot-{}.jpg",

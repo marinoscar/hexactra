@@ -74,6 +74,7 @@ The operator token still works on host routes, so existing single-token setups k
 | `DELETE /v1/sessions/{id}` | client | End a session; queued operations become `cancelled` |
 | `POST /v1/sessions/{id}/actions` | client | Run one action. Body `{ "action": {...}, "timeout_ms"? }`. Waits for a terminal state and returns the operation. `?async=true` returns `202` at once |
 | `GET /v1/operations/{id}?wait_ms=` | client | Read an operation, optionally waiting for it to finish |
+| `GET /v1/artifacts/{id}` | client | Bytes of a screenshot, by the handle in its result |
 | `POST /v1/hosts/register` | host | Register; body `{ "name", "version", "host_id"?, "viewer_url"? }` |
 | `GET /v1/hosts/{id}/next?wait_ms=&browser_connected=&on_demand=&profiles=&running=&commands=` | host | Long-poll (max 30 s) for the next operation, or with `commands=true` a host command (`{ "command": {...} }`, sent first); `204` when none |
 | `POST /v1/hosts/{id}/operations/{op}/result` | host | Report `{ "ok", "result"?, "error"? }`. Only the host the operation was dispatched to may report, once |
@@ -146,7 +147,7 @@ Actions are JSON objects tagged by `type`. `tab_id` is optional on tab-scoped ac
 | `type` | `selector`, `text`, `clear`?, `submit`? | `{}` |
 | `press` | `key`, `selector`? | `{}` |
 | `scroll` | `dx`?, `dy`?, `selector`? | `{ x, y }` |
-| `screenshot` | — | `{ mime, data }` (base64) |
+| `screenshot` | — | `{ artifact_id, mime, size, expires_at }`: fetch the bytes from `GET /v1/artifacts/{artifact_id}` ([artifacts](#artifacts)) |
 | `text` | `selector`?, `max_chars`? | `{ text, truncated }` |
 | `elements` | `max_elements`? | `{ elements: [{ selector, tag, role, text, ... }] }` |
 | `wait_for` | `selector`, `timeout_ms`? (≤ 60000) | `{}` |
@@ -161,6 +162,15 @@ Policy enforced before an action is queued:
 - There is no "run arbitrary JavaScript" action.
 - Selectors are limited to 2,000 characters and typed text to 100,000.
 - Logs record the action `type` only, never URLs, selectors or typed text.
+
+## Artifacts
+
+Screenshots do not travel inside operation results. The control plane keeps the image and returns a short-lived handle; large data moves by handle, not in control messages.
+
+- **Fetch:** `GET /v1/artifacts/{id}` (client token) returns the bytes with their `Content-Type` and `Cache-Control: no-store`.
+- **Lifetime:** handles last 15 minutes. The control plane keeps at most 256 MiB, dropping the oldest first. After that, or after a restart, the handle returns `404`. Artifacts are never written to disk.
+- **Migration flag:** send `"inline_artifacts": true` in the action body, or `?inline_artifacts=true`, to also get the base64 `data` as before.
+- **CLI and MCP** fetch the bytes by handle, so `hexactra screenshot -o file.jpg` and `browser_screenshot` work unchanged.
 
 ## Operation states
 

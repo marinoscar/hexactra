@@ -382,6 +382,11 @@ pub struct ActionRequest {
     /// How long to wait for a result before the operation times out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeout_ms: Option<u64>,
+    /// Also return screenshot bytes inline (`data`, base64) next to the
+    /// artifact handle. For clients that have not moved to
+    /// `GET /v1/artifacts/{id}` yet.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub inline_artifacts: bool,
 }
 
 /// `POST /v1/hosts/register`

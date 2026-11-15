@@ -1180,7 +1180,6 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "async-trait",
- "base64 0.21.7",
  "chrono",
  "clap",
  "hexactra-client",
@@ -1201,6 +1200,7 @@ dependencies = [
 name = "hexactra-client"
 version = "0.1.0"
 dependencies = [
+ "base64 0.21.7",
  "hexactra-core",
  "reqwest",
  "serde",
@@ -1355,6 +1355,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.21.7",
  "clap",
  "hexactra-client",
  "hexactra-control",

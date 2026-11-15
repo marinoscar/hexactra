@@ -3,6 +3,7 @@
 //! `hexactra-control` binary.
 
 pub mod api;
+pub mod artifacts;
 pub mod credentials;
 mod credentials_api;
 pub mod events;

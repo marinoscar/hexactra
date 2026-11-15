@@ -532,8 +532,14 @@ impl Server {
         }
         let result = op.result.unwrap_or(Value::Null);
         if let RemoteAction::Screenshot { .. } = action {
-            let data = result["data"].as_str().unwrap_or_default().to_string();
-            let mime = result["mime"].as_str().unwrap_or("image/jpeg").to_string();
+            let (mime, bytes) = match self.client.screenshot_bytes(&result).await {
+                Ok(v) => v,
+                Err(e) => return text_result(format!("fetching the screenshot: {e}"), true),
+            };
+            let data = {
+                use base64::Engine;
+                base64::engine::general_purpose::STANDARD.encode(bytes)
+            };
             let caption = format!(
                 "{}  {}",
                 result["url"].as_str().unwrap_or(""),
