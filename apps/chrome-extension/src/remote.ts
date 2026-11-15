@@ -447,7 +447,8 @@ let started = false;
 function setBadge(connected: boolean) {
   try {
     void chrome.action.setBadgeText({ text: connected ? 'ON' : '' });
-    void chrome.action.setBadgeBackgroundColor({ color: '#c62828' });
+    // The brand's dark coral: white badge text stays readable on it.
+    void chrome.action.setBadgeBackgroundColor({ color: '#c2412a' });
     void chrome.action.setTitle({
       title: connected ? 'Hexactra AI — remote control connected' : 'Hexactra AI',
     });

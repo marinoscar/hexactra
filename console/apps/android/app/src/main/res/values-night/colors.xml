@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Readable on the dark background (8.3:1). -->
+    <color name="brand_danger">#FFFF8A6E</color>
+</resources>

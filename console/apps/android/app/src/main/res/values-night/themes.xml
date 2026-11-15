@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark scheme of values/themes.xml, used when the system is in dark mode. -->
+    <style name="Theme.App" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorPrimary">@color/brand_night_primary</item>
+        <item name="android:colorAccent">@color/brand_night_primary</item>
+        <item name="android:windowBackground">@color/brand_night_background</item>
+        <item name="android:statusBarColor">@color/brand_night_surface</item>
+        <item name="android:navigationBarColor">@color/brand_night_background</item>
+    </style>
+
+    <style name="Theme.App.Launcher" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:statusBarColor">@color/brand_night_surface</item>
+        <item name="android:navigationBarColor">@color/brand_night_background</item>
+    </style>
+
+    <style name="Theme.App.Invisible" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+</resources>
