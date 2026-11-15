@@ -84,6 +84,7 @@ Then, signed in as admin:
 | Upgrade | `git pull && docker compose $F build && docker compose $F up -d` (run `prisma:migrate` first when the release notes say so) |
 | Back up | Postgres (Administration → Database backup), plus the `fabric-control-data` (hosts, credentials) and `fabric-host-data` (profiles, which hold live sign-ins: treat as secrets) volumes |
 | Smoke test (CI does this) | `console/scripts/stack-smoke.sh` |
+| Telemetry | Add `-f telemetry.compose.yml` to `$F`, and set `HEXACTRA_FABRIC_OTLP_ENDPOINT=http://otel-collector:4318` in `.env`. Console and fabric then export to one store, so a trace runs from the console request through its job to the fabric operation. **Administration → Telemetry → Browser agents** charts runs, steps, waits for a person and model tokens |
 
 ## Troubleshooting
 

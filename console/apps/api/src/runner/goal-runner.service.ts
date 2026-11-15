@@ -133,6 +133,7 @@ export class GoalRunnerService {
 
     const record = async (kind: string, action: string | null, args: Record<string, unknown> | null, ok: boolean, summary: string, started: number, reasoning?: string) => {
       state.stepCount += 1;
+      this.tasks.metrics.step(kind, ok);
       await this.prisma.runStep.create({
         data: {
           runId: run.id,
@@ -397,6 +398,7 @@ export class GoalRunnerService {
 
   private async saveMemory(userId: string, runId: string, memory: RunMemory, usage: { input: number; output: number }) {
     memory.log = memory.log.slice(-200);
+    this.tasks.metrics.tokens(usage.input, usage.output);
     await this.prisma.forUser({ userId }).run.updateMany({
       where: { id: runId },
       data: { transcript: memory as never, inputTokens: { increment: usage.input }, outputTokens: { increment: usage.output } },

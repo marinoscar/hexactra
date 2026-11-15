@@ -10755,7 +10755,7 @@ export interface components {
             /** @description The exact statements run, in order — for "Open in Explorer". */
             sql: string[];
             /** @enum {string} */
-            group: "host" | "database" | "queue" | "nodes" | "uptime" | "pipeline" | "activity";
+            group: "host" | "database" | "queue" | "nodes" | "uptime" | "pipeline" | "activity" | "runs";
             /** @description At least one family or table of the group has its table in the store. */
             available: boolean;
             tiles: {
@@ -26024,8 +26024,8 @@ export interface operations {
                 instance?: string;
                 /** @description Default `60`. */
                 buckets?: "30" | "60";
-                /** @description The metric group: `host`, `database`, `queue`, `nodes`, `uptime`, `pipeline` or `activity`. */
-                group: "host" | "database" | "queue" | "nodes" | "uptime" | "pipeline" | "activity";
+                /** @description The metric group: `host`, `database`, `queue`, `nodes`, `uptime`, `pipeline`, `activity` or `runs`. */
+                group: "host" | "database" | "queue" | "nodes" | "uptime" | "pipeline" | "activity" | "runs";
                 /** @description Only this host (<= 200 chars). */
                 host?: string;
             };
