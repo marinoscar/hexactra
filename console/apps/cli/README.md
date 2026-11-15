@@ -35,7 +35,7 @@ Re-running the same command updates it in place. If `~/.local/bin` is not on you
 Check it:
 
 ```bash
-hexactra --version     # 0.1.0 (platform 0.1.0-next.32)
+hexactra --version     # 0.1.1 (platform 0.1.0-next.33)
 hexactra --help
 ```
 
