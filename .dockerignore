@@ -1,0 +1,11 @@
+# Keep the build context small and free of local state.
+.git
+target
+**/node_modules
+**/dist
+apps/chrome-extension/dist-build
+tests/browser/test-results
+release/bin
+**/.env
+**/.env.*
+deploy/container/.env

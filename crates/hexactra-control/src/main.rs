@@ -90,7 +90,7 @@ async fn main() -> Result<()> {
                     webhooks_file
                         .unwrap_or_else(|| default_token_file().with_file_name("webhooks.json")),
                 ),
-                public_url,
+                public_url: public_url.filter(|u| !u.trim().is_empty()),
                 allow_insecure: webhook_allow_insecure,
                 ..Default::default()
             })?;

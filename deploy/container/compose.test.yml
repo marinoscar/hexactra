@@ -1,0 +1,11 @@
+# Test overlay: adds a fixture web site reachable from the browser as
+# http://fixture/ . Used by tests/e2e/container.e2e.sh.
+services:
+  fixture:
+    image: nginx:1.27-alpine
+    volumes:
+      - ../../tests/e2e/remote-fixture:/usr/share/nginx/html:ro
+  host:
+    environment:
+      HEXACTRA_IDLE_SHUTDOWN_S: ${HEXACTRA_IDLE_SHUTDOWN_S:-8}
+      HEXACTRA_VIEWER_URL: http://127.0.0.1:6080/vnc.html

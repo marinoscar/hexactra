@@ -11,6 +11,9 @@ TAG="${HEXACTRA_IMAGE_TAG:-hexactra:latest}"
 echo "Building OCI image: $TAG"
 
 # Build the image
-docker build -t "$TAG" "$PROJECT_ROOT"
+for target in control host; do
+    docker build -f "$PROJECT_ROOT/deploy/container/Dockerfile" --target "$target" \
+        -t "${TAG%:*}-$target:${TAG##*:}" "$PROJECT_ROOT"
+done
 
 echo "OCI image built: $TAG"
