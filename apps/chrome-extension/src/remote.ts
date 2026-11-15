@@ -478,6 +478,10 @@ function connect() {
       });
     } else if (m?.type === 'ping') {
       p.postMessage({ type: 'pong' });
+    } else if (m?.type === 'shutdown') {
+      // The host agent is closing this browser: close every window so
+      // Chromium exits normally and flushes cookies and site storage.
+      void closeAllWindows();
     } else if (m?.type === 'agent_connected') {
       setBadge(true);
     } else if (m?.type === 'agent_disconnected') {
@@ -492,6 +496,13 @@ function connect() {
     scheduleReconnect();
   });
   p.postMessage({ type: 'hello', version: chrome.runtime.getManifest().version });
+}
+
+/** Close every window; Chromium then exits normally. */
+export async function closeAllWindows(): Promise<number> {
+  const windows = await chrome.windows.getAll();
+  await Promise.all(windows.map((w) => (w.id === undefined ? undefined : chrome.windows.remove(w.id).catch(() => undefined))));
+  return windows.length;
 }
 
 function scheduleReconnect() {
