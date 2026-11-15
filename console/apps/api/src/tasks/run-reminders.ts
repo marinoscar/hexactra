@@ -28,7 +28,7 @@ const RETRY_MS = 60_000;
  */
 
 /** The fields of the fabric's handoff view the reminder reads. */
-type FabricHandoffStatus = Pick<FabricHandoff, 'status' | 'response' | 'expires_at'>;
+type FabricHandoffStatus = Pick<FabricHandoff, 'status' | 'response' | 'expires_at' | 'kind' | 'prompt' | 'input'>;
 
 /** Still waiting for its person: pending on the fabric and not answered (a response's outcome settles it on newer fabrics). */
 function stillPending(h: FabricHandoffStatus): boolean {

@@ -5,6 +5,7 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 
 import { FabricError } from '../src/fabric/fabric.client';
+import type { FabricHandoff } from '../src/runner/fabric-session';
 import { createApp } from '../src/main';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { RunActionTokens } from '../src/tasks/run-action-token';
@@ -19,8 +20,8 @@ let tokens: RunActionTokens;
 let reminders: RunReminders;
 let tasks: TasksService;
 let reminded: jest.SpyInstance;
-/** The handoff the in-memory fabric reports, per handoff id. */
-const handoffs = new Map<string, { status: string; expires_at?: string; kind?: string; prompt?: string; input?: string } | Error>();
+/** The handoff the in-memory fabric reports, per handoff id (the fabric's `HandoffView` fields the reminder reads). */
+const handoffs = new Map<string, (Omit<Partial<FabricHandoff>, 'status'> & { status: string }) | Error>();
 const fabric = {
   request: jest.fn(async (_method: string, path: string) => {
     const h = handoffs.get(path.split('/').pop()!);
@@ -114,6 +115,17 @@ describe('reminders while a run waits (browser.runs.remind)', () => {
     await reminders.sendDue();
     expect(reminded.mock.calls.filter((c) => [answered.run.id, stopped.run.id].includes(c[1].id))).toHaveLength(0);
     expect((await runOf(answered.run.id)).remindAt).toBeNull();
+  });
+
+  it('reads the typed fabric shape: a response with an outcome settles the request', async () => {
+    const secret = await waiting(8, 30);
+    handoffs.set(secret.handoffId, { status: 'completed', input: 'secret', kind: 'code', response: { outcome: 'completed', value_withheld: true, channel: 'notification', by: 'user:x' } });
+    const declined = await waiting(8, 30);
+    handoffs.set(declined.handoffId, { status: 'cancelled', input: 'confirm', kind: 'confirm', response: { outcome: 'cancelled', channel: 'inbox' } });
+    await reminders.sendDue();
+    expect(reminded.mock.calls.filter((c) => [secret.run.id, declined.run.id].includes(c[1].id))).toHaveLength(0);
+    expect((await runOf(secret.run.id)).remindAt).toBeNull();
+    expect((await runOf(declined.run.id)).remindAt).toBeNull();
   });
 
   it('a fabric it cannot reach is tried again in a minute, without a reminder', async () => {
