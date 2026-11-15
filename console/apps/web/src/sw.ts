@@ -41,8 +41,10 @@ scope.addEventListener('activate', (event: NotificationsExtendableEvent) => even
 const ICONS = { icon: '/icons/icon-192.png', badge: '/icons/badge-96.png' };
 
 // The platform's three listeners, with one addition on click: the buttons of a
-// "needs you" notification (Stop run, Approve, Remind me in 15 min) act without opening the app
-// (./notificationActions.ts); every other click opens the notification's link.
+// "needs you" notification and its reminders (Stop run, Approve, Remind me in
+// 15 min) and a question's quick answers (answer-0, answer-1) act without
+// opening the app (./notificationActions.ts); every other click opens the
+// notification's link.
 scope.addEventListener('notificationclick', (event: NotificationsClickEvent) => {
   if (handleActionClick(scope as unknown as ActionScope, event as unknown as ActionClickEvent, fetch, ICONS)) return;
   handleNotificationClick(scope, event);

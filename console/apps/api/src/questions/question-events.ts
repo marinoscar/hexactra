@@ -24,7 +24,12 @@ export interface QuestionEvent {
   channel?: string | null;
 }
 
-export type QuestionEventHandler = (e: QuestionEvent) => void | Promise<void>;
+/** Where an event came from: `local` when this process emitted it. */
+export interface QuestionEventMeta {
+  local: boolean;
+}
+
+export type QuestionEventHandler = (e: QuestionEvent, meta: QuestionEventMeta) => void | Promise<void>;
 
 /**
  * The question broker's hook for channels: `emit` after the write committed,
@@ -49,16 +54,20 @@ export class QuestionEvents {
     }
     for (const h of [...this.local]) {
       try {
-        await h(e);
+        await h(e, { local: true });
       } catch (err) {
         this.log.warn(`handler for ${e.type} failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
   }
 
-  /** Returns the unsubscribe function. A handler must not do long work inline (queue a job). */
+  /**
+   * Returns the unsubscribe function. A handler must not do long work inline
+   * (queue a job). Every replica hears every event; `meta.local` tells the
+   * one that emitted it, for work that must happen once.
+   */
   subscribe(handler: QuestionEventHandler): () => void {
-    if (this.bus) return this.bus.subscribe<QuestionEvent>(QUESTION_EVENTS_CHANNEL, (e) => handler(e));
+    if (this.bus) return this.bus.subscribe<QuestionEvent>(QUESTION_EVENTS_CHANNEL, (e, meta) => handler(e, { local: meta.local }));
     this.local.add(handler);
     return () => void this.local.delete(handler);
   }

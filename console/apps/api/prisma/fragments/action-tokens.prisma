@@ -1,0 +1,24 @@
+// Single-use action tokens (#289): what makes a notification button or a
+// webhook answer work once, across every API instance. Only the sha256 of a
+// token (or of a signed token's nonce) is stored, never the token itself.
+// No foreign keys: a row is meaningless after `expiresAt` and the
+// `questions.expire` job purges it a day later.
+
+model ActionToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  /// sha256 (hex) of the token, or of a signed token's nonce.
+  tokenHash  String    @unique @map("token_hash") @db.Char(64)
+  /// What it authorizes: `run-action`, `question-action` or `question-webhook`.
+  purpose    String    @db.VarChar(40)
+  /// At most one token per key (`question-webhook:<questionId>`): a webhook answer token is issued once per question.
+  issueKey   String?   @unique @map("issue_key") @db.VarChar(120)
+  /// The question a `question-webhook` token answers.
+  questionId String?   @map("question_id") @db.Uuid
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz
+  /// Set when it is redeemed: a second use is refused.
+  usedAt     DateTime? @map("used_at") @db.Timestamptz
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([expiresAt])
+  @@map("action_tokens")
+}

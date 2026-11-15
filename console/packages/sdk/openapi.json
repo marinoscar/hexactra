@@ -26600,6 +26600,73 @@
         "description": "**Requires:** authentication, plus permission `runs:write`."
       }
     },
+    "/api/questions/{id}/answer-by-token": {
+      "post": {
+        "operationId": "answerByToken_answer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-question-token",
+            "in": "header",
+            "description": "The single-use answer token of the questions.question.asked webhook.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerByTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/QuestionResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Questions"
+        ]
+      }
+    },
     "/api/browser/sessions": {
       "post": {
         "operationId": "externalBrowser_open",
@@ -55867,6 +55934,39 @@
         "default": {},
         "additionalProperties": false
       },
+      "AnswerByTokenDto": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "default": "completed",
+            "type": "string",
+            "enum": [
+              "completed",
+              "cancelled"
+            ]
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4096
+              },
+              {
+                "type": "number"
+              }
+            ]
+          },
+          "values": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "OpenDto": {
         "type": "object",
         "properties": {
@@ -56398,14 +56498,16 @@
           "token": {
             "type": "string",
             "minLength": 10,
-            "maxLength": 1000
+            "maxLength": 1500
           },
           "action": {
             "type": "string",
             "enum": [
               "cancel",
               "approve",
-              "snooze"
+              "snooze",
+              "answer-0",
+              "answer-1"
             ]
           }
         },

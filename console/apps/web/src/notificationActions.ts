@@ -1,18 +1,20 @@
-// The buttons of a "needs you" notification and its reminders (Stop run,
-// Approve, Remind me in 15 min), handled in
-// the service worker so they work without opening the app: on a desktop, in
-// the installed PWA and in the Android app (whose notifications Chrome shows
-// through this same worker). No imports: this file is bundled into the worker.
+// The buttons of a notification, handled in the service worker so they work
+// without opening the app: on a desktop, in the installed PWA and in the
+// Android app (whose notifications Chrome shows through this same worker).
+// No imports: this file is bundled into the worker.
 //
-// The worker holds no session. The API puts a single-use, hour-long token
-// for this run in the notification's link (`/inbox?run=<id>&a=<token>`); a
-// button posts it to `POST /api/notification-actions`, which can stop that
-// run, approve that plain confirmation or push its next reminder back 15 min,
-// and nothing else. A tap on the
+// - A "needs you" notification and its reminders (`/inbox?run=<id>&a=<token>`):
+//   Stop run, Approve and Remind me in 15 min (`cancel`, `approve`, `snooze`).
+// - A question (`/inbox/q/<id>?a=<token>`): its quick answers (`answer-0`,
+//   `answer-1`: Approve/Deny of a low-risk confirm, or one of two options).
+//
+// The worker holds no session. The API puts a single-use token in the
+// notification's link; a button posts it to `POST /api/notification-actions`,
+// which does what that token allows and nothing else. A tap on the
 // notification itself (no button) keeps the platform's behaviour: it opens
 // the link.
 
-export type NotificationButton = 'cancel' | 'approve' | 'snooze';
+export type NotificationButton = 'cancel' | 'approve' | 'snooze' | 'answer-0' | 'answer-1';
 
 export interface ActionClickEvent {
   readonly action?: string;
@@ -25,16 +27,23 @@ export interface ActionScope {
   readonly clients: { openWindow(url: string): Promise<unknown> };
 }
 
-const BUTTONS: readonly string[] = ['cancel', 'approve', 'snooze'];
+const RUN_BUTTONS: readonly string[] = ['cancel', 'approve', 'snooze'];
+const QUESTION_BUTTONS: readonly string[] = ['answer-0', 'answer-1'];
+const QUESTION_PATH = /^\/inbox\/q\/([0-9a-fA-F-]{36})$/;
 
-/** The run and the button token of a notification's link, or `null`. */
-export function actionTarget(data: unknown): { runId: string; token: string; link: string } | null {
+export type ActionTarget = { runId: string; token: string; link: string } | { questionId: string; token: string; link: string };
+
+/** The run or question and the button token of a notification's link, or `null`. */
+export function actionTarget(data: unknown): ActionTarget | null {
   const link = typeof (data as { link?: unknown })?.link === 'string' ? (data as { link: string }).link : '';
   if (!link.startsWith('/') || link.startsWith('//')) return null;
   const url = new URL(link, 'https://worker.invalid');
-  const runId = url.searchParams.get('run');
   const token = url.searchParams.get('a');
-  return runId && token ? { runId, token, link } : null;
+  if (!token) return null;
+  const question = QUESTION_PATH.exec(url.pathname);
+  if (question) return { questionId: question[1]!, token, link };
+  const runId = url.searchParams.get('run');
+  return runId ? { runId, token, link } : null;
 }
 
 /**
@@ -43,9 +52,12 @@ export function actionTarget(data: unknown): { runId: string; token: string; lin
  * caller hands to the platform's click handler.
  */
 export function handleActionClick(scope: ActionScope, event: ActionClickEvent, fetchImpl: typeof fetch = fetch, icons: { icon?: string; badge?: string } = {}): boolean {
-  if (!event.action || !BUTTONS.includes(event.action)) return false;
+  if (!event.action || ![...RUN_BUTTONS, ...QUESTION_BUTTONS].includes(event.action)) return false;
   const target = actionTarget(event.notification.data);
   if (!target) return false;
+  const isQuestion = 'questionId' in target;
+  // A run's buttons on a run's notification, a question's on a question's.
+  if ((isQuestion ? QUESTION_BUTTONS : RUN_BUTTONS).includes(event.action) === false) return false;
   const action = event.action as NotificationButton;
   event.notification.close();
   event.waitUntil(
@@ -61,6 +73,13 @@ export function handleActionClick(scope: ActionScope, event: ActionClickEvent, f
         ok = res.ok;
       } catch {
         ok = false;
+      }
+      if (isQuestion) {
+        const id = encodeURIComponent(target.questionId);
+        if (ok) await scope.registration.showNotification('Answered', { body: 'Your answer was sent.', tag: `question-${target.questionId}`, ...icons });
+        // Expired, already used or answered elsewhere: show the question instead.
+        else await scope.clients.openWindow(`/inbox/q/${id}`);
+        return;
       }
       if (ok && action === 'snooze') {
         // Snoozed: nothing on screen until the reminder comes back.

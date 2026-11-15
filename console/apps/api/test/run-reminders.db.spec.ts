@@ -8,6 +8,7 @@ import { FabricError } from '../src/fabric/fabric.client';
 import type { FabricHandoff } from '../src/runner/fabric-session';
 import { createApp } from '../src/main';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { ActionTokenStore, tokenHash } from '../src/tasks/action-token-store';
 import { RunActionTokens } from '../src/tasks/run-action-token';
 import { RunNotifier } from '../src/tasks/run-notifier';
 import { RunReminders } from '../src/tasks/run-reminders';
@@ -152,6 +153,20 @@ describe('Remind me in 15 min (POST /api/notification-actions, snooze)', () => {
     expect(r.snoozedUntil!.getTime()).toBeGreaterThanOrEqual(t + 15 * MIN - 1000);
     expect(r.remindAt).toEqual(r.snoozedUntil);
     expect((await act(token, 'snooze')).statusCode).toBe(401);
+  });
+
+  it('spends the snooze token in action_tokens, so no other API instance accepts it again', async () => {
+    const { uid, run } = await waiting(1, 120);
+    const token = tokens.issue(uid, run.id, null);
+    const nonce = tokens.verify(token)!.nonce;
+    expect((await act(token, 'snooze')).statusCode).toBe(200);
+    const row = await prisma.actionToken.findUnique({ where: { tokenHash: tokenHash(nonce) } });
+    expect(row).toMatchObject({ purpose: 'run-action' });
+    expect(row!.usedAt).not.toBeNull();
+    // A second instance shares only the database, no memory.
+    const other = new RunActionTokens(new ActionTokenStore(prisma));
+    expect(await other.redeem(token, 'snooze')).toBeNull();
+    expect(await other.redeem(token, 'cancel')).toBeNull();
   });
 
   it('is refused with too little time left, or once the run stopped waiting', async () => {

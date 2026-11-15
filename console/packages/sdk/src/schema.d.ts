@@ -5127,6 +5127,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/questions/{id}/answer-by-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["answerByToken_answer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/browser/sessions": {
         parameters: {
             query?: never;
@@ -11535,6 +11551,15 @@ export interface components {
         CancelQuestionDto: {
             channel?: string;
         };
+        AnswerByTokenDto: {
+            /**
+             * @default completed
+             * @enum {string}
+             */
+            outcome?: "completed" | "cancelled";
+            value?: string | number;
+            values?: string[];
+        };
         OpenDto: {
             /** @default default */
             profile?: string;
@@ -11647,7 +11672,7 @@ export interface components {
         NotificationActionDto: {
             token: string;
             /** @enum {string} */
-            action: "cancel" | "approve" | "snooze";
+            action: "cancel" | "approve" | "snooze" | "answer-0" | "answer-1";
         };
         StartRunDto: {
             goal: string;
@@ -28866,6 +28891,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    answerByToken_answer: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The single-use answer token of the questions.question.asked webhook. */
+                "x-question-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerByTokenDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["QuestionResponseDto"];
+                    };
                 };
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */

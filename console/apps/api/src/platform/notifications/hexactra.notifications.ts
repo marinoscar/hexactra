@@ -10,6 +10,7 @@ export const RUN_NEEDS_YOU_EVENT = 'runs.needs_you';
 export const RUN_FINISHED_EVENT = 'runs.finished';
 export const SCHEDULE_FAILING_EVENT = 'schedules.failing';
 export const RUN_REMINDER_EVENT = 'runs.needs_you_reminder';
+export const QUESTION_ASKED_EVENT = 'questions.asked';
 
 const str = (d: unknown, k: string) => (typeof (d as Record<string, unknown>)[k] === 'string' ? String((d as Record<string, unknown>)[k]) : '');
 const trim = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -34,6 +35,17 @@ const reminder: BrowserNotificationTemplate = (d) => {
     title: final ? `Expires in ${Math.max(1, Math.round(left))} min: an agent needs you` : 'Still waiting for you',
     body: trim(str(d, 'prompt') || str(d, 'goal') || 'An agent is waiting for your answer in the Inbox.', 180),
     link: inboxLink(d),
+  };
+};
+const asked: BrowserNotificationTemplate = (d) => {
+  const id = str(d, 'questionId');
+  // A deep link to the question (/inbox/q/<id>); `a`: the quick-answer
+  // buttons' single-use token, read by the service worker, ignored by the page.
+  const token = str(d, 'actionToken');
+  return {
+    title: 'A question for you',
+    body: trim(str(d, 'prompt') || 'Answer it in the Inbox.', 180),
+    link: id ? `/inbox/q/${encodeURIComponent(id)}${token ? `?a=${encodeURIComponent(token)}` : ''}` : '/inbox',
   };
 };
 const finished: BrowserNotificationTemplate = (d) => ({
@@ -69,6 +81,17 @@ export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
       defaultEnabled: true,
     },
     browserTemplate: reminder,
+  },
+  {
+    event: {
+      key: QUESTION_ASKED_EVENT,
+      label: 'A question for you',
+      description: 'An agent or your automation asks you something outside a browser run.',
+      channels: ['browser', ...PUSH, 'email'],
+      defaultEnabled: true,
+    },
+    emailTemplate: 'question-asked',
+    browserTemplate: asked,
   },
   {
     event: {
@@ -124,6 +147,20 @@ export const hexactraPushPayload: PushPayloadHook = (event, data) => {
   if (event.key === RUN_NEEDS_YOU_EVENT || event.key === RUN_REMINDER_EVENT) {
     const actions = requestActions(data);
     return { tag: runId ? `run-${runId}` : 'run', urgency: 'high', ...(actions.length ? { actions } : {}) };
+  }
+  if (event.key === QUESTION_ASKED_EVENT) {
+    // Quick answers only when the notification carries their token (a low-risk
+    // confirm, a two-option choice): never for a secret or a high-risk confirm.
+    const quick = (data as { quickActions?: unknown }).quickActions;
+    const actions =
+      str(data, 'actionToken') && Array.isArray(quick)
+        ? quick
+            .filter((a): a is { action: string; title: string } => typeof a?.action === 'string' && typeof a?.title === 'string')
+            .slice(0, 2)
+            .map((a) => ({ action: a.action, title: a.title.slice(0, 64) }))
+        : [];
+    const id = str(data, 'questionId');
+    return { tag: id ? `question-${id}`.slice(0, 64) : 'question', urgency: 'high', ...(actions.length ? { actions } : {}) };
   }
   if (event.key === RUN_FINISHED_EVENT) return { tag: runId ? `run-${runId}` : 'run', urgency: str(data, 'status') === 'failed' ? 'high' : 'normal' };
   if (event.key === SCHEDULE_FAILING_EVENT) return { tag: `schedule-${str(data, 'scheduleId') || 'failing'}`, urgency: 'normal' };
