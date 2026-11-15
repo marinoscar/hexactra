@@ -1,6 +1,6 @@
 # Hexactra — Product Vision and Technical Architecture
 
-> **Status:** Foundational vision and proposed architecture (not a statement of shipped capabilities)  
+> **Status:** Foundational vision and proposed architecture (not a statement of shipped capabilities). Section 26, and the status notes in Section 11, record what is implemented in this repository.  
 > **Repository:** https://github.com/marinoscar/hexactra  
 > **Document version:** 1.1  
 > **Date:** October 15, 2026  
@@ -434,6 +434,8 @@ Every operation is bound to a subject, session, permission scope, idempotency ke
 
 AI-driven UI tasks routinely encounter a boundary at which a human must supply knowledge, demonstrate possession, approve a change, or take direct control. Hexactra must handle this through structured state, not by asking an agent to improvise with credentials or MFA.
 
+> **Implementation status (epic #285, "Ask a human").** The question model, the fabric handoffs, the console's question broker and its channels described in 11.2-11.6 and 12.1 are implemented in this repository and covered by an end-to-end test against a real Chromium (`tests/e2e/remote-control.e2e.mjs`). Items marked *future* are not. The reference documentation is `docs/remote-control-api.md` (fabric handoffs and `type_secret`) and `console/docs/questions.md` (question types, channel rules, REST, webhooks). The earlier HITL scaffolding (the control plane's unmounted `hitl_broker` and interaction-request routes with their out-of-band and passkey-challenge storage, the `secret_transport` module, and the extension's local HITL stub) was never served and has been removed.
+
 ### 11.1 Requirements
 
 1. Any authorized action or policy rule may request a human interaction.
@@ -449,16 +451,32 @@ AI-driven UI tasks routinely encounter a boundary at which a human must supply k
 
 ### 11.2 HITL request taxonomy
 
-| Request type | Examples | Expected v1 handling |
+Every request is a **typed question**: an `input` type says what answer is expected, and a `kind` (`captcha`, `code`, `passkey`, `login`, `confirmation`, `other`) says why it is asked. The answer comes back typed, so an agent never parses free text to learn what a person decided.
+
+| `input` | The person gives | Constraints | Typed response |
+|---|---|---|---|
+| `none` | Nothing: they act (in the browser or elsewhere), then press Done | | `outcome` |
+| `takeover` | Nothing: they operate the browser themselves, then press Done | | `outcome` |
+| `text` | Nonsecret text | `max_length`, `pattern`, `multiline` | `value` |
+| `secret` | A password, one-time code or recovery code | `max_length` | Withheld: typed into the page by the fabric, never returned |
+| `choice` | One option (1-10, each `{ id, label, description? }`) | | `value`: the option id |
+| `multi_choice` | Several options | `min_selections`, `max_selections` | `values`: option ids |
+| `number` | A number | `min`, `max`, `step`, `unit` | `value`: a canonical decimal |
+| `confirm` | Approve or deny | `confirm_label`, `deny_label`, `risk` (`low` or `high`, default `high`) | `value`: `approve` or `deny` |
+
+Every response carries `outcome` (`completed`, or `cancelled` when the person declines), the answering `channel`, `by` (who answered) and the time. An answer that breaks a constraint is refused before it is recorded.
+
+How the original request types map onto it:
+
+| Request type | Examples | Implemented as |
 |---|---|---|
-| SECRET_TEXT | Username, password, recovery field, application-specific secret | Protected human entry or takeover |
-| OTP_CODE | SMS/email/TOTP one-time code | Protected short-lived input |
-| OUT_OF_BAND_CONFIRMATION | Authenticator push, email approval link, mobile “approve sign in” | Prompt human to complete externally; human confirms, then runtime verifies website state |
-| PASSKEY_OR_SECURITY_KEY | WebAuthn, platform passkey, FIDO security key, phone-as-key | Human takeover/local authenticator as supported; otherwise explicit blocked outcome |
-| ACTION_APPROVAL | Send message, submit purchase, delete account, export sensitive data | Approve/deny with contextual scope |
-| HUMAN_TAKEOVER | CAPTCHA, native dialog, ambiguous UI, unfamiliar challenge | Exclusive browser-control lease and viewer |
-| INFORMATION_REQUEST | Nonsecret missing data required to continue | Typed human response |
-| SECURITY_EXCEPTION_REQUEST | Site/operation blocked by explicit policy | No implicit bypass; require separately authorized policy change if allowed |
+| SECRET_TEXT, OTP_CODE | Password, SMS/email/TOTP code, recovery field | `secret` (kind `login` or `code`), browser-bound |
+| OUT_OF_BAND_CONFIRMATION | Authenticator push, email approval link | `none` (kind `login` or `other`): the person acts on their device and presses Done; the agent then checks the page |
+| PASSKEY_OR_SECURITY_KEY | WebAuthn, platform passkey, FIDO key | `takeover` or `none` (kind `passkey`), through the host's remote viewer where it has one |
+| ACTION_APPROVAL | Submit a purchase, send a message, delete data | `confirm`, `risk: high` by default |
+| HUMAN_TAKEOVER | CAPTCHA, native dialog, ambiguous UI | `takeover` or `none` (kind `captcha`) with the viewer link |
+| INFORMATION_REQUEST | Nonsecret missing data, a decision between options | `text`, `choice`, `multi_choice`, `number` |
+| SECURITY_EXCEPTION_REQUEST | Site or operation blocked by policy | Not a question: policy refuses the action (no implicit bypass) |
 
 **Important distinctions:**
 - Entering a code is not the same as approving an action.
@@ -466,126 +484,136 @@ AI-driven UI tasks routinely encounter a boundary at which a human must supply k
 - Some WebAuthn ceremonies cannot be completed through a remote viewer, even if the human can see the browser. Report the limitation and suggest a supported local flow.
 - Hexactra supports a human completing an allowed CAPTCHA but does not attempt unauthorized evasion or automatic bypass.
 
-### 11.3 v1 interaction channel: built-in human inbox
+### 11.3 Where questions live: the fabric and the console
 
-V1 implements a **Human Interaction Broker** and one concrete **BuiltInHumanProvider**:
+Questions are split between the two layers of Section 26:
 
-1. Save the request's nonsecret metadata and pending state durably.
-2. Publish an **interaction.required** event to authenticated, subscribed clients.
-3. Display a pending item in the Hexactra dashboard's human inbox.
-4. Permit the user to open a secure response page, verify the destination/site and task, and enter the required value or approve/deny.
-5. For device-bound or graphical challenges, permit takeover of the browser where supported.
-6. Resume the suspended operation only after checking authorization, freshness, one-time-use, lease state, and driver/browser state.
+- **The fabric's handoffs** (`/v1/sessions/{id}/handoffs`) are browser-bound. A handoff pauses one browser session: its actions return `409 handoff_pending` until a person answers, cancels, or the handoff expires. A handoff is **the only place a secret is typed**: the agent sends a `type_secret` action naming the handoff, and the control plane types the value into the page (11.6). Each handoff has a single-use 256-bit response token (stored as a digest) and is announced to the fabric's signed webhooks (`handoff.created`, `handoff.resolved`, `handoff.cancelled`, `handoff.expired`).
+- **The console's question broker** (`/api/questions`) is what people use. It holds:
+  - *free-standing questions* that need no browser (every type but `secret`), asked by an agent through REST, the CLI (`hexactra questions ask`) or MCP (`ask_human`);
+  - a mirror of every handoff the console opens, so one Inbox shows both;
+  - an **owner** per question (only that user sees or answers it), the asker (`user:…`, `agent:…`, `run:…`) and an audit trail of asked, answered, cancelled and expired;
+  - the **channels** that reach the person (12.1): its Inbox (web, the Android app, CLI/TUI, MCP `inbox_answer`), notifications (in-app, Web Push, email, the Android app) with quick-answer buttons, and signed outbound webhooks.
 
-**No SMS delivery, email sending/reading, push-notification gateway, external chat bot, password manager, or credential vault integration is required or claimed for v1.** The event API and provider contracts make these possible later. If the user is not connected to the dashboard, the request remains pending until its expiration; an external notification is not guaranteed in v1.
+**Channel rules** in the console (the same functions decide what a channel offers and what an incoming answer may be):
 
-The CLI and SDK may render a sanitized “human input required” notice and link to the authenticated dashboard. A headless MCP client can receive the same nonsecret request metadata.
+| Answer | Where it may be collected |
+|---|---|
+| Public: `choice`, `multi_choice`, `text`, `number`, a low-risk `confirm` | Any channel, including a notification button (a low-risk confirm, or a choice of exactly two options) and a webhook receiver |
+| `secret` | Only on the signed-in question page. Every other channel gets a link, never the value or a way to send one |
+| High-risk `confirm` | Only where the console signs the person in (web, Android app, CLI/TUI) |
+| `none`, `takeover` | The signed-in question page or Inbox |
+
+- **The first answer wins.** Answering is a conditional update on a still-pending question; a later answer from any channel is refused (409), and the question is withdrawn from every other channel.
+- **Webhook answers** use a single-use answer token issued once per public question and sent in the `questions.question.asked` payload. The receiver posts the answer with the token in the `x-question-token` header; the token is stored only as a SHA-256 digest, answers that one question once before it expires, and is not spent by an invalid answer.
+- **Notification buttons** carry a single-use signed token naming the question and the answers it allows, spent in the database.
+- **Not yet:** chat apps (Slack, Teams, Telegram) are post-v1 channels (#293). MCP elicitation (the server asking the client's user mid-call) is not supported, because the console's MCP transport is stateless; agents ask with `ask_human` and wait (`wait_s`, `question_status`). SMS delivery, email reading and vault integrations remain future (Section 12).
 
 ### 11.4 HITL state machine
 
-~~~text
-CREATED -> PENDING_DELIVERY -> AWAITING_HUMAN -> CLAIMED -> RESPONDED
-             |                     |               |          |
-             |                     |               |          -> CONSUMED -> RESUMED
-             |                     |               -> EXPIRED
-             |                     -> DENIED
-             -> DELIVERY_FAILED / RETRYING
+The implemented lifecycle is deliberately small:
 
-Any pending state -> CANCELLED
-Any terminal state: immutable except permitted audit annotations
+~~~text
+fabric handoff:    pending -> completed | cancelled | expired
+console question:  pending -> answered  | cancelled | expired
 ~~~
 
-State transitions must be atomic and replay-safe. Claim/response operations use optimistic version checks or equivalent concurrency guards. A response is tied to one interaction ID and cannot be replayed on another session or website.
+- `cancelled` means the person declined (or the asker withdrew the question, or its session ended); a `deny` of a `confirm` is a completed answer, not a cancellation.
+- Expiry: a handoff expires after its timeout (10 s to 24 h, default 10 min). A console question defaults to 1 h; the `questions.expire` job marks overdue ones expired and withdraws their handoffs.
+- Transitions are atomic and single-use: the response token stops working once the handoff resolves, and a console answer is a conditional update on `status = pending`. A response is tied to one question and cannot be replayed on another session or website.
 
-### 11.5 Interaction request schema (conceptual)
+*Future:* explicit delivery states (`PENDING_DELIVERY`, `DELIVERY_FAILED`, retries per provider) and a `CLAIMED` state for a person who has opened a question but not answered. Today delivery is best effort per channel (a channel failure is logged and does not block the others), and the Inbox always shows what is pending.
+
+### 11.5 Interaction request schema
+
+A fabric handoff, as created (`POST /v1/sessions/{id}/handoffs`):
 
 ~~~json
 {
-  "interaction_id": "hint_01EXAMPLE",
-  "schema_version": "1",
-  "session_id": "sess_01EXAMPLE",
-  "operation_id": "op_01EXAMPLE",
-  "requesting_principal": "agent:example",
-  "owner_principal": "user:example",
-  "kind": "OTP_CODE",
-  "reason_code": "AUTH_CHALLENGE",
-  "display": {
-    "title": "Authentication code required",
-    "message": "Enter the code you received to continue sign-in.",
-    "site_origin": "https://example.com",
-    "requested_fields": [
-      { "name": "code", "type": "secret", "max_length": 12 }
-    ]
-  },
-  "destination": {
-    "kind": "BROWSER_FIELD",
-    "session_bound": true,
-    "origin_bound": true
-  },
-  "status": "AWAITING_HUMAN",
-  "expires_at": "2026-10-15T23:30:00Z",
-  "trace_id": "example-trace-id"
+  "kind": "confirmation",
+  "prompt": "Approve the order of 2 items for 48.00?",
+  "input": "confirm",
+  "confirm_label": "Place order",
+  "deny_label": "Cancel",
+  "risk": "high",
+  "timeout_ms": 600000,
+  "page": { "url": "https://shop.example.test/checkout", "title": "Checkout" }
 }
 ~~~
 
-This is an illustrative schema, not a deployed endpoint or claim that each field is final. In practice, **the request for a secret must not itself include a saved value**. The secret response travels through a protected channel and is consumed once.
+A console question as it is read back (`GET /api/questions/{id}`, camelCase):
+
+~~~json
+{
+  "id": "…", "askedBy": "agent:renewal-bot", "runId": null, "browserBound": false,
+  "input": "choice", "kind": "other", "prompt": "Which plan should I renew?",
+  "options": [{ "id": "basic", "label": "Basic" }, { "id": "team", "label": "Team", "description": "5 seats" }],
+  "status": "answered",
+  "response": { "outcome": "completed", "value": "team", "valueWithheld": false, "channel": "web", "by": "user:…", "answeredAt": "…" },
+  "expiresAt": "…"
+}
+~~~
+
+**The request for a secret never includes a saved value**, and a secret answer reads back as `valueWithheld: true` (fabric: `value_withheld`) with no value, everywhere.
 
 ### 11.6 Secret response handling
 
-For username, password, OTP, and recovery codes:
+For username, password, OTP, and recovery codes, what ships:
 
-1. The human authenticates to the dashboard independently of the target website.
-2. The UI clearly displays the website origin, requesting session, requested fields, and why the information is needed.
-3. Input is submitted over an authenticated TLS-protected channel; use appropriate CSRF defenses and session-bound authorization.
-4. Secret material is held only as long as necessary in a constrained, ephemeral server/worker handoff; never store it in the ordinary interaction row.
-5. The control service delivers the value only to an authorized, bound execution destination; the worker injects it into the intended browser control or uses the approved takeover path.
-6. The secret is never returned to the agent's tool response or stored as retrievable browser snapshot data by Hexactra. Redact before exporting artifacts where technically possible.
-7. After application, report only a sanitized result such as **provided**, **applied**, **rejected**, **expired**, or **human action required again**.
-8. Zeroize/clear transient buffers on a best-effort basis and expire the secret reference. Do not promise perfect memory erasure in managed runtimes.
-9. On origin mismatch, session/profile change, cancellation, approval revocation, or expiration, reject and discard the response.
+1. In the console, the person answers on the signed-in question page; no console notification, webhook or chat message carries a secret or a way to send one. Integrations that talk to the fabric directly can also answer through the handoff's single-use response token (its answer page or its `handoff.*` webhooks) or the operator CLI; those are operator-configured channels.
+2. The question page shows the page title, the requesting run or agent, and why the value is needed (showing the full origin is *future*).
+3. The console relays the value to the fabric's handoff in that one request and never stores or logs it. The fabric holds it **in memory only**, never in its state database, and erases it (memory zeroed) when it is used, when the session ends, or 10 minutes after the answer.
+4. The agent, the goal runner and the console's MCP tools type it with the fabric's **`type_secret` action** (`{ "type": "type_secret", "handoff_id", "selector", "clear", "submit" }`). The control plane checks the handoff belongs to that session, asked for a secret and was answered, takes the value once, and sends the bound host an ordinary `type` command. Only that host-bound command contains the value; operation views, events, webhooks, logs and traces show the handoff id and selector only.
+5. A second `type_secret`, or one after expiry, fails with `409 secret_unavailable`; the agent asks again.
+6. The secret is never returned to the agent's tool response, the console, the SDK or the CLI. The deprecated `POST /v1/handoffs/{id}/claim` route still returns it once to operator and service tokens, but no first-party caller uses it, and it is scheduled for removal.
+7. After application, only a sanitized result is reported (succeeded or failed, as for `type`).
+8. On a session change, cancellation, or expiration, the value is discarded.
 
-**Security reality:** any website receiving credentials can observe those values; Hexactra cannot guarantee that a compromised site or browser will not capture them. Keep the trust boundary explicit. Offer browser takeover as the preferred path when safer than relaying sensitive values through the runtime.
+**Security reality:** any website receiving credentials can observe those values; Hexactra cannot guarantee that a compromised site or browser will not capture them. Keep the trust boundary explicit. Offer browser takeover as the preferred path when safer than relaying sensitive values through the runtime. Zeroization is best effort; the managed runtimes (the console's Node process) cannot promise perfect memory erasure.
 
 ### 11.7 HITL sequence: SMS/email OTP
 
 ~~~mermaid
 sequenceDiagram
-  participant A as External Agent
-  participant C as Hexactra Control Plane
-  participant B as Browser Worker
-  participant H as Authorized Human
-  A->>C: Request browser action
-  C->>B: Execute authorized action
-  B-->>C: Authentication challenge detected
-  C->>C: Persist nonsecret HITL request and pause operation
-  C-->>A: interaction_required + operation reference
-  C-->>H: In-app inbox/event notification
-  H->>C: Authenticated one-time OTP submission
-  C->>C: Check owner, TTL, origin, session, state
-  C->>B: Protected, one-use secret handoff
-  B->>B: Enter OTP in bound browser context
-  B-->>C: Site result observed
-  C-->>A: Sanitized operation result
+  participant A as Agent (goal runner, MCP or SDK)
+  participant K as Hexactra Console
+  participant F as Fabric control plane
+  participant H as Browser host
+  participant P as Person (owner)
+  A->>K: request_human / browser_request_human (input: secret)
+  K->>F: POST /v1/sessions/{id}/handoffs
+  F-->>K: handoff (session paused)
+  K-->>P: Inbox item + notification (link only)
+  P->>K: Signed-in question page: the code
+  K->>F: respond (value relayed, not stored)
+  F-->>K: handoff completed, value_withheld
+  K-->>A: completed, value withheld
+  A->>K: type the secret (selector)
+  K->>F: action type_secret {handoff_id, selector}
+  F->>H: type (value, once)
+  H-->>F: result
+  F-->>K: operation succeeded (no value)
+  K-->>A: typed
 ~~~
 
 ### 11.8 HITL sequence: phone prompt, passkey, or security key
 
-- Issue **OUT_OF_BAND_CONFIRMATION** if the user must respond on a separate trusted device.
+- Ask with `input: none` (kind `login` or `other`) when the user must respond on a separate trusted device: they act there, then press Done.
 - Give clear, contextual instructions but do not ask the agent to impersonate the authenticator.
-- For a passkey or hardware security key, offer **HUMAN_TAKEOVER** when the local execution environment and authentication device allow it.
-- Where browser and authenticator support require local presence and that presence is unavailable, return **HUMAN_ACTION_UNSUPPORTED_ON_THIS_HOST** rather than inventing a bypass.
+- For a passkey or hardware security key, ask with `input: takeover` (kind `passkey`); when the host registered a remote viewer, the question links to it.
+- *Future:* where browser and authenticator support require local presence and that presence is unavailable, return an explicit **HUMAN_ACTION_UNSUPPORTED_ON_THIS_HOST** outcome rather than inventing a bypass. Today the person declines the question (`cancelled`).
 - After the user acts, independently check the page/navigation/authentication state before declaring success.
 
 ### 11.9 HITL safety and authorization
 
 - Human answers are not general instructions to the agent.
-- The dashboard must make malicious or mismatched website origins visible and may require an extra warning for unusual sites.
-- A request can be fulfilled only by the bound owner or an explicitly delegated approver.
-- Agents cannot fabricate human responses or self-approve privileged actions.
+- The question page shows the page title (and the remote viewer, when the host has one), so the person sees which site asks; warnings for mismatched or unusual origins are *future*.
+- A question can be answered only by its owner (implemented); explicitly delegated approvers are *future*.
+- Agents must not fabricate human responses or self-approve privileged actions. The MCP tools tell agents to relay only answers the user gave (`inbox_answer`), and a high-risk confirm is never offered on a webhook or a notification button. An agent holding its user's personal access token is that user to the API, so each agent framework gets its own low-role user until scoped tokens exist (Section 26.5).
 - Restrict which actions a human approval authorizes: include session, action type, target, parameters where possible, expiration, and single-use semantics.
-- High-impact actions (payments, irreversible changes, sending sensitive data) may require a separate **ACTION_APPROVAL**, even after successful login.
+- High-impact actions (payments, irreversible changes, sending sensitive data) may require a separate approval (`confirm`, high risk), even after successful login. The goal runner asks before purchases unless the task turns that off.
 - The input request must be initiated by trusted runtime detection/policy, not by obeying arbitrary instructions embedded on a website.
-- A failed or suspicious challenge should not automatically trigger repeated OTP prompts indefinitely; add request quotas/backoff and abuse safeguards.
+- A failed or suspicious challenge should not automatically trigger repeated OTP prompts indefinitely; add request quotas/backoff and abuse safeguards (*future*).
 
 ---
 
@@ -595,20 +623,26 @@ V1 must provide the **abstraction seams**, while implementing only the human pro
 
 ### 12.1 HumanInteractionProvider
 
+**Implemented as the console's question channel registry.** A channel is a `QuestionChannel` registered with the `QuestionChannelRegistry` (`console/apps/api/src/questions/channels/`):
+
 ~~~typescript
-interface HumanInteractionProvider {
-  id: string;
-  capabilities(): InteractionCapability[];
-  deliver(request: PublicInteractionRequest): Promise<DeliveryReceipt>;
-  cancel(interactionId: string): Promise<void>;
+interface QuestionChannel {
+  id: string;                               // open vocabulary: inbox, notifications, webhook, ...
+  canCollect(q: QuestionView): boolean;     // the channel rules (11.3)
+  deliver(q: QuestionView, ctx: QuestionChannelContext): Promise<void>;
+  withdraw(q: QuestionView, ctx: QuestionChannelContext): Promise<void>;
 }
 ~~~
 
-The provider **delivers a prompt or access path**, not necessarily a secret. The trusted Human Interaction Broker remains responsible for recording the response, enforcing authorization, and resuming the operation.
+The channel **delivers a prompt or access path**, never a secret. The broker remains responsible for recording the answer, enforcing ownership and the channel rules, and resuming the run. Delivery and withdrawal run as queue jobs (`questions.deliver`), never inline in a request.
 
-Possible later providers: email notification, SMS, mobile push, Slack, Teams, webhooks, and custom self-hosted notification services. Each must have an explicitly authorized owner mapping and a secure return channel.
+Implemented channels: `inbox` (web, Android app, CLI/TUI, MCP), `notifications` (in-app, Web Push, email, the Android app, with quick-answer buttons) and `webhook` (signed outbound webhooks with single-use answer tokens). The fabric's own webhooks (`handoff.*`) are a second, lower-level path for integrations that talk to the fabric directly.
+
+Post-v1 channels: Slack, Teams and Telegram adapters (#293), SMS and custom self-hosted notification services. Each must have an explicitly authorized owner mapping and a secure return channel, and follows the same rules: public answers only, secrets link-only.
 
 ### 12.2 CredentialProvider
+
+*Future.* Not implemented.
 
 ~~~typescript
 interface CredentialProvider {
@@ -622,7 +656,7 @@ Possible later providers: local encrypted credential store, operating-system key
 
 **Design constraints for future vaults:**
 - Resolve by **logical credential reference + origin + principal + approved purpose**, not by asking an agent for an arbitrary password.
-- Prefer opaque secret handles and a trusted worker injection pathway rather than disclosing raw values to agent code or the model.
+- Prefer opaque secret handles and a trusted worker injection pathway rather than disclosing raw values to agent code or the model (the `type_secret` action is that pathway for human-supplied secrets today).
 - Keep provider credentials separate from target website credentials.
 - Scope permissions to particular profiles, origins, users, and actions.
 - Support access revocation, rotation, expiration, and provider errors.
@@ -634,16 +668,15 @@ Possible later providers: local encrypted credential store, operating-system key
 
 Future policy can rank **safe existing browser session -> approved credential provider -> human request -> blocked**. This ordering is configurable and never silently escalates permissions. Human presence remains mandatory for operations requiring fresh possession or consent.
 
-Conceptual extension points:
+Extension points:
 
 ~~~text
-InteractionBroker
-  ├── BuiltInHumanProvider          [v1]
-  ├── EmailNotificationProvider     [future]
-  ├── SMSNotificationProvider       [future]
-  ├── MobilePushProvider            [future]
-  ├── ChatNotificationProvider      [future]
-  └── CustomWebhookProvider         [future]
+QuestionChannelRegistry (console)
+  ├── inbox                         [implemented]
+  ├── notifications                 [implemented: in-app, Web Push, email, Android]
+  ├── webhook                       [implemented: signed, single-use answer tokens]
+  ├── chat (Slack, Teams, Telegram) [post-v1, #293]
+  └── sms / custom                  [future]
 
 CredentialResolver
   ├── NoVaultProvider               [v1]
@@ -652,11 +685,11 @@ CredentialResolver
   └── CustomCredentialProvider      [future]
 ~~~
 
-No third-party connector is silently enabled, and no incoming webhook can supply a secret without authenticated owner binding and request-level authorization.
+No third-party connector is silently enabled, and no incoming webhook can supply a secret: a webhook answer token is issued only for public answers and answers one question once.
 
 ### 12.4 How requests become automatable later
 
-The API must make requests machine-readable and policy-controlled from day one. A future approved connector can notify a user, receive a protected reply, or retrieve a permitted credential from a vault. The automation is in *routing and handling known request types*, not in removing the human authority required by the website, device, or policy.
+The API makes requests machine-readable and policy-controlled from day one: every question is typed, with constraints a receiver can render as a form or buttons. A future approved connector can notify a user, receive a protected reply, or retrieve a permitted credential from a vault. The automation is in *routing and handling known request types*, not in removing the human authority required by the website, device, or policy.
 
 ---
 
