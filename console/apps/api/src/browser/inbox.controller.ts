@@ -1,4 +1,5 @@
 import { BadRequestException, Body, ConflictException, Controller, Get, HttpCode, Logger, NotFoundException, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { ApiTags } from '@nestjs/swagger';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { JobsService } from '@marinoscar/platform-api/jobs';
@@ -8,6 +9,7 @@ import { z } from 'zod';
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { PrismaService } from '../prisma/prisma.service';
 import { enqueueGoalRun } from '../runner/goal-runner.jobs';
+import { InboxItemResponseDto, OkResponseDto } from '../openapi/console.responses';
 
 const respondSchema = z.object({
   outcome: z.enum(['completed', 'cancelled']),
@@ -62,6 +64,7 @@ export class InboxController {
   ) {}
 
   @Get()
+  @ApiDataResponse(InboxItemResponseDto, { isArray: true })
   @Auth({ permissions: ['runs:read'] })
   async list(@CurrentUser('id') userId: string): Promise<InboxItem[]> {
     const runs = await this.prisma.forUser({ userId }).run.findMany({
@@ -93,6 +96,7 @@ export class InboxController {
 
   /** Answer (or decline) the request, then resume the run at once. */
   @Post(':runId/respond')
+  @ApiDataResponse(OkResponseDto, { status: 201 })
   @HttpCode(200)
   @Auth({ permissions: ['runs:write'] })
   async respond(

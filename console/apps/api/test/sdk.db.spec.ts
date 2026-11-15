@@ -1,0 +1,51 @@
+// The TypeScript SDK (packages/sdk) against the live API:
+// 1. packages/sdk/openapi.json is the document the API serves (regenerate
+//    with UPDATE_SDK_OPENAPI=1, then `npm run generate --workspace=@hexactra/console-sdk`);
+// 2. the SDK's example runs end to end against a real listening API.
+import { execFile } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { promisify } from 'node:util';
+import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+
+import { createApp } from '../src/main';
+
+const SPEC = resolve(__dirname, '../../../packages/sdk/openapi.json');
+
+let app: NestFastifyApplication;
+let base = '';
+
+/** The served document without what changes per build (the version). */
+function normalized(doc: { info?: { version?: string } }) {
+  return JSON.stringify({ ...doc, info: { ...doc.info, version: '0.0.0' } }, null, 2) + '\n';
+}
+
+beforeAll(async () => {
+  app = await createApp();
+  await app.listen(0, '127.0.0.1');
+  base = `http://127.0.0.1:${(app.getHttpServer().address() as { port: number }).port}`;
+});
+afterAll(async () => {
+  await app?.close();
+});
+
+describe('the console SDK', () => {
+  it('ships the OpenAPI document the API serves', async () => {
+    const served = normalized(await (await fetch(`${base}/api/openapi.json`)).json());
+    if (process.env.UPDATE_SDK_OPENAPI === '1') writeFileSync(SPEC, served);
+    expect(readFileSync(SPEC, 'utf8')).toBe(served);
+  });
+
+  it('runs its example against the API', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/test/login', payload: { email: `sdk-${Date.now()}@example.test`, role: 'contributor' } });
+    const token = new URL(String(res.headers.location)).searchParams.get('token')!;
+    // The built SDK's example, run the way a user runs it.
+    const { stdout } = await promisify(execFile)(process.execPath, [resolve(__dirname, '../../../packages/sdk/dist/examples/tasks.js')], {
+      env: { ...process.env, HEXACTRA_CONSOLE_URL: base, HEXACTRA_TOKEN: token },
+      timeout: 60_000,
+    });
+    const out = JSON.parse(stdout.trim().split('\n').pop()!) as { taskId: string; listed: number; updatedGoal: string };
+    expect(out.listed).toBeGreaterThanOrEqual(1);
+    expect(out.updatedGoal).toBe('Find the cheapest fare to Lisbon in March');
+  });
+});

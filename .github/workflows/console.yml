@@ -79,6 +79,9 @@ jobs:
       - run: npm run prisma:generate --workspace=api
       - run: npm run prisma:validate --workspace=api
       - run: npm run typecheck
+      # The SDK's types are generated from packages/sdk/openapi.json; the db
+      # tier below checks that file equals the document the API serves.
+      - run: npm run check:generated --workspace=@hexactra/console-sdk
       # Unit tests, runPlatformConformance(), web and CLI suites.
       - run: npm test
       - run: npm run build

@@ -8,6 +8,8 @@ COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
 COPY apps/cli/package.json ./apps/cli/
 COPY packages/shared ./packages/shared/
+# The SDK is a workspace too: npm ci needs its manifest to match the lockfile.
+COPY packages/sdk/package.json ./packages/sdk/
 RUN npm ci --workspace=web --include-workspace-root
 
 FROM base AS development
