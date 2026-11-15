@@ -99,7 +99,7 @@ The agent opens a handoff, and your webhook channels get the prompt, the answer 
 | `HEXACTRA_MAX_BROWSERS` | `1` | Profiles whose browsers may be open at once. Each needs about 300–600 MB. At the limit, the least recently used idle browser closes to make room. |
 | `HEXACTRA_SCREEN` | `1440x900x24` | Virtual display size. |
 
-Browsers close gracefully, through the extension, when idle, when evicted and when the container stops (`stop_grace_period: 30s`). Chromium therefore writes cookies to disk and reopens with its last tabs. The containers restart automatically after a crash or reboot (`restart: unless-stopped`). Enable Docker at boot with `sudo systemctl enable docker`.
+Browsers close gracefully, through the extension, when idle, when evicted and when the container stops (`stop_grace_period: 30s`). Chromium therefore writes cookies to disk, and it usually restores its last tabs when it reopens. The containers restart automatically after a crash or reboot (`restart: unless-stopped`). Enable Docker at boot with `sudo systemctl enable docker`.
 
 ## 7. Operate
 

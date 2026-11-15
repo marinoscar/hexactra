@@ -145,8 +145,8 @@ impl BrowserLauncher {
             a.push(format!("--load-extension={}", ext.display()));
         }
         a.extend(self.cfg.extra_args.iter().cloned());
-        // No start URL: after a graceful close Chromium restores the tabs it
-        // had, so an agent finds the browser as it left it.
+        // No start URL: after a graceful close Chromium usually restores the
+        // tabs it had, so an agent finds the browser as it left it.
         a
     }
 

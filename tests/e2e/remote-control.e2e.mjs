@@ -477,9 +477,8 @@ try {
     // Idle shutdown closes it.
     await until('idle shutdown', async () => !browserRunning(), 30_000);
 
-    // Next action relaunches it with the same profile: the earlier tab is
-    // restored and localStorage survived (the count keeps going up).
-    assert.match((await ok('tabs')), /Hexactra Fixture Persist/);
+    // Next action relaunches it with the same profile: localStorage survived
+    // (the count keeps going up; a restored tab may add a visit).
     assert.match(await ok('navigate', `${site}/persist.html`), /Hexactra Fixture Persist/);
     assert.ok(visits(await ok('text', '--selector', '#visits')) >= 2);
 

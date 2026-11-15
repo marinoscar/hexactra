@@ -52,7 +52,7 @@ hexactra-agent daemon \
 - The browser needs a display. Use your desktop session, or Xvfb on a headless machine.
 - Use Chromium or Chrome for Testing: branded Google Chrome ignores `--extension-dir` (`--load-extension`).
 - Each profile is a subdirectory of `--profiles-dir`, with its own cookies and sign-ins. `--max-browsers` (default 1) caps how many run at once: at the cap, the least recently used idle browser is closed to make room.
-- Idle and evicted browsers are closed through the extension, so Chromium flushes cookies and storage. They reopen with the tabs they had.
+- Idle and evicted browsers are closed through the extension, so Chromium flushes cookies and storage. Chromium usually restores the tabs they had when they reopen.
 - The launched profile is separate from your everyday Chrome profile. Sign in to the sites you need once, through the browser or its viewer.
 - Add `--viewer-url` when you have a web viewer (noVNC). Handoffs then link people straight to the browser.
 
