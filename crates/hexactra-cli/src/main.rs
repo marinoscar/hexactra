@@ -110,6 +110,10 @@ enum Commands {
         /// Submit (Enter) after typing.
         #[arg(long)]
         submit: bool,
+        /// The text is a password or code: the control plane reports it as
+        /// `[secret]` instead of storing it in the operation.
+        #[arg(long)]
+        sensitive: bool,
         #[arg(long)]
         tab: Option<i64>,
     },
@@ -781,13 +785,14 @@ async fn run() -> Result<()> {
             text,
             clear,
             submit,
+            sensitive,
             tab,
         } => RemoteAction::Type {
             selector: selector.clone(),
             text: text.clone(),
             clear: *clear,
             submit: *submit,
-            sensitive: false,
+            sensitive: *sensitive,
             tab_id: *tab,
         },
         Commands::Press { key, selector, tab } => RemoteAction::Press {
