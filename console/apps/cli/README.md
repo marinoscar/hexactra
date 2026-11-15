@@ -30,12 +30,12 @@ curl -fsSL https://raw.githubusercontent.com/marinoscar/hexactra/main/install.sh
 2. Builds the CLI.
 3. Puts a `hexactra` shim in `~/.local/bin`.
 
-Re-running the same command updates it in place. If `~/.local/bin` is not on your `PATH`, the installer prints the line to add.
+Re-running the same command updates it in place. Before it builds, it prints the version you have and the one it is installing, each with its commit (`current version: hexactra 0.1.1 (0822b47)`, `new version: hexactra 0.1.2 (…)`); a first install prints `installing: …`. If `~/.local/bin` is not on your `PATH`, the installer prints the line to add.
 
 Check it:
 
 ```bash
-hexactra --version     # 0.1.1 (platform 0.1.0-next.33)
+hexactra --version     # 0.1.2 (platform 0.1.0-next.34)
 hexactra --help
 ```
 

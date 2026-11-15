@@ -89,6 +89,8 @@ hexactra login --server https://<your console>
 hexactra            # the terminal UI
 ```
 
+Re-running the same command updates the CLI. It prints the current and the new version (with their commits) before it builds, for example `current version: hexactra 0.1.1 (0822b47)` and `new version: hexactra 0.1.2 (…)`.
+
 Install options, commands and screenshots: [console/apps/cli/README.md](console/apps/cli/README.md).
 
 
