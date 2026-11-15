@@ -23,6 +23,7 @@ import { z } from 'zod';
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { profileNameSchema } from '../fleet/fleet.schemas';
 import { PrismaService } from '../prisma/prisma.service';
+import { QUESTION_INPUTS, QUESTION_KINDS, questionSpecObject, questionSpecSchema, type QuestionSpec } from '../questions/questions.contract';
 import { QuestionsService } from '../questions/questions.service';
 import { FabricSession, handoffOutcome } from '../runner/fabric-session';
 import { domainAllowed } from '../runner/policy';
@@ -48,14 +49,25 @@ const actionSchema = z.object({
 });
 class ActionDto extends createZodDto(actionSchema) {}
 
-const handoffSchema = z.object({
-  kind: z.enum(['captcha', 'code', 'passkey', 'login', 'confirmation', 'other']),
-  prompt: z.string().trim().min(1).max(2000),
-  input: z.enum(['none', 'text', 'secret', 'choice']).default('none'),
-  choices: z.array(z.string().max(200)).max(10).default([]),
-  timeoutMs: z.number().int().min(10_000).max(24 * 3600_000).optional(),
+/**
+ * A handoff: the full question contract (camelCase; the fabric's snake_case
+ * body is built by `handoffBody`). `choices` (bare strings or option
+ * objects) is the historical name of `options`; `kind` is required here.
+ */
+const handoffSchema = questionSpecObject.extend({
+  kind: z.enum(QUESTION_KINDS),
+  input: z.enum(QUESTION_INPUTS).default('none'),
 });
 class HandoffDto extends createZodDto(handoffSchema) {}
+
+/** Validates a handoff against the question contract before anything reaches the fabric; a 400 names what is wrong. */
+function parseHandoffSpec(body: z.infer<typeof handoffSchema>): QuestionSpec {
+  const parsed = questionSpecSchema.safeParse(body);
+  if (!parsed.success) {
+    throw new BadRequestException({ code: 'INVALID_QUESTION', message: parsed.error.issues.map((i) => `${i.path.join('.') || 'question'}: ${i.message}`).join('; ') });
+  }
+  return parsed.data;
+}
 
 const closeSchema = z.object({ success: z.boolean().default(true), result: z.string().max(8000).optional() });
 class CloseDto extends createZodDto(closeSchema) {}
@@ -213,14 +225,24 @@ export class ExternalBrowserController {
   @Post(':runId/handoffs')
   @Auth({ permissions: ['runs:write'] })
   async handoff(@CurrentUser('id') userId: string, @Param('runId', ParseUUIDPipe) runId: string, @Body() body: HandoffDto) {
+    const spec = parseHandoffSpec(body);
     const run = await this.liveRun(userId, runId);
     const started = Date.now();
-    const created = await new FabricSession(this.fabric).openHandoff(run.sessionId!, { kind: body.kind, prompt: body.prompt, input: body.input, choices: body.choices, timeoutMs: body.timeoutMs });
+    const created = await new FabricSession(this.fabric).openHandoff(run.sessionId!, {
+      kind: spec.kind,
+      prompt: spec.prompt,
+      input: spec.input,
+      choices: spec.options ?? [],
+      constraints: spec.constraints,
+      confirmLabel: spec.confirmLabel,
+      denyLabel: spec.denyLabel,
+      risk: spec.risk,
+      timeoutMs: body.timeoutMs,
+    });
     const { id, expiresAt } = created;
     // Mirror it in the question broker (the inbox and every channel read it there).
     if (this.questions) {
       try {
-        const spec = this.questions.parseSpec({ kind: body.kind, prompt: body.prompt, input: body.input, ...(body.input === 'choice' ? { options: body.choices } : {}), ...(body.timeoutMs ? { timeoutMs: body.timeoutMs } : {}) });
         await this.questions.mirrorHandoff({ id: userId }, spec, created, { askedBy: `agent:${(run.actor ?? 'external agent').slice(0, 190)}`, runId, fabricSessionId: run.sessionId });
       } catch (e) {
         // The handoff exists on the fabric: the inbox mirrors it on first answer.

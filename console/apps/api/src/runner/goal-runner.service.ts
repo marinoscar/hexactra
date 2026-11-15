@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { PrismaService } from '../prisma/prisma.service';
-import type { QuestionOption, QuestionResponse } from '../questions/questions.contract';
+import { questionSpecSchema, type QuestionConstraints, type QuestionInputType, type QuestionOption, type QuestionResponse, type QuestionSpec } from '../questions/questions.contract';
 import { QuestionsService } from '../questions/questions.service';
 import { redactActionArgs, redactUrl } from '../tasks/redact';
 import { RunNotifier } from '../tasks/run-notifier';
@@ -50,6 +50,78 @@ function trim(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n)}…` : s;
 }
 
+/** The model's `request_human` arguments (snake_case, nulls for what does not apply). */
+export interface RequestHumanArgs {
+  kind: string;
+  prompt: string;
+  input: string;
+  choices?: string[] | null;
+  options?: { id: string; label: string; description?: string | null }[] | null;
+  constraints?: Partial<Record<'max_length' | 'pattern' | 'multiline' | 'min' | 'max' | 'step' | 'unit' | 'min_selections' | 'max_selections', unknown>> | null;
+  confirm_label?: string | null;
+  deny_label?: string | null;
+  risk?: 'low' | 'high' | null;
+}
+
+const CONSTRAINT_FROM_MODEL = {
+  max_length: 'maxLength',
+  pattern: 'pattern',
+  multiline: 'multiline',
+  min: 'min',
+  max: 'max',
+  step: 'step',
+  unit: 'unit',
+  min_selections: 'minSelections',
+  max_selections: 'maxSelections',
+} as const;
+
+/** The model's `request_human` arguments as the console's question contract (camelCase, nulls dropped), ready to validate. */
+export function requestHumanSpec(a: RequestHumanArgs): Record<string, unknown> {
+  const options = a.options?.length
+    ? a.options.map((o) => ({ id: o.id, label: o.label, ...(o.description ? { description: o.description } : {}) }))
+    : a.choices?.length
+      ? a.choices.map((c) => c.slice(0, 100))
+      : undefined;
+  const constraints: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(a.constraints ?? {})) {
+    const key = CONSTRAINT_FROM_MODEL[k as keyof typeof CONSTRAINT_FROM_MODEL];
+    if (key && v !== null && v !== undefined) constraints[key] = v;
+  }
+  return {
+    kind: a.kind,
+    prompt: a.prompt,
+    input: a.input,
+    ...(options && (a.input === 'choice' || a.input === 'multi_choice') ? { options } : {}),
+    ...(Object.keys(constraints).length ? { constraints } : {}),
+    ...(a.input === 'confirm' && a.confirm_label ? { confirmLabel: a.confirm_label } : {}),
+    ...(a.input === 'confirm' && a.deny_label ? { denyLabel: a.deny_label } : {}),
+    ...(a.input === 'confirm' && a.risk ? { risk: a.risk } : {}),
+  };
+}
+
+/** What the model reads after a person answered (never a secret). */
+export function answerLine(a: { input: string; kind: string; value?: string; values?: string[]; options: QuestionOption[] | null; unit: string | null }): string {
+  const label = (id: string) => (a.options ?? []).find((o) => o.id === id)?.label ?? id;
+  switch (a.input) {
+    case 'secret':
+      return 'The person provided the secret. Type it with type_handoff_secret(selector).';
+    case 'confirm':
+      return a.value === 'approve' ? 'The person approved.' : 'The person denied it. Do not do it; finish if you cannot continue another way.';
+    case 'choice':
+      return `The person chose: ${trim(label(a.value ?? ''), 500)}`;
+    case 'multi_choice':
+      return `The person selected: ${trim((a.values ?? []).map(label).join(', '), 500)}`;
+    case 'number':
+      return `The person entered: ${trim(`${a.value ?? ''}${a.unit ? ` ${a.unit}` : ''}`, 500)}`;
+    case 'text':
+      return `The person answered: ${trim(a.value ?? '', 500)}`;
+    case 'takeover':
+      return 'The person took over the browser and is done. Check the page and continue.';
+    default:
+      return `The person completed the ${a.kind} step. Check the page and continue.`;
+  }
+}
+
 @Injectable()
 export class GoalRunnerService {
   private readonly log = new Logger(GoalRunnerService.name);
@@ -90,30 +162,22 @@ export class GoalRunnerService {
       if (h.status === 'pending') return 'waiting_human';
       await this.questions?.reconcileHandoff(h);
       // The answer as the broker recorded it (labels of choices), else as the fabric reports it.
-      const q = await db.question.findFirst({ where: { handoffId: h.id }, select: { response: true, options: true } });
+      const q = await db.question.findFirst({ where: { handoffId: h.id }, select: { response: true, options: true, constraints: true, input: true } });
       const resp = (q?.response as unknown as QuestionResponse | null) ?? null;
       const outcome = resp?.outcome ?? handoffOutcome(h);
-      const value = resp?.value ?? h.response?.value;
-      const values = resp?.values ?? h.response?.values;
-      const label = (id: string) => ((q?.options as unknown as QuestionOption[] | null) ?? []).find((o) => o.id === id)?.label ?? id;
       if (h.status === 'completed' && outcome === 'completed') {
-        if (h.input === 'secret') {
-          memory.secretHandoffId = h.id;
-          memory.log.push('The person provided the secret. Type it with type_handoff_secret(selector).');
-        } else if (h.input === 'confirm') {
-          const approved = value === 'approve';
-          if (approved && h.kind === 'confirmation') memory.confirmationGranted = true;
-          memory.log.push(approved ? 'The person approved.' : 'The person denied it. Do not do it; finish if you cannot continue another way.');
-        } else if (h.input === 'choice') {
-          memory.log.push(`The person chose: ${trim(label(value ?? ''), 500)}`);
-        } else if (h.input === 'multi_choice') {
-          memory.log.push(`The person chose: ${trim((values ?? []).map(label).join(', '), 500)}`);
-        } else if (h.input === 'text' || h.input === 'number') {
-          memory.log.push(`The person answered: ${trim(value ?? '', 500)}`);
-        } else {
-          memory.log.push(`The person completed the ${h.kind} step. Check the page and continue.`);
-        }
+        const line = answerLine({
+          input: (q?.input as QuestionInputType | undefined) ?? h.input,
+          kind: h.kind,
+          value: resp?.value ?? h.response?.value,
+          values: resp?.values ?? h.response?.values,
+          options: (q?.options as unknown as QuestionOption[] | null) ?? null,
+          unit: (q?.constraints as unknown as QuestionConstraints | null)?.unit ?? null,
+        });
+        if (h.input === 'secret') memory.secretHandoffId = h.id;
+        if (h.input === 'confirm' && (resp?.value ?? h.response?.value) === 'approve' && h.kind === 'confirmation') memory.confirmationGranted = true;
         if (h.kind === 'confirmation' && h.input !== 'confirm') memory.confirmationGranted = true;
+        memory.log.push(line);
       } else {
         memory.log.push(`The person did not help (handoff ${h.status}${outcome === 'cancelled' ? ', declined' : ''}). Do not retry the same request; finish if you cannot continue.`);
       }
@@ -288,26 +352,60 @@ export class GoalRunnerService {
       }),
       defineTool({
         name: 'request_human',
-        description: 'Ask the person for help: a CAPTCHA, a one-time code, a passkey, a login, a choice, or a confirmation before an irreversible step. The run pauses until they answer.',
+        description:
+          'Ask the person for help: a CAPTCHA, a one-time code, a passkey, a login, a choice, a number, or a confirmation before an irreversible step. ' +
+          'input: none (they do something, then press Done), text, secret (a code or password; type it with type_handoff_secret), choice (one of options), ' +
+          'multi_choice (several of options), number (with constraints min/max/step/unit), confirm (approve or deny; risk "high" by default), takeover (they take over the browser, then press Done). ' +
+          'Set the fields that do not apply to null. The run pauses until they answer.',
         parameters: z.object({
           kind: z.enum(['captcha', 'code', 'passkey', 'login', 'confirmation', 'other']),
           prompt: z.string().min(1).max(1500),
-          input: z.enum(['none', 'text', 'secret', 'choice']),
-          choices: z.array(z.string().max(200)).max(10).nullable(),
+          input: z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover']),
+          /** Bare option labels (each its own id); or use `options`. */
+          choices: z.array(z.string().max(100)).max(10).nullable(),
+          options: z.array(z.object({ id: z.string().max(64), label: z.string().max(100), description: z.string().max(200).nullable() })).max(10).nullable(),
+          constraints: z
+            .object({
+              max_length: z.number().int().nullable(),
+              pattern: z.string().max(200).nullable(),
+              multiline: z.boolean().nullable(),
+              min: z.number().nullable(),
+              max: z.number().nullable(),
+              step: z.number().nullable(),
+              unit: z.string().max(20).nullable(),
+              min_selections: z.number().int().nullable(),
+              max_selections: z.number().int().nullable(),
+            })
+            .nullable(),
+          confirm_label: z.string().max(40).nullable(),
+          deny_label: z.string().max(40).nullable(),
+          risk: z.enum(['low', 'high']).nullable(),
         }),
-        execute: async ({ kind, prompt, input, choices }) => {
+        execute: async (args) => {
           const started = Date.now();
+          const parsed = questionSpecSchema.safeParse(requestHumanSpec(args));
+          if (!parsed.success) return `Invalid request_human: ${parsed.error.issues.map((i) => `${i.path.join('.') || 'question'}: ${i.message}`).join('; ')}. Fix it and call request_human again.`;
+          const spec = parsed.data;
           try {
-            const created = await session.openHandoff(sessionId!, { kind, prompt, input, choices: choices ?? [] });
+            const created = await session.openHandoff(sessionId!, {
+              kind: spec.kind,
+              prompt: spec.prompt,
+              input: spec.input,
+              choices: spec.options ?? [],
+              constraints: spec.constraints,
+              confirmLabel: spec.confirmLabel,
+              denyLabel: spec.denyLabel,
+              risk: spec.risk,
+            });
             state.handoffId = created.id;
             state.handoffExpiresAt = created.expiresAt;
-            await this.mirror(userId, run.id, sessionId!, created, { kind, prompt, input, choices: choices ?? [] });
+            await this.mirror(userId, run.id, sessionId!, created, spec);
           } catch (e) {
             await record('handoff', null, null, false, `could not ask a person: ${e instanceof Error ? e.message : String(e)}`, started);
             return 'Could not reach a person right now.';
           }
-          await record('handoff', null, { kind, input }, true, `asked a person (${kind}): ${trim(prompt, 300)}`, started);
-          state.handoffAsk = { prompt, kind, input };
+          await record('handoff', null, { kind: spec.kind, input: spec.input }, true, `asked a person (${spec.kind}): ${trim(spec.prompt, 300)}`, started);
+          state.handoffAsk = { prompt: spec.prompt, kind: spec.kind, input: spec.input };
           state.stop = 'pause';
           return 'Waiting for the person.';
         },
@@ -420,10 +518,9 @@ export class GoalRunnerService {
   }
 
   /** Record the handoff in the question broker (the inbox and the channels read it there). Never fails the run. */
-  private async mirror(userId: string, runId: string, sessionId: string, created: CreatedHandoff, ask: { kind: string; prompt: string; input: string; choices: string[] }) {
+  private async mirror(userId: string, runId: string, sessionId: string, created: CreatedHandoff, spec: QuestionSpec) {
     if (!this.questions) return;
     try {
-      const spec = this.questions.parseSpec({ kind: ask.kind, prompt: ask.prompt, input: ask.input, ...(ask.input === 'choice' ? { options: ask.choices.map((c) => c.slice(0, 100)) } : {}) });
       await this.questions.mirrorHandoff({ id: userId }, spec, created, { askedBy: `run:${runId}`, runId, fabricSessionId: sessionId });
     } catch (e) {
       this.log.warn(`run ${runId}: could not mirror handoff ${created.id}: ${e instanceof Error ? e.message : String(e)}`);

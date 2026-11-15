@@ -11556,16 +11556,39 @@ export interface components {
             timeoutMs?: number;
         };
         HandoffDto: {
-            /** @enum {string} */
-            kind: "captcha" | "code" | "passkey" | "login" | "confirmation" | "other";
-            prompt: string;
             /**
              * @default none
              * @enum {string}
              */
-            input?: "none" | "text" | "secret" | "choice";
-            /** @default [] */
-            choices?: string[];
+            input?: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover";
+            /** @enum {string} */
+            kind: "captcha" | "code" | "passkey" | "login" | "confirmation" | "other";
+            prompt: string;
+            options?: (string | {
+                id: string;
+                label: string;
+                description?: string;
+            })[];
+            choices?: (string | {
+                id: string;
+                label: string;
+                description?: string;
+            })[];
+            constraints?: {
+                maxLength?: number;
+                pattern?: string;
+                multiline?: boolean;
+                min?: number;
+                max?: number;
+                step?: number;
+                unit?: string;
+                minSelections?: number;
+                maxSelections?: number;
+            };
+            confirmLabel?: string;
+            denyLabel?: string;
+            /** @enum {string} */
+            risk?: "low" | "high";
             timeoutMs?: number;
         };
         CloseDto: {
