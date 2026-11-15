@@ -787,6 +787,7 @@ async fn run() -> Result<()> {
             text: text.clone(),
             clear: *clear,
             submit: *submit,
+            sensitive: false,
             tab_id: *tab,
         },
         Commands::Press { key, selector, tab } => RemoteAction::Press {

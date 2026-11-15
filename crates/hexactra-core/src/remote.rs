@@ -27,6 +27,9 @@ pub const MAX_TYPE_TEXT_LEN: usize = 100_000;
 pub const MAX_WAIT_MS: u64 = 60_000;
 /// Maximum URL length accepted for navigation.
 pub const MAX_URL_LEN: usize = 8_192;
+/// What the control plane stores, reports and logs in place of a secret
+/// typed by `type_secret` or a `type` action with `sensitive: true`.
+pub const REDACTED_TEXT: &str = "[secret]";
 
 /// A single bounded browser operation.
 ///
@@ -52,6 +55,26 @@ pub enum RemoteAction {
     Type {
         selector: String,
         text: String,
+        /// Clear the existing value first.
+        #[serde(default)]
+        clear: bool,
+        /// Press Enter / submit the enclosing form after typing.
+        #[serde(default)]
+        submit: bool,
+        /// The text is sensitive (a password, a code): the control plane
+        /// sends it to the host but stores and reports it as `[secret]`.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        sensitive: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Type the secret a person gave to a `secret` handoff of this session.
+    /// The control plane resolves the value itself and consumes it: the
+    /// caller never sees it, and the operation is reported without it. The
+    /// host receives an ordinary `type` action.
+    TypeSecret {
+        handoff_id: Uuid,
+        selector: String,
         /// Clear the existing value first.
         #[serde(default)]
         clear: bool,
@@ -188,6 +211,7 @@ impl RemoteAction {
             RemoteAction::Navigate { .. } => "navigate",
             RemoteAction::Click { .. } => "click",
             RemoteAction::Type { .. } => "type",
+            RemoteAction::TypeSecret { .. } => "type_secret",
             RemoteAction::Press { .. } => "press",
             RemoteAction::Scroll { .. } => "scroll",
             RemoteAction::Screenshot { .. } => "screenshot",
@@ -209,7 +233,9 @@ impl RemoteAction {
         match self {
             RemoteAction::Navigate { url, .. } => check_navigable_url(url),
             RemoteAction::NewTab { url: Some(url) } => check_navigable_url(url),
-            RemoteAction::Click { selector, .. } => check_selector(selector),
+            RemoteAction::Click { selector, .. } | RemoteAction::TypeSecret { selector, .. } => {
+                check_selector(selector)
+            }
             RemoteAction::Type { selector, text, .. } => {
                 check_selector(selector)?;
                 if text.len() > MAX_TYPE_TEXT_LEN {
@@ -1098,8 +1124,9 @@ pub struct HandoffResponse {
     /// The selected option ids for `multi_choice`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub values: Option<Vec<String>>,
-    /// True for `secret` inputs: the value exists but is only available
-    /// once through `POST /v1/handoffs/{id}/claim`.
+    /// True for `secret` inputs: the value is never returned. Type it into
+    /// the page with a `type_secret` action naming this handoff; the
+    /// control plane consumes it once.
     #[serde(default)]
     pub value_withheld: bool,
     /// Which channel answered (free-form label, e.g. "slack", "web-form").
@@ -1350,7 +1377,8 @@ pub struct RespondHandoffRequest {
     pub answered_by: Option<String>,
 }
 
-/// `POST /v1/handoffs/{id}/claim`: the secret value, returned once.
+/// `POST /v1/handoffs/{id}/claim` (deprecated): the secret value, returned
+/// once. Use a `type_secret` action instead, which never returns it.
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClaimedHandoffValue {
@@ -1453,6 +1481,7 @@ mod tests {
                 text: "hi".into(),
                 clear: false,
                 submit: false,
+                sensitive: false,
                 tab_id: None
             }
         );
@@ -1526,15 +1555,56 @@ mod tests {
     }
 
     #[test]
+    fn type_secret_wire_format() {
+        let id = Uuid::new_v4();
+        let a: RemoteAction = serde_json::from_value(
+            json!({"type": "type_secret", "handoff_id": id, "selector": "#otp", "submit": true}),
+        )
+        .unwrap();
+        assert_eq!(
+            a,
+            RemoteAction::TypeSecret {
+                handoff_id: id,
+                selector: "#otp".into(),
+                clear: false,
+                submit: true,
+                tab_id: None
+            }
+        );
+        assert!(a.validate().is_ok());
+        let empty = RemoteAction::TypeSecret {
+            handoff_id: id,
+            selector: " ".into(),
+            clear: false,
+            submit: false,
+            tab_id: None,
+        };
+        assert!(empty.validate().is_err());
+        // `sensitive` is omitted unless set.
+        let t: RemoteAction =
+            serde_json::from_value(json!({"type": "type", "selector": "#p", "text": "x"})).unwrap();
+        assert!(serde_json::to_value(&t).unwrap().get("sensitive").is_none());
+    }
+
+    #[test]
     fn kind_never_contains_content() {
         let a = RemoteAction::Type {
             selector: "#password".into(),
             text: "secret".into(),
             clear: true,
             submit: false,
+            sensitive: true,
             tab_id: None,
         };
         assert_eq!(a.kind(), "type");
+        let a = RemoteAction::TypeSecret {
+            handoff_id: Uuid::nil(),
+            selector: "#otp".into(),
+            clear: false,
+            submit: true,
+            tab_id: None,
+        };
+        assert_eq!(a.kind(), "type_secret");
     }
 
     #[test]

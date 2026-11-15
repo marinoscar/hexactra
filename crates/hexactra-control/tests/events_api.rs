@@ -110,6 +110,7 @@ async fn stream_replay_filter_and_scope() {
                 text: "hunter2-typed-text".into(),
                 clear: false,
                 submit: false,
+                sensitive: false,
                 tab_id: None,
             },
             Some(Duration::from_millis(300)),
