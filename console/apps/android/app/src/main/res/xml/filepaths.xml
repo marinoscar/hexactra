@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- androidbrowserhelper writes the TWA splash bitmap here and hands it to the browser
+     through the FileProvider declared in the manifest (FILE_PROVIDER_AUTHORITY). -->
+<paths>
+    <files-path
+        name="twa_splash"
+        path="twa_splash/" />
+</paths>

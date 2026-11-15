@@ -44,7 +44,7 @@ class SetupActivity : Activity() {
             setText(config.serverUrl.orEmpty())
         }
         val error = TextView(this).apply {
-            setTextColor(0xFFB00020.toInt())
+            setTextColor(getColor(R.color.brand_danger)) // brand danger; lighter in dark mode
             setPadding(0, padding / 4, 0, padding / 4)
         }
         val save = Button(this).apply { text = "Save and open" }
