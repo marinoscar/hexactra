@@ -42,7 +42,7 @@
 |---|---|
 | **Web app**, installable as a PWA (desktop and mobile) | The console at `/` ([console/README.md](console/README.md)) |
 | **Android app**: a Trusted Web Activity with deep links and actionable notifications | [console/docs/runbooks/android-app.md](console/docs/runbooks/android-app.md) |
-| **CLI and terminal UI**: `hexactra tasks`, `runs`, `inbox`, `fleet`, ... | `console/apps/cli` |
+| **CLI and terminal UI**: `hexactra tasks`, `runs`, `inbox`, `fleet`, ... | [console/apps/cli/README.md](console/apps/cli/README.md) |
 | **REST API**, OpenAPI at `/api/docs`, with a generated TypeScript SDK | `console/packages/sdk` |
 | **MCP** for agent frameworks: `POST /api/mcp` (Streamable HTTP) or `hexactra mcp serve` (stdio) | [console/docs/mcp.md](console/docs/mcp.md), [console/docs/agent-frameworks.md](console/docs/agent-frameworks.md) |
 | **Chrome extension**: the hand inside each browser, and a standalone AI assistant | [apps/chrome-extension/DEMO_GUIDE.md](apps/chrome-extension/DEMO_GUIDE.md) |
@@ -80,6 +80,17 @@ flowchart LR
 - Architecture in depth: [VISION.MD §26](VISION.MD) (console and fabric) and §5 to §6.
 
 ## Get started
+
+**Install the `hexactra` CLI** (Node 24; it updates in place when re-run):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/marinoscar/hexactra/main/install.sh | bash
+hexactra login --server https://<your console>
+hexactra            # the terminal UI
+```
+
+Install options, commands and screenshots: [console/apps/cli/README.md](console/apps/cli/README.md).
+
 
 **Run the whole stack on a server** (console, fabric and a browser host in one Compose stack):
 [console/docs/runbooks/vps-stack.md](console/docs/runbooks/vps-stack.md)
