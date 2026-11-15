@@ -36,8 +36,9 @@ const scope = self as unknown as WorkerScope;
 scope.addEventListener('install', () => void scope.skipWaiting());
 scope.addEventListener('activate', (event: NotificationsExtendableEvent) => event.waitUntil(scope.clients.claim()));
 
-// The favicon doubles as the badge: put PNGs under public/icons for crisper OS toasts.
-const ICONS = { icon: '/favicon.svg', badge: '/favicon.svg' };
+// PNGs: Android (the app's delegated notifications and Chrome) ignores SVG
+// icons. The badge is a white glyph on transparency, as Android draws it.
+const ICONS = { icon: '/icons/icon-192.png', badge: '/icons/badge-96.png' };
 
 // The platform's three listeners, with one addition on click: the buttons of a
 // "needs you" notification (Stop run, Approve) act without opening the app

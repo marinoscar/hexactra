@@ -39,6 +39,23 @@ Publishing also adds the APK's signing key to the trusted apps that `/.well-know
 
 ## 4. Notifications and deep links
 
+### Checklist: notifications on the phone
+
+Work through these in order; each step names how to check it.
+
+1. **Web Push keys.** Administration → Web Push: generate the VAPID key pair and enable it. Check: the page shows the key as active.
+2. **Built for this console.** `hexactra android release`, which builds with the console you are logged in to. Check: in the app, a notification shows the app's icon and name, not Chrome's.
+3. **Trusted.** Administration → Android app lists the release's package and SHA-256, trusted. Publishing with `hexactra android release` does this.
+4. **Verified.** Open `https://<console>/.well-known/assetlinks.json`. Check: a JSON array that names the package and fingerprint. If you see the web app's page instead, `infra/nginx/app.d/locations/android-app.conf` is missing.
+5. **Allowed.** Open the app, accept the notification prompt (Android 13+ shows the system dialog), and keep notifications on in Settings → Notifications for the events you want.
+6. **Test.** Administration → Android app → **Send me a test notification**. Check: it arrives as the app's own notification.
+
+Why each step matters:
+- Chrome hands the console's notifications to the app only after it verifies the app (step 4), for an APK built with the console's host (step 2).
+- A subscription made inside the app is tagged `android_app` (step 5). That is what the admin test and the app-only channel deliver to.
+
+### Events
+
 | Event | On the phone | Opens |
 |---|---|---|
 | An agent needs you (`runs.needs_you`) | High urgency, one per run (a newer one replaces it) | `/inbox?run=<id>`: the Inbox with that request first, outlined |

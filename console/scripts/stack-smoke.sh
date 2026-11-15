@@ -69,6 +69,16 @@ dc exec -T fabric-control hexactra-fabric --url http://127.0.0.1:8787 admin serv
 pass "the fabric admin CLI mints a service token"
 
 code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+tmpdir_headers=$(mktemp)
+
+# Android: Chrome verifies the app (and only then delegates the site's
+# notifications to it) with /.well-known/assetlinks.json, which must be the
+# API's JSON array, never the SPA's index.html.
+links=$(curl -s -D "$tmpdir_headers" "$base/.well-known/assetlinks.json")
+grep -qi '^content-type: application/json' "$tmpdir_headers" || fail "assetlinks.json is not served as JSON (the SPA answered?)"
+echo "$links" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{if(!Array.isArray(JSON.parse(s)))process.exit(1)})' \
+  || fail "assetlinks.json is not a JSON array"
+pass "/.well-known/assetlinks.json is served by the API"
 [ "$(code "$base/viewer/local/vnc.html")" = 401 ] || fail "viewer without a ticket is not refused"
 [ "$(code "$base/viewer/local/vnc.html?ticket=t.9999999999.x.forged")" = 401 ] || fail "forged ticket accepted"
 [ "$(code -H 'Cookie: hx_viewer=c.9999999999.x.forged' "$base/viewer/local/vnc.html")" = 401 ] || fail "forged cookie accepted"

@@ -86,7 +86,10 @@ export function renderManifest(identity: WebIdentity): string {
     display: 'standalone',
     theme_color: identity.themeColor,
     background_color: identity.backgroundColor,
-    icons: [{ src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml' }],
+    icons: [
+      { src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml' },
+      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
   };
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
