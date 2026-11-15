@@ -1,11 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Status-bar icon of delegated Web Push notifications (white on transparent). -->
+<!-- Status-bar icon of delegated Web Push notifications: the Trace mark, white on transparent. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M7,4h10a3,3 0,0 1,3 3v10a3,3 0,0 1,-3 3h-10a3,3 0,0 1,-3 -3v-10a3,3 0,0 1,3 -3z" />
+    <group
+        android:scaleX="0.2"
+        android:scaleY="0.2">
+        <path
+            android:pathData="M60,60V108L18.4,84V36L60,12L101.6,36V84L80,96.5"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="13"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M60,45a15,15 0,1 1,0 30a15,15 0,1 1,0 -30z" />
+    </group>
 </vector>
