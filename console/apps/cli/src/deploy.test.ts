@@ -60,7 +60,7 @@ describe('where the deploy finds the app in its checkout', () => {
 });
 
 describe('the template the install screen reads its questions from', () => {
-  // The TUI install screen (platform-cli 0.1.0-next.32) reads its questions
+  // The TUI install screen (platform-cli before 0.1.0-next.33) read its questions
   // from <deployRoot>/repo/infra/compose/.env.example and ignores deploy.appDir.
   // Without this root symlink it found no template, asked nothing, and the
   // run failed with "Cannot run without a terminal: 10 value(s) are missing".

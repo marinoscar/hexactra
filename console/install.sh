@@ -55,6 +55,13 @@ major="$(node -p 'process.versions.node.split(".")[0]')"
 
 previous=""
 [[ -x "$SHIM" ]] && previous="$("$SHIM" --version 2>/dev/null | awk '{print $1}' || true)"
+previous_commit=""
+[[ -d "$APP_DIR/.git" ]] && previous_commit="$(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || true)"
+
+# The version a checkout carries, read from the CLI's manifest without building it.
+cli_version_in() {
+  node -p "require(process.argv[1]).version" "$1/$APP_SUBDIR/apps/cli/package.json" 2>/dev/null || printf 'unknown'
+}
 
 mkdir -p "$HOME_DIR" "$BIN_DIR"
 if [[ -d "$APP_DIR/.git" ]]; then
@@ -69,6 +76,20 @@ else
   git -C "$APP_DIR" sparse-checkout set "$APP_SUBDIR"
 fi
 
+incoming="$(cli_version_in "$APP_DIR")"
+incoming_commit="$(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
+say ""
+if [[ -n "$previous" ]]; then
+  say "  current version: $CLI_NAME $previous${previous_commit:+ ($previous_commit)}"
+  say "  new version:     $CLI_NAME $incoming ($incoming_commit)"
+  if [[ "$previous" == "$incoming" && "$previous_commit" == "$incoming_commit" ]]; then
+    say "  (already up to date; rebuilding the same version)"
+  fi
+else
+  say "  installing:      $CLI_NAME $incoming ($incoming_commit)"
+fi
+say ""
+
 say "Building the CLI"
 (cd "$APP_DIR/$APP_SUBDIR" && npm ci --workspace=cli --include-workspace-root --no-audit --no-fund && npm run build --workspace=cli)
 
@@ -80,8 +101,8 @@ chmod +x "$SHIM"
 
 version="$("$SHIM" --version | awk '{print $1}')"
 say ""
-if [[ -n "$previous" && "$previous" != "$version" ]]; then
-  say "Updated $CLI_NAME $previous -> $version"
+if [[ -n "$previous" && ( "$previous" != "$version" || "$previous_commit" != "$incoming_commit" ) ]]; then
+  say "Updated $CLI_NAME $previous${previous_commit:+ ($previous_commit)} -> $version ($incoming_commit)"
 else
   say "Installed $CLI_NAME $version"
 fi
