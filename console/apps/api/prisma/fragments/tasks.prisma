@@ -54,6 +54,7 @@ model Task {
   @@map("tasks")
 }
 
+// @extensible
 model Run {
   id              String     @id @default(uuid()) @db.Uuid
   userId          String     @map("user_id") @db.Uuid
