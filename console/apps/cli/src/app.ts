@@ -6,6 +6,7 @@ import { androidCommand, androidTuiScreen } from '@marinoscar/platform-cli/andro
 import type { CreateCliOptions } from '@marinoscar/platform-cli';
 
 import { BRAND_TUI_MENU_ROOT, BRAND_TUI_THEME } from './brand.js';
+import { FABRIC_CONNECT_STEPS } from './fabric-connect.step.js';
 import { fabricCommand } from './fabric.command.js';
 import { fleetCommand } from './fleet.command.js';
 import { inboxCommand } from './inbox.command.js';
@@ -65,6 +66,8 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   // and run compose from console/infra/compose, whose fabric overlay builds
   // the Rust images from the repository root.
   deploy: { appDir: 'console' },
+  // Connect the console to the bundled fabric at the end of install and update (#309).
+  deploySteps: FABRIC_CONNECT_STEPS,
   envGenerators: [VIEWER_PASSWORD_GENERATOR],
   envSpecFragments: [FABRIC_ENV_FRAGMENT],
 };
