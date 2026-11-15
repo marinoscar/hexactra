@@ -79,6 +79,7 @@ USER hexactra
 ENV DISPLAY=:99 \
     XDG_RUNTIME_DIR=/tmp/hexactra-run \
     HEXACTRA_BROWSER=/usr/bin/chromium \
+    HEXACTRA_PROFILES_DIR=/data/profiles \
     HEXACTRA_PROFILE_DIR=/data/profile \
     HEXACTRA_EXTENSION_DIR=/opt/hexactra/extension \
     HEXACTRA_NATIVE_HOST=/usr/local/bin/hexactra-native-host

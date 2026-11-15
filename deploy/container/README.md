@@ -14,7 +14,7 @@ docker compose exec control hexactra --url http://127.0.0.1:8787 status
 | `control` | `127.0.0.1:8787` | `/v1` API, plus the `hexactra` CLI and `hexactra-mcp` inside the image |
 | `host` | `127.0.0.1:6080` | Password-protected noVNC viewer (`/vnc.html`) of the container's browser |
 
-Volumes: `control-data` holds the webhook registry, and `host-data` holds the browser profile (`/data/profile`).
+Volumes: `control-data` holds the webhook registry, and `host-data` holds the browser profiles (`/data/profiles/<name>`).
 
 Settings live in `.env`:
 - `HEXACTRA_IDLE_SHUTDOWN_S` (default 900; 0 keeps the browser open);

@@ -35,6 +35,8 @@ services:
     depends_on:
       control:
         condition: service_healthy
+    # Time to close browsers cleanly (flushing cookies) on stop or reboot.
+    stop_grace_period: 30s
     # A fixed hostname keeps Chromium's profile lock stable across restarts.
     hostname: hexactra-host
     # Chromium needs more shared memory than Docker's 64 MB default.
@@ -54,6 +56,8 @@ services:
       HEXACTRA_VIEWER_URL: ${HEXACTRA_VIEWER_URL:-}
       HEXACTRA_IDLE_SHUTDOWN_S: ${HEXACTRA_IDLE_SHUTDOWN_S:-900}
       HEXACTRA_LAUNCH_EAGERLY: ${HEXACTRA_LAUNCH_EAGERLY:-false}
+      # Browsers (profiles) open at once; each needs about 300-600 MB.
+      HEXACTRA_MAX_BROWSERS: ${HEXACTRA_MAX_BROWSERS:-1}
       HEXACTRA_SCREEN: ${HEXACTRA_SCREEN:-1440x900x24}
       RUST_LOG: ${RUST_LOG:-info}
     ports:
