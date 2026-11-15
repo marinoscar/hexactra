@@ -1,6 +1,7 @@
 // The goal runner against a real database, with a scripted model and an
 // in-memory fabric: policy refusals, a confirmation handoff, a secret typed
 // by the runner (never stored), finishing, and cancelling.
+import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type { AiService } from '@marinoscar/platform-api/ai';
 
@@ -11,6 +12,8 @@ import { GoalRunnerService } from '../src/runner/goal-runner.service';
 import { ExternalBrowserController } from '../src/browser/external-browser.controller';
 import { HandoffAnswers } from '../src/browser/handoff-answers';
 import { InboxController } from '../src/browser/inbox.controller';
+import { QuestionEvents } from '../src/questions/question-events';
+import { QuestionsService } from '../src/questions/questions.service';
 import { TasksService } from '../src/tasks/tasks.service';
 
 let app: NestFastifyApplication;
@@ -36,7 +39,8 @@ async function login(email: string): Promise<string> {
 /** An in-memory fabric: sessions, actions and handoffs. */
 function fakeFabric() {
   const actions: Record<string, unknown>[] = [];
-  const handoffs = new Map<string, { id: string; status: string; input: string; kind: string; response?: { outcome: string; value?: string } }>();
+  // The fabric's real handoff view (crates/hexactra-core/src/remote.rs `HandoffView`).
+  const handoffs = new Map<string, { id: string; status: string; input: string; kind: string; response?: { outcome?: string; value?: string; value_withheld: boolean; channel?: string; by?: string; answered_at?: string } }>();
   let ended = 0;
   let n = 0;
   const request = jest.fn(async (method: string, path: string, opts: { body?: Record<string, unknown> } = {}) => {
@@ -119,13 +123,14 @@ describe('the goal runner', () => {
     // Still pending: nothing happens.
     expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
 
+    // A fabric from before the typed contract reports no outcome: the status says it.
     const [confirm] = [...fabric.handoffs.values()];
-    Object.assign(confirm!, { status: 'completed', response: { outcome: 'completed' } });
+    Object.assign(confirm!, { status: 'completed', response: { value_withheld: false } });
     expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
     expect(fabric.actions.filter((a) => a.type === 'click')).toHaveLength(1);
 
     const code = [...fabric.handoffs.values()][1]!;
-    Object.assign(code, { status: 'completed', response: { outcome: 'completed' } });
+    Object.assign(code, { status: 'completed', response: { outcome: 'completed', value_withheld: true, channel: 'web', by: `user:${userId}`, answered_at: new Date().toISOString() } });
     expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
 
     expect(fabric.actions).toContainEqual(expect.objectContaining({ type: 'type', selector: '#otp', text: SECRET }));
@@ -170,35 +175,63 @@ describe('the goal runner', () => {
 });
 
 describe('the inbox', () => {
-  it('lists what runs wait for and answers the fabric, then resumes the run', async () => {
+  function inboxWith(fabric: FabricClient) {
+    const prisma = app.get(PrismaService);
+    const enqueued: unknown[] = [];
+    const jobs = { enqueue: async (j: unknown) => void enqueued.push(j) };
+    const questions = new QuestionsService(prisma, fabric, jobs as never, new QuestionEvents());
+    return { inbox: new InboxController(questions, new HandoffAnswers(questions)), questions, enqueued };
+  }
+
+  it('lists the questions runs wait for from the database and answers the fabric, then resumes the run', async () => {
     const userId = await login(`inbox-${stamp}@example.test`);
     const prisma = app.get(PrismaService);
     const db = prisma.forUser({ userId });
-    const hid = '00000000-0000-4000-8000-0000000000f1';
+    const hid = randomUUID();
     const waiting = await db.run.create({ data: { userId, goal: 'Pay the bill', status: 'waiting_human', handoffId: hid } });
     const fabricCalls: [string, string, unknown][] = [];
     const fabric = {
       request: async (method: string, path: string, opts?: { body?: unknown }) => {
         fabricCalls.push([method, path, opts?.body]);
-        if (method === 'GET') return { id: hid, kind: 'code', prompt: 'Enter the code', input: 'secret', choices: [], status: 'pending', created_at: 'x', expires_at: 'y' };
         return {};
       },
     } as unknown as FabricClient;
-    const enqueued: unknown[] = [];
-    const jobs = { enqueue: async (j: unknown) => void enqueued.push(j) };
-    const inbox = new InboxController(prisma, fabric, new HandoffAnswers(prisma, fabric, jobs as never));
+    const { inbox, questions, enqueued } = inboxWith(fabric);
+    const spec = questions.parseSpec({ kind: 'code', prompt: 'Enter the code', input: 'secret' });
+    await questions.mirrorHandoff({ id: userId }, spec, { id: hid, viewerUrl: 'https://viewer.example.test/h', pageTitle: 'Bank', expiresAt: new Date(Date.now() + 600_000) }, { askedBy: `run:${waiting.id}`, runId: waiting.id, fabricSessionId: null });
 
     const items = await inbox.list(userId);
-    expect(items).toEqual([expect.objectContaining({ runId: waiting.id, kind: 'code', input: 'secret', prompt: 'Enter the code' })]);
+    expect(items).toEqual([expect.objectContaining({ runId: waiting.id, goal: 'Pay the bill', kind: 'code', input: 'secret', prompt: 'Enter the code', viewerUrl: 'https://viewer.example.test/h', pageTitle: 'Bank' })]);
+    // No fabric round trip to list.
+    expect(fabricCalls).toEqual([]);
 
     await inbox.respond({ id: userId }, waiting.id, { outcome: 'completed', value: SECRET });
-    expect(fabricCalls.at(-1)).toEqual(['POST', `/v1/handoffs/${hid}/respond`, { outcome: 'completed', value: SECRET }]);
+    expect(fabricCalls.at(-1)).toEqual(['POST', `/v1/handoffs/${hid}/respond`, { outcome: 'completed', value: SECRET, channel: 'inbox', answered_by: `user:${userId}` }]);
     expect(enqueued).toEqual([expect.objectContaining({ type: 'browser.goal.run', subjectId: waiting.id })]);
     // The secret went to the fabric only.
     expect(JSON.stringify(await db.run.findFirstOrThrow({ where: { id: waiting.id } }))).not.toContain(SECRET);
+    const q = await db.question.findFirstOrThrow({ where: { handoffId: hid } });
+    expect(q).toMatchObject({ status: 'answered', answeredChannel: 'inbox', response: expect.objectContaining({ outcome: 'completed', valueWithheld: true }) });
+    expect(JSON.stringify(q)).not.toContain(SECRET);
+    expect(await inbox.list(userId)).toEqual([]);
 
     const other = await login(`inbox-other-${stamp}@example.test`);
     await expect(inbox.respond({ id: other }, waiting.id, { outcome: 'completed' })).rejects.toThrow(/Run not found/);
+  });
+
+  it('mirrors a handoff opened before the broker on its first answer', async () => {
+    const userId = await login(`inbox-legacy-${stamp}@example.test`);
+    const db = app.get(PrismaService).forUser({ userId });
+    const hid = randomUUID();
+    const run = await db.run.create({ data: { userId, goal: 'Pick a seat', status: 'waiting_human', handoffId: hid } });
+    const fabric = {
+      request: async (method: string) =>
+        method === 'GET' ? { id: hid, kind: 'other', prompt: 'Which seat?', input: 'choice', choices: ['Aisle', 'Window'], status: 'pending', created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 60_000).toISOString() } : {},
+    } as unknown as FabricClient;
+    const { inbox } = inboxWith(fabric);
+    await expect(inbox.respond({ id: userId }, run.id, { outcome: 'completed', value: 'Middle' })).rejects.toThrow(/Not one of the options/);
+    await inbox.respond({ id: userId }, run.id, { outcome: 'completed', value: 'Window' });
+    expect(await db.question.findFirstOrThrow({ where: { handoffId: hid } })).toMatchObject({ status: 'answered', askedBy: `run:${run.id}`, response: expect.objectContaining({ value: 'Window' }) });
   });
 });
 
@@ -217,7 +250,7 @@ describe('external agents driving a browser through the console', () => {
     const { handoffId } = await ctl.handoff(userId, runId, { kind: 'code', prompt: 'Enter the code', input: 'secret', choices: [] });
     await expect(ctl.act(userId, runId, { action: { type: 'click', selector: '#x' } })).rejects.toThrow(/Waiting for the person/);
     fabric.handoffs.get(handoffId)!.status = 'completed';
-    fabric.handoffs.get(handoffId)!.response = { outcome: 'completed' };
+    fabric.handoffs.get(handoffId)!.response = { outcome: 'completed', value_withheld: true, by: `user:${userId}`, answered_at: new Date().toISOString() };
     expect(await ctl.handoffStatus(userId, runId, handoffId)).toMatchObject({ status: 'completed', secretAvailable: true, value: null });
     await ctl.act(userId, runId, { action: { type: 'type_handoff_secret', handoffId, selector: '#otp', submit: true } });
     expect(fabric.actions).toContainEqual(expect.objectContaining({ type: 'type', selector: '#otp', text: SECRET }));

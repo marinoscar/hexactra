@@ -65,14 +65,70 @@ export const runStepResponseSchema = z.object({
 });
 export class RunDetailResponseDto extends createZodDto(runResponseSchema.extend({ steps: z.array(runStepResponseSchema) })) {}
 
-export const inboxItemResponseSchema = z.object({
-  runId: z.uuid(),
-  goal: z.string(),
-  handoffId: z.uuid(),
+const questionInput = z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover']);
+const questionOption = z.object({ id: z.string(), label: z.string(), description: z.string().optional() });
+const questionConstraints = z.object({
+  maxLength: z.number().int().optional(),
+  pattern: z.string().optional(),
+  multiline: z.boolean().optional(),
+  min: z.number().optional(),
+  max: z.number().optional(),
+  step: z.number().optional(),
+  unit: z.string().optional(),
+  minSelections: z.number().int().optional(),
+  maxSelections: z.number().int().optional(),
+});
+export const questionAnswerResponseSchema = z.object({
+  outcome: z.enum(['completed', 'cancelled']),
+  value: z.string().optional().describe('Never present for a secret'),
+  values: z.array(z.string()).optional(),
+  valueWithheld: z.boolean().describe('True for a secret: the value went to the browser, single use, and is never returned'),
+  channel: z.string().optional(),
+  by: z.string().optional().describe('Who answered, e.g. user:<id>'),
+  answeredAt: iso,
+});
+
+export const questionResponseSchema = z.object({
+  id: z.uuid(),
+  askedBy: z.string().describe('run:<id>, agent:<name> or user:<id>'),
+  runId: z.uuid().nullable(),
+  handoffId: z.uuid().nullable(),
+  browserBound: z.boolean(),
+  input: questionInput,
   kind: z.string(),
   prompt: z.string(),
-  input: z.enum(['none', 'text', 'secret', 'choice']),
+  options: z.array(questionOption).nullable(),
+  constraints: questionConstraints.nullable(),
+  confirmLabel: z.string().nullable(),
+  denyLabel: z.string().nullable(),
+  risk: z.enum(['low', 'high']).nullable(),
+  status: z.enum(['pending', 'answered', 'cancelled', 'expired']),
+  response: questionAnswerResponseSchema.nullable(),
+  pageTitle: z.string().nullable(),
+  viewerUrl: z.string().nullable(),
+  createdAt: iso,
+  expiresAt: iso,
+  answeredAt: iso.nullable(),
+});
+export class QuestionResponseDto extends createZodDto(questionResponseSchema) {}
+
+export const inboxItemResponseSchema = z.object({
+  questionId: z.uuid(),
+  /** Null for a free-standing question (answer it with POST /api/questions/{id}/answer). */
+  runId: z.uuid().nullable(),
+  goal: z.string(),
+  handoffId: z.uuid().nullable(),
+  askedBy: z.string(),
+  kind: z.string(),
+  prompt: z.string(),
+  input: questionInput,
+  /** The option ids (each bare-string option is its own id); `options` has the labels. */
   choices: z.array(z.string()),
+  options: z.array(questionOption).nullable(),
+  constraints: questionConstraints.nullable(),
+  confirmLabel: z.string().nullable(),
+  denyLabel: z.string().nullable(),
+  risk: z.enum(['low', 'high']).nullable(),
   pageTitle: z.string().nullable(),
   viewerUrl: z.string().nullable(),
   createdAt: iso,

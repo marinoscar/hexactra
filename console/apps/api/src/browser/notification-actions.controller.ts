@@ -46,7 +46,7 @@ export class NotificationActionsController {
     if (!claims) throw new UnauthorizedException({ code: 'ACTION_EXPIRED', message: 'This notification button expired or was already used: open the run' });
     if (body.action === 'cancel') await this.tasks.cancel(claims.userId, claims.runId);
     else if (body.action === 'snooze') await this.reminders.snooze(claims.userId, claims.runId);
-    else await this.answers.answer({ id: claims.userId }, claims.runId, 'completed', undefined, claims.handoffId!);
+    else await this.answers.answer({ id: claims.userId }, claims.runId, 'completed', undefined, claims.handoffId!, { channel: 'notification' });
     this.log.log(`run ${claims.runId}: ${body.action} from a notification`);
     return { ok: true };
   }

@@ -26120,6 +26120,486 @@
         "description": "**Requires:** authentication, plus permission `runs:write`."
       }
     },
+    "/api/questions": {
+      "get": {
+        "operationId": "questions_list",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "answered",
+                "cancelled",
+                "expired"
+              ]
+            }
+          },
+          {
+            "name": "runId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/QuestionResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Questions"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:read`."
+      },
+      "post": {
+        "operationId": "questions_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateQuestionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/QuestionResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Questions"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:write`."
+      }
+    },
+    "/api/questions/{id}": {
+      "get": {
+        "operationId": "questions_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "waitMs",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "maximum": 30000,
+              "default": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/QuestionResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Questions"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:read`."
+      }
+    },
+    "/api/questions/{id}/answer": {
+      "post": {
+        "operationId": "questions_answer",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerQuestionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/QuestionResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Questions"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:write`."
+      }
+    },
+    "/api/questions/{id}/cancel": {
+      "post": {
+        "operationId": "questions_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelQuestionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/QuestionResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Questions"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:write`."
+      }
+    },
     "/api/browser/sessions": {
       "post": {
         "operationId": "externalBrowser_open",
@@ -54889,6 +55369,504 @@
           "steps"
         ]
       },
+      "QuestionResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "askedBy": {
+            "type": "string",
+            "description": "run:<id>, agent:<name> or user:<id>"
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "handoffId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "browserBound": {
+            "type": "boolean"
+          },
+          "input": {
+            "type": "string",
+            "enum": [
+              "none",
+              "text",
+              "secret",
+              "choice",
+              "multi_choice",
+              "number",
+              "confirm",
+              "takeover"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "constraints": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "maxLength": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "pattern": {
+                    "type": "string"
+                  },
+                  "multiline": {
+                    "type": "boolean"
+                  },
+                  "min": {
+                    "type": "number"
+                  },
+                  "max": {
+                    "type": "number"
+                  },
+                  "step": {
+                    "type": "number"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "minSelections": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "maxSelections": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confirmLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "denyLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "risk": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "answered",
+              "cancelled",
+              "expired"
+            ]
+          },
+          "response": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "outcome": {
+                    "type": "string",
+                    "enum": [
+                      "completed",
+                      "cancelled"
+                    ]
+                  },
+                  "value": {
+                    "description": "Never present for a secret",
+                    "type": "string"
+                  },
+                  "values": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "valueWithheld": {
+                    "type": "boolean",
+                    "description": "True for a secret: the value went to the browser, single use, and is never returned"
+                  },
+                  "channel": {
+                    "type": "string"
+                  },
+                  "by": {
+                    "description": "Who answered, e.g. user:<id>",
+                    "type": "string"
+                  },
+                  "answeredAt": {
+                    "type": "string",
+                    "description": "ISO 8601 timestamp"
+                  }
+                },
+                "required": [
+                  "outcome",
+                  "valueWithheld",
+                  "answeredAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pageTitle": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "viewerUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "answeredAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "askedBy",
+          "runId",
+          "handoffId",
+          "browserBound",
+          "input",
+          "kind",
+          "prompt",
+          "options",
+          "constraints",
+          "confirmLabel",
+          "denyLabel",
+          "risk",
+          "status",
+          "response",
+          "pageTitle",
+          "viewerUrl",
+          "createdAt",
+          "expiresAt",
+          "answeredAt"
+        ]
+      },
+      "CreateQuestionDto": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "type": "string",
+            "enum": [
+              "none",
+              "text",
+              "secret",
+              "choice",
+              "multi_choice",
+              "number",
+              "confirm",
+              "takeover"
+            ]
+          },
+          "kind": {
+            "default": "other",
+            "type": "string",
+            "enum": [
+              "captcha",
+              "code",
+              "passkey",
+              "login",
+              "confirmation",
+              "other"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "options": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "description": {
+                      "type": "string",
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label"
+                  ]
+                }
+              ]
+            }
+          },
+          "choices": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "description": {
+                      "type": "string",
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label"
+                  ]
+                }
+              ]
+            }
+          },
+          "constraints": {
+            "type": "object",
+            "properties": {
+              "maxLength": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 4096
+              },
+              "pattern": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "multiline": {
+                "type": "boolean"
+              },
+              "min": {
+                "type": "number"
+              },
+              "max": {
+                "type": "number"
+              },
+              "step": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20
+              },
+              "minSelections": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10
+              },
+              "maxSelections": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10
+              }
+            },
+            "additionalProperties": false
+          },
+          "confirmLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "denyLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 40
+          },
+          "risk": {
+            "type": "string",
+            "enum": [
+              "low",
+              "high"
+            ]
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 10000,
+            "maximum": 86400000
+          },
+          "asker": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        },
+        "required": [
+          "input",
+          "prompt"
+        ]
+      },
+      "AnswerQuestionDto": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "default": "completed",
+            "type": "string",
+            "enum": [
+              "completed",
+              "cancelled"
+            ]
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4096
+              },
+              {
+                "type": "number"
+              }
+            ]
+          },
+          "values": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            }
+          },
+          "channel": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,39}$"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CancelQuestionDto": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_.-]{0,39}$"
+          }
+        },
+        "default": {},
+        "additionalProperties": false
+      },
       "OpenDto": {
         "type": "object",
         "properties": {
@@ -55041,18 +56019,40 @@
       "InboxItemResponseDto": {
         "type": "object",
         "properties": {
-          "runId": {
+          "questionId": {
             "type": "string",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "goal": {
             "type": "string"
           },
           "handoffId": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "askedBy": {
+            "type": "string"
           },
           "kind": {
             "type": "string"
@@ -55066,7 +56066,11 @@
               "none",
               "text",
               "secret",
-              "choice"
+              "choice",
+              "multi_choice",
+              "number",
+              "confirm",
+              "takeover"
             ]
           },
           "choices": {
@@ -55074,6 +56078,105 @@
             "items": {
               "type": "string"
             }
+          },
+          "options": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "label"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "constraints": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "maxLength": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "pattern": {
+                    "type": "string"
+                  },
+                  "multiline": {
+                    "type": "boolean"
+                  },
+                  "min": {
+                    "type": "number"
+                  },
+                  "max": {
+                    "type": "number"
+                  },
+                  "step": {
+                    "type": "number"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "minSelections": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "maxSelections": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confirmLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "denyLabel": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "risk": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "pageTitle": {
             "type": [
@@ -55097,13 +56200,20 @@
           }
         },
         "required": [
+          "questionId",
           "runId",
           "goal",
           "handoffId",
+          "askedBy",
           "kind",
           "prompt",
           "input",
           "choices",
+          "options",
+          "constraints",
+          "confirmLabel",
+          "denyLabel",
+          "risk",
           "pageTitle",
           "viewerUrl",
           "createdAt",
@@ -55133,8 +56243,23 @@
             ]
           },
           "value": {
-            "type": "string",
-            "maxLength": 4096
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4096
+              },
+              {
+                "type": "number"
+              }
+            ]
+          },
+          "values": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 64
+            }
           }
         },
         "required": [

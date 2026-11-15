@@ -15,6 +15,7 @@ import { webhooksModule } from './platform/webhooks/webhooks.config';
 import { HexactraAlertsModule } from './alerts/alerts.module';
 import { alertsModule } from './platform/alerts/alerts.config';
 import { alertsMounted } from './platform/alerts/alerts.enabled';
+import { QuestionsModule } from './questions/questions.module';
 import { RunnerModule } from './runner/runner.module';
 import { SchedulesModule } from './schedules/schedules.module';
 import { TasksModule } from './tasks/tasks.module';
@@ -40,6 +41,7 @@ import { PrismaModule } from './prisma/prisma.service';
     FabricModule,
     FleetModule,
     TasksModule,
+    QuestionsModule,
     BrowserModule,
     McpModule,
     // The goal runner needs the AI slice (packages/shared/slices.json).

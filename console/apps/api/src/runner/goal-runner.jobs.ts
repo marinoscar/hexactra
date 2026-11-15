@@ -1,44 +1,16 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { AiError } from '@marinoscar/platform-api/ai';
-import { JobHandlerRegistry, JobsService, enqueueHousekeepingJob, registerJobReason, type Job, type JobHandler } from '@marinoscar/platform-api/jobs';
+import { JobHandlerRegistry, JobsService, enqueueHousekeepingJob, type Job, type JobHandler } from '@marinoscar/platform-api/jobs';
 
 import { FabricClient } from '../fabric/fabric.client';
 import { PrismaService } from '../prisma/prisma.service';
+import { QuestionsService } from '../questions/questions.service';
 import { FabricSession } from './fabric-session';
+import { GOAL_RUN_JOB, HANDOFF_CHECK_JOB, enqueueGoalRun, type GoalRunPayload } from './goal-run.enqueue';
 import { GoalRunnerService } from './goal-runner.service';
 
-/** Permanent job types (never rename once jobs exist). */
-export const GOAL_RUN_JOB = 'browser.goal.run';
-export const HANDOFF_CHECK_JOB = 'browser.handoffs.check';
-
-/** Why a run job was enqueued (permanent ids, shown in the admin job list). */
-export const GOAL_RUN_REASONS = {
-  started: { id: 'run_started', label: 'Run started' },
-  handoffAnswered: { id: 'handoff_answered', label: 'Handoff answered' },
-  handoffResolved: { id: 'handoff_resolved', label: 'Handoff resolved' },
-  schedule: { id: 'schedule', label: 'Scheduled run' },
-} as const;
-export type GoalRunReason = (typeof GOAL_RUN_REASONS)[keyof typeof GOAL_RUN_REASONS]['id'];
-for (const r of Object.values(GOAL_RUN_REASONS)) registerJobReason(r);
-
-export interface GoalRunPayload {
-  runId: string;
-  userId: string;
-  orgId: string | null;
-}
-
-/** Queue one advance of a run (start, or resume after a handoff). */
-export async function enqueueGoalRun(jobs: JobsService, payload: GoalRunPayload, reason: GoalRunReason): Promise<void> {
-  await jobs.enqueue({
-    type: GOAL_RUN_JOB,
-    reason,
-    subjectType: 'browser_run',
-    subjectId: payload.runId,
-    orgId: payload.orgId,
-    payload: { ...payload },
-  });
-}
+export { GOAL_RUN_JOB, GOAL_RUN_REASONS, HANDOFF_CHECK_JOB, enqueueGoalRun, type GoalRunPayload, type GoalRunReason } from './goal-run.enqueue';
 
 /**
  * `browser.goal.run`: drives one run until it finishes or waits for a
@@ -83,7 +55,7 @@ export class GoalRunHandler implements JobHandler, OnModuleInit {
 
 /**
  * `browser.handoffs.check`: resumes runs whose handoff was answered,
- * cancelled or expired. Housekeeping (system job): reads the waiting runs and
+ * cancelled or expired, and settles their mirrored questions. Housekeeping (system job): reads the waiting runs and
  * enqueues their `browser.goal.run`.
  */
 @Injectable()
@@ -97,6 +69,7 @@ export class HandoffCheckHandler implements JobHandler, OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly fabric: FabricClient,
     private readonly jobs: JobsService,
+    private readonly questions: QuestionsService,
   ) {}
 
   onModuleInit(): void {
@@ -114,6 +87,8 @@ export class HandoffCheckHandler implements JobHandler, OnModuleInit {
     const session = new FabricSession(this.fabric);
     for (const r of waiting) {
       const h = await session.getHandoff(r.handoffId!).catch(() => null);
+      // Settle the mirrored question too (expired or cancelled on the fabric, or answered by another channel there).
+      if (h && h.status !== 'pending') await this.questions.reconcileHandoff(h);
       if (!h || h.status !== 'pending') {
         await enqueueGoalRun(this.jobs, { runId: r.id, userId: r.userId, orgId: null }, 'handoff_resolved');
       }

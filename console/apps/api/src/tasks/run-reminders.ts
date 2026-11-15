@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { JobHandlerRegistry, JobsService, enqueueHousekeepingJob, type JobHandler } from '@marinoscar/platform-api/jobs';
 
 import { FabricClient, FabricError } from '../fabric/fabric.client';
+import { handoffOutcome, type FabricHandoff } from '../runner/fabric-session';
 import { PrismaService } from '../prisma/prisma.service';
 import { RunNotifier } from './run-notifier';
 import { SNOOZE_MS, canSnooze, nextReminderAt, reminderDue, type ReminderState } from './reminder-schedule';
@@ -26,12 +27,12 @@ const RETRY_MS = 60_000;
  * the fabric, so an answered or expired request is never reminded about.
  */
 
-interface FabricHandoffStatus {
-  status: string;
-  expires_at?: string;
-  kind?: string;
-  prompt?: string;
-  input?: string;
+/** The fields of the fabric's handoff view the reminder reads. */
+type FabricHandoffStatus = Pick<FabricHandoff, 'status' | 'response' | 'expires_at' | 'kind' | 'prompt' | 'input'>;
+
+/** Still waiting for its person: pending on the fabric and not answered (a response's outcome settles it on newer fabrics). */
+function stillPending(h: FabricHandoffStatus): boolean {
+  return h.status === 'pending' && handoffOutcome(h) === null;
 }
 
 /** Sends due reminders and records snoozes. */
@@ -82,7 +83,7 @@ export class RunReminders {
     } catch (e) {
       gone = e instanceof FabricError && e.status === 404;
     }
-    if (!handoff || handoff.status !== 'pending') {
+    if (!handoff || !stillPending(handoff)) {
       // Resolved or gone: nothing more to remind about. Unreachable: look again shortly.
       await this.claim(run.id, run.remindAt, { remindAt: handoff || gone ? null : new Date(now.getTime() + RETRY_MS) });
       return false;
