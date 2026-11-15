@@ -60,16 +60,29 @@ Why each step matters:
 |---|---|---|
 | An agent needs you (`runs.needs_you`) | High urgency, one per run (a newer one replaces it) | `/inbox?run=<id>`: the Inbox with that request first, outlined |
 | Run finished (`runs.finished`) | High urgency when it failed, normal otherwise; one per run | `/runs/<id>` |
+| Reminders while an agent waits (`runs.needs_you_reminder`) | High urgency; replaces the request's notification and alerts again | `/inbox?run=<id>` |
 | Schedule failing (`schedules.failing`) | Normal urgency, one per schedule | `/tasks` |
 
-- **Buttons that act without opening the app.** A "needs you" notification has **Stop run**, plus **Approve** when the agent asks for a plain confirmation. A code, a password, a choice or a sign-in always needs the app.
+- **Buttons that act without opening the app.** Browsers show two buttons at most, so the pair depends on the request:
+  - A plain confirmation can be answered with one tap: **Approve** and **Stop run**.
+  - A code, a password, a choice or a sign-in always needs the app: **Remind me in 15 min** (while 20 min or more remain) and **Stop run**.
   - The service worker handles the buttons (`apps/web/src/notificationActions.ts`), so they work the same in the Android app, the installed PWA and a desktop browser.
   - It holds no session: a button carries a single-use token, valid for an hour, that can stop that one run or approve that one confirmation (`POST /api/notification-actions`).
   - An expired, used or stale button opens the run instead.
   - Stopping a run that waits for a person cancels it at once: its request is withdrawn and its browser session ends.
+- **Reminders before a request expires** (`apps/api/src/tasks/reminder-schedule.ts`). The schedule comes from the request's own window, from when the agent asked to when the fabric expires the request (10 min by default, at most 24 h):
+  - **Nudge:** at 25 % of the window, between 3 and 15 min after the request.
+  - **Midpoint:** only for windows of 2 h or more.
+  - **Final:** 5 min before expiry (20 % of a short window), titled "Expires in N min".
+  - Points closer than 3 min to the request or to each other are dropped. At most 5 reminders per request, snoozes included. With no known expiry: 10 and 60 min.
+  - Example: a 10 min request reminds at 3 and 8 min; a 30 min request at 7.5 and 25 min.
+  - **Remind me in 15 min** closes the notification quietly. The reminder comes back after 15 min, and no nudge fires in between.
+  - A reminder replaces the request's notification (tag `run-<id>`) and makes sound again. The service worker adds `renotify` to pushed run notifications, because the platform's push extras have no such field yet.
+  - **How it runs.** A 30 s cron only enqueues `browser.runs.remind` when a run's `remind_at` has passed. The job re-reads the request on the fabric, so an answered, cancelled or expired request is never reminded about. An unreachable fabric is tried again a minute later.
+  - **Turning them off.** Settings → Notifications → **Reminders while an agent waits**. The first "needs you" notification still arrives.
 - **How a tap reaches the app.** A notification's link is a URL on the console. The app holds a verified `https://<console>` app link (the `autoVerify` intent filter that `aapt2` checks in CI), so Android opens the link inside the app rather than in the browser.
 - **Payloads carry no secrets.** A request names what is asked, never an answer: codes typed into the Inbox go straight to the fabric.
-- **Tests.** `apps/api/test/push-payload.spec.ts` covers the payloads and links. `apps/web/src/__tests__/InboxPage.test.tsx` covers the deep link.
+- **Tests.** `apps/api/test/push-payload.spec.ts` covers the payloads, links and buttons. `apps/api/test/run-reminders.spec.ts` covers the schedule. `apps/api/test/run-reminders.db.spec.ts` covers sending, snooze and replay. `apps/web/src/__tests__/notificationActions.test.ts` covers the buttons and `renotify`. `apps/web/src/__tests__/InboxPage.test.tsx` covers the deep link.
 
 ## 5. CI
 
