@@ -4,6 +4,7 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 
 import { createApp } from '../src/main';
+import { READ_ONLY_TOOLS } from '../src/mcp/mcp.tools';
 
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
@@ -42,6 +43,10 @@ describe('the console MCP server', () => {
     expect(names).toEqual(expect.arrayContaining(['run_goal', 'run_status', 'task_create', 'task_run', 'inbox_answer', 'browser_open', 'browser_navigate', 'browser_request_human', 'browser_type_secret', 'browser_close', 'hosts_list']));
     const create = list.json.result.tools.find((x: { name: string }) => x.name === 'task_create');
     expect(create.inputSchema).toMatchObject({ type: 'object', properties: { name: {}, goal: {} } });
+    expect(create.annotations).toMatchObject({ readOnlyHint: false });
+    expect(list.json.result.tools.find((x: { name: string }) => x.name === 'run_status').annotations).toEqual({ readOnlyHint: true });
+    // Every read-only hint names a real tool.
+    for (const n of READ_ONLY_TOOLS) expect(names).toContain(n);
 
     const made = await rpc(t, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'task_create', arguments: { name: 'Fare', goal: 'Find a fare', allowed_domains: ['flights.example.test'] } } });
     expect(made.json.result.isError).toBeFalsy();

@@ -1,0 +1,14 @@
+# Hermes Agent: merge this into ~/.hermes/config.yaml.
+# Set HEXACTRA_CONSOLE_URL (for example https://console.example.test) and
+# HEXACTRA_TOKEN (a personal access token of the agent's console user) in
+# ~/.hermes/.env. Hermes expands ${VAR} in headers at connect time.
+# Check it with: hermes mcp test hexactra
+mcp_servers:
+  hexactra:
+    url: "${HEXACTRA_CONSOLE_URL}/api/mcp"
+    headers:
+      Authorization: "Bearer ${HEXACTRA_TOKEN}"
+    # Browser goals can take minutes; run_goal returns at once, but
+    # browser_* tools wait for the page.
+    timeout: 300
+    connect_timeout: 30
