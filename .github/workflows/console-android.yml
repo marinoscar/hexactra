@@ -84,12 +84,16 @@ jobs:
           apk=app/build/outputs/apk/debug/app-debug.apk
           aapt2="$ANDROID_HOME/build-tools/36.0.0/aapt2"
           "$aapt2" dump badging "$apk" > badging.txt
-          head -5 badging.txt
-          grep -q "^package: name='" badging.txt
-          grep -q "^launchable-activity:" badging.txt
-          grep -q "application-label:'Hexactra Console'" badging.txt
           "$aapt2" dump xmltree --file AndroidManifest.xml "$apk" > manifest.txt
-          grep -q 'console.example.test' manifest.txt
+          grep -E "^(package|application-label|launchable-activity|application:)" badging.txt || true
+          grep -nE "activity-alias|android:host|android:scheme|MAIN|LAUNCHER" manifest.txt || true
+          fail=0
+          check() { if grep -qE "$2" "$3"; then echo "ok   $1"; else echo "::error::APK check failed: $1"; fail=1; fi; }
+          check "package name" "^package: name='" badging.txt
+          check "app label is Hexactra Console" "application-label(-[a-zA-Z_]+)?:'Hexactra Console'" badging.txt
+          check "a launcher entry (activity or alias)" "android.intent.category.LAUNCHER" manifest.txt
+          check "the https host binding" "console\.example\.test" manifest.txt
+          exit $fail
 
       - name: Upload test reports
         if: failure()
