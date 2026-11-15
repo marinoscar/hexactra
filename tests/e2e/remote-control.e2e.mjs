@@ -19,7 +19,7 @@
 import { spawn, spawnSync, execFile } from 'node:child_process';
 import { createServer } from 'node:http';
 import crypto from 'node:crypto';
-import { mkdtempSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, existsSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -461,7 +461,21 @@ try {
       '--browser-arg=--window-size=1280,900',
     ];
     if (process.getuid?.() === 0) launchArgs.push('--browser-arg=--no-sandbox');
+    // This host enrolls with a single-use token instead of the operator token.
+    const enrollment = await (
+      await fetch(`${controlUrl}/v1/admin/hosts/enrollments`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'e2e-launch-host', ttl_s: 600 }),
+      })
+    ).json();
+    assert.match(enrollment.enrollment_token, /^hxe_/);
+    launchArgs.push('--enrollment-token', enrollment.enrollment_token);
     agent = start('agent', join(binDir, 'hexactra-agent'), launchArgs);
+    const credFile = join(work, 'config', 'hexactra', 'host-credential.json');
+    await until('host credential saved', async () => existsSync(credFile), 20_000);
+    assert.equal(statSync(credFile).mode & 0o777, 0o600);
+    assert.match(readFileSync(credFile, 'utf8'), /"host_token": "hxh_/);
     await until('on-demand host', async () => /on_demand=true/.test((await cli('status')).out), 30_000);
     assert.match((await cli('status')).out, /viewer=https:\/\/viewer\.example\.test/);
     const browserRunning = () =>

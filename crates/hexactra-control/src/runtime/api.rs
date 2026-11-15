@@ -1,14 +1,14 @@
 //! `/v1` HTTP API for remote browser control.
 //!
-//! Every route except `GET /v1/health` requires `Authorization: Bearer <token>`.
-//! Clients and host agents use the same token in this first slice; separate
-//! host credentials are follow-up work on epic #173.
+//! Every route except `GET /v1/health`, the handoff answer page and host
+//! enrollment requires `Authorization: Bearer <token>`. Tokens are scoped
+//! (see [`super::credentials`]): operator (everything), service (client
+//! routes), host (only its own host routes).
 
-use std::sync::Arc;
 use std::time::Duration;
 
 use axum::{
-    extract::{DefaultBodyLimit, Path, Query, Request, State},
+    extract::{DefaultBodyLimit, Extension, Path, Query, Request, State},
     http::{header, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -20,9 +20,9 @@ use hexactra_core::remote::{
     RegisterHostRequest, RegisterHostResponse,
 };
 use serde::Deserialize;
-use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+use super::credentials::{CredentialError, Credentials, Principal};
 use super::store::{RuntimeStore, StoreError};
 
 /// Default time a caller waits for an action result.
@@ -39,7 +39,7 @@ const RESULT_BODY_LIMIT: usize = 25 * 1024 * 1024;
 pub struct ApiState {
     pub store: RuntimeStore,
     pub webhooks: super::webhooks::Webhooks,
-    token_digest: Arc<[u8; 32]>,
+    pub credentials: Credentials,
 }
 
 impl ApiState {
@@ -55,20 +55,25 @@ impl ApiState {
         token: &str,
         webhooks: super::webhooks::Webhooks,
     ) -> Self {
+        Self::with_parts(store, webhooks, Credentials::new(token))
+    }
+
+    /// Build state from its parts.
+    pub fn with_parts(
+        store: RuntimeStore,
+        webhooks: super::webhooks::Webhooks,
+        credentials: Credentials,
+    ) -> Self {
         Self {
             store,
             webhooks,
-            token_digest: Arc::new(Sha256::digest(token.as_bytes()).into()),
+            credentials,
         }
     }
 
-    /// Constant-time token check (compares SHA-256 digests).
-    pub(super) fn token_matches(&self, presented: &str) -> bool {
-        let d: [u8; 32] = Sha256::digest(presented.as_bytes()).into();
-        d.iter()
-            .zip(self.token_digest.iter())
-            .fold(0u8, |acc, (a, b)| acc | (a ^ b))
-            == 0
+    /// Resolve a bearer token.
+    pub(super) fn principal(&self, presented: &str) -> Option<Principal> {
+        self.credentials.authenticate(presented)
     }
 }
 
@@ -112,44 +117,136 @@ impl From<StoreError> for AppError {
     }
 }
 
-async fn require_token(State(state): State<ApiState>, req: Request, next: Next) -> Response {
-    let presented = req
-        .headers()
+fn bearer(req: &Request) -> Option<&str> {
+    req.headers()
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "));
-    match presented {
-        Some(t) if state.token_matches(t) => next.run(req).await,
-        _ => AppError(
-            StatusCode::UNAUTHORIZED,
-            "unauthorized",
-            "missing or invalid bearer token".into(),
-        )
-        .into_response(),
+        .and_then(|v| v.strip_prefix("Bearer "))
+}
+
+fn unauthorized() -> Response {
+    AppError(
+        StatusCode::UNAUTHORIZED,
+        "unauthorized",
+        "missing or invalid bearer token".into(),
+    )
+    .into_response()
+}
+
+/// Authenticate and require an allowed principal kind; the principal is
+/// stored as a request extension for handlers.
+async fn authorize(
+    state: &ApiState,
+    mut req: Request,
+    next: Next,
+    allowed: fn(Principal) -> bool,
+    denied: &str,
+) -> Response {
+    let Some(p) = bearer(&req).and_then(|t| state.principal(t)) else {
+        return unauthorized();
+    };
+    if !allowed(p) {
+        return AppError(StatusCode::FORBIDDEN, "forbidden", denied.into()).into_response();
+    }
+    req.extensions_mut().insert(p);
+    next.run(req).await
+}
+
+async fn require_client(State(s): State<ApiState>, req: Request, next: Next) -> Response {
+    authorize(
+        &s,
+        req,
+        next,
+        Principal::is_client,
+        "this token cannot call client routes",
+    )
+    .await
+}
+
+async fn require_host(State(s): State<ApiState>, req: Request, next: Next) -> Response {
+    authorize(
+        &s,
+        req,
+        next,
+        |p| matches!(p, Principal::Operator | Principal::Host(_)),
+        "only host credentials (or the operator token) can call host routes",
+    )
+    .await
+}
+
+async fn require_operator(State(s): State<ApiState>, req: Request, next: Next) -> Response {
+    authorize(
+        &s,
+        req,
+        next,
+        |p| p == Principal::Operator,
+        "only the operator token can manage service tokens",
+    )
+    .await
+}
+
+/// A host credential may only act for its own host id.
+fn check_host(p: Principal, host_id: Uuid) -> Result<(), AppError> {
+    match p {
+        Principal::Host(id) if id != host_id => Err(AppError(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "this host credential belongs to another host".into(),
+        )),
+        _ => Ok(()),
+    }
+}
+
+impl From<CredentialError> for AppError {
+    fn from(e: CredentialError) -> Self {
+        match e {
+            CredentialError::InvalidEnrollment => {
+                AppError(StatusCode::FORBIDDEN, "invalid_enrollment", e.to_string())
+            }
+            CredentialError::NotFound(_) => {
+                AppError(StatusCode::NOT_FOUND, "not_found", e.to_string())
+            }
+            CredentialError::Invalid(_) => {
+                AppError(StatusCode::BAD_REQUEST, "invalid_request", e.to_string())
+            }
+        }
     }
 }
 
 /// Build the `/v1` router.
 pub fn router(state: ApiState) -> Router {
-    let protected = Router::new()
-        .route("/v1/hosts", get(list_hosts))
+    let host = Router::new()
         .route("/v1/hosts/register", post(register_host))
         .route("/v1/hosts/{host_id}/next", get(next_operation))
+        .route("/v1/hosts/{host_id}/offline", post(host_offline))
         .route(
             "/v1/hosts/{host_id}/operations/{op_id}/result",
             post(post_result).layer(DefaultBodyLimit::max(RESULT_BODY_LIMIT)),
         )
+        .route_layer(middleware::from_fn_with_state(state.clone(), require_host));
+    let client = Router::new()
+        .route("/v1/hosts", get(list_hosts))
         .route("/v1/sessions", get(list_sessions).post(create_session))
         .route("/v1/sessions/{id}", get(get_session).delete(end_session))
         .route("/v1/sessions/{id}/actions", post(run_action))
         .route("/v1/operations/{id}", get(get_operation))
         .merge(super::handoff_api::protected_routes())
         .merge(super::webhook_api::routes())
-        .route_layer(middleware::from_fn_with_state(state.clone(), require_token));
+        .merge(super::credentials_api::client_routes())
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_client,
+        ));
+    let operator = super::credentials_api::operator_routes().route_layer(
+        middleware::from_fn_with_state(state.clone(), require_operator),
+    );
     Router::new()
         .route("/v1/health", get(health))
         .merge(super::handoff_api::public_routes())
-        .merge(protected)
+        .merge(super::credentials_api::public_routes())
+        .merge(host)
+        .merge(client)
+        .merge(operator)
         .with_state(state)
 }
 
@@ -165,8 +262,13 @@ async fn list_hosts(State(s): State<ApiState>) -> impl IntoResponse {
 
 async fn register_host(
     State(s): State<ApiState>,
-    Json(req): Json<RegisterHostRequest>,
+    Extension(p): Extension<Principal>,
+    Json(mut req): Json<RegisterHostRequest>,
 ) -> Result<Json<RegisterHostResponse>, AppError> {
+    // A host credential always registers its own id.
+    if let Principal::Host(id) = p {
+        req.host_id = Some(id);
+    }
     let name = req.name.trim();
     if name.is_empty() || name.len() > 128 {
         return Err(AppError(
@@ -224,9 +326,11 @@ fn split_list(s: &Option<String>) -> Vec<String> {
 
 async fn next_operation(
     State(s): State<ApiState>,
+    Extension(p): Extension<Principal>,
     Path(host_id): Path<Uuid>,
     Query(q): Query<PollQuery>,
 ) -> Result<Response, AppError> {
+    check_host(p, host_id)?;
     let wait = Duration::from_millis(q.wait_ms.unwrap_or(25_000)).min(MAX_HOST_POLL);
     s.store.set_host_on_demand(host_id, q.on_demand)?;
     if q.profiles.is_some() {
@@ -246,11 +350,24 @@ async fn next_operation(
     }
 }
 
+async fn host_offline(
+    State(s): State<ApiState>,
+    Extension(p): Extension<Principal>,
+    Path(host_id): Path<Uuid>,
+) -> Result<StatusCode, AppError> {
+    check_host(p, host_id)?;
+    s.store.set_host_offline(host_id)?;
+    tracing::info!(%host_id, "host went offline");
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn post_result(
     State(s): State<ApiState>,
+    Extension(p): Extension<Principal>,
     Path((host_id, op_id)): Path<(Uuid, Uuid)>,
     Json(result): Json<OperationResult>,
 ) -> Result<StatusCode, AppError> {
+    check_host(p, host_id)?;
     let view = s.store.complete(host_id, op_id, result)?;
     tracing::info!(%op_id, state = ?view.state, "operation completed");
     Ok(StatusCode::NO_CONTENT)

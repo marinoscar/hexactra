@@ -24,9 +24,44 @@ On first start, if no token is configured, the server generates a 64-hex-charact
 
 The server refuses to listen on a non-loopback address unless `--allow-remote-bind` is passed. Reach it remotely through an SSH tunnel or a private network such as Tailscale or WireGuard; do not expose it to the internet.
 
-## Authentication
+## Authentication and credentials
 
-Every route except `GET /v1/health` requires `Authorization: Bearer <token>`. A missing or wrong token returns `401`. Clients and host agents share one token in this release.
+Every route except `GET /v1/health`, the handoff answer page and `POST /v1/hosts/enroll` requires `Authorization: Bearer <token>`. Tokens are scoped:
+
+| Kind | Looks like | May call |
+|---|---|---|
+| operator | the configured token (`api-token` file or `HEXACTRA_API_TOKEN`) | everything, including service-token management |
+| service | `hxs_…` | client routes (hosts list, sessions, actions, operations, handoffs, webhooks) and host enrollment/revocation |
+| host | `hxh_…` | only its own host routes: register, poll, report results, go offline |
+| enrollment | `hxe_…` | only `POST /v1/hosts/enroll`, once, before it expires |
+
+Tokens are stored as SHA-256 digests only and shown once when created. A wrong token returns `401`; a valid token on a route outside its scope returns `403`.
+
+**Enrolling a host** (recommended over sharing the operator token):
+
+```bash
+# operator or service token
+curl -X POST $URL/v1/admin/hosts/enrollments -H "Authorization: Bearer $TOKEN" \
+     -H 'content-type: application/json' -d '{"name":"vps","ttl_s":3600}'
+# → { "enrollment": {...}, "enrollment_token": "hxe_…" }
+
+# on the host
+hexactra-agent daemon --url $URL --enrollment-token hxe_… [--browser …]
+```
+
+The agent exchanges the enrollment token once, saves its host credential to `$XDG_CONFIG_HOME/hexactra/host-credential.json` (mode `0600`) and uses it from then on. `DELETE /v1/admin/hosts/{id}` revokes a host: its credential stops working and its sessions end. On shutdown an agent calls `POST /v1/hosts/{id}/offline`, so no new sessions are routed to it.
+
+| Method and path | Token | Purpose |
+|---|---|---|
+| `POST /v1/admin/hosts/enrollments` | operator, service | Create an enrollment `{ "name"?, "ttl_s"? }` (default 1 h, at most 7 days) |
+| `GET /v1/admin/hosts/enrollments` | operator, service | Pending enrollments (no tokens) |
+| `POST /v1/hosts/enroll` | none (enrollment token in body) | `{ "enrollment_token", "name"?, "version"? }` → `{ host_id, host_token }` |
+| `DELETE /v1/admin/hosts/{id}` | operator, service | Revoke and remove a host |
+| `POST /v1/admin/service-tokens` | operator | Create `{ "name" }` → `{ service_token, token }` |
+| `GET /v1/admin/service-tokens` | operator | List (no tokens) |
+| `DELETE /v1/admin/service-tokens/{id}` | operator | Revoke |
+
+The operator token still works on host routes, so existing single-token setups keep working. Credentials are held in memory in this release; durable storage lands with #211.
 
 ## Endpoints
 
@@ -216,5 +251,4 @@ def verify(secret, headers, raw_body: bytes) -> bool:
 ## Limitations of this release
 
 - State is in memory: restarting `hexactra-control` drops sessions and operations. Durable sessions and the audit trail are follow-up work on #173.
-- One shared token for clients and hosts.
 - The pre-existing routes in `crates/hexactra-control/src/routes/` are not mounted by this server.

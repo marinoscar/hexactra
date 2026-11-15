@@ -30,6 +30,11 @@ enum Commands {
         /// `HEXACTRA_API_TOKEN` overrides it.
         #[arg(long, env = "HEXACTRA_TOKEN_FILE")]
         token_file: Option<PathBuf>,
+        /// Single-use enrollment token (`hxe_…`) from the console or
+        /// `POST /v1/admin/hosts/enrollments`. Exchanged once for this host's
+        /// own credential, saved to $XDG_CONFIG_HOME/hexactra/host-credential.json.
+        #[arg(long, env = "HEXACTRA_ENROLLMENT_TOKEN")]
+        enrollment_token: Option<String>,
         /// Display name for this host (default: the machine's hostname).
         #[arg(long, env = "HEXACTRA_HOST_NAME")]
         name: Option<String>,
@@ -102,6 +107,68 @@ fn hostname() -> String {
         .unwrap_or_else(|| "hexactra-host".to_string())
 }
 
+/// Saved host credential from enrollment.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct HostCredential {
+    host_id: uuid::Uuid,
+    host_token: String,
+}
+
+fn credential_file() -> PathBuf {
+    config_dir().join("host-credential.json")
+}
+
+fn write_private(path: &std::path::Path, data: &[u8]) -> Result<()> {
+    if let Some(d) = path.parent() {
+        std::fs::create_dir_all(d)?;
+    }
+    use std::io::Write;
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    opts.open(path)?.write_all(data)?;
+    Ok(())
+}
+
+/// The token this host uses: its saved host credential, else a new one
+/// from `enrollment_token`, else the operator token (legacy single-token
+/// setups).
+async fn host_token(
+    url: &str,
+    name: &str,
+    token_file: Option<PathBuf>,
+    enrollment_token: Option<String>,
+) -> Result<String> {
+    let file = credential_file();
+    if let Ok(bytes) = std::fs::read(&file) {
+        let c: HostCredential = serde_json::from_slice(&bytes)
+            .with_context(|| format!("reading {}", file.display()))?;
+        // Keep the host id file in step with the credential.
+        let _ = std::fs::write(config_dir().join("host-id"), format!("{}\n", c.host_id));
+        tracing::info!(host_id = %c.host_id, "using saved host credential");
+        return Ok(c.host_token);
+    }
+    if let Some(et) = enrollment_token.filter(|t| !t.trim().is_empty()) {
+        let e =
+            hexactra_client::HostClient::enroll(url, et.trim(), name, env!("CARGO_PKG_VERSION"))
+                .await
+                .context("enrolling this host (is the enrollment token valid and unused?)")?;
+        let c = HostCredential {
+            host_id: e.host_id,
+            host_token: e.host_token,
+        };
+        write_private(&file, &serde_json::to_vec_pretty(&c)?)?;
+        let _ = std::fs::write(config_dir().join("host-id"), format!("{}\n", c.host_id));
+        tracing::info!(host_id = %c.host_id, file = %file.display(), "host enrolled; credential saved");
+        return Ok(c.host_token);
+    }
+    read_token(token_file)
+}
+
 fn read_token(token_file: Option<PathBuf>) -> Result<String> {
     if let Ok(t) = std::env::var("HEXACTRA_API_TOKEN") {
         if !t.trim().is_empty() {
@@ -138,6 +205,7 @@ async fn main() -> Result<()> {
         Commands::Daemon {
             url,
             token_file,
+            enrollment_token,
             name,
             bridge_socket,
             browser,
@@ -192,10 +260,12 @@ async fn main() -> Result<()> {
                     })
                 }
             };
+            let host_name = name.unwrap_or_else(hostname);
+            let token = host_token(&url, &host_name, token_file, enrollment_token).await?;
             let cfg = DaemonConfig {
                 control_url: url,
-                token: read_token(token_file)?,
-                host_name: name.unwrap_or_else(hostname),
+                token,
+                host_name,
                 host_id_file: Some(config_dir().join("host-id")),
                 bridge_socket,
                 poll_wait: Duration::from_secs(25),

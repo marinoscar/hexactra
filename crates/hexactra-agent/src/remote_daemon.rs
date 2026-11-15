@@ -128,17 +128,40 @@ async fn wait_for_stop_signal() {
     let _ = tokio::signal::ctrl_c().await;
 }
 
+/// The host id this agent is registered as (for the shutdown notice).
+type CurrentHost = std::sync::Arc<std::sync::Mutex<Option<Uuid>>>;
+
+fn set_current(c: &CurrentHost, id: Uuid) {
+    *c.lock().unwrap_or_else(|e| e.into_inner()) = Some(id);
+}
+
+/// Tell the control plane this host is going away, so sessions are not
+/// routed to it while its last poll is still fresh.
+async fn announce_offline(client: &HostClient, current: &CurrentHost) {
+    let id = *current.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(id) = id {
+        let _ = tokio::time::timeout(Duration::from_secs(3), client.offline(id)).await;
+    }
+}
+
 /// Attach mode: one browser (the operator's own Chrome) = the `default` profile.
 async fn run_attach_mode(cfg: DaemonConfig, client: HostClient) -> Result<()> {
-    tokio::spawn(async {
-        wait_for_stop_signal().await;
-        tracing::info!("stopping");
-        std::process::exit(0);
-    });
+    let current: CurrentHost = Default::default();
+    {
+        let client = client.clone();
+        let current = current.clone();
+        tokio::spawn(async move {
+            wait_for_stop_signal().await;
+            tracing::info!("stopping");
+            announce_offline(&client, &current).await;
+            std::process::exit(0);
+        });
+    }
     let bridge = BrowserBridge::bind(&cfg.bridge_socket)
         .await
         .context("starting browser bridge")?;
     let mut host_id = register(&client, &cfg, load_host_id(&cfg.host_id_file)).await;
+    set_current(&current, host_id);
     let mut backoff = Duration::from_secs(1);
     let mut was_connected = false;
     loop {
@@ -187,6 +210,7 @@ async fn run_attach_mode(cfg: DaemonConfig, client: HostClient) -> Result<()> {
                     "control plane does not know this host (restarted?); re-registering"
                 );
                 host_id = register(&client, &cfg, Some(host_id)).await;
+                set_current(&current, host_id);
             }
             Err(e) => {
                 tracing::warn!(error = %e, retry_in = ?backoff, "polling failed");
@@ -205,13 +229,17 @@ async fn run_launch_mode(
     pool_cfg: PoolConfig,
 ) -> Result<()> {
     let pool = BrowserPool::new(pool_cfg)?;
+    let current: CurrentHost = Default::default();
     {
         // On SIGTERM/SIGINT (docker stop, reboot, Ctrl-C) close every
         // browser through its extension before exiting.
         let pool = pool.clone();
+        let client = client.clone();
+        let current = current.clone();
         tokio::spawn(async move {
             wait_for_stop_signal().await;
             tracing::info!("stopping: closing browsers");
+            announce_offline(&client, &current).await;
             pool.shutdown().await;
             std::process::exit(0);
         });
@@ -222,6 +250,7 @@ async fn run_launch_mode(
         }
     }
     let mut host_id = register(&client, &cfg, load_host_id(&cfg.host_id_file)).await;
+    set_current(&current, host_id);
     let mut backoff = Duration::from_secs(1);
     loop {
         let status = HostPollStatus {
@@ -256,6 +285,7 @@ async fn run_launch_mode(
                     "control plane does not know this host (restarted?); re-registering"
                 );
                 host_id = register(&client, &cfg, Some(host_id)).await;
+                set_current(&current, host_id);
             }
             Err(e) => {
                 tracing::warn!(error = %e, retry_in = ?backoff, "polling failed");

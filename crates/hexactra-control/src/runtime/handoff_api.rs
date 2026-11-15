@@ -194,7 +194,9 @@ async fn respond(
     };
 
     let responder = match (bearer(&headers), token.as_deref()) {
-        (Some(b), _) if s.token_matches(b) => Responder::Operator,
+        (Some(b), _) if s.principal(b).map(|p| p.is_client()).unwrap_or(false) => {
+            Responder::Operator
+        }
         (_, Some(t)) => Responder::Token(t),
         _ => {
             let e = AppError(
