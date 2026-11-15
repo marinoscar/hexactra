@@ -1,0 +1,123 @@
+// Tasks, runs and run steps (#224): what browser agents are asked to do and
+// what they did. A Task is a reusable goal; a Run is one attempt at it (or an
+// external agent's session, with no task); RunSteps are the actions taken.
+// Steps store REDACTED arguments only: typed text and secret values never
+// reach this table (src/tasks/redact.ts). Registered in the user-owned data
+// registry (src/tasks/tasks.ownership.ts).
+
+enum RunStatus {
+  queued
+  running
+  waiting_human
+  succeeded
+  failed
+  cancelled
+
+  @@map("run_status")
+}
+
+enum RunTrigger {
+  manual
+  schedule
+  api
+  mcp
+  external
+
+  @@map("run_trigger")
+}
+
+model Task {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  name           String   @db.VarChar(200)
+  goal           String   @db.VarChar(4000)
+  /// Fabric browser profile the runs use.
+  profile        String   @default("default") @db.VarChar(32)
+  /// Pin runs to one fabric host; null lets the fabric choose.
+  hostId         String?  @map("host_id") @db.Uuid
+  /// Hostnames the agent may navigate to (suffix match); empty allows any.
+  allowedDomains String[] @default([]) @map("allowed_domains")
+  maxSteps       Int      @default(40) @map("max_steps")
+  maxMinutes     Int      @default(15) @map("max_minutes")
+  /// Pause for a person before steps that look like a purchase or submission.
+  confirmRiskyActions Boolean @default(true) @map("confirm_risky_actions")
+  /// AI model id; null uses the user's default.
+  model          String?  @db.VarChar(200)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs Run[]
+
+  @@index([userId, createdAt])
+  @@map("tasks")
+}
+
+model Run {
+  id              String     @id @default(uuid()) @db.Uuid
+  userId          String     @map("user_id") @db.Uuid
+  taskId          String?    @map("task_id") @db.Uuid
+  status          RunStatus  @default(queued)
+  trigger         RunTrigger @default(manual)
+  /// The goal as it was when the run started (a task may change later).
+  goal            String     @db.VarChar(4000)
+  profile         String     @default("default") @db.VarChar(32)
+  hostId          String?    @map("host_id") @db.Uuid
+  /// Fabric session the run drives.
+  sessionId       String?    @map("session_id") @db.Uuid
+  /// Open fabric handoff while `waiting_human`.
+  handoffId       String?    @map("handoff_id") @db.Uuid
+  /// Who or what started it (an agent framework's name for external runs).
+  actor           String?    @db.VarChar(200)
+  result          String?    @db.VarChar(8000)
+  error           String?    @db.VarChar(2000)
+  cancelRequested Boolean    @default(false) @map("cancel_requested")
+  stepCount       Int        @default(0) @map("step_count")
+  inputTokens     Int        @default(0) @map("input_tokens")
+  outputTokens    Int        @default(0) @map("output_tokens")
+  /// The AI conversation so far, so a run can resume after a handoff.
+  /// Never holds secret values (they are typed by the runner, not the model).
+  transcript      Json?
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  startedAt       DateTime?  @map("started_at") @db.Timestamptz
+  finishedAt      DateTime?  @map("finished_at") @db.Timestamptz
+
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task  Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  steps RunStep[]
+
+  @@index([userId, createdAt])
+  @@index([taskId, createdAt])
+  @@index([status])
+  @@map("runs")
+}
+
+model RunStep {
+  id            String   @id @default(uuid()) @db.Uuid
+  runId         String   @map("run_id") @db.Uuid
+  seq           Int
+  /// action | handoff | finish | error | note
+  kind          String   @db.VarChar(20)
+  /// The fabric action type (navigate, click, …) for kind=action.
+  action        String?  @db.VarChar(40)
+  /// Redacted arguments: never typed text or secret values.
+  args          Json?
+  ok            Boolean  @default(true)
+  summary       String   @default("") @db.VarChar(2000)
+  /// What the model said it was doing (its own words, trimmed).
+  reasoning     String?  @db.VarChar(2000)
+  /// Object-storage key of the screenshot taken at this step.
+  screenshotKey String?  @map("screenshot_key") @db.VarChar(500)
+  durationMs    Int?     @map("duration_ms")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, seq])
+  @@map("run_steps")
+}
+
+extend model User {
+  tasks Task[]
+  runs  Run[]
+}

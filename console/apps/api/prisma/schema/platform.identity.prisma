@@ -122,6 +122,10 @@ model User {
   // composed from app:notes.prisma
   notes Note[]
 
+  // composed from app:tasks.prisma
+  tasks Task[]
+  runs  Run[]
+
   @@map("users")
 }
 
