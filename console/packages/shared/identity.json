@@ -1,0 +1,8 @@
+{
+  "productName": "Hexactra Console",
+  "tagline": "Assign work to AI browser agents and watch them do it.",
+  "repoSlug": "marinoscar/hexactra",
+  "themeColor": "#3949ab",
+  "backgroundColor": "#ffffff",
+  "cliName": "hexactra"
+}
