@@ -88,6 +88,10 @@ jobs:
       - run: npm run prisma:seed --workspace=api
       # The agent frameworks docs/recipes/ targets, pinned to the versions the
       # recipes were checked against; agent-clients.db.spec.ts runs their CLIs.
+      # hermes-agent 0.19.0 requires Python >=3.11,<3.14.
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
       - name: Install Hermes Agent, OpenClaw and Pi
         run: |
           npm install --prefix "$RUNNER_TEMP/agents" --no-audit --no-fund @earendil-works/pi-coding-agent@1.5.2 openclaw@2026.11.3
