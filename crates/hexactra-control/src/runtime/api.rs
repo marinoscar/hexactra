@@ -233,6 +233,7 @@ pub fn router(state: ApiState) -> Router {
         .merge(super::handoff_api::protected_routes())
         .merge(super::webhook_api::routes())
         .merge(super::credentials_api::client_routes())
+        .merge(super::events_api::routes())
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             require_client,
