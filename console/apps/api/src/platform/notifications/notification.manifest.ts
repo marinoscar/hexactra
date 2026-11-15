@@ -32,6 +32,7 @@ import {
 
 import { contributions } from '../slices/contributions';
 import { isSliceEnabled } from '../slices/manifest';
+import { HEXACTRA_NOTIFICATIONS } from './hexactra.notifications';
 import { IDENTITY_NOTIFICATIONS } from './identity.notifications';
 import { NOTES_NOTIFICATIONS } from './notes-archived.notification';
 
@@ -49,3 +50,4 @@ registerNotifications(OPS_NOTIFICATIONS);
 registerNotifications(NODES_NOTIFICATIONS);
 registerNotifications(contributions().notifications);
 registerNotifications(NOTES_NOTIFICATIONS);
+registerNotifications(HEXACTRA_NOTIFICATIONS);

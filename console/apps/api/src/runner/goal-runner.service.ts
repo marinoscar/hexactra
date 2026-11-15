@@ -1,10 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { AiService, defineTool, type AiDefinedTool, type AiToolLoopResult } from '@marinoscar/platform-api/ai';
 import { z } from 'zod';
 
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { PrismaService } from '../prisma/prisma.service';
 import { redactActionArgs, redactUrl } from '../tasks/redact';
+import { RunNotifier } from '../tasks/run-notifier';
 import { TasksService } from '../tasks/tasks.service';
 import { BROWSER_AGENT_FEATURE_ID } from './browser-agent.feature';
 import { FabricSession } from './fabric-session';
@@ -56,6 +57,7 @@ export class GoalRunnerService {
     private readonly tasks: TasksService,
     private readonly fabric: FabricClient,
     private readonly ai: AiService,
+    @Optional() private readonly notifier?: RunNotifier,
   ) {}
 
   /**
@@ -124,6 +126,7 @@ export class GoalRunnerService {
       stop: null as StopLoop['reason'] | null,
       finished: null as { success: boolean; result: string } | null,
       handoffId: null as string | null,
+      handoffAsk: null as { prompt: string; kind: string } | null,
       labels: new Map<string, string>(),
     };
 
@@ -279,6 +282,7 @@ export class GoalRunnerService {
             return 'Could not reach a person right now.';
           }
           await record('handoff', null, { kind, input }, true, `asked a person (${kind}): ${trim(prompt, 300)}`, started);
+          state.handoffAsk = { prompt, kind };
           state.stop = 'pause';
           return 'Waiting for the person.';
         },
@@ -367,6 +371,7 @@ export class GoalRunnerService {
       }
       if (state.stop === 'pause' && state.handoffId) {
         await this.tasks.transition(userId, run.id, 'waiting_human', { handoffId: state.handoffId });
+        await this.notifier?.needsYou(userId, run, state.handoffAsk?.prompt ?? 'The agent needs you.', state.handoffAsk?.kind ?? 'other');
         return 'waiting_human';
       }
       if (state.stop === 'finish' && state.finished) {
@@ -406,7 +411,8 @@ export class GoalRunnerService {
     patch: { result?: string; error?: string },
   ) {
     if (sessionId) await session.end(sessionId);
-    await this.tasks.transition(userId, runId, to, patch);
+    const done = await this.tasks.transition(userId, runId, to, patch);
     this.log.log(`run ${runId}: ${to}`);
+    await this.notifier?.finished(userId, done, to, patch.result ?? patch.error);
   }
 }
