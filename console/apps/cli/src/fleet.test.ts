@@ -171,3 +171,33 @@ describe('RunsScreen', () => {
     screen.unmount();
   });
 });
+
+describe('the inbox', () => {
+  const item = { runId: '66666666-6666-4666-8666-666666666666', goal: 'Fare', kind: 'code', prompt: 'Enter the code', input: 'secret', choices: [], expiresAt: '2026-11-15T00:10:00Z' };
+
+  it('answers from the CLI and refuses a secret as an argument', async () => {
+    const { inboxCommand } = await import('./inbox.command.js');
+    const calls = fakeApi({ 'GET /inbox': [item], [`POST /inbox/${item.runId}/respond`]: { ok: true } });
+    const program = new Command().exitOverride();
+    inboxCommand(program);
+    await expect(program.parseAsync(['node', 'hexactra', 'inbox', 'answer', item.runId.slice(0, 8), '--done'])).resolves.toBeDefined();
+    expect(calls.at(-1)).toMatchObject({ method: 'POST', body: { outcome: 'completed' } });
+    const p2 = new Command().exitOverride();
+    inboxCommand(p2);
+    await expect(p2.parseAsync(['node', 'hexactra', 'inbox', 'answer', item.runId.slice(0, 8)])).rejects.toThrow(/--secret-stdin/);
+  });
+
+  it('types a masked secret in the TUI and sends it', async () => {
+    const { InboxScreen } = await import('./inbox.screen.js');
+    const calls = fakeApi({ 'GET /inbox': [item], [`POST /inbox/${item.runId}/respond`]: { ok: true } });
+    const screen = await renderTuiScreen(InboxScreen, { columns: 100 });
+    await screen.waitForFrame((f) => stripAnsi(f).includes('[code] Enter the code'));
+    for (const ch of '9876') await screen.press(ch);
+    await screen.waitForFrame((f) => stripAnsi(f).includes('secret: ••••'));
+    expect(stripAnsi(screen.lastFrame() ?? '')).not.toContain('9876');
+    await screen.press('enter');
+    await screen.waitForFrame((f) => stripAnsi(f).includes('sent; the agent continues'));
+    expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ outcome: 'completed', value: '9876' });
+    screen.unmount();
+  });
+});

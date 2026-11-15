@@ -28,6 +28,7 @@ import { NAVIGATION } from './config/navigation';
 import { USER_SETTINGS_SECTIONS } from './config/userSettingsSections';
 import { FabricConnectionPage } from './pages/FabricConnectionPage';
 import { FleetPage } from './pages/FleetPage';
+import { InboxPage } from './pages/InboxPage';
 import { RunDetailPage, RunsPage } from './pages/RunsPage';
 import { TasksPage } from './pages/TasksPage';
 import { NotesPage } from './pages/NotesPage';
@@ -164,6 +165,7 @@ export function AppRoutes() {
           <Route index element={<Home />} />
           <Route path="notes" element={<Gate permission="notes:read"><NotesPage /></Gate>} />
           <Route path="tasks" element={<Gate permission="tasks:read"><TasksPage /></Gate>} />
+          <Route path="inbox" element={<Gate permission="runs:read"><InboxPage /></Gate>} />
           <Route path="runs" element={<Gate permission="runs:read"><RunsPage /></Gate>} />
           <Route path="runs/:id" element={<Gate permission="runs:read"><RunDetailPage /></Gate>} />
           <Route path="fleet" element={<Gate permission="fleet:read"><FleetPage /></Gate>} />

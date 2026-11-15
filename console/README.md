@@ -17,6 +17,8 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 | Fabric connection (URL and `hxs_` service token, stored encrypted; Doctor checks `fabric.*`) | Administration → Fabric connection | `GET/PUT/DELETE /api/fabric/connection`, `POST …/test` | — | `fabric_config:read` / `:write` |
 | Tasks: saved goals with a profile, allowed sites, step and time budgets, confirm-before-purchase | `/tasks` | `/api/tasks` | `hexactra tasks list\|create\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
 | Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel | `/runs`, `/runs/:id` | `/api/runs`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` |
+| Inbox: what agents wait for (CAPTCHA, code, sign-in, confirmation); answers resume the run | `/inbox` | `GET /api/inbox`, `POST /api/inbox/:runId/respond` | `hexactra inbox list\|answer RUN --done\|--value\|--choice\|--secret-stdin\|--decline`; TUI **Inbox** | `runs:read` / `runs:write` |
+| Live run view: steps over SSE, live screenshot, take over | `/runs/:id` | `GET /api/runs/:id/stream\|screenshot\|viewer` | `hexactra runs watch`; TUI **Runs** | `runs:read` |
 | Fleet: hosts, enrollment, drain, revoke, profiles | `/fleet` | `/api/fleet/…` | `hexactra fleet hosts\|enroll\|drain\|undrain\|revoke\|commands`, `hexactra fleet profile create\|delete\|restart\|close`; TUI **Fleet** screen | `fleet:read` / `fleet:write` |
 
 Run it all on a VPS (console, fabric and a browser host in one stack): [docs/runbooks/vps-stack.md](docs/runbooks/vps-stack.md).
