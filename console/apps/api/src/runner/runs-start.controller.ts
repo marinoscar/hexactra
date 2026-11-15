@@ -41,7 +41,7 @@ export class RunsStartController {
       data: { userId: user.id, taskId: task.id, goal: task.goal, profile: task.profile, hostId: task.hostId, trigger: 'manual' },
       omit: { transcript: true },
     });
-    await enqueueGoalRun(this.jobs, { runId: run.id, userId: user.id, orgId: user.activeOrgId ?? null }, 'started');
+    await enqueueGoalRun(this.jobs, { runId: run.id, userId: user.id, orgId: user.activeOrgId ?? null }, 'run_started');
     return run;
   }
 
@@ -53,7 +53,7 @@ export class RunsStartController {
       data: { userId: user.id, goal: body.goal, profile: body.profile, hostId: body.hostId ?? null, trigger: 'api' },
       omit: { transcript: true },
     });
-    await enqueueGoalRun(this.jobs, { runId: run.id, userId: user.id, orgId: user.activeOrgId ?? null }, 'started');
+    await enqueueGoalRun(this.jobs, { runId: run.id, userId: user.id, orgId: user.activeOrgId ?? null }, 'run_started');
     return run;
   }
 }

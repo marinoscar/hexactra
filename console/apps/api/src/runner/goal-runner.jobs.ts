@@ -1,7 +1,7 @@
 import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { AiError } from '@marinoscar/platform-api/ai';
-import { JobHandlerRegistry, JobsService, enqueueHousekeepingJob, type Job, type JobHandler } from '@marinoscar/platform-api/jobs';
+import { JobHandlerRegistry, JobsService, enqueueHousekeepingJob, registerJobReason, type Job, type JobHandler } from '@marinoscar/platform-api/jobs';
 
 import { FabricClient } from '../fabric/fabric.client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,6 +12,16 @@ import { GoalRunnerService } from './goal-runner.service';
 export const GOAL_RUN_JOB = 'browser.goal.run';
 export const HANDOFF_CHECK_JOB = 'browser.handoffs.check';
 
+/** Why a run job was enqueued (permanent ids, shown in the admin job list). */
+export const GOAL_RUN_REASONS = {
+  started: { id: 'run_started', label: 'Run started' },
+  handoffAnswered: { id: 'handoff_answered', label: 'Handoff answered' },
+  handoffResolved: { id: 'handoff_resolved', label: 'Handoff resolved' },
+  schedule: { id: 'schedule', label: 'Scheduled run' },
+} as const;
+export type GoalRunReason = (typeof GOAL_RUN_REASONS)[keyof typeof GOAL_RUN_REASONS]['id'];
+for (const r of Object.values(GOAL_RUN_REASONS)) registerJobReason(r);
+
 export interface GoalRunPayload {
   runId: string;
   userId: string;
@@ -19,7 +29,7 @@ export interface GoalRunPayload {
 }
 
 /** Queue one advance of a run (start, or resume after a handoff). */
-export async function enqueueGoalRun(jobs: JobsService, payload: GoalRunPayload, reason: string): Promise<void> {
+export async function enqueueGoalRun(jobs: JobsService, payload: GoalRunPayload, reason: GoalRunReason): Promise<void> {
   await jobs.enqueue({
     type: GOAL_RUN_JOB,
     reason,
@@ -104,7 +114,7 @@ export class HandoffCheckHandler implements JobHandler, OnModuleInit {
     for (const r of waiting) {
       const h = await session.getHandoff(r.handoffId!).catch(() => null);
       if (!h || h.status !== 'pending') {
-        await enqueueGoalRun(this.jobs, { runId: r.id, userId: r.userId, orgId: null }, 'handoff resolved');
+        await enqueueGoalRun(this.jobs, { runId: r.id, userId: r.userId, orgId: null }, 'handoff_resolved');
       }
     }
   }
