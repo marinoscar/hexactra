@@ -1,6 +1,7 @@
 // Schedules against a real database with a fixed clock: due firings start
 // runs, a live run makes a "skip" schedule wait, failures are counted.
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import { WebhooksService, webhookEventRegistry } from '@marinoscar/platform-api/webhooks';
 
 import { createApp } from '../src/main';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -66,5 +67,23 @@ describe('schedules', () => {
       failing = failing.concat(r.failing.filter((f) => f.scheduleId === s.id));
     }
     expect(failing).toEqual([expect.objectContaining({ scheduleId: s.id, taskName: 'Daily', failures: 3 })]);
+  });
+});
+
+describe('run events as webhooks', () => {
+  it('registers the console events and validates their payloads', async () => {
+    const { userId } = await login(`hooks-${stamp}@example.test`);
+    const keys = webhookEventRegistry.list().map((e: { key: string }) => e.key);
+    expect(keys).toEqual(expect.arrayContaining(['runs.run.started', 'runs.run.waiting', 'runs.run.finished', 'schedules.schedule.failing']));
+    const hooks = app.get(WebhooksService);
+    const ok = await hooks.emitForUser(userId, 'runs.run.finished', {
+      runId: '00000000-0000-4000-8000-000000000001',
+      taskId: null,
+      goal: 'g',
+      trigger: 'manual',
+      status: 'succeeded',
+      result: 'done',
+    });
+    expect(ok).toMatchObject({ matched: 0, queued: 0 }); // no endpoint subscribed yet
   });
 });

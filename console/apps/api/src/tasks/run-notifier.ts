@@ -1,8 +1,18 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NotificationsService } from '@marinoscar/platform-api/notifications';
+import { WebhooksService } from '@marinoscar/platform-api/webhooks';
 
 import { RUN_FINISHED_EVENT, RUN_NEEDS_YOU_EVENT, SCHEDULE_FAILING_EVENT } from '../platform/notifications/hexactra.notifications';
+import { RUN_FINISHED_WEBHOOK, RUN_STARTED_WEBHOOK, RUN_WAITING_WEBHOOK, SCHEDULE_FAILING_WEBHOOK } from '../platform/webhooks/hexactra.webhook-events';
+
+/** A run as the events describe it. */
+export interface RunRef {
+  id: string;
+  goal: string;
+  taskId?: string | null;
+  trigger?: string;
+}
 
 /**
  * Tells a run's owner what happened, after the change committed. A no-op
@@ -17,7 +27,26 @@ export class RunNotifier {
   constructor(
     private readonly config: ConfigService,
     @Optional() private readonly notifications?: NotificationsService,
+    @Optional() private readonly webhooks?: WebhooksService,
   ) {}
+
+  private async hook(event: string, userId: string, data: Record<string, unknown>): Promise<void> {
+    if (!this.webhooks) return;
+    try {
+      await this.webhooks.emitForUser(userId, event, data);
+    } catch (e) {
+      this.log.warn(`webhook ${event} failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  private runData(run: RunRef, status: string) {
+    return { runId: run.id, taskId: run.taskId ?? null, goal: run.goal.slice(0, 300), trigger: run.trigger ?? 'manual', status };
+  }
+
+  /** A run started. */
+  async started(userId: string, run: RunRef): Promise<void> {
+    await this.hook(RUN_STARTED_WEBHOOK, userId, this.runData(run, 'running'));
+  }
 
   private url(path: string): string {
     return `${(this.config.get<string>('appUrl') ?? '').replace(/\/+$/, '')}${path}`;
@@ -32,15 +61,18 @@ export class RunNotifier {
     }
   }
 
-  needsYou(userId: string, run: { id: string; goal: string }, prompt: string, kind: string): Promise<void> {
-    return this.send(RUN_NEEDS_YOU_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), prompt: prompt.slice(0, 1000), kind, inboxUrl: this.url('/inbox') });
+  async needsYou(userId: string, run: RunRef, prompt: string, kind: string): Promise<void> {
+    await this.send(RUN_NEEDS_YOU_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), prompt: prompt.slice(0, 1000), kind, inboxUrl: this.url('/inbox') });
+    await this.hook(RUN_WAITING_WEBHOOK, userId, { ...this.runData(run, 'waiting_human'), prompt: prompt.slice(0, 1000), kind });
   }
 
-  finished(userId: string, run: { id: string; goal: string }, status: string, result?: string | null): Promise<void> {
-    return this.send(RUN_FINISHED_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), status, result: (result ?? '').slice(0, 500), runUrl: this.url(`/runs/${run.id}`) });
+  async finished(userId: string, run: RunRef, status: string, result?: string | null): Promise<void> {
+    await this.send(RUN_FINISHED_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), status, result: (result ?? '').slice(0, 500), runUrl: this.url(`/runs/${run.id}`) });
+    await this.hook(RUN_FINISHED_WEBHOOK, userId, { ...this.runData(run, status), result: (result ?? '').slice(0, 2000) || null });
   }
 
-  scheduleFailing(userId: string, e: { scheduleId: string; taskName: string; failures: number }): Promise<void> {
-    return this.send(SCHEDULE_FAILING_EVENT, userId, { ...e, tasksUrl: this.url('/tasks') });
+  async scheduleFailing(userId: string, e: { scheduleId: string; taskName: string; failures: number }): Promise<void> {
+    await this.send(SCHEDULE_FAILING_EVENT, userId, { ...e, tasksUrl: this.url('/tasks') });
+    await this.hook(SCHEDULE_FAILING_WEBHOOK, userId, { scheduleId: e.scheduleId, taskName: e.taskName, failures: e.failures });
   }
 }

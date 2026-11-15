@@ -10,6 +10,7 @@ import configuration from './config/configuration';
 import { BrowserModule } from './browser/browser.module';
 import { FabricModule } from './fabric/fabric.module';
 import { FleetModule } from './fleet/fleet.module';
+import { webhooksModule } from './platform/webhooks/webhooks.config';
 import { RunnerModule } from './runner/runner.module';
 import { SchedulesModule } from './schedules/schedules.module';
 import { TasksModule } from './tasks/tasks.module';
@@ -38,6 +39,8 @@ import { PrismaModule } from './prisma/prisma.service';
     BrowserModule,
     // The goal runner needs the AI slice (packages/shared/slices.json).
     ...(isSliceEnabled('ai') ? [RunnerModule, SchedulesModule] : []),
+    // Outbound webhooks need the credential store (signing secrets) and notifications.
+    ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [webhooksModule] : []),
   ],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },

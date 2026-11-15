@@ -26,6 +26,9 @@ import { api, platformApi } from './api';
 import { ADMIN_SECTIONS } from './config/adminSections';
 import { NAVIGATION } from './config/navigation';
 import { USER_SETTINGS_SECTIONS } from './config/userSettingsSections';
+import { WebhooksPage } from '@marinoscar/platform-web/webhooks/ui';
+
+import { WEBHOOKS_ENABLED } from './config/userSettingsSections';
 import { FabricConnectionPage } from './pages/FabricConnectionPage';
 import { FleetPage } from './pages/FleetPage';
 import { InboxPage } from './pages/InboxPage';
@@ -188,6 +191,8 @@ export function AppRoutes() {
           <Route path="admin/settings/jobs/insights" element={<Gate permission="jobs:read"><JobInsightsPage /></Gate>} />
           <Route path="admin/settings/doctor" element={<Gate permission="system_settings:read"><DoctorPage /></Gate>} />
           <Route path="admin/settings/fabric" element={<Gate permission="fabric_config:read"><FabricConnectionPage /></Gate>} />
+          {WEBHOOKS_ENABLED && <Route path="settings/webhooks" element={<Gate permission="webhooks:read"><WebhooksPage scope="user" /></Gate>} />}
+          {WEBHOOKS_ENABLED && <Route path="admin/settings/webhooks" element={<Gate permission="system_webhooks:read"><WebhooksPage scope="system" /></Gate>} />}
           <Route path="settings/danger-zone" element={<UserDangerZonePage />} />
           <Route path="admin/settings/factory-reset" element={<Gate permission={factoryResetSettingsPage.card.permission!}><FactoryResetPage /></Gate>} />
           {/* The enabled optional slices' pages (packages/shared/slices.json; src/slices/). */}
