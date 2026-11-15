@@ -12,6 +12,8 @@ name = "hexactra-control"
 path = "src/main.rs"
 
 [dependencies]
+hexactra-otel = { path = "../hexactra-otel" }
+opentelemetry = "0.33"
 tokio.workspace = true
 tokio-stream.workspace = true
 serde.workspace = true

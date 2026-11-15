@@ -43,8 +43,35 @@ const token = 'e2e-token-' + Math.random().toString(16).slice(2).padEnd(24, '0')
 const socket = join(work, 'run', 'bridge.sock');
 const userDataDir = join(work, 'chrome-profile');
 const work_dir_profiles = join(work, 'launch-profiles');
+// --- OTLP/JSON collector (#215): control and agents export here ------------
+const otlp = { spans: [], raw: [] };
+const collector = createServer((req, res) => {
+  let body = '';
+  req.on('data', (d) => (body += d));
+  req.on('end', () => {
+    otlp.raw.push(body);
+    try {
+      const j = JSON.parse(body);
+      for (const rs of j.resourceSpans ?? []) {
+        const svc = (rs.resource?.attributes ?? []).find((a) => a.key === 'service.name')?.value?.stringValue;
+        for (const ss of rs.scopeSpans ?? []) {
+          for (const sp of ss.spans ?? []) otlp.spans.push({ svc, traceId: sp.traceId, name: sp.name });
+        }
+      }
+    } catch {
+      // metrics or an unparsable body: kept in raw only
+    }
+    res.writeHead(200, { 'content-type': 'application/json' }).end('{}');
+  });
+});
+await new Promise((r) => collector.listen(0, '127.0.0.1', r));
+
 const env = {
   ...process.env,
+  OTEL_EXPORTER_OTLP_ENDPOINT: `http://127.0.0.1:${collector.address().port}`,
+  OTEL_EXPORTER_OTLP_PROTOCOL: 'http/json',
+  OTEL_BSP_SCHEDULE_DELAY: '200',
+  OTEL_METRIC_EXPORT_INTERVAL: '1000',
   HEXACTRA_API_TOKEN: token,
   HEXACTRA_BRIDGE_SOCKET: socket,
   XDG_CONFIG_HOME: join(work, 'config'),
@@ -619,6 +646,34 @@ try {
     assert.match(refused.err, /attaches to a Chrome you run yourself/);
     stop(attachAgent);
   });
+  await step('one OTLP trace spans the control plane and the agent', async () => {
+    const traceId = crypto.randomBytes(16).toString('hex');
+    const traceparent = `00-${traceId}-${crypto.randomBytes(8).toString('hex')}-01`;
+    const headers = { authorization: `Bearer ${token}`, 'content-type': 'application/json', traceparent };
+    const s = await (await fetch(`${controlUrl}/v1/sessions`, { method: 'POST', headers, body: '{}' })).json();
+    const op = await (
+      await fetch(`${controlUrl}/v1/sessions/${s.id}/actions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ action: { type: 'navigate', url: `${site}/persist.html` }, timeout_ms: 60000 }),
+      })
+    ).json();
+    assert.equal(op.state, 'succeeded', JSON.stringify(op));
+    await until(
+      'spans from both services in one trace',
+      async () => {
+        const svcs = new Set(otlp.spans.filter((x) => x.traceId === traceId).map((x) => x.svc));
+        return svcs.has('hexactra-control') && svcs.has('hexactra-agent');
+      },
+      20_000,
+    );
+    const names = otlp.spans.filter((x) => x.traceId === traceId).map((x) => x.name);
+    assert.ok(names.includes('POST /v1/sessions/{id}/actions'), names.join(', '));
+    assert.ok(names.includes('execute navigate'), names.join(', '));
+    // Content-free: action URLs never reach telemetry.
+    assert.ok(!otlp.raw.some((b) => b.includes('persist.html')), 'an action URL leaked into telemetry');
+    await until('metrics exported', async () => otlp.raw.some((b) => b.includes('hexactra.operations')), 20_000);
+  });
 } catch (e) {
   failed = true;
   console.error(`\nFAILED: ${e.stack ?? e}`);
@@ -628,6 +683,7 @@ try {
 } finally {
   for (const c of children.reverse()) stop(c);
   fixture.close();
+  collector.close();
   await sleep(500);
   if (!keep) rmSync(work, { recursive: true, force: true });
 }

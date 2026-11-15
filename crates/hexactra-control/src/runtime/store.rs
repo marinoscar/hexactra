@@ -75,6 +75,8 @@ struct OperationEntry {
     tx: watch::Sender<OperationState>,
     /// Keep screenshot bytes inline in the result as well (migration flag).
     inline_artifacts: bool,
+    /// Trace context of the request that queued it (#215).
+    traceparent: Option<String>,
 }
 
 #[derive(Default)]
@@ -498,6 +500,7 @@ impl RuntimeStore {
                                 profile,
                                 action: op.view.action.clone(),
                                 deadline: op.deadline,
+                                traceparent: op.traceparent.clone(),
                             });
                             break;
                         }
@@ -725,6 +728,7 @@ impl RuntimeStore {
                 deadline,
                 tx,
                 inline_artifacts,
+                traceparent: hexactra_otel::current_traceparent(),
             },
         );
         let host = inner
@@ -809,6 +813,7 @@ impl RuntimeStore {
         };
         op.view.completed_at = Some(Utc::now());
         let _ = op.tx.send(state);
+        super::metrics::operation_finished(&op.view);
         self.log.emit(
             if state == OperationState::Succeeded {
                 "operation.succeeded"
@@ -867,6 +872,7 @@ impl RuntimeStore {
             });
             op.view.completed_at = Some(Utc::now());
             let _ = op.tx.send(OperationState::TimedOut);
+            super::metrics::operation_finished(&op.view);
             self.log.emit("operation.timed_out", op_event(&op.view));
         }
         Some(op.view.clone())

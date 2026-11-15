@@ -77,11 +77,7 @@ fn default_token_file() -> PathBuf {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .init();
+    hexactra_otel::init("hexactra-control");
 
     match Cli::parse().command {
         Command::TokenPath => {
@@ -133,6 +129,7 @@ async fn main() -> Result<()> {
             let result = runtime::serve(listener, state, stop_signal()).await;
             db.flush(&store, &credentials);
             tracing::info!(path = %db.path().display(), "state saved; stopped");
+            hexactra_otel::shutdown();
             result
         }
     }

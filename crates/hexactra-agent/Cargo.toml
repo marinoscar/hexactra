@@ -8,6 +8,7 @@ repository.workspace = true
 description.workspace = true
 
 [dependencies]
+hexactra-otel = { path = "../hexactra-otel" }
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
