@@ -280,7 +280,7 @@ export const MCP_TOOLS: McpTool[] = [
     input: z.object({ session_id: id, handoff_id: id }),
     call: async (a, ctx) => text(await ctx.api('GET', `/browser/sessions/${String(a.session_id)}/handoffs/${String(a.handoff_id)}`)),
   },
-  action('browser_type_secret', 'Type the code or password the person gave in a handoff, without you seeing it.', z.object({ handoff_id: id, selector: z.string().max(2000), submit: z.boolean().default(false) }), (a) => ({ type: 'type_handoff_secret', handoffId: a.handoff_id, selector: a.selector, submit: a.submit })),
+  action('browser_type_secret', 'Type the code or password the person gave in a handoff, without you seeing it (the fabric types it; the console never holds it).', z.object({ handoff_id: id, selector: z.string().max(2000), clear: z.boolean().default(true), submit: z.boolean().default(false) }), (a) => ({ type: 'type_handoff_secret', handoffId: a.handoff_id, selector: a.selector, clear: a.clear, submit: a.submit })),
   {
     name: 'browser_close',
     description: 'End the session, saying whether you succeeded.',

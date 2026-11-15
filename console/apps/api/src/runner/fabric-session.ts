@@ -16,7 +16,7 @@ export interface FabricHandoffResponse {
   outcome?: 'completed' | 'cancelled';
   value?: string;
   values?: string[];
-  /** A secret: the value exists but only `claim` returns it, once. */
+  /** A secret: the value exists but is never returned; a `type_secret` action types it, once. */
   value_withheld?: boolean;
   channel?: string;
   by?: string;
@@ -173,8 +173,24 @@ export class FabricSession {
     return this.fabric.request<FabricHandoff>('GET', `/v1/handoffs/${id}`);
   }
 
-  /** The secret a person typed; single use, never logged. */
-  async claimSecret(id: string): Promise<string> {
-    return (await this.fabric.request<{ value: string }>('POST', `/v1/handoffs/${id}/claim`, { body: {} })).value;
+  /**
+   * Type the answer of a `secret` handoff into `selector` with the fabric's
+   * `type_secret` action: the fabric types it on the host, so the plaintext
+   * never reaches the console. Single use; the fabric refuses (409
+   * `secret_unavailable`) when it was already used, erased or expired.
+   */
+  typeSecret(sessionId: string, opts: { handoffId: string; selector: string; clear?: boolean; submit?: boolean; tabId?: number }, timeoutMs?: number): Promise<FabricOperation> {
+    return this.act(
+      sessionId,
+      {
+        type: 'type_secret',
+        handoff_id: opts.handoffId,
+        selector: opts.selector,
+        clear: opts.clear ?? true,
+        submit: opts.submit ?? false,
+        ...(opts.tabId !== undefined ? { tab_id: opts.tabId } : {}),
+      },
+      timeoutMs,
+    );
   }
 }

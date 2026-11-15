@@ -245,6 +245,8 @@ Rules:
 
 Statuses: `pending` → `completed` | `cancelled` | `expired`.
 
+**Handoffs and the console's questions.** A handoff is the fabric half of a question: browser-bound, it pauses one session, and it is the only place a secret is typed (`type_secret`). The Hexactra Console adds a question broker on top: free-standing questions with no browser, an owner and audit trail per question, and channels (its Inbox on web, Android, CLI/TUI and MCP; notifications with quick-answer buttons; signed webhooks). The console mirrors each handoff it opens as a question and enforces its channel rules there: a secret is answered only on its signed-in page, a high-risk `confirm` only where the person is signed in, and the first answer wins. See [console/docs/questions.md](../console/docs/questions.md). The fabric itself accepts any valid answer from an API token or the handoff's response token.
+
 An answered handoff carries `response`: `{ "outcome": "completed" | "cancelled", "value"?, "values"?, "value_withheld", "channel"?, "by", "answered_at" }`. `by` is `operator`, `service:<token name>`, `token` (the response-token holder), or the `answered_by` an operator or service caller sent (at most 128 characters, e.g. `user:42`); `answered_by` from a response-token answer is ignored. `cancelled` means the person declined. Handoffs saved before these fields existed read back with `outcome` taken from the status and `answered_at` from `resolved_at`.
 
 ### Secrets typed by the fabric
@@ -261,7 +263,7 @@ POST /v1/sessions/{session_id}/actions
 - Errors: `404 not_found` (unknown handoff), `422 handoff_wrong_session` (the handoff belongs to another session), `422 handoff_not_secret`, and `409 secret_unavailable` (not answered yet, cancelled or expired, already used, or erased).
 - Lifetime: the value is kept in memory only (never persisted) and erased, with its memory zeroed, when it is used, when the session ends, or 10 minutes after the person answered if nothing used it. A value taken by a `type_secret` that then times out before a host picks it up is dropped too; ask the person again.
 - The MCP tool is `browser_type_secret { handoff_id, selector, clear?, submit? }`; `browser_request_human` with `input: "secret"` answers `{"status": "completed", "value_withheld": true, …}`. The CLI is `hexactra-fabric handoff type-secret <id> --selector <css> [--clear] [--submit]`; `handoff request --wait` and `handoff show` never print a secret.
-- `POST /v1/handoffs/{id}/claim` still returns the value once, for operator and service tokens only, with a `Deprecation: true` header. It shares the single use: whichever of claim and `type_secret` comes first gets the value. It will be removed once its callers move to `type_secret`.
+- `POST /v1/handoffs/{id}/claim` still returns the value once, for operator and service tokens only, with a `Deprecation: true` header. It shares the single use: whichever of claim and `type_secret` comes first gets the value. The Hexactra Console, the SDK and the MCP server no longer call it; it will be removed in a later release.
 
 ## Webhooks: channels that reach a person
 

@@ -417,20 +417,15 @@ export class GoalRunnerService {
         execute: async ({ selector, submit }) => {
           const started = Date.now();
           if (!memory.secretHandoffId) return 'No secret is available: call request_human with input "secret" first.';
-          let value: string;
-          try {
-            value = await session.claimSecret(memory.secretHandoffId);
-          } catch {
-            memory.secretHandoffId = null;
-            await record('action', 'type', { selector, secret: '' }, false, 'the secret was already used or expired', started);
-            return 'The secret is no longer available; ask the person again if needed.';
-          }
+          const handoffId = memory.secretHandoffId;
           memory.secretHandoffId = null;
           let op;
           try {
-            op = await session.act(sessionId!, { type: 'type', selector, text: value, clear: true, submit });
-          } finally {
-            value = '';
+            // The fabric types the value itself: the console never sees it.
+            op = await session.typeSecret(sessionId!, { handoffId, selector, clear: true, submit });
+          } catch {
+            await record('action', 'type', { selector, secret: '' }, false, 'the secret was already used or expired', started);
+            return 'The secret is no longer available; ask the person again if needed.';
           }
           const ok = op.state === 'succeeded';
           await record('action', 'type', { selector, submit }, ok, ok ? 'typed the secret' : (op.error ?? op.state), started);

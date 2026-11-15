@@ -21,13 +21,41 @@ What differs between them:
 
 ## Which tools to give the agent
 
-- **Delegate (recommended).** Give the agent `run_goal`, `run_status`, `inbox_list`, `inbox_answer` and `run_cancel`. Hexactra's own goal runner then drives the browser and asks you for CAPTCHAs and codes. The framework only follows progress. Filters:
+- **Delegate (recommended).** Give the agent `run_goal`, `run_status`, `inbox_list`, `inbox_answer` and `run_cancel` (and `ask_human`, `question_status` to let it ask you questions). Hexactra's own goal runner then drives the browser and asks you for CAPTCHAs and codes. The framework only follows progress. Filters:
   - Hermes: `tools: { include: [run_goal, run_status, inbox_list, inbox_answer, run_cancel] }`.
   - OpenClaw: `toolFilter: { include: [...] }`.
-  - Pi: `"exposure": "hidden"` with `"toolExposure": { "run_*": "direct", "inbox_*": "direct" }`.
+  - Pi: `"exposure": "hidden"` with `"toolExposure": { "run_*": "direct", "inbox_*": "direct", "ask_human": "direct", "question_status": "direct" }`.
 - **Drive.** Expose the `browser_*` tools too, and the framework's model controls the browser step by step. Each action is still recorded as a run that you can watch and stop in the console.
 
-Whichever mode you choose, the agent never sees a code or password you type into a handoff: `browser_type_secret` types it server-side.
+Whichever mode you choose, the agent never sees a code or password you type into a handoff: `browser_type_secret` has the fabric type it into the page.
+
+## Asking you a question
+
+Any of the three frameworks can stop and ask you something with `ask_human` (add it, and `question_status`, to the tool filters above). You answer in the console, the Android app, the CLI, a notification button or your own webhook receiver ([questions.md](questions.md)). For example, the model calls:
+
+```json
+{
+  "name": "ask_human",
+  "arguments": {
+    "input": "choice",
+    "prompt": "Two flights match. Which one should I book?",
+    "options": [
+      { "id": "am", "label": "07:40, direct", "description": "Arrives 09:55" },
+      { "id": "pm", "label": "16:15, one stop", "description": "Arrives 21:30" }
+    ],
+    "wait_s": 300,
+    "agent_name": "travel-agent"
+  }
+}
+```
+
+and gets back, once you pick the second option on your phone:
+
+```json
+{ "question_id": "…", "status": "answered", "input": "choice", "outcome": "completed", "value": "pm", "channel": "notification" }
+```
+
+A two-option choice like this one is answered from the notification itself. If `wait_s` runs out first, the result is `"status": "pending"`: call `question_status` with the `question_id` to keep waiting. The tool names carry each framework's prefix (`mcp_hexactra_ask_human`, `hexactra__ask_human`, `mcp__hexactra__ask_human`).
 
 ## Troubleshooting
 

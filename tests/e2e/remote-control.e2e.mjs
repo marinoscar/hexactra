@@ -184,7 +184,9 @@ function mcpClient(extraEnv = {}) {
 
 // A webhook receiver playing the person's channel (chat bot, automation):
 // verifies Standard Webhooks signatures and answers handoffs from the payload.
-async function startChannel() {
+// With `auto: false` it only records events; the test answers with the
+// response token each `handoff.created` event carries.
+async function startChannel({ auto = true } = {}) {
   const state = { secret: null, events: [], badSignatures: 0 };
   const server = createServer((req, res) => {
     const chunks = [];
@@ -202,7 +204,7 @@ async function startChannel() {
       res.writeHead(204).end();
       const event = JSON.parse(raw);
       state.events.push(event);
-      if (event.type !== 'handoff.created') return;
+      if (!auto || event.type !== 'handoff.created') return;
       const h = event.data.handoff;
       const answer = { channel: 'e2e-channel', response_token: event.data.respond.token };
       if (h.input === 'secret') answer.value = '424242';
@@ -487,6 +489,112 @@ try {
       assert.ok(!JSON.stringify(channel.events).includes('424242'));
       assert.equal(channel.badSignatures, 0);
       assert.match(await ok('webhook', 'deliveries', added.webhook.id), /succeeded/);
+    } finally {
+      channel.close();
+    }
+  });
+
+  await step('typed questions: every public type gets a typed, validated answer', async () => {
+    const channel = await startChannel({ auto: false });
+    try {
+      const added = JSON.parse(await ok('--json', 'webhook', 'add', channel.url, '--event', 'handoff.*', '--description', 'e2e questions'));
+      channel.secret = added.secret;
+      await ok('navigate', `${site}/index.html`);
+
+      // Ask through the CLI without waiting; the channel learns of it from the
+      // signed handoff.created event, which carries a single-use response token.
+      const ask = async (...args) => {
+        const created = JSON.parse(await ok('--json', 'handoff', 'request', ...args, '--timeout-s', '60'));
+        const id = created.handoff.id;
+        let event;
+        await until(`handoff.created for ${id}`, () => (event = channel.events.find((e) => e.type === 'handoff.created' && e.data.handoff.id === id)));
+        assert.ok(event.data.respond.token && event.data.respond.url, JSON.stringify(event.data));
+        return { id, created, event };
+      };
+      const answer = (event, body) =>
+        fetch(event.data.respond.url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ response_token: event.data.respond.token, channel: 'e2e-channel', ...body }),
+        });
+      const refused = async (event, body, why) => {
+        const r = await answer(event, body);
+        assert.ok(r.status >= 400 && r.status < 500, `${why}: expected a 4xx, got ${r.status} ${await r.text()}`);
+      };
+      const accepted = async (event, body) => {
+        const r = await answer(event, body);
+        assert.ok(r.ok, `answer refused: ${r.status} ${await r.text()}`);
+      };
+      const resolved = async (id) => {
+        const h = JSON.parse(await ok('--json', 'handoff', 'show', id, '--wait-s', '20'));
+        assert.equal(h.status, 'completed', JSON.stringify(h));
+        return h.response;
+      };
+
+      // choice, with options that have their own ids
+      const choice = await ask('--kind', 'confirmation', '--prompt', 'Which shipping speed?', '--input', 'choice', '--choice', 'std=Standard (3-5 days)', '--choice', 'exp=Express (next day)');
+      assert.deepEqual(choice.event.data.handoff.choices.map((c) => c.id), ['std', 'exp']);
+      await refused(choice.event, { value: 'overnight' }, 'a value that is not an option id');
+      await accepted(choice.event, { value: 'exp' });
+      let r = await resolved(choice.id);
+      assert.equal(r.outcome, 'completed');
+      assert.equal(r.value, 'exp');
+      assert.equal(r.by, 'token');
+      assert.equal(r.channel, 'e2e-channel');
+      // First answer wins: the token is spent and the handoff is resolved.
+      await refused(choice.event, { value: 'std' }, 'a second answer');
+      assert.equal((await resolved(choice.id)).value, 'exp');
+
+      // multi_choice with selection bounds
+      const multi = await ask('--kind', 'other', '--prompt', 'Which reports should be attached?', '--input', 'multi-choice', '--choice', 'sales=Sales', '--choice', 'ops=Operations', '--choice', 'hr=Staffing', '--min-selections', '1', '--max-selections', '2');
+      await refused(multi.event, { values: ['sales', 'ops', 'hr'] }, 'more selections than allowed');
+      await refused(multi.event, { values: [] }, 'fewer selections than allowed');
+      await accepted(multi.event, { values: ['sales', 'hr'] });
+      r = await resolved(multi.id);
+      assert.equal(r.outcome, 'completed');
+      assert.deepEqual([...r.values].sort(), ['hr', 'sales']);
+      assert.equal(r.value ?? null, null);
+      assert.equal(r.by, 'token');
+
+      // number with min, max and step
+      const number = await ask('--kind', 'other', '--prompt', 'How many kilograms?', '--input', 'number', '--min', '1', '--max', '10', '--step', '0.5', '--unit', 'kg');
+      await refused(number.event, { value: '11' }, 'above max');
+      await refused(number.event, { value: '2.25' }, 'off the step');
+      await refused(number.event, { value: 'two' }, 'not a number');
+      await accepted(number.event, { value: '2.5' });
+      r = await resolved(number.id);
+      assert.equal(r.outcome, 'completed');
+      assert.equal(Number(r.value), 2.5);
+      assert.equal(r.by, 'token');
+
+      // text with a pattern and a length limit
+      const text = await ask('--kind', 'other', '--prompt', 'Order reference (ABC-123)?', '--input', 'text', '--pattern', '^[A-Z]{3}-[0-9]{3}$', '--max-length', '7');
+      await refused(text.event, { value: 'abc-123' }, 'does not match the pattern');
+      await accepted(text.event, { value: 'QRS-042' });
+      r = await resolved(text.id);
+      assert.equal(r.outcome, 'completed');
+      assert.equal(r.value, 'QRS-042');
+      assert.equal(r.by, 'token');
+
+      // confirm, low risk, answered by the operator on behalf of a signed-in person
+      const confirm = await ask('--kind', 'confirmation', '--prompt', 'Save the draft?', '--input', 'confirm', '--risk', 'low', '--confirm-label', 'Save', '--deny-label', 'Discard');
+      assert.equal((await cli('handoff', 'respond', confirm.id, '--value', 'maybe')).code !== 0, true, 'confirm takes only approve or deny');
+      await ok('handoff', 'respond', confirm.id, '--value', 'approve', '--answered-by', 'user:e2e-person');
+      r = await resolved(confirm.id);
+      assert.equal(r.outcome, 'completed');
+      assert.equal(r.value, 'approve');
+      assert.equal(r.by, 'user:e2e-person');
+
+      // The channel saw each answer in a signed handoff.resolved event, typed.
+      await until('handoff.resolved events', () => [choice, multi, number, text, confirm].every(({ id }) => channel.events.some((e) => e.type === 'handoff.resolved' && e.data.handoff.id === id)));
+      const resolvedEvent = (id) => channel.events.find((e) => e.type === 'handoff.resolved' && e.data.handoff.id === id).data.handoff;
+      assert.equal(resolvedEvent(choice.id).response.value, 'exp');
+      assert.deepEqual([...resolvedEvent(multi.id).response.values].sort(), ['hr', 'sales']);
+      assert.equal(resolvedEvent(confirm.id).response.by, 'user:e2e-person');
+      assert.equal(channel.badSignatures, 0);
+      // Browser actions resume once nothing is pending.
+      await ok('text');
+      await ok('webhook', 'remove', added.webhook.id);
     } finally {
       channel.close();
     }

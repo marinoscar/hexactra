@@ -7,7 +7,7 @@ import type { AiService } from '@marinoscar/platform-api/ai';
 
 import { createApp } from '../src/main';
 import { PrismaService } from '../src/prisma/prisma.service';
-import type { FabricClient } from '../src/fabric/fabric.client';
+import { FabricError, type FabricClient } from '../src/fabric/fabric.client';
 import { GoalRunnerService } from '../src/runner/goal-runner.service';
 import { ExternalBrowserController } from '../src/browser/external-browser.controller';
 import { HandoffAnswers } from '../src/browser/handoff-answers';
@@ -41,6 +41,7 @@ function fakeFabric() {
   const actions: Record<string, unknown>[] = [];
   // The fabric's real handoff view (crates/hexactra-core/src/remote.rs `HandoffView`).
   const handoffs = new Map<string, { id: string; status: string; input: string; kind: string; response?: { outcome?: string; value?: string; value_withheld: boolean; channel?: string; by?: string; answered_at?: string } }>();
+  const typed = new Set<string>();
   let ended = 0;
   const request = jest.fn(async (method: string, path: string, opts: { body?: Record<string, unknown> } = {}) => {
     if (method === 'POST' && path === '/v1/sessions') return { id: '00000000-0000-4000-8000-00000000000a' };
@@ -50,6 +51,13 @@ function fakeFabric() {
       actions.push(action);
       if (action.type === 'navigate') return { id: 'op', state: 'succeeded', result: { url: action.url, title: 'Shop' } };
       if (action.type === 'elements') return { id: 'op', state: 'succeeded', result: { elements: [{ selector: '#buy', tag: 'button', text: 'Place order' }] } };
+      if (action.type === 'type_secret') {
+        // The fabric types the answer itself, once; the console only names the handoff.
+        const h = handoffs.get(String(action.handoff_id));
+        if (!h || h.input !== 'secret' || h.status !== 'completed' || typed.has(h.id)) throw new FabricError('api', 'secret_unavailable', 409, 'secret_unavailable');
+        typed.add(h.id);
+        return { id: 'op', state: 'succeeded', result: {} };
+      }
       return { id: 'op', state: 'succeeded', result: {} };
     }
     if (method === 'POST' && path.endsWith('/handoffs')) {
@@ -59,10 +67,12 @@ function fakeFabric() {
       return { handoff: { id } };
     }
     if (method === 'GET' && path.startsWith('/v1/handoffs/')) return handoffs.get(path.split('/')[3]!);
-    if (method === 'POST' && path.endsWith('/claim')) return { value: SECRET };
+    // The deprecated claim route returns the plaintext: the console must never call it.
+    if (method === 'POST' && path.endsWith('/claim')) throw new Error('the console called the secret claim route');
     throw new Error(`unexpected ${method} ${path}`);
   });
-  return { client: { request, config: async () => ({ url: 'http://f', token: 't' }) } as unknown as FabricClient, actions, handoffs, ended: () => ended };
+  const claimed = () => request.mock.calls.some(([, path]) => String(path).endsWith('/claim'));
+  return { client: { request, config: async () => ({ url: 'http://f', token: 't' }) } as unknown as FabricClient, actions, handoffs, ended: () => ended, claimed };
 }
 
 type Call = [name: string, args: Record<string, unknown>];
@@ -133,7 +143,10 @@ describe('the goal runner', () => {
     Object.assign(code, { status: 'completed', response: { outcome: 'completed', value_withheld: true, channel: 'web', by: `user:${userId}`, answered_at: new Date().toISOString() } });
     expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
 
-    expect(fabric.actions).toContainEqual(expect.objectContaining({ type: 'type', selector: '#otp', text: SECRET }));
+    expect(fabric.actions).toContainEqual({ type: 'type_secret', handoff_id: code.id, selector: '#otp', clear: true, submit: true });
+    // The console never holds the plaintext: no claim, and no action carries it.
+    expect(fabric.claimed()).toBe(false);
+    expect(JSON.stringify(fabric.actions)).not.toContain(SECRET);
     expect(fabric.ended()).toBe(1);
     const done = await db.run.findFirstOrThrow({ where: { id: run.id }, include: { steps: true } });
     expect(done).toMatchObject({ status: 'succeeded', result: 'Order placed', inputTokens: 90, outputTokens: 45 });
@@ -328,7 +341,11 @@ describe('external agents driving a browser through the console', () => {
     fabric.handoffs.get(handoffId)!.response = { outcome: 'completed', value_withheld: true, by: `user:${userId}`, answered_at: new Date().toISOString() };
     expect(await ctl.handoffStatus(userId, runId, handoffId)).toMatchObject({ status: 'completed', secretAvailable: true, value: null });
     await ctl.act(userId, runId, { action: { type: 'type_handoff_secret', handoffId, selector: '#otp', submit: true } });
-    expect(fabric.actions).toContainEqual(expect.objectContaining({ type: 'type', selector: '#otp', text: SECRET }));
+    expect(fabric.actions).toContainEqual({ type: 'type_secret', handoff_id: handoffId, selector: '#otp', clear: true, submit: true });
+    // Single use: a second attempt is refused by the fabric and reported as no secret.
+    await expect(ctl.act(userId, runId, { action: { type: 'type_handoff_secret', handoffId, selector: '#otp' } })).rejects.toThrow(/No secret to type/);
+    expect(fabric.claimed()).toBe(false);
+    expect(JSON.stringify(fabric.actions)).not.toContain(SECRET);
 
     const db = prisma.forUser({ userId });
     const row = await db.run.findFirstOrThrow({ where: { id: runId }, include: { steps: true } });

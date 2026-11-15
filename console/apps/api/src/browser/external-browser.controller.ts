@@ -162,14 +162,16 @@ export class ExternalBrowserController {
       const handoffId = String(action.handoffId ?? '');
       const selector = String(action.selector ?? '');
       if (!handoffId || !selector) throw new BadRequestException({ code: 'INVALID_ACTION', message: 'type_handoff_secret needs handoffId and selector' });
-      let value: string;
+      let op;
       try {
-        value = await session.claimSecret(handoffId);
-      } catch {
-        throw new ConflictException({ code: 'NO_SECRET', message: 'No secret to type (already used, expired, or not answered yet)' });
+        // The fabric types the value itself (`type_secret`): the console never sees it.
+        op = await session.typeSecret(run.sessionId!, { handoffId, selector, clear: action.clear === undefined ? true : Boolean(action.clear), submit: Boolean(action.submit) });
+      } catch (e) {
+        if (e instanceof FabricError && (e.status === 409 || e.status === 422 || e.status === 404)) {
+          throw new ConflictException({ code: 'NO_SECRET', message: 'No secret to type (already used, expired, or not answered yet)' });
+        }
+        throw new ConflictException({ code: 'ACTION_FAILED', message: e instanceof Error ? e.message : String(e) });
       }
-      const op = await session.act(run.sessionId!, { type: 'type', selector, text: value, clear: true, submit: Boolean(action.submit) });
-      value = '';
       await this.record(runId, userId, 'action', 'type', { selector, submit: Boolean(action.submit) }, op.state === 'succeeded', op.state === 'succeeded' ? 'typed the secret' : (op.error ?? op.state), started);
       return { state: op.state, error: op.error ?? null };
     }
