@@ -11,8 +11,8 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use hexactra_core::remote::{
-    DispatchedOperation, HostView, OperationResult, OperationState, OperationView, RemoteAction,
-    RemoteSessionStatus, SessionView,
+    valid_profile_name, DispatchedOperation, HostView, OperationResult, OperationState,
+    OperationView, RemoteAction, RemoteSessionStatus, SessionView, DEFAULT_PROFILE,
 };
 use tokio::sync::{broadcast, watch, Notify};
 use uuid::Uuid;
@@ -41,6 +41,10 @@ pub enum StoreError {
     Invalid(String),
     #[error("invalid or already used response token")]
     Forbidden,
+    #[error(
+        "profile {0:?} not found on any online host; create it with --create (create_profile)"
+    )]
+    ProfileNotFound(String),
 }
 
 pub(super) struct HostEntry {
@@ -50,6 +54,10 @@ pub(super) struct HostEntry {
     browser_connected: bool,
     on_demand: bool,
     pub(super) viewer_url: Option<String>,
+    /// Profiles the host reported; empty means a host that only knows the
+    /// default profile (older agents).
+    profiles: Vec<String>,
+    running_profiles: Vec<String>,
     queue: VecDeque<Uuid>,
     notify: Arc<Notify>,
 }
@@ -99,7 +107,23 @@ fn host_view(id: Uuid, h: &HostEntry, now: DateTime<Utc>) -> HostView {
         browser_connected: online && h.browser_connected,
         on_demand: online && h.on_demand,
         viewer_url: h.viewer_url.clone(),
+        profiles: h.known_profiles(),
+        running_profiles: h.running_profiles.clone(),
         last_seen: h.last_seen,
+    }
+}
+
+impl HostEntry {
+    fn known_profiles(&self) -> Vec<String> {
+        if self.profiles.is_empty() {
+            vec![DEFAULT_PROFILE.to_string()]
+        } else {
+            self.profiles.clone()
+        }
+    }
+
+    fn has_profile(&self, p: &str) -> bool {
+        self.known_profiles().iter().any(|x| x == p)
     }
 }
 
@@ -141,6 +165,8 @@ impl RuntimeStore {
                         browser_connected: false,
                         on_demand: false,
                         viewer_url: None,
+                        profiles: Vec::new(),
+                        running_profiles: Vec::new(),
                         queue: VecDeque::new(),
                         notify: Arc::new(Notify::new()),
                     },
@@ -169,6 +195,33 @@ impl RuntimeStore {
             .get_mut(&id)
             .ok_or(StoreError::NotFound("host"))?;
         h.on_demand = on_demand;
+        Ok(())
+    }
+
+    /// Record the profiles a host has and which are running (from polls).
+    pub fn set_host_profiles(
+        &self,
+        id: Uuid,
+        profiles: Vec<String>,
+        running: Vec<String>,
+    ) -> Result<(), StoreError> {
+        let clean = |v: Vec<String>| -> Vec<String> {
+            let mut v: Vec<String> = v
+                .into_iter()
+                .filter(|p| valid_profile_name(p))
+                .take(100)
+                .collect();
+            v.sort();
+            v.dedup();
+            v
+        };
+        let mut inner = self.lock();
+        let h = inner
+            .hosts
+            .get_mut(&id)
+            .ok_or(StoreError::NotFound("host"))?;
+        h.profiles = clean(profiles);
+        h.running_profiles = clean(running);
         Ok(())
     }
 
@@ -207,13 +260,25 @@ impl RuntimeStore {
                 let mut queue = std::mem::take(&mut host.queue);
                 let mut found = None;
                 while let Some(op_id) = queue.pop_front() {
-                    if let Some(op) = inner.operations.get_mut(&op_id) {
-                        if op.view.state == OperationState::Queued {
+                    let queued_session = inner
+                        .operations
+                        .get(&op_id)
+                        .filter(|op| op.view.state == OperationState::Queued)
+                        .map(|op| op.view.session_id);
+                    if let Some(session_id) = queued_session {
+                        {
+                            let profile = inner
+                                .sessions
+                                .get(&session_id)
+                                .map(|s| s.profile.clone())
+                                .unwrap_or_else(|| DEFAULT_PROFILE.to_string());
+                            let op = inner.operations.get_mut(&op_id).expect("checked above");
                             op.view.state = OperationState::Dispatched;
                             let _ = op.tx.send(OperationState::Dispatched);
                             found = Some(DispatchedOperation {
                                 id: op.view.id,
                                 session_id: op.view.session_id,
+                                profile,
                                 action: op.view.action.clone(),
                                 deadline: op.deadline,
                             });
@@ -238,32 +303,91 @@ impl RuntimeStore {
 
     // ------------------------------------------------------------- sessions
 
+    /// Create a session on the default profile.
     pub fn create_session(
         &self,
         host_id: Option<Uuid>,
         label: Option<String>,
     ) -> Result<SessionView, StoreError> {
+        self.create_session_for(host_id, label, None, false)
+    }
+
+    /// Create a session on a profile. Without `host_id`, picks an online host
+    /// that has the profile (preferring one where it is running); with
+    /// `create_profile`, an on-demand host may create it.
+    pub fn create_session_for(
+        &self,
+        host_id: Option<Uuid>,
+        label: Option<String>,
+        profile: Option<String>,
+        create_profile: bool,
+    ) -> Result<SessionView, StoreError> {
+        let profile = profile.unwrap_or_else(|| DEFAULT_PROFILE.to_string());
+        if !valid_profile_name(&profile) {
+            return Err(StoreError::Invalid(
+                "profile names are 1-32 characters: lowercase letters, digits, '-' and '_'".into(),
+            ));
+        }
         let mut inner = self.lock();
         let now = Utc::now();
         let host_id = match host_id {
             Some(id) => {
-                if !inner.hosts.contains_key(&id) {
-                    return Err(StoreError::NotFound("host"));
+                let h = inner.hosts.get(&id).ok_or(StoreError::NotFound("host"))?;
+                if !h.has_profile(&profile) {
+                    let on_demand = host_view(id, h, now).on_demand;
+                    if !create_profile {
+                        return Err(StoreError::ProfileNotFound(profile));
+                    }
+                    if !on_demand {
+                        return Err(StoreError::Invalid(
+                            "this host attaches to a browser you run; it cannot create profiles"
+                                .into(),
+                        ));
+                    }
                 }
                 id
             }
-            None => inner
-                .hosts
-                .iter()
-                .map(|(id, h)| host_view(*id, h, now))
-                .filter(|h| h.browser_connected || h.on_demand)
-                .max_by_key(|h| h.last_seen)
-                .map(|h| h.id)
-                .ok_or(StoreError::NoHostAvailable)?,
+            None => {
+                let usable: Vec<(HostView, bool, bool)> = inner
+                    .hosts
+                    .iter()
+                    .map(|(id, h)| {
+                        (
+                            host_view(*id, h, now),
+                            h.has_profile(&profile),
+                            h.running_profiles.iter().any(|r| r == &profile),
+                        )
+                    })
+                    .filter(|(v, _, _)| v.browser_connected || v.on_demand)
+                    .collect();
+                if usable.is_empty() {
+                    return Err(StoreError::NoHostAvailable);
+                }
+                let with = usable
+                    .iter()
+                    .filter(|(_, has, _)| *has)
+                    .max_by_key(|(v, _, running)| (*running, v.last_seen))
+                    .map(|(v, _, _)| v.id);
+                match with {
+                    Some(id) => id,
+                    None if create_profile => usable
+                        .iter()
+                        .filter(|(v, _, _)| v.on_demand)
+                        .max_by_key(|(v, _, _)| v.last_seen)
+                        .map(|(v, _, _)| v.id)
+                        .ok_or_else(|| {
+                            StoreError::Invalid(
+                                "no on-demand host is online to create the profile".into(),
+                            )
+                        })?,
+                    None => return Err(StoreError::ProfileNotFound(profile)),
+                }
+            }
         };
         let session = SessionView {
             id: Uuid::new_v4(),
             host_id,
+            profile,
             status: RemoteSessionStatus::Active,
             label,
             created_at: now,
@@ -533,6 +657,62 @@ mod tests {
             Some("https://viewer.example.test/")
         );
         assert_eq!(s.create_session(None, None).unwrap().host_id, h);
+    }
+
+    #[tokio::test]
+    async fn sessions_route_by_profile() {
+        let s = RuntimeStore::new();
+        // An attach-mode desktop (default profile only) and an on-demand VPS.
+        let desktop = s.register_host(None, "desktop".into(), "0".into());
+        s.next_operation(desktop, true, Duration::from_millis(1))
+            .await
+            .unwrap();
+        let vps = s.register_host(None, "vps".into(), "0".into());
+        s.set_host_on_demand(vps, true).unwrap();
+        s.set_host_profiles(
+            vps,
+            vec!["default".into(), "travel".into(), "Bad/Name".into()],
+            vec!["travel".into()],
+        )
+        .unwrap();
+        let v = s.list_hosts().into_iter().find(|h| h.id == vps).unwrap();
+        assert_eq!(v.profiles, vec!["default", "travel"]);
+        assert_eq!(v.running_profiles, vec!["travel"]);
+
+        let t = s
+            .create_session_for(None, None, Some("travel".into()), false)
+            .unwrap();
+        assert_eq!((t.host_id, t.profile.as_str()), (vps, "travel"));
+
+        // Unknown profile: refused unless created, and only on-demand hosts create.
+        assert_eq!(
+            s.create_session_for(None, None, Some("work".into()), false)
+                .unwrap_err(),
+            StoreError::ProfileNotFound("work".into())
+        );
+        let w = s
+            .create_session_for(None, None, Some("work".into()), true)
+            .unwrap();
+        assert_eq!(w.host_id, vps);
+        assert!(matches!(
+            s.create_session_for(Some(desktop), None, Some("work".into()), true),
+            Err(StoreError::Invalid(_))
+        ));
+        assert!(matches!(
+            s.create_session_for(None, None, Some("Work!".into()), true),
+            Err(StoreError::Invalid(_))
+        ));
+
+        // The operation carries the session's profile.
+        let (op, _) = s
+            .enqueue(t.id, RemoteAction::Tabs, Duration::from_secs(5))
+            .unwrap();
+        let d = s
+            .next_operation(vps, true, Duration::from_millis(50))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!((d.id, d.profile.as_str()), (op.id, "travel"));
     }
 
     #[tokio::test]

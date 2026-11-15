@@ -119,6 +119,7 @@ impl RuntimeStore {
                 return Err(StoreError::Conflict("session has ended".into()));
             }
             let host_id = session.host_id;
+            let profile = session.profile.clone();
             let viewer_url = inner.hosts.get(&host_id).and_then(|h| h.viewer_url.clone());
             if let Some(h) = Self::pending_handoff(&inner, session_id) {
                 return Err(StoreError::HandoffPending(h));
@@ -129,6 +130,7 @@ impl RuntimeStore {
                 id: Uuid::new_v4(),
                 session_id,
                 host_id,
+                profile,
                 kind: req.kind,
                 prompt: req.prompt.trim().to_string(),
                 input: req.input,

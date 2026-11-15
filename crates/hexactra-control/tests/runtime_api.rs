@@ -218,3 +218,73 @@ async fn invalid_actions_and_ended_sessions_are_rejected() {
         .unwrap_err();
     assert_eq!(err.status(), Some(409));
 }
+
+#[tokio::test]
+async fn profiles_over_http() {
+    use hexactra_client::HostPollStatus;
+    let url = start().await;
+    let host = HostClient::new(&url, TOKEN).unwrap();
+    let id = host
+        .register(&RegisterHostRequest {
+            name: "vps".into(),
+            version: "0".into(),
+            host_id: None,
+            viewer_url: None,
+        })
+        .await
+        .unwrap()
+        .host_id;
+    host.poll(
+        id,
+        &HostPollStatus {
+            browser_connected: false,
+            on_demand: true,
+            profiles: Some((vec!["default".into(), "travel".into()], vec![])),
+        },
+        Duration::from_millis(10),
+    )
+    .await
+    .unwrap();
+    let client = ControlClient::new(&url, TOKEN).unwrap();
+    let hosts = client.hosts().await.unwrap();
+    assert_eq!(hosts[0].profiles, vec!["default", "travel"]);
+
+    let s = client
+        .create_session(&CreateSessionRequest {
+            profile: Some("travel".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(s.profile, "travel");
+
+    let err = client
+        .create_session(&CreateSessionRequest {
+            profile: Some("work".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(err.status(), Some(404));
+    assert!(err.to_string().contains("profile_not_found"));
+
+    let err = client
+        .create_session(&CreateSessionRequest {
+            profile: Some("../etc".into()),
+            create_profile: true,
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(err.status(), Some(400));
+
+    let w = client
+        .create_session(&CreateSessionRequest {
+            profile: Some("work".into()),
+            create_profile: true,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(w.profile, "work");
+}

@@ -253,6 +253,7 @@ async fn resolve_session(cli: &Cli, client: &ControlClient) -> Result<Uuid> {
         .create_session(&CreateSessionRequest {
             host_id: None,
             label: Some("cli".into()),
+            ..Default::default()
         })
         .await
         .context("creating a session")?;
@@ -379,6 +380,7 @@ async fn run() -> Result<()> {
                         .create_session(&CreateSessionRequest {
                             host_id: *host,
                             label: label.clone(),
+                            ..Default::default()
                         })
                         .await?;
                     save_current(s.id);

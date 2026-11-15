@@ -105,6 +105,9 @@ impl From<StoreError> for AppError {
                 AppError(StatusCode::BAD_REQUEST, "invalid_request", e.to_string())
             }
             StoreError::Forbidden => AppError(StatusCode::FORBIDDEN, "forbidden", e.to_string()),
+            StoreError::ProfileNotFound(_) => {
+                AppError(StatusCode::NOT_FOUND, "profile_not_found", e.to_string())
+            }
         }
     }
 }
@@ -204,6 +207,19 @@ struct PollQuery {
     browser_connected: bool,
     #[serde(default)]
     on_demand: bool,
+    /// Comma-separated profile names the host has.
+    profiles: Option<String>,
+    /// Comma-separated profile names whose browser is running.
+    running: Option<String>,
+}
+
+fn split_list(s: &Option<String>) -> Vec<String> {
+    s.as_deref()
+        .unwrap_or("")
+        .split(',')
+        .map(|x| x.trim().to_string())
+        .filter(|x| !x.is_empty())
+        .collect()
 }
 
 async fn next_operation(
@@ -213,6 +229,10 @@ async fn next_operation(
 ) -> Result<Response, AppError> {
     let wait = Duration::from_millis(q.wait_ms.unwrap_or(25_000)).min(MAX_HOST_POLL);
     s.store.set_host_on_demand(host_id, q.on_demand)?;
+    if q.profiles.is_some() {
+        s.store
+            .set_host_profiles(host_id, split_list(&q.profiles), split_list(&q.running))?;
+    }
     match s
         .store
         .next_operation(host_id, q.browser_connected, wait)
@@ -254,7 +274,9 @@ async fn create_session(
             "label longer than 200 characters".into(),
         ));
     }
-    let session = s.store.create_session(req.host_id, req.label)?;
+    let session =
+        s.store
+            .create_session_for(req.host_id, req.label, req.profile, req.create_profile)?;
     tracing::info!(session_id = %session.id, host_id = %session.host_id, "session created");
     Ok((StatusCode::CREATED, Json(session)))
 }
