@@ -49,12 +49,12 @@ describe('shell navigation', () => {
     expect(routedPaths.has(path.replace(/^\//, ''))).toBe(true);
   });
 
-  it('gate the Notes destination with its card\'s permission', () => {
-    const destination = NAVIGATION.destinations.find((d) => d.key === 'notes');
-    expect(destination?.permission).toBe(cards.find((c) => c.path === '/notes')?.permission);
+  it('gate the Fleet destination with the permission the fleet API enforces', () => {
+    const destination = NAVIGATION.destinations.find((d) => d.key === 'fleet');
+    expect(destination?.permission).toBe('fleet:read');
   });
 
-  it('fit the bottom bar (four destinations at most)', () => {
-    expect(NAVIGATION.destinations.length).toBeLessThanOrEqual(4);
+  it('keep the bottom bar usable (the rest goes to its More sheet)', () => {
+    expect(NAVIGATION.destinations.length).toBeLessThanOrEqual(7);
   });
 });

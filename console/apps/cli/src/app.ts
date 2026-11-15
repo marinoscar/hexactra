@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs';
 import { APP_NAME, CLI_NAME, REPO_SLUG } from '@app/shared';
 import type { CreateCliOptions } from '@marinoscar/platform-cli';
 
+import { fleetCommand } from './fleet.command.js';
+import { fleetScreen } from './fleet.tui.js';
+
 /** This CLI's version: apps/cli/package.json, or `0.0.0-unknown` in an unusual install. */
 function readVersion(): string {
   try {
@@ -21,5 +24,6 @@ function readVersion(): string {
 export const APP_CLI_OPTIONS: CreateCliOptions = {
   identity: { name: CLI_NAME, displayName: `${APP_NAME} CLI`, productName: APP_NAME, repoSlug: REPO_SLUG },
   version: readVersion(),
-  extraCommands: [],
+  extraCommands: [fleetCommand],
+  tuiScreens: [fleetScreen],
 };
