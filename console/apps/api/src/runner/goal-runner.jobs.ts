@@ -106,7 +106,8 @@ export class HandoffCheckHandler implements JobHandler, OnModuleInit {
   async process(): Promise<void> {
     if (!(await this.fabric.config())) return;
     const waiting = await this.prisma.run.findMany({
-      where: { status: 'waiting_human', handoffId: { not: null } },
+      // External runs are resumed by their own agent, never by the AI runner.
+      where: { status: 'waiting_human', handoffId: { not: null }, trigger: { not: 'external' } },
       select: { id: true, userId: true, handoffId: true },
       take: 200,
     });
@@ -132,7 +133,7 @@ export class HandoffCheckTask {
 
   @Cron(CronExpression.EVERY_30_SECONDS)
   async handleCron(): Promise<void> {
-    const waiting = await this.prisma.run.count({ where: { status: 'waiting_human' } });
+    const waiting = await this.prisma.run.count({ where: { status: 'waiting_human', trigger: { not: 'external' } } });
     if (waiting === 0) return;
     await enqueueHousekeepingJob({ jobs: this.jobs, prisma: this.prisma, logger: this.logger, type: HANDOFF_CHECK_JOB, what: 'handoff check' });
   }

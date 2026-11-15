@@ -7,6 +7,7 @@ import { ZodValidationPipe } from 'nestjs-zod';
 import { RegistryFreezeService } from '@marinoscar/platform-api/core';
 
 import configuration from './config/configuration';
+import { BrowserModule } from './browser/browser.module';
 import { FabricModule } from './fabric/fabric.module';
 import { FleetModule } from './fleet/fleet.module';
 import { RunnerModule } from './runner/runner.module';
@@ -33,6 +34,7 @@ import { PrismaModule } from './prisma/prisma.service';
     FabricModule,
     FleetModule,
     TasksModule,
+    BrowserModule,
     // The goal runner needs the AI slice (packages/shared/slices.json).
     ...(isSliceEnabled('ai') ? [RunnerModule] : []),
   ],

@@ -8,7 +8,8 @@ import { createApp } from '../src/main';
 import { PrismaService } from '../src/prisma/prisma.service';
 import type { FabricClient } from '../src/fabric/fabric.client';
 import { GoalRunnerService } from '../src/runner/goal-runner.service';
-import { InboxController } from '../src/runner/inbox.controller';
+import { ExternalBrowserController } from '../src/browser/external-browser.controller';
+import { InboxController } from '../src/browser/inbox.controller';
 import { TasksService } from '../src/tasks/tasks.service';
 
 let app: NestFastifyApplication;
@@ -187,5 +188,41 @@ describe('the inbox', () => {
 
     const other = await login(`inbox-other-${stamp}@example.test`);
     await expect(inbox.respond({ id: other }, waiting.id, { outcome: 'completed' })).rejects.toThrow(/Run not found/);
+  });
+});
+
+describe('external agents driving a browser through the console', () => {
+  it('records every action as a redacted step, enforces sites, answers handoffs, types secrets unseen, and stops on cancel', async () => {
+    const userId = await login(`ext-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const tasks = app.get(TasksService);
+    const fabric = fakeFabric();
+    const ctl = new ExternalBrowserController(prisma, fabric.client, tasks);
+
+    const { runId } = await ctl.open(userId, { profile: 'default', actor: 'agent-x', goal: 'Check my order', allowedDomains: ['shop.example.test'], hostId: null });
+    await ctl.act(userId, runId, { action: { type: 'navigate', url: 'https://shop.example.test/orders?session=s3cr3t' } });
+    await expect(ctl.act(userId, runId, { action: { type: 'navigate', url: 'https://other.example.test/' } })).rejects.toThrow(/may not open/);
+
+    const { handoffId } = await ctl.handoff(userId, runId, { kind: 'code', prompt: 'Enter the code', input: 'secret', choices: [] });
+    await expect(ctl.act(userId, runId, { action: { type: 'click', selector: '#x' } })).rejects.toThrow(/Waiting for the person/);
+    fabric.handoffs.get(handoffId)!.status = 'completed';
+    fabric.handoffs.get(handoffId)!.response = { outcome: 'completed' };
+    expect(await ctl.handoffStatus(userId, runId, handoffId)).toMatchObject({ status: 'completed', secretAvailable: true, value: null });
+    await ctl.act(userId, runId, { action: { type: 'type_handoff_secret', handoffId, selector: '#otp', submit: true } });
+    expect(fabric.actions).toContainEqual(expect.objectContaining({ type: 'type', selector: '#otp', text: SECRET }));
+
+    const db = prisma.forUser({ userId });
+    const row = await db.run.findFirstOrThrow({ where: { id: runId }, include: { steps: true } });
+    expect(row).toMatchObject({ trigger: 'external', actor: 'agent-x', status: 'running' });
+    expect(row.steps.length).toBe(4);
+    const stored = JSON.stringify(row);
+    expect(stored).not.toContain(SECRET);
+    expect(stored).not.toContain('s3cr3t');
+
+    // The user stops it: the next action is refused and the session ends.
+    await tasks.cancel(userId, runId);
+    await expect(ctl.act(userId, runId, { action: { type: 'tabs' } })).rejects.toThrow(/stopped this session/);
+    expect((await db.run.findFirstOrThrow({ where: { id: runId } })).status).toBe('cancelled');
+    expect(fabric.ended()).toBe(1);
   });
 });
