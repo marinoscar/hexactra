@@ -17,6 +17,8 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 | Fabric connection (URL and `hxs_` service token, stored encrypted; Doctor checks `fabric.*`) | Administration → Fabric connection | `GET/PUT/DELETE /api/fabric/connection`, `POST …/test` | — | `fabric_config:read` / `:write` |
 | Fleet: hosts, enrollment, drain, revoke, profiles | `/fleet` | `/api/fleet/…` | `hexactra fleet hosts\|enroll\|drain\|undrain\|revoke\|commands`, `hexactra fleet profile create\|delete\|restart\|close`; TUI **Fleet** screen | `fleet:read` / `fleet:write` |
 
+Run it all on a VPS (console, fabric and a browser host in one stack): [docs/runbooks/vps-stack.md](docs/runbooks/vps-stack.md).
+
 The CLI's commands use the login from `hexactra login`, or `HEXACTRA_SERVER_URL` and `HEXACTRA_TOKEN`.
 
 ## Layout
