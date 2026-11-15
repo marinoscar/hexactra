@@ -7,6 +7,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use hexactra_agent::launcher::LaunchConfig;
+use hexactra_agent::pool::PoolConfig;
 use hexactra_agent::remote_daemon::{self, DaemonConfig};
 use hexactra_core::bridge::bridge_socket_path;
 
@@ -40,10 +41,18 @@ enum Commands {
         /// browser you run yourself.
         #[arg(long, env = "HEXACTRA_BROWSER")]
         browser: Option<PathBuf>,
-        /// Persistent browser profile for launch mode
-        /// (default: $XDG_DATA_HOME/hexactra/profiles/default).
-        #[arg(long, env = "HEXACTRA_PROFILE_DIR")]
+        /// Launch mode: directory with one subdirectory per browser profile
+        /// (default: $XDG_DATA_HOME/hexactra/profiles).
+        #[arg(long, env = "HEXACTRA_PROFILES_DIR")]
+        profiles_dir: Option<PathBuf>,
+        /// Deprecated single-profile directory; becomes the `default` profile
+        /// by moving it into the profiles directory on first start.
+        #[arg(long, env = "HEXACTRA_PROFILE_DIR", hide = true)]
         profile_dir: Option<PathBuf>,
+        /// Most browsers (profiles) running at once; the least recently used
+        /// idle one is closed to make room. Each takes 300-600 MB of RAM.
+        #[arg(long, env = "HEXACTRA_MAX_BROWSERS", default_value_t = 1)]
+        max_browsers: usize,
         /// Unpacked Hexactra extension to load in launch mode.
         #[arg(long, env = "HEXACTRA_EXTENSION_DIR")]
         extension_dir: Option<PathBuf>,
@@ -132,7 +141,9 @@ async fn main() -> Result<()> {
             name,
             bridge_socket,
             browser,
+            profiles_dir,
             profile_dir,
+            max_browsers,
             extension_dir,
             browser_args,
             idle_shutdown_s,
@@ -154,17 +165,30 @@ async fn main() -> Result<()> {
                             native_host.display()
                         );
                     }
-                    Some(LaunchConfig {
-                        browser,
-                        profile_dir: profile_dir
-                            .unwrap_or_else(|| data_dir().join("profiles").join("default")),
-                        extension_dir,
-                        extra_args: browser_args,
-                        idle_shutdown: (idle_shutdown_s > 0)
-                            .then(|| Duration::from_secs(idle_shutdown_s)),
-                        native_host,
-                        bridge_socket: bridge_socket.clone(),
-                        startup_timeout: Duration::from_secs(30),
+                    let profiles_dir = profiles_dir.unwrap_or_else(|| data_dir().join("profiles"));
+                    hexactra_agent::pool::migrate_single_profile(
+                        profile_dir.as_deref(),
+                        &profiles_dir,
+                    )?;
+                    let socket_dir = bridge_socket
+                        .parent()
+                        .map(|p| p.to_path_buf())
+                        .unwrap_or_else(|| PathBuf::from("."));
+                    Some(PoolConfig {
+                        profiles_dir,
+                        socket_dir,
+                        max_browsers: max_browsers.max(1),
+                        launch: LaunchConfig {
+                            browser,
+                            profile_dir: PathBuf::new(),
+                            extension_dir,
+                            extra_args: browser_args,
+                            idle_shutdown: (idle_shutdown_s > 0)
+                                .then(|| Duration::from_secs(idle_shutdown_s)),
+                            native_host,
+                            bridge_socket: PathBuf::new(),
+                            startup_timeout: Duration::from_secs(30),
+                        },
                     })
                 }
             };
@@ -179,13 +203,9 @@ async fn main() -> Result<()> {
                 launch_eagerly,
                 viewer_url,
             };
-            tokio::select! {
-                r = remote_daemon::run(cfg) => r,
-                _ = tokio::signal::ctrl_c() => {
-                    tracing::info!("shutting down");
-                    Ok(())
-                }
-            }
+            // SIGTERM/SIGINT are handled inside: browsers are closed
+            // gracefully so their cookies and storage reach the disk.
+            remote_daemon::run(cfg).await
         }
     }
 }
