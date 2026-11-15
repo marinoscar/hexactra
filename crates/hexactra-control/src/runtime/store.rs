@@ -588,10 +588,26 @@ impl RuntimeStore {
                 if usable.is_empty() {
                     return Err(StoreError::NoHostAvailable);
                 }
+                // Spread sessions: among hosts with the profile (running ones
+                // first), the one with the fewest active sessions, then the
+                // most recently seen. Without the load term every session of a
+                // profile landed on one host (scripts/load/fabric-load.mjs).
+                let mut load: HashMap<Uuid, usize> = HashMap::new();
+                for s in inner.sessions.values() {
+                    if s.status == RemoteSessionStatus::Active {
+                        *load.entry(s.host_id).or_default() += 1;
+                    }
+                }
                 let with = usable
                     .iter()
                     .filter(|(_, has, _)| *has)
-                    .max_by_key(|(v, _, running)| (*running, v.last_seen))
+                    .max_by_key(|(v, _, running)| {
+                        (
+                            *running,
+                            std::cmp::Reverse(load.get(&v.id).copied().unwrap_or(0)),
+                            v.last_seen,
+                        )
+                    })
                     .map(|(v, _, _)| v.id);
                 match with {
                     Some(id) => id,
@@ -974,6 +990,35 @@ mod tests {
             .await
             .unwrap();
         assert!(s.create_session(None, None).is_ok());
+    }
+
+    #[tokio::test]
+    async fn sessions_spread_across_hosts_with_the_profile() {
+        let s = RuntimeStore::new();
+        let hosts: Vec<Uuid> = (0..3)
+            .map(|i| s.register_host(None, format!("h{i}"), "0".into()))
+            .collect();
+        for h in &hosts {
+            s.set_host_on_demand(*h, true).unwrap();
+            s.set_host_profiles(*h, vec!["work".into()], vec!["work".into()])
+                .unwrap();
+        }
+        let mut per_host: HashMap<Uuid, usize> = HashMap::new();
+        for _ in 0..9 {
+            let v = s
+                .create_session_for(None, None, Some("work".into()), false)
+                .unwrap();
+            *per_host.entry(v.host_id).or_default() += 1;
+        }
+        assert_eq!(per_host.len(), 3);
+        assert!(per_host.values().all(|n| *n == 3), "{per_host:?}");
+        // An ended session frees its slot.
+        let first = s.list_sessions()[0].clone();
+        s.end_session(first.id).unwrap();
+        let next = s
+            .create_session_for(None, None, Some("work".into()), false)
+            .unwrap();
+        assert_eq!(next.host_id, first.host_id);
     }
 
     #[tokio::test]
