@@ -26,7 +26,7 @@ export const NAVIGATION: ShellNavigation<'home' | 'notes' | 'settings' | 'consol
       compactLabel: 'Admin',
       Icon: AdminPanelSettingsIcon,
       path: '/admin/settings',
-      anyPermission: ['system_settings:read', 'users:read', 'org_members:read', 'organizations:read', 'jobs:read', ...sliceConsolePermissions],
+      anyPermission: ['system_settings:read', 'fabric_config:read', 'users:read', 'org_members:read', 'organizations:read', 'jobs:read', ...sliceConsolePermissions],
       pinned: true,
     },
   ],

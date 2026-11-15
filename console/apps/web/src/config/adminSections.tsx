@@ -5,6 +5,8 @@ import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { DANGER_ZONE_GROUP_LABEL } from '@marinoscar/platform-web/user-data/headless';
 import { factoryResetSettingsPage } from '@marinoscar/platform-web/user-data/ui';
 
+import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
+
 import { composeSections } from '../slices/sections';
 import { sliceAdminCards } from '../slices/manifest';
 
@@ -14,7 +16,18 @@ import { sliceAdminCards } from '../slices/manifest';
  * `Operations`, and add their own groups (AI) before the Danger Zone.
  */
 const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
-  { label: 'General', cards: [] },
+  {
+    label: 'General',
+    cards: [
+      {
+        title: 'Fabric connection',
+        description: 'The Hexactra Fabric control plane that runs the browsers: its URL and service token.',
+        Icon: HubOutlinedIcon,
+        path: '/admin/settings/fabric',
+        permission: 'fabric_config:read',
+      },
+    ],
+  },
   { label: 'Access', cards: [...identityAdminSections.access, ...identityAdminSections.organizations] },
   {
     label: 'Operations',
