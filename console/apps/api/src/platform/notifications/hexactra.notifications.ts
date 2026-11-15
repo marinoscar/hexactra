@@ -1,4 +1,4 @@
-import type { BrowserNotificationTemplate, NotificationRegistration } from '@marinoscar/platform-api/notifications';
+import type { BrowserNotificationTemplate, NotificationRegistration, PushPayloadHook } from '@marinoscar/platform-api/notifications';
 
 import { isSliceEnabled } from '../slices/manifest';
 
@@ -16,7 +16,9 @@ const trim = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s
 const needsYou: BrowserNotificationTemplate = (d) => ({
   title: 'An agent needs you',
   body: trim(str(d, 'prompt') || 'Answer its request in the Inbox.', 180),
-  link: '/inbox',
+  // A deep link to this run's request: the web app, the installed PWA and the
+  // Android app all open the Inbox with it in front.
+  link: str(d, 'runId') ? `/inbox?run=${encodeURIComponent(str(d, 'runId'))}` : '/inbox',
 });
 const finished: BrowserNotificationTemplate = (d) => ({
   title: str(d, 'status') === 'succeeded' ? 'Run finished' : `Run ${str(d, 'status') || 'ended'}`,
@@ -63,3 +65,17 @@ export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
     browserTemplate: failing,
   },
 ];
+
+/**
+ * Push extras of the console's events (`NotificationsModule.forRoot({ pushPayload })`):
+ * one notification per run on the device (a newer one replaces it: `tag`),
+ * and the push service's high urgency when a person must act (a request,
+ * a failed run), so a phone in Doze still shows it.
+ */
+export const hexactraPushPayload: PushPayloadHook = (event, data) => {
+  const runId = str(data, 'runId');
+  if (event.key === RUN_NEEDS_YOU_EVENT) return { tag: runId ? `run-${runId}` : 'run', urgency: 'high' };
+  if (event.key === RUN_FINISHED_EVENT) return { tag: runId ? `run-${runId}` : 'run', urgency: str(data, 'status') === 'failed' ? 'high' : 'normal' };
+  if (event.key === SCHEDULE_FAILING_EVENT) return { tag: `schedule-${str(data, 'scheduleId') || 'failing'}`, urgency: 'normal' };
+  return null;
+};

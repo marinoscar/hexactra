@@ -12,10 +12,12 @@ import {
 } from '@marinoscar/platform-api/notifications';
 
 import { EmailModule } from '../email/email.config';
+import { hexactraPushPayload } from './hexactra.notifications';
 import { NotificationsHostModule } from './notifications-host.module';
 
 export const NotificationsModule = PlatformNotificationsModule.forRoot({
   imports: [EmailModule, NotificationsHostModule],
+  pushPayload: hexactraPushPayload,
 });
 
 export const BroadcastsModule = PlatformBroadcastsModule;

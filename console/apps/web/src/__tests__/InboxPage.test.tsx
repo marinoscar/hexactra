@@ -48,4 +48,31 @@ describe('InboxPage', () => {
     );
     expect(await screen.findByText('Nothing is waiting for you.')).toBeInTheDocument();
   });
+
+  it('opens a notification deep link with its request first and marked', async () => {
+    const host = createTestPlatformHost({ permissions: ['runs:read'], responses: { 'GET /inbox': [code, confirm] } });
+    render(
+      <PlatformHostProvider host={host}>
+        <MemoryRouter initialEntries={['/inbox?run=r2']}>
+          <InboxPage />
+        </MemoryRouter>
+      </PlatformHostProvider>,
+    );
+    const cards = await screen.findAllByLabelText(/^Request: /);
+    expect(cards[0]).toHaveAttribute('aria-label', 'Request: Book the 9:00 flight for $120?');
+    expect(cards[0]).toHaveAttribute('aria-current', 'true');
+    expect(cards[1]).not.toHaveAttribute('aria-current');
+  });
+
+  it('says when the linked request is gone', async () => {
+    const host = createTestPlatformHost({ permissions: ['runs:read'], responses: { 'GET /inbox': [code] } });
+    render(
+      <PlatformHostProvider host={host}>
+        <MemoryRouter initialEntries={['/inbox?run=gone']}>
+          <InboxPage />
+        </MemoryRouter>
+      </PlatformHostProvider>,
+    );
+    expect(await screen.findByText('That request was already answered or expired.')).toBeInTheDocument();
+  });
 });
