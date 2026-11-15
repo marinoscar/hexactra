@@ -14,6 +14,7 @@ hexactra navigate https://example.com && hexactra screenshot -o page.jpg
 ```
 
 - Quickstart, remote access and safety: [docs/remote-control-quickstart.md](docs/remote-control-quickstart.md)
+- Desktop off? Run the always-on container host (`deploy/container`, browser on demand plus web viewer): [docs/container-host.md](docs/container-host.md)
 - `/v1` API: [docs/remote-control-api.md](docs/remote-control-api.md)
 - Proven by a real-Chromium end-to-end test in CI: `tests/e2e/remote-control.e2e.mjs`
 

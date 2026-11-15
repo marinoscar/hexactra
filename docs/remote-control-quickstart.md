@@ -54,7 +54,7 @@ hexactra-agent daemon \
 - The launched profile is separate from your everyday Chrome profile. Sign in to the sites you need once, through the browser or its viewer.
 - Add `--viewer-url` when you have a web viewer (noVNC). Handoffs then link people straight to the browser.
 
-The container host (#195) packages all of this so it runs on an always-on machine even when your desktop is off.
+The container host packages all of this, so it runs on an always-on machine even when your desktop is off: [container-host.md](container-host.md).
 
 ## 2. Use it locally
 
