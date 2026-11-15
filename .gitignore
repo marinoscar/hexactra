@@ -153,3 +153,5 @@ target/
 
 # Git worktrees (one per issue)
 worktrees/
+# Generated env templates of the console (EAB platform-infra)
+!console/infra/compose/.env.*.example
