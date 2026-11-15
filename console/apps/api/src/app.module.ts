@@ -9,6 +9,7 @@ import { RegistryFreezeService } from '@marinoscar/platform-api/core';
 import configuration from './config/configuration';
 import { BrowserModule } from './browser/browser.module';
 import { FabricModule } from './fabric/fabric.module';
+import { McpModule } from './mcp/mcp.module';
 import { FleetModule } from './fleet/fleet.module';
 import { webhooksModule } from './platform/webhooks/webhooks.config';
 import { RunnerModule } from './runner/runner.module';
@@ -37,6 +38,7 @@ import { PrismaModule } from './prisma/prisma.service';
     FleetModule,
     TasksModule,
     BrowserModule,
+    McpModule,
     // The goal runner needs the AI slice (packages/shared/slices.json).
     ...(isSliceEnabled('ai') ? [RunnerModule, SchedulesModule] : []),
     // Outbound webhooks need the credential store (signing secrets) and notifications.

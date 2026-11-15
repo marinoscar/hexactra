@@ -201,3 +201,33 @@ describe('the inbox', () => {
     screen.unmount();
   });
 });
+
+describe('hexactra mcp serve', () => {
+  it('bridges stdio JSON-RPC lines to POST /api/mcp and back', async () => {
+    const { serveMcpStdio } = await import('./mcp.command.js');
+    const { PassThrough } = await import('node:stream');
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const seen: { url: string; auth: string | null; body: string }[] = [];
+    const fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const body = String(init?.body);
+      seen.push({ url: String(url), auth: new Headers(init?.headers).get('authorization'), body });
+      const msg = JSON.parse(body) as { id?: number; method: string };
+      if (msg.id === undefined) return new Response(null, { status: 202 });
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { echoed: msg.method } }), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    let out = '';
+    output.on('data', (d) => (out += String(d)));
+    const done = serveMcpStdio({ input, output, fetch: fetch as never, credentials: { apiBaseUrl: 'http://console.example.test/api', token: 'pat_x' } });
+    input.write('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}\n');
+    input.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\n');
+    input.write('not json\n');
+    input.end();
+    await done;
+    const lines = out.trim().split('\n').map((l) => JSON.parse(l));
+    expect(lines).toContainEqual({ jsonrpc: '2.0', id: 1, result: { echoed: 'initialize' } });
+    expect(lines).toContainEqual(expect.objectContaining({ error: expect.objectContaining({ code: -32700 }) }));
+    expect(lines).toHaveLength(2);
+    expect(seen[0]).toMatchObject({ url: 'http://console.example.test/api/mcp', auth: 'Bearer pat_x' });
+  });
+});
