@@ -1464,3 +1464,52 @@ The Phase 2 extension milestone in Section 19 must therefore include **Side Pane
 - [Chrome MV3 service-worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle)
 - [Chrome extension network requests and host permissions](https://developer.chrome.com/docs/extensions/develop/concepts/network-requests)
 - [OpenAI Chat Completions reference](https://platform.openai.com/docs/api-reference/chat)
+
+## 26. Console and fabric
+
+**Status: implemented in this repository (console/ and crates/).** This section records the architecture the platform grew into while implementing Sections 16, 19 and 25. Where it differs from earlier sections, it describes what exists; earlier sections still describe the product intent.
+
+### 26.1 Two layers
+
+- **Hexactra Fabric** (`crates/`) is the browser execution layer:
+  - the Rust control plane (`/v1`: sessions, actions, handoffs, host commands, artifacts, events, webhooks), with durable SQLite state;
+  - host agents (`hexactra-agent`) that keep a Chromium per profile on a VPS container, a desktop or any machine, long-polling the control plane with per-host credentials;
+  - the extension and native host that act inside each browser.
+- **Hexactra Console** (`console/`) is the single user-facing control point. It is an application on the EnterpriseAppBase platform packages, and it adds:
+  - identity, roles and personal access tokens;
+  - tasks, runs and steps;
+  - the server-side AI goal runner;
+  - schedules, the handoff Inbox, notifications (web, email, Web Push and the Android app), outbound webhooks and alerts;
+  - telemetry, the Doctor checks, and fleet management.
+
+  Only the console holds the fabric's service token. The fabric's ports are not published (Section 26.4).
+
+### 26.2 One capability, every surface
+
+Every capability is a REST operation under `/api` (the OpenAPI document is at `/api/docs`). It is also present on the web app, the `hexactra` CLI and TUI, and the MCP server (`POST /api/mcp`, or `hexactra mcp serve` over stdio), unless a recorded reason says otherwise. `console/packages/shared/capabilities.json` is the registry. Each surface's tests fail when a capability it names is missing, or when an operation, command or tool belongs to no capability.
+
+The TypeScript SDK (`console/packages/sdk`) is generated from the same OpenAPI document. Recipes for three agent frameworks (Hermes Agent, OpenClaw and Pi) are run against a live console in CI.
+
+### 26.3 The goal runner
+
+- **Runs are durable state machines** (`queued → running → waiting_human → running → succeeded | failed | cancelled`).
+- **Each advance is a queue job.** The runner calls the model in chunks, with the transcript persisted after each chunk.
+- **Waits release the worker.** A run waiting for a person ends its job, and the answered handoff enqueues the continuation.
+- **Policy is enforced server-side before every action:** allowed sites, step and time budgets, and confirmation before irreversible steps.
+- **The model never sees secrets.** A person types codes and passwords into a handoff, and the runner types them into the page.
+- **External agents are recorded the same way.** An agent driving a browser directly through the console is recorded as a run of trigger `external`, so the person sees every step and can stop it.
+
+### 26.4 Deployment
+
+One compose stack on a VPS (`console/docs/runbooks/vps-stack.md`):
+- the console (nginx, API, web, Postgres);
+- the fabric control plane and a bundled browser host on a private network;
+- the browser viewer, behind the console's single-use tickets.
+
+More hosts enroll from any machine with a one-time token. Day-2 operations are in `console/docs/runbooks/operations.md`, and measured capacity in `console/docs/runbooks/capacity.md`.
+
+### 26.5 What stays open
+
+- Native notification actions on Android ("approve" or "cancel" from the notification itself).
+- Scoped personal access tokens. Until then, a dedicated low-role user per agent framework.
+- Windows and macOS hosts (post-v1, Section 19).

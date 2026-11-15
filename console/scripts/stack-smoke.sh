@@ -83,4 +83,22 @@ grep -q hx_viewer "$jar" || fail "no viewer cookie set"
 [ "$(code -b "$jar" "$base/viewer/local/vnc.html")" = 200 ] || fail "the viewer cookie does not work"
 [ "$(code "$base/viewer/local/vnc.html?ticket=$ticket")" = 401 ] || fail "a ticket worked twice"
 pass "a one-time ticket opens the viewer, sets its cookie and cannot be reused"
+# Back up the fabric's state the way docs/runbooks/operations.md says (stop,
+# archive the volume, start), then check the host comes back online with the
+# state the control plane restored from its database.
+backups=$(mktemp -d)
+dc stop fabric-host fabric-control >/dev/null || fail "stop the fabric for a backup"
+for svc in fabric-control fabric-host; do
+  docker run --rm --volumes-from "$(dc ps -aq "$svc")" -v "$backups:/backup" alpine:3.22 \
+    tar czf "/backup/$svc.tgz" -C /data . || fail "back up $svc"
+done
+dc start fabric-control fabric-host >/dev/null || fail "start the fabric after the backup"
+tar tzf "$backups/fabric-control.tgz" | grep -q 'control.db$' || fail "the control-plane backup has no control.db"
+[ -s "$backups/fabric-host.tgz" ] || fail "the browser-host backup is empty"
+for _ in $(seq 1 60); do
+  dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra --url http://127.0.0.1:8787 status 2>/dev/null | grep -q 'online=true' && break
+  sleep 2
+done
+dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra --url http://127.0.0.1:8787 status | grep -q 'online=true' || fail "browser host not online after a backup and restart"
+pass "the documented fabric backup works and the host comes back online"
 echo "stack smoke: all checks passed"
