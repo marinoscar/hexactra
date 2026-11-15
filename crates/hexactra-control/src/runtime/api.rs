@@ -5,6 +5,8 @@
 //! (see [`super::credentials`]): operator (everything), service (client
 //! routes), host (only its own host routes).
 
+#[allow(unused_imports)]
+use super::openapi::*;
 use std::time::Duration;
 
 use axum::{
@@ -283,16 +285,36 @@ async fn trace_request(req: Request, next: Next) -> Response {
     resp
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/health",
+    tag = "health",
+    security(()),
+    responses((status = 200, description = "Liveness and version", body = Object))
+)]
 async fn health() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "status": "ok", "version": env!("CARGO_PKG_VERSION") }))
 }
 
 // ------------------------------------------------------------------ hosts
 
+#[utoipa::path(
+    get,
+    path = "/v1/hosts",
+    tag = "hosts",
+    responses((status = 200, body = HostList), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn list_hosts(State(s): State<ApiState>) -> impl IntoResponse {
     Json(serde_json::json!({ "hosts": s.store.list_hosts() }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/hosts/register",
+    tag = "agent",
+    request_body = RegisterHostRequest,
+    responses((status = 200, body = RegisterHostResponse), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn register_host(
     State(s): State<ApiState>,
     Extension(p): Extension<Principal>,
@@ -360,6 +382,13 @@ fn split_list(s: &Option<String>) -> Vec<String> {
         .collect()
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/hosts/{host_id}/next",
+    tag = "agent",
+    params(("host_id" = Uuid, Path,), ("wait_ms" = Option<u64>, Query,), ("browser_connected" = Option<bool>, Query,), ("on_demand" = Option<bool>, Query,), ("profiles" = Option<String>, Query, description = "Comma-separated profiles the host has"), ("running" = Option<String>, Query, description = "Comma-separated profiles running now"), ("commands" = Option<bool>, Query, description = "The agent accepts host commands")),
+    responses((status = 200, description = "An operation, or `{ \"command\": … }`", body = HostWork), (status = 204, description = "Nothing to do"), (status = 404, description = "Unknown host"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn next_operation(
     State(s): State<ApiState>,
     Extension(p): Extension<Principal>,
@@ -392,6 +421,13 @@ async fn next_operation(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/hosts/{host_id}/offline",
+    tag = "agent",
+    params(("host_id" = Uuid, Path,)),
+    responses((status = 204, description = "Marked offline"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn host_offline(
     State(s): State<ApiState>,
     Extension(p): Extension<Principal>,
@@ -403,6 +439,14 @@ async fn host_offline(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/hosts/{host_id}/operations/{op_id}/result",
+    tag = "agent",
+    params(("host_id" = Uuid, Path,), ("op_id" = Uuid, Path,)),
+    request_body = OperationResult,
+    responses((status = 204, description = "Recorded"), (status = 404, description = "Unknown operation"), (status = 409, description = "Not dispatched, or already reported"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn post_result(
     State(s): State<ApiState>,
     Extension(p): Extension<Principal>,
@@ -417,10 +461,23 @@ async fn post_result(
 
 // --------------------------------------------------------------- sessions
 
+#[utoipa::path(
+    get,
+    path = "/v1/sessions",
+    tag = "sessions",
+    responses((status = 200, body = SessionList), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn list_sessions(State(s): State<ApiState>) -> impl IntoResponse {
     Json(serde_json::json!({ "sessions": s.store.list_sessions() }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/sessions",
+    tag = "sessions",
+    request_body(content = Option<CreateSessionRequest>),
+    responses((status = 201, body = SessionView), (status = 404, description = "Unknown host or profile"), (status = 409, description = "Host is draining"), (status = 503, description = "No host available"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn create_session(
     State(s): State<ApiState>,
     body: Option<Json<CreateSessionRequest>>,
@@ -440,6 +497,13 @@ async fn create_session(
     Ok((StatusCode::CREATED, Json(session)))
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/sessions/{id}",
+    tag = "sessions",
+    params(("id" = Uuid, Path,)),
+    responses((status = 200, body = SessionView), (status = 404, description = "Unknown session"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn get_session(
     State(s): State<ApiState>,
     Path(id): Path<Uuid>,
@@ -447,6 +511,13 @@ async fn get_session(
     Ok(Json(s.store.get_session(id)?))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/v1/sessions/{id}",
+    tag = "sessions",
+    params(("id" = Uuid, Path,)),
+    responses((status = 200, body = SessionView), (status = 404, description = "Unknown session"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn end_session(
     State(s): State<ApiState>,
     Path(id): Path<Uuid>,
@@ -468,6 +539,14 @@ struct ActionQuery {
     inline_artifacts: bool,
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/sessions/{id}/actions",
+    tag = "sessions",
+    params(("id" = Uuid, Path,), ("async" = Option<bool>, Query, description = "Return 202 at once"), ("inline_artifacts" = Option<bool>, Query, description = "Also return screenshot bytes inline")),
+    request_body = ActionRequest,
+    responses((status = 200, description = "Final state (succeeded, failed, timed_out, cancelled)", body = OperationView), (status = 202, description = "Queued (`?async=true`)", body = OperationView), (status = 400, description = "Invalid action"), (status = 409, description = "Session ended or a handoff is pending"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn run_action(
     State(s): State<ApiState>,
     Path(session_id): Path<Uuid>,
@@ -509,6 +588,13 @@ struct GetOperationQuery {
     wait_ms: Option<u64>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/operations/{id}",
+    tag = "sessions",
+    params(("id" = Uuid, Path,), ("wait_ms" = Option<u64>, Query,)),
+    responses((status = 200, body = OperationView), (status = 404, description = "Unknown operation"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn get_operation(
     State(s): State<ApiState>,
     Path(id): Path<Uuid>,
@@ -527,6 +613,13 @@ async fn get_operation(
 
 // -------------------------------------------------------------- artifacts
 
+#[utoipa::path(
+    get,
+    path = "/v1/artifacts/{id}",
+    tag = "artifacts",
+    params(("id" = Uuid, Path,)),
+    responses((status = 200, description = "The artifact bytes", content_type = "image/jpeg", body = Vec<u8>), (status = 404, description = "Unknown or expired"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn get_artifact(
     State(s): State<ApiState>,
     Path(id): Path<Uuid>,

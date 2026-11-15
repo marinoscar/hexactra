@@ -65,6 +65,10 @@ The operator token still works on host routes, so existing single-token setups k
 
 ## Endpoints
 
+The full reference is [`api/openapi.yaml`](../api/openapi.yaml) (OpenAPI 3.1).
+- **Generated from the server code:** `cargo run -q -p hexactra-control -- openapi > api/openapi.yaml`.
+- **Kept in sync by CI:** `crates/hexactra-control/tests/openapi_contract.rs` fails when the committed file is stale, or when a mounted route is missing from it.
+
 | Method and path | Who | Purpose |
 |---|---|---|
 | `GET /v1/health` | anyone | Liveness and version |

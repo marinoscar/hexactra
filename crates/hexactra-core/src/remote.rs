@@ -32,6 +32,7 @@ pub const MAX_URL_LEN: usize = 8_192;
 ///
 /// `tab_id` is optional everywhere: when absent the extension uses the active
 /// tab of the last focused window.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RemoteAction {
@@ -264,6 +265,7 @@ pub fn valid_profile_name(name: &str) -> bool {
 }
 
 /// Lifecycle of a queued operation.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OperationState {
@@ -289,6 +291,7 @@ impl OperationState {
 }
 
 /// An operation as reported to clients.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OperationView {
     pub id: Uuid,
@@ -306,6 +309,7 @@ pub struct OperationView {
 }
 
 /// Session status.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RemoteSessionStatus {
@@ -314,6 +318,7 @@ pub enum RemoteSessionStatus {
 }
 
 /// A remote-control session bound to one host.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SessionView {
     pub id: Uuid,
@@ -330,6 +335,7 @@ pub struct SessionView {
 }
 
 /// A host agent as seen by the control plane.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HostView {
     pub id: Uuid,
@@ -359,6 +365,7 @@ pub struct HostView {
 }
 
 /// `POST /v1/sessions`
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct CreateSessionRequest {
     /// Pin the session to a host; otherwise the control plane picks an online
@@ -376,6 +383,7 @@ pub struct CreateSessionRequest {
 }
 
 /// `POST /v1/sessions/{id}/actions`
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ActionRequest {
     pub action: RemoteAction,
@@ -390,6 +398,7 @@ pub struct ActionRequest {
 }
 
 /// `POST /v1/hosts/register`
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RegisterHostRequest {
     pub name: String,
@@ -404,12 +413,14 @@ pub struct RegisterHostRequest {
 }
 
 /// Response to host registration.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RegisterHostResponse {
     pub host_id: Uuid,
 }
 
 /// An operation handed to a host agent by `GET /v1/hosts/{id}/next`.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DispatchedOperation {
     pub id: Uuid,
@@ -426,6 +437,7 @@ pub struct DispatchedOperation {
 }
 
 /// `POST /v1/operations/{id}/result`
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OperationResult {
     pub ok: bool,
@@ -443,6 +455,7 @@ pub const DEFAULT_HOST_COMMAND_TIMEOUT_MS: u64 = 60_000;
 pub const MAX_HOST_COMMAND_TIMEOUT_MS: u64 = 5 * 60_000;
 
 /// A management command for a host rather than an action in a session.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum HostCommand {
@@ -510,6 +523,7 @@ impl HostCommand {
 }
 
 /// `POST /v1/hosts/{id}/commands`
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HostCommandRequest {
     pub command: HostCommand,
@@ -518,6 +532,7 @@ pub struct HostCommandRequest {
 }
 
 /// A host command as reported to clients. States are those of operations.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HostCommandView {
     pub id: Uuid,
@@ -534,6 +549,7 @@ pub struct HostCommandView {
 }
 
 /// A command handed to a host on its poll.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DispatchedCommand {
     pub id: Uuid,
@@ -546,6 +562,7 @@ pub struct DispatchedCommand {
 
 /// What `GET /v1/hosts/{id}/next` returns: an operation, or (to agents that
 /// poll with `commands=true`) a host command wrapped as `{"command": …}`.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum HostWork {
@@ -566,6 +583,7 @@ pub const MIN_HANDOFF_TIMEOUT_MS: u64 = 10 * 1000;
 pub const MAX_HANDOFF_TIMEOUT_MS: u64 = 24 * 60 * 60 * 1000;
 
 /// Why the agent needs a human.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HandoffKind {
@@ -584,6 +602,7 @@ pub enum HandoffKind {
 }
 
 /// What the human is asked to provide.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HandoffInput {
@@ -600,6 +619,7 @@ pub enum HandoffInput {
 }
 
 /// Lifecycle of a handoff.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HandoffStatus {
@@ -616,6 +636,7 @@ impl HandoffStatus {
 }
 
 /// Page the agent was on when it asked for help (informational only).
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct HandoffPage {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -625,6 +646,7 @@ pub struct HandoffPage {
 }
 
 /// `POST /v1/sessions/{id}/handoffs`
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CreateHandoffRequest {
     pub kind: HandoffKind,
@@ -693,6 +715,7 @@ impl CreateHandoffRequest {
 }
 
 /// The human's answer as visible to readers.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HandoffResponse {
     /// The submitted value for `text` and `choice` inputs.
@@ -708,6 +731,7 @@ pub struct HandoffResponse {
 }
 
 /// A handoff as reported by the API and in webhook payloads.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct HandoffView {
     pub id: Uuid,
@@ -737,6 +761,7 @@ pub struct HandoffView {
 }
 
 /// Response to creating a handoff.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CreateHandoffResponse {
     pub handoff: HandoffView,
@@ -748,6 +773,7 @@ pub struct CreateHandoffResponse {
 }
 
 /// How the human resolved the handoff.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HandoffOutcome {
@@ -757,6 +783,7 @@ pub enum HandoffOutcome {
 }
 
 /// `POST /v1/handoffs/{id}/respond`
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct RespondHandoffRequest {
     #[serde(default)]
@@ -773,6 +800,7 @@ pub struct RespondHandoffRequest {
 }
 
 /// `POST /v1/handoffs/{id}/claim`: the secret value, returned once.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClaimedHandoffValue {
     pub value: String,
@@ -801,6 +829,7 @@ pub fn webhook_filter_matches(filter: &str, event: &str) -> bool {
 }
 
 /// `POST /v1/webhooks`
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct CreateWebhookRequest {
     pub url: String,
@@ -812,6 +841,7 @@ pub struct CreateWebhookRequest {
 }
 
 /// A webhook endpoint (never includes the secret).
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WebhookView {
     pub id: Uuid,
@@ -823,6 +853,7 @@ pub struct WebhookView {
 }
 
 /// Response to creating a webhook: the signing secret is shown only here.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CreatedWebhook {
     pub webhook: WebhookView,
@@ -831,6 +862,7 @@ pub struct CreatedWebhook {
 }
 
 /// One delivery attempt.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WebhookDelivery {
     pub event_id: String,
@@ -846,6 +878,7 @@ pub struct WebhookDelivery {
 }
 
 /// Error body returned by the `/v1` API.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ApiError {
     pub error: String,

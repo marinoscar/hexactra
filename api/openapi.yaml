@@ -1,1596 +1,2225 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
-  title: Hexactra API
-  description: |
-    Hexactra is a portable, self-hostable computer-use runtime letting authorized AI agents
-    operate real graphical browsers through an HTTP API, TypeScript SDK, CLI and MCP.
-    
-    ## Authentication
-    
-    All endpoints (except `/health`) require authentication via Bearer token in the
-    `Authorization` header. Tokens are issued by the identity provider and include
-    scopes for granular access control.
-    
-    ## Error Handling
-    
-    Errors return JSON with structure:
-    ```json
-    {
-      "error": {
-        "code": "INVALID_INPUT",
-        "message": "Human-readable error message",
-        "details": {}
-      }
-    }
-    ```
-    
-    ## Idempotency
-    
-    Mutating requests support the `Idempotency-Key` header. Repeated requests with the
-    same key return the original response without re-executing the operation.
-  version: "1.0.0"
+  title: Hexactra Fabric API
+  description: 'Remote browser control: hosts, sessions and actions, human handoffs, webhooks, host commands, artifacts and the event stream. Generated from the server code; see docs/remote-control-api.md for the guide.'
   contact:
-    name: Hexactra Project
-    url: https://github.com/marinoscar/hexactra
-
+    name: Oscar Marin
+    email: marinoscar@users.noreply.github.com
+  license:
+    name: MIT
+    identifier: MIT
+  version: 0.1.0
 servers:
-  - url: http://localhost:3000
-    description: Local development server
-
-components:
-  securitySchemes:
-    bearer:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-  
-  schemas:
-    GoalId:
-      type: string
-      format: uuid
-      description: Unique identifier for a goal
-    
-    SessionId:
-      type: string
-      format: uuid
-      description: Unique identifier for a session
-    
-    OperationId:
-      type: string
-      format: uuid
-      description: Unique identifier for an operation
-    
-    InteractionRequestId:
-      type: string
-      format: uuid
-      description: Unique identifier for an interaction request (HITL)
-    
-    RunStatus:
-      type: string
-      enum:
-        - queued
-        - running
-        - completed
-        - failed
-        - cancelled
-        - timed_out
-      description: Status of a goal execution
-    
-    SessionStatus:
-      type: string
-      enum:
-        - initializing
-        - running
-        - paused
-        - ended
-      description: Status of a session
-    
-    InteractionStatus:
-      type: string
-      enum:
-        - pending
-        - approved
-        - rejected
-      description: Status of an interaction request
-    
-    OperationStatus:
-      type: string
-      enum:
-        - queued
-        - in_progress
-        - completed
-        - failed
-      description: Status of an operation
-    
-    BrowserActionType:
-      type: string
-      enum:
-        - navigate
-        - click
-        - type
-        - get_value
-        - screenshot
-        - execute_script
-        - wait_for_element
-        - back
-        - forward
-        - refresh
-      description: Type of browser action
-    
-    BrowserAction:
-      oneOf:
-        - $ref: '#/components/schemas/NavigateAction'
-        - $ref: '#/components/schemas/ClickAction'
-        - $ref: '#/components/schemas/TypeAction'
-        - $ref: '#/components/schemas/GetValueAction'
-        - $ref: '#/components/schemas/ScreenshotAction'
-        - $ref: '#/components/schemas/ExecuteScriptAction'
-        - $ref: '#/components/schemas/WaitForElementAction'
-        - $ref: '#/components/schemas/BackAction'
-        - $ref: '#/components/schemas/ForwardAction'
-        - $ref: '#/components/schemas/RefreshAction'
-      discriminator:
-        propertyName: type
-        mapping:
-          navigate: '#/components/schemas/NavigateAction'
-          click: '#/components/schemas/ClickAction'
-          type: '#/components/schemas/TypeAction'
-          get_value: '#/components/schemas/GetValueAction'
-          screenshot: '#/components/schemas/ScreenshotAction'
-          execute_script: '#/components/schemas/ExecuteScriptAction'
-          wait_for_element: '#/components/schemas/WaitForElementAction'
-          back: '#/components/schemas/BackAction'
-          forward: '#/components/schemas/ForwardAction'
-          refresh: '#/components/schemas/RefreshAction'
-    
-    NavigateAction:
-      type: object
-      required:
-        - type
-        - url
-      properties:
-        type:
+- url: http://127.0.0.1:8787
+  description: Default local bind
+paths:
+  /v1/admin/hosts/enrollments:
+    get:
+      tags:
+      - credentials
+      operationId: list_enrollments
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollmentList'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+    post:
+      tags:
+      - credentials
+      operationId: create_enrollment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - type: 'null'
+              - $ref: '#/components/schemas/CreateEnrollmentRequest'
+      responses:
+        '201':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedEnrollment'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+  /v1/admin/hosts/{id}:
+    delete:
+      tags:
+      - credentials
+      operationId: revoke_host
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
           type: string
-          enum: [navigate]
-        url:
+          format: uuid
+      responses:
+        '204':
+          description: Revoked and removed
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown host
+  /v1/admin/service-tokens:
+    get:
+      tags:
+      - credentials
+      operationId: list_service_tokens
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceTokenList'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+    post:
+      tags:
+      - credentials
+      operationId: create_service_token
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateServiceTokenRequest'
+        required: true
+      responses:
+        '201':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedServiceToken'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+  /v1/admin/service-tokens/{id}:
+    delete:
+      tags:
+      - credentials
+      operationId: revoke_service_token
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
           type: string
-          format: uri
-    
-    ClickAction:
-      type: object
-      required:
-        - type
-        - selector
-      properties:
-        type:
+          format: uuid
+      responses:
+        '204':
+          description: Revoked
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown token
+  /v1/artifacts/{id}:
+    get:
+      tags:
+      - artifacts
+      operationId: get_artifact
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
           type: string
-          enum: [click]
-        selector:
-          type: string
-    
-    TypeAction:
-      type: object
-      required:
-        - type
-        - selector
-        - text
-      properties:
-        type:
-          type: string
-          enum: [type]
-        selector:
-          type: string
-        text:
-          type: string
-    
-    GetValueAction:
-      type: object
-      required:
-        - type
-        - selector
-      properties:
-        type:
-          type: string
-          enum: [get_value]
-        selector:
-          type: string
-    
-    ScreenshotAction:
-      type: object
-      required:
-        - type
-      properties:
-        type:
-          type: string
-          enum: [screenshot]
-    
-    ExecuteScriptAction:
-      type: object
-      required:
-        - type
-        - script
-      properties:
-        type:
-          type: string
-          enum: [execute_script]
-        script:
-          type: string
-    
-    WaitForElementAction:
-      type: object
-      required:
-        - type
-        - selector
-        - timeout_ms
-      properties:
-        type:
-          type: string
-          enum: [wait_for_element]
-        selector:
-          type: string
-        timeout_ms:
+          format: uuid
+      responses:
+        '200':
+          description: The artifact bytes
+          content:
+            image/jpeg:
+              schema:
+                type: array
+                items:
+                  type: integer
+                  format: int32
+                  minimum: 0
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown or expired
+  /v1/events:
+    get:
+      tags:
+      - events
+      operationId: events
+      parameters:
+      - name: after
+        in: query
+        description: Resume after this seq
+        required: false
+        schema:
           type: integer
+          format: int64
           minimum: 0
-    
-    BackAction:
-      type: object
-      required:
-        - type
-      properties:
-        type:
+      - name: types
+        in: query
+        description: Comma-separated type patterns, e.g. `operation.*`
+        required: false
+        schema:
           type: string
-          enum: [back]
-    
-    ForwardAction:
-      type: object
-      required:
-        - type
-      properties:
-        type:
+      - name: Last-Event-ID
+        in: header
+        required: false
+        schema:
+          type:
+          - string
+          - 'null'
+      responses:
+        '200':
+          description: Server-sent events; each `data` is a FabricEvent
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/FabricEvent'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+  /v1/handoffs:
+    get:
+      tags:
+      - handoffs
+      operationId: list
+      parameters:
+      - name: session_id
+        in: query
+        required: false
+        schema:
           type: string
-          enum: [forward]
-    
-    RefreshAction:
-      type: object
-      required:
-        - type
-      properties:
-        type:
-          type: string
-          enum: [refresh]
-    
-    ActionResult:
-      type: object
-      required:
-        - success
-      properties:
-        success:
+          format: uuid
+      - name: pending
+        in: query
+        required: false
+        schema:
           type: boolean
-        error:
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoffList'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+  /v1/handoffs/{id}:
+    get:
+      tags:
+      - handoffs
+      operationId: read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
           type: string
-          nullable: true
-        data:
-          type: object
-          nullable: true
-    
-    Goal:
+          format: uuid
+      - name: wait_ms
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoffView'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown handoff
+  /v1/handoffs/{id}/cancel:
+    post:
+      tags:
+      - handoffs
+      operationId: cancel
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoffView'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '409':
+          description: Already resolved
+  /v1/handoffs/{id}/claim:
+    post:
+      tags:
+      - handoffs
+      operationId: claim
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimedHandoffValue'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Nothing to claim
+  /v1/handoffs/{id}/respond:
+    get:
+      tags:
+      - handoffs
+      summary: '`GET /v1/handoffs/{id}/respond?token=` — a minimal page for link channels.'
+      operationId: form
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: token
+        in: query
+        description: The handoff response token
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Answer page
+          content:
+            text/html:
+              schema:
+                type: string
+        '401':
+          description: Missing token
+        '403':
+          description: Invalid or used token
+      security:
+      - {}
+    post:
+      tags:
+      - handoffs
+      summary: |-
+        `POST /v1/handoffs/{id}/respond` — JSON (`RespondHandoffRequest`) or an
+        HTML form submission.
+      operationId: respond
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        description: 'JSON with `Authorization: Bearer <response token>`, or an HTML form with `token`, `outcome` and `value`'
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RespondHandoffRequest'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoffView'
+        '403':
+          description: Invalid or used token
+        '409':
+          description: Already resolved
+      security:
+      - {}
+  /v1/health:
+    get:
+      tags:
+      - health
+      operationId: health
+      responses:
+        '200':
+          description: Liveness and version
+          content:
+            application/json:
+              schema:
+                type: object
+      security:
+      - {}
+  /v1/host-commands/{id}:
+    get:
+      tags:
+      - host-commands
+      operationId: get_command
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: wait_ms
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostCommandView'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown command
+  /v1/hosts:
+    get:
+      tags:
+      - hosts
+      operationId: list_hosts
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostList'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+  /v1/hosts/enroll:
+    post:
+      tags:
+      - credentials
+      operationId: enroll
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnrollRequest'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollResponse'
+        '403':
+          description: Invalid, used or expired enrollment token
+      security:
+      - {}
+  /v1/hosts/register:
+    post:
+      tags:
+      - agent
+      operationId: register_host
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterHostRequest'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterHostResponse'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+  /v1/hosts/{host_id}/commands:
+    get:
+      tags:
+      - host-commands
+      operationId: list_commands
+      parameters:
+      - name: host_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostCommandList'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+    post:
+      tags:
+      - host-commands
+      operationId: create_command
+      parameters:
+      - name: host_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: async
+        in: query
+        required: false
+        schema:
+          type: boolean
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HostCommandRequest'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostCommandView'
+        '202':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostCommandView'
+        '400':
+          description: Invalid command
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown host
+        '409':
+          description: Profile in use
+  /v1/hosts/{host_id}/commands/{command_id}/result:
+    post:
+      tags:
+      - agent
+      operationId: post_result
+      parameters:
+      - name: host_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: command_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationResult'
+        required: true
+      responses:
+        '204':
+          description: Recorded
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown command
+        '409':
+          description: Not dispatched
+  /v1/hosts/{host_id}/next:
+    get:
+      tags:
+      - agent
+      operationId: next_operation
+      parameters:
+      - name: host_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: wait_ms
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      - name: browser_connected
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - name: on_demand
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - name: profiles
+        in: query
+        description: Comma-separated profiles the host has
+        required: false
+        schema:
+          type: string
+      - name: running
+        in: query
+        description: Comma-separated profiles running now
+        required: false
+        schema:
+          type: string
+      - name: commands
+        in: query
+        description: The agent accepts host commands
+        required: false
+        schema:
+          type: boolean
+      responses:
+        '200':
+          description: 'An operation, or `{ "command": … }`'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostWork'
+        '204':
+          description: Nothing to do
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown host
+  /v1/hosts/{host_id}/offline:
+    post:
+      tags:
+      - agent
+      operationId: host_offline
+      parameters:
+      - name: host_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Marked offline
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+  /v1/hosts/{host_id}/operations/{op_id}/result:
+    post:
+      tags:
+      - agent
+      operationId: post_result
+      parameters:
+      - name: host_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: op_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationResult'
+        required: true
+      responses:
+        '204':
+          description: Recorded
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown operation
+        '409':
+          description: Not dispatched, or already reported
+  /v1/operations/{id}:
+    get:
+      tags:
+      - sessions
+      operationId: get_operation
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: wait_ms
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationView'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown operation
+  /v1/sessions:
+    get:
+      tags:
+      - sessions
+      operationId: list_sessions
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionList'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+    post:
+      tags:
+      - sessions
+      operationId: create_session
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - type: 'null'
+              - $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '201':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown host or profile
+        '409':
+          description: Host is draining
+        '503':
+          description: No host available
+  /v1/sessions/{id}:
+    get:
+      tags:
+      - sessions
+      operationId: get_session
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown session
+    delete:
+      tags:
+      - sessions
+      operationId: end_session
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown session
+  /v1/sessions/{id}/actions:
+    post:
+      tags:
+      - sessions
+      operationId: run_action
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: async
+        in: query
+        description: Return 202 at once
+        required: false
+        schema:
+          type: boolean
+      - name: inline_artifacts
+        in: query
+        description: Also return screenshot bytes inline
+        required: false
+        schema:
+          type: boolean
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+        required: true
+      responses:
+        '200':
+          description: Final state (succeeded, failed, timed_out, cancelled)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationView'
+        '202':
+          description: Queued (`?async=true`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationView'
+        '400':
+          description: Invalid action
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '409':
+          description: Session ended or a handoff is pending
+  /v1/sessions/{id}/handoffs:
+    post:
+      tags:
+      - handoffs
+      operationId: create
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateHandoffRequest'
+        required: true
+      responses:
+        '201':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateHandoffResponse'
+        '400':
+          description: Invalid request
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '409':
+          description: Session ended or a handoff is pending
+  /v1/webhooks:
+    get:
+      tags:
+      - webhooks
+      operationId: list
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookList'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+    post:
+      tags:
+      - webhooks
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWebhookRequest'
+        required: true
+      responses:
+        '201':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedWebhook'
+        '400':
+          description: Invalid or disallowed URL
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+  /v1/webhooks/{id}:
+    delete:
+      tags:
+      - webhooks
+      operationId: remove
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: Removed
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown webhook
+  /v1/webhooks/{id}/deliveries:
+    get:
+      tags:
+      - webhooks
+      operationId: deliveries
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryList'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+  /v1/webhooks/{id}/test:
+    post:
+      tags:
+      - webhooks
+      operationId: test
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '202':
+          description: Test event queued
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+components:
+  schemas:
+    ActionRequest:
       type: object
+      description: '`POST /v1/sessions/{id}/actions`'
       required:
-        - id
-        - session_id
-        - actions
-        - created_at
-        - status
+      - action
       properties:
-        id:
-          $ref: '#/components/schemas/GoalId'
-        session_id:
-          $ref: '#/components/schemas/SessionId'
-        actions:
+        action:
+          $ref: '#/components/schemas/RemoteAction'
+        inline_artifacts:
+          type: boolean
+          description: |-
+            Also return screenshot bytes inline (`data`, base64) next to the
+            artifact handle. For clients that have not moved to
+            `GET /v1/artifacts/{id}` yet.
+        timeout_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: How long to wait for a result before the operation times out.
+          minimum: 0
+    ClaimedHandoffValue:
+      type: object
+      description: '`POST /v1/handoffs/{id}/claim`: the secret value, returned once.'
+      required:
+      - value
+      properties:
+        value:
+          type: string
+    CreateEnrollmentRequest:
+      type: object
+      properties:
+        name:
+          type:
+          - string
+          - 'null'
+        ttl_s:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          description: Validity in seconds (default 3600, at most 7 days).
+          minimum: 0
+    CreateHandoffRequest:
+      type: object
+      description: '`POST /v1/sessions/{id}/handoffs`'
+      required:
+      - kind
+      - prompt
+      properties:
+        choices:
           type: array
           items:
-            $ref: '#/components/schemas/BrowserAction'
-        created_at:
-          type: string
-          format: date-time
-        status:
-          $ref: '#/components/schemas/RunStatus'
-    
-    Session:
-      type: object
-      required:
-        - id
-        - status
-        - created_at
-        - updated_at
-      properties:
-        id:
-          $ref: '#/components/schemas/SessionId'
-        profile_id:
-          type: string
-          format: uuid
-        status:
-          $ref: '#/components/schemas/SessionStatus'
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-    
-    Operation:
-      type: object
-      required:
-        - id
-        - goal_id
-        - status
-        - created_at
-      properties:
-        id:
-          $ref: '#/components/schemas/OperationId'
-        goal_id:
-          $ref: '#/components/schemas/GoalId'
-        status:
-          $ref: '#/components/schemas/OperationStatus'
-        created_at:
-          type: string
-          format: date-time
-        started_at:
-          type: string
-          format: date-time
-          nullable: true
-        completed_at:
-          type: string
-          format: date-time
-          nullable: true
-    
-    InteractionRequest:
-      type: object
-      required:
-        - id
-        - session_id
-        - reason
-        - created_at
-        - status
-      properties:
-        id:
-          $ref: '#/components/schemas/InteractionRequestId'
-        session_id:
-          $ref: '#/components/schemas/SessionId'
-        reason:
-          type: string
-        details:
-          type: object
-        created_at:
-          type: string
-          format: date-time
-        status:
-          $ref: '#/components/schemas/InteractionStatus'
-    
-    Error:
-      type: object
-      required:
-        - code
-        - message
-      properties:
-        code:
-          type: string
-          description: Error code (e.g., INVALID_INPUT, NOT_FOUND)
-        message:
-          type: string
-          description: Human-readable error message
-        details:
-          type: object
-          nullable: true
-          description: Additional error details
-
-    ViewerToken:
-      type: object
-      required:
-        - id
-        - session_id
-        - viewer_id
-        - expires_at
-        - permissions
-      properties:
-        id:
-          type: string
-          format: uuid
-        session_id:
-          type: string
-          format: uuid
-        viewer_id:
-          type: string
-          format: uuid
-        expires_at:
-          type: string
-          format: date-time
-        permissions:
-          $ref: '#/components/schemas/ViewerPermissions'
-
-    ViewerPermissions:
-      type: object
-      required:
-        - view
-        - input
-      properties:
-        view:
-          type: boolean
+            type: string
+          description: 'Options for `input: "choice"`.'
         input:
-          type: boolean
-
-    InputLease:
+          $ref: '#/components/schemas/HandoffInput'
+        kind:
+          $ref: '#/components/schemas/HandoffKind'
+        page:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/HandoffPage'
+        prompt:
+          type: string
+          description: What the human should do, in plain words.
+        timeout_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+    CreateHandoffResponse:
+      type: object
+      description: Response to creating a handoff.
+      required:
+      - handoff
+      - response_token
+      - respond_path
+      properties:
+        handoff:
+          $ref: '#/components/schemas/HandoffView'
+        respond_path:
+          type: string
+          description: |-
+            Path of the respond endpoint (JSON POST, or GET for an HTML form
+            with `?token=`).
+        response_token:
+          type: string
+          description: Single-use token any channel can use to answer this handoff.
+    CreateServiceTokenRequest:
       type: object
       required:
-        - id
-        - session_id
-        - owner_id
-        - expires_at
-        - created_at
+      - name
       properties:
+        name:
+          type: string
+    CreateSessionRequest:
+      type: object
+      description: '`POST /v1/sessions`'
+      properties:
+        create_profile:
+          type: boolean
+          description: Allow creating the profile on an on-demand host that does not have it.
+        host_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: |-
+            Pin the session to a host; otherwise the control plane picks an online
+            host that has the profile.
+        label:
+          type:
+          - string
+          - 'null'
+        profile:
+          type:
+          - string
+          - 'null'
+          description: Browser profile to use (default `default`).
+    CreateWebhookRequest:
+      type: object
+      description: '`POST /v1/webhooks`'
+      required:
+      - url
+      properties:
+        description:
+          type:
+          - string
+          - 'null'
+        events:
+          type: array
+          items:
+            type: string
+          description: Event filters; defaults to `["handoff.*"]`.
+        url:
+          type: string
+    CreatedEnrollment:
+      type: object
+      required:
+      - enrollment
+      - enrollment_token
+      properties:
+        enrollment:
+          $ref: '#/components/schemas/EnrollmentView'
+        enrollment_token:
+          type: string
+          description: Single-use token (`hxe_…`) for `hexactra-agent daemon --enrollment-token`.
+    CreatedServiceToken:
+      type: object
+      required:
+      - service_token
+      - token
+      properties:
+        service_token:
+          $ref: '#/components/schemas/ServiceTokenView'
+        token:
+          type: string
+          description: The token (`hxs_…`). Shown once.
+    CreatedWebhook:
+      type: object
+      description: 'Response to creating a webhook: the signing secret is shown only here.'
+      required:
+      - webhook
+      - secret
+      properties:
+        secret:
+          type: string
+          description: Standard Webhooks secret (`whsec_<base64>`).
+        webhook:
+          $ref: '#/components/schemas/WebhookView'
+    DeliveryList:
+      type: object
+      required:
+      - deliveries
+      properties:
+        deliveries:
+          type: array
+          items:
+            $ref: '#/components/schemas/WebhookDelivery'
+    DispatchedCommand:
+      type: object
+      description: A command handed to a host on its poll.
+      required:
+      - id
+      - command
+      - deadline
+      properties:
+        command:
+          $ref: '#/components/schemas/HostCommand'
+        deadline:
+          type: string
+          format: date-time
         id:
           type: string
           format: uuid
+        traceparent:
+          type:
+          - string
+          - 'null'
+          description: W3C trace context of the request that queued the command (#215).
+    DispatchedOperation:
+      type: object
+      description: An operation handed to a host agent by `GET /v1/hosts/{id}/next`.
+      required:
+      - id
+      - session_id
+      - action
+      - deadline
+      properties:
+        action:
+          $ref: '#/components/schemas/RemoteAction'
+        deadline:
+          type: string
+          format: date-time
+          description: Deadline the host should respect when executing.
+        id:
+          type: string
+          format: uuid
+        profile:
+          type: string
+          description: Profile whose browser runs the action.
         session_id:
           type: string
           format: uuid
-        owner_id:
+        traceparent:
+          type:
+          - string
+          - 'null'
+          description: W3C trace context of the request that queued the action (#215).
+    EnrollRequest:
+      type: object
+      description: '`POST /v1/hosts/enroll`'
+      required:
+      - enrollment_token
+      properties:
+        enrollment_token:
+          type: string
+        name:
+          type:
+          - string
+          - 'null'
+          description: Host display name (defaults to the enrollment's suggested name).
+        version:
+          type:
+          - string
+          - 'null'
+    EnrollResponse:
+      type: object
+      required:
+      - host_id
+      - host_token
+      properties:
+        host_id:
           type: string
           format: uuid
+        host_token:
+          type: string
+          description: The host's own credential (`hxh_…`). Shown once.
+    EnrollmentList:
+      type: object
+      required:
+      - enrollments
+      properties:
+        enrollments:
+          type: array
+          items:
+            $ref: '#/components/schemas/EnrollmentView'
+    EnrollmentView:
+      type: object
+      description: A pending host enrollment.
+      required:
+      - id
+      - created_at
+      - expires_at
+      properties:
+        created_at:
+          type: string
+          format: date-time
         expires_at:
           type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        name:
+          type:
+          - string
+          - 'null'
+          description: Suggested host name (the host may send its own).
+    FabricEvent:
+      type: object
+      description: One fabric event.
+      required:
+      - seq
+      - type
+      - at
+      - data
+      properties:
+        at:
+          type: string
+          format: date-time
+        data: {}
+        seq:
+          type: integer
+          format: int64
+          minimum: 0
+        type:
+          type: string
+          description: e.g. `operation.completed`, `session.created`, `host.offline`.
+    HandoffInput:
+      type: string
+      description: What the human is asked to provide.
+      enum:
+      - none
+      - text
+      - secret
+      - choice
+    HandoffKind:
+      type: string
+      description: Why the agent needs a human.
+      enum:
+      - captcha
+      - code
+      - passkey
+      - login
+      - confirmation
+      - other
+    HandoffList:
+      type: object
+      required:
+      - handoffs
+      properties:
+        handoffs:
+          type: array
+          items:
+            $ref: '#/components/schemas/HandoffView'
+    HandoffOutcome:
+      type: string
+      description: How the human resolved the handoff.
+      enum:
+      - completed
+      - cancelled
+    HandoffPage:
+      type: object
+      description: Page the agent was on when it asked for help (informational only).
+      properties:
+        title:
+          type:
+          - string
+          - 'null'
+        url:
+          type:
+          - string
+          - 'null'
+    HandoffResponse:
+      type: object
+      description: The human's answer as visible to readers.
+      properties:
+        channel:
+          type:
+          - string
+          - 'null'
+          description: Which channel answered (free-form label, e.g. "slack", "web-form").
+        value:
+          type:
+          - string
+          - 'null'
+          description: The submitted value for `text` and `choice` inputs.
+        value_withheld:
+          type: boolean
+          description: |-
+            True for `secret` inputs: the value exists but is only available
+            once through `POST /v1/handoffs/{id}/claim`.
+    HandoffStatus:
+      type: string
+      description: Lifecycle of a handoff.
+      enum:
+      - pending
+      - completed
+      - cancelled
+      - expired
+    HandoffView:
+      type: object
+      description: A handoff as reported by the API and in webhook payloads.
+      required:
+      - id
+      - session_id
+      - host_id
+      - kind
+      - prompt
+      - input
+      - status
+      - created_at
+      - expires_at
+      properties:
+        choices:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        host_id:
+          type: string
+          format: uuid
+        id:
+          type: string
+          format: uuid
+        input:
+          $ref: '#/components/schemas/HandoffInput'
+        kind:
+          $ref: '#/components/schemas/HandoffKind'
+        page:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/HandoffPage'
+        profile:
+          type: string
+          description: Profile of the session's browser.
+        prompt:
+          type: string
+        resolved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        response:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/HandoffResponse'
+        session_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/HandoffStatus'
+        viewer_url:
+          type:
+          - string
+          - 'null'
+          description: |-
+            Web viewer of the host's browser, when the host has one: open it to
+            solve a CAPTCHA or approve a passkey in the remote browser.
+    HostCommand:
+      oneOf:
+      - type: object
+        description: Create an empty profile (signed out).
+        required:
+        - profile
+        - type
+        properties:
+          profile:
+            type: string
+          type:
+            type: string
+            enum:
+            - create_profile
+      - type: object
+        description: |-
+          Close the profile's browser and delete its directory (cookies,
+          sign-ins, storage). The `default` profile cannot be deleted.
+        required:
+        - profile
+        - type
+        properties:
+          profile:
+            type: string
+          type:
+            type: string
+            enum:
+            - delete_profile
+      - type: object
+        description: Close the profile's browser and start it again.
+        required:
+        - profile
+        - type
+        properties:
+          profile:
+            type: string
+          type:
+            type: string
+            enum:
+            - restart_browser
+      - type: object
+        description: Close the profile's browser (it starts again on the next action).
+        required:
+        - profile
+        - type
+        properties:
+          profile:
+            type: string
+          type:
+            type: string
+            enum:
+            - close_browser
+      - type: object
+        description: |-
+          Stop (or resume) placing new sessions on the host. Existing sessions
+          keep working. Handled by the control plane; never sent to the host.
+        required:
+        - type
+        properties:
+          enabled:
+            type: boolean
+          type:
+            type: string
+            enum:
+            - drain
+      description: A management command for a host rather than an action in a session.
+    HostCommandList:
+      type: object
+      required:
+      - commands
+      properties:
+        commands:
+          type: array
+          items:
+            $ref: '#/components/schemas/HostCommandView'
+    HostCommandRequest:
+      type: object
+      description: '`POST /v1/hosts/{id}/commands`'
+      required:
+      - command
+      properties:
+        command:
+          $ref: '#/components/schemas/HostCommand'
+        timeout_ms:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+    HostCommandView:
+      type: object
+      description: A host command as reported to clients. States are those of operations.
+      required:
+      - id
+      - host_id
+      - command
+      - state
+      - created_at
+      properties:
+        command:
+          $ref: '#/components/schemas/HostCommand'
+        completed_at:
+          type:
+          - string
+          - 'null'
           format: date-time
         created_at:
           type: string
           format: date-time
-
-    ViewerTokenResponse:
+        error:
+          type:
+          - string
+          - 'null'
+        host_id:
+          type: string
+          format: uuid
+        id:
+          type: string
+          format: uuid
+        result: {}
+        state:
+          $ref: '#/components/schemas/OperationState'
+    HostList:
       type: object
       required:
-        - token
+      - hosts
       properties:
-        token:
-          $ref: '#/components/schemas/ViewerToken'
-
-    InputLeaseResponse:
+        hosts:
+          type: array
+          items:
+            $ref: '#/components/schemas/HostView'
+    HostView:
       type: object
+      description: A host agent as seen by the control plane.
       required:
-        - lease
+      - id
+      - name
+      - version
+      - online
+      - browser_connected
+      - last_seen
       properties:
-        lease:
-          $ref: '#/components/schemas/InputLease'
-    
-    ListSessionsResponse:
+        browser_connected:
+          type: boolean
+          description: The Chrome extension is connected to this host's native bridge.
+        draining:
+          type: boolean
+          description: New sessions are not placed on this host (see [`HostCommand::Drain`]).
+        id:
+          type: string
+          format: uuid
+        last_seen:
+          type: string
+          format: date-time
+        name:
+          type: string
+        on_demand:
+          type: boolean
+          description: |-
+            The host launches its browser on demand, so it can take sessions
+            while the browser is stopped.
+        online:
+          type: boolean
+          description: Polled the control plane recently.
+        profiles:
+          type: array
+          items:
+            type: string
+          description: Browser profiles this host has.
+        running_profiles:
+          type: array
+          items:
+            type: string
+          description: Profiles whose browser is running now.
+        version:
+          type: string
+        viewer_url:
+          type:
+          - string
+          - 'null'
+          description: Web viewer where a person can see and use this host's browser.
+    HostWork:
+      oneOf:
+      - type: object
+        required:
+        - command
+        properties:
+          command:
+            $ref: '#/components/schemas/DispatchedCommand'
+      - $ref: '#/components/schemas/DispatchedOperation'
+      description: |-
+        What `GET /v1/hosts/{id}/next` returns: an operation, or (to agents that
+        poll with `commands=true`) a host command wrapped as `{"command": …}`.
+    OperationResult:
+      type: object
+      description: '`POST /v1/operations/{id}/result`'
+      required:
+      - ok
+      properties:
+        error:
+          type:
+          - string
+          - 'null'
+        ok:
+          type: boolean
+        result: {}
+    OperationState:
+      type: string
+      description: Lifecycle of a queued operation.
+      enum:
+      - queued
+      - dispatched
+      - succeeded
+      - failed
+      - timed_out
+      - cancelled
+    OperationView:
+      type: object
+      description: An operation as reported to clients.
+      required:
+      - id
+      - session_id
+      - host_id
+      - action
+      - state
+      - created_at
+      properties:
+        action:
+          $ref: '#/components/schemas/RemoteAction'
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        error:
+          type:
+          - string
+          - 'null'
+        host_id:
+          type: string
+          format: uuid
+        id:
+          type: string
+          format: uuid
+        result: {}
+        session_id:
+          type: string
+          format: uuid
+        state:
+          $ref: '#/components/schemas/OperationState'
+    RegisterHostRequest:
+      type: object
+      description: '`POST /v1/hosts/register`'
+      required:
+      - name
+      - version
+      properties:
+        host_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Re-register with a previously issued id to keep sessions bound to it.
+        name:
+          type: string
+        version:
+          type: string
+        viewer_url:
+          type:
+          - string
+          - 'null'
+          description: |-
+            Web viewer for this host's browser (`http(s)` URL), shown to people
+            answering handoffs.
+    RegisterHostResponse:
+      type: object
+      description: Response to host registration.
+      required:
+      - host_id
+      properties:
+        host_id:
+          type: string
+          format: uuid
+    RemoteAction:
+      oneOf:
+      - type: object
+        description: Navigate a tab to an `http(s)` URL (or `about:blank`).
+        required:
+        - url
+        - type
+        properties:
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - navigate
+          url:
+            type: string
+      - type: object
+        description: Click the first element matching a CSS selector.
+        required:
+        - selector
+        - type
+        properties:
+          selector:
+            type: string
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - click
+      - type: object
+        description: Type text into an input, textarea or contenteditable element.
+        required:
+        - selector
+        - text
+        - type
+        properties:
+          clear:
+            type: boolean
+            description: Clear the existing value first.
+          selector:
+            type: string
+          submit:
+            type: boolean
+            description: Press Enter / submit the enclosing form after typing.
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          text:
+            type: string
+          type:
+            type: string
+            enum:
+            - type
+      - type: object
+        description: |-
+          Press a key (e.g. `Enter`, `Escape`, `Tab`, `ArrowDown`) on the focused
+          element or on `selector` when given.
+        required:
+        - key
+        - type
+        properties:
+          key:
+            type: string
+          selector:
+            type:
+            - string
+            - 'null'
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - press
+      - type: object
+        description: Scroll the page by a delta, or scroll `selector` into view.
+        required:
+        - type
+        properties:
+          dx:
+            type: integer
+            format: int64
+          dy:
+            type: integer
+            format: int64
+          selector:
+            type:
+            - string
+            - 'null'
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - scroll
+      - type: object
+        description: 'Capture the visible area of a tab. Result: `{ "mime": ..., "data": <base64> }`.'
+        required:
+        - type
+        properties:
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - screenshot
+      - type: object
+        description: Read visible text of the page or of `selector`.
+        required:
+        - type
+        properties:
+          max_chars:
+            type:
+            - integer
+            - 'null'
+            minimum: 0
+          selector:
+            type:
+            - string
+            - 'null'
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - text
+      - type: object
+        description: |-
+          List interactive elements (links, buttons, inputs) with selectors an
+          agent can use in follow-up actions.
+        required:
+        - type
+        properties:
+          max_elements:
+            type:
+            - integer
+            - 'null'
+            minimum: 0
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - elements
+      - type: object
+        description: Wait until an element matching `selector` exists.
+        required:
+        - selector
+        - type
+        properties:
+          selector:
+            type: string
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          timeout_ms:
+            type:
+            - integer
+            - 'null'
+            format: int64
+            minimum: 0
+          type:
+            type: string
+            enum:
+            - wait_for
+      - type: object
+        description: List open tabs.
+        required:
+        - type
+        properties:
+          type:
+            type: string
+            enum:
+            - tabs
+      - type: object
+        description: Open a new tab (optionally at a URL) and make it active.
+        required:
+        - type
+        properties:
+          type:
+            type: string
+            enum:
+            - new_tab
+          url:
+            type:
+            - string
+            - 'null'
+      - type: object
+        description: Make a tab active and focus its window.
+        required:
+        - tab_id
+        - type
+        properties:
+          tab_id:
+            type: integer
+            format: int64
+          type:
+            type: string
+            enum:
+            - activate_tab
+      - type: object
+        description: Close a tab.
+        required:
+        - tab_id
+        - type
+        properties:
+          tab_id:
+            type: integer
+            format: int64
+          type:
+            type: string
+            enum:
+            - close_tab
+      - type: object
+        description: History back.
+        required:
+        - type
+        properties:
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - back
+      - type: object
+        description: History forward.
+        required:
+        - type
+        properties:
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - forward
+      - type: object
+        description: Reload a tab.
+        required:
+        - type
+        properties:
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - reload
+      description: |-
+        A single bounded browser operation.
+
+        `tab_id` is optional everywhere: when absent the extension uses the active
+        tab of the last focused window.
+    RemoteSessionStatus:
+      type: string
+      description: Session status.
+      enum:
+      - active
+      - ended
+    RespondHandoffRequest:
+      type: object
+      description: '`POST /v1/handoffs/{id}/respond`'
+      properties:
+        channel:
+          type:
+          - string
+          - 'null'
+          description: Label of the answering channel, for the record.
+        outcome:
+          $ref: '#/components/schemas/HandoffOutcome'
+        response_token:
+          type:
+          - string
+          - 'null'
+          description: |-
+            The handoff's response token (alternatively sent as the
+            `X-Hexactra-Response-Token` header). Not needed with the API token.
+        value:
+          type:
+          - string
+          - 'null'
+    ServiceTokenList:
       type: object
       required:
-        - sessions
+      - service_tokens
+      properties:
+        service_tokens:
+          type: array
+          items:
+            $ref: '#/components/schemas/ServiceTokenView'
+    ServiceTokenView:
+      type: object
+      description: A service token as listed (never includes the token).
+      required:
+      - id
+      - name
+      - created_at
+      properties:
+        created_at:
+          type: string
+          format: date-time
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+    SessionList:
+      type: object
+      required:
+      - sessions
       properties:
         sessions:
           type: array
           items:
-            $ref: '#/components/schemas/Session'
-    
-    CreateGoalRequest:
+            $ref: '#/components/schemas/SessionView'
+    SessionView:
+      type: object
+      description: A remote-control session bound to one host.
+      required:
+      - id
+      - host_id
+      - status
+      - created_at
+      properties:
+        created_at:
+          type: string
+          format: date-time
+        ended_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        host_id:
+          type: string
+          format: uuid
+        id:
+          type: string
+          format: uuid
+        label:
+          type:
+          - string
+          - 'null'
+        profile:
+          type: string
+          description: Browser profile this session drives.
+        status:
+          $ref: '#/components/schemas/RemoteSessionStatus'
+    WebhookDelivery:
+      type: object
+      description: One delivery attempt.
+      required:
+      - event_id
+      - event_type
+      - attempt
+      - at
+      - outcome
+      properties:
+        at:
+          type: string
+          format: date-time
+        attempt:
+          type: integer
+          format: int32
+          minimum: 0
+        error:
+          type:
+          - string
+          - 'null'
+        event_id:
+          type: string
+        event_type:
+          type: string
+        http_status:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          minimum: 0
+        outcome:
+          type: string
+          description: '`succeeded`, `retrying` or `failed`.'
+    WebhookList:
       type: object
       required:
-        - session_id
-        - actions
+      - webhooks
       properties:
-        session_id:
-          $ref: '#/components/schemas/SessionId'
-        actions:
+        webhooks:
           type: array
           items:
-            $ref: '#/components/schemas/BrowserAction'
-    
-    CreateGoalResponse:
+            $ref: '#/components/schemas/WebhookView'
+    WebhookView:
       type: object
+      description: A webhook endpoint (never includes the secret).
       required:
-        - goal
+      - id
+      - url
+      - events
+      - created_at
       properties:
-        goal:
-          $ref: '#/components/schemas/Goal'
-    
-    ListGoalsResponse:
-      type: object
-      required:
-        - goals
-      properties:
-        goals:
+        created_at:
+          type: string
+          format: date-time
+        description:
+          type:
+          - string
+          - 'null'
+        events:
           type: array
           items:
-            $ref: '#/components/schemas/Goal'
-    
-    GetGoalResponse:
-      type: object
-      required:
-        - goal
-      properties:
-        goal:
-          $ref: '#/components/schemas/Goal'
-    
-    ListOperationsResponse:
-      type: object
-      required:
-        - operations
-      properties:
-        operations:
-          type: array
-          items:
-            $ref: '#/components/schemas/Operation'
-    
-    GetOperationResponse:
-      type: object
-      required:
-        - operation
-      properties:
-        operation:
-          $ref: '#/components/schemas/Operation'
-    
-    ListInteractionRequestsResponse:
-      type: object
-      required:
-        - requests
-      properties:
-        requests:
-          type: array
-          items:
-            $ref: '#/components/schemas/InteractionRequest'
-    
-    CreateInteractionRequestResponse:
-      type: object
-      required:
-        - request
-      properties:
-        request:
-          $ref: '#/components/schemas/InteractionRequest'
-    
-    ApproveInteractionRequestResponse:
-      type: object
-      required:
-        - request
-      properties:
-        request:
-          $ref: '#/components/schemas/InteractionRequest'
-    
-    RejectInteractionRequestResponse:
-      type: object
-      required:
-        - request
-      properties:
-        request:
-          $ref: '#/components/schemas/InteractionRequest'
-
+            type: string
+        id:
+          type: string
+          format: uuid
+        url:
+          type: string
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: Operator token, service token (`hxs_…`) for client routes, or a host token (`hxh_…`) for that host's agent routes
 security:
-  - bearer: []
-
-paths:
-  /health:
-    get:
-      summary: Health check
-      operationId: health
-      tags:
-        - system
-      responses:
-        '200':
-          description: Service is healthy
-          content:
-            text/plain:
-              schema:
-                type: string
-                example: OK
-
-  /sessions:
-    get:
-      summary: List sessions
-      operationId: listSessions
-      tags:
-        - sessions
-      security:
-        - bearer: [sessions:read]
-      responses:
-        '200':
-          description: List of sessions
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListSessionsResponse'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /goals:
-    post:
-      summary: Create a new goal (task)
-      operationId: createGoal
-      tags:
-        - goals
-      security:
-        - bearer: [goals:write]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateGoalRequest'
-      responses:
-        '201':
-          description: Goal created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CreateGoalResponse'
-        '400':
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-    get:
-      summary: List goals
-      operationId: listGoals
-      tags:
-        - goals
-      security:
-        - bearer: [goals:read]
-      responses:
-        '200':
-          description: List of goals
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListGoalsResponse'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /goals/{goalId}:
-    get:
-      summary: Get a specific goal
-      operationId: getGoal
-      tags:
-        - goals
-      security:
-        - bearer: [goals:read]
-      parameters:
-        - name: goalId
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/GoalId'
-      responses:
-        '200':
-          description: Goal details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GetGoalResponse'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Goal not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /operations:
-    get:
-      summary: List operations
-      operationId: listOperations
-      tags:
-        - operations
-      security:
-        - bearer: [operations:read]
-      responses:
-        '200':
-          description: List of operations
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListOperationsResponse'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /operations/{operationId}:
-    get:
-      summary: Get a specific operation
-      operationId: getOperation
-      tags:
-        - operations
-      security:
-        - bearer: [operations:read]
-      parameters:
-        - name: operationId
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/OperationId'
-      responses:
-        '200':
-          description: Operation details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/GetOperationResponse'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Operation not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /interaction-requests:
-    post:
-      summary: Create an interaction request (HITL)
-      operationId: createInteractionRequest
-      tags:
-        - interaction
-      security:
-        - bearer: [interaction:write]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - session_id
-                - reason
-              properties:
-                session_id:
-                  $ref: '#/components/schemas/SessionId'
-                reason:
-                  type: string
-                details:
-                  type: object
-      responses:
-        '201':
-          description: Interaction request created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CreateInteractionRequestResponse'
-        '400':
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-    get:
-      summary: List interaction requests
-      operationId: listInteractionRequests
-      tags:
-        - interaction
-      security:
-        - bearer: [interaction:read]
-      responses:
-        '200':
-          description: List of interaction requests
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ListInteractionRequestsResponse'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /interaction-requests/{requestId}/approve:
-    post:
-      summary: Approve an interaction request
-      operationId: approveInteractionRequest
-      tags:
-        - interaction
-      security:
-        - bearer: [interaction:write]
-      parameters:
-        - name: requestId
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/InteractionRequestId'
-      responses:
-        '200':
-          description: Interaction request approved
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ApproveInteractionRequestResponse'
-        '400':
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemasError'
-        '404':
-          description: Interaction request not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /interaction-requests/{requestId}/reject:
-    post:
-      summary: Reject an interaction request
-      operationId: rejectInteractionRequest
-      tags:
-        - interaction
-      security:
-        - bearer: [interaction:write]
-      parameters:
-        - name: requestId
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/InteractionRequestId'
-      responses:
-        '200':
-          description: Interaction request rejected
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RejectInteractionRequestResponse'
-        '400':
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemasError'
-        '404':
-          description: Interaction request not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /viewers/token:
-    post:
-      summary: Generate a viewer token for a session
-      operationId: generateViewerToken
-      tags:
-        - viewers
-      security:
-        - bearer: [viewers:write]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - session_id
-                - viewer_id
-              properties:
-                session_id:
-                  $ref: '#/components/schemas/SessionId'
-                viewer_id:
-                  type: string
-                  format: uuid
-                permissions:
-                  $ref: '#/components/schemas/ViewerPermissions'
-      responses:
-        '201':
-          description: Viewer token generated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ViewerTokenResponse'
-        '400':
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /viewers/token/{tokenId}:
-    get:
-      summary: Validate a viewer token
-      operationId: validateViewerToken
-      tags:
-        - viewers
-      security:
-        - bearer: [viewers:read]
-      parameters:
-        - name: tokenId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Token validated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ViewerTokenResponse'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Token not found or expired
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-    delete:
-      summary: Revoke a viewer token
-      operationId: revokeViewerToken
-      tags:
-        - viewers
-      security:
-        - bearer: [viewers:write]
-      parameters:
-        - name: tokenId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '204':
-          description: Token revoked
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /viewers/input-lease:
-    post:
-      summary: Acquire an input lease for a session
-      operationId: acquireInputLease
-      tags:
-        - viewers
-      security:
-        - bearer: [viewers:write]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - session_id
-                - owner_id
-              properties:
-                session_id:
-                  $ref: '#/components/schemas/SessionId'
-                owner_id:
-                  type: string
-                  format: uuid
-      responses:
-        '201':
-          description: Input lease acquired
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InputLeaseResponse'
-        '400':
-          description: Invalid input or lease already held
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /viewers/input-lease/{sessionId}:
-    delete:
-      summary: Release an input lease for a session
-      operationId: releaseInputLease
-      tags:
-        - viewers
-      security:
-        - bearer: [viewers:write]
-      parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            $ref: '#/components/schemas/SessionId'
-      responses:
-        '204':
-          description: Input lease released
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /artifacts/{artifactId}:
-    get:
-      summary: Get an artifact with signed URL
-      operationId: getArtifact
-      tags:
-        - artifacts
-      security:
-        - bearer: [artifacts:read]
-      parameters:
-        - name: artifactId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: token
-          in: query
-          required: true
-          schema:
-            type: string
-            description: Signed token for artifact access
-      responses:
-        '200':
-          description: Artifact content (redirect or stream)
-          headers:
-            X-Expires-At:
-              schema:
-                type: string
-                format: date-time
-              description: Token expiration time
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden (token expired or invalid)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Artifact not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /artifacts:
-    post:
-      summary: Create a new artifact (e.g., screenshot)
-      operationId: createArtifact
-      tags:
-        - artifacts
-      security:
-        - bearer: [artifacts:write]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - session_id
-                - artifact_type
-              properties:
-                session_id:
-                  $ref: '#/components/schemas/SessionId'
-                artifact_type:
-                  type: string
-                  enum: [screenshot, video, log]
-      responses:
-        '201':
-          description: Artifact created
-          headers:
-            X-Artifact-Id:
-              schema:
-                type: string
-                format: uuid
-            X-Signed-Url:
-              schema:
-                type: string
-                description: Signed URL for artifact access
-        '400':
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /experience/events:
-    post:
-      summary: Submit experience events (opt-in)
-      operationId: submitExperienceEvents
-      tags:
-        - experience
-      security:
-        - bearer: [experience:submit]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - owner_id
-                - events
-              properties:
-                owner_id:
-                  $ref: '#/components/schemas/SessionId'
-                events:
-                  type: array
-                  items:
-                    type: object
-                  minItems: 1
-      responses:
-        '202':
-          description: Events accepted for processing
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  batch_id:
-                    type: string
-                    format: uuid
-                  submitted_count:
-                    type: integer
-                  accepted_count:
-                    type: integer
-        '400':
-          description: Invalid input (missing required fields, invalid schema)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Forbidden (consent not granted or revoked)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /experience/batches:
-    get:
-      summary: List experience event batches
-      operationId: listExperienceBatches
-      tags:
-        - experience
-      security:
-        - bearer: [experience:read]
-      parameters:
-        - name: owner_id
-          in: query
-          required: false
-          schema:
-            $ref: '#/components/schemas/SessionId'
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
-        - name: offset
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 0
-            default: 0
-      responses:
-        '200':
-          description: List of batches
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  batches:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        batch_id:
-                          type: string
-                          format: uuid
-                        owner_id:
-                          type: string
-                          format: uuid
-                        event_count:
-                          type: integer
-                        created_at:
-                          type: string
-                          format: date-time
-                  total:
-                    type: integer
-                  limit:
-                    type: integer
-                  offset:
-                    type: integer
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /experience/health:
-    get:
-      summary: Check experience service health
-      operationId: getExperienceHealth
-      tags:
-        - experience
-      security:
-        - bearer: [health:read]
-      responses:
-        '200':
-          description: Health status
-          content:
-            application/json:
-              schema:
-                type: object
-                required:
-                  - status
-                  - timestamp
-                properties:
-                  status:
-                    type: string
-                    enum: [healthy, degraded, unhealthy]
-                  timestamp:
-                    type: string
-                    format: date-time
-                  circuit_breaker:
-                    type: object
-                    properties:
-                      state:
-                        type: string
-                        enum: [closed, open, half_open]
-                      failure_count:
-                        type: integer
-                      last_failure:
-                        type: string
-                        format: date-time
-        '503':
-          description: Service unavailable
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /experience/consent:
-    post:
-      summary: Grant or revoke consent for experience events
-      operationId: manageConsent
-      tags:
-        - experience
-      security:
-        - bearer: [consent:manage]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - owner_id
-                - site_url
-                - granted
-              properties:
-                owner_id:
-                  $ref: '#/components/schemas/SessionId'
-                site_url:
-                  type: string
-                  format: uri
-                granted:
-                  type: boolean
-                revoke_at:
-                  type: string
-                  format: date-time
-      responses:
-        '200':
-          description: Consent updated
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  request_id:
-                    type: string
-                    format: uuid
-                  granted:
-                    type: boolean
-                  revoked_at:
-                    type: string
-                    format: date-time
-        '400':
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /experience/hints:
-    get:
-      summary: Retrieve reusable hints for similar tasks
-      operationId: retrieveHints
-      tags:
-        - experience
-      security:
-        - bearer: [hints:read]
-      parameters:
-        - name: site_url
-          in: query
-          required: true
-          schema:
-            type: string
-            format: uri
-        - name: task_type
-          in: query
-          required: true
-          schema:
-            type: string
-            enum:
-              - navigation
-              - form_submission
-              - data_extraction
-              - authentication
-              - click_action
-              - text_input
-              - element_interaction
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 20
-            default: 10
-        - name: min_confidence
-          in: query
-          required: false
-          schema:
-            type: number
-            minimum: 0
-            maximum: 1
-            default: 0.5
-      responses:
-        '200':
-          description: Relevant hints
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hints:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        hint_id:
-                          type: string
-                          format: uuid
-                        site_url:
-                          type: string
-                          format: uri
-                        task_type:
-                          type: string
-                        confidence:
-                          type: number
-                          minimum: 0
-                          maximum: 1
-                        payload:
-                          type: object
-                        provenance:
-                          type: object
-                          properties:
-                            created_at:
-                              type: string
-                              format: date-time
-                            agent_id:
-                              type: string
-                              format: uuid
-                        freshness_days:
-                          type: integer
-        '400':
-          description: Invalid input
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /experience/config:
-    get:
-      summary: Get experience service configuration
-      operationId: getExperienceConfig
-      tags:
-        - experience
-      security:
-        - bearer: [config:read]
-      responses:
-        '200':
-          description: Configuration
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  opt_in_default:
-                    type: boolean
-                  max_events_per_batch:
-                    type: integer
-                  batch_flush_interval_ms:
-                    type: integer
-                  circuit_breaker:
-                    type: object
-                    properties:
-                      failure_threshold:
-                        type: integer
-                      recovery_timeout_ms:
-                        type: integer
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+- bearer: []
+tags:
+- name: sessions
+  description: Sessions, actions and operations
+- name: hosts
+  description: Registered hosts
+- name: host-commands
+  description: Manage a host's profiles and browsers
+- name: handoffs
+  description: Ask a person for help
+- name: webhooks
+  description: Channels that reach a person
+- name: events
+  description: Server-sent event stream
+- name: artifacts
+  description: Short-lived screenshot bytes
+- name: credentials
+  description: Host enrollment and service tokens
+- name: agent
+  description: Routes used by host agents
+- name: health
+  description: Liveness

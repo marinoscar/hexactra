@@ -21,7 +21,7 @@ use tokio::sync::broadcast;
 pub const EVENT_BUFFER: usize = 2_000;
 
 /// One fabric event.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct FabricEvent {
     pub seq: u64,
     /// e.g. `operation.completed`, `session.created`, `host.offline`.
