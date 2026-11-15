@@ -5,55 +5,124 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hexactra AI - Side Panel</title>
   <style>
+    /* hexactra brand tokens (docs/brand/README.md); dark follows the system setting. */
+    :root {
+      color-scheme: light dark;
+      --hx-primary: #4b4be8;
+      --hx-primary-hover: #3b3bd0;
+      --hx-on-primary: #ffffff;
+      --hx-accent: #ff6b4a;
+      --hx-danger: #c2412a;
+      --hx-danger-hover: #a33520;
+      --hx-on-danger: #ffffff;
+      --hx-bg: #f6f6fb;
+      --hx-surface: #ffffff;
+      --hx-surface-2: #eeeef6;
+      --hx-surface-2-hover: #e3e4ef;
+      --hx-text: #12131c;
+      --hx-muted: #5a5e72;
+      --hx-border: #e3e4ef;
+      --hx-info-bg: #e4e4fb;
+      --hx-info-text: #2e2ea8;
+      --hx-error-bg: #ffe3db;
+      --hx-error-text: #8a2a12;
+      --hx-focus: rgba(75, 75, 232, 0.25);
+      --hx-display: 'Space Grotesk', 'Inter', 'Helvetica Neue', Arial, sans-serif;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --hx-primary: #8c8cff;
+        --hx-primary-hover: #a3a3ff;
+        --hx-on-primary: #0d0e17;
+        --hx-accent: #ff8a6e;
+        --hx-danger: #ff8a6e;
+        --hx-danger-hover: #ffa48d;
+        --hx-on-danger: #0d0e17;
+        --hx-bg: #0d0e17;
+        --hx-surface: #181a28;
+        --hx-surface-2: #23263a;
+        --hx-surface-2-hover: #2e3149;
+        --hx-text: #ecedf7;
+        --hx-muted: #a3a7bd;
+        --hx-border: #2a2d42;
+        --hx-info-bg: #23236b;
+        --hx-info-text: #dcdcfa;
+        --hx-error-bg: #4a1d12;
+        --hx-error-text: #ffd2c6;
+        --hx-focus: rgba(140, 140, 255, 0.35);
+      }
+    }
+
     * {
       box-sizing: border-box;
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Ubuntu, sans-serif;
       margin: 0;
       padding: 16px;
-      background-color: #f5f5f5;
-      color: #333;
+      background-color: var(--hx-bg);
+      color: var(--hx-text);
       min-width: 320px;
     }
 
     .header {
       display: flex;
       align-items: center;
+      gap: 10px;
       margin-bottom: 16px;
     }
 
     .logo {
-      width: 32px;
-      height: 32px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-radius: 8px;
-      margin-right: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-weight: bold;
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+
+    .logo .trace {
+      stroke: var(--hx-primary);
+    }
+
+    .logo .start {
+      fill: var(--hx-accent);
     }
 
     .title {
-      font-size: 16px;
+      font-family: var(--hx-display);
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+
+    .title-tag {
+      font-size: 11px;
       font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--hx-muted);
+      border: 1px solid var(--hx-border);
+      border-radius: 999px;
+      padding: 3px 8px;
     }
 
     .status {
       padding: 8px 12px;
-      background-color: #e3f2fd;
-      border-radius: 4px;
+      background-color: var(--hx-info-bg);
+      border-radius: 8px;
       margin-bottom: 16px;
       font-size: 12px;
-      color: #1565c0;
+      color: var(--hx-info-text);
     }
 
     .status.error {
-      background-color: #ffebee;
-      color: #c62828;
+      background-color: var(--hx-error-bg);
+      color: var(--hx-error-text);
+    }
+
+    .button-group + .status {
+      margin-top: 12px;
     }
 
     .controls {
@@ -65,14 +134,15 @@
     button {
       padding: 10px 16px;
       border: none;
-      border-radius: 6px;
+      border-radius: 8px;
       font-size: 14px;
-      font-weight: 500;
+      font-weight: 600;
+      font-family: inherit;
       cursor: pointer;
       transition: background-color 0.2s, transform 0.1s;
     }
 
-    button:hover {
+    button:hover:not(:disabled) {
       transform: translateY(-1px);
     }
 
@@ -80,31 +150,41 @@
       transform: translateY(0);
     }
 
-    .btn-primary {
-      background-color: #667eea;
-      color: white;
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
-    .btn-primary:hover {
-      background-color: #5a6fd6;
+    button:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--hx-focus);
+    }
+
+    .btn-primary {
+      background-color: var(--hx-primary);
+      color: var(--hx-on-primary);
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background-color: var(--hx-primary-hover);
     }
 
     .btn-secondary {
-      background-color: #e0e0e0;
-      color: #333;
+      background-color: var(--hx-surface-2);
+      color: var(--hx-text);
     }
 
-    .btn-secondary:hover {
-      background-color: #d0d0d0;
+    .btn-secondary:hover:not(:disabled) {
+      background-color: var(--hx-surface-2-hover);
     }
 
     .btn-danger {
-      background-color: #ef5350;
-      color: white;
+      background-color: var(--hx-danger);
+      color: var(--hx-on-danger);
     }
 
-    .btn-danger:hover {
-      background-color: #e53935;
+    .btn-danger:hover:not(:disabled) {
+      background-color: var(--hx-danger-hover);
     }
 
     .observation-section {
@@ -112,41 +192,42 @@
     }
 
     .section-title {
+      font-family: var(--hx-display);
       font-size: 14px;
-      font-weight: 600;
+      font-weight: 700;
       margin-bottom: 8px;
-      color: #555;
+      color: var(--hx-text);
     }
 
     .elements-list {
       max-height: 200px;
       overflow-y: auto;
-      background-color: white;
-      border-radius: 6px;
+      background-color: var(--hx-surface);
+      border: 1px solid var(--hx-border);
+      border-radius: 8px;
       padding: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
 
     .element-item {
       padding: 6px 8px;
       margin-bottom: 4px;
-      background-color: #f5f5f5;
-      border-radius: 4px;
+      background-color: var(--hx-surface-2);
+      border-radius: 6px;
       font-size: 12px;
       cursor: pointer;
       transition: background-color 0.2s;
     }
 
     .element-item:hover {
-      background-color: #e0e0e0;
+      background-color: var(--hx-surface-2-hover);
     }
 
     .provider-section {
       margin-top: 24px;
       padding: 16px;
-      background-color: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      background-color: var(--hx-surface);
+      border: 1px solid var(--hx-border);
+      border-radius: 12px;
     }
 
     .control-group {
@@ -158,11 +239,12 @@
       font-size: 12px;
       font-weight: 600;
       margin-bottom: 4px;
-      color: #555;
+      color: var(--hx-muted);
     }
 
     .button-group {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
       margin-top: 12px;
     }
@@ -170,39 +252,52 @@
     .screenshot {
       margin-top: 16px;
       max-width: 100%;
-      border-radius: 6px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      border-radius: 8px;
+      border: 1px solid var(--hx-border);
     }
 
     .empty-state {
       text-align: center;
-      color: #999;
+      color: var(--hx-muted);
       font-size: 12px;
       padding: 20px;
     }
 
-    textarea {
+    textarea,
+    input,
+    select {
       width: 100%;
       padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
+      background-color: var(--hx-surface);
+      color: var(--hx-text);
+      border: 1px solid var(--hx-border);
+      border-radius: 6px;
       font-size: 13px;
       font-family: inherit;
+    }
+
+    textarea {
       resize: vertical;
       min-height: 60px;
     }
 
-    textarea:focus {
+    textarea:focus,
+    input:focus,
+    select:focus {
       outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+      border-color: var(--hx-primary);
+      box-shadow: 0 0 0 3px var(--hx-focus);
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <div class="logo">H</div>
-    <div class="title">Hexactra AI</div>
+    <svg class="logo" viewBox="0 0 120 120" aria-hidden="true" focusable="false">
+      <path class="trace" d="M60 60V108L18.4 84V36L60 12L101.6 36V84L80 96.5" fill="none" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle class="start" cx="60" cy="60" r="13"/>
+    </svg>
+    <h1 class="title" aria-label="Hexactra AI" style="margin: 0">hexactra</h1>
+    <span class="title-tag" aria-hidden="true">AI</span>
   </div>
 
   <div id="status" class="status">Ready to initialize</div>
