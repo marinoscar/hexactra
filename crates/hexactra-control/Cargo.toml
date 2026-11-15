@@ -28,6 +28,7 @@ schemars.workspace = true
 chrono.workspace = true
 chrono-tz = "0.8"
 sqlx.workspace = true
+rusqlite.workspace = true
 clap.workspace = true
 jsonwebtoken = "9.3"
 sha2 = "0.10"

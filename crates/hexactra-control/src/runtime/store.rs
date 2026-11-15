@@ -14,6 +14,7 @@ use hexactra_core::remote::{
     valid_profile_name, DispatchedOperation, HostView, OperationResult, OperationState,
     OperationView, RemoteAction, RemoteSessionStatus, SessionView, DEFAULT_PROFILE,
 };
+use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, watch, Notify};
 use uuid::Uuid;
 
@@ -76,6 +77,32 @@ pub(super) struct Inner {
     pub(super) handoffs: HashMap<Uuid, HandoffEntry>,
 }
 
+/// A host as persisted (no queue, no connection state).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct HostRecord {
+    pub id: Uuid,
+    pub name: String,
+    pub version: String,
+    pub last_seen: DateTime<Utc>,
+    pub on_demand: bool,
+    pub viewer_url: Option<String>,
+    pub profiles: Vec<String>,
+}
+
+/// Everything the store persists (#211). Operations are not persisted:
+/// they are short-lived, and an operation in flight at a restart is
+/// reported as timed out by the waiting caller anyway. Typed text and
+/// screenshots therefore never reach disk.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub(crate) struct StoreSnapshot {
+    pub hosts: Vec<HostRecord>,
+    pub sessions: Vec<SessionView>,
+    pub handoffs: Vec<super::handoff::HandoffRecord>,
+}
+
+/// Ended sessions older than this are not kept across restarts.
+const ENDED_SESSION_RETENTION_DAYS: i64 = 7;
+
 /// Shared runtime store.
 #[derive(Clone)]
 pub struct RuntimeStore {
@@ -130,6 +157,74 @@ impl HostEntry {
 impl RuntimeStore {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Snapshot for persistence.
+    pub(super) fn export_snapshot(&self) -> StoreSnapshot {
+        let inner = self.lock();
+        let cutoff = Utc::now() - chrono::Duration::days(ENDED_SESSION_RETENTION_DAYS);
+        let mut hosts: Vec<HostRecord> = inner
+            .hosts
+            .iter()
+            .map(|(id, h)| HostRecord {
+                id: *id,
+                name: h.name.clone(),
+                version: h.version.clone(),
+                last_seen: h.last_seen,
+                on_demand: h.on_demand,
+                viewer_url: h.viewer_url.clone(),
+                profiles: h.profiles.clone(),
+            })
+            .collect();
+        hosts.sort_by_key(|h| h.id);
+        let mut sessions: Vec<SessionView> = inner
+            .sessions
+            .values()
+            .filter(|s| {
+                s.status == RemoteSessionStatus::Active
+                    || s.ended_at.map(|t| t > cutoff).unwrap_or(true)
+            })
+            .cloned()
+            .collect();
+        sessions.sort_by_key(|s| s.id);
+        let handoffs = Self::export_handoffs(&inner);
+        StoreSnapshot {
+            hosts,
+            sessions,
+            handoffs,
+        }
+    }
+
+    /// Restore from a snapshot (at startup, before serving). Hosts come back
+    /// offline until they poll again; pending handoffs keep their expiry.
+    pub(super) fn import_snapshot(&self, snap: StoreSnapshot) {
+        let pending = {
+            let mut inner = self.lock();
+            for h in snap.hosts {
+                inner.hosts.insert(
+                    h.id,
+                    HostEntry {
+                        name: h.name,
+                        version: h.version,
+                        last_seen: h.last_seen,
+                        browser_connected: false,
+                        on_demand: h.on_demand,
+                        viewer_url: h.viewer_url,
+                        profiles: h.profiles,
+                        running_profiles: Vec::new(),
+                        queue: VecDeque::new(),
+                        notify: Arc::new(Notify::new()),
+                    },
+                );
+            }
+            for s in snap.sessions {
+                inner.sessions.insert(s.id, s);
+            }
+            Self::import_handoffs(&mut inner, snap.handoffs)
+        };
+        for (id, expires_at) in pending {
+            self.schedule_handoff_expiry(id, expires_at);
+        }
     }
 
     pub(super) fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {

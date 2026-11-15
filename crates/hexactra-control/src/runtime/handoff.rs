@@ -42,6 +42,14 @@ impl RuntimeEvent {
     }
 }
 
+/// A handoff as persisted: the view and the response-token digest. A
+/// secret answer waiting to be claimed is deliberately not persisted.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub(crate) struct HandoffRecord {
+    pub view: HandoffView,
+    pub token_digest: Option<[u8; 32]>,
+}
+
 pub(super) struct HandoffEntry {
     view: HandoffView,
     token_digest: Option<[u8; 32]>,
@@ -160,15 +168,55 @@ impl RuntimeStore {
             view.clone(),
             Some(token.clone()),
         ));
-        // Expire on schedule.
+        self.schedule_handoff_expiry(view.id, view.expires_at);
+        Ok((view, token))
+    }
+
+    /// Expire a pending handoff at `expires_at`.
+    pub(super) fn schedule_handoff_expiry(&self, id: Uuid, expires_at: DateTime<Utc>) {
         let store = self.clone();
-        let id = view.id;
-        let wait = (view.expires_at - Utc::now()).to_std().unwrap_or_default();
+        let wait = (expires_at - Utc::now()).to_std().unwrap_or_default();
         tokio::spawn(async move {
             tokio::time::sleep(wait).await;
             store.expire_handoff(id);
         });
-        Ok((view, token))
+    }
+
+    pub(super) fn export_handoffs(inner: &Inner) -> Vec<HandoffRecord> {
+        let mut v: Vec<HandoffRecord> = inner
+            .handoffs
+            .values()
+            .map(|h| HandoffRecord {
+                view: h.view.clone(),
+                token_digest: h.token_digest,
+            })
+            .collect();
+        v.sort_by_key(|h| h.view.id);
+        v
+    }
+
+    /// Restore handoffs; returns pending ones that need an expiry timer.
+    pub(super) fn import_handoffs(
+        inner: &mut Inner,
+        records: Vec<HandoffRecord>,
+    ) -> Vec<(Uuid, DateTime<Utc>)> {
+        let mut pending = Vec::new();
+        for r in records {
+            let (tx, _) = watch::channel(r.view.status);
+            if r.view.status == HandoffStatus::Pending {
+                pending.push((r.view.id, r.view.expires_at));
+            }
+            inner.handoffs.insert(
+                r.view.id,
+                HandoffEntry {
+                    view: r.view,
+                    token_digest: r.token_digest,
+                    secret_value: None,
+                    tx,
+                },
+            );
+        }
+        pending
     }
 
     fn expire_handoff(&self, id: Uuid) {

@@ -50,11 +50,13 @@ USER hexactra
 # Listens on all interfaces inside the container; compose publishes it on
 # 127.0.0.1 only. The API token comes from HEXACTRA_API_TOKEN.
 ENV HEXACTRA_BIND=0.0.0.0:8787 \
-    HEXACTRA_ALLOW_REMOTE_BIND=true
+    HEXACTRA_ALLOW_REMOTE_BIND=true \
+    HEXACTRA_STATE_DB=/data/control.db
 VOLUME /data
 EXPOSE 8787
 HEALTHCHECK --interval=15s --timeout=3s --start-period=10s \
   CMD curl -fsS http://127.0.0.1:8787/v1/health || exit 1
+# tini forwards SIGTERM so the control plane saves its state before exiting.
 ENTRYPOINT ["/usr/bin/tini", "--", "hexactra-control", "serve"]
 
 # --------------------------------------------------------------- target: host

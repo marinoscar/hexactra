@@ -132,7 +132,9 @@ Browsers close gracefully, through the extension, when idle, when evicted and wh
 git pull && docker compose up -d --build            # upgrade
 docker compose logs -f host                          # agent and browser logs
 docker run --rm -v hexactra_host-data:/d -v "$PWD":/b debian:bookworm-slim \
-  tar czf /b/hexactra-profile.tgz -C /d .            # back up the profile (holds your sign-ins)
+  tar czf /b/hexactra-profile.tgz -C /d .            # back up the profiles (hold your sign-ins)
+docker run --rm -v hexactra_control-data:/d -v "$PWD":/b debian:bookworm-slim \
+  tar czf /b/hexactra-control.tgz -C /d .            # back up control-plane state (hosts, credentials, webhooks)
 docker compose down                                  # stop (volumes are kept)
 ```
 
