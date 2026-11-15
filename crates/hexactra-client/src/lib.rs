@@ -30,6 +30,8 @@ pub enum ClientError {
         code: String,
         message: String,
     },
+    #[error("invalid response: {0}")]
+    Decode(String),
 }
 
 impl ClientError {
@@ -210,6 +212,36 @@ impl ControlClient {
         Ok(l.commands)
     }
 
+    /// Fetch an artifact's bytes and media type (`GET /v1/artifacts/{id}`).
+    pub async fn artifact(&self, id: Uuid) -> Result<(String, Vec<u8>)> {
+        let resp = self
+            .http
+            .send(Method::GET, &format!("v1/artifacts/{id}"), NO_BODY, None)
+            .await?;
+        let mime = resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("application/octet-stream")
+            .to_string();
+        Ok((mime, resp.bytes().await?.to_vec()))
+    }
+
+    /// Bytes of a screenshot result: from its artifact handle, or the inline
+    /// `data` of an older control plane.
+    pub async fn screenshot_bytes(&self, result: &serde_json::Value) -> Result<(String, Vec<u8>)> {
+        use base64::Engine;
+        if let Some(id) = result["artifact_id"].as_str().and_then(|s| s.parse().ok()) {
+            return self.artifact(id).await;
+        }
+        let data = result["data"].as_str().unwrap_or_default();
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(data)
+            .map_err(|e| ClientError::Decode(e.to_string()))?;
+        let mime = result["mime"].as_str().unwrap_or("image/jpeg").to_string();
+        Ok((mime, bytes))
+    }
+
     pub async fn create_session(&self, req: &CreateSessionRequest) -> Result<SessionView> {
         self.http
             .json(Method::POST, "v1/sessions", Some(req), None)
@@ -239,6 +271,7 @@ impl ControlClient {
         let req = ActionRequest {
             action,
             timeout_ms: timeout.map(|t| t.as_millis() as u64),
+            inline_artifacts: false,
         };
         let wait = timeout.unwrap_or(Duration::from_secs(30)) + Duration::from_secs(10);
         self.http

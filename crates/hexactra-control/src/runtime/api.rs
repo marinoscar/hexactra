@@ -236,6 +236,7 @@ pub fn router(state: ApiState) -> Router {
         .merge(super::credentials_api::client_routes())
         .merge(super::events_api::routes())
         .merge(super::host_commands_api::client_routes())
+        .route("/v1/artifacts/{id}", get(get_artifact))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             require_client,
@@ -433,6 +434,9 @@ struct ActionQuery {
     /// Return 202 immediately instead of waiting for the result.
     #[serde(default, rename = "async")]
     is_async: bool,
+    /// Keep screenshot bytes inline too (migration; see #214).
+    #[serde(default)]
+    inline_artifacts: bool,
 }
 
 async fn run_action(
@@ -450,7 +454,10 @@ async fn run_action(
         .unwrap_or(DEFAULT_ACTION_TIMEOUT)
         .clamp(Duration::from_millis(100), MAX_ACTION_TIMEOUT);
     let kind = req.action.kind();
-    let (op, rx) = s.store.enqueue(session_id, req.action, timeout)?;
+    let inline = req.inline_artifacts || q.inline_artifacts;
+    let (op, rx) = s
+        .store
+        .enqueue_with(session_id, req.action, timeout, inline)?;
     tracing::info!(op_id = %op.id, %session_id, kind, "operation queued");
     if q.is_async {
         // Expire the operation in the background so it cannot sit queued forever.
@@ -487,4 +494,31 @@ async fn get_operation(
         _ => s.store.get_operation(id)?,
     };
     Ok(Json(view))
+}
+
+// -------------------------------------------------------------- artifacts
+
+async fn get_artifact(
+    State(s): State<ApiState>,
+    Path(id): Path<Uuid>,
+) -> Result<Response, AppError> {
+    let a = s.store.artifacts.get(id).ok_or_else(|| {
+        AppError(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            "artifact not found or expired".into(),
+        )
+    })?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, a.mime.clone()),
+            (header::CACHE_CONTROL, "no-store".to_string()),
+            (
+                header::HeaderName::from_static("x-content-type-options"),
+                "nosniff".to_string(),
+            ),
+        ],
+        a.bytes.as_ref().clone(),
+    )
+        .into_response())
 }

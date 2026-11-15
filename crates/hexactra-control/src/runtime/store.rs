@@ -73,6 +73,8 @@ struct OperationEntry {
     view: OperationView,
     deadline: DateTime<Utc>,
     tx: watch::Sender<OperationState>,
+    /// Keep screenshot bytes inline in the result as well (migration flag).
+    inline_artifacts: bool,
 }
 
 #[derive(Default)]
@@ -119,6 +121,8 @@ pub struct RuntimeStore {
     pub(super) events: broadcast::Sender<RuntimeEvent>,
     /// Content-free event log for `GET /v1/events`.
     pub log: super::events::EventLog,
+    /// Screenshot bytes, served by handle (#214).
+    pub artifacts: super::artifacts::ArtifactStore,
 }
 
 impl Default for RuntimeStore {
@@ -128,6 +132,7 @@ impl Default for RuntimeStore {
             inner: Arc::new(Mutex::new(Inner::default())),
             events,
             log: Default::default(),
+            artifacts: Default::default(),
         }
     }
 }
@@ -675,6 +680,18 @@ impl RuntimeStore {
         action: RemoteAction,
         timeout: Duration,
     ) -> Result<(OperationView, watch::Receiver<OperationState>), StoreError> {
+        self.enqueue_with(session_id, action, timeout, false)
+    }
+
+    /// Queue an action; `inline_artifacts` keeps screenshot data in the
+    /// result next to the artifact handle.
+    pub fn enqueue_with(
+        &self,
+        session_id: Uuid,
+        action: RemoteAction,
+        timeout: Duration,
+        inline_artifacts: bool,
+    ) -> Result<(OperationView, watch::Receiver<OperationState>), StoreError> {
         let mut inner = self.lock();
         let session = inner
             .sessions
@@ -707,6 +724,7 @@ impl RuntimeStore {
                 view: view.clone(),
                 deadline,
                 tx,
+                inline_artifacts,
             },
         );
         let host = inner
@@ -779,6 +797,11 @@ impl RuntimeStore {
         };
         op.view.state = state;
         op.view.result = result.result;
+        if result.ok && matches!(op.view.action, RemoteAction::Screenshot { .. }) {
+            if let Some(r) = op.view.result.as_mut() {
+                Self::store_screenshot(&self.artifacts, op.view.session_id, r, op.inline_artifacts);
+            }
+        }
         op.view.error = if result.ok {
             None
         } else {
@@ -795,6 +818,39 @@ impl RuntimeStore {
             op_event(&op.view),
         );
         Ok(op.view.clone())
+    }
+
+    /// Move a screenshot's base64 `data` into the artifact store and put a
+    /// handle (`artifact_id`, `mime`, `size`) in the result instead.
+    fn store_screenshot(
+        artifacts: &super::artifacts::ArtifactStore,
+        session_id: Uuid,
+        result: &mut serde_json::Value,
+        inline: bool,
+    ) {
+        use base64::Engine;
+        let Some(data) = result.get("data").and_then(|d| d.as_str()) else {
+            return;
+        };
+        let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(data) else {
+            return;
+        };
+        let mime = result
+            .get("mime")
+            .and_then(|m| m.as_str())
+            .unwrap_or("image/jpeg")
+            .to_string();
+        let size = bytes.len();
+        let a = artifacts.put(session_id, &mime, bytes);
+        if let Some(obj) = result.as_object_mut() {
+            if !inline {
+                obj.remove("data");
+            }
+            obj.insert("mime".into(), json!(mime));
+            obj.insert("artifact_id".into(), json!(a.id));
+            obj.insert("size".into(), json!(size));
+            obj.insert("expires_at".into(), json!(a.expires_at));
+        }
     }
 
     /// Mark an operation timed out if it is still pending.

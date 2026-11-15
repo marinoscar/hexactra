@@ -12,6 +12,7 @@ name = "hexactra-mcp"
 path = "src/main.rs"
 
 [dependencies]
+base64.workspace = true
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
