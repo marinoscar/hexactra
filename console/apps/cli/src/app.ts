@@ -4,6 +4,7 @@ import { ANDROID_IDENTITY_SOURCE, APP_NAME, CLI_NAME, REPO_SLUG } from '@app/sha
 import { androidCommand, androidTuiScreen } from '@marinoscar/platform-cli/android';
 import type { CreateCliOptions } from '@marinoscar/platform-cli';
 
+import { BRAND_TUI_MENU_ROOT, BRAND_TUI_THEME } from './brand.js';
 import { fabricCommand } from './fabric.command.js';
 import { fleetCommand } from './fleet.command.js';
 import { inboxCommand } from './inbox.command.js';
@@ -34,4 +35,7 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   // `android`: build, version and release the Android app (apps/android) through the platform's group.
   extraCommands: [fabricCommand, fleetCommand, runsCommand, inboxCommand, mcpCommand, androidCommand({ identity: ANDROID_IDENTITY_SOURCE })],
   tuiScreens: [inboxScreen, runsScreen, fleetScreen, androidTuiScreen],
+  // The hexactra brand (docs/brand): its colours, and the Trace mark with the wordmark atop the menu.
+  tuiTheme: BRAND_TUI_THEME,
+  tuiMenuRoot: BRAND_TUI_MENU_ROOT,
 };

@@ -1,4 +1,4 @@
-import type { TuiScreenProps } from '@marinoscar/platform-cli/tui';
+import { textColor, useTuiTheme, type TuiScreenProps } from '@marinoscar/platform-cli/tui';
 import { Box, Text, useInput } from 'ink';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
@@ -11,6 +11,7 @@ import { hostLine, type FleetHost } from './fleet.js';
  * `fleet:write`; the API says so when it is missing.
  */
 export function FleetScreen({ onDone }: TuiScreenProps): ReactNode {
+  const theme = useTuiTheme();
   const [hosts, setHosts] = useState<FleetHost[] | null>(null);
   const [selected, setSelected] = useState(0);
   const [status, setStatus] = useState<string | null>(null);
@@ -53,8 +54,8 @@ export function FleetScreen({ onDone }: TuiScreenProps): ReactNode {
 
   return (
     <Box flexDirection="column" gap={1}>
-      <Text bold>Fleet</Text>
-      {error && <Text color="red">{error}</Text>}
+      <Text bold {...textColor(theme.primary)}>Fleet</Text>
+      {error && <Text {...textColor(theme.error)}>{error}</Text>}
       {!hosts && !error && <Text dimColor>Loading…</Text>}
       {hosts?.length === 0 && <Text>No host is enrolled. Run `hexactra fleet enroll`.</Text>}
       <Box flexDirection="column">
