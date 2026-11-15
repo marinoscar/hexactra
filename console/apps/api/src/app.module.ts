@@ -11,6 +11,7 @@ import { BrowserModule } from './browser/browser.module';
 import { FabricModule } from './fabric/fabric.module';
 import { FleetModule } from './fleet/fleet.module';
 import { RunnerModule } from './runner/runner.module';
+import { SchedulesModule } from './schedules/schedules.module';
 import { TasksModule } from './tasks/tasks.module';
 import { NotesModule } from './notes/notes.module';
 import { PLATFORM_MODULES } from './platform/platform';
@@ -36,7 +37,7 @@ import { PrismaModule } from './prisma/prisma.service';
     TasksModule,
     BrowserModule,
     // The goal runner needs the AI slice (packages/shared/slices.json).
-    ...(isSliceEnabled('ai') ? [RunnerModule] : []),
+    ...(isSliceEnabled('ai') ? [RunnerModule, SchedulesModule] : []),
   ],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },

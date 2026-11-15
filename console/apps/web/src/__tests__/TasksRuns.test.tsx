@@ -49,7 +49,7 @@ describe('TasksPage', () => {
   it('lists tasks and starts a run', async () => {
     const host = createTestPlatformHost({
       permissions: ['tasks:read', 'tasks:write', 'runs:write'],
-      responses: { 'GET /tasks': [task], [`POST /tasks/${task.id}/runs`]: { id: run.id } },
+      responses: { 'GET /tasks': [task], [`POST /tasks/${task.id}/runs`]: { id: run.id }, [`GET /schedules?taskId=${task.id}`]: [] },
     });
     render(
       <PlatformHostProvider host={host}>
@@ -68,7 +68,7 @@ describe('TasksPage', () => {
   });
 
   it('hides creating and running from a reader', async () => {
-    const host = createTestPlatformHost({ permissions: ['tasks:read'], responses: { 'GET /tasks': [task] } });
+    const host = createTestPlatformHost({ permissions: ['tasks:read'], responses: { 'GET /tasks': [task], [`GET /schedules?taskId=${task.id}`]: [] } });
     render(
       <PlatformHostProvider host={host}>
         <MemoryRouter>
@@ -110,5 +110,28 @@ describe('RunDetailPage', () => {
     expect(await screen.findByRole('button', { name: 'Take over on vps' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel run' }));
     expect(host.requests.map((r) => `${r.method} ${r.path}`)).toContain(`POST /runs/${run.id}/cancel`);
+  });
+});
+
+describe('TaskSchedules', () => {
+  it('lists a schedule and adds one', async () => {
+    const { TaskSchedules } = await import('../pages/TaskSchedules');
+    const host = createTestPlatformHost({
+      permissions: ['tasks:read', 'tasks:write'],
+      responses: {
+        [`GET /schedules?taskId=${task.id}`]: [{ id: 'sc1', taskId: task.id, cron: '0 9 * * 1-5', timezone: 'Europe/Madrid', enabled: true, concurrency: 'skip', nextRunAt: '2026-11-16T08:00:00Z', lastRunAt: null, consecutiveFailures: 0 }],
+        'POST /schedules': { id: 'sc2' },
+      },
+    });
+    render(
+      <PlatformHostProvider host={host}>
+        <TaskSchedules taskId={task.id} canWrite />
+      </PlatformHostProvider>,
+    );
+    expect(await screen.findByText('0 9 * * 1-5 (Europe/Madrid)')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Cron'), { target: { value: '30 7 * * *' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add schedule' }));
+    await screen.findByText('0 9 * * 1-5 (Europe/Madrid)');
+    expect(host.requests.find((r) => r.method === 'POST')?.body).toMatchObject({ taskId: task.id, cron: '30 7 * * *' });
   });
 });

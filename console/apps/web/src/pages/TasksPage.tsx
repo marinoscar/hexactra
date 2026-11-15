@@ -3,6 +3,8 @@ import { Alert, Box, Button, Card, CardActions, CardContent, Chip, Container, Fo
 import { useNavigate } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
+import { TaskSchedules } from './TaskSchedules';
+
 /** A task, as `GET /api/tasks` returns it. */
 export interface Task {
   id: string;
@@ -121,6 +123,7 @@ export function TasksPage() {
                 <Chip size="small" label={t.allowedDomains.length ? t.allowedDomains.join(', ') : 'any site'} />
                 <Chip size="small" variant="outlined" label={`${t.maxSteps} steps · ${t.maxMinutes} min`} />
               </Stack>
+              <TaskSchedules taskId={t.id} canWrite={canWrite} />
             </CardContent>
             <CardActions>
               {canRun && (

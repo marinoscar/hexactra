@@ -1,0 +1,44 @@
+// Task schedules (#230): run a task on a cron expression in a time zone.
+// A per-minute cron enqueues `browser.schedules.tick`, which starts the due
+// runs (src/schedules/).
+
+enum ScheduleConcurrency {
+  /// Skip a firing while an earlier run of the task is still live.
+  skip
+  /// Start it anyway.
+  queue
+
+  @@map("schedule_concurrency")
+}
+
+model TaskSchedule {
+  id                  String              @id @default(uuid()) @db.Uuid
+  userId              String              @map("user_id") @db.Uuid
+  taskId              String              @map("task_id") @db.Uuid
+  cron                String              @db.VarChar(100)
+  timezone            String              @default("UTC") @db.VarChar(64)
+  enabled             Boolean             @default(true)
+  concurrency         ScheduleConcurrency @default(skip)
+  nextRunAt           DateTime?           @map("next_run_at") @db.Timestamptz
+  lastRunAt           DateTime?           @map("last_run_at") @db.Timestamptz
+  lastRunId           String?             @map("last_run_id") @db.Uuid
+  /// Failed runs in a row (reset by a success); drives the "failing" notice.
+  consecutiveFailures Int                 @default(0) @map("consecutive_failures")
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([enabled, nextRunAt])
+  @@index([userId])
+  @@map("task_schedules")
+}
+
+extend model User {
+  taskSchedules TaskSchedule[]
+}
+
+extend model Task {
+  schedules TaskSchedule[]
+}
