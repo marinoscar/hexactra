@@ -58,3 +58,25 @@ describe('where the deploy finds the app in its checkout', () => {
     expect(existsSync(join(repoRoot, 'deploy', 'container', 'Dockerfile'))).toBe(true);
   });
 });
+
+describe('the template the install screen reads its questions from', () => {
+  // The TUI install screen (platform-cli 0.1.0-next.32) reads its questions
+  // from <deployRoot>/repo/infra/compose/.env.example and ignores deploy.appDir.
+  // Without this root symlink it found no template, asked nothing, and the
+  // run failed with "Cannot run without a terminal: 10 value(s) are missing".
+  it('is reachable at the repository root and is this app\'s template', async () => {
+    const { lstatSync, readFileSync, realpathSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { join } = await import('node:path');
+    const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
+    const atRoot = join(repoRoot, 'infra', 'compose', '.env.example');
+    const appTemplate = join(repoRoot, APP_CLI_OPTIONS.deploy!.appDir!, 'infra', 'compose', '.env.example');
+    // A relative symlink, so it still resolves inside a deployment's clone.
+    expect(lstatSync(atRoot).isSymbolicLink()).toBe(true);
+    expect(realpathSync(atRoot)).toBe(realpathSync(appTemplate));
+    const template = readFileSync(atRoot, 'utf8');
+    for (const key of ['POSTGRES_HOST', 'POSTGRES_PASSWORD', 'JWT_SECRET', 'GOOGLE_CLIENT_ID', 'INITIAL_ADMIN_EMAIL']) {
+      expect(template).toMatch(new RegExp(`^${key}=`, 'm'));
+    }
+  });
+});
