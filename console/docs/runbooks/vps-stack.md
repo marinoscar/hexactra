@@ -46,11 +46,12 @@ The install asks for:
 
 It generates every other secret. Add `--staging` while you are still working out DNS and the proxy, so you stay clear of Let's Encrypt's rate limits.
 
-**Then connect the console to the fabric** (once). Mint the service token inside `fabric-control`, then follow section 3 from step 1:
+**The fabric connection is automatic.** The last step of `install` and `update` (`fabric-connect`) connects the console to the bundled fabric:
+- **Not connected yet** (or the bundled connection broke, e.g. after a volume restore): it mints an `hxs_` service token inside `fabric-control` and pipes it straight into the API, which stores it encrypted. The token appears in no command line, log or journal.
+- **Already connected**: it does nothing.
+- **Pointed at another fabric** in Administration → Fabric connection: it leaves that connection alone, even if that fabric is down.
 
-```bash
-docker exec "$(docker ps -qf name=fabric-control)" hexactra-fabric --url http://127.0.0.1:8787 admin service-token-create console
-```
+If the step cannot connect, the deploy still succeeds and the journal shows a warning. Set the connection by hand (section 3), or run `deploy update` again. Check the result at **Administration → Doctor**: the `fabric.*` checks pass.
 
 **Update** (safe to run from cron; it exits 0 when nothing moved):
 
@@ -101,7 +102,14 @@ docker compose $F ps                   # everything running; db and fabric servi
 
 ## 3. Connect the console to the fabric
 
-Mint a service token for the console with the fabric's admin CLI. It runs inside `fabric-control`, which already holds the operator token:
+With `hexactra deploy`, this happens on its own (above). With a hand-run stack, the same pipe does it in one line:
+
+```bash
+docker compose $F exec -T fabric-control hexactra-fabric --url http://127.0.0.1:8787 admin service-token-create console \
+  | docker compose $F exec -T api node dist/fabric/fabric-connect.cli.js set --url http://fabric-control:8787
+```
+
+Or by hand: mint a service token for the console with the fabric's admin CLI. It runs inside `fabric-control`, which already holds the operator token:
 
 ```bash
 docker compose $F exec fabric-control hexactra-fabric --url http://127.0.0.1:8787 admin service-token-create console

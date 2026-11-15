@@ -68,6 +68,16 @@ dc exec -T fabric-control hexactra-fabric --url http://127.0.0.1:8787 admin serv
   || fail "the documented service-token command does not print an hxs_ token"
 pass "the fabric admin CLI mints a service token"
 
+# What `hexactra deploy` does at the end of install/update (#309): the token is
+# piped from the fabric into the api container's script, never shown or logged.
+connect_out=$(dc exec -T fabric-control hexactra-fabric --url http://127.0.0.1:8787 admin service-token-create console 2>/dev/null \
+  | dc exec -T api node dist/fabric/fabric-connect.cli.js set --url http://fabric-control:8787) \
+  || fail "the deploy's fabric-connect pipe: $connect_out"
+echo "$connect_out" | grep -q '"state":"connected"' || fail "the console did not connect to the bundled fabric: $connect_out"
+! echo "$connect_out" | grep -q 'hxs_' || fail "the fabric-connect output shows the token"
+dc exec -T api node dist/fabric/fabric-connect.cli.js status | grep -q '"state":"connected"' || fail "fabric-connect status after connecting"
+pass "the deploy's fabric-connect step connects the console to the bundled fabric"
+
 code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 tmpdir_headers=$(mktemp)
 
