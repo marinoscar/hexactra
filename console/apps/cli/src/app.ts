@@ -60,6 +60,11 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   // The hexactra brand (docs/brand): its colours, and the Trace mark with the wordmark atop the menu.
   tuiTheme: BRAND_TUI_THEME,
   tuiMenuRoot: BRAND_TUI_MENU_ROOT,
+  // This app lives in console/ of the hexactra repository: `deploy install`
+  // and `deploy update` clone the whole repository (git stays at its root)
+  // and run compose from console/infra/compose, whose fabric overlay builds
+  // the Rust images from the repository root.
+  deploy: { appDir: 'console' },
   envGenerators: [VIEWER_PASSWORD_GENERATOR],
   envSpecFragments: [FABRIC_ENV_FRAGMENT],
 };

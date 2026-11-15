@@ -43,3 +43,18 @@ describe('the stack-agent image the VPS deploy runs', () => {
     expect(overlay).toContain(`image: ghcr.io/marinoscar/enterpriseappbase-stack-agent:${platform.version}\n`);
   });
 });
+
+describe('where the deploy finds the app in its checkout', () => {
+  it('names the directory of this app inside the repository', async () => {
+    const { existsSync } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const { join } = await import('node:path');
+    const appDir = APP_CLI_OPTIONS.deploy?.appDir;
+    expect(appDir).toBe('console');
+    // The deploy clones the repository and runs compose from <repo>/<appDir>/infra/compose.
+    const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
+    expect(existsSync(join(repoRoot, appDir!, 'infra', 'compose', 'base.compose.yml'))).toBe(true);
+    // The fabric overlay builds from the repository root (context ../../.. of that directory).
+    expect(existsSync(join(repoRoot, 'deploy', 'container', 'Dockerfile'))).toBe(true);
+  });
+});
