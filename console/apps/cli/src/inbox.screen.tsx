@@ -4,17 +4,42 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { consoleApi } from './console-api.js';
 import type { InboxItem } from './inbox.js';
+import { constraintText, type AnswerBody } from './questions.js';
+
+const TYPED = new Set(['text', 'secret', 'number']);
+
+/** The keys that answer the selected item, shown under it. */
+function hint(item: InboxItem, armed: boolean): string {
+  switch (item.input) {
+    case 'text':
+    case 'number':
+    case 'secret':
+      return 'type, enter send · x decline (before typing)';
+    case 'choice':
+      return 'press an option number · x decline';
+    case 'multi_choice':
+      return 'numbers toggle · enter send · x decline';
+    case 'confirm':
+      return armed ? `press y again to ${item.confirmLabel ?? 'approve'} (high risk) · any other key cancels` : `y ${item.confirmLabel ?? 'approve'} · n ${item.denyLabel ?? 'deny'} · x decline`;
+    default:
+      return 'enter done · x decline';
+  }
+}
 
 /**
- * The inbox. Up/down selects a request. For text or a secret, type the
- * answer (a secret shows as dots) and press Enter; for a choice, press its
- * number; otherwise Enter means done. `x` declines; Esc goes back.
+ * The inbox. Up/down selects a request. Text, a number or a secret: type
+ * it (a secret shows as dots) and press Enter. A choice: press its number.
+ * Several choices: numbers toggle, Enter sends. A confirmation: y or n (a
+ * high-risk one asks for y twice). Otherwise Enter means done. `x`
+ * declines; Esc goes back.
  */
 export function InboxScreen({ onDone }: TuiScreenProps): ReactNode {
   const theme = useTuiTheme();
   const [items, setItems] = useState<InboxItem[] | null>(null);
   const [selected, setSelected] = useState(0);
   const [typed, setTyped] = useState('');
+  const [picked, setPicked] = useState<string[]>([]);
+  const [armed, setArmed] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,13 +58,21 @@ export function InboxScreen({ onDone }: TuiScreenProps): ReactNode {
     return () => clearInterval(t);
   }, [load]);
 
-  const send = (item: InboxItem, outcome: 'completed' | 'cancelled', value?: string) => {
+  const reset = () => {
+    setTyped('');
+    setPicked([]);
+    setArmed(false);
+  };
+
+  const send = (item: InboxItem, body: AnswerBody) => {
     setStatus('sending…');
+    // The typed value is dropped from state at once (a secret is not kept).
+    reset();
+    const path = item.runId ? `/inbox/${item.runId}/respond` : `/questions/${item.questionId}/answer`;
     void consoleApi()
-      .post(`/inbox/${item.runId}/respond`, value !== undefined ? { outcome, value } : { outcome })
+      .post(path, item.runId ? body : { ...body, channel: 'tui' })
       .then(() => {
-        setStatus(outcome === 'completed' ? 'sent; the agent continues' : 'declined');
-        setTyped('');
+        setStatus(body.outcome === 'completed' ? 'sent; the agent continues' : 'declined');
         return load();
       })
       .catch((e: unknown) => setStatus(e instanceof Error ? e.message : String(e)));
@@ -49,28 +82,47 @@ export function InboxScreen({ onDone }: TuiScreenProps): ReactNode {
     if (key.escape) return onDone();
     const list = items ?? [];
     const item = list[selected];
-    if (key.upArrow) return (setSelected((i) => Math.max(0, i - 1)), setTyped(''));
-    if (key.downArrow) return (setSelected((i) => Math.min(Math.max(0, list.length - 1), i + 1)), setTyped(''));
+    if (key.upArrow) return (setSelected((i) => Math.max(0, i - 1)), reset());
+    if (key.downArrow) return (setSelected((i) => Math.min(Math.max(0, list.length - 1), i + 1)), reset());
     if (!item) return;
-    const typing = item.input === 'text' || item.input === 'secret';
-    if (typing) {
-      if (key.return) return typed ? send(item, 'completed', typed) : undefined;
+    if (TYPED.has(item.input)) {
+      if (key.return) return typed ? send(item, { outcome: 'completed', value: typed }) : undefined;
       if (key.backspace || key.delete) return setTyped((t) => t.slice(0, -1));
-      if (input === 'x' && !typed) return send(item, 'cancelled');
+      if (input === 'x' && !typed) return send(item, { outcome: 'cancelled' });
       if (input && !key.ctrl && !key.meta) setTyped((t) => t + input);
       return;
     }
-    if (input === 'x') return send(item, 'cancelled');
+    if (item.input === 'confirm') {
+      if (armed) {
+        if (input === 'y') return send(item, { outcome: 'completed', value: 'approve' });
+        return setArmed(false);
+      }
+      if (input === 'y') return item.risk === 'low' ? send(item, { outcome: 'completed', value: 'approve' }) : setArmed(true);
+      if (input === 'n') return send(item, { outcome: 'completed', value: 'deny' });
+    }
+    if (input === 'x') return send(item, { outcome: 'cancelled' });
+    const options = item.options ?? item.choices.map((c) => ({ id: c, label: c }));
+    const n = Number.parseInt(input, 10);
     if (item.input === 'choice') {
-      const n = Number.parseInt(input, 10);
-      if (n >= 1 && n <= item.choices.length) send(item, 'completed', item.choices[n - 1]);
+      if (n >= 1 && n <= options.length) send(item, { outcome: 'completed', value: options[n - 1]!.id });
       return;
     }
-    if (key.return) send(item, 'completed');
+    if (item.input === 'multi_choice') {
+      if (n >= 1 && n <= options.length) {
+        const id = options[n - 1]!.id;
+        return setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+      }
+      if (key.return && picked.length) send(item, { outcome: 'completed', values: options.map((o) => o.id).filter((id) => picked.includes(id)) });
+      return;
+    }
+    if (item.input === 'confirm') return;
+    if (key.return) send(item, { outcome: 'completed' });
     if (input === 'q') onDone();
   });
 
   const item = items?.[selected];
+  const options = item ? (item.options ?? item.choices.map((c) => ({ id: c, label: c }))) : [];
+  const c = item ? constraintText(item) : '';
   return (
     <Box flexDirection="column" gap={1}>
       <Text bold {...textColor(theme.primary)}>Inbox</Text>
@@ -79,19 +131,33 @@ export function InboxScreen({ onDone }: TuiScreenProps): ReactNode {
       {items?.length === 0 && <Text>Nothing is waiting for you.</Text>}
       <Box flexDirection="column">
         {items?.map((i, n) => (
-          <Text key={i.runId} inverse={n === selected} wrap="truncate">
+          <Text key={i.questionId} inverse={n === selected} wrap="truncate">
             {n === selected ? '› ' : '  '}[{i.kind}] {i.prompt}
           </Text>
         ))}
       </Box>
-      {item && (item.input === 'text' || item.input === 'secret') && (
+      {item && c && <Text dimColor>{c}</Text>}
+      {item && TYPED.has(item.input) && (
         <Text>
           {item.input === 'secret' ? 'secret' : 'answer'}: {item.input === 'secret' ? '•'.repeat(typed.length) : typed}
+          {item.input === 'number' && item.constraints?.unit ? ` ${item.constraints.unit}` : ''}
         </Text>
       )}
-      {item?.input === 'choice' && <Text>{item.choices.map((c, n) => `${n + 1}) ${c}`).join('   ')}</Text>}
+      {(item?.input === 'choice' || item?.input === 'multi_choice') && (
+        <Box flexDirection="column">
+          {options.map((o, n) => (
+            <Text key={o.id}>
+              {item.input === 'multi_choice' ? (picked.includes(o.id) ? '[x] ' : '[ ] ') : ''}
+              {n + 1}) {o.label}
+              {'description' in o && o.description ? ` — ${o.description}` : ''}
+            </Text>
+          ))}
+        </Box>
+      )}
+      {item?.input === 'takeover' && <Text>Take over the browser (open it from the web app), then press enter.</Text>}
+      {item && <Text dimColor>{hint(item, armed)}</Text>}
       {status && <Text>{status}</Text>}
-      <Text dimColor>↑/↓ select · enter send/done · x decline · esc back</Text>
+      <Text dimColor>↑/↓ select · x decline · esc back</Text>
     </Box>
   );
 }

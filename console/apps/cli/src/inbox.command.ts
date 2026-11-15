@@ -2,7 +2,8 @@ import type { Command } from 'commander';
 import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 
 import { consoleApi } from './console-api.js';
-import { readStdinLine, type InboxItem } from './inbox.js';
+import { inboxRef, readStdinLine, type InboxItem } from './inbox.js';
+import { answerFromFlags, constraintText, optionLines, type AnswerFlags } from './questions.js';
 
 const out = (s: string): void => {
   process.stdout.write(`${s}\n`);
@@ -19,32 +20,33 @@ export const inboxCommand: CliCommandRegistration = (program: Command) => {
       if (o.json) return out(JSON.stringify(items, null, 2));
       if (!items.length) return out('Nothing is waiting for you.');
       for (const i of items) {
-        out(`${i.runId.slice(0, 8)}  [${i.kind}, ${i.input}]  ${i.prompt}`);
-        if (i.choices.length) out(`          choices: ${i.choices.join(' | ')}`);
+        out(`${inboxRef(i)}  [${i.kind}, ${i.input}]  ${i.prompt}`);
+        for (const line of optionLines(i)) out(`          ${line}`);
+        const c = constraintText(i);
+        if (c) out(`          ${c}`);
       }
     });
   inbox
-    .command('answer <run>')
-    .description('Answer a request: --done, --value TEXT, --choice C, --secret-stdin, or --decline')
-    .option('--done', 'you did what was asked (CAPTCHA, approval, sign-in)')
-    .option('--value <text>', 'a text answer')
-    .option('--choice <choice>', 'one of the offered choices')
+    .command('answer <ref>')
+    .description('Answer a request (by its run or question id, or a prefix): --done, --value V, --values a,b, --choice ID, --approve, --deny, --secret-stdin, or --decline')
+    .option('--done', 'you did what was asked (CAPTCHA, sign-in, taking over the browser)')
+    .option('--value <value>', 'a text or number answer')
+    .option('--values <ids>', 'multi_choice: option ids, comma separated')
+    .option('--choice <id>', 'one of the offered options (its id)')
+    .option('--approve', 'confirm: approve')
+    .option('--deny', 'confirm: deny')
     .option('--secret-stdin', 'read a code or password from stdin (never pass secrets as arguments)')
     .option('--decline', 'you cannot or will not help')
-    .action(async (ref: string, o: { done?: boolean; value?: string; choice?: string; secretStdin?: boolean; decline?: boolean }) => {
+    .action(async (ref: string, o: AnswerFlags) => {
       const api = consoleApi();
       const items = await api.get<InboxItem[]>('/inbox');
-      const matches = items.filter((i) => i.runId === ref || i.runId.startsWith(ref));
+      const matches = items.filter((i) => [i.runId, i.questionId].some((id) => id && (id === ref || id.startsWith(ref))));
       if (matches.length !== 1) throw new Error(matches.length ? `"${ref}" matches several requests` : `No waiting request for "${ref}" (see \`hexactra inbox list\`)`);
       const item = matches[0]!;
-      let body: { outcome: 'completed' | 'cancelled'; value?: string };
-      if (o.decline) body = { outcome: 'cancelled' };
-      else if (o.secretStdin) body = { outcome: 'completed', value: await readStdinLine() };
-      else if (o.value !== undefined) body = { outcome: 'completed', value: o.value };
-      else if (o.choice !== undefined) body = { outcome: 'completed', value: o.choice };
-      else if (o.done) body = { outcome: 'completed' };
-      else throw new Error(`This request needs ${item.input === 'secret' ? '--secret-stdin' : item.input === 'text' ? '--value' : item.input === 'choice' ? '--choice' : '--done'} (or --decline).`);
-      await api.post(`/inbox/${item.runId}/respond`, body);
+      // A run's question by its run (the run resumes at once); a free-standing one through the broker.
+      const body = await answerFromFlags(o, item.input, readStdinLine);
+      if (item.runId) await api.post(`/inbox/${item.runId}/respond`, body);
+      else await api.post(`/questions/${item.questionId}/answer`, { ...body, channel: 'cli' });
       out(body.outcome === 'completed' ? 'sent; the agent continues' : 'declined');
     });
 };

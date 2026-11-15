@@ -89,6 +89,15 @@ const CONSTRAINT_FIELDS = {
   maxSelections: 'max_selections',
 } as const;
 
+/**
+ * A choice as the fabric takes it: a bare string when it is its own label
+ * (what fabrics before the typed contract accept), else `{ id, label, description? }`.
+ */
+function fabricChoice(c: string | { id: string; label: string; description?: string }): string | { id: string; label: string; description?: string } {
+  if (typeof c === 'string' || (c.id === c.label && !c.description)) return typeof c === 'string' ? c : c.id;
+  return { id: c.id, label: c.label, ...(c.description ? { description: c.description } : {}) };
+}
+
 /** The fabric's create body. Typed-contract fields are sent only when set, so older fabrics keep accepting it. */
 export function handoffBody(req: HandoffRequest): Record<string, unknown> {
   const constraints: Record<string, unknown> = {};
@@ -99,7 +108,7 @@ export function handoffBody(req: HandoffRequest): Record<string, unknown> {
     kind: req.kind,
     prompt: req.prompt,
     input: req.input,
-    choices: req.choices ?? [],
+    choices: (req.choices ?? []).map(fabricChoice),
     ...(Object.keys(constraints).length ? { constraints } : {}),
     ...(req.confirmLabel ? { confirm_label: req.confirmLabel } : {}),
     ...(req.denyLabel ? { deny_label: req.denyLabel } : {}),

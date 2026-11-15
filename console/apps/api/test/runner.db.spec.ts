@@ -42,7 +42,6 @@ function fakeFabric() {
   // The fabric's real handoff view (crates/hexactra-core/src/remote.rs `HandoffView`).
   const handoffs = new Map<string, { id: string; status: string; input: string; kind: string; response?: { outcome?: string; value?: string; value_withheld: boolean; channel?: string; by?: string; answered_at?: string } }>();
   let ended = 0;
-  let n = 0;
   const request = jest.fn(async (method: string, path: string, opts: { body?: Record<string, unknown> } = {}) => {
     if (method === 'POST' && path === '/v1/sessions') return { id: '00000000-0000-4000-8000-00000000000a' };
     if (method === 'DELETE' && path.startsWith('/v1/sessions/')) return void (ended += 1);
@@ -54,7 +53,8 @@ function fakeFabric() {
       return { id: 'op', state: 'succeeded', result: {} };
     }
     if (method === 'POST' && path.endsWith('/handoffs')) {
-      const id = `00000000-0000-4000-8000-0000000000${String(++n).padStart(2, '0')}`;
+      // Unique per run of the suite: the question broker mirrors handoffs by id.
+      const id = randomUUID();
       handoffs.set(id, { id, status: 'pending', input: String(opts.body!.input), kind: String(opts.body!.kind) });
       return { handoff: { id } };
     }
@@ -171,6 +171,81 @@ describe('the goal runner', () => {
     } as unknown as AiService);
     expect(await runner.advance(run.id, userId, null)).toBe('cancelled');
     expect(fabric.ended()).toBe(1);
+  });
+});
+
+describe('the goal runner asks typed questions (#290)', () => {
+  it('asks multi_choice, number and confirm questions and folds the answers into its memory', async () => {
+    const userId = await login(`runner-typed-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const tasks = app.get(TasksService);
+    const db = prisma.forUser({ userId });
+    const run = await db.run.create({ data: { userId, goal: 'Order fruit' } });
+    const fabric = fakeFabric();
+    const bodies: Record<string, unknown>[] = [];
+    const request = fabric.client.request as unknown as jest.Mock;
+    const inner = request.getMockImplementation()!;
+    request.mockImplementation(async (method: string, path: string, opts: { body?: Record<string, unknown> } = {}) => {
+      if (method === 'POST' && path.endsWith('/handoffs')) bodies.push(opts.body!);
+      return inner(method, path, opts);
+    });
+    const nulls = { choices: null, options: null, constraints: null, confirm_label: null, deny_label: null, risk: null };
+    const { ai, outputs } = scriptedAi([
+      [['request_human', { ...nulls, kind: 'other', prompt: 'Which fruit?', input: 'choice' }]],
+      [
+        [
+          'request_human',
+          {
+            ...nulls,
+            kind: 'other',
+            prompt: 'Which fruit?',
+            input: 'multi_choice',
+            options: [
+              { id: 'a', label: 'Apples', description: null },
+              { id: 'b', label: 'Bananas', description: 'Ripe' },
+              { id: 'c', label: 'Cherries', description: null },
+            ],
+            constraints: { max_length: null, pattern: null, multiline: null, min: null, max: null, step: null, unit: null, min_selections: 1, max_selections: 2 },
+          },
+        ],
+      ],
+      [['request_human', { ...nulls, kind: 'other', prompt: 'How much?', input: 'number', constraints: { min: 0, max: 10, step: 0.5, unit: 'kg' } }]],
+      [['request_human', { ...nulls, kind: 'confirmation', prompt: 'Pay 12 for the order?', input: 'confirm', confirm_label: 'Pay', deny_label: 'Stop', risk: 'high' }]],
+      [['finish', { success: true, result: 'Ordered' }]],
+    ]);
+    const questions = new QuestionsService(prisma, fabric.client, { enqueue: async () => undefined } as never, new QuestionEvents());
+    const runner = new GoalRunnerService(prisma, tasks, fabric.client, ai, undefined, questions);
+
+    // An invalid question is refused back to the model, which asks again.
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    expect(outputs[0]).toMatch(/Invalid request_human: options: choice needs 1-10 options/);
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0]).toMatchObject({
+      input: 'multi_choice',
+      choices: [{ id: 'a', label: 'Apples' }, { id: 'b', label: 'Bananas', description: 'Ripe' }, { id: 'c', label: 'Cherries' }],
+      constraints: { min_selections: 1, max_selections: 2 },
+    });
+    const answer = (n: number, response: Record<string, unknown>) => {
+      const h = [...fabric.handoffs.values()][n]!;
+      Object.assign(h, { status: 'completed', response: { outcome: 'completed', value_withheld: false, channel: 'web', by: `user:${userId}`, answered_at: new Date().toISOString(), ...response } });
+    };
+    answer(0, { values: ['a', 'c'] });
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    expect(bodies[1]).toMatchObject({ input: 'number', constraints: { min: 0, max: 10, step: 0.5, unit: 'kg' } });
+    answer(1, { value: '2.5' });
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    expect(bodies[2]).toMatchObject({ input: 'confirm', confirm_label: 'Pay', deny_label: 'Stop', risk: 'high' });
+    answer(2, { value: 'approve' });
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+
+    const memory = (await db.run.findFirstOrThrow({ where: { id: run.id } })).transcript as unknown as { log: string[] };
+    expect(memory.log).toEqual(expect.arrayContaining(['The person selected: Apples, Cherries', 'The person entered: 2.5 kg', 'The person approved.']));
+    const asked = await db.question.findMany({ where: { runId: run.id }, orderBy: { createdAt: 'asc' } });
+    expect(asked.map((q) => [q.input, q.status])).toEqual([
+      ['multi_choice', 'answered'],
+      ['number', 'answered'],
+      ['confirm', 'answered'],
+    ]);
   });
 });
 

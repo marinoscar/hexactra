@@ -163,7 +163,9 @@
       "cli": "inbox answer",
       "mcp": "inbox_answer",
       "tui": "inbox",
-      "web": "/inbox"
+      "web": {
+        "none": "/inbox answers every question through the question broker (questions.answer: POST /api/questions/{id}/answer), free-standing ones too"
+      }
     },
     {
       "id": "questions.ask",
@@ -172,17 +174,19 @@
         "POST /api/questions",
         "GET /api/questions/{id}"
       ],
-      "cli": {
-        "none": "Asking is done by agents through REST; the person answers with `inbox answer`"
-      },
-      "mcp": {
-        "none": "Agents ask through browser_request_human today; MCP tools for free-standing questions come with the channels work (#290)"
-      },
+      "cli": [
+        "questions ask",
+        "questions show"
+      ],
+      "mcp": [
+        "ask_human",
+        "question_status"
+      ],
       "tui": {
-        "none": "The person answers on the Inbox screen"
+        "none": "The TUI is for answering; ask with `questions ask` (CLI), ask_human (MCP) or REST"
       },
       "web": {
-        "none": "The person answers on /inbox"
+        "none": "The web app is where the person answers (/inbox, /inbox/q/:id); agents ask through REST, the CLI or MCP"
       }
     },
     {
@@ -191,17 +195,15 @@
       "rest": [
         "GET /api/questions"
       ],
-      "cli": {
-        "none": "`inbox list` shows the pending questions (GET /api/inbox); the full history comes to the CLI with #290"
-      },
+      "cli": "questions list",
       "mcp": {
-        "none": "`inbox_list` shows the pending questions (GET /api/inbox); the full history comes to MCP with #290"
+        "none": "An agent follows the questions it asked with question_status; inbox_list shows what is pending"
       },
       "tui": {
-        "none": "The Inbox screen shows the pending questions; the full history comes with #290"
+        "none": "The Inbox screen shows the pending questions (GET /api/inbox); the history is in `questions list --all`"
       },
       "web": {
-        "none": "/inbox shows the pending questions; the full history comes to the web app with #290"
+        "none": "/inbox shows the pending questions and /inbox/q/:id one question with its final state; the history is in `questions list --all`"
       }
     },
     {
@@ -211,18 +213,13 @@
         "POST /api/questions/{id}/answer",
         "POST /api/questions/{id}/cancel"
       ],
-      "cli": {
-        "none": "`inbox answer` answers a run's question; free-standing questions come to the CLI with #290"
-      },
-      "mcp": {
-        "none": "`inbox_answer` answers a run's question; free-standing questions come to MCP with #290"
-      },
-      "tui": {
-        "none": "The Inbox screen answers a run's question; free-standing questions come to the TUI with #290"
-      },
-      "web": {
-        "none": "/inbox answers a run's question; free-standing questions come to the web app with #290"
-      }
+      "cli": "questions answer",
+      "mcp": "inbox_answer",
+      "tui": "inbox",
+      "web": [
+        "/inbox",
+        "/inbox/q/:id"
+      ]
     },
     {
       "id": "schedules.list",

@@ -43,10 +43,93 @@ function action(name: string, description: string, input: z.ZodObject, build: (a
   };
 }
 
+/** An option: a bare label (its own id) or `{ id, label, description }`. */
+const option = z.union([
+  z.string().min(1).max(100),
+  z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/), label: z.string().min(1).max(100), description: z.string().max(200).optional() }),
+]);
+const constraints = z
+  .object({
+    max_length: z.number().int().min(1).max(4096).optional().describe('text: the longest answer'),
+    pattern: z.string().min(1).max(200).optional().describe('text: a regular expression the whole answer must match'),
+    multiline: z.boolean().optional().describe('text: allow several lines'),
+    min: z.number().optional().describe('number: the smallest value'),
+    max: z.number().optional().describe('number: the largest value'),
+    step: z.number().positive().optional().describe('number: the increment (from min, or 0)'),
+    unit: z.string().min(1).max(20).optional().describe('number: shown after the value, e.g. kg'),
+    min_selections: z.number().int().min(0).max(10).optional().describe('multi_choice: at least this many'),
+    max_selections: z.number().int().min(1).max(10).optional().describe('multi_choice: at most this many'),
+  })
+  .strict();
+const CONSTRAINT_KEYS = { max_length: 'maxLength', pattern: 'pattern', multiline: 'multiline', min: 'min', max: 'max', step: 'step', unit: 'unit', min_selections: 'minSelections', max_selections: 'maxSelections' } as const;
+const KINDS = ['captcha', 'code', 'passkey', 'login', 'confirmation', 'other'] as const;
+/** The longest an MCP tool waits for an answer, in seconds (long-polled in waits of at most 30 s). */
+export const MAX_TOOL_WAIT_S = 300;
+
+/** The question fields of a tool's arguments (snake_case) as the REST contract's (camelCase). */
+export function questionBody(a: Record<string, unknown>): Record<string, unknown> {
+  const c: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries((a.constraints as Record<string, unknown> | undefined) ?? {})) {
+    if (v !== undefined) c[CONSTRAINT_KEYS[k as keyof typeof CONSTRAINT_KEYS]] = v;
+  }
+  const options = (a.options as unknown[] | undefined) ?? (a.choices as unknown[] | undefined);
+  return {
+    ...(a.kind !== undefined ? { kind: a.kind } : {}),
+    prompt: a.prompt,
+    input: a.input,
+    ...(options && options.length ? { options } : {}),
+    ...(Object.keys(c).length ? { constraints: c } : {}),
+    ...(a.confirm_label !== undefined ? { confirmLabel: a.confirm_label } : {}),
+    ...(a.deny_label !== undefined ? { denyLabel: a.deny_label } : {}),
+    ...(a.risk !== undefined ? { risk: a.risk } : {}),
+    ...(a.timeout_s !== undefined ? { timeoutMs: Number(a.timeout_s) * 1000 } : {}),
+  };
+}
+
+interface QuestionView {
+  id: string;
+  input: string;
+  prompt: string;
+  status: string;
+  expiresAt: string;
+  response: { outcome: string; value?: string; values?: string[]; valueWithheld?: boolean; channel?: string } | null;
+}
+
+/** What a tool returns about a question: never more than the REST API (a secret is never returned). */
+function questionResult(q: QuestionView) {
+  return {
+    question_id: q.id,
+    status: q.status,
+    input: q.input,
+    expires_at: q.expiresAt,
+    ...(q.response
+      ? {
+          outcome: q.response.outcome,
+          ...(q.response.value !== undefined ? { value: q.response.value } : {}),
+          ...(q.response.values !== undefined ? { values: q.response.values } : {}),
+          ...(q.response.channel ? { channel: q.response.channel } : {}),
+        }
+      : {}),
+    ...(q.status === 'pending' ? { hint: 'Still pending: call question_status with wait_s to keep waiting.' } : {}),
+  };
+}
+
+/** Wait up to `waitS` seconds for a question to settle, in long polls of at most 30 s. */
+async function awaitQuestion(ctx: McpContext, id: string, waitS: number, first?: QuestionView): Promise<QuestionView> {
+  const deadline = Date.now() + Math.min(Math.max(waitS, 0), MAX_TOOL_WAIT_S) * 1000;
+  let q = first ?? (await ctx.api<QuestionView>('GET', `/questions/${id}`));
+  while (q.status === 'pending' && Date.now() < deadline) {
+    const waitMs = Math.min(30_000, deadline - Date.now());
+    q = await ctx.api<QuestionView>('GET', `/questions/${id}?waitMs=${waitMs}`);
+  }
+  return q;
+}
+
 export const MCP_INSTRUCTIONS = `Hexactra runs real browsers for the user, on their own machines and profiles, through this console.
 Two ways to work:
 1. Delegate: run_goal (or task_run) hands a goal to Hexactra's own browser agent; follow it with run_status. It asks the person for CAPTCHAs, codes and confirmations itself.
 2. Drive: browser_open, then browser_* tools step by step; every action is recorded and the user can stop you at any time.
+3. Ask: ask_human asks the user a question with no browser involved (text, choice, multi_choice, number, confirm, none, takeover) and can wait for the answer (wait_s); question_status follows it. The user answers on any of their devices.
 Rules: never try to bypass a CAPTCHA or a bot check, never guess a code or a password. Call browser_request_human and wait (browser_handoff_status); type codes with browser_type_secret, so you never see them. Ask before buying, paying or submitting anything irreversible. Close sessions with browser_close.`;
 
 export const MCP_TOOLS: McpTool[] = [
@@ -101,9 +184,52 @@ export const MCP_TOOLS: McpTool[] = [
   { name: 'inbox_list', description: "What the user's agents are waiting for (CAPTCHAs, codes, sign-ins, confirmations). Relay these to the user.", input: z.object({}), call: async (_a, ctx) => text(await ctx.api('GET', '/inbox')) },
   {
     name: 'inbox_answer',
-    description: "Relay the USER's answer to a waiting request (never invent one). outcome completed with value for text/choice/secret, completed alone for done/approve, cancelled to decline.",
-    input: z.object({ run_id: id, outcome: z.enum(['completed', 'cancelled']), value: z.string().max(4096).optional() }),
-    call: async (a, ctx) => text(await ctx.api('POST', `/inbox/${String(a.run_id)}/respond`, { outcome: a.outcome, ...(a.value !== undefined ? { value: a.value } : {}) })),
+    description:
+      "Relay the USER's answer to a waiting request (never invent one). Name it by question_id (from inbox_list or ask_human) or by run_id. " +
+      'outcome completed with value for text/choice (an option id)/number/confirm ("approve" or "deny")/secret, values (option ids) for multi_choice, completed alone for none/takeover; cancelled to decline.',
+    input: z.object({
+      question_id: id.optional(),
+      run_id: id.optional(),
+      outcome: z.enum(['completed', 'cancelled']),
+      value: z.union([z.string().max(4096), z.number()]).optional(),
+      values: z.array(z.string().max(64)).max(10).optional(),
+    }),
+    async call(a, ctx) {
+      if (Boolean(a.question_id) === Boolean(a.run_id)) return { ...text('Give question_id or run_id (one of them).'), isError: true };
+      const body = { outcome: a.outcome, ...(a.value !== undefined ? { value: a.value } : {}), ...(a.values !== undefined ? { values: a.values } : {}) };
+      if (a.question_id) return text(questionResult(await ctx.api<QuestionView>('POST', `/questions/${String(a.question_id)}/answer`, { ...body, channel: 'mcp' })));
+      return text(await ctx.api('POST', `/inbox/${String(a.run_id)}/respond`, body));
+    },
+  },
+  {
+    name: 'ask_human',
+    description:
+      'Ask the user a question that needs no browser (they answer on the web app, the Android app, the CLI or a notification). ' +
+      'input: text, choice (one of options), multi_choice (several), number, confirm (approve/deny; risk "high" by default, which only signed-in channels may answer), none or takeover (they press Done). ' +
+      'Never ask for a password or a code here (use browser_request_human with input secret). With wait_s (at most 300) the call waits for the answer; otherwise follow it with question_status.',
+    input: z.object({
+      prompt: z.string().min(1).max(2000),
+      input: z.enum(['none', 'text', 'choice', 'multi_choice', 'number', 'confirm', 'takeover']),
+      kind: z.enum(KINDS).default('other'),
+      options: z.array(option).max(10).optional().describe('choice and multi_choice'),
+      constraints: constraints.optional(),
+      confirm_label: z.string().min(1).max(40).optional(),
+      deny_label: z.string().min(1).max(40).optional(),
+      risk: z.enum(['low', 'high']).optional().describe('confirm only'),
+      timeout_s: z.number().int().min(10).max(86_400).optional().describe('How long the question stays open (default 1 hour)'),
+      wait_s: z.number().int().min(0).max(MAX_TOOL_WAIT_S).default(0).describe('Wait this long for the answer'),
+      agent_name: z.string().min(1).max(100).default('mcp agent'),
+    }),
+    async call(a, ctx) {
+      const q = await ctx.api<QuestionView>('POST', '/questions', { ...questionBody(a), asker: a.agent_name });
+      return text(questionResult(Number(a.wait_s) > 0 ? await awaitQuestion(ctx, q.id, Number(a.wait_s), q) : q));
+    },
+  },
+  {
+    name: 'question_status',
+    description: 'A question: pending, answered (with outcome, value or values), cancelled (declined) or expired. With wait_s (at most 300) waits while it is pending. A secret is never returned.',
+    input: z.object({ question_id: id, wait_s: z.number().int().min(0).max(MAX_TOOL_WAIT_S).default(0) }),
+    call: async (a, ctx) => text(questionResult(await awaitQuestion(ctx, String(a.question_id), Number(a.wait_s)))),
   },
   { name: 'hosts_list', description: 'Browser hosts with their profiles and running browsers.', input: z.object({}), call: async (_a, ctx) => text(await ctx.api('GET', '/fleet/hosts')) },
 
@@ -130,9 +256,23 @@ export const MCP_TOOLS: McpTool[] = [
   action('browser_screenshot', 'A screenshot of the page.', z.object({}), () => ({ type: 'screenshot' })),
   {
     name: 'browser_request_human',
-    description: 'Ask the person for help (CAPTCHA, code, passkey, login, confirmation). It appears in their Inbox and notifications. Then poll browser_handoff_status.',
-    input: z.object({ session_id: id, kind: z.enum(['captcha', 'code', 'passkey', 'login', 'confirmation', 'other']), prompt: z.string().min(1).max(2000), input: z.enum(['none', 'text', 'secret', 'choice']).default('none'), choices: z.array(z.string()).max(10).default([]) }),
-    call: async (a, ctx) => text(await ctx.api('POST', `/browser/sessions/${String(a.session_id)}/handoffs`, { kind: a.kind, prompt: a.prompt, input: a.input, choices: a.choices })),
+    description:
+      'Ask the person for help in this browser session (CAPTCHA, code, passkey, login, a choice, a number, a confirmation, or taking over the browser). It appears in their Inbox and notifications. ' +
+      'input: none (they act, then Done), text, secret (type it with browser_type_secret), choice, multi_choice, number, confirm (approve/deny), takeover. Then poll browser_handoff_status.',
+    input: z.object({
+      session_id: id,
+      kind: z.enum(KINDS),
+      prompt: z.string().min(1).max(2000),
+      input: z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover']).default('none'),
+      options: z.array(option).max(10).optional().describe('choice and multi_choice'),
+      choices: z.array(option).max(10).optional().describe('The older name of options'),
+      constraints: constraints.optional(),
+      confirm_label: z.string().min(1).max(40).optional(),
+      deny_label: z.string().min(1).max(40).optional(),
+      risk: z.enum(['low', 'high']).optional().describe('confirm only'),
+      timeout_s: z.number().int().min(10).max(86_400).optional(),
+    }),
+    call: async (a, ctx) => text(await ctx.api('POST', `/browser/sessions/${String(a.session_id)}/handoffs`, questionBody(a))),
   },
   {
     name: 'browser_handoff_status',
@@ -155,5 +295,5 @@ export const MCP_TOOLS: McpTool[] = [
  */
 export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
   'run_status', 'runs_list', 'tasks_list', 'schedules_list', 'inbox_list', 'hosts_list',
-  'browser_elements', 'browser_text', 'browser_tabs', 'browser_screenshot', 'browser_handoff_status',
+  'browser_elements', 'browser_text', 'browser_tabs', 'browser_screenshot', 'browser_handoff_status', 'question_status',
 ]);
