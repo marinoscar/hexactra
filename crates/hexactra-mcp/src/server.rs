@@ -140,12 +140,49 @@ pub fn tools() -> Vec<Value> {
         tool("browser_reload", "Reload the tab.", json!({"tab_id": tab_prop()}), &[]),
         tool(
             "browser_request_human",
-            "Pause and ask the user to do something only a person should do: solve a CAPTCHA, enter a one-time code, approve a passkey, sign in, or confirm a purchase. The user is reached on their configured channels (chat, email link, ...). With wait=true (default) this returns the outcome and, for input text/secret/choice, the person's answer. Use input=secret for one-time codes: type the value into the page and do not repeat it elsewhere.",
+            "Pause and ask the user to do something only a person should do, or a question only they can answer: solve a CAPTCHA, enter a one-time code, approve a passkey, sign in, confirm a purchase, pick from options. The user is reached on their configured channels (chat, email link, ...). With wait=true (default) this returns the outcome and the person's answer: `value` for text, secret, choice (the option id), number (a decimal string) and confirm (`approve` or `deny`), `values` (option ids) for multi_choice. Use input=secret for one-time codes: type the value into the page and do not repeat it elsewhere. Use input=takeover when the person must operate the browser themselves.",
             json!({
                 "kind": {"type": "string", "enum": ["captcha", "code", "passkey", "login", "confirmation", "other"]},
                 "prompt": {"type": "string", "description": "What the person should do, in plain words."},
-                "input": {"type": "string", "enum": ["none", "text", "secret", "choice"], "description": "none: the person acts in the browser and marks it done."},
-                "choices": {"type": "array", "items": {"type": "string"}},
+                "input": {"type": "string", "enum": ["none", "text", "secret", "choice", "multi_choice", "number", "confirm", "takeover"], "description": "none: the person acts in the browser and marks it done. takeover: the person operates the browser, then marks it done. confirm: approve or deny."},
+                "choices": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 10,
+                    "description": "Options for choice and multi_choice: a string (used as id and label) or {id, label, description}.",
+                    "items": {"oneOf": [
+                        {"type": "string"},
+                        {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$"},
+                                "label": {"type": "string", "maxLength": 100},
+                                "description": {"type": "string", "maxLength": 200}
+                            },
+                            "required": ["id", "label"],
+                            "additionalProperties": false
+                        }
+                    ]}
+                },
+                "constraints": {
+                    "type": "object",
+                    "description": "Bounds on the answer; only those that apply to the input are allowed.",
+                    "properties": {
+                        "max_length": {"type": "integer", "minimum": 1, "maximum": 4096, "description": "text, secret"},
+                        "pattern": {"type": "string", "maxLength": 200, "description": "text: regex the whole answer must match"},
+                        "multiline": {"type": "boolean", "description": "text: false rejects newlines"},
+                        "min": {"type": "number", "description": "number"},
+                        "max": {"type": "number", "description": "number"},
+                        "step": {"type": "number", "exclusiveMinimum": 0, "description": "number"},
+                        "unit": {"type": "string", "maxLength": 20, "description": "number"},
+                        "min_selections": {"type": "integer", "minimum": 0, "description": "multi_choice (default 1)"},
+                        "max_selections": {"type": "integer", "minimum": 1, "description": "multi_choice (default all)"}
+                    },
+                    "additionalProperties": false
+                },
+                "confirm_label": {"type": "string", "maxLength": 40, "description": "confirm: approve button label"},
+                "deny_label": {"type": "string", "maxLength": 40, "description": "confirm: deny button label"},
+                "risk": {"type": "string", "enum": ["low", "high"], "description": "confirm: how risky approving is (default high)"},
                 "timeout_s": {"type": "integer", "minimum": 10, "maximum": 86400},
                 "wait": {"type": "boolean", "description": "Wait for the answer (default true)."}
             }),
@@ -434,6 +471,9 @@ impl Server {
                 if let Some(v) = value {
                     out["value"] = json!(v);
                 }
+                if let Some(vs) = h.response.as_ref().and_then(|r| r.values.as_ref()) {
+                    out["values"] = json!(vs);
+                }
                 text_result(
                     format!(
                         "The person completed the request{channel}. Browser actions are resumed.\n{}",
@@ -568,6 +608,7 @@ impl Server {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hexactra_core::remote::{HandoffConstraints, HandoffKind, HandoffRisk};
 
     #[test]
     fn every_tool_maps_to_an_action_or_is_status() {
@@ -628,6 +669,71 @@ mod tests {
             actual, expected,
             "api/mcp-schemas.json is stale; run HEXACTRA_UPDATE_CONTRACTS=1 cargo test -p hexactra-mcp"
         );
+    }
+
+    /// Every `browser_request_human` property (but `wait`, `timeout_s`) is a
+    /// `CreateHandoffRequest` field, and typed questions parse and validate.
+    #[test]
+    fn request_human_schema_matches_the_handoff_contract() {
+        let t = tools()
+            .into_iter()
+            .find(|t| t["name"] == "browser_request_human")
+            .unwrap();
+        let props = t["inputSchema"]["properties"].as_object().unwrap();
+        let mut args = json!({
+            "kind": "confirmation", "prompt": "Pick extras", "input": "multi_choice",
+            "choices": ["Window seat", {"id": "bag", "label": "Checked bag", "description": "23 kg"}],
+            "constraints": {"min_selections": 0, "max_selections": 2},
+        });
+        let req: CreateHandoffRequest = serde_json::from_value(args.clone()).unwrap();
+        req.validate().unwrap();
+        for (k, v) in [
+            ("input", json!("confirm")),
+            ("confirm_label", json!("Pay")),
+            ("deny_label", json!("Don't")),
+            ("risk", json!("low")),
+        ] {
+            args[k] = v;
+        }
+        args.as_object_mut().unwrap().remove("choices");
+        args.as_object_mut().unwrap().remove("constraints");
+        let req: CreateHandoffRequest = serde_json::from_value(args).unwrap();
+        req.validate().unwrap();
+        let fields = serde_json::to_value(CreateHandoffRequest {
+            choices: vec!["a".into()],
+            constraints: HandoffConstraints {
+                max_length: Some(1),
+                ..Default::default()
+            },
+            confirm_label: Some("a".into()),
+            deny_label: Some("b".into()),
+            risk: Some(HandoffRisk::Low),
+            timeout_ms: Some(10_000),
+            ..CreateHandoffRequest::new(HandoffKind::Other, "p", HandoffInput::Choice)
+        })
+        .unwrap();
+        for k in props.keys() {
+            if k != "wait" && k != "timeout_s" && k != "page" {
+                assert!(fields.get(k).is_some(), "{k} is not a request field");
+            }
+        }
+        let inputs: Vec<HandoffInput> =
+            serde_json::from_value(props["input"]["enum"].clone()).unwrap();
+        assert_eq!(inputs.len(), 8);
+    }
+
+    #[tokio::test]
+    async fn request_human_rejects_invalid_questions_locally() {
+        let s = server();
+        let r = s
+            .handle_line(r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"browser_request_human","arguments":{"kind":"other","prompt":"Approve?","input":"confirm","constraints":{"min":1}}}}"#)
+            .await
+            .unwrap();
+        assert_eq!(r["result"]["isError"], true);
+        assert!(r["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("does not apply"));
     }
 
     fn server() -> Server {
