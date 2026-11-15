@@ -80,6 +80,19 @@ Where the tokens live:
 - Chrome extension: CSS custom properties at the top of `apps/chrome-extension/sidepanel.html`.
 - Dashboard: CSS custom properties in `apps/dashboard/index.html`.
 
+## Terminal (CLI and TUI)
+
+The `hexactra` CLI and its terminal UI use the dark-scheme tokens, which read well on the dark backgrounds most terminals have:
+- primary `#8C8CFF` for headings, the selection and the banner;
+- accent `#FF8A6E`;
+- the terminal's own green, yellow and red for status.
+
+Color is off under `NO_COLOR`, `--no-color` and `TERM=dumb`.
+
+- The theme and the banner live in `console/apps/cli/src/brand.ts`. They reach the platform CLI through `createCli({ tuiTheme, tuiMenuRoot })`.
+- The banner is the Trace mark in Unicode Braille beside the wordmark and tagline. It shrinks to a smaller mark under 60 columns and to `⬡ hexactra` under 26. `hexactra --help` prints it too, as plain text when piped.
+- The Braille mark (`console/apps/cli/src/brand-mark.ts`) is generated from `hexactra-mark-mono.svg`: `node scripts/brand/render-terminal-mark.mjs` (needs Playwright with Chromium).
+
 ## Typography
 
 - **Space Grotesk** (700): the wordmark and headings h1 to h4.

@@ -1,4 +1,4 @@
-import type { TuiScreenProps } from '@marinoscar/platform-cli/tui';
+import { textColor, useTuiTheme, type TuiScreenProps } from '@marinoscar/platform-cli/tui';
 import { Box, Text, useInput } from 'ink';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
@@ -30,6 +30,7 @@ const live = (s: string) => s === 'queued' || s === 'running' || s === 'waiting_
  * the menu).
  */
 export function RunsScreen({ onDone }: TuiScreenProps): ReactNode {
+  const theme = useTuiTheme();
   const [runs, setRuns] = useState<Run[] | null>(null);
   const [selected, setSelected] = useState(0);
   const [open, setOpen] = useState<Run | null>(null);
@@ -95,7 +96,7 @@ export function RunsScreen({ onDone }: TuiScreenProps): ReactNode {
           ))}
         </Box>
         {open.result && <Text>result: {open.result}</Text>}
-        {open.error && <Text color="red">error: {open.error}</Text>}
+        {open.error && <Text {...textColor(theme.error)}>error: {open.error}</Text>}
         {status && <Text>{status}</Text>}
         <Text dimColor>c cancel · esc back</Text>
       </Box>
@@ -103,8 +104,8 @@ export function RunsScreen({ onDone }: TuiScreenProps): ReactNode {
   }
   return (
     <Box flexDirection="column" gap={1}>
-      <Text bold>Runs</Text>
-      {error && <Text color="red">{error}</Text>}
+      <Text bold {...textColor(theme.primary)}>Runs</Text>
+      {error && <Text {...textColor(theme.error)}>{error}</Text>}
       {!runs && !error && <Text dimColor>Loading…</Text>}
       {runs?.length === 0 && <Text>No runs yet. Start one with `hexactra tasks run`.</Text>}
       <Box flexDirection="column">

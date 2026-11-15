@@ -2,6 +2,7 @@
 import { createCli, EXIT, exitCodeFor, formatError } from '@marinoscar/platform-cli';
 
 import { APP_CLI_OPTIONS } from './app.js';
+import { helpBanner, isTopLevelHelp } from './brand.js';
 
 // Set exitCode and return; never process.exit(), which truncates piped output.
 async function main(): Promise<void> {
@@ -13,7 +14,10 @@ async function main(): Promise<void> {
     process.exitCode = exitCodeFor(error);
     return;
   }
-  process.exitCode = await cli.run(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  // The brand banner above the top-level help (the platform builds the help text; this only prefixes it).
+  if (isTopLevelHelp(argv)) process.stdout.write(helpBanner(process.stdout, process.env, argv));
+  process.exitCode = await cli.run(argv);
 }
 
 process.on('unhandledRejection', (reason) => {

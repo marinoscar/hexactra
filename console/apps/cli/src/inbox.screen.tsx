@@ -1,4 +1,4 @@
-import type { TuiScreenProps } from '@marinoscar/platform-cli/tui';
+import { textColor, useTuiTheme, type TuiScreenProps } from '@marinoscar/platform-cli/tui';
 import { Box, Text, useInput } from 'ink';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
@@ -11,6 +11,7 @@ import type { InboxItem } from './inbox.js';
  * number; otherwise Enter means done. `x` declines; Esc goes back.
  */
 export function InboxScreen({ onDone }: TuiScreenProps): ReactNode {
+  const theme = useTuiTheme();
   const [items, setItems] = useState<InboxItem[] | null>(null);
   const [selected, setSelected] = useState(0);
   const [typed, setTyped] = useState('');
@@ -72,8 +73,8 @@ export function InboxScreen({ onDone }: TuiScreenProps): ReactNode {
   const item = items?.[selected];
   return (
     <Box flexDirection="column" gap={1}>
-      <Text bold>Inbox</Text>
-      {error && <Text color="red">{error}</Text>}
+      <Text bold {...textColor(theme.primary)}>Inbox</Text>
+      {error && <Text {...textColor(theme.error)}>{error}</Text>}
       {!items && !error && <Text dimColor>Loading…</Text>}
       {items?.length === 0 && <Text>Nothing is waiting for you.</Text>}
       <Box flexDirection="column">
