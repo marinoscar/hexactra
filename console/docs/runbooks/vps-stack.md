@@ -44,7 +44,17 @@ The install asks for:
 - the Google OAuth client;
 - `INITIAL_ADMIN_EMAIL`.
 
-It generates every other secret. Add `--staging` while you are still working out DNS and the proxy, so you stay clear of Let's Encrypt's rate limits.
+It generates every other secret.
+
+**The database login can be an administrator** (for example a managed PostgreSQL's `admin`). The console must not run as a superuser, because row-level security does not apply to one. So the install uses that login once to create an ordinary database user for the console, and only that user's login is saved to `.env`. The administrator's password is held in memory and never saved.
+- **At the terminal** it asks: *Create a dedicated ordinary database user for the app?* (Enter answers yes), then the user name (Enter keeps the default) and its password (Enter generates a strong one; a typed one needs at least 12 characters).
+- **In the TUI** (`hexactra` → Install) the same two questions are optional fields, *app database user* and *app database password* (masked). Creating the user is the default.
+- **Opting out:** "Create no role" (`--skip-role-provisioning`) means `POSTGRES_USER` must already be an ordinary role you created. "Run as a superuser anyway" (`--allow-superuser`) turns tenant isolation off; don't use it in production.
+- **The database itself:** tick "Create the database if it is missing" (`--create-database`) and it is created, owned by the new user.
+- **Unattended runs:** `--provision-app-role` consents in advance and asks nothing. Put `APP_DB_USER` / `APP_DB_PASSWORD` in the answers file to choose them. The password is never a flag.
+- **Retrying:** changing any of these choices and retrying, including with `--resume` or the TUI's resume, reruns the environment step, so the new choice takes effect.
+
+Details: the platform's [deploy-to-vps runbook, section 2.1](https://github.com/marinoscar/EnterpriseAppBase/blob/main/docs/runbooks/deploy-to-vps.md#21-the-database-login-a-dedicated-role). Add `--staging` while you are still working out DNS and the proxy, so you stay clear of Let's Encrypt's rate limits.
 
 **The fabric connection is automatic.** The last step of `install` and `update` (`fabric-connect`) connects the console to the bundled fabric:
 - **Not connected yet** (or the bundled connection broke, e.g. after a volume restore): it mints an `hxs_` service token inside `fabric-control` and pipes it straight into the API, which stores it encrypted. The token appears in no command line, log or journal.
