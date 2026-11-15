@@ -4,7 +4,7 @@
 # Starts a virtual display (Xvfb) with a window manager, an optional
 # password-protected web viewer (x11vnc + noVNC on port 6080), and the
 # Hexactra agent in launch mode. The agent starts Chromium on demand with
-# the persistent profile in /data/profile. If any of these processes exits,
+# persistent profiles in /data/profiles. If any of these processes exits,
 # the container exits so the restart policy brings it back cleanly.
 #
 # Environment:
@@ -14,7 +14,7 @@
 #                                most 8 characters; keep the port private)
 #   HEXACTRA_SCREEN              Xvfb geometry (default 1440x900x24)
 #   HEXACTRA_HOST_NAME, HEXACTRA_IDLE_SHUTDOWN_S, HEXACTRA_LAUNCH_EAGERLY,
-#   HEXACTRA_VIEWER_URL          passed to hexactra-agent
+#   HEXACTRA_MAX_BROWSERS, HEXACTRA_VIEWER_URL   passed to hexactra-agent
 
 set -euo pipefail
 
@@ -34,12 +34,25 @@ HEXACTRA_API_TOKEN="$(read_secret HEXACTRA_API_TOKEN)"
 [[ -n "$HEXACTRA_API_TOKEN" ]] || { log "set HEXACTRA_API_TOKEN or HEXACTRA_API_TOKEN_FILE"; exit 1; }
 export HEXACTRA_API_TOKEN
 
-mkdir -p "$XDG_RUNTIME_DIR" /data/profile
-chmod 0700 "$XDG_RUNTIME_DIR" /data/profile
+# Profiles live in /data/profiles/<name>. A volume from the single-profile
+# release still has /data/profile; the agent moves it to
+# /data/profiles/default on start (HEXACTRA_PROFILE_DIR).
+mkdir -p "$XDG_RUNTIME_DIR" /data/profiles
+chmod 0700 "$XDG_RUNTIME_DIR" /data/profiles
 
 pids=()
+agent_pid=""
 shutdown() {
     log "stopping"
+    # Stop the agent first: it closes every browser through its extension so
+    # cookies and storage are flushed, which needs the display still up.
+    if [[ -n "$agent_pid" ]]; then
+        kill -TERM "$agent_pid" 2>/dev/null || true
+        for _ in $(seq 1 250); do
+            kill -0 "$agent_pid" 2>/dev/null || break
+            sleep 0.1
+        done
+    fi
     kill -TERM "${pids[@]}" 2>/dev/null || true
     wait || true
     exit 0
@@ -75,7 +88,8 @@ unset VIEWER_PASSWORD
 
 # The agent launches Chromium on demand (HEXACTRA_BROWSER etc. from the image).
 hexactra-agent daemon "$@" &
-pids+=($!)
+agent_pid=$!
+pids+=($agent_pid)
 log "agent started; control plane ${HEXACTRA_URL}"
 
 # Exit when any child exits, so the container restarts as a whole.

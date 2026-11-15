@@ -44,13 +44,15 @@ By default the agent attaches to the Chrome you run yourself. In **launch mode**
 ```bash
 hexactra-agent daemon \
   --browser /usr/bin/chromium \
-  --profile-dir ~/.local/share/hexactra/profiles/default \
+  --profiles-dir ~/.local/share/hexactra/profiles \
   --extension-dir ~/hexactra/apps/chrome-extension/dist \
   --idle-shutdown-s 900          # close after 15 idle minutes; 0 keeps it open
 ```
 
 - The browser needs a display. Use your desktop session, or Xvfb on a headless machine.
 - Use Chromium or Chrome for Testing: branded Google Chrome ignores `--extension-dir` (`--load-extension`).
+- Each profile is a subdirectory of `--profiles-dir`, with its own cookies and sign-ins. `--max-browsers` (default 1) caps how many run at once: at the cap, the least recently used idle browser is closed to make room.
+- Idle and evicted browsers are closed through the extension, so Chromium flushes cookies and storage. Chromium usually restores the tabs they had when they reopen.
 - The launched profile is separate from your everyday Chrome profile. Sign in to the sites you need once, through the browser or its viewer.
 - Add `--viewer-url` when you have a web viewer (noVNC). Handoffs then link people straight to the browser.
 

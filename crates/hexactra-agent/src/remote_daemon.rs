@@ -9,12 +9,12 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use hexactra_client::{ClientError, HostClient};
-use hexactra_core::remote::{OperationResult, RegisterHostRequest};
+use hexactra_client::{ClientError, HostClient, HostPollStatus};
+use hexactra_core::remote::{OperationResult, RegisterHostRequest, DEFAULT_PROFILE};
 use uuid::Uuid;
 
 use crate::browser_bridge::BrowserBridge;
-use crate::launcher::{BrowserLauncher, LaunchConfig};
+use crate::pool::{BrowserPool, PoolConfig};
 
 /// Daemon configuration.
 #[derive(Debug, Clone)]
@@ -31,9 +31,10 @@ pub struct DaemonConfig {
     pub bridge_socket: PathBuf,
     /// Long-poll duration.
     pub poll_wait: Duration,
-    /// Launch mode: the agent starts and supervises the browser itself.
-    pub launch: Option<LaunchConfig>,
-    /// Start the browser at startup instead of on the first operation.
+    /// Launch mode: the agent starts and supervises one browser per profile.
+    pub launch: Option<PoolConfig>,
+    /// Start the default profile's browser at startup instead of on the
+    /// first operation.
     pub launch_eagerly: bool,
     /// Web viewer URL for this host's browser (reported to the control plane).
     pub viewer_url: Option<String>,
@@ -98,65 +99,156 @@ async fn report(client: &HostClient, host_id: Uuid, op_id: Uuid, result: &Operat
 
 /// Run until the process is stopped.
 pub async fn run(cfg: DaemonConfig) -> Result<()> {
+    let client = HostClient::new(&cfg.control_url, &cfg.token).context("control plane URL")?;
+    match cfg.launch.clone() {
+        Some(pool_cfg) => run_launch_mode(cfg, client, pool_cfg).await,
+        None => run_attach_mode(cfg, client).await,
+    }
+}
+
+fn failure(msg: impl Into<String>) -> OperationResult {
+    OperationResult {
+        ok: false,
+        result: None,
+        error: Some(msg.into()),
+    }
+}
+
+async fn wait_for_stop_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        let mut term = signal(SignalKind::terminate()).expect("SIGTERM handler");
+        tokio::select! {
+            _ = term.recv() => {}
+            _ = tokio::signal::ctrl_c() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = tokio::signal::ctrl_c().await;
+}
+
+/// Attach mode: one browser (the operator's own Chrome) = the `default` profile.
+async fn run_attach_mode(cfg: DaemonConfig, client: HostClient) -> Result<()> {
+    tokio::spawn(async {
+        wait_for_stop_signal().await;
+        tracing::info!("stopping");
+        std::process::exit(0);
+    });
     let bridge = BrowserBridge::bind(&cfg.bridge_socket)
         .await
         .context("starting browser bridge")?;
-    let client = HostClient::new(&cfg.control_url, &cfg.token).context("control plane URL")?;
-
-    let launcher = cfg
-        .launch
-        .clone()
-        .map(|l| BrowserLauncher::new(l, bridge.clone()));
-    if let Some(l) = &launcher {
-        l.spawn_idle_watcher();
-        if cfg.launch_eagerly {
-            if let Err(e) = l.ensure_running().await {
-                tracing::error!(error = %e, "could not start the browser; will retry on the next operation");
-            }
-        }
-    }
-
     let mut host_id = register(&client, &cfg, load_host_id(&cfg.host_id_file)).await;
     let mut backoff = Duration::from_secs(1);
     let mut was_connected = false;
     loop {
         let connected = bridge.is_connected();
-        let on_demand = launcher.is_some();
         if connected != was_connected {
             tracing::info!(connected, "browser extension connection changed");
             was_connected = connected;
         }
         // Poll briefly while the extension is absent so the control plane
         // learns quickly when it connects.
-        let wait = if connected || on_demand {
+        let wait = if connected {
             cfg.poll_wait
         } else {
             Duration::from_secs(2)
         };
-        match client.next_with(host_id, connected, on_demand, wait).await {
+        let status = HostPollStatus {
+            browser_connected: connected,
+            on_demand: false,
+            profiles: Some((
+                vec![DEFAULT_PROFILE.to_string()],
+                if connected {
+                    vec![DEFAULT_PROFILE.to_string()]
+                } else {
+                    vec![]
+                },
+            )),
+        };
+        match client.poll(host_id, &status, wait).await {
             Ok(Some(op)) => {
                 backoff = Duration::from_secs(1);
                 tracing::info!(op_id = %op.id, kind = op.action.kind(), "executing operation");
-                let result = match &launcher {
-                    Some(l) => match l.ensure_running().await {
-                        Ok(()) => {
-                            let r = bridge.execute(op.id, &op.action, op.deadline).await;
-                            l.touch().await;
-                            r
-                        }
-                        Err(e) => {
-                            tracing::error!(error = %e, "browser unavailable");
-                            hexactra_core::remote::OperationResult {
-                                ok: false,
-                                result: None,
-                                error: Some(format!("browser unavailable: {e:#}")),
-                            }
-                        }
-                    },
-                    None => bridge.execute(op.id, &op.action, op.deadline).await,
+                let result = if op.profile != DEFAULT_PROFILE {
+                    failure(format!(
+                        "this host attaches to one browser (profile {DEFAULT_PROFILE:?}); profile {:?} is not available here",
+                        op.profile
+                    ))
+                } else {
+                    bridge.execute(op.id, &op.action, op.deadline).await
                 };
                 tracing::info!(op_id = %op.id, ok = result.ok, "operation finished");
                 report(&client, host_id, op.id, &result).await;
+            }
+            Ok(None) => backoff = Duration::from_secs(1),
+            Err(ClientError::Api { status: 404, .. }) => {
+                tracing::warn!(
+                    "control plane does not know this host (restarted?); re-registering"
+                );
+                host_id = register(&client, &cfg, Some(host_id)).await;
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, retry_in = ?backoff, "polling failed");
+                tokio::time::sleep(backoff).await;
+                backoff = (backoff * 2).min(Duration::from_secs(30));
+            }
+        }
+    }
+}
+
+/// Launch mode: a pool of browsers, one per profile, started on demand.
+/// Operations run as separate tasks so profiles work in parallel.
+async fn run_launch_mode(
+    cfg: DaemonConfig,
+    client: HostClient,
+    pool_cfg: PoolConfig,
+) -> Result<()> {
+    let pool = BrowserPool::new(pool_cfg)?;
+    {
+        // On SIGTERM/SIGINT (docker stop, reboot, Ctrl-C) close every
+        // browser through its extension before exiting.
+        let pool = pool.clone();
+        tokio::spawn(async move {
+            wait_for_stop_signal().await;
+            tracing::info!("stopping: closing browsers");
+            pool.shutdown().await;
+            std::process::exit(0);
+        });
+    }
+    if cfg.launch_eagerly {
+        if let Err(e) = pool.start(DEFAULT_PROFILE, Duration::from_secs(60)).await {
+            tracing::error!(error = %e, "could not start the browser; will retry on the next operation");
+        }
+    }
+    let mut host_id = register(&client, &cfg, load_host_id(&cfg.host_id_file)).await;
+    let mut backoff = Duration::from_secs(1);
+    loop {
+        let status = HostPollStatus {
+            browser_connected: pool.any_connected().await,
+            on_demand: true,
+            profiles: Some((pool.profiles(), pool.running().await)),
+        };
+        // Short polls keep the reported running profiles fresh.
+        let wait = cfg.poll_wait.min(Duration::from_secs(10));
+        match client.poll(host_id, &status, wait).await {
+            Ok(Some(op)) => {
+                backoff = Duration::from_secs(1);
+                tracing::info!(op_id = %op.id, kind = op.action.kind(), profile = %op.profile, "executing operation");
+                let pool = pool.clone();
+                let client = client.clone();
+                tokio::spawn(async move {
+                    let result = pool
+                        .execute(&op.profile, op.id, &op.action, op.deadline)
+                        .await;
+                    if let Some(e) = &result.error {
+                        if e.starts_with("browser unavailable") {
+                            tracing::error!(error = %e, profile = %op.profile, "browser unavailable");
+                        }
+                    }
+                    tracing::info!(op_id = %op.id, ok = result.ok, "operation finished");
+                    report(&client, host_id, op.id, &result).await;
+                });
             }
             Ok(None) => backoff = Duration::from_secs(1),
             Err(ClientError::Api { status: 404, .. }) => {

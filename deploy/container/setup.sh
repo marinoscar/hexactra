@@ -22,6 +22,8 @@ HEXACTRA_VIEWER_URL=
 # Close the browser after this many idle seconds (0 keeps it open).
 HEXACTRA_IDLE_SHUTDOWN_S=900
 HEXACTRA_LAUNCH_EAGERLY=false
+# Profiles whose browsers may be open at once (about 300-600 MB each).
+HEXACTRA_MAX_BROWSERS=1
 HEXACTRA_HOST_NAME=container-host
 ENV
 echo "Wrote $(pwd)/.env"

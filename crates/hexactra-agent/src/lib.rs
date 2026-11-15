@@ -8,6 +8,7 @@ pub mod browser_bridge;
 pub mod chrome;
 pub mod launcher;
 pub mod platform;
+pub mod pool;
 pub mod remote_daemon;
 
 use anyhow::Result;

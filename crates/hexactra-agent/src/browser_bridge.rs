@@ -287,6 +287,22 @@ impl BrowserBridge {
         }
     }
 
+    /// Ask the extension to close the browser's windows (graceful
+    /// shutdown). Returns false if the request could not be sent.
+    pub async fn request_shutdown(&self) -> bool {
+        let sender = {
+            let inner = self.lock();
+            match inner.conn.as_ref().filter(|c| c.hello) {
+                Some(c) => c.tx.clone(),
+                None => return false,
+            }
+        };
+        sender
+            .send(br#"{"type":"shutdown"}"#.to_vec())
+            .await
+            .is_ok()
+    }
+
     /// Execute one action in the browser, waiting until `deadline`. If the
     /// extension is momentarily disconnected (for example right after an
     /// agent restart), wait up to 5 seconds for it to reconnect first.

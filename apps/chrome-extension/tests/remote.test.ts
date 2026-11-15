@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { handleRequest, isNavigableUrl, type BridgeRequest } from '../src/remote';
+import { closeAllWindows, handleRequest, isNavigableUrl, type BridgeRequest } from '../src/remote';
 
 type Listener = (id: number, info: { status?: string }, tab: unknown) => void;
 
@@ -138,5 +138,21 @@ describe('handleRequest', () => {
   it('rejects unknown action types', async () => {
     const r = await handleRequest(req({ type: 'execute_script' } as unknown as BridgeRequest['action']));
     expect(r.ok).toBe(false);
+  });
+});
+
+describe('closeAllWindows', () => {
+  it('closes every window so the browser exits normally', async () => {
+    const removed: number[] = [];
+    vi.stubGlobal('chrome', {
+      windows: {
+        getAll: vi.fn(async () => [{ id: 1 }, { id: 2 }]),
+        remove: vi.fn(async (id: number) => {
+          removed.push(id);
+        }),
+      },
+    });
+    expect(await closeAllWindows()).toBe(2);
+    expect(removed.sort()).toEqual([1, 2]);
   });
 });

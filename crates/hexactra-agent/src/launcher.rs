@@ -145,7 +145,8 @@ impl BrowserLauncher {
             a.push(format!("--load-extension={}", ext.display()));
         }
         a.extend(self.cfg.extra_args.iter().cloned());
-        a.push("about:blank".into());
+        // No start URL: after a graceful close Chromium usually restores the
+        // tabs it had, so an agent finds the browser as it left it.
         a
     }
 
@@ -205,7 +206,7 @@ impl BrowserLauncher {
                     );
                 }
                 if Instant::now() >= deadline {
-                    Self::stop(&mut st).await;
+                    Self::stop(&mut st, &self.bridge).await;
                     bail!(
                         "browser started but the Hexactra extension did not connect within {:?}; last output:\n{}",
                         self.cfg.startup_timeout,
@@ -233,10 +234,22 @@ impl BrowserLauncher {
         self.state.lock().await.last_activity = Instant::now();
     }
 
-    async fn stop(st: &mut State) {
+    async fn stop(st: &mut State, bridge: &BrowserBridge) {
         let Some(mut child) = st.child.take() else {
             return;
         };
+        // Preferred: ask the extension to close every window, so Chromium
+        // shuts down normally and flushes cookies and site storage (which it
+        // writes lazily).
+        if bridge.is_connected() && bridge.request_shutdown().await {
+            if tokio::time::timeout(Duration::from_secs(15), child.wait())
+                .await
+                .is_ok()
+            {
+                return;
+            }
+            tracing::warn!("browser did not close its windows in time; terminating it");
+        }
         #[cfg(unix)]
         if let Some(pid) = child.id() {
             // Ask politely so the profile is flushed.
@@ -256,7 +269,7 @@ impl BrowserLauncher {
     /// Stop the browser now.
     pub async fn shutdown(&self) {
         let mut st = self.state.lock().await;
-        Self::stop(&mut st).await;
+        Self::stop(&mut st, &self.bridge).await;
     }
 
     /// Close the browser after `idle_shutdown` without activity.
@@ -272,18 +285,17 @@ impl BrowserLauncher {
                 let mut st = this.state.lock().await;
                 if Self::alive(&mut st) && st.last_activity.elapsed() >= idle {
                     tracing::info!(?idle, "closing idle browser");
-                    Self::stop(&mut st).await;
+                    Self::stop(&mut st, &this.bridge).await;
                 }
             }
         });
     }
 }
 
+/// Test helpers shared with the pool tests.
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::browser_bridge::BrowserBridge;
-    use hexactra_core::remote::RemoteAction;
+pub(crate) mod tests_support {
+    use std::path::{Path, PathBuf};
 
     /// A stand-in browser: connects to the bridge socket like the native
     /// host would, says hello and answers every request. With
@@ -312,25 +324,41 @@ send({'type': 'hello', 'version': 'fake'})
 left = ([int(a.split('=', 1)[1]) for a in args if a.startswith('--fake-exit-after=')] or [None])[0]
 while True:
     m = recv()
+    if m.get('type') == 'shutdown':
+        sys.exit(0)
     if m.get('type') == 'request':
-        send({'type': 'response', 'id': m['id'], 'ok': True, 'result': {'launches': len(open(os.path.join(profile, 'launched')).read())}})
+        launches = len(open(os.path.join(profile, 'launched')).read())
+        send({'type': 'response', 'id': m['id'], 'ok': True, 'result': {'launches': launches, 'profile': profile}})
         if left is not None:
             left -= 1
             if left == 0: sys.exit(0)
 "#;
 
-    async fn setup(
-        idle: Option<Duration>,
-        exit_after: Option<u32>,
-    ) -> (tempfile::TempDir, Arc<BrowserLauncher>, BrowserBridge) {
-        let dir = tempfile::tempdir().unwrap();
-        let browser = dir.path().join("fake-browser");
+    /// Write the stand-in browser into `dir` and return its path.
+    pub(crate) fn fake_browser(dir: &Path) -> PathBuf {
+        let browser = dir.join("fake-browser");
         std::fs::write(&browser, FAKE_BROWSER).unwrap();
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             std::fs::set_permissions(&browser, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
+        browser
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::browser_bridge::BrowserBridge;
+    use hexactra_core::remote::RemoteAction;
+
+    async fn setup(
+        idle: Option<Duration>,
+        exit_after: Option<u32>,
+    ) -> (tempfile::TempDir, Arc<BrowserLauncher>, BrowserBridge) {
+        let dir = tempfile::tempdir().unwrap();
+        let browser = super::tests_support::fake_browser(dir.path());
         let socket = dir.path().join("run/bridge.sock");
         let bridge = BrowserBridge::bind(&socket).await.unwrap();
         let profile = dir.path().join("profile");
