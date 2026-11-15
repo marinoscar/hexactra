@@ -245,6 +245,24 @@ impl RemoteAction {
     }
 }
 
+/// Name of the profile used when none is given.
+pub const DEFAULT_PROFILE: &str = "default";
+
+fn default_profile() -> String {
+    DEFAULT_PROFILE.to_string()
+}
+
+/// Profile names: 1-32 characters, lowercase letters, digits, `-` and `_`,
+/// starting with a letter or digit. They become directory names on hosts.
+pub fn valid_profile_name(name: &str) -> bool {
+    let b = name.as_bytes();
+    !b.is_empty()
+        && b.len() <= 32
+        && (b[0].is_ascii_lowercase() || b[0].is_ascii_digit())
+        && b.iter()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-' || *c == b'_')
+}
+
 /// Lifecycle of a queued operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -300,6 +318,9 @@ pub enum RemoteSessionStatus {
 pub struct SessionView {
     pub id: Uuid,
     pub host_id: Uuid,
+    /// Browser profile this session drives.
+    #[serde(default = "default_profile")]
+    pub profile: String,
     pub status: RemoteSessionStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
@@ -325,6 +346,12 @@ pub struct HostView {
     /// Web viewer where a person can see and use this host's browser.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewer_url: Option<String>,
+    /// Browser profiles this host has.
+    #[serde(default)]
+    pub profiles: Vec<String>,
+    /// Profiles whose browser is running now.
+    #[serde(default)]
+    pub running_profiles: Vec<String>,
     pub last_seen: DateTime<Utc>,
 }
 
@@ -332,11 +359,17 @@ pub struct HostView {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct CreateSessionRequest {
     /// Pin the session to a host; otherwise the control plane picks an online
-    /// host with a connected browser.
+    /// host that has the profile.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host_id: Option<Uuid>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    /// Browser profile to use (default `default`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile: Option<String>,
+    /// Allow creating the profile on an on-demand host that does not have it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub create_profile: bool,
 }
 
 /// `POST /v1/sessions/{id}/actions`
@@ -373,6 +406,9 @@ pub struct RegisterHostResponse {
 pub struct DispatchedOperation {
     pub id: Uuid,
     pub session_id: Uuid,
+    /// Profile whose browser runs the action.
+    #[serde(default = "default_profile")]
+    pub profile: String,
     pub action: RemoteAction,
     /// Deadline the host should respect when executing.
     pub deadline: DateTime<Utc>,
@@ -548,6 +584,9 @@ pub struct HandoffView {
     pub id: Uuid,
     pub session_id: Uuid,
     pub host_id: Uuid,
+    /// Profile of the session's browser.
+    #[serde(default = "default_profile")]
+    pub profile: String,
     pub kind: HandoffKind,
     pub prompt: String,
     pub input: HandoffInput,
@@ -783,6 +822,31 @@ mod tests {
             tab_id: None,
         };
         assert_eq!(a.kind(), "type");
+    }
+
+    #[test]
+    fn profile_names() {
+        for ok in ["default", "travel", "work-2", "a_b", "9lives"] {
+            assert!(valid_profile_name(ok), "{ok}");
+        }
+        for bad in [
+            "",
+            "Travel",
+            "-x",
+            "_x",
+            "a/b",
+            "..",
+            "a b",
+            &"x".repeat(33),
+        ] {
+            assert!(!valid_profile_name(bad), "{bad}");
+        }
+        let s: SessionView = serde_json::from_value(json!({
+            "id": Uuid::nil(), "host_id": Uuid::nil(), "status": "active",
+            "created_at": "2026-01-01T00:00:00Z"
+        }))
+        .unwrap();
+        assert_eq!(s.profile, "default");
     }
 
     #[test]

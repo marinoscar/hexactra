@@ -367,6 +367,17 @@ impl ControlClient {
     }
 }
 
+/// What a host reports on each poll.
+#[derive(Debug, Clone, Default)]
+pub struct HostPollStatus {
+    /// A browser extension is connected (attach mode, or any running browser).
+    pub browser_connected: bool,
+    /// The host launches browsers on demand.
+    pub on_demand: bool,
+    /// `(profiles the host has, profiles running now)`.
+    pub profiles: Option<(Vec<String>, Vec<String>)>,
+}
+
 /// Client used by a host agent.
 #[derive(Clone)]
 pub struct HostClient {
@@ -405,10 +416,39 @@ impl HostClient {
         on_demand: bool,
         wait: Duration,
     ) -> Result<Option<DispatchedOperation>> {
-        let path = format!(
-            "v1/hosts/{host_id}/next?wait_ms={}&browser_connected={browser_connected}&on_demand={on_demand}",
-            wait.as_millis()
+        self.poll(
+            host_id,
+            &HostPollStatus {
+                browser_connected,
+                on_demand,
+                profiles: None,
+            },
+            wait,
+        )
+        .await
+    }
+
+    /// Long-poll with the host's full status.
+    pub async fn poll(
+        &self,
+        host_id: Uuid,
+        status: &HostPollStatus,
+        wait: Duration,
+    ) -> Result<Option<DispatchedOperation>> {
+        let mut path = format!(
+            "v1/hosts/{host_id}/next?wait_ms={}&browser_connected={}&on_demand={}",
+            wait.as_millis(),
+            status.browser_connected,
+            status.on_demand,
         );
+        if let Some((profiles, running)) = &status.profiles {
+            // Profile names are [a-z0-9_-], so they need no escaping.
+            path.push_str(&format!(
+                "&profiles={}&running={}",
+                profiles.join(","),
+                running.join(",")
+            ));
+        }
         let resp = self
             .http
             .send(

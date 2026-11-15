@@ -240,6 +240,7 @@ impl Server {
             .create_session(&CreateSessionRequest {
                 host_id: None,
                 label: Some("mcp".into()),
+                ..Default::default()
             })
             .await?;
         *guard = Some(s.id);
