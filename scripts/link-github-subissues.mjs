@@ -32,6 +32,7 @@ const epicChildren = new Map([
   [82, [83, 84, 85, 86, 87]],
   [88, [89, 90, 91, 92, 93]],
   [173, [174, 175, 176, 177, 178]],
+  [285, [286, 287, 288, 289, 290, 291, 292, 293]],
 ]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
