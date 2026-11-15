@@ -9,6 +9,7 @@ Hexactra is a Cargo + pnpm monorepo with a large amount of scaffolding. **Most v
 - `VISION.MD` — product vision and architecture (25 sections). A proposal, not a statement of shipped capability.
 - `crates/` — Rust workspace (control plane, host agent, worker, native host, CLI, MCP, core types, telemetry, providers, AEF connector, fleet scheduling).
 - `apps/chrome-extension` (MV3 extension, standalone side-panel AI works), `apps/dashboard`, `packages/sdk`, `packages/contracts`.
+- `console/` — the Hexactra Console (epic #217): an EnterpriseAppBase starter app (NestJS + React + Prisma, Node 24, npm, separate from the pnpm workspace). Inside `console/`, its own `AGENTS.md` applies: never edit `@marinoscar/platform-*`; platform gaps go upstream as EnterpriseAppBase seam requests. CI: `.github/workflows/console.yml`.
 - `api/openapi.yaml`, `api/*.json` — contracts (CI checks they parse).
 - `scripts/link-github-subissues.mjs` — idempotent script linking epics to sub-issues (`epicChildren` map); refuses any repo but `marinoscar/hexactra`.
 
@@ -21,6 +22,7 @@ cargo test --workspace --all-targets
 pnpm install --frozen-lockfile && pnpm build
 pnpm --filter @hexactra/sdk --filter @hexactra/chrome-extension test
 python3 scripts/ci/validate-contracts.py
+cd console && npm ci && npm run platform:check && npm run typecheck && npm test && npm run build   # Node 24
 GITHUB_TOKEN=... node scripts/link-github-subissues.mjs --check   # dry run of sub-issue linking
 ```
 
