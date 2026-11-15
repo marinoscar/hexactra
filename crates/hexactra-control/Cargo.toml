@@ -12,6 +12,7 @@ name = "hexactra-control"
 path = "src/main.rs"
 
 [dependencies]
+utoipa = { workspace = true, features = ["chrono", "uuid", "yaml"] }
 hexactra-otel = { path = "../hexactra-otel" }
 opentelemetry = "0.33"
 tokio.workspace = true
@@ -46,10 +47,11 @@ url = "2"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 tracing-subscriber.workspace = true
 
-hexactra-core = { path = "../hexactra-core" }
+hexactra-core = { path = "../hexactra-core", features = ["openapi"] }
 hexactra-telemetry = { path = "../hexactra-telemetry" }
 
 [dev-dependencies]
+serde_yaml = "0.9"
 hexactra-client = { path = "../hexactra-client" }
 tokio-test.workspace = true
 tempfile.workspace = true

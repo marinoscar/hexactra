@@ -5,6 +5,8 @@
 //! handoff's single-use response token, as JSON or as an HTML form, so any
 //! channel (chat bot, automation, emailed link) can answer.
 
+#[allow(unused_imports)]
+use super::openapi::*;
 use std::time::Duration;
 
 use axum::{
@@ -46,6 +48,14 @@ pub fn respond_path(id: Uuid) -> String {
     format!("/v1/handoffs/{id}/respond")
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/sessions/{id}/handoffs",
+    tag = "handoffs",
+    params(("id" = Uuid, Path,)),
+    request_body = CreateHandoffRequest,
+    responses((status = 201, body = CreateHandoffResponse), (status = 400, description = "Invalid request"), (status = 409, description = "Session ended or a handoff is pending"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn create(
     State(s): State<ApiState>,
     Path(session_id): Path<Uuid>,
@@ -71,6 +81,13 @@ struct ListQuery {
     pending: bool,
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/handoffs",
+    tag = "handoffs",
+    params(("session_id" = Option<Uuid>, Query,), ("pending" = Option<bool>, Query,)),
+    responses((status = 200, body = HandoffList), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn list(State(s): State<ApiState>, Query(q): Query<ListQuery>) -> impl IntoResponse {
     Json(serde_json::json!({ "handoffs": s.store.list_handoffs(q.session_id, q.pending) }))
 }
@@ -80,6 +97,13 @@ struct WaitQuery {
     wait_ms: Option<u64>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/handoffs/{id}",
+    tag = "handoffs",
+    params(("id" = Uuid, Path,), ("wait_ms" = Option<u64>, Query,)),
+    responses((status = 200, body = HandoffView), (status = 404, description = "Unknown handoff"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn read(
     State(s): State<ApiState>,
     Path(id): Path<Uuid>,
@@ -95,6 +119,13 @@ async fn read(
     }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/handoffs/{id}/claim",
+    tag = "handoffs",
+    params(("id" = Uuid, Path,)),
+    responses((status = 200, body = ClaimedHandoffValue), (status = 404, description = "Nothing to claim"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn claim(
     State(s): State<ApiState>,
     Path(id): Path<Uuid>,
@@ -104,6 +135,13 @@ async fn claim(
     Ok(Json(ClaimedHandoffValue { value }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/handoffs/{id}/cancel",
+    tag = "handoffs",
+    params(("id" = Uuid, Path,)),
+    responses((status = 200, body = HandoffView), (status = 409, description = "Already resolved"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn cancel(
     State(s): State<ApiState>,
     Path(id): Path<Uuid>,
@@ -138,6 +176,15 @@ struct FormBody {
 
 /// `POST /v1/handoffs/{id}/respond` — JSON (`RespondHandoffRequest`) or an
 /// HTML form submission.
+#[utoipa::path(
+    post,
+    path = "/v1/handoffs/{id}/respond",
+    tag = "handoffs",
+    params(("id" = Uuid, Path,)),
+    request_body(content = RespondHandoffRequest, description = "JSON with `Authorization: Bearer <response token>`, or an HTML form with `token`, `outcome` and `value`"),
+    security(()),
+    responses((status = 200, body = HandoffView), (status = 403, description = "Invalid or used token"), (status = 409, description = "Already resolved"))
+)]
 async fn respond(
     State(s): State<ApiState>,
     Path(id): Path<Uuid>,
@@ -239,6 +286,14 @@ struct FormQuery {
 }
 
 /// `GET /v1/handoffs/{id}/respond?token=` — a minimal page for link channels.
+#[utoipa::path(
+    get,
+    path = "/v1/handoffs/{id}/respond",
+    tag = "handoffs",
+    params(("id" = Uuid, Path,), ("token" = String, Query, description = "The handoff response token")),
+    security(()),
+    responses((status = 200, description = "Answer page", content_type = "text/html", body = String), (status = 401, description = "Missing token"), (status = 403, description = "Invalid or used token"))
+)]
 async fn form(
     State(s): State<ApiState>,
     Path(id): Path<Uuid>,

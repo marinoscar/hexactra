@@ -37,7 +37,7 @@ impl Principal {
 }
 
 /// A service token as listed (never includes the token).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ServiceTokenView {
     pub id: Uuid,
     pub name: String,
@@ -45,7 +45,7 @@ pub struct ServiceTokenView {
 }
 
 /// A pending host enrollment.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct EnrollmentView {
     pub id: Uuid,
     /// Suggested host name (the host may send its own).

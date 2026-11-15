@@ -8,6 +8,8 @@
 //! - When a client resumes from further back than the replay buffer (or from
 //!   before a restart), it first gets `event: reset` and should re-read state.
 
+#[allow(unused_imports)]
+use super::openapi::*;
 use std::convert::Infallible;
 use std::time::Duration;
 
@@ -49,6 +51,13 @@ fn reset(last_seq: u64) -> Event {
         .data(serde_json::json!({ "last_seq": last_seq }).to_string())
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/events",
+    tag = "events",
+    params(("after" = Option<u64>, Query, description = "Resume after this seq"), ("types" = Option<String>, Query, description = "Comma-separated type patterns, e.g. `operation.*`"), ("Last-Event-ID" = Option<String>, Header,)),
+    responses((status = 200, description = "Server-sent events; each `data` is a FabricEvent", content_type = "text/event-stream", body = FabricEvent), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn events(
     State(s): State<ApiState>,
     headers: HeaderMap,

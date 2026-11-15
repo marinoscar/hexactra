@@ -1,5 +1,7 @@
 //! HTTP routes for webhooks (#190). All require the API token.
 
+#[allow(unused_imports)]
+use super::openapi::*;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -37,6 +39,13 @@ pub(super) fn routes() -> Router<ApiState> {
         .route("/v1/webhooks/{id}/deliveries", get(deliveries))
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/webhooks",
+    tag = "webhooks",
+    request_body = CreateWebhookRequest,
+    responses((status = 201, body = CreatedWebhook), (status = 400, description = "Invalid or disallowed URL"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn create(
     State(s): State<ApiState>,
     Json(req): Json<CreateWebhookRequest>,
@@ -44,15 +53,35 @@ async fn create(
     Ok((StatusCode::CREATED, Json(s.webhooks.add(req)?)))
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/webhooks",
+    tag = "webhooks",
+    responses((status = 200, body = WebhookList), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn list(State(s): State<ApiState>) -> impl IntoResponse {
     Json(serde_json::json!({ "webhooks": s.webhooks.list() }))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/v1/webhooks/{id}",
+    tag = "webhooks",
+    params(("id" = Uuid, Path,)),
+    responses((status = 204, description = "Removed"), (status = 404, description = "Unknown webhook"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn remove(State(s): State<ApiState>, Path(id): Path<Uuid>) -> Result<StatusCode, AppError> {
     s.webhooks.remove(id)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/webhooks/{id}/test",
+    tag = "webhooks",
+    params(("id" = Uuid, Path,)),
+    responses((status = 202, description = "Test event queued", body = Object), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn test(
     State(s): State<ApiState>,
     Path(id): Path<Uuid>,
@@ -64,6 +93,13 @@ async fn test(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/webhooks/{id}/deliveries",
+    tag = "webhooks",
+    params(("id" = Uuid, Path,)),
+    responses((status = 200, body = DeliveryList), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn deliveries(
     State(s): State<ApiState>,
     Path(id): Path<Uuid>,

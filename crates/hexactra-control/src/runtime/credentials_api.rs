@@ -5,6 +5,8 @@
 //! - client (operator or service): create and list enrollments, revoke a host.
 //! - operator only: create, list and revoke service tokens.
 
+#[allow(unused_imports)]
+use super::openapi::*;
 use std::time::Duration;
 
 use axum::{
@@ -49,7 +51,7 @@ pub(super) fn operator_routes() -> Router<ApiState> {
 }
 
 /// `POST /v1/hosts/enroll`
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct EnrollRequest {
     pub enrollment_token: String,
     /// Host display name (defaults to the enrollment's suggested name).
@@ -59,13 +61,21 @@ pub struct EnrollRequest {
     pub version: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct EnrollResponse {
     pub host_id: Uuid,
     /// The host's own credential (`hxh_…`). Shown once.
     pub host_token: String,
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/hosts/enroll",
+    tag = "credentials",
+    request_body = EnrollRequest,
+    security(()),
+    responses((status = 200, body = EnrollResponse), (status = 403, description = "Invalid, used or expired enrollment token"))
+)]
 async fn enroll(
     State(s): State<ApiState>,
     Json(req): Json<EnrollRequest>,
@@ -90,7 +100,7 @@ async fn enroll(
     }))
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct CreateEnrollmentRequest {
     #[serde(default)]
     pub name: Option<String>,
@@ -99,13 +109,20 @@ pub struct CreateEnrollmentRequest {
     pub ttl_s: Option<u64>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct CreatedEnrollment {
     pub enrollment: EnrollmentView,
     /// Single-use token (`hxe_…`) for `hexactra-agent daemon --enrollment-token`.
     pub enrollment_token: String,
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/admin/hosts/enrollments",
+    tag = "credentials",
+    request_body(content = Option<CreateEnrollmentRequest>),
+    responses((status = 201, body = CreatedEnrollment), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn create_enrollment(
     State(s): State<ApiState>,
     body: Option<Json<CreateEnrollmentRequest>>,
@@ -127,10 +144,23 @@ async fn create_enrollment(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/admin/hosts/enrollments",
+    tag = "credentials",
+    responses((status = 200, body = EnrollmentList), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn list_enrollments(State(s): State<ApiState>) -> impl IntoResponse {
     Json(serde_json::json!({ "enrollments": s.credentials.list_enrollments() }))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/v1/admin/hosts/{id}",
+    tag = "credentials",
+    params(("id" = Uuid, Path,)),
+    responses((status = 204, description = "Revoked and removed"), (status = 404, description = "Unknown host"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn revoke_host(
     State(s): State<ApiState>,
     Path(id): Path<Uuid>,
@@ -148,18 +178,25 @@ async fn revoke_host(
     Ok(StatusCode::NO_CONTENT)
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct CreateServiceTokenRequest {
     pub name: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, utoipa::ToSchema)]
 pub struct CreatedServiceToken {
     pub service_token: ServiceTokenView,
     /// The token (`hxs_…`). Shown once.
     pub token: String,
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/admin/service-tokens",
+    tag = "credentials",
+    request_body = CreateServiceTokenRequest,
+    responses((status = 201, body = CreatedServiceToken), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn create_service_token(
     State(s): State<ApiState>,
     Json(req): Json<CreateServiceTokenRequest>,
@@ -175,10 +212,23 @@ async fn create_service_token(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/admin/service-tokens",
+    tag = "credentials",
+    responses((status = 200, body = ServiceTokenList), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn list_service_tokens(State(s): State<ApiState>) -> impl IntoResponse {
     Json(serde_json::json!({ "service_tokens": s.credentials.list_service_tokens() }))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/v1/admin/service-tokens/{id}",
+    tag = "credentials",
+    params(("id" = Uuid, Path,)),
+    responses((status = 204, description = "Revoked"), (status = 404, description = "Unknown token"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn revoke_service_token(
     State(s): State<ApiState>,
     Path(id): Path<Uuid>,

@@ -1,5 +1,7 @@
 //! `/v1` routes for host commands (#213).
 
+#[allow(unused_imports)]
+use super::openapi::*;
 use std::time::Duration;
 
 use axum::{
@@ -44,6 +46,14 @@ struct CreateQuery {
     is_async: bool,
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/hosts/{host_id}/commands",
+    tag = "host-commands",
+    params(("host_id" = Uuid, Path,), ("async" = Option<bool>, Query,)),
+    request_body = HostCommandRequest,
+    responses((status = 200, body = HostCommandView), (status = 202, body = HostCommandView), (status = 400, description = "Invalid command"), (status = 404, description = "Unknown host"), (status = 409, description = "Profile in use"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn create_command(
     State(s): State<ApiState>,
     Path(host_id): Path<Uuid>,
@@ -78,6 +88,13 @@ async fn create_command(
     Ok(Json(done).into_response())
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/hosts/{host_id}/commands",
+    tag = "host-commands",
+    params(("host_id" = Uuid, Path,)),
+    responses((status = 200, body = HostCommandList), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn list_commands(
     State(s): State<ApiState>,
     Path(host_id): Path<Uuid>,
@@ -92,6 +109,13 @@ struct GetQuery {
     wait_ms: Option<u64>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/v1/host-commands/{id}",
+    tag = "host-commands",
+    params(("id" = Uuid, Path,), ("wait_ms" = Option<u64>, Query,)),
+    responses((status = 200, body = HostCommandView), (status = 404, description = "Unknown command"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn get_command(
     State(s): State<ApiState>,
     Path(id): Path<Uuid>,
@@ -108,6 +132,14 @@ async fn get_command(
     Ok(Json(view))
 }
 
+#[utoipa::path(
+    post,
+    path = "/v1/hosts/{host_id}/commands/{command_id}/result",
+    tag = "agent",
+    params(("host_id" = Uuid, Path,), ("command_id" = Uuid, Path,)),
+    request_body = OperationResult,
+    responses((status = 204, description = "Recorded"), (status = 404, description = "Unknown command"), (status = 409, description = "Not dispatched"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
+)]
 async fn post_result(
     State(s): State<ApiState>,
     Extension(p): Extension<Principal>,

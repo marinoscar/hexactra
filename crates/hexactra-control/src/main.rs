@@ -51,6 +51,8 @@ enum Command {
     },
     /// Print the path of the default token file.
     TokenPath,
+    /// Print the OpenAPI document for `/v1` (YAML); `api/openapi.yaml` is this output.
+    Openapi,
 }
 
 /// Resolves on SIGTERM (docker stop, systemd) or Ctrl-C.
@@ -82,6 +84,10 @@ async fn main() -> Result<()> {
     match Cli::parse().command {
         Command::TokenPath => {
             println!("{}", default_token_file().display());
+            Ok(())
+        }
+        Command::Openapi => {
+            print!("{}", hexactra_control::runtime::openapi::yaml());
             Ok(())
         }
         Command::Serve {
