@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 
-import { APP_NAME, CLI_NAME, REPO_SLUG } from '@app/shared';
+import { ANDROID_IDENTITY_SOURCE, APP_NAME, CLI_NAME, REPO_SLUG } from '@app/shared';
+import { androidCommand, androidTuiScreen } from '@marinoscar/platform-cli/android';
 import type { CreateCliOptions } from '@marinoscar/platform-cli';
 
 import { fabricCommand } from './fabric.command.js';
@@ -30,6 +31,7 @@ function readVersion(): string {
 export const APP_CLI_OPTIONS: CreateCliOptions = {
   identity: { name: CLI_NAME, displayName: `${APP_NAME} CLI`, productName: APP_NAME, repoSlug: REPO_SLUG },
   version: readVersion(),
-  extraCommands: [fabricCommand, fleetCommand, runsCommand, inboxCommand, mcpCommand],
-  tuiScreens: [inboxScreen, runsScreen, fleetScreen],
+  // `android`: build, version and release the Android app (apps/android) through the platform's group.
+  extraCommands: [fabricCommand, fleetCommand, runsCommand, inboxCommand, mcpCommand, androidCommand({ identity: ANDROID_IDENTITY_SOURCE })],
+  tuiScreens: [inboxScreen, runsScreen, fleetScreen, androidTuiScreen],
 };
