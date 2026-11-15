@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use axum::{
     body::Bytes,
-    extract::{Path, Query, State},
+    extract::{Extension, Path, Query, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
     response::{Html, IntoResponse, Response},
     routing::{get, post},
@@ -19,12 +19,13 @@ use axum::{
 };
 use hexactra_core::remote::{
     ClaimedHandoffValue, CreateHandoffRequest, CreateHandoffResponse, HandoffInput, HandoffOutcome,
-    HandoffStatus, HandoffView, RespondHandoffRequest,
+    HandoffRisk, HandoffStatus, HandoffView, RespondHandoffRequest,
 };
 use serde::Deserialize;
 use uuid::Uuid;
 
 use super::api::{ApiState, AppError};
+use super::credentials::Principal;
 use super::handoff::Responder;
 
 /// Header channels may use to send the response token.
@@ -144,17 +145,40 @@ async fn claim(
 )]
 async fn cancel(
     State(s): State<ApiState>,
+    Extension(p): Extension<Principal>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<HandoffView>, AppError> {
+    let name = service_name(&s, p);
     Ok(Json(s.store.respond_handoff(
         id,
-        Responder::Operator,
+        responder_for(p, name.as_deref()).unwrap_or(Responder::Operator),
         RespondHandoffRequest {
             outcome: HandoffOutcome::Cancelled,
             channel: Some("api".into()),
             ..Default::default()
         },
     )?))
+}
+
+/// Name of a service principal's token (its id if it was just revoked).
+fn service_name(s: &ApiState, p: Principal) -> Option<String> {
+    match p {
+        Principal::Service(id) => Some(
+            s.credentials
+                .service_token_name(id)
+                .unwrap_or_else(|| id.to_string()),
+        ),
+        _ => None,
+    }
+}
+
+/// The responder for an authenticated client principal.
+fn responder_for(p: Principal, service_name: Option<&str>) -> Option<Responder<'_>> {
+    match p {
+        Principal::Operator => Some(Responder::Operator),
+        Principal::Service(_) => Some(Responder::Service(service_name.unwrap_or_default())),
+        Principal::Host(_) => None,
+    }
 }
 
 fn bearer(headers: &HeaderMap) -> Option<&str> {
@@ -164,14 +188,31 @@ fn bearer(headers: &HeaderMap) -> Option<&str> {
         .and_then(|v| v.strip_prefix("Bearer "))
 }
 
-#[derive(Deserialize)]
+/// An HTML form submission: `token`, `outcome`, `value`, and `values`
+/// repeated once per checked box.
+#[derive(Default)]
 struct FormBody {
-    #[serde(default)]
     token: Option<String>,
-    #[serde(default)]
     outcome: Option<String>,
-    #[serde(default)]
     value: Option<String>,
+    values: Vec<String>,
+}
+
+impl FormBody {
+    fn parse(body: &[u8]) -> Self {
+        let mut f = FormBody::default();
+        for (k, v) in url::form_urlencoded::parse(body) {
+            let v = v.into_owned();
+            match k.as_ref() {
+                "token" => f.token = Some(v),
+                "outcome" => f.outcome = Some(v),
+                "value" => f.value = Some(v),
+                "values" => f.values.push(v),
+                _ => {}
+            }
+        }
+        f
+    }
 }
 
 /// `POST /v1/handoffs/{id}/respond` — JSON (`RespondHandoffRequest`) or an
@@ -181,7 +222,7 @@ struct FormBody {
     path = "/v1/handoffs/{id}/respond",
     tag = "handoffs",
     params(("id" = Uuid, Path,)),
-    request_body(content = RespondHandoffRequest, description = "JSON with `Authorization: Bearer <response token>`, or an HTML form with `token`, `outcome` and `value`"),
+    request_body(content = RespondHandoffRequest, description = "JSON with the response token (`response_token` or the `X-Hexactra-Response-Token` header) or an operator or service token (`Authorization: Bearer`), or an HTML form with `token`, `outcome`, `value` and `values` (repeated)"),
     security(()),
     responses((status = 200, body = HandoffView), (status = 403, description = "Invalid or used token"), (status = 409, description = "Already resolved"))
 )]
@@ -198,16 +239,7 @@ async fn respond(
         .unwrap_or(false);
 
     let (req, token) = if is_form {
-        let f: FormBody = match serde_urlencoded::from_bytes(&body) {
-            Ok(f) => f,
-            Err(_) => {
-                return page(
-                    StatusCode::BAD_REQUEST,
-                    "Invalid form",
-                    "The form could not be read.",
-                )
-            }
-        };
+        let f = FormBody::parse(&body);
         let outcome = if f.outcome.as_deref() == Some("cancelled") {
             HandoffOutcome::Cancelled
         } else {
@@ -217,8 +249,10 @@ async fn respond(
             RespondHandoffRequest {
                 outcome,
                 value: f.value,
+                values: Some(f.values),
                 response_token: None,
                 channel: Some("web-form".into()),
+                answered_by: None,
             },
             f.token,
         )
@@ -240,10 +274,15 @@ async fn respond(
         }
     };
 
-    let responder = match (bearer(&headers), token.as_deref()) {
-        (Some(b), _) if s.principal(b).map(|p| p.is_client()).unwrap_or(false) => {
-            Responder::Operator
-        }
+    let principal = bearer(&headers)
+        .and_then(|b| s.principal(b))
+        .filter(|p| p.is_client());
+    let name = principal.and_then(|p| service_name(&s, p));
+    let responder = match (
+        principal.and_then(|p| responder_for(p, name.as_deref())),
+        token.as_deref(),
+    ) {
+        (Some(r), _) => r,
         (_, Some(t)) => Responder::Token(t),
         _ => {
             let e = AppError(
@@ -323,23 +362,7 @@ async fn form(
             "This request is no longer open.",
         );
     }
-    let field = match h.input {
-        HandoffInput::None => String::new(),
-        HandoffInput::Text => {
-            r#"<label>Your answer<input name="value" required maxlength="4096" autocomplete="off"></label>"#.into()
-        }
-        HandoffInput::Secret => {
-            r#"<label>Code<input name="value" type="password" required maxlength="4096" autocomplete="one-time-code" inputmode="text"></label>"#.into()
-        }
-        HandoffInput::Choice => {
-            let opts: String = h
-                .choices
-                .iter()
-                .map(|c| format!(r#"<option value="{0}">{0}</option>"#, esc(c)))
-                .collect();
-            format!(r#"<label>Choose<select name="value" required>{opts}</select></label>"#)
-        }
-    };
+    let field = question_field(&h);
     let page_info = h
         .page
         .as_ref()
@@ -361,18 +384,37 @@ async fn form(
             )
         })
         .unwrap_or_default();
-    let done_label = if h.input == HandoffInput::None {
-        "I've done it"
+    let buttons = match h.input {
+        HandoffInput::Confirm => {
+            let approve = esc(h.confirm_label.as_deref().unwrap_or("Approve"));
+            let deny = esc(h.deny_label.as_deref().unwrap_or("Deny"));
+            let class = if h.risk == Some(HandoffRisk::Low) {
+                ""
+            } else {
+                " class=danger"
+            };
+            format!(
+                r#"<button name="value" value="approve"{class}>{approve}</button>
+<button name="value" value="deny">{deny}</button>"#
+            )
+        }
+        HandoffInput::None | HandoffInput::Takeover => {
+            r#"<button name="outcome" value="completed">Done</button>"#.into()
+        }
+        _ => r#"<button name="outcome" value="completed">Submit</button>"#.into(),
+    };
+    let takeover = if h.input == HandoffInput::Takeover {
+        "<p>Take over the browser, finish this step yourself, then press Done.</p>"
     } else {
-        "Submit"
+        ""
     };
     let body = format!(
         r#"<p class=kind>{kind:?} · expires {expires}</p>
-<p class=prompt>{prompt}</p>{page_info}{viewer}
+<p class=prompt>{prompt}</p>{page_info}{viewer}{takeover}
 <form method="post" action="respond">
 <input type="hidden" name="token" value="{token}">
 {field}
-<div class=row><button name="outcome" value="completed">{done_label}</button>
+<div class=row>{buttons}
 <button name="outcome" value="cancelled" class=secondary formnovalidate>Cancel the task</button></div>
 </form>"#,
         kind = h.kind,
@@ -381,6 +423,99 @@ async fn form(
         token = esc(&token),
     );
     html(StatusCode::OK, "Hexactra needs you", &body)
+}
+
+/// Format a number constraint for an HTML attribute.
+fn num(v: f64) -> String {
+    format!("{v}")
+}
+
+/// The answer field for a handoff's question (plain HTML, no script).
+fn question_field(h: &HandoffView) -> String {
+    let c = &h.constraints;
+    let max_length = c.text_max_length();
+    match h.input {
+        HandoffInput::None | HandoffInput::Takeover | HandoffInput::Confirm => String::new(),
+        HandoffInput::Text => {
+            if c.multiline == Some(true) {
+                format!(
+                    r#"<label>Your answer<textarea name="value" required maxlength="{max_length}" rows="5" autocomplete="off"></textarea></label>"#
+                )
+            } else {
+                let pattern = c
+                    .pattern
+                    .as_deref()
+                    .map(|p| {
+                        format!(
+                            r#" pattern="{}" title="Answer in the required format""#,
+                            esc(p)
+                        )
+                    })
+                    .unwrap_or_default();
+                format!(
+                    r#"<label>Your answer<input name="value" required maxlength="{max_length}"{pattern} autocomplete="off"></label>"#
+                )
+            }
+        }
+        HandoffInput::Secret => format!(
+            r#"<label>Code<input name="value" type="password" required maxlength="{max_length}" autocomplete="one-time-code" inputmode="text"></label>"#
+        ),
+        HandoffInput::Number => {
+            let mut attrs = String::new();
+            if let Some(v) = c.min {
+                attrs.push_str(&format!(r#" min="{}""#, num(v)));
+            }
+            if let Some(v) = c.max {
+                attrs.push_str(&format!(r#" max="{}""#, num(v)));
+            }
+            let step = c.step.map(num).unwrap_or_else(|| "any".into());
+            let unit = c
+                .unit
+                .as_deref()
+                .map(|u| format!(" ({})", esc(u)))
+                .unwrap_or_default();
+            format!(
+                r#"<label>Your answer{unit}<input name="value" type="number" required step="{step}"{attrs} inputmode="decimal" autocomplete="off"></label>"#
+            )
+        }
+        HandoffInput::Choice | HandoffInput::MultiChoice => {
+            let multi = h.input == HandoffInput::MultiChoice;
+            let (kind, name) = if multi {
+                ("checkbox", "values")
+            } else {
+                ("radio", "value")
+            };
+            let opts: String = h
+                .choices
+                .iter()
+                .enumerate()
+                .map(|(i, o)| {
+                    let required = if !multi && i == 0 { " required" } else { "" };
+                    let desc = o
+                        .description
+                        .as_deref()
+                        .map(|d| format!("<span class=muted>{}</span>", esc(d)))
+                        .unwrap_or_default();
+                    format!(
+                        r#"<label class=opt><input type="{kind}" name="{name}" value="{id}"{required}><span>{label}{desc}</span></label>"#,
+                        id = esc(&o.id),
+                        label = esc(&o.label),
+                    )
+                })
+                .collect();
+            let legend = if multi {
+                let (min, max) = c.selection_bounds(h.choices.len());
+                if min == max {
+                    format!("Choose {min}")
+                } else {
+                    format!("Choose {min} to {max}")
+                }
+            } else {
+                "Choose one".into()
+            };
+            format!("<fieldset><legend>{legend}</legend>{opts}</fieldset>")
+        }
+    }
 }
 
 fn esc(s: &str) -> String {
@@ -409,11 +544,13 @@ fn html(status: StatusCode, title: &str, body: &str) -> Response {
 <title>{title}</title>
 <style>
 body{{font:16px/1.5 system-ui,sans-serif;max-width:32rem;margin:2rem auto;padding:0 1rem;color:#1b1b1b;background:#fff}}
-@media (prefers-color-scheme:dark){{body{{color:#eee;background:#161616}}input,select{{background:#222;color:#eee}}}}
+@media (prefers-color-scheme:dark){{body{{color:#eee;background:#161616}}input,select,textarea{{background:#222;color:#eee}}}}
 h1{{font-size:1.3rem}}.prompt{{font-size:1.1rem}}.muted,.kind{{color:#777;font-size:.9rem;word-break:break-all}}
-label{{display:block;margin:1rem 0}}input,select{{display:block;width:100%;padding:.6rem;font-size:1rem;margin-top:.3rem;box-sizing:border-box}}
+label{{display:block;margin:1rem 0}}input,select,textarea{{display:block;width:100%;padding:.6rem;font-size:1rem;margin-top:.3rem;box-sizing:border-box;font-family:inherit}}
+fieldset{{border:0;padding:0;margin:1rem 0}}legend{{padding:0}}label.opt{{display:flex;gap:.6rem;align-items:flex-start;margin:.6rem 0}}
+label.opt input{{width:auto;margin:.3rem 0 0}}label.opt .muted{{display:block}}
 .row{{display:flex;gap:.5rem;flex-wrap:wrap}}button{{padding:.6rem 1rem;font-size:1rem;border:0;border-radius:6px;background:#1a5fd0;color:#fff}}
-button.secondary{{background:#777}}
+button.secondary{{background:#777}}button.danger{{background:#b3261e}}
 </style></head><body><h1>{title}</h1>{body}</body></html>"#,
         title = esc(title),
     );

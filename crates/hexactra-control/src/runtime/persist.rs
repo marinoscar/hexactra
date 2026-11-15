@@ -220,6 +220,10 @@ mod tests {
                 prompt: "Enter the code".into(),
                 input,
                 choices: vec![],
+                constraints: Default::default(),
+                confirm_label: None,
+                deny_label: None,
+                risk: None,
                 timeout_ms: None,
                 page: None,
             };

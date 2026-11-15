@@ -194,6 +194,15 @@ impl Credentials {
         self.lock().service.iter().map(|r| r.view.clone()).collect()
     }
 
+    /// Name of a service token, if it still exists.
+    pub fn service_token_name(&self, id: Uuid) -> Option<String> {
+        self.lock()
+            .service
+            .iter()
+            .find(|r| r.view.id == id)
+            .map(|r| r.view.name.clone())
+    }
+
     pub fn revoke_service_token(&self, id: Uuid) -> Result<(), CredentialError> {
         let mut s = self.lock();
         let before = s.service.len();

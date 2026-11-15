@@ -8,9 +8,9 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use hexactra_core::remote::{
-    CreateHandoffRequest, HandoffInput, HandoffOutcome, HandoffResponse, HandoffStatus,
-    HandoffView, RemoteSessionStatus, RespondHandoffRequest, DEFAULT_HANDOFF_TIMEOUT_MS,
-    MAX_HANDOFF_VALUE,
+    CreateHandoffRequest, HandoffInput, HandoffOutcome, HandoffResponse, HandoffRisk,
+    HandoffStatus, HandoffView, RemoteSessionStatus, RespondHandoffRequest,
+    DEFAULT_HANDOFF_TIMEOUT_MS, MAX_HANDOFF_ANSWERED_BY, MAX_HANDOFF_VALUE,
 };
 use sha2::{Digest, Sha256};
 use tokio::sync::watch;
@@ -71,10 +71,38 @@ fn ct_eq(a: &[u8; 32], b: &[u8; 32]) -> bool {
 /// Who is answering.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Responder<'a> {
-    /// Holder of the API token.
+    /// Holder of the operator token.
     Operator,
+    /// Holder of a service token, by the token's name.
+    Service(&'a str),
     /// Holder of the handoff's response token.
     Token(&'a str),
+}
+
+impl Responder<'_> {
+    /// The response's `by`: the caller's `answered_by` when the responder is
+    /// authenticated (operator or service), else the responder itself.
+    fn by(self, answered_by: Option<String>) -> Result<String, StoreError> {
+        let claimed = match self {
+            Responder::Token(_) => None,
+            _ => answered_by
+                .map(|a| a.trim().to_string())
+                .filter(|a| !a.is_empty()),
+        };
+        if let Some(a) = claimed {
+            if a.chars().count() > MAX_HANDOFF_ANSWERED_BY || a.chars().any(char::is_control) {
+                return Err(StoreError::Invalid(format!(
+                    "answered_by must be 1-{MAX_HANDOFF_ANSWERED_BY} printable characters"
+                )));
+            }
+            return Ok(a);
+        }
+        Ok(match self {
+            Responder::Operator => "operator".into(),
+            Responder::Service(name) => format!("service:{name}"),
+            Responder::Token(_) => "token".into(),
+        })
+    }
 }
 
 impl RuntimeStore {
@@ -161,7 +189,15 @@ impl RuntimeStore {
                 kind: req.kind,
                 prompt: req.prompt.trim().to_string(),
                 input: req.input,
-                choices: req.choices,
+                choices: req.choices.iter().map(|c| c.to_choice()).collect(),
+                constraints: req.constraints,
+                confirm_label: req.confirm_label,
+                deny_label: req.deny_label,
+                risk: if req.input == HandoffInput::Confirm {
+                    Some(req.risk.unwrap_or(HandoffRisk::High))
+                } else {
+                    None
+                },
                 page: req.page,
                 status: HandoffStatus::Pending,
                 created_at: now,
@@ -220,7 +256,18 @@ impl RuntimeStore {
         records: Vec<HandoffRecord>,
     ) -> Vec<(Uuid, DateTime<Utc>)> {
         let mut pending = Vec::new();
-        for r in records {
+        for mut r in records {
+            // Responses saved before typed questions lack `outcome` and
+            // `answered_at`: a response exists only on an answered handoff,
+            // so both follow from the status and `resolved_at`.
+            if let Some(resp) = r.view.response.as_mut() {
+                if r.view.status == HandoffStatus::Cancelled {
+                    resp.outcome = HandoffOutcome::Cancelled;
+                }
+                if resp.answered_at.is_none() {
+                    resp.answered_at = r.view.resolved_at;
+                }
+            }
             let (tx, _) = watch::channel(r.view.status);
             if r.view.status == HandoffStatus::Pending {
                 pending.push((r.view.id, r.view.expires_at));
@@ -320,87 +367,42 @@ impl RuntimeStore {
                 .channel
                 .map(|c| c.chars().take(64).collect::<String>())
                 .filter(|c| !c.trim().is_empty());
-            let value = req
-                .value
-                .map(|v| v.trim().to_string())
-                .filter(|v| !v.is_empty());
-            let (status, response) = match req.outcome {
-                HandoffOutcome::Cancelled => (
-                    HandoffStatus::Cancelled,
-                    HandoffResponse {
-                        value: None,
-                        value_withheld: false,
-                        channel,
-                    },
-                ),
+            let by = responder.by(req.answered_by)?;
+            let now = Utc::now();
+            let mut response = HandoffResponse {
+                outcome: req.outcome,
+                value: None,
+                values: None,
+                value_withheld: false,
+                channel,
+                by: Some(by),
+                answered_at: Some(now),
+            };
+            let status = match req.outcome {
+                HandoffOutcome::Cancelled => HandoffStatus::Cancelled,
                 HandoffOutcome::Completed => {
-                    if let Some(v) = &value {
-                        if v.len() > MAX_HANDOFF_VALUE {
-                            return Err(StoreError::Invalid(format!(
-                                "value longer than {MAX_HANDOFF_VALUE} characters"
-                            )));
-                        }
+                    if req.value.as_deref().map(str::len).unwrap_or(0) > MAX_HANDOFF_VALUE {
+                        return Err(StoreError::Invalid(format!(
+                            "value longer than {MAX_HANDOFF_VALUE} characters"
+                        )));
                     }
-                    match h.view.input {
-                        HandoffInput::None => (
-                            HandoffStatus::Completed,
-                            HandoffResponse {
-                                value: None,
-                                value_withheld: false,
-                                channel,
-                            },
-                        ),
-                        HandoffInput::Text => {
-                            let v = value.ok_or_else(|| {
-                                StoreError::Invalid("this handoff needs a value".into())
-                            })?;
-                            (
-                                HandoffStatus::Completed,
-                                HandoffResponse {
-                                    value: Some(v),
-                                    value_withheld: false,
-                                    channel,
-                                },
-                            )
-                        }
-                        HandoffInput::Choice => {
-                            let v = value.ok_or_else(|| {
-                                StoreError::Invalid("this handoff needs a choice".into())
-                            })?;
-                            if !h.view.choices.iter().any(|c| c == &v) {
-                                return Err(StoreError::Invalid(
-                                    "value is not one of the choices".into(),
-                                ));
-                            }
-                            (
-                                HandoffStatus::Completed,
-                                HandoffResponse {
-                                    value: Some(v),
-                                    value_withheld: false,
-                                    channel,
-                                },
-                            )
-                        }
-                        HandoffInput::Secret => {
-                            let v = value.ok_or_else(|| {
-                                StoreError::Invalid("this handoff needs a value".into())
-                            })?;
-                            h.secret_value = Some(v);
-                            (
-                                HandoffStatus::Completed,
-                                HandoffResponse {
-                                    value: None,
-                                    value_withheld: true,
-                                    channel,
-                                },
-                            )
-                        }
+                    let answer = h
+                        .view
+                        .check_answer(req.value, req.values)
+                        .map_err(|e| StoreError::Invalid(e.0))?;
+                    if h.view.input == HandoffInput::Secret {
+                        h.secret_value = answer.value;
+                        response.value_withheld = true;
+                    } else {
+                        response.value = answer.value;
+                        response.values = answer.values;
                     }
+                    HandoffStatus::Completed
                 }
             };
             h.view.status = status;
             h.view.response = Some(response);
-            h.view.resolved_at = Some(Utc::now());
+            h.view.resolved_at = Some(now);
             h.token_digest = None; // single use
             let _ = h.tx.send(status);
             let kind = if status == HandoffStatus::Cancelled {
@@ -472,18 +474,11 @@ mod tests {
     }
 
     fn req(input: HandoffInput) -> CreateHandoffRequest {
-        CreateHandoffRequest {
-            kind: HandoffKind::Code,
-            prompt: "Enter the code".into(),
-            input,
-            choices: if input == HandoffInput::Choice {
-                vec!["Yes".into(), "No".into()]
-            } else {
-                vec![]
-            },
-            timeout_ms: None,
-            page: None,
+        let mut r = CreateHandoffRequest::new(HandoffKind::Code, "Enter the code", input);
+        if input.has_choices() {
+            r.choices = vec!["Yes".into(), "No".into()];
         }
+        r
     }
 
     fn answer(value: Option<&str>, token: Option<&str>) -> RespondHandoffRequest {
@@ -492,6 +487,7 @@ mod tests {
             value: value.map(str::to_string),
             response_token: token.map(str::to_string),
             channel: Some("test".into()),
+            ..Default::default()
         }
     }
 
@@ -591,5 +587,142 @@ mod tests {
             s.get_handoff(h2.id).unwrap().status,
             HandoffStatus::Cancelled
         );
+    }
+
+    #[tokio::test]
+    async fn response_records_outcome_and_who_answered() {
+        let (s, sess) = setup();
+        let claim = |by: &str| RespondHandoffRequest {
+            answered_by: Some(by.into()),
+            ..answer(Some("hi"), None)
+        };
+        // Response-token holders cannot claim an identity.
+        let (h, token) = s.create_handoff(sess, req(HandoffInput::Text)).unwrap();
+        let r = s
+            .respond_handoff(h.id, Responder::Token(&token), claim("user:42"))
+            .unwrap()
+            .response
+            .unwrap();
+        assert_eq!(r.by.as_deref(), Some("token"));
+        assert_eq!(r.outcome, HandoffOutcome::Completed);
+        assert!(r.answered_at.is_some());
+
+        let (h, _) = s.create_handoff(sess, req(HandoffInput::Text)).unwrap();
+        let r = s
+            .respond_handoff(h.id, Responder::Operator, answer(Some("hi"), None))
+            .unwrap()
+            .response
+            .unwrap();
+        assert_eq!(r.by.as_deref(), Some("operator"));
+
+        let (h, _) = s.create_handoff(sess, req(HandoffInput::Text)).unwrap();
+        let r = s
+            .respond_handoff(
+                h.id,
+                Responder::Service("console"),
+                answer(Some("hi"), None),
+            )
+            .unwrap()
+            .response
+            .unwrap();
+        assert_eq!(r.by.as_deref(), Some("service:console"));
+
+        let (h, _) = s.create_handoff(sess, req(HandoffInput::Text)).unwrap();
+        assert!(matches!(
+            s.respond_handoff(h.id, Responder::Service("console"), claim(&"x".repeat(129))),
+            Err(StoreError::Invalid(_))
+        ));
+        let r = s
+            .respond_handoff(h.id, Responder::Service("console"), claim("user:42"))
+            .unwrap()
+            .response
+            .unwrap();
+        assert_eq!(r.by.as_deref(), Some("user:42"));
+
+        let (h, _) = s.create_handoff(sess, req(HandoffInput::Confirm)).unwrap();
+        assert_eq!(h.risk, Some(HandoffRisk::High));
+        let v = s
+            .respond_handoff(
+                h.id,
+                Responder::Operator,
+                RespondHandoffRequest {
+                    outcome: HandoffOutcome::Cancelled,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(v.status, HandoffStatus::Cancelled);
+        assert_eq!(v.response.unwrap().outcome, HandoffOutcome::Cancelled);
+    }
+
+    #[tokio::test]
+    async fn multi_choice_and_number_answers() {
+        let (s, sess) = setup();
+        let (h, _) = s
+            .create_handoff(sess, req(HandoffInput::MultiChoice))
+            .unwrap();
+        let pick = |vs: &[&str]| RespondHandoffRequest {
+            values: Some(vs.iter().map(|v| v.to_string()).collect()),
+            ..Default::default()
+        };
+        assert!(s
+            .respond_handoff(h.id, Responder::Operator, pick(&["Yes", "Yes"]))
+            .is_err());
+        assert!(s
+            .respond_handoff(h.id, Responder::Operator, pick(&[]))
+            .is_err());
+        let r = s
+            .respond_handoff(h.id, Responder::Operator, pick(&["No", "Yes"]))
+            .unwrap()
+            .response
+            .unwrap();
+        assert_eq!(r.values, Some(vec!["No".to_string(), "Yes".to_string()]));
+        assert_eq!(r.value, None);
+
+        let mut n = req(HandoffInput::Number);
+        n.constraints.step = Some(0.5);
+        let (h, _) = s.create_handoff(sess, n).unwrap();
+        assert!(s
+            .respond_handoff(h.id, Responder::Operator, answer(Some("1.2"), None))
+            .is_err());
+        let r = s
+            .respond_handoff(h.id, Responder::Operator, answer(Some("01.50"), None))
+            .unwrap()
+            .response
+            .unwrap();
+        assert_eq!(r.value.as_deref(), Some("1.5"));
+    }
+
+    #[test]
+    fn import_fills_outcome_and_answered_at_of_old_records() {
+        // A cancelled and a completed handoff as saved before typed questions.
+        let old = |status: &str| {
+            serde_json::json!({
+                "view": {
+                    "id": Uuid::new_v4(), "session_id": Uuid::nil(), "host_id": Uuid::nil(),
+                    "kind": "confirmation", "prompt": "Go?", "input": "choice",
+                    "choices": ["Yes, continue", "No"], "status": status,
+                    "created_at": "2026-01-01T00:00:00Z", "expires_at": "2026-01-01T00:10:00Z",
+                    "resolved_at": "2026-01-01T00:01:00Z",
+                    "response": {"value": "Yes, continue", "value_withheld": false, "channel": "web-form"}
+                },
+                "token_digest": null
+            })
+        };
+        let records: Vec<HandoffRecord> =
+            serde_json::from_value(serde_json::json!([old("cancelled"), old("completed")]))
+                .unwrap();
+        let ids: Vec<Uuid> = records.iter().map(|r| r.view.id).collect();
+        let s = RuntimeStore::new();
+        RuntimeStore::import_handoffs(&mut s.lock(), records);
+        let c = s.get_handoff(ids[0]).unwrap();
+        assert_eq!(c.response.unwrap().outcome, HandoffOutcome::Cancelled);
+        let d = s.get_handoff(ids[1]).unwrap();
+        assert_eq!(d.choices[0].id, "Yes, continue");
+        assert_eq!(d.choices[0].label, "Yes, continue");
+        let r = d.response.unwrap();
+        assert_eq!(r.outcome, HandoffOutcome::Completed);
+        assert_eq!(r.answered_at, d.resolved_at);
+        assert_eq!(r.by, None);
     }
 }

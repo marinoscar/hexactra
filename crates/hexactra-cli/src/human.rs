@@ -197,7 +197,11 @@ pub async fn handoff(
                         kind: kind.into(),
                         prompt,
                         input: input.into(),
-                        choices,
+                        choices: choices.into_iter().map(Into::into).collect(),
+                        constraints: Default::default(),
+                        confirm_label: None,
+                        deny_label: None,
+                        risk: None,
                         timeout_ms: Some(timeout_s * 1000),
                         page: None,
                     },
@@ -260,8 +264,8 @@ pub async fn handoff(
                     &RespondHandoffRequest {
                         outcome: HandoffOutcome::Completed,
                         value,
-                        response_token: None,
                         channel: Some("cli".into()),
+                        ..Default::default()
                     },
                 )
                 .await?;

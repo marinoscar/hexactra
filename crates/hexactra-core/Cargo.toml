@@ -28,6 +28,7 @@ base64.workspace = true
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
 tempfile = "3.14"
 libc = "0.2"
+regex = "1"
 
 [dev-dependencies]
 tokio-test.workspace = true
