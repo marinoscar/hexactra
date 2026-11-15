@@ -36,6 +36,25 @@ export function TasksPage() {
   const [profile, setProfile] = useState('default');
   const [domains, setDomains] = useState('');
   const [confirmRisky, setConfirmRisky] = useState(true);
+  const [editing, setEditing] = useState<string | null>(null);
+
+  const reset = () => {
+    setEditing(null);
+    setName('');
+    setGoal('');
+    setProfile('default');
+    setDomains('');
+    setConfirmRisky(true);
+  };
+
+  const edit = (t: Task) => {
+    setEditing(t.id);
+    setName(t.name);
+    setGoal(t.goal);
+    setProfile(t.profile);
+    setDomains(t.allowedDomains.join(', '));
+    setConfirmRisky(t.confirmRiskyActions);
+  };
 
   const load = useCallback(async () => {
     try {
@@ -52,20 +71,20 @@ export function TasksPage() {
   const create = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
+    const body = {
+      name: name.trim(),
+      goal: goal.trim(),
+      profile: profile.trim() || 'default',
+      allowedDomains: domains.split(/[\s,]+/).map((d) => d.trim()).filter(Boolean),
+      confirmRiskyActions: confirmRisky,
+    };
     try {
-      await api.post('/tasks', {
-        name: name.trim(),
-        goal: goal.trim(),
-        profile: profile.trim() || 'default',
-        allowedDomains: domains.split(/[\s,]+/).map((d) => d.trim()).filter(Boolean),
-        confirmRiskyActions: confirmRisky,
-      });
-      setName('');
-      setGoal('');
-      setDomains('');
+      if (editing) await api.patch(`/tasks/${editing}`, body);
+      else await api.post('/tasks', body);
+      reset();
       await load();
     } catch (e) {
-      setError(message(e, 'Could not create the task'));
+      setError(message(e, editing ? 'Could not save the task' : 'Could not create the task'));
     }
   };
 
@@ -90,7 +109,7 @@ export function TasksPage() {
       )}
       {canWrite && (
         <Card variant="outlined" sx={{ mb: 3 }}>
-          <CardContent component="form" onSubmit={create} aria-label="New task">
+          <CardContent component="form" onSubmit={create} aria-label={editing ? 'Edit task' : 'New task'}>
             <Stack spacing={2}>
               <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} required />
               <TextField label="Goal" value={goal} onChange={(e) => setGoal(e.target.value)} multiline minRows={2} required helperText="What the agent should achieve, in plain words." />
@@ -101,8 +120,13 @@ export function TasksPage() {
               <FormControlLabel control={<Switch checked={confirmRisky} onChange={(e) => setConfirmRisky(e.target.checked)} />} label="Ask me before purchases and other irreversible steps" />
               <Box>
                 <Button type="submit" variant="contained" disabled={!name.trim() || !goal.trim()}>
-                  Create task
+                  {editing ? 'Save task' : 'Create task'}
                 </Button>
+                {editing && (
+                  <Button sx={{ ml: 1 }} onClick={reset}>
+                    Cancel
+                  </Button>
+                )}
               </Box>
             </Stack>
           </CardContent>
@@ -132,6 +156,7 @@ export function TasksPage() {
                 </Button>
               )}
               <Button onClick={() => navigate(`/runs?taskId=${t.id}`)}>Runs</Button>
+              {canWrite && <Button onClick={() => edit(t)}>Edit</Button>}
               {canWrite && (
                 <Button color="error" onClick={() => void api.delete(`/tasks/${t.id}`).then(load)}>
                   Delete

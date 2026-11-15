@@ -73,3 +73,11 @@ exports.resolveSliceIds = resolveSliceIds;
 
 /** The ids in `slices.json` `enabled`, validated, in mount order. */
 exports.ENABLED_SLICES = Object.freeze(resolveSliceIds(manifest.enabled));
+
+/**
+ * Every Hexactra capability and where it lives on each surface (REST, CLI,
+ * MCP, TUI, web): `capabilities.json`, checked by each surface's tests.
+ */
+exports.CAPABILITIES = Object.freeze(require('./capabilities.json').capabilities);
+/** App REST operations that are not client capabilities, with the reason. */
+exports.REST_EXEMPT = Object.freeze(require('./capabilities.json').restExempt);

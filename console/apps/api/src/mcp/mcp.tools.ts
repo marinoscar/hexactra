@@ -76,6 +76,20 @@ export const MCP_TOOLS: McpTool[] = [
     input: z.object({ name: z.string().min(1).max(200), goal: z.string().min(1).max(4000), profile, allowed_domains: z.array(z.string()).max(50).default([]) }),
     call: async (a, ctx) => text(await ctx.api('POST', '/tasks', { name: a.name, goal: a.goal, profile: a.profile, allowedDomains: a.allowed_domains })),
   },
+  {
+    name: 'task_update',
+    description: 'Change a saved task; only the fields you pass change.',
+    input: z.object({ task_id: id, name: z.string().min(1).max(200).optional(), goal: z.string().min(1).max(4000).optional(), profile: profile.optional(), allowed_domains: z.array(z.string()).max(50).optional() }),
+    call: async (a, ctx) =>
+      text(
+        await ctx.api('PATCH', `/tasks/${String(a.task_id)}`, {
+          ...(a.name !== undefined ? { name: a.name } : {}),
+          ...(a.goal !== undefined ? { goal: a.goal } : {}),
+          ...(a.profile !== undefined ? { profile: a.profile } : {}),
+          ...(a.allowed_domains !== undefined ? { allowedDomains: a.allowed_domains } : {}),
+        }),
+      ),
+  },
   { name: 'task_run', description: 'Run a saved task now. Returns the run.', input: z.object({ task_id: id }), call: async (a, ctx) => text(await ctx.api('POST', `/tasks/${String(a.task_id)}/runs`, {})) },
   {
     name: 'schedule_create',
