@@ -26735,6 +26735,55 @@
         "description": "**Requires:** authentication, plus permission `runs:write`."
       }
     },
+    "/api/notification-actions": {
+      "post": {
+        "operationId": "notificationActions_act",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationActionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OkResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Inbox"
+        ]
+      }
+    },
     "/api/mcp": {
       "post": {
         "operationId": "mcp_post",
@@ -55090,6 +55139,27 @@
         },
         "required": [
           "outcome"
+        ]
+      },
+      "NotificationActionDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 1000
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "cancel",
+              "approve"
+            ]
+          }
+        },
+        "required": [
+          "token",
+          "action"
         ]
       },
       "StartRunDto": {

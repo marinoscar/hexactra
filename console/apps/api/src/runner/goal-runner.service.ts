@@ -127,7 +127,7 @@ export class GoalRunnerService {
       stop: null as StopLoop['reason'] | null,
       finished: null as { success: boolean; result: string } | null,
       handoffId: null as string | null,
-      handoffAsk: null as { prompt: string; kind: string } | null,
+      handoffAsk: null as { prompt: string; kind: string; input: string } | null,
       labels: new Map<string, string>(),
     };
 
@@ -284,7 +284,7 @@ export class GoalRunnerService {
             return 'Could not reach a person right now.';
           }
           await record('handoff', null, { kind, input }, true, `asked a person (${kind}): ${trim(prompt, 300)}`, started);
-          state.handoffAsk = { prompt, kind };
+          state.handoffAsk = { prompt, kind, input };
           state.stop = 'pause';
           return 'Waiting for the person.';
         },
@@ -373,7 +373,7 @@ export class GoalRunnerService {
       }
       if (state.stop === 'pause' && state.handoffId) {
         await this.tasks.transition(userId, run.id, 'waiting_human', { handoffId: state.handoffId });
-        await this.notifier?.needsYou(userId, run, state.handoffAsk?.prompt ?? 'The agent needs you.', state.handoffAsk?.kind ?? 'other');
+        await this.notifier?.needsYou(userId, { ...run, handoffId: state.handoffId ?? null }, state.handoffAsk?.prompt ?? 'The agent needs you.', state.handoffAsk?.kind ?? 'other', state.handoffAsk?.input ?? 'none');
         return 'waiting_human';
       }
       if (state.stop === 'finish' && state.finished) {

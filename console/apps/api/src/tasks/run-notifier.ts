@@ -4,6 +4,7 @@ import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { WebhooksService } from '@marinoscar/platform-api/webhooks';
 
 import { RUN_FINISHED_EVENT, RUN_NEEDS_YOU_EVENT, SCHEDULE_FAILING_EVENT } from '../platform/notifications/hexactra.notifications';
+import { RunActionTokens } from './run-action-token';
 import { RUN_FINISHED_WEBHOOK, RUN_STARTED_WEBHOOK, RUN_WAITING_WEBHOOK, SCHEDULE_FAILING_WEBHOOK } from '../platform/webhooks/hexactra.webhook-events';
 
 /** A run as the events describe it. */
@@ -28,6 +29,7 @@ export class RunNotifier {
     private readonly config: ConfigService,
     @Optional() private readonly notifications?: NotificationsService,
     @Optional() private readonly webhooks?: WebhooksService,
+    @Optional() private readonly actions?: RunActionTokens,
   ) {}
 
   private async hook(event: string, userId: string, data: Record<string, unknown>): Promise<void> {
@@ -61,8 +63,18 @@ export class RunNotifier {
     }
   }
 
-  async needsYou(userId: string, run: RunRef, prompt: string, kind: string): Promise<void> {
-    await this.send(RUN_NEEDS_YOU_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), prompt: prompt.slice(0, 1000), kind, inboxUrl: this.url('/inbox') });
+  async needsYou(userId: string, run: RunRef & { handoffId?: string | null }, prompt: string, kind: string, input = 'none'): Promise<void> {
+    // The notification's buttons: Stop run always; Approve only for a plain confirmation.
+    const approvable = kind === 'confirmation' && input === 'none' && Boolean(run.handoffId);
+    const actionToken = this.actions?.issue(userId, run.id, approvable ? (run.handoffId ?? null) : null);
+    await this.send(RUN_NEEDS_YOU_EVENT, userId, {
+      runId: run.id,
+      goal: run.goal.slice(0, 300),
+      prompt: prompt.slice(0, 1000),
+      kind,
+      inboxUrl: this.url('/inbox'),
+      ...(actionToken ? { actionToken, approvable } : {}),
+    });
     await this.hook(RUN_WAITING_WEBHOOK, userId, { ...this.runData(run, 'waiting_human'), prompt: prompt.slice(0, 1000), kind });
   }
 

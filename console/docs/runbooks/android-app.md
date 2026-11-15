@@ -45,6 +45,11 @@ Publishing also adds the APK's signing key to the trusted apps that `/.well-know
 | Run finished (`runs.finished`) | High urgency when it failed, normal otherwise; one per run | `/runs/<id>` |
 | Schedule failing (`schedules.failing`) | Normal urgency, one per schedule | `/tasks` |
 
+- **Buttons that act without opening the app.** A "needs you" notification has **Stop run**, plus **Approve** when the agent asks for a plain confirmation. A code, a password, a choice or a sign-in always needs the app.
+  - The service worker handles the buttons (`apps/web/src/notificationActions.ts`), so they work the same in the Android app, the installed PWA and a desktop browser.
+  - It holds no session: a button carries a single-use token, valid for an hour, that can stop that one run or approve that one confirmation (`POST /api/notification-actions`).
+  - An expired, used or stale button opens the run instead.
+  - Stopping a run that waits for a person cancels it at once: its request is withdrawn and its browser session ends.
 - **How a tap reaches the app.** A notification's link is a URL on the console. The app holds a verified `https://<console>` app link (the `autoVerify` intent filter that `aapt2` checks in CI), so Android opens the link inside the app rather than in the browser.
 - **Payloads carry no secrets.** A request names what is asked, never an answer: codes typed into the Inbox go straight to the fabric.
 - **Tests.** `apps/api/test/push-payload.spec.ts` covers the payloads and links. `apps/web/src/__tests__/InboxPage.test.tsx` covers the deep link.
