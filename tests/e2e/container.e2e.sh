@@ -36,15 +36,20 @@ export HEXACTRA_LAUNCH_EAGERLY=false
 "${COMPOSE[@]}" up -d --build --wait --wait-timeout 300 || fail "stack did not become healthy"
 pass "stack is up and healthy"
 
-hx() { "${COMPOSE[@]}" exec -T -e HEXACTRA_API_TOKEN="$HEXACTRA_API_TOKEN" control hexactra-fabric --url http://127.0.0.1:8787 "$@"; }
+# Run a command and print its whole output in one write. Under `set -o
+# pipefail`, `cmd | grep -q X` fails whenever grep matches and exits before
+# cmd has finished writing (cmd dies of SIGPIPE), so every command whose
+# output is checked with `grep -q` goes through this.
+buffered() { local out; out="$("$@")" || return $?; printf '%s\n' "$out"; }
+hx() { buffered "${COMPOSE[@]}" exec -T -e HEXACTRA_API_TOKEN="$HEXACTRA_API_TOKEN" control hexactra-fabric --url http://127.0.0.1:8787 "$@"; }
 chromium_running() { "${COMPOSE[@]}" exec -T host pgrep -f 'user-data-dir=/data/profiles/default' >/dev/null; }
 
 curl -fsS http://127.0.0.1:8787/v1/health >/dev/null || fail "API not published on 127.0.0.1:8787"
 [[ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/v1/hosts)" == 401 ]] || fail "API accepted a request without the token"
 pass "API published on loopback and requires the token"
 
-curl -fsS http://127.0.0.1:6080/vnc.html | grep -qi novnc || fail "viewer page not served"
-"${COMPOSE[@]}" exec -T host pgrep -a x11vnc | grep -q -- '-rfbauth' || fail "viewer is not password protected"
+buffered curl -fsS http://127.0.0.1:6080/vnc.html | grep -qi novnc || fail "viewer page not served"
+buffered "${COMPOSE[@]}" exec -T host pgrep -a x11vnc | grep -q -- '-rfbauth' || fail "viewer is not password protected"
 pass "viewer served on loopback and password protected"
 
 for _ in $(seq 1 30); do
