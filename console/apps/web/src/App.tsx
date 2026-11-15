@@ -26,6 +26,7 @@ import { api, platformApi } from './api';
 import { ADMIN_SECTIONS } from './config/adminSections';
 import { NAVIGATION } from './config/navigation';
 import { USER_SETTINGS_SECTIONS } from './config/userSettingsSections';
+import { FabricConnectionPage } from './pages/FabricConnectionPage';
 import { NotesPage } from './pages/NotesPage';
 import { AppPlatformHost } from './platformHost';
 import {
@@ -177,6 +178,7 @@ export function AppRoutes() {
           <Route path="admin/settings/jobs" element={<Gate permission="jobs:read"><JobsPage /></Gate>} />
           <Route path="admin/settings/jobs/insights" element={<Gate permission="jobs:read"><JobInsightsPage /></Gate>} />
           <Route path="admin/settings/doctor" element={<Gate permission="system_settings:read"><DoctorPage /></Gate>} />
+          <Route path="admin/settings/fabric" element={<Gate permission="fabric_config:read"><FabricConnectionPage /></Gate>} />
           <Route path="settings/danger-zone" element={<UserDangerZonePage />} />
           <Route path="admin/settings/factory-reset" element={<Gate permission={factoryResetSettingsPage.card.permission!}><FactoryResetPage /></Gate>} />
           {/* The enabled optional slices' pages (packages/shared/slices.json; src/slices/). */}
