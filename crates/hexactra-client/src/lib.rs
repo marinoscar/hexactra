@@ -83,10 +83,10 @@ impl Http {
         body: Option<&B>,
         timeout: Option<Duration>,
     ) -> Result<reqwest::Response> {
-        let mut req = self
-            .http
-            .request(method, self.url(path)?)
-            .bearer_auth(&self.token);
+        let mut req = self.http.request(method, self.url(path)?);
+        if !self.token.is_empty() {
+            req = req.bearer_auth(&self.token);
+        }
         if let Some(b) = body {
             req = req.json(b);
         }
@@ -214,6 +214,52 @@ impl ControlClient {
     pub async fn operation(&self, id: Uuid) -> Result<OperationView> {
         self.http
             .json(Method::GET, &format!("v1/operations/{id}"), NO_BODY, None)
+            .await
+    }
+
+    // ------------------------------------------------------- credentials
+
+    /// Create a single-use host enrollment token (operator or service).
+    pub async fn create_enrollment(
+        &self,
+        name: Option<&str>,
+        ttl: Option<Duration>,
+    ) -> Result<serde_json::Value> {
+        self.http
+            .json(
+                Method::POST,
+                "v1/admin/hosts/enrollments",
+                Some(&serde_json::json!({
+                    "name": name,
+                    "ttl_s": ttl.map(|t| t.as_secs()),
+                })),
+                None,
+            )
+            .await
+    }
+
+    /// Revoke a host's credential and remove it.
+    pub async fn revoke_host(&self, host_id: Uuid) -> Result<()> {
+        self.http
+            .send(
+                Method::DELETE,
+                &format!("v1/admin/hosts/{host_id}"),
+                NO_BODY,
+                None,
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Create a service token (operator only).
+    pub async fn create_service_token(&self, name: &str) -> Result<serde_json::Value> {
+        self.http
+            .json(
+                Method::POST,
+                "v1/admin/service-tokens",
+                Some(&serde_json::json!({ "name": name })),
+                None,
+            )
             .await
     }
 
@@ -384,11 +430,54 @@ pub struct HostClient {
     http: Http,
 }
 
+/// Result of exchanging an enrollment token.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HostEnrollment {
+    pub host_id: Uuid,
+    /// The host's own credential (`hxh_…`).
+    pub host_token: String,
+}
+
 impl HostClient {
     pub fn new(base_url: &str, token: &str) -> Result<Self> {
         Ok(Self {
             http: Http::new(base_url, token, Duration::from_secs(60))?,
         })
+    }
+
+    /// Exchange a single-use enrollment token (`hxe_…`) for a host
+    /// credential. Needs no other credential.
+    pub async fn enroll(
+        base_url: &str,
+        enrollment_token: &str,
+        name: &str,
+        version: &str,
+    ) -> Result<HostEnrollment> {
+        let http = Http::new(base_url, "", Duration::from_secs(30))?;
+        http.json(
+            Method::POST,
+            "v1/hosts/enroll",
+            Some(&serde_json::json!({
+                "enrollment_token": enrollment_token,
+                "name": name,
+                "version": version,
+            })),
+            None,
+        )
+        .await
+    }
+
+    /// Announce that this host is shutting down.
+    pub async fn offline(&self, host_id: Uuid) -> Result<()> {
+        self.http
+            .send(
+                Method::POST,
+                &format!("v1/hosts/{host_id}/offline"),
+                NO_BODY,
+                None,
+            )
+            .await?;
+        Ok(())
     }
 
     pub async fn register(&self, req: &RegisterHostRequest) -> Result<RegisterHostResponse> {

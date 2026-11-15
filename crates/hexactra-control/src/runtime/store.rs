@@ -176,6 +176,41 @@ impl RuntimeStore {
         id
     }
 
+    /// Remove a host: its sessions end and queued work is cancelled.
+    /// Returns false if the host was unknown.
+    pub fn remove_host(&self, id: Uuid) -> bool {
+        let sessions: Vec<Uuid> = {
+            let mut inner = self.lock();
+            if inner.hosts.remove(&id).is_none() {
+                return false;
+            }
+            inner
+                .sessions
+                .values()
+                .filter(|s| s.host_id == id && s.status == RemoteSessionStatus::Active)
+                .map(|s| s.id)
+                .collect()
+        };
+        for s in sessions {
+            let _ = self.end_session(s);
+        }
+        true
+    }
+
+    /// Mark a host offline now (it announced shutdown). Its next poll or
+    /// registration brings it back.
+    pub fn set_host_offline(&self, id: Uuid) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let h = inner
+            .hosts
+            .get_mut(&id)
+            .ok_or(StoreError::NotFound("host"))?;
+        h.last_seen = DateTime::<Utc>::UNIX_EPOCH;
+        h.browser_connected = false;
+        h.running_profiles.clear();
+        Ok(())
+    }
+
     /// Record a host's viewer URL (from registration).
     pub fn set_host_viewer_url(&self, id: Uuid, url: Option<String>) -> Result<(), StoreError> {
         let mut inner = self.lock();
@@ -657,6 +692,25 @@ mod tests {
             Some("https://viewer.example.test/")
         );
         assert_eq!(s.create_session(None, None).unwrap().host_id, h);
+    }
+
+    #[tokio::test]
+    async fn offline_hosts_get_no_sessions() {
+        let s = RuntimeStore::new();
+        let h = s.register_host(None, "h".into(), "0".into());
+        s.next_operation(h, true, Duration::from_millis(1))
+            .await
+            .unwrap();
+        s.set_host_offline(h).unwrap();
+        assert!(!s.list_hosts()[0].online);
+        assert_eq!(
+            s.create_session(None, None).unwrap_err(),
+            StoreError::NoHostAvailable
+        );
+        s.next_operation(h, true, Duration::from_millis(1))
+            .await
+            .unwrap();
+        assert!(s.create_session(None, None).is_ok());
     }
 
     #[tokio::test]
