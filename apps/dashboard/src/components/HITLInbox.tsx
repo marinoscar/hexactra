@@ -1,55 +1,40 @@
-import React, { useState, useEffect } from 'react';
-import {
-  InteractionRequest,
-  InteractionStatus,
-  InteractionKind,
-} from '@hexactra/sdk';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ControlPlaneClient, HandoffView, RespondHandoffRequest } from '@hexactra/sdk';
 
-// Types for the inbox UI
-interface InboxItem extends InteractionRequest {
-  id: string;
-  sessionId: string;
-  reason: string;
-  details: Record<string, unknown>;
-  createdAt: string;
-  kind: InteractionKind;
-  status: InteractionStatus;
-  expiresAt: string;
-  ownerId?: string;
-}
+// Human handoffs pending on the control plane (`/v1/handoffs`), answered with
+// the dashboard's operator token.
 
 interface InboxProps {
+  /** Origin of the control plane, e.g. http://127.0.0.1:8787. */
   apiBase: string;
-  authHeader: string;
+  /** Operator or service token. */
+  token: string;
 }
 
-export function HITLInbox({ apiBase, authHeader }: InboxProps) {
-  const [pendingRequests, setPendingRequests] = useState<InboxItem[]>([]);
-  const [selectedRequest, setSelectedRequest] = useState<InboxItem | null>(null);
-  const [response, setResponse] = useState<{ status: InteractionStatus; secret?: string } | null>(null);
+/** The answer being edited for the selected handoff. */
+interface Draft {
+  value: string;
+  values: string[];
+}
+
+const EMPTY_DRAFT: Draft = { value: '', values: [] };
+
+export function HITLInbox({ apiBase, token }: InboxProps) {
+  const client = useMemo(() => new ControlPlaneClient({ baseUrl: apiBase, token }), [apiBase, token]);
+  const [pending, setPending] = useState<HandoffView[]>([]);
+  const [selected, setSelected] = useState<HandoffView | null>(null);
+  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch pending requests on mount
   useEffect(() => {
-    fetchPendingRequests();
-  }, []);
+    fetchPending();
+  }, [client]);
 
-  const fetchPendingRequests = async () => {
+  const fetchPending = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${apiBase}/hitl/pending`, {
-        headers: {
-          Authorization: authHeader,
-        },
-      });
-
-      if (!res.ok) {
-        throw new Error(`Failed to fetch pending requests: ${res.statusText}`);
-      }
-
-      const data = await res.json();
-      setPendingRequests(data.requests || []);
+      setPending(await client.listHandoffs({ pending: true }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -57,199 +42,245 @@ export function HITLInbox({ apiBase, authHeader }: InboxProps) {
     }
   };
 
-  const handleSelectRequest = (request: InboxItem) => {
-    setSelectedRequest(request);
-    setResponse(null);
+  const handleSelect = (handoff: HandoffView) => {
+    setSelected(handoff);
+    setDraft(EMPTY_DRAFT);
   };
 
-  const handleApprove = async () => {
-    if (!selectedRequest || !response?.status) return;
-
+  const respond = async (body: RespondHandoffRequest) => {
+    if (!selected) return;
     try {
-      const res = await fetch(`${apiBase}/hitl/${selectedRequest.id}/respond`, {
-        method: 'POST',
-        headers: {
-          Authorization: authHeader,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          owner_id: selectedRequest.ownerId || '',
-          status: response.status,
-          secret: response.secret,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`Failed to respond: ${res.statusText}`);
-      }
-
-      // Refresh the list
-      await fetchPendingRequests();
-      setSelectedRequest(null);
-      setResponse(null);
+      await client.respondHandoff(selected.id, { ...body, channel: 'dashboard' });
+      setSelected(null);
+      setDraft(EMPTY_DRAFT);
+      await fetchPending();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     }
   };
 
-  const handleDeny = async () => {
-    if (!selectedRequest) return;
-
-    try {
-      const res = await fetch(`${apiBase}/hitl/${selectedRequest.id}/respond`, {
-        method: 'POST',
-        headers: {
-          Authorization: authHeader,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          owner_id: selectedRequest.ownerId || '',
-          status: InteractionStatus.Rejected,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`Failed to deny: ${res.statusText}`);
-      }
-
-      // Refresh the list
-      await fetchPendingRequests();
-      setSelectedRequest(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+  const handleSubmit = () => {
+    if (!selected) return;
+    switch (selected.input) {
+      case 'none':
+      case 'takeover':
+        return respond({ outcome: 'completed' });
+      case 'multi_choice':
+        return respond({ outcome: 'completed', values: draft.values });
+      default:
+        return respond({ outcome: 'completed', value: draft.value });
     }
   };
 
-  const handleExpire = async () => {
-    if (!selectedRequest) return;
+  const handleDecline = () => respond({ outcome: 'cancelled' });
 
+  const handleCancel = async () => {
+    if (!selected) return;
     try {
-      const res = await fetch(`${apiBase}/hitl/${selectedRequest.id}/respond`, {
-        method: 'POST',
-        headers: {
-          Authorization: authHeader,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          owner_id: selectedRequest.ownerId || '',
-          status: InteractionStatus.Expired,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`Failed to expire: ${res.statusText}`);
-      }
-
-      // Refresh the list
-      await fetchPendingRequests();
-      setSelectedRequest(null);
+      await client.cancelHandoff(selected.id);
+      setSelected(null);
+      await fetchPending();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     }
   };
 
   const formatTimeRemaining = (expiresAt: string): string => {
-    const expires = new Date(expiresAt);
-    const now = new Date();
-    const diff = expires.getTime() - now.getTime();
-
+    const diff = new Date(expiresAt).getTime() - Date.now();
     if (diff <= 0) return 'Expired';
-
     const minutes = Math.floor(diff / 60000);
     const seconds = Math.floor((diff % 60000) / 1000);
-
-    if (minutes > 0) {
-      return `${minutes}m ${seconds}s`;
-    }
-    return `${seconds}s`;
+    return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
   };
 
-  const renderSecretInput = () => {
-    if (!selectedRequest) return null;
+  const toggleValue = (id: string) => {
+    const values = draft.values.includes(id)
+      ? draft.values.filter((v) => v !== id)
+      : [...draft.values, id];
+    setDraft({ ...draft, values });
+  };
 
-    // Only show secret input for certain kinds
-    const needsSecret = [
-      InteractionKind.SecretText,
-      InteractionKind.OtpCode,
-    ].includes(selectedRequest.kind);
-
-    return (
-      <div className="secret-input">
-        {needsSecret && (
+  const renderAnswerInput = () => {
+    if (!selected) return null;
+    const c = selected.constraints ?? {};
+    switch (selected.input) {
+      case 'text':
+        return (
           <div className="form-group">
-            <label htmlFor="secret-input">Enter secret (password/OTP):</label>
+            <label htmlFor="answer-input">Answer:</label>
+            {c.multiline ? (
+              <textarea
+                id="answer-input"
+                className="secret-input-field"
+                maxLength={c.max_length}
+                value={draft.value}
+                onChange={(e) => setDraft({ ...draft, value: e.target.value })}
+              />
+            ) : (
+              <input
+                id="answer-input"
+                className="secret-input-field"
+                maxLength={c.max_length}
+                pattern={c.pattern}
+                value={draft.value}
+                onChange={(e) => setDraft({ ...draft, value: e.target.value })}
+              />
+            )}
+          </div>
+        );
+      case 'secret':
+        return (
+          <div className="form-group">
+            <label htmlFor="answer-input">Secret (password or code):</label>
             <input
               type="password"
-              id="secret-input"
+              id="answer-input"
               className="secret-input-field"
-              value={response?.secret || ''}
-              onChange={(e) => setResponse({ ...response!, secret: e.target.value })}
-              placeholder="Enter password or OTP code"
-              autoFocus
+              autoComplete="off"
+              maxLength={c.max_length}
+              value={draft.value}
+              onChange={(e) => setDraft({ ...draft, value: e.target.value })}
             />
             <p className="security-note">
-              Secret is encrypted in transit and never stored in logs or telemetry
+              Never shown back to the agent: the control plane types it into the page once.
             </p>
           </div>
-        )}
+        );
+      case 'number':
+        return (
+          <div className="form-group">
+            <label htmlFor="answer-input">Number{c.unit ? ` (${c.unit})` : ''}:</label>
+            <input
+              type="number"
+              id="answer-input"
+              className="secret-input-field"
+              min={c.min}
+              max={c.max}
+              step={c.step}
+              value={draft.value}
+              onChange={(e) => setDraft({ ...draft, value: e.target.value })}
+            />
+          </div>
+        );
+      case 'choice':
+        return (
+          <div className="form-group">
+            {(selected.choices ?? []).map((o) => (
+              <label key={o.id} className="choice">
+                <input
+                  type="radio"
+                  name="choice"
+                  checked={draft.value === o.id}
+                  onChange={() => setDraft({ ...draft, value: o.id })}
+                />{' '}
+                {o.label}
+                {o.description ? <span className="label"> — {o.description}</span> : null}
+              </label>
+            ))}
+          </div>
+        );
+      case 'multi_choice':
+        return (
+          <div className="form-group">
+            {(selected.choices ?? []).map((o) => (
+              <label key={o.id} className="choice">
+                <input
+                  type="checkbox"
+                  checked={draft.values.includes(o.id)}
+                  onChange={() => toggleValue(o.id)}
+                />{' '}
+                {o.label}
+                {o.description ? <span className="label"> — {o.description}</span> : null}
+              </label>
+            ))}
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const renderActions = () => {
+    if (!selected) return null;
+    if (selected.input === 'confirm') {
+      return (
+        <div className="actions">
+          <button className="btn approve" onClick={() => respond({ outcome: 'completed', value: 'approve' })}>
+            {selected.confirm_label || 'Approve'}
+          </button>
+          <button className="btn deny" onClick={() => respond({ outcome: 'completed', value: 'deny' })}>
+            {selected.deny_label || 'Deny'}
+          </button>
+          <button className="btn expire" onClick={handleCancel}>
+            Cancel request
+          </button>
+        </div>
+      );
+    }
+    const ready =
+      selected.input === 'none' ||
+      selected.input === 'takeover' ||
+      (selected.input === 'multi_choice' ? draft.values.length > 0 : draft.value !== '');
+    return (
+      <div className="actions">
+        <button className="btn approve" onClick={handleSubmit} disabled={!ready}>
+          {selected.input === 'none' || selected.input === 'takeover' ? 'Done' : 'Submit'}
+        </button>
+        <button className="btn deny" onClick={handleDecline}>
+          Decline
+        </button>
+        <button className="btn expire" onClick={handleCancel}>
+          Cancel request
+        </button>
       </div>
     );
   };
 
-  const renderRequestDetails = () => {
-    if (!selectedRequest) return null;
-
+  const renderDetails = () => {
+    if (!selected) return null;
     return (
       <div className="request-details">
-        <h3>Interaction Request Details</h3>
+        <h3>Handoff details</h3>
         <div className="request-info">
           <div className="info-item">
-            <span className="label">Reason:</span>
-            <span className="value">{selectedRequest.reason}</span>
+            <span className="label">Prompt:</span>
+            <span className="value">{selected.prompt}</span>
           </div>
           <div className="info-item">
             <span className="label">Kind:</span>
-            <span className="value">{selectedRequest.kind}</span>
+            <span className="value">{selected.kind}</span>
           </div>
+          <div className="info-item">
+            <span className="label">Answer:</span>
+            <span className="value">{selected.input}</span>
+          </div>
+          {selected.page?.url ? (
+            <div className="info-item">
+              <span className="label">Page:</span>
+              <span className="value">{selected.page.title || selected.page.url}</span>
+            </div>
+          ) : null}
+          {selected.viewer_url ? (
+            <div className="info-item">
+              <span className="label">Browser:</span>
+              <a className="value" href={selected.viewer_url} target="_blank" rel="noreferrer noopener">
+                Open the remote browser
+              </a>
+            </div>
+          ) : null}
           <div className="info-item">
             <span className="label">Session ID:</span>
-            <span className="value">{selectedRequest.sessionId}</span>
-          </div>
-          <div className="info-item">
-            <span className="label">Created:</span>
-            <span className="value">{new Date(selectedRequest.createdAt).toLocaleString()}</span>
+            <span className="value">{selected.session_id}</span>
           </div>
           <div className="info-item">
             <span className="label">Expires in:</span>
-            <span className={`value ${formatTimeRemaining(selectedRequest.expiresAt) === 'Expired' ? 'expired' : ''}`}>
-              {formatTimeRemaining(selectedRequest.expiresAt)}
-            </span>
-          </div>
-          <div className="info-item">
-            <span className="label">Status:</span>
-            <span className={`value status-${selectedRequest.status}`}>
-              {selectedRequest.status}
+            <span className={`value ${formatTimeRemaining(selected.expires_at) === 'Expired' ? 'expired' : ''}`}>
+              {formatTimeRemaining(selected.expires_at)}
             </span>
           </div>
         </div>
-
-        {renderSecretInput()}
-
-        <div className="actions">
-          <button
-            className="btn approve"
-            onClick={handleApprove}
-            disabled={!response?.status}
-          >
-            Approve
-          </button>
-          <button className="btn deny" onClick={handleDeny}>
-            Deny
-          </button>
-          <button className="btn expire" onClick={handleExpire}>
-            Mark Expired
-          </button>
-        </div>
+        {renderAnswerInput()}
+        {renderActions()}
       </div>
     );
   };
@@ -261,38 +292,34 @@ export function HITLInbox({ apiBase, authHeader }: InboxProps) {
       {error && <div className="error-message">{error}</div>}
 
       <div className="inbox-content">
-        {/* Pending Requests List */}
         <div className="requests-list">
-          <h3>Pending Requests ({pendingRequests.length})</h3>
+          <h3>Pending handoffs ({pending.length})</h3>
           {loading ? (
             <p>Loading...</p>
-          ) : pendingRequests.length === 0 ? (
-            <p>No pending requests</p>
+          ) : pending.length === 0 ? (
+            <p>No pending handoffs</p>
           ) : (
             <ul className="request-list">
-              {pendingRequests.map((req) => (
+              {pending.map((h) => (
                 <li
-                  key={req.id}
-                  className={`request-item ${selectedRequest?.id === req.id ? 'selected' : ''}`}
-                  onClick={() => handleSelectRequest(req)}
+                  key={h.id}
+                  className={`request-item ${selected?.id === h.id ? 'selected' : ''}`}
+                  onClick={() => handleSelect(h)}
                 >
                   <div className="request-header">
-                    <span className="kind">{req.kind}</span>
-                    <span className={`status status-${req.status}`}>{req.status}</span>
+                    <span className="kind">{h.kind}</span>
+                    <span className={`status ${h.status}`}>{h.status}</span>
                   </div>
-                  <p className="reason">{req.reason}</p>
-                  <p className="expires">
-                    Expires in: {formatTimeRemaining(req.expiresAt)}
-                  </p>
+                  <p className="reason">{h.prompt}</p>
+                  <p className="expires">Expires in: {formatTimeRemaining(h.expires_at)}</p>
                 </li>
               ))}
             </ul>
           )}
         </div>
 
-        {/* Selected Request Details */}
         <div className="request-details-panel">
-          {selectedRequest ? renderRequestDetails() : <p>Select a request to view details</p>}
+          {selected ? renderDetails() : <p>Select a handoff to view details</p>}
         </div>
       </div>
 
@@ -405,6 +432,10 @@ export function HITLInbox({ apiBase, authHeader }: InboxProps) {
         }
         .form-group {
           margin-bottom: 16px;
+        }
+        .choice {
+          display: block;
+          margin-bottom: 6px;
         }
         .form-group label {
           display: block;

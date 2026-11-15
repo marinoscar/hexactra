@@ -9,9 +9,7 @@ pub mod routes {
     pub mod durable_actions;
     pub mod fleet;
     pub mod goals;
-    pub mod hitl_broker;
     pub mod hosts;
-    pub mod interaction_requests;
     pub mod mcp;
     pub mod operations;
     pub mod session_lifecycle;
@@ -35,7 +33,6 @@ pub fn create_router(_config: &Config, db_state: DbState) -> Router<DbState> {
         .merge(routes::hosts::router())
         .merge(routes::session_lifecycle::router())
         .merge(routes::viewers::router())
-        .merge(routes::hitl_broker::router())
         .merge(routes::mcp::router(db_state.clone()))
         .merge(routes::fleet::router())
 }

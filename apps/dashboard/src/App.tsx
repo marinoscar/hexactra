@@ -1,9 +1,10 @@
 import React from 'react';
 import { HITLInbox } from './components/HITLInbox.js';
 
-// Default API base URL (can be overridden via environment variable)
-const API_BASE = import.meta.env?.VITE_API_BASE || 'http://localhost:3000/api/v1';
-const AUTH_HEADER = `Bearer ${import.meta.env?.VITE_AUTH_TOKEN || ''}`;
+// Origin of the control plane (its `/v1` API); override with VITE_API_BASE.
+const API_BASE = import.meta.env?.VITE_API_BASE || 'http://127.0.0.1:8787';
+// An operator or service token; override with VITE_AUTH_TOKEN.
+const AUTH_TOKEN = import.meta.env?.VITE_AUTH_TOKEN || '';
 
 export function App() {
   return (
@@ -19,7 +20,7 @@ export function App() {
         <a href="#inbox">HITL Inbox</a>
       </nav>
       <main className="content">
-        <HITLInbox apiBase={API_BASE} authHeader={AUTH_HEADER} />
+        <HITLInbox apiBase={API_BASE} token={AUTH_TOKEN} />
       </main>
     </div>
   );

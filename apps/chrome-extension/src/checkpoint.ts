@@ -18,8 +18,7 @@ const STORAGE_KEYS = {
 /**
  * Task states
  */
-export type TaskState = 'idle' | 'running' | 'paused' | 'stopped' | 'failed' | 'completed' | 
-  'pending_approval' | 'approved' | 'rejected' | 'expired' | 'secret_input_received';
+export type TaskState = 'idle' | 'running' | 'paused' | 'stopped' | 'failed' | 'completed';
 
 /**
  * Checkpoint data structure
@@ -57,11 +56,6 @@ export interface TaskMetadata {
   createdAt: number;
   lastUpdatedAt: number;
   stepsCount: number;
-  // HITL-specific fields
-  type?: string;
-  message?: string;
-  details?: Record<string, unknown>;
-  expiresAt?: number;
 }
 
 /**

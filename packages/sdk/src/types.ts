@@ -91,142 +91,205 @@ export interface ActionResult {
   data?: unknown;
 }
 
-// ==================== HITL Types ====================
+// ==================== Handoff Types ====================
+//
+// Human handoffs of the remote control API (`/v1`): see
+// docs/remote-control-api.md#human-handoff and api/openapi.yaml.
 
-export enum InteractionKind {
-  SecretText = 'secret_text',
-  OtpCode = 'otp_code',
-  OobConfirmation = 'oob_confirmation',
-  PasskeyOrSecurityKey = 'passkey_or_security_key',
-  ActionApproval = 'action_approval',
-  HumanTakeover = 'human_takeover',
-  Information = 'information',
-}
+/** Why the agent needs a human. */
+export type HandoffKind = 'captcha' | 'code' | 'passkey' | 'login' | 'confirmation' | 'other';
 
-export enum InteractionStatus {
-  Pending = 'pending',
-  Approved = 'approved',
-  Rejected = 'rejected',
-  Expired = 'expired',
-  Cancelled = 'cancelled',
-}
+/** What the human is asked to provide. */
+export type HandoffInput =
+  | 'none'
+  | 'text'
+  | 'secret'
+  | 'choice'
+  | 'multi_choice'
+  | 'number'
+  | 'confirm'
+  | 'takeover';
 
-export interface InteractionRequest {
+/** Lifecycle of a handoff. */
+export type HandoffStatus = 'pending' | 'completed' | 'cancelled' | 'expired';
+
+/** How the human resolved a handoff. `cancelled` means they declined. */
+export type HandoffOutcome = 'completed' | 'cancelled';
+
+/** How risky approving a `confirm` question is (a UI hint). */
+export type HandoffRisk = 'low' | 'high';
+
+/** One option of a `choice` or `multi_choice` question, as returned. */
+export interface HandoffChoice {
+  /** What the answer carries (`[A-Za-z0-9_-]{1,64}`). */
   id: string;
-  sessionId: string;
-  reason: string;
-  details: Record<string, unknown>;
-  createdAt: string;
-  kind: InteractionKind;
-  status: InteractionStatus;
-  expiresAt: string;
-  ownerId?: string;
-  originSessionId: string;
+  /** What the human sees (at most 100 characters). */
+  label: string;
+  /** At most 200 characters. */
+  description?: string | null;
 }
 
-export interface CreateInteractionRequestRequest {
-  sessionId: string;
-  reason: string;
-  details: Record<string, unknown>;
-  kind?: InteractionKind;
-  ttlMinutes?: number;
+/** An option as a caller sends it: a bare string (id and label) or an object. */
+export type HandoffChoiceSpec = string | HandoffChoice;
+
+/** Bounds on an answer; a constraint that does not apply to the input is a `400`. */
+export interface HandoffConstraints {
+  /** `text` (1-4096, default 4096) and `secret`. */
+  max_length?: number;
+  /** `text`: regex the whole answer must match (at most 200 characters). */
+  pattern?: string;
+  /** `text`: `false` rejects newlines. */
+  multiline?: boolean;
+  /** `multi_choice`: fewest options to select (default 1). */
+  min_selections?: number;
+  /** `multi_choice`: most options to select (default: all). */
+  max_selections?: number;
+  /** `number`: smallest accepted value. */
+  min?: number;
+  /** `number`: largest accepted value. */
+  max?: number;
+  /** `number`: the answer is `min` (or 0) plus a multiple of `step`. */
+  step?: number;
+  /** `number`: unit label (at most 20 characters). */
+  unit?: string;
 }
 
-export interface CreateInteractionRequestResponse {
-  request: InteractionRequestResponse;
+/** Page the agent was on when it asked for help (informational only). */
+export interface HandoffPage {
+  url?: string | null;
+  title?: string | null;
 }
 
-export interface InteractionRequestResponse {
+/** Body of `POST /v1/sessions/{id}/handoffs`. */
+export interface CreateHandoffRequest {
+  kind: HandoffKind;
+  /** What the human should do, in plain words. */
+  prompt: string;
+  /** Defaults to `none` on the server. */
+  input?: HandoffInput;
+  /** `choice` and `multi_choice` only (1 to 10). */
+  choices?: HandoffChoiceSpec[];
+  constraints?: HandoffConstraints;
+  /** `confirm` only (at most 40 characters). */
+  confirm_label?: string;
+  /** `confirm` only (at most 40 characters). */
+  deny_label?: string;
+  /** `confirm` only (default `high`). */
+  risk?: HandoffRisk;
+  /** 10 seconds to 24 hours; defaults to 10 minutes. */
+  timeout_ms?: number;
+  page?: HandoffPage;
+}
+
+/** The human's answer as visible to readers. */
+export interface HandoffResponse {
+  outcome: HandoffOutcome;
+  /** `text`, `choice` (option id), `number` (canonical decimal) and `confirm` (`approve` | `deny`). */
+  value?: string | null;
+  /** `multi_choice`: the selected option ids. */
+  values?: string[] | null;
+  /**
+   * True for `secret` inputs: the value is never returned. Type it into the
+   * page with {@link ControlPlaneClient.typeSecret}.
+   */
+  value_withheld?: boolean;
+  /** Which channel answered (free-form label). */
+  channel?: string | null;
+  /** `operator`, `service:<name>`, `token`, or the `answered_by` an authenticated caller recorded. */
+  by?: string | null;
+  answered_at?: string | null;
+}
+
+/** A handoff as reported by the API and in webhook payloads. */
+export interface HandoffView {
   id: string;
-  sessionId: string;
-  reason: string;
-  details: Record<string, unknown>;
-  createdAt: string;
-  kind: InteractionKind;
-  status: InteractionStatus;
-  expiresAt: string;
-  originSessionId?: string;
+  session_id: string;
+  host_id: string;
+  profile?: string;
+  kind: HandoffKind;
+  prompt: string;
+  input: HandoffInput;
+  /** Always objects. */
+  choices?: HandoffChoice[];
+  constraints?: HandoffConstraints;
+  confirm_label?: string | null;
+  deny_label?: string | null;
+  risk?: HandoffRisk | null;
+  page?: HandoffPage | null;
+  status: HandoffStatus;
+  created_at: string;
+  expires_at: string;
+  resolved_at?: string | null;
+  response?: HandoffResponse | null;
+  /** Web viewer of the host's browser, when the host has one. */
+  viewer_url?: string | null;
 }
 
-export interface ClaimInteractionRequestRequest {
-  ownerId: string;
+/** Response of `POST /v1/sessions/{id}/handoffs`. */
+export interface CreateHandoffResponse {
+  handoff: HandoffView;
+  /** Single-use token any channel can use to answer this handoff. */
+  response_token: string;
+  /** Path of the respond endpoint. */
+  respond_path: string;
 }
 
-export interface ClaimInteractionRequestResponse {
-  claimed: boolean;
+/** Filters of `GET /v1/handoffs`. */
+export interface ListHandoffsOptions {
+  sessionId?: string;
+  pending?: boolean;
 }
 
-export interface RespondInteractionRequestRequest {
-  ownerId: string;
-  status: InteractionStatus;
-  secret?: string;
+/** Body of `POST /v1/handoffs/{id}/respond`. */
+export interface RespondHandoffRequest {
+  outcome: HandoffOutcome;
+  value?: string;
+  values?: string[];
+  /** Label of the answering channel, for the record. */
+  channel?: string;
+  /** Who answered (at most 128 characters); honoured only with an operator or service token. */
+  answered_by?: string;
 }
 
-export interface RespondInteractionRequestResponse {
-  responded: boolean;
+/** Options of {@link ControlPlaneClient.respondHandoff}. */
+export interface RespondHandoffOptions {
+  /**
+   * The handoff's single-use response token. Sent in the
+   * `X-Hexactra-Response-Token` header, never in the URL. Not needed when
+   * the client's own token is an operator or service token.
+   */
+  responseToken?: string;
 }
 
-// ==================== OOB Confirmation Types ====================
-
-export interface RequestOobConfirmationRequest {
-  sessionId: string;
-  reason: string;
-  details: Record<string, unknown>;
-  ttlMinutes?: number;
+/** A `type_secret` action: type the answer of a `secret` handoff of this session. */
+export interface TypeSecretRequest {
+  handoffId: string;
+  selector: string;
+  /** Clear the existing value first. */
+  clear?: boolean;
+  /** Press Enter / submit the enclosing form after typing. */
+  submit?: boolean;
+  tabId?: number;
 }
 
-export interface RequestOobConfirmationResponse {
-  request: InteractionRequestResponse;
-  oobChannel: OobChannelInfo;
-}
+/** State of a remote operation. */
+export type RemoteOperationState =
+  | 'queued'
+  | 'dispatched'
+  | 'succeeded'
+  | 'failed'
+  | 'timed_out'
+  | 'cancelled';
 
-export interface OobChannelInfo {
-  channelId: string;
-  verificationUri: string;
-  verificationCode: string;
-  expiresAt: string;
-}
-
-export interface VerifyOobRequest {
-  channelId: string;
-  verificationCode: string;
-}
-
-export interface VerifyOobResponse {
-  verified: boolean;
-}
-
-// ==================== Passkey Types ====================
-
-export interface RequestPasskeyRequest {
-  sessionId: string;
-  reason: string;
-  details: Record<string, unknown>;
-  ttlMinutes?: number;
-}
-
-export interface RequestPasskeyResponse {
-  request: InteractionRequestResponse;
-  passkeyChallenge: PasskeyChallenge;
-}
-
-export interface PasskeyChallenge {
-  challengeId: string;
-  rpEntityName: string;
-  userId: string;
-  timeoutSeconds: number;
-  attestationTypes: string[];
-}
-
-export interface VerifyPasskeyRequest {
-  challengeId: string;
-  credentialId: string;
-  authenticatorData: string;
-  clientDataJson: string;
-  signature: string;
-}
-
-export interface VerifyPasskeyResponse {
-  verified: boolean;
-  credentialId: string;
+/** An operation of the remote control API (`GET /v1/operations/{id}`). */
+export interface OperationView {
+  id: string;
+  session_id: string;
+  host_id: string;
+  action: Record<string, unknown> & { type: string };
+  state: RemoteOperationState;
+  result?: unknown;
+  error?: string | null;
+  created_at: string;
+  completed_at?: string | null;
 }

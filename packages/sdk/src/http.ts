@@ -75,7 +75,10 @@ export class HttpClient {
     this.baseUrl = config.baseUrl.replace(/\/+$/, '');
     this.token = config.token;
     this.timeout = config.timeout ?? 30000;
-    this.fetchImpl = config.fetch ?? fetch;
+    // Resolve the global fetch at call time and call it unbound: storing
+    // `fetch` itself and calling it as a method throws "Illegal invocation"
+    // in browsers.
+    this.fetchImpl = config.fetch ?? ((input, init) => fetch(input, init));
   }
 
   /**
@@ -88,8 +91,12 @@ export class HttpClient {
   /**
    * Perform a POST request
    */
-  async post<T, R>(path: string, body?: T): Promise<HttpResponse<R>> {
-    return this.request<R>('POST', path, body);
+  async post<T, R>(
+    path: string,
+    body?: T,
+    extraHeaders?: Record<string, string>
+  ): Promise<HttpResponse<R>> {
+    return this.request<R>('POST', path, body, extraHeaders);
   }
 
   /**
@@ -109,7 +116,8 @@ export class HttpClient {
   private async request<T>(
     method: string,
     path: string,
-    body?: unknown
+    body?: unknown,
+    extraHeaders?: Record<string, string>
   ): Promise<HttpResponse<T>> {
     const url = `${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
     const controller = new AbortController();
@@ -122,6 +130,10 @@ export class HttpClient {
 
       if (this.token) {
         headers['Authorization'] = `Bearer ${this.token}`;
+      }
+
+      if (extraHeaders) {
+        Object.assign(headers, extraHeaders);
       }
 
       const init: RequestInit = {
