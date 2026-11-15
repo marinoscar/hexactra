@@ -5,8 +5,8 @@ import { Injectable } from '@nestjs/common';
 /** How long the buttons on a "needs you" notification work. */
 export const RUN_ACTION_TTL_S = 60 * 60;
 
-/** What a notification button may do: stop the run, or approve a plain confirmation. */
-export type RunAction = 'cancel' | 'approve';
+/** What a notification button may do: stop the run, approve a plain confirmation, or remind later. */
+export type RunAction = 'cancel' | 'approve' | 'snooze';
 
 export interface RunActionClaims {
   userId: string;

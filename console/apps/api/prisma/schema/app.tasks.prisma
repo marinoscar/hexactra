@@ -88,6 +88,18 @@ model Run {
   createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz
   startedAt       DateTime?  @map("started_at") @db.Timestamptz
   finishedAt      DateTime?  @map("finished_at") @db.Timestamptz
+  /// Reminders while `waiting_human` (tasks/run-reminders.ts); cleared when the run stops waiting.
+  /// When the run started waiting for its person.
+  waitingSince     DateTime? @map("waiting_since") @db.Timestamptz
+  /// When the open handoff expires on the fabric (null: unknown).
+  handoffExpiresAt DateTime? @map("handoff_expires_at") @db.Timestamptz
+  /// When the reminder job next looks at this run (null: nothing due).
+  remindAt         DateTime? @map("remind_at") @db.Timestamptz
+  /// When the last reminder was sent.
+  remindedAt       DateTime? @map("reminded_at") @db.Timestamptz
+  reminderCount    Int       @default(0) @map("reminder_count")
+  /// "Remind me in 15 min" from a notification.
+  snoozedUntil     DateTime? @map("snoozed_until") @db.Timestamptz
 
   user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   task  Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
@@ -96,6 +108,7 @@ model Run {
   @@index([userId, createdAt])
   @@index([taskId, createdAt])
   @@index([status])
+  @@index([remindAt])
   @@map("runs")
 }
 

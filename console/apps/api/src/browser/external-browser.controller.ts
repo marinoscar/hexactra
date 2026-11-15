@@ -213,10 +213,10 @@ export class ExternalBrowserController {
   async handoff(@CurrentUser('id') userId: string, @Param('runId', ParseUUIDPipe) runId: string, @Body() body: HandoffDto) {
     const run = await this.liveRun(userId, runId);
     const started = Date.now();
-    const id = await new FabricSession(this.fabric).createHandoff(run.sessionId!, { kind: body.kind, prompt: body.prompt, input: body.input, choices: body.choices, timeoutMs: body.timeoutMs });
+    const { id, expiresAt } = await new FabricSession(this.fabric).openHandoff(run.sessionId!, { kind: body.kind, prompt: body.prompt, input: body.input, choices: body.choices, timeoutMs: body.timeoutMs });
     await this.record(runId, userId, 'handoff', null, { kind: body.kind, input: body.input }, true, `asked a person (${body.kind}): ${body.prompt.slice(0, 300)}`, started);
-    await this.tasks.transition(userId, runId, 'waiting_human', { handoffId: id });
-    await this.notifier?.needsYou(userId, { ...run, handoffId: id }, body.prompt, body.kind, body.input);
+    await this.tasks.transition(userId, runId, 'waiting_human', { handoffId: id, handoffExpiresAt: expiresAt });
+    await this.notifier?.needsYou(userId, { ...run, handoffId: id }, body.prompt, body.kind, body.input, expiresAt);
     return { handoffId: id };
   }
 

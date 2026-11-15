@@ -1,4 +1,5 @@
-// The buttons of a "needs you" notification (Stop run, Approve), handled in
+// The buttons of a "needs you" notification and its reminders (Stop run,
+// Approve, Remind me in 15 min), handled in
 // the service worker so they work without opening the app: on a desktop, in
 // the installed PWA and in the Android app (whose notifications Chrome shows
 // through this same worker). No imports: this file is bundled into the worker.
@@ -6,11 +7,12 @@
 // The worker holds no session. The API puts a single-use, hour-long token
 // for this run in the notification's link (`/inbox?run=<id>&a=<token>`); a
 // button posts it to `POST /api/notification-actions`, which can stop that
-// run or approve that plain confirmation and nothing else. A tap on the
+// run, approve that plain confirmation or push its next reminder back 15 min,
+// and nothing else. A tap on the
 // notification itself (no button) keeps the platform's behaviour: it opens
 // the link.
 
-export type NotificationButton = 'cancel' | 'approve';
+export type NotificationButton = 'cancel' | 'approve' | 'snooze';
 
 export interface ActionClickEvent {
   readonly action?: string;
@@ -23,7 +25,7 @@ export interface ActionScope {
   readonly clients: { openWindow(url: string): Promise<unknown> };
 }
 
-const BUTTONS: readonly string[] = ['cancel', 'approve'];
+const BUTTONS: readonly string[] = ['cancel', 'approve', 'snooze'];
 
 /** The run and the button token of a notification's link, or `null`. */
 export function actionTarget(data: unknown): { runId: string; token: string; link: string } | null {
@@ -60,7 +62,9 @@ export function handleActionClick(scope: ActionScope, event: ActionClickEvent, f
       } catch {
         ok = false;
       }
-      if (ok) {
+      if (ok && action === 'snooze') {
+        // Snoozed: nothing on screen until the reminder comes back.
+      } else if (ok) {
         await scope.registration.showNotification(action === 'cancel' ? 'Run stopped' : 'Approved', {
           body: action === 'cancel' ? 'The agent stops after its current step.' : 'The agent continues.',
           tag: `run-${target.runId}`,
@@ -73,4 +77,28 @@ export function handleActionClick(scope: ActionScope, event: ActionClickEvent, f
     })(),
   );
   return true;
+}
+
+/** Options of `showNotification` as the platform's push handler passes them. */
+type ShowOptions = Record<string, unknown> & { tag?: string };
+
+/**
+ * A scope whose `showNotification` re-alerts (`renotify`) when a pushed
+ * notification replaces one of the same run (`run-<id>` tag): a reminder, or a
+ * run that finished after asking for help, makes sound and vibrates instead of
+ * replacing the old one silently. The platform's push handler has no
+ * `renotify` extra yet (seam request upstream); this wraps only the push path.
+ */
+export function withRunRenotify<S extends { readonly registration: { showNotification(title: string, options?: never): Promise<void> } }>(scope: S): S {
+  const registration = scope.registration as unknown as { showNotification(title: string, options?: ShowOptions): Promise<void> };
+  const show = (title: string, options?: ShowOptions) =>
+    registration.showNotification(title, options && typeof options.tag === 'string' && options.tag.startsWith('run-') ? { ...options, renotify: true } : options);
+  return new Proxy(scope, {
+    get(target, prop, receiver) {
+      if (prop === 'registration') {
+        return new Proxy(registration, { get: (r, p, rr) => (p === 'showNotification' ? show : Reflect.get(r, p, rr)) });
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  });
 }
