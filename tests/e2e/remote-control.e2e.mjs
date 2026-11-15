@@ -207,7 +207,7 @@ async function startChannel() {
       const answer = { channel: 'e2e-channel', response_token: event.data.respond.token };
       if (h.input === 'secret') answer.value = '424242';
       if (h.input === 'text') answer.value = 'from the channel';
-      if (h.input === 'choice') answer.value = h.choices[0];
+      if (h.input === 'choice') answer.value = h.choices[0].id;
       // A person takes a moment to answer.
       const delay = h.kind === 'captcha' ? 2_000 : 300;
       setTimeout(() => {
