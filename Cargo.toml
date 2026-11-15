@@ -21,6 +21,7 @@ members = [
     "crates/hexactra-aef-connector",
     "crates/hexactra-benchmark",
     "crates/hexactra-client",
+    "crates/hexactra-otel",
     "tests",
 ]
 resolver = "2"

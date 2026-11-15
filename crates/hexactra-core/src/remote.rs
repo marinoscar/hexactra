@@ -420,6 +420,9 @@ pub struct DispatchedOperation {
     pub action: RemoteAction,
     /// Deadline the host should respect when executing.
     pub deadline: DateTime<Utc>,
+    /// W3C trace context of the request that queued the action (#215).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub traceparent: Option<String>,
 }
 
 /// `POST /v1/operations/{id}/result`
@@ -536,6 +539,9 @@ pub struct DispatchedCommand {
     pub id: Uuid,
     pub command: HostCommand,
     pub deadline: DateTime<Utc>,
+    /// W3C trace context of the request that queued the command (#215).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub traceparent: Option<String>,
 }
 
 /// What `GET /v1/hosts/{id}/next` returns: an operation, or (to agents that

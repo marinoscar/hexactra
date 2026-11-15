@@ -251,7 +251,36 @@ pub fn router(state: ApiState) -> Router {
         .merge(host)
         .merge(client)
         .merge(operator)
+        .layer(middleware::from_fn(trace_request))
         .with_state(state)
+}
+
+/// One span per request, continuing the caller's trace (`traceparent`).
+/// Host long-polls and the event stream get no span of their own unless
+/// the caller sends a trace context: they would only add noise.
+async fn trace_request(req: Request, next: Next) -> Response {
+    let path = req.uri().path();
+    let traced = req.headers().contains_key("traceparent");
+    let noisy = path.ends_with("/next") || path == "/v1/events";
+    if noisy && !traced {
+        return next.run(req).await;
+    }
+    let route = req
+        .extensions()
+        .get::<axum::extract::MatchedPath>()
+        .map(|p| p.as_str().to_string())
+        .unwrap_or_else(|| "unmatched".into());
+    let span = tracing::info_span!(
+        "http.request",
+        otel.name = %format!("{} {}", req.method(), route),
+        http.request.method = %req.method(),
+        http.route = %route,
+        http.response.status_code = tracing::field::Empty,
+    );
+    hexactra_otel::set_parent_from_headers(&span, req.headers());
+    let resp = tracing::Instrument::instrument(next.run(req), span.clone()).await;
+    span.record("http.response.status_code", resp.status().as_u16());
+    resp
 }
 
 async fn health() -> Json<serde_json::Value> {

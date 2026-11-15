@@ -304,6 +304,33 @@ def verify(secret, headers, raw_body: bytes) -> bool:
 - The registry is saved to `$XDG_CONFIG_HOME/hexactra/webhooks.json` (mode `0600`, because it holds secrets), or to the path given by `--webhooks-file`.
 - Every subscribed endpoint receives a token that can answer the handoff, so register only channels you trust.
 
+## Tracing and metrics (OpenTelemetry)
+
+`hexactra-control` and `hexactra-agent` export OpenTelemetry traces and metrics over OTLP/HTTP. Export is off unless an endpoint is set.
+
+| Variable | Effect |
+|---|---|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Collector base URL, e.g. `http://otel-collector:4318`. Unset or empty means nothing is exported |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` (default) or `http/json` |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`, `..._METRICS_ENDPOINT`, `OTEL_BSP_*`, `OTEL_METRIC_EXPORT_INTERVAL` | Standard OpenTelemetry settings |
+
+**One trace runs from the caller to the browser.**
+- Send a W3C `traceparent` header with any `/v1` request.
+- The control plane's `http.request` span joins that trace.
+- The context travels with the queued action or host command to the agent, whose `operation.execute` or `host_command.execute` span continues it.
+- Propagation works even with export off, so a caller's trace id still reaches the agent's logs.
+- Host long-polls and the event stream get no span unless the caller sends a `traceparent`.
+
+**Metrics:**
+
+| Metric | Meaning |
+|---|---|
+| `hexactra.operations` | Count of actions, by `kind` and final `state` |
+| `hexactra.operation.duration` | Seconds from queue to final state |
+| `hexactra.host_commands` | Count of host commands, by `kind` and `state` |
+
+**Content-free:** span names, attributes and events carry ids, routes (templated, such as `/v1/sessions/{id}/actions`), kinds, profile names and states. They never carry action URLs, selectors, typed text, screenshots or tokens. The e2e test checks that no action URL reaches the collector.
+
 ## Limitations of this release
 
 - **State and restarts.** The control plane saves hosts, sessions, handoffs and credentials to a SQLite state database: `--state-db`, `HEXACTRA_STATE_DB`, default `$XDG_DATA_HOME/hexactra/control.db`, mode `0600`.

@@ -12,6 +12,7 @@ pub mod handoff;
 mod handoff_api;
 pub mod host_commands;
 mod host_commands_api;
+mod metrics;
 pub mod persist;
 pub mod store;
 mod webhook_api;

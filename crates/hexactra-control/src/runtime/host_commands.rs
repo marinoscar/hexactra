@@ -29,6 +29,7 @@ pub(crate) struct CommandEntry {
     pub(super) view: HostCommandView,
     pub(super) deadline: DateTime<Utc>,
     pub(super) tx: watch::Sender<OperationState>,
+    pub(super) traceparent: Option<String>,
 }
 
 fn event(v: &HostCommandView) -> serde_json::Value {
@@ -107,6 +108,7 @@ impl RuntimeStore {
                     view: view.clone(),
                     deadline: now,
                     tx,
+                    traceparent: None,
                 },
             );
             return Ok((view, rx));
@@ -119,6 +121,7 @@ impl RuntimeStore {
                 view: view.clone(),
                 deadline,
                 tx,
+                traceparent: hexactra_otel::current_traceparent(),
             },
         );
         let host = inner.hosts.get_mut(&host_id).expect("checked above");
@@ -157,6 +160,7 @@ impl RuntimeStore {
                         id,
                         command: c.view.command.clone(),
                         deadline: c.deadline,
+                        traceparent: c.traceparent.clone(),
                     });
                     break;
                 }
@@ -238,6 +242,7 @@ impl RuntimeStore {
         };
         c.view.completed_at = Some(Utc::now());
         let _ = c.tx.send(state);
+        super::metrics::host_command_finished(&c.view);
         self.log.emit(event_name(state), event(&c.view));
         let view = c.view.clone();
         if result.ok {
@@ -277,6 +282,7 @@ impl RuntimeStore {
             });
             c.view.completed_at = Some(Utc::now());
             let _ = c.tx.send(OperationState::TimedOut);
+            super::metrics::host_command_finished(&c.view);
             self.log.emit(event_name(c.view.state), event(&c.view));
         }
         Some(c.view.clone())

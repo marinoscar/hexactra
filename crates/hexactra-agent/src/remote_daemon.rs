@@ -11,8 +11,10 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use hexactra_client::{ClientError, HostClient, HostPollStatus};
 use hexactra_core::remote::{
-    HostCommand, HostWork, OperationResult, RegisterHostRequest, DEFAULT_PROFILE,
+    DispatchedCommand, DispatchedOperation, HostCommand, HostWork, OperationResult,
+    RegisterHostRequest, DEFAULT_PROFILE,
 };
+use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::browser_bridge::BrowserBridge;
@@ -99,6 +101,30 @@ async fn report(client: &HostClient, host_id: Uuid, op_id: Uuid, result: &Operat
     }
 }
 
+/// Span for one operation, continuing the trace that queued it (#215).
+fn op_span(op: &DispatchedOperation) -> tracing::Span {
+    let span = tracing::info_span!(
+        "operation.execute",
+        otel.name = %format!("execute {}", op.action.kind()),
+        op_id = %op.id,
+        kind = op.action.kind(),
+        profile = %op.profile,
+    );
+    hexactra_otel::set_parent_from_traceparent(&span, op.traceparent.as_deref());
+    span
+}
+
+fn command_span(c: &DispatchedCommand) -> tracing::Span {
+    let span = tracing::info_span!(
+        "host_command.execute",
+        otel.name = %format!("host command {}", c.command.kind()),
+        command_id = %c.id,
+        kind = c.command.kind(),
+    );
+    hexactra_otel::set_parent_from_traceparent(&span, c.traceparent.as_deref());
+    span
+}
+
 /// Why an attach-mode host cannot run a host command.
 pub fn attach_mode_refusal(command: &HostCommand) -> String {
     format!(
@@ -180,6 +206,7 @@ async fn run_attach_mode(cfg: DaemonConfig, client: HostClient) -> Result<()> {
             wait_for_stop_signal().await;
             tracing::info!("stopping");
             announce_offline(&client, &current).await;
+            hexactra_otel::shutdown();
             std::process::exit(0);
         });
     }
@@ -225,17 +252,22 @@ async fn run_attach_mode(cfg: DaemonConfig, client: HostClient) -> Result<()> {
             }
             Ok(Some(HostWork::Operation(op))) => {
                 backoff = Duration::from_secs(1);
-                tracing::info!(op_id = %op.id, kind = op.action.kind(), "executing operation");
-                let result = if op.profile != DEFAULT_PROFILE {
-                    failure(format!(
-                        "this host attaches to one browser (profile {DEFAULT_PROFILE:?}); profile {:?} is not available here",
-                        op.profile
-                    ))
-                } else {
-                    bridge.execute(op.id, &op.action, op.deadline).await
-                };
-                tracing::info!(op_id = %op.id, ok = result.ok, "operation finished");
-                report(&client, host_id, op.id, &result).await;
+                let span = op_span(&op);
+                async {
+                    tracing::info!(op_id = %op.id, kind = op.action.kind(), "executing operation");
+                    let result = if op.profile != DEFAULT_PROFILE {
+                        failure(format!(
+                            "this host attaches to one browser (profile {DEFAULT_PROFILE:?}); profile {:?} is not available here",
+                            op.profile
+                        ))
+                    } else {
+                        bridge.execute(op.id, &op.action, op.deadline).await
+                    };
+                    tracing::info!(op_id = %op.id, ok = result.ok, "operation finished");
+                    report(&client, host_id, op.id, &result).await;
+                }
+                .instrument(span)
+                .await;
             }
             Ok(None) => backoff = Duration::from_secs(1),
             Err(ClientError::Api { status: 404, .. }) => {
@@ -274,6 +306,7 @@ async fn run_launch_mode(
             tracing::info!("stopping: closing browsers");
             announce_offline(&client, &current).await;
             pool.shutdown().await;
+            hexactra_otel::shutdown();
             std::process::exit(0);
         });
     }
@@ -300,17 +333,19 @@ async fn run_launch_mode(
                 tracing::info!(command_id = %command.id, kind = command.command.kind(), profile = ?command.command.profile(), "running host command");
                 let pool = pool.clone();
                 let client = client.clone();
+                let span = command_span(&command);
                 tokio::spawn(async move {
                     let result = pool.run_command(&command.command, command.deadline).await;
                     tracing::info!(command_id = %command.id, ok = result.ok, error = ?result.error, "host command finished");
                     report_command(&client, host_id, command.id, &result).await;
-                });
+                }.instrument(span));
             }
             Ok(Some(HostWork::Operation(op))) => {
                 backoff = Duration::from_secs(1);
                 tracing::info!(op_id = %op.id, kind = op.action.kind(), profile = %op.profile, "executing operation");
                 let pool = pool.clone();
                 let client = client.clone();
+                let span = op_span(&op);
                 tokio::spawn(async move {
                     let result = pool
                         .execute(&op.profile, op.id, &op.action, op.deadline)
@@ -322,7 +357,7 @@ async fn run_launch_mode(
                     }
                     tracing::info!(op_id = %op.id, ok = result.ok, "operation finished");
                     report(&client, host_id, op.id, &result).await;
-                });
+                }.instrument(span));
             }
             Ok(None) => backoff = Duration::from_secs(1),
             Err(ClientError::Api { status: 404, .. }) => {
