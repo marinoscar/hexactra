@@ -3,7 +3,8 @@
   "restExempt": {
     "GET /api/fleet/viewer-auth": "nginx's auth_request for the viewer, not a client operation",
     "POST /api/mcp": "the MCP transport itself",
-    "GET /api/mcp": "the MCP transport itself (405)"
+    "GET /api/mcp": "the MCP transport itself (405)",
+    "POST /api/notification-actions": "the notification buttons' token-authenticated channel from the service worker; on every surface the same actions are runs.cancel and inbox.answer"
   },
   "capabilities": [
     {

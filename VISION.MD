@@ -1510,6 +1510,6 @@ More hosts enroll from any machine with a one-time token. Day-2 operations are i
 
 ### 26.5 What stays open
 
-- Native notification actions on Android ("approve" or "cancel" from the notification itself).
+- A native Android module. The app is a Trusted Web Activity: its notification buttons (Stop run, Approve) are Web Push actions handled by the service worker, which is enough today.
 - Scoped personal access tokens. Until then, a dedicated low-role user per agent framework.
 - Windows and macOS hosts (post-v1, Section 19).

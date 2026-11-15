@@ -18,7 +18,9 @@ const needsYou: BrowserNotificationTemplate = (d) => ({
   body: trim(str(d, 'prompt') || 'Answer its request in the Inbox.', 180),
   // A deep link to this run's request: the web app, the installed PWA and the
   // Android app all open the Inbox with it in front.
-  link: str(d, 'runId') ? `/inbox?run=${encodeURIComponent(str(d, 'runId'))}` : '/inbox',
+  // `a`: the notification buttons' single-use token (RunActionTokens), read by
+  // the service worker (apps/web/src/sw.ts); the Inbox ignores it.
+  link: str(d, 'runId') ? `/inbox?run=${encodeURIComponent(str(d, 'runId'))}${str(d, 'actionToken') ? `&a=${encodeURIComponent(str(d, 'actionToken'))}` : ''}` : '/inbox',
 });
 const finished: BrowserNotificationTemplate = (d) => ({
   title: str(d, 'status') === 'succeeded' ? 'Run finished' : `Run ${str(d, 'status') || 'ended'}`,
@@ -74,7 +76,13 @@ export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
  */
 export const hexactraPushPayload: PushPayloadHook = (event, data) => {
   const runId = str(data, 'runId');
-  if (event.key === RUN_NEEDS_YOU_EVENT) return { tag: runId ? `run-${runId}` : 'run', urgency: 'high' };
+  if (event.key === RUN_NEEDS_YOU_EVENT) {
+    // Buttons only when the notification carries their token.
+    const actions = str(data, 'actionToken')
+      ? [...((data as { approvable?: boolean }).approvable ? [{ action: 'approve', title: 'Approve' }] : []), { action: 'cancel', title: 'Stop run' }]
+      : [];
+    return { tag: runId ? `run-${runId}` : 'run', urgency: 'high', ...(actions.length ? { actions } : {}) };
+  }
   if (event.key === RUN_FINISHED_EVENT) return { tag: runId ? `run-${runId}` : 'run', urgency: str(data, 'status') === 'failed' ? 'high' : 'normal' };
   if (event.key === SCHEDULE_FAILING_EVENT) return { tag: `schedule-${str(data, 'scheduleId') || 'failing'}`, urgency: 'normal' };
   return null;

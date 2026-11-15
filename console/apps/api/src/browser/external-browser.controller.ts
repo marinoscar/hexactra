@@ -216,7 +216,7 @@ export class ExternalBrowserController {
     const id = await new FabricSession(this.fabric).createHandoff(run.sessionId!, { kind: body.kind, prompt: body.prompt, input: body.input, choices: body.choices, timeoutMs: body.timeoutMs });
     await this.record(runId, userId, 'handoff', null, { kind: body.kind, input: body.input }, true, `asked a person (${body.kind}): ${body.prompt.slice(0, 300)}`, started);
     await this.tasks.transition(userId, runId, 'waiting_human', { handoffId: id });
-    await this.notifier?.needsYou(userId, run, body.prompt, body.kind);
+    await this.notifier?.needsYou(userId, { ...run, handoffId: id }, body.prompt, body.kind, body.input);
     return { handoffId: id };
   }
 

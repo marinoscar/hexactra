@@ -9,6 +9,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import type { FabricClient } from '../src/fabric/fabric.client';
 import { GoalRunnerService } from '../src/runner/goal-runner.service';
 import { ExternalBrowserController } from '../src/browser/external-browser.controller';
+import { HandoffAnswers } from '../src/browser/handoff-answers';
 import { InboxController } from '../src/browser/inbox.controller';
 import { TasksService } from '../src/tasks/tasks.service';
 
@@ -185,7 +186,7 @@ describe('the inbox', () => {
     } as unknown as FabricClient;
     const enqueued: unknown[] = [];
     const jobs = { enqueue: async (j: unknown) => void enqueued.push(j) };
-    const inbox = new InboxController(prisma, fabric, jobs as never);
+    const inbox = new InboxController(prisma, fabric, new HandoffAnswers(prisma, fabric, jobs as never));
 
     const items = await inbox.list(userId);
     expect(items).toEqual([expect.objectContaining({ runId: waiting.id, kind: 'code', input: 'secret', prompt: 'Enter the code' })]);

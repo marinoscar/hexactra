@@ -45,4 +45,15 @@ describe('push payloads of the console events', () => {
     const shown = reg(RUN_NEEDS_YOU_EVENT).browserTemplate!({ runId: RUN, prompt: 'Enter the code', value: '987654' } as never);
     expect(JSON.stringify(shown)).not.toContain('987654');
   });
+
+  it('carries the buttons: Approve only for a plain confirmation, Stop run always, the token in the link', () => {
+    const data = { runId: RUN, prompt: 'Book the 9:00 table?', kind: 'confirmation', actionToken: 'tok.sig', approvable: true };
+    expect(reg(RUN_NEEDS_YOU_EVENT).browserTemplate!(data as never)).toMatchObject({ link: `/inbox?run=${RUN}&a=tok.sig` });
+    expect(sanitizePushExtras(hexactraPushPayload(event(RUN_NEEDS_YOU_EVENT), data)).payload.actions).toEqual([
+      { action: 'approve', title: 'Approve' },
+      { action: 'cancel', title: 'Stop run' },
+    ]);
+    const code = { ...data, kind: 'code', approvable: false };
+    expect(sanitizePushExtras(hexactraPushPayload(event(RUN_NEEDS_YOU_EVENT), code)).payload.actions).toEqual([{ action: 'cancel', title: 'Stop run' }]);
+  });
 });

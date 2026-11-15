@@ -5194,6 +5194,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notification-actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["notificationActions_act"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/mcp": {
         parameters: {
             query?: never;
@@ -11408,6 +11424,11 @@ export interface components {
             /** @enum {string} */
             outcome: "completed" | "cancelled";
             value?: string;
+        };
+        NotificationActionDto: {
+            token: string;
+            /** @enum {string} */
+            action: "cancel" | "approve";
         };
         StartRunDto: {
             goal: string;
@@ -28720,6 +28741,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    notificationActions_act: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationActionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["OkResponseDto"];
+                    };
                 };
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */

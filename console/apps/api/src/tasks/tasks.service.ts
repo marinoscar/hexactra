@@ -4,6 +4,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertTransition, isTerminal, type RunStatus } from './run-status';
 import type { CreateTaskDto, ListRunsDto, UpdateTaskDto } from './tasks.schemas';
+import { FabricClient } from '../fabric/fabric.client';
 import { RunMetrics } from './run-metrics';
 
 /** Fields a status change may set. */
@@ -25,6 +26,7 @@ export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() readonly metrics: RunMetrics = new RunMetrics(),
+    @Optional() private readonly fabric?: FabricClient,
   ) {}
 
   private db(userId: string) {
@@ -111,6 +113,13 @@ export class TasksService {
     const run = await this.getRun(userId, id);
     if (isTerminal(run.status as RunStatus)) return run;
     if (run.status === 'queued') return this.transition(userId, id, 'cancelled', { error: 'Cancelled before it started' });
+    // Waiting for a person, nothing is running to see the flag: withdraw the
+    // request, end the browser session and cancel now (best effort on the fabric).
+    if (run.status === 'waiting_human') {
+      if (this.fabric && run.handoffId) await this.fabric.request('POST', `/v1/handoffs/${run.handoffId}/cancel`).catch(() => undefined);
+      if (this.fabric && run.sessionId) await this.fabric.request('DELETE', `/v1/sessions/${run.sessionId}`).catch(() => undefined);
+      return this.transition(userId, id, 'cancelled', { error: 'Cancelled by the user' });
+    }
     await this.db(userId).run.updateMany({ where: { id }, data: { cancelRequested: true } });
     return this.getRun(userId, id);
   }

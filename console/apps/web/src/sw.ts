@@ -12,10 +12,17 @@
 // Import the handlers from `/service-worker`, never from the `/headless` barrel:
 // the barrel pulls React in, which a worker cannot load.
 import {
-  registerNotificationServiceWorkerHandlers,
+  handleNotificationClick,
+  handlePushEvent,
+  handlePushSubscriptionChange,
+  type NotificationsClickEvent,
   type NotificationsExtendableEvent,
+  type NotificationsPushEvent,
+  type NotificationsPushSubscriptionChangeEvent,
   type NotificationsServiceWorkerScope,
 } from '@marinoscar/platform-web/notifications/service-worker';
+
+import { handleActionClick, type ActionClickEvent, type ActionScope } from './notificationActions';
 
 /** The members of the worker's global scope this file uses beyond the handlers'. */
 type WorkerScope = NotificationsServiceWorkerScope & {
@@ -30,4 +37,14 @@ scope.addEventListener('install', () => void scope.skipWaiting());
 scope.addEventListener('activate', (event: NotificationsExtendableEvent) => event.waitUntil(scope.clients.claim()));
 
 // The favicon doubles as the badge: put PNGs under public/icons for crisper OS toasts.
-registerNotificationServiceWorkerHandlers(scope, { icon: '/favicon.svg', badge: '/favicon.svg' });
+const ICONS = { icon: '/favicon.svg', badge: '/favicon.svg' };
+
+// The platform's three listeners, with one addition on click: the buttons of a
+// "needs you" notification (Stop run, Approve) act without opening the app
+// (./notificationActions.ts); every other click opens the notification's link.
+scope.addEventListener('notificationclick', (event: NotificationsClickEvent) => {
+  if (handleActionClick(scope as unknown as ActionScope, event as unknown as ActionClickEvent, fetch, ICONS)) return;
+  handleNotificationClick(scope, event);
+});
+scope.addEventListener('push', (event: NotificationsPushEvent) => event.waitUntil(handlePushEvent(scope, event, ICONS)));
+scope.addEventListener('pushsubscriptionchange', (event: NotificationsPushSubscriptionChangeEvent) => event.waitUntil(handlePushSubscriptionChange(scope, event)));
