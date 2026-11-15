@@ -59,7 +59,14 @@ async fn main() -> Result<()> {
 
     let url = std::env::var("HEXACTRA_URL").unwrap_or_else(|_| "http://127.0.0.1:8787".into());
     let client = ControlClient::new(&url, &read_token()?)?;
-    let server = server::Server::new(client);
+    let profile = std::env::var("HEXACTRA_PROFILE")
+        .ok()
+        .filter(|p| !p.trim().is_empty())
+        .unwrap_or_else(|| hexactra_core::remote::DEFAULT_PROFILE.to_string());
+    if !hexactra_core::remote::valid_profile_name(&profile) {
+        anyhow::bail!("HEXACTRA_PROFILE {profile:?} is not a valid profile name");
+    }
+    let server = server::Server::with_profile(client, profile);
 
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
     let mut stdout = tokio::io::stdout();
