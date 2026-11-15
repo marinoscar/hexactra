@@ -33,7 +33,7 @@ Run it all on a VPS (console, fabric and a browser host in one stack): [docs/run
 - Steps store redacted arguments only.
 - Sites outside a task's allowed list are refused, and purchases wait for your confirmation unless you turn that off.
 
-The CLI's commands use the login from `hexactra login`, or `HEXACTRA_SERVER_URL` and `HEXACTRA_TOKEN`.
+The CLI's commands use the login from `hexactra login`, or `HEXACTRA_SERVER_URL` and `HEXACTRA_TOKEN`. Install it with one `curl | bash` line; the guide, with screenshots of the terminal UI, is [apps/cli/README.md](apps/cli/README.md).
 
 ## Layout
 
