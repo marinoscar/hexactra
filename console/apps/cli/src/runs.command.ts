@@ -146,4 +146,34 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
       const r = await consoleApi().post<Run>(`/runs/${id}/cancel`, {});
       out(`${label(r.status)}${r.status === 'running' ? ' (stopping after the current step)' : ''}`);
     });
+
+  const schedules = program.command('schedules').description('Run tasks on a schedule (cron + time zone)');
+  schedules
+    .command('list')
+    .option('--task <id>', 'only this task')
+    .option('--json', 'print JSON')
+    .action(async (o: { task?: string; json?: boolean }) => {
+      const list = await consoleApi().get<Array<{ id: string; taskId: string; cron: string; timezone: string; enabled: boolean; nextRunAt: string | null; consecutiveFailures: number }>>('/schedules', { query: { taskId: o.task } });
+      if (o.json) return json(list);
+      for (const s of list) out(`${s.id.slice(0, 8)}  task ${s.taskId.slice(0, 8)}  ${s.cron} (${s.timezone})  ${s.enabled ? `next ${s.nextRunAt}` : 'paused'}${s.consecutiveFailures ? `  ${s.consecutiveFailures} failed in a row` : ''}`);
+    });
+  schedules
+    .command('create <taskId> <cron>')
+    .description('e.g. hexactra schedules create <task> "0 9 * * 1-5" --tz Europe/Madrid')
+    .option('--tz <zone>', 'IANA time zone', Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
+    .option('--queue', 'start even while an earlier run is live (default: skip)')
+    .action(async (taskId: string, cron: string, o: { tz: string; queue?: boolean }) => {
+      const s = await consoleApi().post<{ id: string; nextRunAt: string }>('/schedules', { taskId, cron, timezone: o.tz, concurrency: o.queue ? 'queue' : 'skip' });
+      out(`schedule ${s.id}: next ${s.nextRunAt}`);
+    });
+  for (const [name, enabled] of [['pause', false], ['resume', true]] as const) {
+    schedules.command(`${name} <id>`).action(async (id: string) => {
+      await consoleApi().patch(`/schedules/${id}`, { enabled });
+      out(enabled ? 'resumed' : 'paused');
+    });
+  }
+  schedules.command('delete <id>').action(async (id: string) => {
+    await consoleApi().delete(`/schedules/${id}`);
+    out('deleted');
+  });
 };

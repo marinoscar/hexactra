@@ -29,6 +29,7 @@ enum RunTrigger {
   @@map("run_trigger")
 }
 
+// @extensible
 model Task {
   id             String   @id @default(uuid()) @db.Uuid
   userId         String   @map("user_id") @db.Uuid
@@ -51,6 +52,9 @@ model Task {
 
   user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   runs Run[]
+
+  // composed from app:schedules.prisma
+  schedules TaskSchedule[]
 
   @@index([userId, createdAt])
   @@map("tasks")
