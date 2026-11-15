@@ -5,7 +5,6 @@ import { AiModule } from '../platform/ai/ai.config';
 import { TasksModule } from '../tasks/tasks.module';
 import { GoalRunHandler, HandoffCheckHandler, HandoffCheckTask } from './goal-runner.jobs';
 import { GoalRunnerService } from './goal-runner.service';
-import { InboxController } from './inbox.controller';
 import { RunLiveController, RunOwnerGuard } from './run-live.controller';
 import { RunsStartController } from './runs-start.controller';
 
@@ -16,7 +15,7 @@ import { RunsStartController } from './runs-start.controller';
  */
 @Module({
   imports: [AiModule, FabricModule, TasksModule],
-  controllers: [RunsStartController, RunLiveController, InboxController],
+  controllers: [RunsStartController, RunLiveController],
   providers: [RunOwnerGuard, GoalRunnerService, GoalRunHandler, HandoffCheckHandler, HandoffCheckTask],
   exports: [GoalRunnerService],
 })

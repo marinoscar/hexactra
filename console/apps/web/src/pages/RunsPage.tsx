@@ -24,6 +24,7 @@ export interface Run {
   taskId: string | null;
   status: RunStatus;
   trigger: string;
+  actor?: string | null;
   goal: string;
   profile: string;
   result: string | null;
@@ -80,7 +81,7 @@ export function RunsPage() {
       <List aria-label="Runs">
         {runs.map((r) => (
           <ListItemButton key={r.id} onClick={() => navigate(`/runs/${r.id}`)}>
-            <ListItemText primary={r.goal} secondary={`${new Date(r.createdAt).toLocaleString()} · ${r.stepCount} steps · ${r.trigger}`} />
+            <ListItemText primary={r.goal} secondary={`${new Date(r.createdAt).toLocaleString()} · ${r.stepCount} steps · ${r.trigger === 'external' ? `driven by ${r.actor ?? 'an external agent'}` : r.trigger}`} />
             <Chip size="small" color={STATUS_COLOR[r.status]} label={statusLabel(r.status)} />
           </ListItemButton>
         ))}

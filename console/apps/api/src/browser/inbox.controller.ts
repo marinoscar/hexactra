@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { PrismaService } from '../prisma/prisma.service';
-import { enqueueGoalRun } from './goal-runner.jobs';
+import { enqueueGoalRun } from '../runner/goal-runner.jobs';
 
 const respondSchema = z.object({
   outcome: z.enum(['completed', 'cancelled']),
@@ -100,7 +100,7 @@ export class InboxController {
     @Param('runId', ParseUUIDPipe) runId: string,
     @Body() body: RespondDto,
   ): Promise<{ ok: true }> {
-    const run = await this.prisma.forUser({ userId: user.id }).run.findFirst({ where: { id: runId }, select: { status: true, handoffId: true } });
+    const run = await this.prisma.forUser({ userId: user.id }).run.findFirst({ where: { id: runId }, select: { status: true, handoffId: true, trigger: true } });
     if (!run) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
     if (run.status !== 'waiting_human' || !run.handoffId) throw new ConflictException({ code: 'NOT_WAITING', message: 'This run is not waiting for you' });
     try {
@@ -111,7 +111,10 @@ export class InboxController {
       throw e;
     }
     this.log.log(`run ${runId}: handoff ${body.outcome}`);
-    await enqueueGoalRun(this.jobs, { runId, userId: user.id, orgId: user.activeOrgId ?? null }, 'handoff_answered');
+    // The AI runner resumes its own runs; an external agent polls its handoff.
+    if (run.trigger !== 'external') {
+      await enqueueGoalRun(this.jobs, { runId, userId: user.id, orgId: user.activeOrgId ?? null }, 'handoff_answered');
+    }
     return { ok: true };
   }
 }
