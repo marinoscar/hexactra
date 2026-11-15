@@ -1,0 +1,106 @@
+name: Console Android
+
+# The Hexactra Console's Android app (console/apps/android): a Trusted Web
+# Activity around the console, on the platform's Kotlin core
+# (console/node_modules/@marinoscar/platform-infra/android/platform-core).
+# Release builds and uploads go through the console CLI's `android` command
+# (console/docs/runbooks/android-app.md).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'console/apps/android/**'
+      - 'console/packages/shared/identity.json'
+      - 'console/package-lock.json'
+      - '.github/workflows/console-android.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'console/apps/android/**'
+      - 'console/packages/shared/identity.json'
+      - 'console/package-lock.json'
+      - '.github/workflows/console-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2
+
+defaults:
+  run:
+    working-directory: console/apps/android
+
+jobs:
+  build:
+    name: Unit tests and debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: console/package-lock.json
+
+      # platform-core comes with the platform-infra package.
+      - name: Install the console's packages
+        working-directory: console
+        run: npm ci --ignore-scripts
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+          cache-dependency-path: |
+            console/apps/android/*.gradle.kts
+            console/apps/android/app/*.gradle.kts
+            console/apps/android/gradle/libs.versions.toml
+            console/apps/android/gradle/wrapper/gradle-wrapper.properties
+
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+
+      - name: Read identity and version
+        id: meta
+        run: scripts/build-meta.sh >> "$GITHUB_OUTPUT"
+
+      - name: Unit tests and debug build
+        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug -Papp.serverUrl=https://console.example.test
+
+      # The APK is what a phone installs: check its package, launcher and
+      # deep-link scheme from the built manifest, not from the sources.
+      - name: Inspect the APK
+        run: |
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          aapt2="$ANDROID_HOME/build-tools/36.0.0/aapt2"
+          "$aapt2" dump badging "$apk" | tee badging.txt | head -5
+          grep -q "^package: name='" badging.txt
+          grep -q "^launchable-activity:" badging.txt
+          grep -q "application-label:'Hexactra Console'" badging.txt
+          "$aapt2" dump xmltree --file AndroidManifest.xml "$apk" > manifest.txt
+          grep -q 'console.example.test' manifest.txt
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: console-android-test-reports
+          path: console/apps/android/app/build/reports/tests/
+          retention-days: 7
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.meta.outputs.apk_stem }}-debug
+          path: console/apps/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
