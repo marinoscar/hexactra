@@ -42,7 +42,6 @@ function fakeFabric() {
   // The fabric's real handoff view (crates/hexactra-core/src/remote.rs `HandoffView`).
   const handoffs = new Map<string, { id: string; status: string; input: string; kind: string; response?: { outcome?: string; value?: string; value_withheld: boolean; channel?: string; by?: string; answered_at?: string } }>();
   let ended = 0;
-  let n = 0;
   const request = jest.fn(async (method: string, path: string, opts: { body?: Record<string, unknown> } = {}) => {
     if (method === 'POST' && path === '/v1/sessions') return { id: '00000000-0000-4000-8000-00000000000a' };
     if (method === 'DELETE' && path.startsWith('/v1/sessions/')) return void (ended += 1);
@@ -54,7 +53,8 @@ function fakeFabric() {
       return { id: 'op', state: 'succeeded', result: {} };
     }
     if (method === 'POST' && path.endsWith('/handoffs')) {
-      const id = `00000000-0000-4000-8000-0000000000${String(++n).padStart(2, '0')}`;
+      // Unique per run of the suite: the question broker mirrors handoffs by id.
+      const id = randomUUID();
       handoffs.set(id, { id, status: 'pending', input: String(opts.body!.input), kind: String(opts.body!.kind) });
       return { handoff: { id } };
     }

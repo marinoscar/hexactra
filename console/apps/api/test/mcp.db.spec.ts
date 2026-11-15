@@ -1,6 +1,7 @@
 // The console's MCP server over Streamable HTTP, against a real database:
 // the protocol, the tool list, tools that call the REST API as the caller
 // (so its permissions apply), notifications and batches.
+import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 
 import { createApp } from '../src/main';
@@ -157,12 +158,11 @@ describe('MCP questions (#290)', () => {
     const t = await token(`mcp-handoff-${stamp}@example.test`, 'contributor');
     const fabric = app.get(FabricClient);
     const bodies: Record<string, unknown>[] = [];
-    let n = 0;
     const spy = jest.spyOn(fabric, 'request').mockImplementation((async (method: string, path: string, opts: { body?: Record<string, unknown> } = {}) => {
       if (method === 'POST' && path === '/v1/sessions') return { id: '00000000-0000-4000-8000-0000000000aa' };
       if (method === 'POST' && path.endsWith('/handoffs')) {
         bodies.push(opts.body!);
-        return { handoff: { id: `00000000-0000-4000-8000-0000000001${String(++n).padStart(2, '0')}`, viewer_url: 'https://viewer.example.test/x', page: { title: 'Shop' } } };
+        return { handoff: { id: randomUUID(), viewer_url: 'https://viewer.example.test/x', page: { title: 'Shop' } } };
       }
       if (method === 'DELETE') return undefined;
       throw new Error(`unexpected ${method} ${path}`);
