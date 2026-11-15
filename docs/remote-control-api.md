@@ -61,7 +61,7 @@ The agent exchanges the enrollment token once, saves its host credential to `$XD
 | `GET /v1/admin/service-tokens` | operator | List (no tokens) |
 | `DELETE /v1/admin/service-tokens/{id}` | operator | Revoke |
 
-The operator token still works on host routes, so existing single-token setups keep working. Credentials are held in memory in this release; durable storage lands with #211.
+The operator token still works on host routes, so existing single-token setups keep working.
 
 ## Endpoints
 
@@ -250,5 +250,8 @@ def verify(secret, headers, raw_body: bytes) -> bool:
 
 ## Limitations of this release
 
-- State is in memory: restarting `hexactra-control` drops sessions and operations. Durable sessions and the audit trail are follow-up work on #173.
+- **State and restarts.** The control plane saves hosts, sessions, handoffs and credentials to a SQLite state database: `--state-db`, `HEXACTRA_STATE_DB`, default `$XDG_DATA_HOME/hexactra/control.db`, mode `0600`.
+  - What is saved: about once a second when something changed, plus on SIGTERM or Ctrl-C. Credentials are stored as digests only.
+  - What is not saved: **operations**, which are short-lived; a caller waiting at restart time sees a timeout. **Secret handoff answers** waiting to be claimed. **Connection state**: hosts come back offline until they poll.
+  - Run history and the audit trail belong to the Hexactra Console (#217).
 - The pre-existing routes in `crates/hexactra-control/src/routes/` are not mounted by this server.
