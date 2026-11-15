@@ -1,43 +1,45 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Card, CardActions, CardContent, Chip, Container, Link, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Card, CardContent, Chip, Container, Link, Stack, Typography } from '@mui/material';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
-/** `GET /api/inbox`. */
-export interface InboxItem {
-  runId: string;
+import { QuestionAnswerForm } from '../components/QuestionAnswerForm';
+import { KIND_LABEL, askerText, type AnswerBody, type AskedQuestion } from '../components/questions';
+import { useOpenViewer } from '../components/useOpenViewer';
+
+/** `GET /api/inbox`: one pending question. */
+export interface InboxItem extends AskedQuestion {
+  questionId: string;
+  /** Null for a free-standing question (no browser run). */
+  runId: string | null;
   goal: string;
-  handoffId: string;
-  kind: string;
+  handoffId: string | null;
+  askedBy: string;
   prompt: string;
-  input: 'none' | 'text' | 'secret' | 'choice';
+  /** Option ids (older clients); `options` carries the labels. */
   choices: string[];
   pageTitle: string | null;
-  viewerUrl: string | null;
   createdAt: string;
   expiresAt: string;
 }
 
-const KIND_LABEL: Record<string, string> = {
-  captcha: 'CAPTCHA',
-  code: 'Code',
-  passkey: 'Passkey',
-  login: 'Sign-in',
-  confirmation: 'Confirm',
-  other: 'Help',
-};
-
-/** `/inbox`: what your agents are waiting for. Answers go to the agent at once. */
+/**
+ * `/inbox`: what your agents are waiting for, free-standing questions too.
+ * Every answer goes through the question broker (`POST
+ * /api/questions/:id/answer`), which forwards a browser-bound one to its run.
+ */
 export function InboxPage() {
   const { api, viewer } = usePlatformHost();
   const canAnswer = viewer.hasPermission('runs:write');
   const [items, setItems] = useState<InboxItem[] | null>(null);
-  const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  // `/inbox?run=<id>`: the deep link of a "needs you" notification (web, PWA, Android app).
+  const openViewer = useOpenViewer(setError);
+  // `/inbox?run=<id>` (or `?q=<question id>`): the deep link of a "needs you" notification.
   const [params] = useSearchParams();
   const focusRun = params.get('run');
+  const focusQuestion = params.get('q');
+  const focused = (i: InboxItem) => (focusRun !== null && i.runId === focusRun) || (focusQuestion !== null && i.questionId === focusQuestion);
 
   const load = useCallback(async () => {
     try {
@@ -53,12 +55,12 @@ export function InboxPage() {
     return () => clearInterval(t);
   }, [load]);
 
-  const respond = async (item: InboxItem, outcome: 'completed' | 'cancelled', value?: string) => {
-    setBusy(item.runId);
+  const respond = async (item: InboxItem, answer: AnswerBody) => {
+    setBusy(item.questionId);
     setError(null);
     try {
-      await api.post(`/inbox/${item.runId}/respond`, value !== undefined ? { outcome, value } : { outcome });
-      setValues((v) => ({ ...v, [item.runId]: '' }));
+      if (answer.outcome === 'cancelled') await api.post(`/questions/${item.questionId}/cancel`, { channel: 'web' });
+      else await api.post(`/questions/${item.questionId}/answer`, { ...answer, channel: 'web' });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not send the answer');
@@ -67,21 +69,8 @@ export function InboxPage() {
     }
   };
 
-  const openViewer = async (item: InboxItem) => {
-    if (!item.viewerUrl) return;
-    if (!item.viewerUrl.includes('/viewer/local/')) return void window.open(item.viewerUrl, '_blank', 'noopener');
-    const tab = window.open('', '_blank');
-    try {
-      const { url } = await api.post<{ url: string }>('/fleet/viewer-ticket', {});
-      if (tab) tab.location.href = url;
-    } catch (e) {
-      tab?.close();
-      setError(e instanceof Error ? e.message : 'Could not open the viewer');
-    }
-  };
-
   return (
-    <Container maxWidth="sm" sx={{ py: 4 }}>
+    <Container maxWidth="sm" sx={{ py: { xs: 2, sm: 4 } }}>
       <Typography variant="h4" component="h1" gutterBottom>
         Inbox
       </Typography>
@@ -91,76 +80,55 @@ export function InboxPage() {
         </Alert>
       )}
       {items?.length === 0 && <Alert severity="success">Nothing is waiting for you.</Alert>}
-      {focusRun && items && items.length > 0 && !items.some((i) => i.runId === focusRun) && (
+      {(focusRun || focusQuestion) && items && items.length > 0 && !items.some(focused) && (
         <Alert severity="info" sx={{ mb: 2 }}>
           That request was already answered or expired.
         </Alert>
       )}
       <Stack spacing={2} aria-label="Requests">
-        {[...(items ?? [])].sort((a, b) => Number(b.runId === focusRun) - Number(a.runId === focusRun)).map((item) => {
-          const value = values[item.runId] ?? '';
-          const disabled = !canAnswer || busy === item.runId;
-          return (
-            <Card
-              key={item.runId}
-              variant="outlined"
-              aria-label={`Request: ${item.prompt}`}
-              aria-current={item.runId === focusRun ? 'true' : undefined}
-              sx={item.runId === focusRun ? { borderColor: 'warning.main', borderWidth: 2 } : undefined}
-            >
-              <CardContent>
-                <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
-                  <Chip size="small" color="warning" label={KIND_LABEL[item.kind] ?? item.kind} />
-                  <Typography variant="caption" color="text.secondary">
-                    expires {new Date(item.expiresAt).toLocaleTimeString()}
-                  </Typography>
-                </Stack>
-                <Typography sx={{ whiteSpace: 'pre-wrap' }}>{item.prompt}</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                  For:{' '}
-                  <Link component={RouterLink} to={`/runs/${item.runId}`}>
-                    {item.goal}
-                  </Link>
-                  {item.pageTitle ? ` · on “${item.pageTitle}”` : ''}
+        {[...(items ?? [])].sort((a, b) => Number(focused(b)) - Number(focused(a))).map((item) => (
+          <Card
+            key={item.questionId}
+            variant="outlined"
+            aria-label={`Request: ${item.prompt}`}
+            aria-current={focused(item) ? 'true' : undefined}
+            sx={focused(item) ? { borderColor: 'warning.main', borderWidth: 2 } : undefined}
+          >
+            <CardContent>
+              <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                <Chip size="small" color="warning" label={KIND_LABEL[item.kind] ?? item.kind} />
+                {item.risk === 'high' && <Chip size="small" color="error" variant="outlined" label="High risk" />}
+                <Typography variant="caption" color="text.secondary">
+                  expires {new Date(item.expiresAt).toLocaleTimeString()}
                 </Typography>
-                {(item.input === 'text' || item.input === 'secret') && (
-                  <TextField
-                    sx={{ mt: 2 }}
-                    fullWidth
-                    size="small"
-                    type={item.input === 'secret' ? 'password' : 'text'}
-                    autoComplete={item.input === 'secret' ? 'one-time-code' : 'off'}
-                    label={item.input === 'secret' ? 'Code or secret (goes to the agent, never stored)' : 'Your answer'}
-                    value={value}
-                    onChange={(e) => setValues((v) => ({ ...v, [item.runId]: e.target.value }))}
-                    disabled={disabled}
-                  />
-                )}
-              </CardContent>
-              <CardActions sx={{ flexWrap: 'wrap' }}>
-                {item.input === 'choice' ? (
-                  item.choices.map((c) => (
-                    <Button key={c} variant="contained" disabled={disabled} onClick={() => void respond(item, 'completed', c)}>
-                      {c}
-                    </Button>
-                  ))
-                ) : item.input === 'none' ? (
-                  <Button variant="contained" disabled={disabled} onClick={() => void respond(item, 'completed')}>
-                    {item.kind === 'confirmation' ? 'Approve' : "I've done it"}
-                  </Button>
+              </Stack>
+              <Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{item.prompt}</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1, overflowWrap: 'anywhere' }}>
+                {item.runId ? (
+                  <>
+                    For:{' '}
+                    <Link component={RouterLink} to={`/runs/${item.runId}`}>
+                      {item.goal}
+                    </Link>
+                    {item.pageTitle ? ` · on “${item.pageTitle}”` : ''}
+                  </>
                 ) : (
-                  <Button variant="contained" disabled={disabled || !value} onClick={() => void respond(item, 'completed', value)}>
-                    Send
-                  </Button>
+                  <>Asked by {askerText(item.askedBy)}</>
                 )}
-                <Button color="error" disabled={disabled} onClick={() => void respond(item, 'cancelled')}>
-                  {item.kind === 'confirmation' ? 'Decline' : "Can't help"}
-                </Button>
-                {item.viewerUrl && <Button onClick={() => void openViewer(item)}>Open the browser</Button>}
-              </CardActions>
-            </Card>
-          );
-        })}
+                {' · '}
+                <Link component={RouterLink} to={`/inbox/q/${item.questionId}`}>
+                  Details
+                </Link>
+              </Typography>
+              <QuestionAnswerForm
+                question={item}
+                disabled={!canAnswer || busy === item.questionId}
+                onSubmit={(answer) => respond(item, answer)}
+                onOpenBrowser={item.viewerUrl ? () => void openViewer(item.viewerUrl!) : undefined}
+              />
+            </CardContent>
+          </Card>
+        ))}
       </Stack>
     </Container>
   );
