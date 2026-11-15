@@ -9,20 +9,33 @@ const domain = z
   .toLowerCase()
   .regex(/^(\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/, 'A hostname such as example.test or *.example.test');
 
-export const createTaskSchema = z.object({
+const taskFields = {
   name: z.string().trim().min(1).max(200),
   goal: z.string().trim().min(1).max(4000),
-  profile: profileNameSchema.default('default'),
-  hostId: z.uuid().nullable().optional(),
-  allowedDomains: z.array(domain).max(50).default([]),
-  maxSteps: z.number().int().min(1).max(200).default(40),
-  maxMinutes: z.number().int().min(1).max(240).default(15),
-  confirmRiskyActions: z.boolean().default(true),
-  model: z.string().trim().min(1).max(200).nullable().optional(),
+  profile: profileNameSchema,
+  hostId: z.uuid().nullable(),
+  allowedDomains: z.array(domain).max(50),
+  maxSteps: z.number().int().min(1).max(200),
+  maxMinutes: z.number().int().min(1).max(240),
+  confirmRiskyActions: z.boolean(),
+  model: z.string().trim().min(1).max(200).nullable(),
+};
+
+export const createTaskSchema = z.object({
+  ...taskFields,
+  profile: taskFields.profile.default('default'),
+  hostId: taskFields.hostId.optional(),
+  allowedDomains: taskFields.allowedDomains.default([]),
+  maxSteps: taskFields.maxSteps.default(40),
+  maxMinutes: taskFields.maxMinutes.default(15),
+  confirmRiskyActions: taskFields.confirmRiskyActions.default(true),
+  model: taskFields.model.optional(),
 });
 export class CreateTaskDto extends createZodDto(createTaskSchema) {}
 
-export const updateTaskSchema = createTaskSchema.partial().refine((p) => Object.keys(p).length > 0, { message: 'Nothing to update' });
+// Built from the fields without their defaults: zod 4 applies `.default()`
+// inside `.partial()`, which would reset every field a PATCH leaves out.
+export const updateTaskSchema = z.object(taskFields).partial().refine((p) => Object.keys(p).length > 0, { message: 'Nothing to update' });
 export class UpdateTaskDto extends createZodDto(updateTaskSchema) {}
 
 export const listRunsSchema = z.object({

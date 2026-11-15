@@ -10,16 +10,16 @@ This app was started from the platform starter. The platform (sign-in, users and
 
 ## What the console adds
 
-The console drives the **Hexactra Fabric**: the Rust control plane and its browser hosts (`../crates`, `../docs/remote-control-api.md`). Every capability is available on the web, the REST API, the CLI and the TUI.
+The console drives the **Hexactra Fabric**: the Rust control plane and its browser hosts (`../crates`, `../docs/remote-control-api.md`). Every capability is a REST operation, and lives on the web, CLI, TUI and MCP surfaces unless [packages/shared/capabilities.json](packages/shared/capabilities.json) says why not. That file is the parity registry: each surface's tests fail when a capability it names is missing there, or when a REST operation, command or MCP tool belongs to no capability.
 
 | Capability | Web | API | CLI / TUI | Permission |
 |---|---|---|---|---|
-| Fabric connection (URL and `hxs_` service token, stored encrypted; Doctor checks `fabric.*`) | Administration → Fabric connection | `GET/PUT/DELETE /api/fabric/connection`, `POST …/test` | — | `fabric_config:read` / `:write` |
-| Tasks: saved goals with a profile, allowed sites, step and time budgets, confirm-before-purchase | `/tasks` | `/api/tasks` | `hexactra tasks list\|create\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
+| Fabric connection (URL and `hxs_` service token, stored encrypted; Doctor checks `fabric.*`) | Administration → Fabric connection | `GET/PUT/DELETE /api/fabric/connection`, `POST …/test` | `hexactra fabric show\|set URL --token-stdin\|test\|clear --yes` | `fabric_config:read` / `:write` |
+| Tasks: saved goals with a profile, allowed sites, step and time budgets, confirm-before-purchase | `/tasks` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
 | Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel | `/runs`, `/runs/:id` | `/api/runs`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` |
 | Inbox: what agents wait for (CAPTCHA, code, sign-in, confirmation); answers resume the run | `/inbox` | `GET /api/inbox`, `POST /api/inbox/:runId/respond` | `hexactra inbox list\|answer RUN --done\|--value\|--choice\|--secret-stdin\|--decline`; TUI **Inbox** | `runs:read` / `runs:write` |
 | Live run view: steps over SSE, live screenshot, take over | `/runs/:id` | `GET /api/runs/:id/stream\|screenshot\|viewer` | `hexactra runs watch`; TUI **Runs** | `runs:read` |
-| External agents: a browser session through the console, recorded as a run (trigger `external`); the user sees each step, can stop it, and answers its handoffs | `/runs` | `POST /api/browser/sessions`, `…/:runId/actions\|handoffs\|artifacts/:id`, `DELETE …/:runId` | via MCP (E23) | `runs:read` / `runs:write` |
+| External agents: a browser session through the console, recorded as a run (trigger `external`); the user sees each step, can stop it, and answers its handoffs | `/runs` | `POST /api/browser/sessions`, `…/:runId/actions\|handoffs\|artifacts/:id`, `DELETE …/:runId` | via MCP | `runs:read` / `runs:write` |
 | MCP server for agent frameworks: delegate goals or drive browsers, with every call going through the REST API as the user ([docs/mcp.md](docs/mcp.md)) | — | `POST /api/mcp` (Streamable HTTP) | `hexactra mcp serve` (stdio) | the tools' routes |
 | Fleet: hosts, enrollment, drain, revoke, profiles | `/fleet` | `/api/fleet/…` | `hexactra fleet hosts\|enroll\|drain\|undrain\|revoke\|commands`, `hexactra fleet profile create\|delete\|restart\|close`; TUI **Fleet** screen | `fleet:read` / `fleet:write` |
 

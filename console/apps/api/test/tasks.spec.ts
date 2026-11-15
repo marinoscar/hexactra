@@ -2,7 +2,8 @@ import { ConflictException } from '@nestjs/common';
 
 import { redactActionArgs, redactUrl } from '../src/tasks/redact';
 import { RUN_TRANSITIONS, assertTransition, canTransition, isTerminal, type RunStatus } from '../src/tasks/run-status';
-import { createTaskSchema } from '../src/tasks/tasks.schemas';
+import { createTaskSchema, updateTaskSchema } from '../src/tasks/tasks.schemas';
+import { updateScheduleSchema } from '../src/schedules/schedules.service';
 
 describe('the run state machine', () => {
   it('allows the designed transitions only', () => {
@@ -41,5 +42,15 @@ describe('task input', () => {
     expect(createTaskSchema.safeParse({ name: 'n', goal: 'g', allowedDomains: ['*.example.test', 'shop.example.test'] }).success).toBe(true);
     expect(createTaskSchema.safeParse({ name: 'n', goal: 'g', profile: 'Bad Name' }).success).toBe(false);
     expect(createTaskSchema.safeParse({ name: 'n', goal: 'g', allowedDomains: ['https://x.test/'] }).success).toBe(false);
+  });
+});
+
+describe('PATCH schemas keep what they are not sent', () => {
+  it('a task update carries only the sent fields', () => {
+    expect(updateTaskSchema.parse({ goal: 'New goal' })).toEqual({ goal: 'New goal' });
+    expect(() => updateTaskSchema.parse({})).toThrow();
+  });
+  it('a schedule pause does not reset its time zone or concurrency', () => {
+    expect(updateScheduleSchema.parse({ enabled: false })).toEqual({ enabled: false });
   });
 });

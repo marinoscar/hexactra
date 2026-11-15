@@ -15,7 +15,14 @@ export const createScheduleSchema = z.object({
   concurrency: z.enum(['skip', 'queue']).default('skip'),
 });
 export class CreateScheduleDto extends createZodDto(createScheduleSchema) {}
-export const updateScheduleSchema = createScheduleSchema.omit({ taskId: true }).partial();
+// No defaults here: zod 4 applies `.default()` inside `.partial()`, which
+// would reset unsent fields (a pause would move the schedule to UTC).
+export const updateScheduleSchema = z.object({
+  cron: z.string().trim().min(9).max(100).optional(),
+  timezone: z.string().trim().min(1).max(64).optional(),
+  enabled: z.boolean().optional(),
+  concurrency: z.enum(['skip', 'queue']).optional(),
+});
 export class UpdateScheduleDto extends createZodDto(updateScheduleSchema) {}
 
 /** Failed runs in a row after which the owner is told the schedule is failing. */

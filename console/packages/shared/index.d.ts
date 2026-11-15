@@ -56,3 +56,24 @@ export declare function resolveSliceIds(
 ): readonly SliceId[];
 /** The slices this app mounts: `slices.json` `enabled`, validated, in mount order. */
 export declare const ENABLED_SLICES: readonly SliceId[];
+/** Where a capability lives on one surface: one value, several, or why it is absent. */
+export type CapabilitySurface = string | readonly string[] | { readonly none: string };
+/** One capability (`capabilities.json`). */
+export interface Capability {
+  readonly id: string;
+  readonly description: string;
+  /** REST operations, `METHOD /api/path` with OpenAPI `{param}` segments. */
+  readonly rest: readonly string[];
+  /** CLI command paths, e.g. `tasks list`. */
+  readonly cli: CapabilitySurface;
+  /** MCP tool names. */
+  readonly mcp: CapabilitySurface;
+  /** TUI screen routes. */
+  readonly tui: CapabilitySurface;
+  /** Web routes, e.g. `/runs/:id`. */
+  readonly web: CapabilitySurface;
+}
+/** Every capability and where it lives on each surface; each surface's tests check it. */
+export declare const CAPABILITIES: readonly Capability[];
+/** App REST operations that are not client capabilities, with the reason. */
+export declare const REST_EXEMPT: Readonly<Record<string, string>>;

@@ -1,0 +1,421 @@
+{
+  "$comment": "Every Hexactra capability and where it lives on each surface. A surface is a value or a list of values (REST operations as 'METHOD /api/path', a CLI command path, an MCP tool name, a TUI screen route, a web route) or {\"none\": \"why\"}. Tests on each surface fail when a value is missing there: apps/api/test/capabilities.db.spec.ts (REST, MCP), apps/cli/src/capabilities.test.ts (CLI, TUI), apps/web/src/__tests__/capabilities.test.ts (web). Every app REST operation and every MCP tool must belong to a capability.",
+  "restExempt": {
+    "GET /api/fleet/viewer-auth": "nginx's auth_request for the viewer, not a client operation",
+    "POST /api/mcp": "the MCP transport itself",
+    "GET /api/mcp": "the MCP transport itself (405)"
+  },
+  "capabilities": [
+    {
+      "id": "tasks.list",
+      "description": "List and read saved tasks",
+      "rest": [
+        "GET /api/tasks",
+        "GET /api/tasks/{id}"
+      ],
+      "cli": "tasks list",
+      "mcp": "tasks_list",
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": "/tasks"
+    },
+    {
+      "id": "tasks.create",
+      "description": "Save a task (goal, profile, allowed sites, budgets)",
+      "rest": [
+        "POST /api/tasks"
+      ],
+      "cli": "tasks create",
+      "mcp": "task_create",
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": "/tasks"
+    },
+    {
+      "id": "tasks.update",
+      "description": "Change a task",
+      "rest": [
+        "PATCH /api/tasks/{id}"
+      ],
+      "cli": "tasks update",
+      "mcp": "task_update",
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": "/tasks"
+    },
+    {
+      "id": "tasks.delete",
+      "description": "Delete a task",
+      "rest": [
+        "DELETE /api/tasks/{id}"
+      ],
+      "cli": "tasks delete",
+      "mcp": {
+        "none": "Deleting a person's saved work is left to the person"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": "/tasks"
+    },
+    {
+      "id": "tasks.run",
+      "description": "Run a saved task now",
+      "rest": [
+        "POST /api/tasks/{id}/runs"
+      ],
+      "cli": "tasks run",
+      "mcp": "task_run",
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": "/tasks"
+    },
+    {
+      "id": "runs.start",
+      "description": "Run a one-off goal",
+      "rest": [
+        "POST /api/runs"
+      ],
+      "cli": "runs start",
+      "mcp": "run_goal",
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": "/runs"
+    },
+    {
+      "id": "runs.list",
+      "description": "List recent runs",
+      "rest": [
+        "GET /api/runs"
+      ],
+      "cli": "runs list",
+      "mcp": "runs_list",
+      "tui": "runs",
+      "web": "/runs"
+    },
+    {
+      "id": "runs.watch",
+      "description": "Follow one run: status, steps, live events and its screenshot",
+      "rest": [
+        "GET /api/runs/{id}",
+        "GET /api/runs/{id}/stream",
+        "GET /api/runs/{id}/screenshot"
+      ],
+      "cli": [
+        "runs show",
+        "runs watch"
+      ],
+      "mcp": "run_status",
+      "tui": "runs",
+      "web": "/runs/:id"
+    },
+    {
+      "id": "runs.cancel",
+      "description": "Stop a run",
+      "rest": [
+        "POST /api/runs/{id}/cancel"
+      ],
+      "cli": "runs cancel",
+      "mcp": "run_cancel",
+      "tui": "runs",
+      "web": "/runs/:id"
+    },
+    {
+      "id": "runs.viewer",
+      "description": "Watch or take over a run's browser",
+      "rest": [
+        "GET /api/runs/{id}/viewer"
+      ],
+      "cli": {
+        "none": "Taking over a browser is a person in a web page (the viewer)"
+      },
+      "mcp": {
+        "none": "Taking over a browser is for a person, not an agent"
+      },
+      "tui": {
+        "none": "A terminal cannot show a browser"
+      },
+      "web": "/runs/:id"
+    },
+    {
+      "id": "inbox.list",
+      "description": "What agents are waiting for",
+      "rest": [
+        "GET /api/inbox"
+      ],
+      "cli": "inbox list",
+      "mcp": "inbox_list",
+      "tui": "inbox",
+      "web": "/inbox"
+    },
+    {
+      "id": "inbox.answer",
+      "description": "Answer a request (done, text, choice, secret, decline)",
+      "rest": [
+        "POST /api/inbox/{runId}/respond"
+      ],
+      "cli": "inbox answer",
+      "mcp": "inbox_answer",
+      "tui": "inbox",
+      "web": "/inbox"
+    },
+    {
+      "id": "schedules.list",
+      "description": "List task schedules",
+      "rest": [
+        "GET /api/schedules"
+      ],
+      "cli": "schedules list",
+      "mcp": "schedules_list",
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": "/tasks"
+    },
+    {
+      "id": "schedules.create",
+      "description": "Schedule a task (cron and time zone)",
+      "rest": [
+        "POST /api/schedules"
+      ],
+      "cli": "schedules create",
+      "mcp": "schedule_create",
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": "/tasks"
+    },
+    {
+      "id": "schedules.update",
+      "description": "Pause, resume or change a schedule",
+      "rest": [
+        "PATCH /api/schedules/{id}"
+      ],
+      "cli": [
+        "schedules pause",
+        "schedules resume"
+      ],
+      "mcp": {
+        "none": "Pausing a person's schedule is left to the person"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": "/tasks"
+    },
+    {
+      "id": "schedules.delete",
+      "description": "Delete a schedule",
+      "rest": [
+        "DELETE /api/schedules/{id}"
+      ],
+      "cli": "schedules delete",
+      "mcp": {
+        "none": "Deleting a person's saved work is left to the person"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": "/tasks"
+    },
+    {
+      "id": "browser.session",
+      "description": "Drive a browser directly: open, act, read artifacts, close (recorded as an external run)",
+      "rest": [
+        "POST /api/browser/sessions",
+        "POST /api/browser/sessions/{runId}/actions",
+        "GET /api/browser/sessions/{runId}/artifacts/{artifactId}",
+        "DELETE /api/browser/sessions/{runId}"
+      ],
+      "cli": {
+        "none": "Step-by-step driving is for programs: use MCP or REST"
+      },
+      "mcp": [
+        "browser_open",
+        "browser_navigate",
+        "browser_elements",
+        "browser_text",
+        "browser_click",
+        "browser_type",
+        "browser_press",
+        "browser_scroll",
+        "browser_wait_for",
+        "browser_back",
+        "browser_tabs",
+        "browser_screenshot",
+        "browser_close"
+      ],
+      "tui": {
+        "none": "Step-by-step driving is for programs: use MCP or REST"
+      },
+      "web": {
+        "none": "People watch these sessions on /runs; driving is for programs"
+      }
+    },
+    {
+      "id": "browser.handoff",
+      "description": "Ask the person for help from a driven session, and read the answer",
+      "rest": [
+        "POST /api/browser/sessions/{runId}/handoffs",
+        "GET /api/browser/sessions/{runId}/handoffs/{handoffId}"
+      ],
+      "cli": {
+        "none": "Asking a person is done by the agent; the person answers with `inbox answer`"
+      },
+      "mcp": [
+        "browser_request_human",
+        "browser_handoff_status",
+        "browser_type_secret"
+      ],
+      "tui": {
+        "none": "The person answers on the Inbox screen"
+      },
+      "web": {
+        "none": "The person answers on /inbox"
+      }
+    },
+    {
+      "id": "fleet.hosts",
+      "description": "List and read browser hosts with their profiles",
+      "rest": [
+        "GET /api/fleet/hosts",
+        "GET /api/fleet/hosts/{id}"
+      ],
+      "cli": "fleet hosts",
+      "mcp": "hosts_list",
+      "tui": "fleet",
+      "web": "/fleet"
+    },
+    {
+      "id": "fleet.commands",
+      "description": "A host's recent commands",
+      "rest": [
+        "GET /api/fleet/hosts/{id}/commands"
+      ],
+      "cli": "fleet commands",
+      "mcp": {
+        "none": "An administrator's change, kept off agent surfaces"
+      },
+      "tui": {
+        "none": "Use `fleet commands` in the CLI"
+      },
+      "web": {
+        "none": "The Fleet page shows command results inline; the full list is in the CLI"
+      }
+    },
+    {
+      "id": "fleet.enroll",
+      "description": "Enroll a host (a one-time token and the command to run)",
+      "rest": [
+        "POST /api/fleet/enrollments"
+      ],
+      "cli": "fleet enroll",
+      "mcp": {
+        "none": "Returns a host credential, which never goes to an agent"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": "/fleet"
+    },
+    {
+      "id": "fleet.revoke",
+      "description": "Revoke a host",
+      "rest": [
+        "DELETE /api/fleet/hosts/{id}"
+      ],
+      "cli": "fleet revoke",
+      "mcp": {
+        "none": "An administrator's change, kept off agent surfaces"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": "/fleet"
+    },
+    {
+      "id": "fleet.drain",
+      "description": "Drain or undrain a host",
+      "rest": [
+        "POST /api/fleet/hosts/{id}/drain"
+      ],
+      "cli": [
+        "fleet drain",
+        "fleet undrain"
+      ],
+      "mcp": {
+        "none": "An administrator's change, kept off agent surfaces"
+      },
+      "tui": "fleet",
+      "web": "/fleet"
+    },
+    {
+      "id": "fleet.profiles",
+      "description": "Create, delete, restart or close a profile's browser",
+      "rest": [
+        "POST /api/fleet/hosts/{id}/profiles",
+        "DELETE /api/fleet/hosts/{id}/profiles/{name}",
+        "POST /api/fleet/hosts/{id}/profiles/{name}/restart",
+        "POST /api/fleet/hosts/{id}/profiles/{name}/close"
+      ],
+      "cli": [
+        "fleet profile create",
+        "fleet profile delete",
+        "fleet profile restart",
+        "fleet profile close"
+      ],
+      "mcp": {
+        "none": "An administrator's change, kept off agent surfaces"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": "/fleet"
+    },
+    {
+      "id": "fleet.viewer",
+      "description": "Open a host's browser viewer (a one-time ticket)",
+      "rest": [
+        "POST /api/fleet/viewer-ticket"
+      ],
+      "cli": {
+        "none": "The viewer is a web page; open it from the Fleet page"
+      },
+      "mcp": {
+        "none": "Taking over a browser is for a person, not an agent"
+      },
+      "tui": {
+        "none": "A terminal cannot show a browser"
+      },
+      "web": "/fleet"
+    },
+    {
+      "id": "fabric.connection",
+      "description": "The fabric URL and service token: read, set, test, clear",
+      "rest": [
+        "GET /api/fabric/connection",
+        "PUT /api/fabric/connection",
+        "DELETE /api/fabric/connection",
+        "POST /api/fabric/connection/test"
+      ],
+      "cli": [
+        "fabric show",
+        "fabric set",
+        "fabric clear",
+        "fabric test"
+      ],
+      "mcp": {
+        "none": "A deployment secret, never to an agent"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": "/admin/settings/fabric"
+    }
+  ]
+}

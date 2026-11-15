@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { APP_NAME, CLI_NAME, REPO_SLUG } from '@app/shared';
 import type { CreateCliOptions } from '@marinoscar/platform-cli';
 
+import { fabricCommand } from './fabric.command.js';
 import { fleetCommand } from './fleet.command.js';
 import { inboxCommand } from './inbox.command.js';
 import { inboxScreen } from './inbox.tui.js';
@@ -29,6 +30,6 @@ function readVersion(): string {
 export const APP_CLI_OPTIONS: CreateCliOptions = {
   identity: { name: CLI_NAME, displayName: `${APP_NAME} CLI`, productName: APP_NAME, repoSlug: REPO_SLUG },
   version: readVersion(),
-  extraCommands: [fleetCommand, runsCommand, inboxCommand, mcpCommand],
+  extraCommands: [fabricCommand, fleetCommand, runsCommand, inboxCommand, mcpCommand],
   tuiScreens: [inboxScreen, runsScreen, fleetScreen],
 };

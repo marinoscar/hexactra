@@ -91,6 +91,31 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
       out(`created ${t.id}`);
     });
   tasks
+    .command('update <id>')
+    .description('Change a task; only the options you pass change')
+    .option('--name <name>')
+    .option('--goal <goal>')
+    .option('--profile <profile>', 'browser profile')
+    .option('--allow <domains>', 'comma-separated allowed sites ("" for any site)')
+    .option('--max-steps <n>', 'step budget', (v) => Number.parseInt(v, 10))
+    .option('--confirm', 'ask before purchases and irreversible steps')
+    .option('--no-confirm', 'do not ask before purchases and irreversible steps')
+    .option('--json', 'print JSON')
+    .action(async (id: string, o: { name?: string; goal?: string; profile?: string; allow?: string; maxSteps?: number; confirm?: boolean; json?: boolean }) => {
+      const body = {
+        ...(o.name !== undefined ? { name: o.name } : {}),
+        ...(o.goal !== undefined ? { goal: o.goal } : {}),
+        ...(o.profile !== undefined ? { profile: o.profile } : {}),
+        ...(o.allow !== undefined ? { allowedDomains: o.allow.split(',').map((d) => d.trim()).filter(Boolean) } : {}),
+        ...(o.maxSteps ? { maxSteps: o.maxSteps } : {}),
+        ...(o.confirm !== undefined ? { confirmRiskyActions: o.confirm } : {}),
+      };
+      if (!Object.keys(body).length) throw new Error('Nothing to change: pass --goal, --name, --profile, --allow, --max-steps or --[no-]confirm.');
+      const t = await consoleApi().patch<Task>(`/tasks/${id}`, body);
+      if (o.json) return json(t);
+      out(`updated ${t.id}`);
+    });
+  tasks
     .command('run <task>')
     .description('Run a task (by id or id prefix); --watch follows it to the end')
     .option('--watch', 'follow the run')
