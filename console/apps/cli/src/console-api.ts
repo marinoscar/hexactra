@@ -35,13 +35,22 @@ function stored(): Stored {
   }
 }
 
-export function consoleApi(fetch?: FetchLike): ApiClient {
-  if (factory) return factory();
+/**
+ * The API root and token, for the MCP stdio bridge only (it forwards raw
+ * JSON-RPC). Never print the token.
+ */
+export function consoleCredentials(): { apiBaseUrl: string; token: string } {
   const file = stored();
   const serverUrl = process.env[envVar('SERVER_URL')] || file.serverUrl;
   const token = process.env[envVar('TOKEN')] || file.token;
   if (!serverUrl || !token) {
     throw new AuthRequiredError('Not logged in. Run `hexactra login` first.');
   }
-  return new ApiClient({ baseUrl: resolveApiBaseUrl(serverUrl), token, ...(fetch ? { fetch } : {}) });
+  return { apiBaseUrl: resolveApiBaseUrl(serverUrl), token };
+}
+
+export function consoleApi(fetch?: FetchLike): ApiClient {
+  if (factory) return factory();
+  const { apiBaseUrl, token } = consoleCredentials();
+  return new ApiClient({ baseUrl: apiBaseUrl, token, ...(fetch ? { fetch } : {}) });
 }
