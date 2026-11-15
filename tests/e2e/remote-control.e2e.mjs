@@ -579,6 +579,39 @@ try {
     assert.ok(visits((await call('browser_text', { selector: '#visits' })).content[0].text) > t1);
     proc.stdin.end();
   });
+  await step('host commands manage profiles and browsers; attach hosts refuse them', async () => {
+    const hosts = JSON.parse(await ok('--json', 'hosts'));
+    const launch = hosts.find((h) => h.name === 'e2e-launch-host');
+    const attach = hosts.find((h) => h.name === 'e2e-host' && h.online);
+    const running = (p) => spawnSync('pgrep', ['-f', `user-data-dir=${join(work_dir_profiles, p)}`]).status === 0;
+
+    await ok('profile', 'create', 'scratch', '--host', launch.id);
+    assert.ok(existsSync(join(work_dir_profiles, 'scratch')));
+    await ok('profile', 'restart', 'scratch', '--host', launch.id);
+    assert.equal(running('scratch'), true);
+    await ok('profile', 'close', 'scratch', '--host', launch.id);
+    await until('scratch browser closed', async () => !running('scratch'), 20_000);
+
+    const unconfirmed = await cli('profile', 'delete', 'scratch', '--host', launch.id);
+    assert.notEqual(unconfirmed.code, 0);
+    assert.match(unconfirmed.err, /pass --yes/);
+    await ok('profile', 'delete', 'scratch', '--host', launch.id, '--yes');
+    assert.equal(existsSync(join(work_dir_profiles, 'scratch')), false);
+
+    // Drain: no new sessions are placed on the host until it is undrained.
+    await ok('host', 'drain', launch.id);
+    const drained = await cli('--profile', 'scratch2', 'session', 'create', '--create', '--host', launch.id);
+    assert.notEqual(drained.code, 0);
+    assert.match(drained.err, /draining/);
+    await ok('host', 'undrain', launch.id);
+    assert.match(await ok('host', 'commands', launch.id), /delete_profile\tscratch\tSucceeded/);
+
+    if (attach) {
+      const refused = await cli('profile', 'close', 'default', '--host', attach.id);
+      assert.notEqual(refused.code, 0);
+      assert.match(refused.err, /attaches to a Chrome you run yourself/);
+    }
+  });
 } catch (e) {
   failed = true;
   console.error(`\nFAILED: ${e.stack ?? e}`);

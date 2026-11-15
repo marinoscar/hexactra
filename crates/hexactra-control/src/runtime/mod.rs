@@ -9,6 +9,8 @@ pub mod events;
 mod events_api;
 pub mod handoff;
 mod handoff_api;
+pub mod host_commands;
+mod host_commands_api;
 pub mod persist;
 pub mod store;
 mod webhook_api;

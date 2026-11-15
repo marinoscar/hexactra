@@ -75,8 +75,11 @@ The operator token still works on host routes, so existing single-token setups k
 | `POST /v1/sessions/{id}/actions` | client | Run one action. Body `{ "action": {...}, "timeout_ms"? }`. Waits for a terminal state and returns the operation. `?async=true` returns `202` at once |
 | `GET /v1/operations/{id}?wait_ms=` | client | Read an operation, optionally waiting for it to finish |
 | `POST /v1/hosts/register` | host | Register; body `{ "name", "version", "host_id"?, "viewer_url"? }` |
-| `GET /v1/hosts/{id}/next?wait_ms=&browser_connected=&on_demand=&profiles=&running=` | host | Long-poll (max 30 s) for the next operation; `204` when none |
+| `GET /v1/hosts/{id}/next?wait_ms=&browser_connected=&on_demand=&profiles=&running=&commands=` | host | Long-poll (max 30 s) for the next operation, or with `commands=true` a host command (`{ "command": {...} }`, sent first); `204` when none |
 | `POST /v1/hosts/{id}/operations/{op}/result` | host | Report `{ "ok", "result"?, "error"? }`. Only the host the operation was dispatched to may report, once |
+| `POST /v1/hosts/{id}/commands` | client | Run a [host command](#host-commands); body `{ "command": {...}, "timeout_ms"? }`. Waits for the result; `?async=true` returns `202` |
+| `GET /v1/hosts/{id}/commands`, `GET /v1/host-commands/{cmd}?wait_ms=` | client | Recent commands for a host (newest first), or one command |
+| `POST /v1/hosts/{id}/commands/{cmd}/result` | host | Report a command's result, like an operation's |
 
 An action that fails in the browser returns `200` with `state: "failed"` and an `error`. Request problems return `400` (invalid action), `404`, `409` (session ended, duplicate result) or `422` (malformed JSON or an unknown action type).
 
@@ -96,6 +99,7 @@ data: {"seq":42,"type":"operation.succeeded","at":"…","data":{"op_id":"…","s
 | `session.created`, `session.ended` | Session lifecycle |
 | `operation.queued`, `operation.dispatched`, `operation.succeeded`, `operation.failed`, `operation.timed_out`, `operation.cancelled` | Each action |
 | `handoff.created`, `handoff.resolved`, `handoff.cancelled`, `handoff.expired` | Human handoffs |
+| `host.command.queued`, `.dispatched`, `.succeeded`, `.failed`, `.timed_out`; `host.draining` | [Host commands](#host-commands) |
 | `reset` | You missed events. Re-read state and continue from the new position |
 
 - **Resume after a disconnect** with the `Last-Event-ID` header, or with `?after=<seq>`. The last 2,000 events are kept for replay. A client further behind, or one resuming with a sequence number from before a control-plane restart, gets `reset` first.
@@ -111,6 +115,25 @@ A host can keep several named browser profiles, each with its own cookies and si
 - **Sessions pick a profile.** Without `host_id`, the control plane picks an online host that has the profile, preferring one where it is already running.
 - **Unknown profiles are refused** with `404 profile_not_found`. Pass `create_profile: true` to let an on-demand host create it, so a typo never silently creates a new, signed-out profile. Attach-mode hosts cannot create profiles.
 - **Operations and handoffs carry the session's `profile`.**
+
+## Host commands
+
+Host commands manage a host's profiles and browsers rather than act in a session. They are queued per host, handed to the agent on its next poll ahead of session operations, and go through the same states as operations.
+
+| `type` | Fields | Effect |
+|---|---|---|
+| `create_profile` | `profile` | Create an empty, signed-out profile |
+| `delete_profile` | `profile` | Close its browser and delete the profile directory (cookies, sign-ins, storage). Refused for `default`, and with `409` while an active session uses the profile |
+| `restart_browser` | `profile` | Close the profile's browser and start it again |
+| `close_browser` | `profile` | Close the profile's browser gracefully; the next action starts it again |
+| `drain` | `enabled` (default `true`) | Stop (or resume) placing new sessions on the host. Existing sessions keep working. Applied by the control plane at once; the host shows `draining: true` |
+
+- **Launch-mode hosts only.** Attach-mode hosts use the Chrome you run yourself, so they fail profile and browser commands with an error that says so. `drain` works for every host.
+- **Agent support.** Agents ask for commands with `commands=true` on their poll. An older agent never receives one, and the command times out with an error saying it did not run.
+- **Effects show at once.** A successful `create_profile` or `delete_profile` updates the host's `profiles` without waiting for its next poll.
+- **CLI:**
+  - `hexactra profile create|delete|close|restart NAME [--host ID]`. `delete` needs `--yes`.
+  - `hexactra host drain|undrain|commands HOST`.
 
 ## Actions
 

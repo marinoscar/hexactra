@@ -98,6 +98,10 @@ hexactra --profile travel screenshot -o travel.jpg    # every command takes --pr
 - **Names** are 1–32 characters of lowercase letters, digits, `-` and `_`. A typo is refused rather than silently creating a new, signed-out profile.
 - **Browsers open at once:** `HEXACTRA_MAX_BROWSERS` (default `1`) caps it. Switching to another profile closes the least recently used idle browser, which flushes its cookies first, and the switch takes a few seconds. With 4 GB RAM, `2` keeps two profiles warm.
 - **MCP agents** start on `HEXACTRA_PROFILE` (for example `--env HEXACTRA_PROFILE=travel` in `claude mcp add`). They can list profiles with `browser_profiles` and switch with `browser_use_profile`. They create a profile only when you ask.
+- **Manage profiles remotely:**
+  - `hexactra profile create NAME`, `hexactra profile close NAME`, `hexactra profile restart NAME`;
+  - `hexactra profile delete NAME --yes` removes the profile and its sign-ins;
+  - `hexactra host drain HOST` stops new sessions before maintenance, and `hexactra host undrain HOST` resumes them.
 - **Each CLI profile keeps its own current session.** In the viewer, window titles start with `Hexactra: <profile>`.
 
 ## 4a. Sign in once through the viewer

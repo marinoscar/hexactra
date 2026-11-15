@@ -16,7 +16,7 @@ use axum::{
     Json, Router,
 };
 use hexactra_core::remote::{
-    ActionRequest, ApiError, CreateSessionRequest, OperationResult, OperationState,
+    ActionRequest, ApiError, CreateSessionRequest, HostWork, OperationResult, OperationState,
     RegisterHostRequest, RegisterHostResponse,
 };
 use serde::Deserialize;
@@ -186,7 +186,7 @@ async fn require_operator(State(s): State<ApiState>, req: Request, next: Next) -
 }
 
 /// A host credential may only act for its own host id.
-fn check_host(p: Principal, host_id: Uuid) -> Result<(), AppError> {
+pub(super) fn check_host(p: Principal, host_id: Uuid) -> Result<(), AppError> {
     match p {
         Principal::Host(id) if id != host_id => Err(AppError(
             StatusCode::FORBIDDEN,
@@ -223,6 +223,7 @@ pub fn router(state: ApiState) -> Router {
             "/v1/hosts/{host_id}/operations/{op_id}/result",
             post(post_result).layer(DefaultBodyLimit::max(RESULT_BODY_LIMIT)),
         )
+        .merge(super::host_commands_api::host_routes())
         .route_layer(middleware::from_fn_with_state(state.clone(), require_host));
     let client = Router::new()
         .route("/v1/hosts", get(list_hosts))
@@ -234,6 +235,7 @@ pub fn router(state: ApiState) -> Router {
         .merge(super::webhook_api::routes())
         .merge(super::credentials_api::client_routes())
         .merge(super::events_api::routes())
+        .merge(super::host_commands_api::client_routes())
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             require_client,
@@ -314,6 +316,9 @@ struct PollQuery {
     profiles: Option<String>,
     /// Comma-separated profile names whose browser is running.
     running: Option<String>,
+    /// The agent can run host commands (#213).
+    #[serde(default)]
+    commands: bool,
 }
 
 fn split_list(s: &Option<String>) -> Vec<String> {
@@ -340,12 +345,18 @@ async fn next_operation(
     }
     match s
         .store
-        .next_operation(host_id, q.browser_connected, wait)
+        .next_work(host_id, q.browser_connected, q.commands, wait)
         .await?
     {
-        Some(op) => {
+        Some(HostWork::Operation(op)) => {
             tracing::info!(op_id = %op.id, kind = op.action.kind(), "operation dispatched");
             Ok(Json(op).into_response())
+        }
+        Some(work @ HostWork::Command { .. }) => {
+            if let HostWork::Command { command } = &work {
+                tracing::info!(command_id = %command.id, kind = command.command.kind(), "host command dispatched");
+            }
+            Ok(Json(work).into_response())
         }
         None => Ok(StatusCode::NO_CONTENT.into_response()),
     }
