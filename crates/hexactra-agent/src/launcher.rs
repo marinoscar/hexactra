@@ -50,6 +50,8 @@ struct State {
     child: Option<Child>,
     last_activity: Instant,
     launches: u32,
+    /// Launched and waiting for the extension: never idled out meanwhile.
+    starting: bool,
 }
 
 /// Starts and supervises the browser.
@@ -81,6 +83,7 @@ impl BrowserLauncher {
             state: Mutex::new(State {
                 child: None,
                 last_activity: Instant::now(),
+                starting: false,
                 launches: 0,
             }),
         })
@@ -187,8 +190,17 @@ impl BrowserLauncher {
             .with_context(|| format!("starting {}", self.cfg.browser.display()))?;
         st.child = Some(child);
         st.launches += 1;
+        st.starting = true;
         drop(st);
+        let result = self.wait_started().await;
+        let mut st = self.state.lock().await;
+        st.starting = false;
+        // Idle time counts from when the browser is ready.
+        st.last_activity = Instant::now();
+        result
+    }
 
+    async fn wait_started(&self) -> Result<()> {
         // Wait for the extension, but fail fast if the browser exits.
         let deadline = Instant::now() + self.cfg.startup_timeout;
         loop {
@@ -283,7 +295,7 @@ impl BrowserLauncher {
             loop {
                 tokio::time::sleep(tick).await;
                 let mut st = this.state.lock().await;
-                if Self::alive(&mut st) && st.last_activity.elapsed() >= idle {
+                if !st.starting && Self::alive(&mut st) && st.last_activity.elapsed() >= idle {
                     tracing::info!(?idle, "closing idle browser");
                     Self::stop(&mut st, &this.bridge).await;
                 }
