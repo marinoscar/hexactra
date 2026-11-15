@@ -15,9 +15,17 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 | Capability | Web | API | CLI / TUI | Permission |
 |---|---|---|---|---|
 | Fabric connection (URL and `hxs_` service token, stored encrypted; Doctor checks `fabric.*`) | Administration → Fabric connection | `GET/PUT/DELETE /api/fabric/connection`, `POST …/test` | — | `fabric_config:read` / `:write` |
+| Tasks: saved goals with a profile, allowed sites, step and time budgets, confirm-before-purchase | `/tasks` | `/api/tasks` | `hexactra tasks list\|create\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
+| Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel | `/runs`, `/runs/:id` | `/api/runs`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` |
 | Fleet: hosts, enrollment, drain, revoke, profiles | `/fleet` | `/api/fleet/…` | `hexactra fleet hosts\|enroll\|drain\|undrain\|revoke\|commands`, `hexactra fleet profile create\|delete\|restart\|close`; TUI **Fleet** screen | `fleet:read` / `fleet:write` |
 
 Run it all on a VPS (console, fabric and a browser host in one stack): [docs/runbooks/vps-stack.md](docs/runbooks/vps-stack.md).
+
+**The goal runner**:
+- It uses the AI slice: feature `browser_agent`, a model with `tools`. Configure a provider at Administration → AI.
+- The model never sees secrets: codes and passwords come from handoffs and are typed by the runner.
+- Steps store redacted arguments only.
+- Sites outside a task's allowed list are refused, and purchases wait for your confirmation unless you turn that off.
 
 The CLI's commands use the login from `hexactra login`, or `HEXACTRA_SERVER_URL` and `HEXACTRA_TOKEN`.
 

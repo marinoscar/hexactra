@@ -28,6 +28,8 @@ import { NAVIGATION } from './config/navigation';
 import { USER_SETTINGS_SECTIONS } from './config/userSettingsSections';
 import { FabricConnectionPage } from './pages/FabricConnectionPage';
 import { FleetPage } from './pages/FleetPage';
+import { RunDetailPage, RunsPage } from './pages/RunsPage';
+import { TasksPage } from './pages/TasksPage';
 import { NotesPage } from './pages/NotesPage';
 import { AppPlatformHost } from './platformHost';
 import {
@@ -161,6 +163,9 @@ export function AppRoutes() {
         <Route element={shell}>
           <Route index element={<Home />} />
           <Route path="notes" element={<Gate permission="notes:read"><NotesPage /></Gate>} />
+          <Route path="tasks" element={<Gate permission="tasks:read"><TasksPage /></Gate>} />
+          <Route path="runs" element={<Gate permission="runs:read"><RunsPage /></Gate>} />
+          <Route path="runs/:id" element={<Gate permission="runs:read"><RunDetailPage /></Gate>} />
           <Route path="fleet" element={<Gate permission="fleet:read"><FleetPage /></Gate>} />
           <Route path="settings" element={<Hub sections={USER_SETTINGS_SECTIONS} hubKey="user-settings-hub" title="Settings" subtitle="Manage your account preferences." />} />
           <Route path="settings/tokens" element={<UserTokensPage />} />

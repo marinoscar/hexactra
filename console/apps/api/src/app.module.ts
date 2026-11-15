@@ -9,9 +9,11 @@ import { RegistryFreezeService } from '@marinoscar/platform-api/core';
 import configuration from './config/configuration';
 import { FabricModule } from './fabric/fabric.module';
 import { FleetModule } from './fleet/fleet.module';
+import { RunnerModule } from './runner/runner.module';
 import { TasksModule } from './tasks/tasks.module';
 import { NotesModule } from './notes/notes.module';
 import { PLATFORM_MODULES } from './platform/platform';
+import { isSliceEnabled } from './platform/slices/manifest';
 import { PrismaModule } from './prisma/prisma.service';
 
 /**
@@ -31,6 +33,8 @@ import { PrismaModule } from './prisma/prisma.service';
     FabricModule,
     FleetModule,
     TasksModule,
+    // The goal runner needs the AI slice (packages/shared/slices.json).
+    ...(isSliceEnabled('ai') ? [RunnerModule] : []),
   ],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },

@@ -5,6 +5,7 @@ import type { CreateCliOptions } from '@marinoscar/platform-cli';
 
 import { fleetCommand } from './fleet.command.js';
 import { fleetScreen } from './fleet.tui.js';
+import { runsCommand } from './runs.command.js';
 
 /** This CLI's version: apps/cli/package.json, or `0.0.0-unknown` in an unusual install. */
 function readVersion(): string {
@@ -24,6 +25,6 @@ function readVersion(): string {
 export const APP_CLI_OPTIONS: CreateCliOptions = {
   identity: { name: CLI_NAME, displayName: `${APP_NAME} CLI`, productName: APP_NAME, repoSlug: REPO_SLUG },
   version: readVersion(),
-  extraCommands: [fleetCommand],
+  extraCommands: [fleetCommand, runsCommand],
   tuiScreens: [fleetScreen],
 };

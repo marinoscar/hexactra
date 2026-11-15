@@ -115,3 +115,39 @@ describe('FleetScreen', () => {
     screen.unmount();
   });
 });
+
+describe('hexactra tasks and runs', () => {
+  async function runCli(...args: string[]): Promise<string> {
+    const { runsCommand } = await import('./runs.command.js');
+    const program = new Command().exitOverride();
+    runsCommand(program);
+    let out = '';
+    const spy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      out += String(chunk);
+      return true;
+    });
+    try {
+      await program.parseAsync(['node', 'hexactra', ...args]);
+    } finally {
+      spy.mockRestore();
+    }
+    return out;
+  }
+
+  it('creates and runs a task, and shows a run with its steps', async () => {
+    const T = '33333333-3333-4333-8333-333333333333';
+    const R = '44444444-4444-4444-8444-444444444444';
+    const calls = fakeApi({
+      'POST /tasks': { id: T, name: 'Fare', goal: 'Find a fare', profile: 'travel', allowedDomains: [] },
+      'GET /tasks': [{ id: T, name: 'Fare', goal: 'Find a fare', profile: 'travel', allowedDomains: [] }],
+      [`POST /tasks/${T}/runs`]: { id: R, status: 'queued', goal: 'Find a fare', stepCount: 0 },
+      [`GET /runs/${R}`]: { id: R, status: 'succeeded', goal: 'Find a fare', stepCount: 1, result: '$120', steps: [{ seq: 1, kind: 'action', action: 'navigate', ok: true, summary: 'at https://f.example.test/' }] },
+    });
+    expect(await runCli('tasks', 'create', 'Fare', 'Find a fare', '--profile', 'travel', '--allow', 'f.example.test')).toContain(`created ${T}`);
+    expect(calls.at(-1)?.body).toMatchObject({ profile: 'travel', allowedDomains: ['f.example.test'], confirmRiskyActions: true });
+    const runOut = await runCli('tasks', 'run', T.slice(0, 8), '--watch');
+    expect(runOut).toContain(`run ${R}`);
+    expect(runOut).toContain('1. navigate: at https://f.example.test/');
+    expect(runOut).toContain('result: $120');
+  });
+});
