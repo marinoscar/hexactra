@@ -107,7 +107,7 @@ describe('question channels', () => {
     const u = await login(`qc-chat-${Date.now()}@example.test`);
     const q = await ask(u.token, { input: 'choice', prompt: 'Which fare?', options: ['early', 'late', 'none'] });
     expect(chat.delivered).toContain(q.id);
-    await questions.answer({ id: u.userId }, q.id, { value: 'late' }, { channel: 'fake-chat' });
+    await questions.answer({ id: u.userId }, q.id, { outcome: 'completed', value: 'late' }, { channel: 'fake-chat' });
     await runJob(q.id, 'withdraw');
     expect(chat.withdrawn).toContainEqual({ id: q.id, ctx: { ownerUserId: u.userId, event: 'question.answered', answeredChannel: 'fake-chat' } });
     const answered = emitted.find((e) => e.key === 'questions.question.answered' && (e.data.question as { id: string }).id === q.id)!;
@@ -120,7 +120,7 @@ describe('question channels', () => {
     await app.get(NotificationsService, { strict: false }).flush();
     const row = await prisma.notification.findFirstOrThrow({ where: { userId: u.userId, eventKey: QUESTION_ASKED_EVENT } });
     expect(row).toMatchObject({ title: 'A question for you', body: 'Name the trip', link: `/inbox/q/${q.id}`, dismissedAt: null });
-    await questions.answer({ id: u.userId }, q.id, { value: 'Spring' }, { channel: 'web' });
+    await questions.answer({ id: u.userId }, q.id, { outcome: 'completed', value: 'Spring' }, { channel: 'web' });
     await runJob(q.id, 'withdraw');
     expect((await prisma.notification.findUniqueOrThrow({ where: { id: row.id } })).dismissedAt).not.toBeNull();
   });
