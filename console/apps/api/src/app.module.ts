@@ -12,6 +12,9 @@ import { FabricModule } from './fabric/fabric.module';
 import { McpModule } from './mcp/mcp.module';
 import { FleetModule } from './fleet/fleet.module';
 import { webhooksModule } from './platform/webhooks/webhooks.config';
+import { HexactraAlertsModule } from './alerts/alerts.module';
+import { alertsModule } from './platform/alerts/alerts.config';
+import { alertsMounted } from './platform/alerts/alerts.enabled';
 import { RunnerModule } from './runner/runner.module';
 import { SchedulesModule } from './schedules/schedules.module';
 import { TasksModule } from './tasks/tasks.module';
@@ -43,6 +46,8 @@ import { PrismaModule } from './prisma/prisma.service';
     ...(isSliceEnabled('ai') ? [RunnerModule, SchedulesModule] : []),
     // Outbound webhooks need the credential store (signing secrets) and notifications.
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [webhooksModule] : []),
+    // Alerts (Administration → Alerts): the platform slice plus the console's rule kinds.
+    ...(alertsMounted() ? [alertsModule, HexactraAlertsModule] : []),
   ],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },

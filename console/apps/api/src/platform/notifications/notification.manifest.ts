@@ -30,6 +30,9 @@ import {
   type NotificationChannelDef,
 } from '@marinoscar/platform-api/notifications';
 
+import { ALERTS_NOTIFICATIONS } from '@marinoscar/platform-api/alerts';
+
+import { alertsMounted } from '../alerts/alerts.enabled';
 import { contributions } from '../slices/contributions';
 import { isSliceEnabled } from '../slices/manifest';
 import { HEXACTRA_NOTIFICATIONS } from './hexactra.notifications';
@@ -51,3 +54,5 @@ registerNotifications(NODES_NOTIFICATIONS);
 registerNotifications(contributions().notifications);
 registerNotifications(NOTES_NOTIFICATIONS);
 registerNotifications(HEXACTRA_NOTIFICATIONS);
+// The alerts slice's two (fired, resolved), to the holders of `alerts:read`.
+if (alertsMounted()) registerNotifications(ALERTS_NOTIFICATIONS);

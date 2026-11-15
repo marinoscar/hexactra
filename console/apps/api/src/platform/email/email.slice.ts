@@ -22,6 +22,9 @@ export const emailSlice: ApiSlice = {
     email.registerEmailTemplates(EMAIL_SLICE_TEMPLATES);
     // Templates other slices own the words of (sharing's invitation and share mails).
     email.registerEmailTemplates(contributions().emailTemplates);
+    // The alerts slice's two templates (it is mounted with notifications and email).
+    const { isSliceEnabled } = require('../slices/manifest') as typeof import('../slices/manifest');
+    if (isSliceEnabled('notifications')) (require('@marinoscar/platform-api/alerts') as typeof import('@marinoscar/platform-api/alerts')).registerAlertsEmailTemplates();
   },
   modules: () => {
     const { EmailModule } = require('./email.config') as typeof import('./email.config');
