@@ -173,7 +173,7 @@ describe('RunsScreen', () => {
 });
 
 describe('the inbox', () => {
-  const item = { runId: '66666666-6666-4666-8666-666666666666', goal: 'Fare', kind: 'code', prompt: 'Enter the code', input: 'secret', choices: [], expiresAt: '2026-11-15T00:10:00Z' };
+  const item = { questionId: '66666666-6666-4666-8666-000000000000', runId: '66666666-6666-4666-8666-666666666666', goal: 'Fare', kind: 'code', prompt: 'Enter the code', input: 'secret', choices: [], expiresAt: '2026-11-15T00:10:00Z' };
 
   it('answers from the CLI and refuses a secret as an argument', async () => {
     const { inboxCommand } = await import('./inbox.command.js');

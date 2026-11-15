@@ -8,6 +8,7 @@ import { BRAND_TUI_MENU_ROOT, BRAND_TUI_THEME } from './brand.js';
 import { fabricCommand } from './fabric.command.js';
 import { fleetCommand } from './fleet.command.js';
 import { inboxCommand } from './inbox.command.js';
+import { questionsCommand } from './questions.command.js';
 import { inboxScreen } from './inbox.tui.js';
 import { mcpCommand } from './mcp.command.js';
 import { fleetScreen } from './fleet.tui.js';
@@ -33,7 +34,7 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   identity: { name: CLI_NAME, displayName: `${APP_NAME} CLI`, productName: APP_NAME, repoSlug: REPO_SLUG },
   version: readVersion(),
   // `android`: build, version and release the Android app (apps/android) through the platform's group.
-  extraCommands: [fabricCommand, fleetCommand, runsCommand, inboxCommand, mcpCommand, androidCommand({ identity: ANDROID_IDENTITY_SOURCE })],
+  extraCommands: [fabricCommand, fleetCommand, runsCommand, inboxCommand, questionsCommand, mcpCommand, androidCommand({ identity: ANDROID_IDENTITY_SOURCE })],
   tuiScreens: [inboxScreen, runsScreen, fleetScreen, androidTuiScreen],
   // The hexactra brand (docs/brand): its colours, and the Trace mark with the wordmark atop the menu.
   tuiTheme: BRAND_TUI_THEME,
