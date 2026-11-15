@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Card, CardActions, CardContent, Chip, Container, Link, Stack, TextField, Typography } from '@mui/material';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 /** `GET /api/inbox`. */
@@ -35,6 +35,9 @@ export function InboxPage() {
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // `/inbox?run=<id>`: the deep link of a "needs you" notification (web, PWA, Android app).
+  const [params] = useSearchParams();
+  const focusRun = params.get('run');
 
   const load = useCallback(async () => {
     try {
@@ -88,12 +91,23 @@ export function InboxPage() {
         </Alert>
       )}
       {items?.length === 0 && <Alert severity="success">Nothing is waiting for you.</Alert>}
+      {focusRun && items && items.length > 0 && !items.some((i) => i.runId === focusRun) && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          That request was already answered or expired.
+        </Alert>
+      )}
       <Stack spacing={2} aria-label="Requests">
-        {items?.map((item) => {
+        {[...(items ?? [])].sort((a, b) => Number(b.runId === focusRun) - Number(a.runId === focusRun)).map((item) => {
           const value = values[item.runId] ?? '';
           const disabled = !canAnswer || busy === item.runId;
           return (
-            <Card key={item.runId} variant="outlined" aria-label={`Request: ${item.prompt}`}>
+            <Card
+              key={item.runId}
+              variant="outlined"
+              aria-label={`Request: ${item.prompt}`}
+              aria-current={item.runId === focusRun ? 'true' : undefined}
+              sx={item.runId === focusRun ? { borderColor: 'warning.main', borderWidth: 2 } : undefined}
+            >
               <CardContent>
                 <Stack direction="row" spacing={1} sx={{ mb: 1, alignItems: 'center' }}>
                   <Chip size="small" color="warning" label={KIND_LABEL[item.kind] ?? item.kind} />

@@ -37,7 +37,19 @@ Publishing also adds the APK's signing key to the trusted apps that `/.well-know
 3. Open **Hexactra Console** from the launcher. It opens the console full screen, without the browser's address bar, once asset links verify.
 4. Allow notifications when asked. Run and handoff notifications now reach the phone.
 
-## 4. CI
+## 4. Notifications and deep links
+
+| Event | On the phone | Opens |
+|---|---|---|
+| An agent needs you (`runs.needs_you`) | High urgency, one per run (a newer one replaces it) | `/inbox?run=<id>`: the Inbox with that request first, outlined |
+| Run finished (`runs.finished`) | High urgency when it failed, normal otherwise; one per run | `/runs/<id>` |
+| Schedule failing (`schedules.failing`) | Normal urgency, one per schedule | `/tasks` |
+
+- **How a tap reaches the app.** A notification's link is a URL on the console. The app holds a verified `https://<console>` app link (the `autoVerify` intent filter that `aapt2` checks in CI), so Android opens the link inside the app rather than in the browser.
+- **Payloads carry no secrets.** A request names what is asked, never an answer: codes typed into the Inbox go straight to the fabric.
+- **Tests.** `apps/api/test/push-payload.spec.ts` covers the payloads and links. `apps/web/src/__tests__/InboxPage.test.tsx` covers the deep link.
+
+## 5. CI
 
 `.github/workflows/console-android.yml` runs on every change to the app. It:
 - runs the unit tests;
@@ -47,7 +59,7 @@ Publishing also adds the APK's signing key to the trusted apps that `/.well-know
 
 Signed release builds in CI are an owner step. See section 9 of the platform runbook for the four keystore secrets.
 
-## 5. Troubleshooting
+## 6. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
