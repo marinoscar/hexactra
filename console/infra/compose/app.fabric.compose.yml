@@ -21,6 +21,8 @@ services:
     environment:
       HEXACTRA_API_TOKEN: ${HEXACTRA_FABRIC_OPERATOR_TOKEN:?set HEXACTRA_FABRIC_OPERATOR_TOKEN in infra/compose/.env}
       HEXACTRA_PUBLIC_URL: ${APP_URL:-}
+      # Traces and metrics to the console's collector (telemetry overlay); empty = off.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${HEXACTRA_FABRIC_OTLP_ENDPOINT:-}
       RUST_LOG: ${RUST_LOG:-info}
     volumes:
       - fabric-control-data:/data
@@ -54,6 +56,7 @@ services:
       # The console turns this into a one-time ticket link (Fleet page).
       HEXACTRA_VIEWER_URL: ${APP_URL:-http://localhost:3535}/viewer/local/vnc.html
       HEXACTRA_MAX_BROWSERS: ${HEXACTRA_MAX_BROWSERS:-1}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${HEXACTRA_FABRIC_OTLP_ENDPOINT:-}
       RUST_LOG: ${RUST_LOG:-info}
     volumes:
       - fabric-host-data:/data

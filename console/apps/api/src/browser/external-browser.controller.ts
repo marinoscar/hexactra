@@ -96,6 +96,7 @@ export class ExternalBrowserController {
   private async record(runId: string, userId: string, kind: string, action: string | null, args: Record<string, unknown> | null, ok: boolean, summary: string, started: number) {
     const db = this.prisma.forUser({ userId });
     const updated = await db.run.update({ where: { id: runId }, data: { stepCount: { increment: 1 } }, select: { stepCount: true } });
+    this.tasks.metrics.step(kind, ok);
     await this.prisma.runStep.create({
       data: { runId, seq: updated.stepCount, kind, action, args: args ? (redactActionArgs(action ?? '', args) as never) : undefined, ok, summary: summary.slice(0, 1_900), durationMs: Date.now() - started },
     });

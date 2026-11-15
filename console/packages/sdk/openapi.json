@@ -22343,7 +22343,7 @@
             "name": "group",
             "required": true,
             "in": "query",
-            "description": "The metric group: `host`, `database`, `queue`, `nodes`, `uptime`, `pipeline` or `activity`.",
+            "description": "The metric group: `host`, `database`, `queue`, `nodes`, `uptime`, `pipeline`, `activity` or `runs`.",
             "schema": {
               "enum": [
                 "host",
@@ -22352,7 +22352,8 @@
                 "nodes",
                 "uptime",
                 "pipeline",
-                "activity"
+                "activity",
+                "runs"
               ],
               "type": "string"
             }
@@ -52191,7 +52192,8 @@
               "nodes",
               "uptime",
               "pipeline",
-              "activity"
+              "activity",
+              "runs"
             ]
           },
           "available": {

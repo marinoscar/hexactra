@@ -1,9 +1,10 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { assertTransition, isTerminal, type RunStatus } from './run-status';
 import type { CreateTaskDto, ListRunsDto, UpdateTaskDto } from './tasks.schemas';
+import { RunMetrics } from './run-metrics';
 
 /** Fields a status change may set. */
 export interface RunPatch {
@@ -21,7 +22,10 @@ export interface RunPatch {
  */
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() readonly metrics: RunMetrics = new RunMetrics(),
+  ) {}
 
   private db(userId: string) {
     return this.prisma.forUser({ userId });
@@ -78,7 +82,7 @@ export class TasksService {
   async transition(userId: string, id: string, to: RunStatus, patch: RunPatch = {}) {
     const db = this.db(userId);
     for (let attempt = 0; attempt < 5; attempt++) {
-      const run = await db.run.findFirst({ where: { id }, select: { status: true, startedAt: true } });
+      const run = await db.run.findFirst({ where: { id }, select: { status: true, startedAt: true, createdAt: true, trigger: true } });
       if (!run) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
       assertTransition(run.status as RunStatus, to);
       const now = new Date();
@@ -92,7 +96,12 @@ export class TasksService {
           ...(isTerminal(to) ? { finishedAt: now } : {}),
         },
       });
-      if (count === 1) return db.run.findFirstOrThrow({ where: { id }, omit: { transcript: true } });
+      if (count === 1) {
+        if (to === 'running' && !run.startedAt) this.metrics.started(run.trigger);
+        if (to === 'waiting_human') this.metrics.handoff();
+        if (isTerminal(to)) this.metrics.finished(to, run.trigger, (now.getTime() - (run.startedAt ?? run.createdAt).getTime()) / 1000);
+        return db.run.findFirstOrThrow({ where: { id }, omit: { transcript: true } });
+      }
     }
     throw new ConflictException({ code: 'RUN_BUSY', message: 'The run changed while it was being updated; try again' });
   }
