@@ -123,40 +123,15 @@ GET /operations/{operationId}
 Scopes: operations:read
 ```
 
-### Interaction Requests (HITL)
+### Human handoffs
 
-#### Create Interaction Request
-```
-POST /interaction-requests
-Scopes: interaction:write
-```
-
-Body:
-```json
-{
-  "session_id": "uuid",
-  "reason": "User approval required",
-  "details": {}
-}
-```
-
-#### List Interaction Requests
-```
-GET /interaction-requests
-Scopes: interaction:read
-```
-
-#### Approve Request
-```
-POST /interaction-requests/{requestId}/approve
-Scopes: interaction:write
-```
-
-#### Reject Request
-```
-POST /interaction-requests/{requestId}/reject
-Scopes: interaction:write
-```
+The early `/interaction-requests` and `/hitl/...` routes were never served and
+have been removed. A person is asked for help through the remote control API's
+handoffs (`POST /v1/sessions/{id}/handoffs`, `GET /v1/handoffs`,
+`POST /v1/handoffs/{id}/respond`, and the `type_secret` action for secrets):
+see [remote-control-api.md](remote-control-api.md#human-handoff). The
+TypeScript SDK wraps them as `createHandoff`, `listHandoffs`, `getHandoff`,
+`respondHandoff`, `cancelHandoff` and `typeSecret`.
 
 ## MCP Tools
 
@@ -167,9 +142,8 @@ The following MCP tools are available:
 - `create_goal` - Create a goal to execute
 - `get_goal_status` - Get goal status
 - `list_goals` - List goals for a session
-- `create_interaction_request` - Create HITL request
-- `approve_interaction_request` - Approve HITL request
-- `reject_interaction_request` - Reject HITL request
+- `browser_request_human` - Ask a person for help (a human handoff)
+- `browser_type_secret` - Type the answer of a `secret` handoff into the page
 - `get_operation_status` - Get operation status
 - `get_health` - Check service health
 
