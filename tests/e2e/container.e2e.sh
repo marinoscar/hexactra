@@ -16,7 +16,7 @@ fail() {
     printf 'FAIL %s\n' "$*" >&2
     "${COMPOSE[@]}" logs --tail 80 >&2 || true
     echo "----- browser log -----" >&2
-    "${COMPOSE[@]}" exec -T host tail -60 /data/profile/hexactra-browser.log >&2 || true
+    "${COMPOSE[@]}" exec -T host tail -60 /data/profiles/default/hexactra-browser.log >&2 || true
     exit 1
 }
 
@@ -37,7 +37,7 @@ export HEXACTRA_LAUNCH_EAGERLY=false
 pass "stack is up and healthy"
 
 hx() { "${COMPOSE[@]}" exec -T -e HEXACTRA_API_TOKEN="$HEXACTRA_API_TOKEN" control hexactra --url http://127.0.0.1:8787 "$@"; }
-chromium_running() { "${COMPOSE[@]}" exec -T host pgrep -f 'user-data-dir=/data/profile' >/dev/null; }
+chromium_running() { "${COMPOSE[@]}" exec -T host pgrep -f 'user-data-dir=/data/profiles/default' >/dev/null; }
 
 curl -fsS http://127.0.0.1:8787/v1/health >/dev/null || fail "API not published on 127.0.0.1:8787"
 [[ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8787/v1/hosts)" == 401 ]] || fail "API accepted a request without the token"
@@ -65,7 +65,7 @@ chromium_running || fail "browser not running after the first action"
 "${COMPOSE[@]}" exec -T host sh -c '
   set -e
   ! pgrep -af -- "--no-sandbox" | grep -q chromium
-  main=$(pgrep -o -f "user-data-dir=/data/profile")
+  main=$(pgrep -o -f "user-data-dir=/data/profiles/default")
   rend=$(pgrep -f -- "--type=renderer" | head -1)
   [ -n "$rend" ]
   [ "$(readlink /proc/$main/ns/pid)" != "$(readlink /proc/$rend/ns/pid)" ]
@@ -84,14 +84,15 @@ chromium_running && fail "idle browser was not closed"
 pass "idle browser closed"
 
 hx navigate http://fixture/persist.html >/dev/null
-hx text --selector '#visits' | grep -q 'visits: 2' || fail "profile did not persist across idle relaunch"
+visits() { hx text --selector '#visits' | sed -n 's/.*visits: \([0-9]*\).*/\1/p'; }
+[ "$(visits)" -ge 2 ] || fail "profile did not persist across idle relaunch"
 pass "relaunch after idle keeps the profile"
 
 "${COMPOSE[@]}" restart host >/dev/null
 "${COMPOSE[@]}" up -d --wait --wait-timeout 120 >/dev/null || fail "host not healthy after restart"
 for _ in $(seq 1 30); do hx status | grep -q 'on_demand=true' && break; sleep 1; done
 hx --timeout-ms 60000 navigate http://fixture/persist.html >/dev/null || fail "navigate after container restart failed"
-hx text --selector '#visits' | grep -q 'visits: 3' || fail "profile did not survive the container restart"
+[ "$(visits)" -ge 3 ] || fail "profile did not survive the container restart"
 pass "profile survives a container restart (stale lock cleared)"
 
 id="$(hx handoff request --kind captcha --prompt 'Solve it in the viewer' 2>/dev/null)"

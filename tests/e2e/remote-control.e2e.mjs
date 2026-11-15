@@ -42,6 +42,7 @@ const work = mkdtempSync(join(tmpdir(), 'hexactra-e2e-'));
 const token = 'e2e-token-' + Math.random().toString(16).slice(2).padEnd(24, '0');
 const socket = join(work, 'run', 'bridge.sock');
 const userDataDir = join(work, 'chrome-profile');
+const work_dir_profiles = join(work, 'launch-profiles');
 const env = {
   ...process.env,
   HEXACTRA_API_TOKEN: token,
@@ -196,6 +197,8 @@ async function startChannel() {
   state.close = () => server.close();
   return state;
 }
+
+const visits = (text) => Number((/visits: (\d+)/.exec(text) ?? [])[1] ?? 0);
 
 const results = [];
 async function step(name, fn) {
@@ -444,11 +447,12 @@ try {
     await new Promise((r) => agent.once('exit', r));
     stop(attachedChromium);
     await sleep(1_000);
-    const launchProfile = join(work, 'launch-profile');
+    const launchProfiles = work_dir_profiles;
+    const launchProfile = join(launchProfiles, 'default');
     const launchArgs = [
       'daemon', '--url', controlUrl, '--name', 'e2e-launch-host',
       '--browser', chromium,
-      '--profile-dir', launchProfile,
+      '--profiles-dir', launchProfiles,
       '--extension-dir', extensionDir,
       '--native-host', join(binDir, 'hexactra-native-host'),
       '--idle-shutdown-s', '4',
@@ -473,15 +477,58 @@ try {
     // Idle shutdown closes it.
     await until('idle shutdown', async () => !browserRunning(), 30_000);
 
-    // Next action relaunches it with the same profile (localStorage survived).
+    // Next action relaunches it with the same profile: the earlier tab is
+    // restored and localStorage survived (the count keeps going up).
+    assert.match((await ok('tabs')), /Hexactra Fixture Persist/);
     assert.match(await ok('navigate', `${site}/persist.html`), /Hexactra Fixture Persist/);
-    assert.match(await ok('text', '--selector', '#visits'), /visits: 2/);
+    assert.ok(visits(await ok('text', '--selector', '#visits')) >= 2);
 
     // Handoffs point the person at the viewer.
     const id = (await ok('handoff', 'request', '--kind', 'captcha', '--prompt', 'Solve it in the viewer')).trim();
     const shown = JSON.parse(await ok('--json', 'handoff', 'show', id));
     assert.equal(shown.viewer_url, 'https://viewer.example.test/vnc.html');
     await ok('handoff', 'cancel', id);
+  });
+  await step('profiles: two profiles keep separate storage and share one browser slot', async () => {
+    const api = async (method, path, body) => {
+      const r = await fetch(`${controlUrl}${path}`, {
+        method,
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      return { status: r.status, body: await r.json().catch(() => null) };
+    };
+    const act = async (session, action) => {
+      const r = await api('POST', `/v1/sessions/${session}/actions`, { action, timeout_ms: 60000 });
+      assert.equal(r.body.state, 'succeeded', JSON.stringify(r.body));
+      return r.body.result;
+    };
+    // Unknown profile is refused until created explicitly.
+    assert.equal((await api('POST', '/v1/sessions', { profile: 'travel' })).status, 404);
+    const travel = (await api('POST', '/v1/sessions', { profile: 'travel', create_profile: true })).body;
+    const work = (await api('POST', '/v1/sessions', { profile: 'work', create_profile: true })).body;
+    assert.equal(travel.profile, 'travel');
+
+    await act(travel.id, { type: 'navigate', url: `${site}/persist.html` });
+    assert.match((await act(travel.id, { type: 'text', selector: '#visits' })).text, /visits: 1/);
+    await act(travel.id, { type: 'navigate', url: `${site}/persist.html` });
+    assert.match((await act(travel.id, { type: 'text', selector: '#visits' })).text, /visits: 2/);
+
+    // Same site, other profile: its own storage (count starts again).
+    await act(work.id, { type: 'navigate', url: `${site}/persist.html` });
+    assert.match((await act(work.id, { type: 'text', selector: '#visits' })).text, /visits: 1/);
+
+    // Capacity 1: only one profile's browser runs at a time.
+    const running = (p) => spawnSync('pgrep', ['-f', `user-data-dir=${join(work_dir_profiles, p)}`]).status === 0;
+    assert.equal(running('work'), true);
+    assert.equal(running('travel'), false);
+
+    // Back to travel: relaunched with its storage intact.
+    await act(travel.id, { type: 'navigate', url: `${site}/persist.html` });
+    assert.ok(visits((await act(travel.id, { type: 'text', selector: '#visits' })).text) >= 3);
+
+    const host = (await api('GET', '/v1/hosts')).body.hosts.find((h) => h.name === 'e2e-launch-host');
+    for (const p of ['default', 'travel', 'work']) assert.ok(host.profiles.includes(p), JSON.stringify(host));
   });
 } catch (e) {
   failed = true;
