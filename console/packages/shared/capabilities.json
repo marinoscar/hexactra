@@ -166,6 +166,65 @@
       "web": "/inbox"
     },
     {
+      "id": "questions.ask",
+      "description": "Ask the user a question (free-standing: text, choice, multi-choice, number, confirm, takeover, none) and wait for the answer",
+      "rest": [
+        "POST /api/questions",
+        "GET /api/questions/{id}"
+      ],
+      "cli": {
+        "none": "Asking is done by agents through REST; the person answers with `inbox answer`"
+      },
+      "mcp": {
+        "none": "Agents ask through browser_request_human today; MCP tools for free-standing questions come with the channels work (#290)"
+      },
+      "tui": {
+        "none": "The person answers on the Inbox screen"
+      },
+      "web": {
+        "none": "The person answers on /inbox"
+      }
+    },
+    {
+      "id": "questions.list",
+      "description": "List the questions asked of the user and their answers (a secret is never returned)",
+      "rest": [
+        "GET /api/questions"
+      ],
+      "cli": {
+        "none": "`inbox list` shows the pending questions (GET /api/inbox); the full history comes to the CLI with #290"
+      },
+      "mcp": {
+        "none": "`inbox_list` shows the pending questions (GET /api/inbox); the full history comes to MCP with #290"
+      },
+      "tui": {
+        "none": "The Inbox screen shows the pending questions; the full history comes with #290"
+      },
+      "web": {
+        "none": "/inbox shows the pending questions; the full history comes to the web app with #290"
+      }
+    },
+    {
+      "id": "questions.answer",
+      "description": "Answer or decline a question (first answer wins)",
+      "rest": [
+        "POST /api/questions/{id}/answer",
+        "POST /api/questions/{id}/cancel"
+      ],
+      "cli": {
+        "none": "`inbox answer` answers a run's question; free-standing questions come to the CLI with #290"
+      },
+      "mcp": {
+        "none": "`inbox_answer` answers a run's question; free-standing questions come to MCP with #290"
+      },
+      "tui": {
+        "none": "The Inbox screen answers a run's question; free-standing questions come to the TUI with #290"
+      },
+      "web": {
+        "none": "/inbox answers a run's question; free-standing questions come to the web app with #290"
+      }
+    },
+    {
       "id": "schedules.list",
       "description": "List task schedules",
       "rest": [

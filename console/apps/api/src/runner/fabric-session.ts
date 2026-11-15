@@ -8,13 +8,104 @@ export interface FabricOperation {
   error?: string;
 }
 
+export type FabricHandoffInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover';
+
+/** The answer as the fabric reports it (`HandoffView.response`, snake_case). */
+export interface FabricHandoffResponse {
+  /** Absent on fabrics older than the typed contract (#285): derive it from the status. */
+  outcome?: 'completed' | 'cancelled';
+  value?: string;
+  values?: string[];
+  /** A secret: the value exists but only `claim` returns it, once. */
+  value_withheld?: boolean;
+  channel?: string;
+  by?: string;
+  answered_at?: string;
+}
+
 export interface FabricHandoff {
   id: string;
   status: 'pending' | 'completed' | 'cancelled' | 'expired';
-  input: 'none' | 'text' | 'secret' | 'choice';
+  input: FabricHandoffInput;
   kind: string;
+  prompt?: string;
+  choices?: (string | { id: string; label: string; description?: string })[];
+  page?: { url?: string; title?: string };
   viewer_url?: string;
-  response?: { outcome: 'completed' | 'cancelled'; value?: string; by?: string };
+  created_at?: string;
+  expires_at?: string;
+  resolved_at?: string;
+  response?: FabricHandoffResponse;
+}
+
+/** How a resolved handoff ended: the response's outcome, or (older fabrics) its status. Null while pending or expired. */
+export function handoffOutcome(h: Pick<FabricHandoff, 'status' | 'response'>): 'completed' | 'cancelled' | null {
+  if (h.response?.outcome) return h.response.outcome;
+  if (h.status === 'completed') return 'completed';
+  if (h.status === 'cancelled') return 'cancelled';
+  return null;
+}
+
+/** What a handoff asks, in the console's camelCase (mapped to the fabric's snake_case body). */
+export interface HandoffRequest {
+  kind: string;
+  prompt: string;
+  input: string;
+  choices?: (string | { id: string; label: string; description?: string })[];
+  constraints?: {
+    maxLength?: number;
+    pattern?: string;
+    multiline?: boolean;
+    min?: number;
+    max?: number;
+    step?: number;
+    unit?: string;
+    minSelections?: number;
+    maxSelections?: number;
+  } | null;
+  confirmLabel?: string | null;
+  denyLabel?: string | null;
+  risk?: 'low' | 'high' | null;
+  timeoutMs?: number;
+}
+
+/** A created handoff: its id and what the inbox shows. */
+export interface CreatedHandoff {
+  id: string;
+  viewerUrl: string | null;
+  pageTitle: string | null;
+  expiresAt: Date | null;
+}
+
+const CONSTRAINT_FIELDS = {
+  maxLength: 'max_length',
+  pattern: 'pattern',
+  multiline: 'multiline',
+  min: 'min',
+  max: 'max',
+  step: 'step',
+  unit: 'unit',
+  minSelections: 'min_selections',
+  maxSelections: 'max_selections',
+} as const;
+
+/** The fabric's create body. Typed-contract fields are sent only when set, so older fabrics keep accepting it. */
+export function handoffBody(req: HandoffRequest): Record<string, unknown> {
+  const constraints: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(req.constraints ?? {})) {
+    if (v !== undefined) constraints[CONSTRAINT_FIELDS[k as keyof typeof CONSTRAINT_FIELDS]] = v;
+  }
+  return {
+    kind: req.kind,
+    prompt: req.prompt,
+    input: req.input,
+    choices: req.choices ?? [],
+    ...(Object.keys(constraints).length ? { constraints } : {}),
+    ...(req.confirmLabel ? { confirm_label: req.confirmLabel } : {}),
+    ...(req.denyLabel ? { deny_label: req.denyLabel } : {}),
+    ...(req.risk ? { risk: req.risk } : {}),
+    timeout_ms: req.timeoutMs,
+  };
 }
 
 /** The fabric calls a run makes, over the console's FabricClient. */
@@ -39,17 +130,34 @@ export class FabricSession {
     await this.fabric.request('DELETE', `/v1/sessions/${sessionId}`).catch(() => undefined);
   }
 
-  async createHandoff(sessionId: string, req: { kind: string; prompt: string; input: string; choices?: string[]; timeoutMs?: number }): Promise<string> {
+  async createHandoff(sessionId: string, req: HandoffRequest): Promise<string> {
     return (await this.openHandoff(sessionId, req)).id;
   }
 
-  /** Ask a person; with the request's expiry (`null` when the fabric gives none), which schedules the reminders. */
-  async openHandoff(sessionId: string, req: { kind: string; prompt: string; input: string; choices?: string[]; timeoutMs?: number }): Promise<{ id: string; expiresAt: Date | null }> {
-    const r = await this.fabric.request<{ handoff: { id: string; expires_at?: string } }>('POST', `/v1/sessions/${sessionId}/handoffs`, {
-      body: { kind: req.kind, prompt: req.prompt, input: req.input, choices: req.choices ?? [], timeout_ms: req.timeoutMs },
+  /** Create a handoff and keep what the inbox shows (viewer link, page title, expiry). */
+  async openHandoff(sessionId: string, req: HandoffRequest): Promise<CreatedHandoff> {
+    const r = await this.fabric.request<{ handoff: Partial<FabricHandoff> & { id: string } }>('POST', `/v1/sessions/${sessionId}/handoffs`, { body: handoffBody(req) });
+    const h = r.handoff;
+    const expires = h.expires_at ? new Date(h.expires_at) : null;
+    return { id: h.id, viewerUrl: h.viewer_url ?? null, pageTitle: h.page?.title ?? null, expiresAt: expires && !Number.isNaN(expires.getTime()) ? expires : null };
+  }
+
+  /** Answer a handoff with the console's service token, as `answeredBy` (e.g. `user:<id>`). */
+  async respond(id: string, answer: { outcome: 'completed' | 'cancelled'; value?: string; values?: string[]; channel?: string; answeredBy?: string }): Promise<void> {
+    await this.fabric.request('POST', `/v1/handoffs/${id}/respond`, {
+      body: {
+        outcome: answer.outcome,
+        ...(answer.value !== undefined ? { value: answer.value } : {}),
+        ...(answer.values !== undefined ? { values: answer.values } : {}),
+        ...(answer.channel ? { channel: answer.channel } : {}),
+        ...(answer.answeredBy ? { answered_by: answer.answeredBy } : {}),
+      },
     });
-    const exp = r.handoff.expires_at ? new Date(r.handoff.expires_at) : null;
-    return { id: r.handoff.id, expiresAt: exp && !Number.isNaN(exp.getTime()) ? exp : null };
+  }
+
+  /** Withdraw a pending handoff (best effort). */
+  async cancelHandoff(id: string): Promise<void> {
+    await this.fabric.request('POST', `/v1/handoffs/${id}/cancel`).catch(() => undefined);
   }
 
   getHandoff(id: string): Promise<FabricHandoff> {

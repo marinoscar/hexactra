@@ -5,40 +5,38 @@ import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
-import { FabricClient } from '../fabric/fabric.client';
 import { HandoffAnswers } from './handoff-answers';
-import { PrismaService } from '../prisma/prisma.service';
 import { InboxItemResponseDto, OkResponseDto } from '../openapi/console.responses';
+import { QuestionsService } from '../questions/questions.service';
+import type { QuestionConstraints, QuestionInputType, QuestionOption } from '../questions/questions.contract';
 
 const respondSchema = z.object({
   outcome: z.enum(['completed', 'cancelled']),
-  /** Text, a choice, or a secret (passed to the fabric, never stored or logged). */
-  value: z.string().max(4096).optional(),
+  /** Text, a choice (its id), a number, approve/deny, or a secret (passed to the fabric, never stored or logged). */
+  value: z.union([z.string().max(4096), z.number().finite()]).optional(),
+  /** multi_choice: the chosen option ids. */
+  values: z.array(z.string().max(64)).max(10).optional(),
 });
 class RespondDto extends createZodDto(respondSchema) {}
 
-interface FabricHandoffView {
-  id: string;
-  kind: string;
-  prompt: string;
-  input: 'none' | 'text' | 'secret' | 'choice';
-  choices: string[];
-  status: string;
-  page?: { url?: string; title?: string };
-  viewer_url?: string;
-  created_at: string;
-  expires_at: string;
-}
-
-/** One request from an agent waiting for the user. */
+/** One question waiting for the user. */
 export interface InboxItem {
-  runId: string;
+  questionId: string;
+  /** Null for a free-standing question (answered with POST /api/questions/:id/answer). */
+  runId: string | null;
   goal: string;
-  handoffId: string;
+  handoffId: string | null;
+  askedBy: string;
   kind: string;
   prompt: string;
-  input: FabricHandoffView['input'];
+  input: QuestionInputType;
+  /** Option ids (kept for older clients; `options` carries the labels). */
   choices: string[];
+  options: QuestionOption[] | null;
+  constraints: QuestionConstraints | null;
+  confirmLabel: string | null;
+  denyLabel: string | null;
+  risk: 'low' | 'high' | null;
   pageTitle: string | null;
   viewerUrl: string | null;
   createdAt: string;
@@ -47,17 +45,15 @@ export interface InboxItem {
 
 /**
  * `/api/inbox`: what the user's agents are waiting for (CAPTCHAs, codes,
- * logins, confirmations), answered here instead of through a link. The
- * console answers the fabric with its service token; a secret goes straight
- * to the fabric (single use) and is never stored or logged here.
+ * logins, confirmations, choices), answered here instead of through a link.
+ * Read from the question broker (no fabric round trip per item); a secret
+ * goes straight to the fabric (single use) and is never stored or logged.
  */
 @ApiTags('Inbox')
 @Controller('inbox')
 export class InboxController {
-
   constructor(
-    private readonly prisma: PrismaService,
-    private readonly fabric: FabricClient,
+    private readonly questions: QuestionsService,
     private readonly answers: HandoffAnswers,
   ) {}
 
@@ -65,34 +61,33 @@ export class InboxController {
   @ApiDataResponse(InboxItemResponseDto, { isArray: true })
   @Auth({ permissions: ['runs:read'] })
   async list(@CurrentUser('id') userId: string): Promise<InboxItem[]> {
-    const runs = await this.prisma.forUser({ userId }).run.findMany({
-      where: { status: 'waiting_human', handoffId: { not: null } },
-      select: { id: true, goal: true, handoffId: true },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
+    const rows = await this.questions.pendingWithRuns(userId);
+    return rows.map((q) => {
+      const options = (q.options as unknown as QuestionOption[] | null) ?? null;
+      return {
+        questionId: q.id,
+        runId: q.runId,
+        goal: q.run?.goal ?? q.prompt.slice(0, 300),
+        handoffId: q.handoffId,
+        askedBy: q.askedBy,
+        kind: q.kind,
+        prompt: q.prompt,
+        input: q.input as QuestionInputType,
+        choices: options?.map((o) => o.id) ?? [],
+        options,
+        constraints: (q.constraints as unknown as QuestionConstraints | null) ?? null,
+        confirmLabel: q.confirmLabel,
+        denyLabel: q.denyLabel,
+        risk: (q.risk as 'low' | 'high' | null) ?? null,
+        pageTitle: q.pageTitle,
+        viewerUrl: q.viewerUrl,
+        createdAt: q.createdAt.toISOString(),
+        expiresAt: q.expiresAt.toISOString(),
+      };
     });
-    const items: InboxItem[] = [];
-    for (const r of runs) {
-      const h = await this.fabric.request<FabricHandoffView>('GET', `/v1/handoffs/${r.handoffId}`).catch(() => null);
-      if (!h || h.status !== 'pending') continue;
-      items.push({
-        runId: r.id,
-        goal: r.goal,
-        handoffId: h.id,
-        kind: h.kind,
-        prompt: h.prompt,
-        input: h.input,
-        choices: h.choices ?? [],
-        pageTitle: h.page?.title ?? null,
-        viewerUrl: h.viewer_url ?? null,
-        createdAt: h.created_at,
-        expiresAt: h.expires_at,
-      });
-    }
-    return items;
   }
 
-  /** Answer (or decline) the request, then resume the run at once. */
+  /** Answer (or decline) the question the run waits on, then resume the run at once. */
   @Post(':runId/respond')
   @ApiDataResponse(OkResponseDto, { status: 201 })
   @HttpCode(200)
@@ -102,7 +97,7 @@ export class InboxController {
     @Param('runId', ParseUUIDPipe) runId: string,
     @Body() body: RespondDto,
   ): Promise<{ ok: true }> {
-    await this.answers.answer(user, runId, body.outcome, body.value);
+    await this.answers.answer(user, runId, body.outcome, body.value, undefined, { ...(body.values ? { values: body.values } : {}), channel: 'inbox' });
     return { ok: true };
   }
 }

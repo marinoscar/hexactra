@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { FabricModule } from '../fabric/fabric.module';
 import { AiModule } from '../platform/ai/ai.config';
+import { QuestionsModule } from '../questions/questions.module';
 import { TasksModule } from '../tasks/tasks.module';
 import { GoalRunHandler, HandoffCheckHandler, HandoffCheckTask } from './goal-runner.jobs';
 import { GoalRunnerService } from './goal-runner.service';
@@ -14,7 +15,7 @@ import { RunsStartController } from './runs-start.controller';
  * (its configured AiModule); the job queue is global.
  */
 @Module({
-  imports: [AiModule, FabricModule, TasksModule],
+  imports: [AiModule, FabricModule, TasksModule, QuestionsModule],
   controllers: [RunsStartController, RunLiveController],
   providers: [RunOwnerGuard, GoalRunnerService, GoalRunHandler, HandoffCheckHandler, HandoffCheckTask],
   exports: [GoalRunnerService],

@@ -23,7 +23,8 @@ import { z } from 'zod';
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { profileNameSchema } from '../fleet/fleet.schemas';
 import { PrismaService } from '../prisma/prisma.service';
-import { FabricSession } from '../runner/fabric-session';
+import { QuestionsService } from '../questions/questions.service';
+import { FabricSession, handoffOutcome } from '../runner/fabric-session';
 import { domainAllowed } from '../runner/policy';
 import { redactActionArgs, redactUrl } from '../tasks/redact';
 import { RunNotifier } from '../tasks/run-notifier';
@@ -77,6 +78,7 @@ export class ExternalBrowserController {
     private readonly fabric: FabricClient,
     private readonly tasks: TasksService,
     @Optional() private readonly notifier?: RunNotifier,
+    @Optional() private readonly questions?: QuestionsService,
   ) {}
 
   private async liveRun(userId: string, runId: string) {
@@ -213,7 +215,18 @@ export class ExternalBrowserController {
   async handoff(@CurrentUser('id') userId: string, @Param('runId', ParseUUIDPipe) runId: string, @Body() body: HandoffDto) {
     const run = await this.liveRun(userId, runId);
     const started = Date.now();
-    const { id, expiresAt } = await new FabricSession(this.fabric).openHandoff(run.sessionId!, { kind: body.kind, prompt: body.prompt, input: body.input, choices: body.choices, timeoutMs: body.timeoutMs });
+    const created = await new FabricSession(this.fabric).openHandoff(run.sessionId!, { kind: body.kind, prompt: body.prompt, input: body.input, choices: body.choices, timeoutMs: body.timeoutMs });
+    const { id, expiresAt } = created;
+    // Mirror it in the question broker (the inbox and every channel read it there).
+    if (this.questions) {
+      try {
+        const spec = this.questions.parseSpec({ kind: body.kind, prompt: body.prompt, input: body.input, ...(body.input === 'choice' ? { options: body.choices } : {}), ...(body.timeoutMs ? { timeoutMs: body.timeoutMs } : {}) });
+        await this.questions.mirrorHandoff({ id: userId }, spec, created, { askedBy: `agent:${(run.actor ?? 'external agent').slice(0, 190)}`, runId, fabricSessionId: run.sessionId });
+      } catch (e) {
+        // The handoff exists on the fabric: the inbox mirrors it on first answer.
+        this.log.warn(`run ${runId}: could not mirror handoff ${id}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
     await this.record(runId, userId, 'handoff', null, { kind: body.kind, input: body.input }, true, `asked a person (${body.kind}): ${body.prompt.slice(0, 300)}`, started);
     await this.tasks.transition(userId, runId, 'waiting_human', { handoffId: id, handoffExpiresAt: expiresAt });
     await this.notifier?.needsYou(userId, { ...run, handoffId: id }, body.prompt, body.kind, body.input, expiresAt);
@@ -227,14 +240,17 @@ export class ExternalBrowserController {
     const run = await this.prisma.forUser({ userId }).run.findFirst({ where: { id: runId, trigger: 'external' } });
     if (!run) throw new NotFoundException({ code: 'SESSION_NOT_FOUND', message: 'Browser session not found' });
     const h = await new FabricSession(this.fabric).getHandoff(handoffId);
+    if (h.status !== 'pending') await this.questions?.reconcileHandoff(h);
     if (h.status !== 'pending' && run.status === 'waiting_human' && run.handoffId === handoffId) {
       await this.tasks.transition(userId, runId, 'running', { handoffId: null });
     }
+    const outcome = handoffOutcome(h);
     return {
       status: h.status,
-      outcome: h.response?.outcome ?? null,
+      outcome,
       value: h.input === 'secret' ? null : (h.response?.value ?? null),
-      secretAvailable: h.input === 'secret' && h.status === 'completed' && h.response?.outcome === 'completed',
+      values: h.response?.values ?? null,
+      secretAvailable: h.input === 'secret' && h.status === 'completed' && outcome === 'completed',
     };
   }
 

@@ -105,6 +105,8 @@ export class TasksService {
         },
       });
       if (count === 1) {
+        // A finished run asks nothing any more: withdraw its pending questions.
+        if (isTerminal(to)) await this.prisma.question.updateMany({ where: { runId: id, status: 'pending' }, data: { status: 'cancelled' } });
         if (to === 'running' && !run.startedAt) this.metrics.started(run.trigger);
         if (to === 'waiting_human') this.metrics.handoff();
         if (isTerminal(to)) this.metrics.finished(to, run.trigger, (now.getTime() - (run.startedAt ?? run.createdAt).getTime()) / 1000);

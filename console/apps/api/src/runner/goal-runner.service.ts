@@ -4,11 +4,13 @@ import { z } from 'zod';
 
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { PrismaService } from '../prisma/prisma.service';
+import type { QuestionOption, QuestionResponse } from '../questions/questions.contract';
+import { QuestionsService } from '../questions/questions.service';
 import { redactActionArgs, redactUrl } from '../tasks/redact';
 import { RunNotifier } from '../tasks/run-notifier';
 import { TasksService } from '../tasks/tasks.service';
 import { BROWSER_AGENT_FEATURE_ID } from './browser-agent.feature';
-import { FabricSession } from './fabric-session';
+import { FabricSession, handoffOutcome, type CreatedHandoff } from './fabric-session';
 import { domainAllowed, looksRisky } from './policy';
 
 /** Round-trips per `runTools` call (the platform's cap is 20). */
@@ -58,6 +60,7 @@ export class GoalRunnerService {
     private readonly fabric: FabricClient,
     private readonly ai: AiService,
     @Optional() private readonly notifier?: RunNotifier,
+    @Optional() private readonly questions?: QuestionsService,
   ) {}
 
   /**
@@ -85,18 +88,34 @@ export class GoalRunnerService {
       }
       const h = await session.getHandoff(run.handoffId);
       if (h.status === 'pending') return 'waiting_human';
-      if (h.status === 'completed' && h.response?.outcome === 'completed') {
+      await this.questions?.reconcileHandoff(h);
+      // The answer as the broker recorded it (labels of choices), else as the fabric reports it.
+      const q = await db.question.findFirst({ where: { handoffId: h.id }, select: { response: true, options: true } });
+      const resp = (q?.response as unknown as QuestionResponse | null) ?? null;
+      const outcome = resp?.outcome ?? handoffOutcome(h);
+      const value = resp?.value ?? h.response?.value;
+      const values = resp?.values ?? h.response?.values;
+      const label = (id: string) => ((q?.options as unknown as QuestionOption[] | null) ?? []).find((o) => o.id === id)?.label ?? id;
+      if (h.status === 'completed' && outcome === 'completed') {
         if (h.input === 'secret') {
           memory.secretHandoffId = h.id;
           memory.log.push('The person provided the secret. Type it with type_handoff_secret(selector).');
-        } else if (h.input === 'text' || h.input === 'choice') {
-          memory.log.push(`The person answered: ${trim(h.response.value ?? '', 500)}`);
+        } else if (h.input === 'confirm') {
+          const approved = value === 'approve';
+          if (approved && h.kind === 'confirmation') memory.confirmationGranted = true;
+          memory.log.push(approved ? 'The person approved.' : 'The person denied it. Do not do it; finish if you cannot continue another way.');
+        } else if (h.input === 'choice') {
+          memory.log.push(`The person chose: ${trim(label(value ?? ''), 500)}`);
+        } else if (h.input === 'multi_choice') {
+          memory.log.push(`The person chose: ${trim((values ?? []).map(label).join(', '), 500)}`);
+        } else if (h.input === 'text' || h.input === 'number') {
+          memory.log.push(`The person answered: ${trim(value ?? '', 500)}`);
         } else {
           memory.log.push(`The person completed the ${h.kind} step. Check the page and continue.`);
         }
-        if (h.kind === 'confirmation') memory.confirmationGranted = true;
+        if (h.kind === 'confirmation' && h.input !== 'confirm') memory.confirmationGranted = true;
       } else {
-        memory.log.push(`The person did not help (handoff ${h.status}${h.response?.outcome === 'cancelled' ? ', declined' : ''}). Do not retry the same request; finish if you cannot continue.`);
+        memory.log.push(`The person did not help (handoff ${h.status}${outcome === 'cancelled' ? ', declined' : ''}). Do not retry the same request; finish if you cannot continue.`);
       }
       await this.tasks.transition(userId, run.id, 'running', { handoffId: null, transcript: memory as never });
     } else {
@@ -279,9 +298,10 @@ export class GoalRunnerService {
         execute: async ({ kind, prompt, input, choices }) => {
           const started = Date.now();
           try {
-            const h = await session.openHandoff(sessionId!, { kind, prompt, input, choices: choices ?? [] });
-            state.handoffId = h.id;
-            state.handoffExpiresAt = h.expiresAt;
+            const created = await session.openHandoff(sessionId!, { kind, prompt, input, choices: choices ?? [] });
+            state.handoffId = created.id;
+            state.handoffExpiresAt = created.expiresAt;
+            await this.mirror(userId, run.id, sessionId!, created, { kind, prompt, input, choices: choices ?? [] });
           } catch (e) {
             await record('handoff', null, null, false, `could not ask a person: ${e instanceof Error ? e.message : String(e)}`, started);
             return 'Could not reach a person right now.';
@@ -397,6 +417,17 @@ export class GoalRunnerService {
     }
     await this.finish(userId, run.id, sessionId, session, 'failed', { error: 'The agent did not finish within its budget' });
     return 'failed';
+  }
+
+  /** Record the handoff in the question broker (the inbox and the channels read it there). Never fails the run. */
+  private async mirror(userId: string, runId: string, sessionId: string, created: CreatedHandoff, ask: { kind: string; prompt: string; input: string; choices: string[] }) {
+    if (!this.questions) return;
+    try {
+      const spec = this.questions.parseSpec({ kind: ask.kind, prompt: ask.prompt, input: ask.input, ...(ask.input === 'choice' ? { options: ask.choices.map((c) => c.slice(0, 100)) } : {}) });
+      await this.questions.mirrorHandoff({ id: userId }, spec, created, { askedBy: `run:${runId}`, runId, fabricSessionId: sessionId });
+    } catch (e) {
+      this.log.warn(`run ${runId}: could not mirror handoff ${created.id}: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   private async saveMemory(userId: string, runId: string, memory: RunMemory, usage: { input: number; output: number }) {

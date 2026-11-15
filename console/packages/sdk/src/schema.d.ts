@@ -5058,6 +5058,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `runs:read`. */
+        get: operations["questions_list"];
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `runs:write`. */
+        post: operations["questions_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/questions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `runs:read`. */
+        get: operations["questions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/questions/{id}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `runs:write`. */
+        post: operations["questions_answer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/questions/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `runs:write`. */
+        post: operations["questions_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/browser/sessions": {
         parameters: {
             query?: never;
@@ -11360,6 +11429,112 @@ export interface components {
                 createdAt: string;
             }[];
         };
+        QuestionResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description run:<id>, agent:<name> or user:<id> */
+            askedBy: string;
+            runId: string | null;
+            handoffId: string | null;
+            browserBound: boolean;
+            /** @enum {string} */
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover";
+            kind: string;
+            prompt: string;
+            options: {
+                id: string;
+                label: string;
+                description?: string;
+            }[] | null;
+            constraints: {
+                maxLength?: number;
+                pattern?: string;
+                multiline?: boolean;
+                min?: number;
+                max?: number;
+                step?: number;
+                unit?: string;
+                minSelections?: number;
+                maxSelections?: number;
+            } | null;
+            confirmLabel: string | null;
+            denyLabel: string | null;
+            risk: ("low" | "high") | null;
+            /** @enum {string} */
+            status: "pending" | "answered" | "cancelled" | "expired";
+            response: {
+                /** @enum {string} */
+                outcome: "completed" | "cancelled";
+                /** @description Never present for a secret */
+                value?: string;
+                values?: string[];
+                /** @description True for a secret: the value went to the browser, single use, and is never returned */
+                valueWithheld: boolean;
+                channel?: string;
+                /** @description Who answered, e.g. user:<id> */
+                by?: string;
+                /** @description ISO 8601 timestamp */
+                answeredAt: string;
+            } | null;
+            pageTitle: string | null;
+            viewerUrl: string | null;
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            /** @description ISO 8601 timestamp */
+            expiresAt: string;
+            answeredAt: string | null;
+        };
+        CreateQuestionDto: {
+            /** @enum {string} */
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover";
+            /**
+             * @default other
+             * @enum {string}
+             */
+            kind?: "captcha" | "code" | "passkey" | "login" | "confirmation" | "other";
+            prompt: string;
+            options?: (string | {
+                id: string;
+                label: string;
+                description?: string;
+            })[];
+            choices?: (string | {
+                id: string;
+                label: string;
+                description?: string;
+            })[];
+            constraints?: {
+                maxLength?: number;
+                pattern?: string;
+                multiline?: boolean;
+                min?: number;
+                max?: number;
+                step?: number;
+                unit?: string;
+                minSelections?: number;
+                maxSelections?: number;
+            };
+            confirmLabel?: string;
+            denyLabel?: string;
+            /** @enum {string} */
+            risk?: "low" | "high";
+            timeoutMs?: number;
+            asker?: string;
+        };
+        AnswerQuestionDto: {
+            /**
+             * @default completed
+             * @enum {string}
+             */
+            outcome?: "completed" | "cancelled";
+            value?: string | number;
+            values?: string[];
+            channel?: string;
+        };
+        /** @default {} */
+        CancelQuestionDto: {
+            channel?: string;
+        };
         OpenDto: {
             /** @default default */
             profile?: string;
@@ -11400,15 +11575,35 @@ export interface components {
         };
         InboxItemResponseDto: {
             /** Format: uuid */
-            runId: string;
+            questionId: string;
+            runId: string | null;
             goal: string;
-            /** Format: uuid */
-            handoffId: string;
+            handoffId: string | null;
+            askedBy: string;
             kind: string;
             prompt: string;
             /** @enum {string} */
-            input: "none" | "text" | "secret" | "choice";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover";
             choices: string[];
+            options: {
+                id: string;
+                label: string;
+                description?: string;
+            }[] | null;
+            constraints: {
+                maxLength?: number;
+                pattern?: string;
+                multiline?: boolean;
+                min?: number;
+                max?: number;
+                step?: number;
+                unit?: string;
+                minSelections?: number;
+                maxSelections?: number;
+            } | null;
+            confirmLabel: string | null;
+            denyLabel: string | null;
+            risk: ("low" | "high") | null;
             pageTitle: string | null;
             viewerUrl: string | null;
             /** @description ISO 8601 timestamp */
@@ -11423,7 +11618,8 @@ export interface components {
         RespondDto: {
             /** @enum {string} */
             outcome: "completed" | "cancelled";
-            value?: string;
+            value?: string | number;
+            values?: string[];
         };
         NotificationActionDto: {
             token: string;
@@ -28364,6 +28560,270 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["RunResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    questions_list: {
+        parameters: {
+            query?: {
+                status?: "pending" | "answered" | "cancelled" | "expired";
+                runId?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["QuestionResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    questions_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateQuestionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["QuestionResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    questions_get: {
+        parameters: {
+            query?: {
+                waitMs?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["QuestionResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    questions_answer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerQuestionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["QuestionResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    questions_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelQuestionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["QuestionResponseDto"];
                     };
                 };
             };
