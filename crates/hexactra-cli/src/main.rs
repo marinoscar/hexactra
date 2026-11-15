@@ -49,6 +49,10 @@ struct Cli {
     /// Session to act in.
     #[arg(long, short = 's', global = true, env = "HEXACTRA_SESSION")]
     session: Option<Uuid>,
+    /// Browser profile to act in (default: `default`). Each profile keeps its
+    /// own current session.
+    #[arg(long, short = 'p', global = true, env = "HEXACTRA_PROFILE")]
+    profile: Option<String>,
     /// Print raw JSON.
     #[arg(long, global = true)]
     json: bool,
@@ -66,6 +70,9 @@ enum Commands {
     Status,
     /// List hosts.
     Hosts,
+    /// Browser profiles on the hosts.
+    #[command(subcommand)]
+    Profile(ProfileCmd),
     /// Manage sessions.
     #[command(subcommand)]
     Session(SessionCmd),
@@ -179,13 +186,23 @@ enum Commands {
 }
 
 #[derive(Subcommand, Debug)]
+enum ProfileCmd {
+    /// List profiles per host (* = browser running). Create one with
+    /// `hexactra --profile NAME session create --create`.
+    List,
+}
+
+#[derive(Subcommand, Debug)]
 enum SessionCmd {
-    /// Create a session and make it current.
+    /// Create a session on --profile (default `default`) and make it current.
     Create {
         #[arg(long)]
         host: Option<Uuid>,
         #[arg(long)]
         label: Option<String>,
+        /// Create the profile if no host has it yet (a new, signed-out browser).
+        #[arg(long)]
+        create: bool,
     },
     /// List sessions.
     List,
@@ -203,8 +220,21 @@ fn config_dir() -> PathBuf {
         .join("hexactra")
 }
 
-fn current_session_file() -> PathBuf {
-    config_dir().join("current-session")
+const DEFAULT_PROFILE: &str = hexactra_core::remote::DEFAULT_PROFILE;
+
+impl Cli {
+    fn profile(&self) -> &str {
+        self.profile.as_deref().unwrap_or(DEFAULT_PROFILE)
+    }
+}
+
+/// Current session per profile (`current-session` for the default profile).
+fn current_session_file(profile: &str) -> PathBuf {
+    if profile == DEFAULT_PROFILE {
+        config_dir().join("current-session")
+    } else {
+        config_dir().join(format!("current-session-{profile}"))
+    }
 }
 
 fn read_token(file: &Option<PathBuf>) -> Result<String> {
@@ -227,38 +257,63 @@ fn read_token(file: &Option<PathBuf>) -> Result<String> {
         .to_string())
 }
 
-fn save_current(id: Uuid) {
-    let f = current_session_file();
+fn save_current(profile: &str, id: Uuid) {
+    let f = current_session_file(profile);
     if let Some(d) = f.parent() {
         let _ = std::fs::create_dir_all(d);
     }
     let _ = std::fs::write(f, format!("{id}\n"));
 }
 
+fn profile_summary(h: &hexactra_core::remote::HostView) -> String {
+    h.profiles
+        .iter()
+        .map(|p| {
+            if h.running_profiles.contains(p) {
+                format!("{p}*")
+            } else {
+                p.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 async fn resolve_session(cli: &Cli, client: &ControlClient) -> Result<Uuid> {
     if let Some(id) = cli.session {
         return Ok(id);
     }
-    if let Some(id) = std::fs::read_to_string(current_session_file())
+    let profile = cli.profile();
+    if !hexactra_core::remote::valid_profile_name(profile) {
+        bail!("invalid profile name {profile:?}: use lowercase letters, digits, '-' and '_'");
+    }
+    if let Some(id) = std::fs::read_to_string(current_session_file(profile))
         .ok()
         .and_then(|s| s.trim().parse::<Uuid>().ok())
     {
         if let Ok(s) = client.session(id).await {
-            if s.status == RemoteSessionStatus::Active {
+            if s.status == RemoteSessionStatus::Active && s.profile == profile {
                 return Ok(id);
             }
         }
     }
-    let s = client
+    let s = match client
         .create_session(&CreateSessionRequest {
-            host_id: None,
             label: Some("cli".into()),
+            profile: Some(profile.to_string()),
             ..Default::default()
         })
         .await
-        .context("creating a session")?;
-    save_current(s.id);
-    eprintln!("started session {}", s.id);
+    {
+        Ok(s) => s,
+        Err(e) if e.to_string().contains("profile_not_found") => bail!(
+            "no host has a profile named {profile:?}. List profiles with `hexactra profile list`, \
+             or create it with `hexactra --profile {profile} session create --create`"
+        ),
+        Err(e) => return Err(e).context("creating a session"),
+    };
+    save_current(profile, s.id);
+    eprintln!("started session {} (profile {})", s.id, s.profile);
     Ok(s.id)
 }
 
@@ -345,6 +400,31 @@ async fn run() -> Result<()> {
                         .map(|u| format!(" viewer={u}"))
                         .unwrap_or_default()
                 );
+                println!("     profiles: {}", profile_summary(&h));
+            }
+            return Ok(());
+        }
+        Commands::Profile(ProfileCmd::List) => {
+            let hosts = client.hosts().await?;
+            if cli.json {
+                let v: Vec<_> = hosts
+                    .iter()
+                    .map(|h| {
+                        serde_json::json!({
+                            "host_id": h.id, "host": h.name, "online": h.online,
+                            "profiles": h.profiles, "running": h.running_profiles,
+                        })
+                    })
+                    .collect();
+                return print_json(&v);
+            }
+            for h in hosts {
+                println!(
+                    "{} ({}): {}",
+                    h.name,
+                    if h.online { "online" } else { "offline" },
+                    profile_summary(&h)
+                );
             }
             return Ok(());
         }
@@ -375,15 +455,20 @@ async fn run() -> Result<()> {
         }
         Commands::Session(cmd) => {
             match cmd {
-                SessionCmd::Create { host, label } => {
+                SessionCmd::Create {
+                    host,
+                    label,
+                    create,
+                } => {
                     let s = client
                         .create_session(&CreateSessionRequest {
                             host_id: *host,
                             label: label.clone(),
-                            ..Default::default()
+                            profile: Some(cli.profile().to_string()),
+                            create_profile: *create,
                         })
                         .await?;
-                    save_current(s.id);
+                    save_current(&s.profile, s.id);
                     if cli.json {
                         print_json(&s)?;
                     } else {
@@ -397,9 +482,10 @@ async fn run() -> Result<()> {
                     } else {
                         for s in list {
                             println!(
-                                "{}\t{:?}\thost={}\t{}",
+                                "{}\t{:?}\tprofile={}\thost={}\t{}",
                                 s.id,
                                 s.status,
+                                s.profile,
                                 s.host_id,
                                 s.label.unwrap_or_default()
                             );
@@ -407,13 +493,13 @@ async fn run() -> Result<()> {
                     }
                 }
                 SessionCmd::Use { id } => {
-                    client.session(*id).await?;
-                    save_current(*id);
+                    let s = client.session(*id).await?;
+                    save_current(&s.profile, *id);
                 }
                 SessionCmd::End { id } => {
                     let id = match id.or(cli.session) {
                         Some(id) => id,
-                        None => std::fs::read_to_string(current_session_file())
+                        None => std::fs::read_to_string(current_session_file(cli.profile()))
                             .ok()
                             .and_then(|s| s.trim().parse().ok())
                             .context("no current session")?,
