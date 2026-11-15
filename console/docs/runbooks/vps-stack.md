@@ -36,6 +36,7 @@ Edit `infra/compose/.env`:
 
 ```bash
 cd infra/compose
+docker network create devnet 2>/dev/null || true    # once per host (the platform stack joins it)
 F="-f base.compose.yml -f prod.compose.yml -f devdb.compose.yml -f vps.compose.yml -f app.fabric.compose.yml"
 docker compose $F build
 docker compose $F up -d db fabric-control fabric-host

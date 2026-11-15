@@ -34,6 +34,8 @@ dc() { docker compose "${files[@]}" "$@"; }
 cleanup() { if [ "${KEEP:-0}" != 1 ]; then dc down -v --remove-orphans >/dev/null 2>&1 || true; fi; }
 trap cleanup EXIT
 
+# The platform stack joins the shared external network (README: once per host).
+docker network create devnet >/dev/null 2>&1 || true
 dc build >/dev/null
 dc up -d --wait --wait-timeout 300 db fabric-control fabric-host || fail "fabric or database did not become healthy"
 pass "database, fabric control plane and browser host are healthy"
