@@ -88,8 +88,12 @@ export class HttpClient {
   /**
    * Perform a POST request
    */
-  async post<T, R>(path: string, body?: T): Promise<HttpResponse<R>> {
-    return this.request<R>('POST', path, body);
+  async post<T, R>(
+    path: string,
+    body?: T,
+    extraHeaders?: Record<string, string>
+  ): Promise<HttpResponse<R>> {
+    return this.request<R>('POST', path, body, extraHeaders);
   }
 
   /**
@@ -109,7 +113,8 @@ export class HttpClient {
   private async request<T>(
     method: string,
     path: string,
-    body?: unknown
+    body?: unknown,
+    extraHeaders?: Record<string, string>
   ): Promise<HttpResponse<T>> {
     const url = `${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
     const controller = new AbortController();
@@ -122,6 +127,10 @@ export class HttpClient {
 
       if (this.token) {
         headers['Authorization'] = `Bearer ${this.token}`;
+      }
+
+      if (extraHeaders) {
+        Object.assign(headers, extraHeaders);
       }
 
       const init: RequestInit = {

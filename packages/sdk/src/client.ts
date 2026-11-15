@@ -7,26 +7,14 @@ import {
   BrowserAction,
   ActionResult,
   CreateGoalRequest,
-  InteractionRequest,
-  InteractionKind,
-  InteractionStatus,
-  CreateInteractionRequestRequest,
-  CreateInteractionRequestResponse,
-  InteractionRequestResponse,
-  ClaimInteractionRequestRequest,
-  ClaimInteractionRequestResponse,
-  RespondInteractionRequestRequest,
-  RespondInteractionRequestResponse,
-  RequestOobConfirmationRequest,
-  RequestOobConfirmationResponse,
-  OobChannelInfo,
-  VerifyOobRequest,
-  VerifyOobResponse,
-  RequestPasskeyRequest,
-  RequestPasskeyResponse,
-  PasskeyChallenge,
-  VerifyPasskeyRequest,
-  VerifyPasskeyResponse,
+  CreateHandoffRequest,
+  CreateHandoffResponse,
+  HandoffView,
+  ListHandoffsOptions,
+  RespondHandoffRequest,
+  RespondHandoffOptions,
+  TypeSecretRequest,
+  OperationView,
   ErrorCode,
 } from './types';
 import { HttpClient, HttpClientConfig, HexactraError } from './http';
@@ -85,180 +73,113 @@ export class ControlPlaneClient {
       .then((response) => response.body);
   }
 
-  // ==================== HITL Methods ====================
+  // ==================== Handoff Methods ====================
+  //
+  // Human handoffs of the remote control API (`/v1`). The `/v1` paths are
+  // relative to `baseUrl`, so `baseUrl` is the control plane's origin.
 
   /**
-   * Create an interaction request (HITL)
+   * Ask a person for help: open a handoff on a session
+   * (`POST /v1/sessions/{id}/handoffs`). The session pauses until it is
+   * answered, cancelled or expires. The returned `response_token` answers
+   * this handoff only, once.
    */
-  async createInteractionRequest(
+  async createHandoff(
     sessionId: string,
-    reason: string,
-    details: Record<string, unknown>,
-    kind?: InteractionKind,
-    ttlMinutes?: number
-  ): Promise<InteractionRequest> {
-    const request: CreateInteractionRequestRequest = {
-      sessionId,
-      reason,
-      details,
-      kind,
-      ttlMinutes,
-    };
+    request: CreateHandoffRequest
+  ): Promise<CreateHandoffResponse> {
     return this.httpClient
-      .post<CreateInteractionRequestRequest, CreateInteractionRequestResponse>(
-        `/hitl/requests`,
+      .post<CreateHandoffRequest, CreateHandoffResponse>(
+        `/v1/sessions/${encodeURIComponent(sessionId)}/handoffs`,
         request
       )
-      .then((response) => this.convertToInteractionRequest(response.body.request));
+      .then((response) => response.body);
   }
 
   /**
-   * Claim an interaction request
+   * List handoffs (`GET /v1/handoffs`), optionally of one session or only
+   * the pending ones.
    */
-  async claimInteractionRequest(requestId: string, ownerId: string): Promise<boolean> {
-    const request: ClaimInteractionRequestRequest = { ownerId };
+  async listHandoffs(options: ListHandoffsOptions = {}): Promise<HandoffView[]> {
+    const query = new URLSearchParams();
+    if (options.sessionId !== undefined) {
+      query.set('session_id', options.sessionId);
+    }
+    if (options.pending !== undefined) {
+      query.set('pending', String(options.pending));
+    }
+    const qs = query.toString();
     return this.httpClient
-      .post<ClaimInteractionRequestRequest, ClaimInteractionRequestResponse>(
-        `/hitl/requests/${requestId}/claim`,
-        request
+      .get<{ handoffs: HandoffView[] }>(`/v1/handoffs${qs ? `?${qs}` : ''}`)
+      .then((response) => response.body.handoffs);
+  }
+
+  /**
+   * Read a handoff (`GET /v1/handoffs/{id}`). With `waitMs` the server waits
+   * (up to 120 s) for it to resolve. A `secret` answer reads back with
+   * `value_withheld: true` and no value; type it with {@link typeSecret}.
+   */
+  async getHandoff(handoffId: string, options: { waitMs?: number } = {}): Promise<HandoffView> {
+    const qs =
+      options.waitMs !== undefined ? `?wait_ms=${encodeURIComponent(String(options.waitMs))}` : '';
+    return this.httpClient
+      .get<HandoffView>(`/v1/handoffs/${encodeURIComponent(handoffId)}${qs}`)
+      .then((response) => response.body);
+  }
+
+  /**
+   * Answer a handoff (`POST /v1/handoffs/{id}/respond`). With
+   * `responseToken`, the token goes in the `X-Hexactra-Response-Token`
+   * header (never in the URL); without it the client's own operator or
+   * service token answers.
+   */
+  async respondHandoff(
+    handoffId: string,
+    request: RespondHandoffRequest,
+    options: RespondHandoffOptions = {}
+  ): Promise<HandoffView> {
+    const headers = options.responseToken
+      ? { 'x-hexactra-response-token': options.responseToken }
+      : undefined;
+    return this.httpClient
+      .post<RespondHandoffRequest, HandoffView>(
+        `/v1/handoffs/${encodeURIComponent(handoffId)}/respond`,
+        request,
+        headers
       )
-      .then((response) => response.body.claimed);
+      .then((response) => response.body);
+  }
+
+  /** Cancel a pending handoff (`POST /v1/handoffs/{id}/cancel`). */
+  async cancelHandoff(handoffId: string): Promise<HandoffView> {
+    return this.httpClient
+      .post<undefined, HandoffView>(`/v1/handoffs/${encodeURIComponent(handoffId)}/cancel`)
+      .then((response) => response.body);
   }
 
   /**
-   * Respond to an interaction request
+   * Type the answer of a `secret` handoff of this session into the page: a
+   * `type_secret` action (`POST /v1/sessions/{id}/actions`). The control
+   * plane consumes the value once; the caller never sees it, and the
+   * returned operation reports the action without it.
    */
-  async respondInteractionRequest(
-    requestId: string,
-    status: InteractionStatus,
-    ownerId: string,
-    secret?: string
-  ): Promise<boolean> {
-    const request: RespondInteractionRequestRequest = { ownerId, status, secret };
+  async typeSecret(sessionId: string, request: TypeSecretRequest): Promise<OperationView> {
+    const action: Record<string, unknown> = {
+      type: 'type_secret',
+      handoff_id: request.handoffId,
+      selector: request.selector,
+      clear: request.clear ?? false,
+      submit: request.submit ?? false,
+    };
+    if (request.tabId !== undefined) {
+      action.tab_id = request.tabId;
+    }
     return this.httpClient
-      .post<RespondInteractionRequestRequest, RespondInteractionRequestResponse>(
-        `/hitl/requests/${requestId}/respond`,
-        request
+      .post<{ action: Record<string, unknown> }, OperationView>(
+        `/v1/sessions/${encodeURIComponent(sessionId)}/actions`,
+        { action }
       )
-      .then((response) => response.body.responded);
-  }
-
-  /**
-   * Get pending interaction requests for a session
-   */
-  async getPendingInteractionRequests(sessionId: string): Promise<InteractionRequest[]> {
-    return this.httpClient
-      .get<{ requests: InteractionRequestResponse[] }>(
-        `/hitl/requests/pending?sessionId=${encodeURIComponent(sessionId)}`
-      )
-      .then((response) => response.body.requests.map((r) => this.convertToInteractionRequest(r)));
-  }
-
-  // ==================== OOB Confirmation Methods ====================
-
-  /**
-   * Request out-of-band confirmation
-   */
-  async requestOobConfirmation(
-    sessionId: string,
-    reason: string,
-    details: Record<string, unknown>,
-    ttlMinutes?: number
-  ): Promise<{ request: InteractionRequest; oobChannel: OobChannelInfo }> {
-    const request: RequestOobConfirmationRequest = {
-      sessionId,
-      reason,
-      details,
-      ttlMinutes,
-    };
-    return this.httpClient
-      .post<RequestOobConfirmationRequest, RequestOobConfirmationResponse>(
-        `/hitl/oob/confirm`,
-        request
-      )
-      .then((response) => ({
-        request: {
-          ...response.body.request,
-          originSessionId: response.body.request.originSessionId || sessionId,
-        },
-        oobChannel: response.body.oobChannel,
-      }));
-  }
-
-  /**
-   * Verify OOB confirmation code
-   */
-  async verifyOob(channelId: string, verificationCode: string): Promise<boolean> {
-    const request: VerifyOobRequest = { channelId, verificationCode };
-    return this.httpClient
-      .post<VerifyOobRequest, VerifyOobResponse>(`/hitl/oob/verify`, request)
-      .then((response) => response.body.verified);
-  }
-
-  // ==================== Passkey Methods ====================
-
-  /**
-   * Request passkey authentication
-   */
-  async requestPasskey(
-    sessionId: string,
-    reason: string,
-    details: Record<string, unknown>,
-    ttlMinutes?: number
-  ): Promise<{ request: InteractionRequest; passkeyChallenge: PasskeyChallenge }> {
-    const request: RequestPasskeyRequest = {
-      sessionId,
-      reason,
-      details,
-      ttlMinutes,
-    };
-    return this.httpClient
-      .post<RequestPasskeyRequest, RequestPasskeyResponse>(`/hitl/passkey/request`, request)
-      .then((response) => ({
-        request: {
-          ...response.body.request,
-          originSessionId: response.body.request.originSessionId || sessionId,
-        },
-        passkeyChallenge: response.body.passkeyChallenge,
-      }));
-  }
-
-  /**
-   * Verify passkey authentication
-   */
-  async verifyPasskey(
-    challengeId: string,
-    credentialId: string,
-    authenticatorData: string,
-    clientDataJson: string,
-    signature: string
-  ): Promise<boolean> {
-    const request: VerifyPasskeyRequest = {
-      challengeId,
-      credentialId,
-      authenticatorData,
-      clientDataJson,
-      signature,
-    };
-    return this.httpClient
-      .post<VerifyPasskeyRequest, VerifyPasskeyResponse>(`/hitl/passkey/verify`, request)
-      .then((response) => response.body.verified);
-  }
-
-  // ==================== Helper Methods ====================
-
-  private convertToInteractionRequest(response: InteractionRequestResponse): InteractionRequest {
-    return {
-      id: response.id,
-      sessionId: response.sessionId,
-      reason: response.reason,
-      details: response.details,
-      createdAt: response.createdAt,
-      kind: response.kind,
-      status: response.status,
-      expiresAt: response.expiresAt,
-      originSessionId: response.originSessionId || response.sessionId,
-    };
+      .then((response) => response.body);
   }
 
   // ==================== Error Handling Helpers ====================
