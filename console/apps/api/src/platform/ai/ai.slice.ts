@@ -29,6 +29,8 @@ export const aiSlice: ApiSlice = {
     const { registerAiFeature } = require('@marinoscar/platform-api/ai') as typeof import('@marinoscar/platform-api/ai');
     const { NOTES_SUMMARY_FEATURE } = require('./notes-summary.feature') as typeof import('./notes-summary.feature');
     registerAiFeature(NOTES_SUMMARY_FEATURE);
+    const { BROWSER_AGENT_FEATURE } = require('../../runner/browser-agent.feature') as typeof import('../../runner/browser-agent.feature');
+    registerAiFeature(BROWSER_AGENT_FEATURE);
   },
   modules: () => {
     const { AiModule } = require('./ai.config') as typeof import('./ai.config');
