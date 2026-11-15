@@ -3,12 +3,11 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { JobHandlerRegistry, JobsService, enqueueHousekeepingJob, type JobHandler } from '@marinoscar/platform-api/jobs';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { RunNotifier } from '../tasks/run-notifier';
 import { SchedulesService } from './schedules.service';
 
 export const SCHEDULES_TICK_JOB = 'browser.schedules.tick';
 
-/** Listener for schedules that keep failing (notifications, E22.2, bind it). */
-export const SCHEDULE_FAILING_LISTENERS: ((e: { userId: string; scheduleId: string; taskName: string; failures: number }) => Promise<void>)[] = [];
 
 /** `browser.schedules.tick`: start the runs of every due schedule. */
 @Injectable()
@@ -20,6 +19,7 @@ export class SchedulesTickHandler implements JobHandler, OnModuleInit {
   constructor(
     private readonly registry: JobHandlerRegistry,
     private readonly schedules: SchedulesService,
+    private readonly notifier: RunNotifier,
   ) {}
 
   onModuleInit(): void {
@@ -28,7 +28,7 @@ export class SchedulesTickHandler implements JobHandler, OnModuleInit {
 
   async process(): Promise<void> {
     const { failing } = await this.schedules.tick();
-    for (const f of failing) for (const l of SCHEDULE_FAILING_LISTENERS) await l(f);
+    for (const f of failing) await this.notifier.scheduleFailing(f.userId, f);
   }
 }
 

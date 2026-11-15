@@ -105,7 +105,12 @@ describe('the goal runner', () => {
         ['finish', { success: true, result: 'Order placed' }],
       ],
     ]);
-    const runner = new GoalRunnerService(prisma, tasks, fabric.client, ai);
+    const told: [string, ...unknown[]][] = [];
+    const notifier = {
+      needsYou: async (_u: string, _r: unknown, prompt: string, kind: string) => void told.push(['needsYou', kind, prompt]),
+      finished: async (_u: string, _r: unknown, status: string, result?: string | null) => void told.push(['finished', status, result]),
+    };
+    const runner = new GoalRunnerService(prisma, tasks, fabric.client, ai, notifier as never);
 
     expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
     expect(outputs[1]).toMatch(/not an allowed site/);
@@ -131,6 +136,11 @@ describe('the goal runner', () => {
     expect(stored).not.toContain(SECRET);
     expect(stored).not.toContain('ref=abc');
     expect(done.steps.map((s) => s.kind)).toEqual(expect.arrayContaining(['action', 'handoff', 'finish']));
+    expect(told).toEqual([
+      ['needsYou', 'confirmation', 'Place the order for 1 item?'],
+      ['needsYou', 'code', 'Enter the code sent to your phone'],
+      ['finished', 'succeeded', 'Order placed'],
+    ]);
   });
 
   it('stops between steps when cancelled', async () => {

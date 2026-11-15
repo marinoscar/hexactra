@@ -7,6 +7,7 @@ import {
   Get,
   HttpCode,
   Logger,
+  Optional,
   NotFoundException,
   Param,
   ParseUUIDPipe,
@@ -25,6 +26,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { FabricSession } from '../runner/fabric-session';
 import { domainAllowed } from '../runner/policy';
 import { redactActionArgs, redactUrl } from '../tasks/redact';
+import { RunNotifier } from '../tasks/run-notifier';
 import { TasksService } from '../tasks/tasks.service';
 
 const openSchema = z.object({
@@ -74,6 +76,7 @@ export class ExternalBrowserController {
     private readonly prisma: PrismaService,
     private readonly fabric: FabricClient,
     private readonly tasks: TasksService,
+    @Optional() private readonly notifier?: RunNotifier,
   ) {}
 
   private async liveRun(userId: string, runId: string) {
@@ -211,6 +214,7 @@ export class ExternalBrowserController {
     const id = await new FabricSession(this.fabric).createHandoff(run.sessionId!, { kind: body.kind, prompt: body.prompt, input: body.input, choices: body.choices, timeoutMs: body.timeoutMs });
     await this.record(runId, userId, 'handoff', null, { kind: body.kind, input: body.input }, true, `asked a person (${body.kind}): ${body.prompt.slice(0, 300)}`, started);
     await this.tasks.transition(userId, runId, 'waiting_human', { handoffId: id });
+    await this.notifier?.needsYou(userId, run, body.prompt, body.kind);
     return { handoffId: id };
   }
 
