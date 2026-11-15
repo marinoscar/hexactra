@@ -32,10 +32,18 @@ Publishing also adds the APK's signing key to the trusted apps that `/.well-know
 
 ## 3. Install on a phone
 
-1. On the phone, open the console and sign in.
-2. Go to **Administration → Android app** and download the current APK. Allow the install from the browser when asked.
-3. Open **Hexactra Console** from the launcher. It opens the console full screen, without the browser's address bar, once asset links verify.
-4. Allow notifications when asked. Run and handoff notifications now reach the phone.
+Any signed-in person can install the app; no administrator permission is needed.
+
+1. On the phone, open `https://<console>/settings/android-app` and sign in. The page is also reachable as **Settings → Android app**, and as **Get the Android app** in the user menu (hidden inside the app itself).
+2. Tap **Download APK**. Allow installs from the browser when Android asks.
+   - The button asks for a signed link that is valid for ten minutes, then opens it, so Android hands the file straight to the installer.
+   - The page shows the version, release date, size, notes and the SHA-256 checksum, so you can check the file.
+3. Open **Hexactra Console** from the launcher. Once asset links verify, it opens the console full screen, without the browser's address bar.
+4. Allow notifications when asked. Run, handoff and reminder notifications now reach the phone.
+
+Inside the app, the same page says whether the installed build is current. The in-app banner also offers a newer release.
+
+With nothing published, the page says so. An administrator also sees how to publish: `hexactra android release` (section 2), or upload an APK on Administration → Android app.
 
 ## 4. Notifications and deep links
 
