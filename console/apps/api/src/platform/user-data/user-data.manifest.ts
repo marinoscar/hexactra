@@ -31,12 +31,15 @@ import type { Prisma } from '@prisma/client';
 export const APP_USER_DATA_CATEGORIES: readonly UserDataCategoryDef[] = [
   { id: 'notes', label: 'Notes', description: 'Every note you wrote.', content: true },
   { id: 'documents', label: 'Documents', description: 'Every document you wrote.', content: true },
+  { id: 'browser-tasks', label: 'Browser tasks and runs', description: 'Your browser tasks, their runs and the steps the agents took.', content: true },
 ];
 
 /** One keep-or-delete decision per user-owned model. */
 export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[] = [
   { model: 'Note', category: 'notes' },
   { model: 'Document', category: 'documents' },
+  { model: 'Task', category: 'browser-tasks' },
+  { model: 'Run', category: 'browser-tasks' },
 ];
 
 /** Narrow scopes, such as "delete my notes" (none by default: the built-in scopes cover every category). */
