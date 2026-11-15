@@ -1,0 +1,16 @@
+{
+  "mcp": {
+    "servers": {
+      "hexactra": {
+        "url": "${HEXACTRA_CONSOLE_URL}/api/mcp",
+        "transport": "streamable-http",
+        "enabled": true,
+        "connectionTimeoutMs": 30000,
+        "requestTimeoutMs": 300000,
+        "headers": {
+          "Authorization": "Bearer ${HEXACTRA_TOKEN}"
+        }
+      }
+    }
+  }
+}

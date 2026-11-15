@@ -17,6 +17,8 @@ claude mcp add --transport http hexactra https://<console>/api/mcp --header "Aut
 claude mcp add hexactra -- hexactra mcp serve
 ```
 
+Hermes Agent, OpenClaw and Pi: ready-made, CI-tested recipes in [agent-frameworks.md](agent-frameworks.md).
+
 **Give each framework its own user.** Personal access tokens carry every permission of their user (there are no per-token scopes yet), so:
 1. Create a user for the framework (for example `agent-hermes@…`) with the **contributor** role.
 2. Mint its token while signed in as that user.

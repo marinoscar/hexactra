@@ -5,7 +5,7 @@ import { Auth } from '@marinoscar/platform-api/identity';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
-import { MCP_INSTRUCTIONS, MCP_TOOLS, type McpContext, type McpToolResult } from './mcp.tools';
+import { MCP_INSTRUCTIONS, MCP_TOOLS, READ_ONLY_TOOLS, type McpContext, type McpToolResult } from './mcp.tools';
 
 const SUPPORTED = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const SERVER_INFO = { name: 'hexactra-console', version: '0.1.0' };
@@ -79,7 +79,12 @@ export class McpController {
         return reply({});
       case 'tools/list':
         return reply({
-          tools: MCP_TOOLS.map((t) => ({ name: t.name, description: t.description, inputSchema: z.toJSONSchema(t.input, { io: 'input' }) })),
+          tools: MCP_TOOLS.map((t) => ({
+            name: t.name,
+            description: t.description,
+            inputSchema: z.toJSONSchema(t.input, { io: 'input' }),
+            annotations: READ_ONLY_TOOLS.has(t.name) ? { readOnlyHint: true } : { readOnlyHint: false, destructiveHint: t.name === 'run_cancel' || t.name === 'browser_close', openWorldHint: true },
+          })),
         });
       case 'tools/call': {
         const name = String(msg.params?.name ?? '');

@@ -134,3 +134,12 @@ export const MCP_TOOLS: McpTool[] = [
     call: async (a, ctx) => text(await ctx.api('DELETE', `/browser/sessions/${String(a.session_id)}`, { success: a.success, ...(a.result ? { result: a.result } : {}) })),
   },
 ];
+
+/**
+ * Tools that only read (MCP `readOnlyHint`): clients such as OpenClaw may run
+ * them without asking. Every other tool acts and is announced as such.
+ */
+export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
+  'run_status', 'runs_list', 'tasks_list', 'schedules_list', 'inbox_list', 'hosts_list',
+  'browser_elements', 'browser_text', 'browser_tabs', 'browser_screenshot', 'browser_handoff_status',
+]);
