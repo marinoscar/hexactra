@@ -115,6 +115,7 @@ data: {"seq":42,"type":"operation.succeeded","at":"…","data":{"op_id":"…","s
 | `session.created`, `session.ended` | Session lifecycle |
 | `operation.queued`, `operation.dispatched`, `operation.succeeded`, `operation.failed`, `operation.timed_out`, `operation.cancelled` | Each action |
 | `handoff.created`, `handoff.resolved`, `handoff.cancelled`, `handoff.expired` | Human handoffs |
+| `handoff.secret_used`, `handoff.secret_claimed` | A `secret` answer was consumed by a `type_secret` action (with its `op_id`) or by the deprecated claim route. Never the value |
 | `host.command.queued`, `.dispatched`, `.succeeded`, `.failed`, `.timed_out`; `host.draining` | [Host commands](#host-commands) |
 | `reset` | You missed events. Re-read state and continue from the new position |
 
@@ -159,7 +160,8 @@ Actions are JSON objects tagged by `type`. `tab_id` is optional on tab-scoped ac
 |---|---|---|
 | `navigate` | `url` | `{ url, title }` |
 | `click` | `selector` | `{}` |
-| `type` | `selector`, `text`, `clear`?, `submit`? | `{}` |
+| `type` | `selector`, `text`, `clear`?, `submit`?, `sensitive`? | `{}` |
+| `type_secret` | `handoff_id`, `selector`, `clear`?, `submit`? | `{}`. Types the answer of a `secret` handoff; see [secrets](#secrets-typed-by-the-fabric) |
 | `press` | `key`, `selector`? | `{}` |
 | `scroll` | `dx`?, `dy`?, `selector`? | `{ x, y }` |
 | `screenshot` | — | `{ artifact_id, mime, size, expires_at }`: fetch the bytes from `GET /v1/artifacts/{artifact_id}` ([artifacts](#artifacts)) |
@@ -177,6 +179,7 @@ Policy enforced before an action is queued:
 - There is no "run arbitrary JavaScript" action.
 - Selectors are limited to 2,000 characters and typed text to 100,000.
 - Logs record the action `type` only, never URLs, selectors or typed text.
+- A `type` action with `"sensitive": true` (CLI: `type --sensitive`) still sends its text to the host, but the operation view reports it as `[secret]`; use it for passwords the caller already holds.
 
 ## Artifacts
 
@@ -200,7 +203,7 @@ When an agent meets something only a person should do (a CAPTCHA, a one-time cod
 | `POST /v1/sessions/{id}/handoffs` | API token | Open a handoff. Returns `{ handoff, response_token, respond_path }` |
 | `GET /v1/handoffs?pending=true&session_id=` | API token | List handoffs |
 | `GET /v1/handoffs/{id}?wait_ms=` | API token | Read one, waiting up to 120 s for it to resolve |
-| `POST /v1/handoffs/{id}/claim` | API token | Return a `secret` answer once, then erase it |
+| `POST /v1/handoffs/{id}/claim` | Operator or service token | **Deprecated.** Return a `secret` answer once, then erase it. Use a `type_secret` action instead |
 | `POST /v1/handoffs/{id}/cancel` | API token | Cancel |
 | `POST /v1/handoffs/{id}/respond` | API token **or** response token | Answer as JSON: `{ "outcome": "completed" \| "cancelled", "value"?, "values"?, "channel"?, "answered_by"?, "response_token"? }`. The token can also go in the `X-Hexactra-Response-Token` header |
 | `GET /v1/handoffs/{id}/respond?token=` | response token | A minimal HTML page with the prompt and a form, for channels that can only send a link (email, SMS, chat) |
@@ -222,7 +225,7 @@ Create body:
   - `none`: the person acts in the browser and clicks "Done".
   - `takeover`: the person operates the browser themselves, then clicks "Done".
   - `text`: a free-text answer. Constraints: `max_length` (1 to 4096, default 4096), `pattern` (a regex of at most 200 characters the whole answer must match), `multiline` (`false` rejects newlines).
-  - `secret`: an answer that is withheld from reads and payloads and claimed once. Constraint: `max_length`.
+  - `secret`: an answer that is withheld from reads and payloads and typed into the page by the control plane, once ([below](#secrets-typed-by-the-fabric)). Constraint: `max_length`.
   - `choice`: one of `choices`; the answer's `value` is the option id.
   - `multi_choice`: several of `choices`; the answer's `values` are option ids, unique, between `min_selections` (default 1) and `max_selections` (default: all).
   - `number`: a decimal string, returned in canonical form (`02.50` becomes `2.5`). Constraints: `min`, `max`, `step` (the answer is `min`, or 0, plus a multiple of it), `unit` (a label, at most 20 characters).
@@ -236,13 +239,29 @@ Rules:
 - The response token is 256 bits, stored only as a SHA-256 digest, and **single use**. It stops working once the handoff resolves, is cancelled or expires.
 - A response token can only answer its own handoff. It cannot call any other route.
 - `secret` values never appear in `GET` responses, logs or event payloads.
-- Ending a session cancels its open handoff.
+- Ending a session cancels its open handoff and erases any unused secret answer of the session.
 - When the session's host registered a `viewer_url`, the handoff carries it. The answer page and webhook payloads then link to the remote browser, so a person can solve a CAPTCHA or approve a passkey there.
 - The HTML page escapes all agent-provided text. It is served with a `default-src 'none'` CSP, `no-store`, `no-referrer` and `DENY` framing.
 
 Statuses: `pending` → `completed` | `cancelled` | `expired`.
 
 An answered handoff carries `response`: `{ "outcome": "completed" | "cancelled", "value"?, "values"?, "value_withheld", "channel"?, "by", "answered_at" }`. `by` is `operator`, `service:<token name>`, `token` (the response-token holder), or the `answered_by` an operator or service caller sent (at most 128 characters, e.g. `user:42`); `answered_by` from a response-token answer is ignored. `cancelled` means the person declined. Handoffs saved before these fields existed read back with `outcome` taken from the status and `answered_at` from `resolved_at`.
+
+### Secrets typed by the fabric
+
+A `secret` answer (a one-time code, a password) is never returned to the caller that asked for it. The agent asks the control plane to type it:
+
+```json
+POST /v1/sessions/{session_id}/actions
+{ "action": { "type": "type_secret", "handoff_id": "…", "selector": "#otp", "submit": true } }
+```
+
+- The control plane checks that the handoff belongs to this session, asked for a `secret`, and was answered. It then takes the value, once, and sends the host an ordinary `type` action carrying it. Only that host-bound command contains the value.
+- The operation view (`GET /v1/operations/{id}`), events, webhooks, logs and traces show the `type_secret` action (handoff id and selector), never the value. The host's result is reported as for `type`.
+- Errors: `404 not_found` (unknown handoff), `422 handoff_wrong_session` (the handoff belongs to another session), `422 handoff_not_secret`, and `409 secret_unavailable` (not answered yet, cancelled or expired, already used, or erased).
+- Lifetime: the value is kept in memory only (never persisted) and erased, with its memory zeroed, when it is used, when the session ends, or 10 minutes after the person answered if nothing used it. A value taken by a `type_secret` that then times out before a host picks it up is dropped too; ask the person again.
+- The MCP tool is `browser_type_secret { handoff_id, selector, clear?, submit? }`; `browser_request_human` with `input: "secret"` answers `{"status": "completed", "value_withheld": true, …}`. The CLI is `hexactra-fabric handoff type-secret <id> --selector <css> [--clear] [--submit]`; `handoff request --wait` and `handoff show` never print a secret.
+- `POST /v1/handoffs/{id}/claim` still returns the value once, for operator and service tokens only, with a `Deprecation: true` header. It shares the single use: whichever of claim and `type_secret` comes first gets the value. It will be removed once its callers move to `type_secret`.
 
 ## Webhooks: channels that reach a person
 
@@ -358,6 +377,6 @@ def verify(secret, headers, raw_body: bytes) -> bool:
 
 - **State and restarts.** The control plane saves hosts, sessions, handoffs and credentials to a SQLite state database: `--state-db`, `HEXACTRA_STATE_DB`, default `$XDG_DATA_HOME/hexactra/control.db`, mode `0600`.
   - What is saved: about once a second when something changed, plus on SIGTERM or Ctrl-C. Credentials are stored as digests only.
-  - What is not saved: **operations**, which are short-lived; a caller waiting at restart time sees a timeout. **Secret handoff answers** waiting to be claimed. **Connection state**: hosts come back offline until they poll.
+  - What is not saved: **operations**, which are short-lived; a caller waiting at restart time sees a timeout. **Secret handoff answers** waiting to be typed. **Connection state**: hosts come back offline until they poll.
   - Run history and the audit trail belong to the Hexactra Console (#217).
 - The pre-existing routes in `crates/hexactra-control/src/routes/` are not mounted by this server.

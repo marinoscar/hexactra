@@ -21,7 +21,8 @@ selectors, then browser_click / browser_type, then browser_text or browser_scree
 result. Act at a human pace and only on the user's own behalf. If a page shows a CAPTCHA, a \
 verification code, a passkey prompt, a payment confirmation or any other security check, call \
 browser_request_human and wait for the person; never try to solve or bypass the check yourself. \
-Browser actions are paused while a request to the person is open.";
+Browser actions are paused while a request to the person is open. A secret the person gives \
+(input=secret) is never shown to you: type it with browser_type_secret.";
 
 fn tab_prop() -> Value {
     json!({"type": "integer", "description": "Tab id from browser_tabs; defaults to the active tab."})
@@ -87,6 +88,18 @@ pub fn tools() -> Vec<Value> {
             &["selector", "text"],
         ),
         tool(
+            "browser_type_secret",
+            "Type the secret (one-time code, password) a person gave to a browser_request_human request with input=secret. The browser fabric types it for you; you never see the value. Each answer can be typed once; if typing it fails, ask the person again.",
+            json!({
+                "handoff_id": {"type": "string", "description": "The handoff_id browser_request_human returned."},
+                "selector": {"type": "string"},
+                "clear": {"type": "boolean"},
+                "submit": {"type": "boolean"},
+                "tab_id": tab_prop()
+            }),
+            &["handoff_id", "selector"],
+        ),
+        tool(
             "browser_press",
             "Press a key such as Enter, Escape, Tab or ArrowDown on the focused element or on selector.",
             json!({"key": {"type": "string"}, "selector": {"type": "string"}, "tab_id": tab_prop()}),
@@ -140,7 +153,7 @@ pub fn tools() -> Vec<Value> {
         tool("browser_reload", "Reload the tab.", json!({"tab_id": tab_prop()}), &[]),
         tool(
             "browser_request_human",
-            "Pause and ask the user to do something only a person should do, or a question only they can answer: solve a CAPTCHA, enter a one-time code, approve a passkey, sign in, confirm a purchase, pick from options. The user is reached on their configured channels (chat, email link, ...). With wait=true (default) this returns the outcome and the person's answer: `value` for text, secret, choice (the option id), number (a decimal string) and confirm (`approve` or `deny`), `values` (option ids) for multi_choice. Use input=secret for one-time codes: type the value into the page and do not repeat it elsewhere. Use input=takeover when the person must operate the browser themselves.",
+            "Pause and ask the user to do something only a person should do, or a question only they can answer: solve a CAPTCHA, enter a one-time code, approve a passkey, sign in, confirm a purchase, pick from options. The user is reached on their configured channels (chat, email link, ...). With wait=true (default) this returns the outcome and the person's answer: `value` for text, choice (the option id), number (a decimal string) and confirm (`approve` or `deny`), `values` (option ids) for multi_choice. Use input=secret for one-time codes and passwords: the answer is never returned (`value_withheld`); type it into the page with browser_type_secret and the handoff_id. Use input=takeover when the person must operate the browser themselves.",
             json!({
                 "kind": {"type": "string", "enum": ["captcha", "code", "passkey", "login", "confirmation", "other"]},
                 "prompt": {"type": "string", "description": "What the person should do, in plain words."},
@@ -459,16 +472,15 @@ impl Server {
                     .and_then(|r| r.channel.clone())
                     .map(|c| format!(" via {c}"))
                     .unwrap_or_default();
-                let value = if h.input == HandoffInput::Secret {
-                    match self.client.claim_handoff_secret(id).await {
-                        Ok(v) => Some(v),
-                        Err(e) => return text_result(format!("answer could not be claimed: {e}"), true),
-                    }
-                } else {
-                    h.response.as_ref().and_then(|r| r.value.clone())
-                };
                 let mut out = json!({ "status": "completed", "handoff_id": id });
-                if let Some(v) = value {
+                let mut next = String::new();
+                if h.input == HandoffInput::Secret {
+                    // The value stays in the fabric; it is typed for us.
+                    out["value_withheld"] = json!(true);
+                    next = format!(
+                        "\nThe secret is not shown to you. Type it with browser_type_secret {{\"handoff_id\": \"{id}\", \"selector\": <the field>, \"submit\": true}}."
+                    );
+                } else if let Some(v) = h.response.as_ref().and_then(|r| r.value.clone()) {
                     out["value"] = json!(v);
                 }
                 if let Some(vs) = h.response.as_ref().and_then(|r| r.values.as_ref()) {
@@ -476,8 +488,7 @@ impl Server {
                 }
                 text_result(
                     format!(
-                        "The person completed the request{channel}. Browser actions are resumed.\n{}",
-                        out
+                        "The person completed the request{channel}. Browser actions are resumed.\n{out}{next}"
                     ),
                     false,
                 )
@@ -552,8 +563,16 @@ impl Server {
                 .act(session, action.clone(), Some(timeout))
                 .await
             {
-                // Session ended or unknown (control plane restarted): retry once.
-                Err(e) if !fresh && matches!(e.status(), Some(404) | Some(409)) => fresh = true,
+                // Session ended or unknown (control plane restarted): retry
+                // once. Not for type_secret: its handoff belongs to this
+                // session, and its 404/409 are about the secret.
+                Err(e)
+                    if !fresh
+                        && !matches!(action, RemoteAction::TypeSecret { .. })
+                        && matches!(e.status(), Some(404) | Some(409)) =>
+                {
+                    fresh = true
+                }
                 Err(e) => return text_result(e.to_string(), true),
                 Ok(op) => break op,
             }
@@ -625,6 +644,7 @@ mod tests {
                     "url" => json!("https://example.test/"),
                     "tab_id" => json!(1),
                     "key" => json!("Enter"),
+                    "handoff_id" => json!(Uuid::nil()),
                     _ => json!("#x"),
                 };
                 args.insert(r.into(), v);
@@ -734,6 +754,123 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("does not apply"));
+    }
+
+    /// The secret a person gives never reaches the model: request_human
+    /// reports it withheld and browser_type_secret has the fabric type it.
+    #[tokio::test]
+    async fn secrets_are_typed_by_the_fabric_never_returned() {
+        use hexactra_client::HostClient;
+        use hexactra_control::runtime::{self, ApiState, RuntimeStore};
+        use hexactra_core::remote::{OperationResult, RegisterHostRequest};
+        const TOKEN: &str = "mcp-secret-test-token-0123456789abc";
+        const SECRET: &str = "987654-mcp-otp";
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        tokio::spawn(runtime::serve(
+            listener,
+            ApiState::new(RuntimeStore::new(), TOKEN),
+            std::future::pending(),
+        ));
+        let host = HostClient::new(&url, TOKEN).unwrap();
+        let host_id = host
+            .register(&RegisterHostRequest {
+                name: "h".into(),
+                version: "0".into(),
+                host_id: None,
+                viewer_url: None,
+            })
+            .await
+            .unwrap()
+            .host_id;
+        // A fake host: answers every action and records what it was sent.
+        let typed = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let t2 = typed.clone();
+        tokio::spawn(async move {
+            loop {
+                if let Ok(Some(op)) = host.next(host_id, true, Duration::from_secs(5)).await {
+                    let result = match &op.action {
+                        RemoteAction::Tabs => json!({"tabs": []}),
+                        _ => json!({}),
+                    };
+                    t2.lock().unwrap().push(op.action.clone());
+                    let _ = host
+                        .report(
+                            host_id,
+                            op.id,
+                            &OperationResult {
+                                ok: true,
+                                result: Some(result),
+                                error: None,
+                            },
+                        )
+                        .await;
+                }
+            }
+        });
+        let client = ControlClient::new(&url, TOKEN).unwrap();
+        let server = std::sync::Arc::new(Server::new(client.clone()));
+        let call = |name: &str, args: Value| {
+            json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                "params": {"name": name, "arguments": args}})
+            .to_string()
+        };
+
+        let s2 = server.clone();
+        let line = call(
+            "browser_request_human",
+            json!({"kind": "code", "prompt": "Enter the code", "input": "secret"}),
+        );
+        let asked = tokio::spawn(async move { s2.handle_line(&line).await.unwrap() });
+        // The person answers.
+        let pending = loop {
+            if let Some(h) = client.handoffs(true).await.unwrap().into_iter().next() {
+                break h;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        };
+        client
+            .respond_handoff(
+                pending.id,
+                &hexactra_core::remote::RespondHandoffRequest {
+                    value: Some(SECRET.into()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+        let r = asked.await.unwrap();
+        let text = r["result"]["content"][0]["text"].as_str().unwrap();
+        assert_eq!(r["result"]["isError"], false, "{text}");
+        assert!(!text.contains(SECRET), "{text}");
+        assert!(text.contains("\"value_withheld\":true"), "{text}");
+        assert!(text.contains("browser_type_secret"), "{text}");
+
+        let r = server
+            .handle_line(&call(
+                "browser_type_secret",
+                json!({"handoff_id": pending.id, "selector": "#otp", "submit": true}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(r["result"]["isError"], false, "{r}");
+        assert!(!r.to_string().contains(SECRET), "{r}");
+        assert!(typed.lock().unwrap().iter().any(|a| matches!(
+            a,
+            RemoteAction::Type { text, submit: true, .. } if text == SECRET
+        )));
+
+        // A second use is a tool error, without the value.
+        let r = server
+            .handle_line(&call(
+                "browser_type_secret",
+                json!({"handoff_id": pending.id, "selector": "#otp"}),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(r["result"]["isError"], true);
+        assert!(r.to_string().contains("secret_unavailable"), "{r}");
     }
 
     fn server() -> Server {

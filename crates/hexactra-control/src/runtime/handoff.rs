@@ -1,8 +1,14 @@
 //! Human handoff (#189): an agent pauses a session until a human acts.
 //!
 //! Each handoff has a single-use response token (stored as a SHA-256 digest)
-//! that any channel can present to answer it without the API token. Secret
-//! inputs (one-time codes) are held only until the API caller claims them.
+//! that any channel can present to answer it without the API token.
+//!
+//! Secret inputs (one-time codes, #287) are held in memory only, never
+//! persisted or returned by the handoff routes. The value is used once: a
+//! `type_secret` action of the same session consumes it and the control
+//! plane types it into the page itself. An unused value is erased (and its
+//! memory zeroed) [`SECRET_TTL`] after the answer, when the session ends,
+//! and when the deprecated claim route takes it.
 
 use std::time::Duration;
 
@@ -15,8 +21,19 @@ use hexactra_core::remote::{
 use sha2::{Digest, Sha256};
 use tokio::sync::watch;
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 use super::store::{Inner, RuntimeStore, StoreError};
+
+/// How long a secret answer stays usable after the person gives it. One-time
+/// codes expire within minutes anyway; a value no one used is erased.
+pub const SECRET_TTL: Duration = Duration::from_secs(10 * 60);
+
+/// A secret answer waiting to be used. Its memory is zeroed when dropped.
+pub(super) struct HeldSecret {
+    value: Zeroizing<String>,
+    expires_at: DateTime<Utc>,
+}
 
 /// Event published to webhook dispatchers and other listeners.
 #[derive(Debug, Clone)]
@@ -53,7 +70,7 @@ pub(crate) struct HandoffRecord {
 pub(super) struct HandoffEntry {
     view: HandoffView,
     token_digest: Option<[u8; 32]>,
-    secret_value: Option<String>,
+    secret: Option<HeldSecret>,
     tx: watch::Sender<HandoffStatus>,
 }
 
@@ -145,6 +162,10 @@ impl RuntimeStore {
     ) -> Vec<RuntimeEvent> {
         let mut events = Vec::new();
         for h in inner.handoffs.values_mut() {
+            if h.view.session_id == session_id {
+                // An unused secret dies with its session.
+                h.secret = None;
+            }
             if h.view.session_id == session_id && h.view.status == HandoffStatus::Pending {
                 h.view.status = HandoffStatus::Cancelled;
                 h.view.resolved_at = Some(now);
@@ -212,7 +233,7 @@ impl RuntimeStore {
                 HandoffEntry {
                     view: view.clone(),
                     token_digest: Some(digest(&token)),
-                    secret_value: None,
+                    secret: None,
                     tx,
                 },
             );
@@ -277,7 +298,7 @@ impl RuntimeStore {
                 HandoffEntry {
                     view: r.view,
                     token_digest: r.token_digest,
-                    secret_value: None,
+                    secret: None,
                     tx,
                 },
             );
@@ -297,6 +318,7 @@ impl RuntimeStore {
             h.view.status = HandoffStatus::Expired;
             h.view.resolved_at = Some(Utc::now());
             h.token_digest = None;
+            h.secret = None;
             let _ = h.tx.send(HandoffStatus::Expired);
             RuntimeEvent::new("handoff.expired", h.view.clone(), None)
         };
@@ -391,7 +413,11 @@ impl RuntimeStore {
                         .check_answer(req.value, req.values)
                         .map_err(|e| StoreError::Invalid(e.0))?;
                     if h.view.input == HandoffInput::Secret {
-                        h.secret_value = answer.value;
+                        h.secret = answer.value.map(|v| HeldSecret {
+                            value: Zeroizing::new(v),
+                            expires_at: now
+                                + chrono::Duration::from_std(SECRET_TTL).unwrap_or_default(),
+                        });
                         response.value_withheld = true;
                     } else {
                         response.value = answer.value;
@@ -414,25 +440,92 @@ impl RuntimeStore {
         };
         tracing::info!(handoff_id = %id, status = ?ev.handoff.status, "handoff resolved");
         let view = ev.handoff.clone();
+        let withheld = view.response.as_ref().is_some_and(|r| r.value_withheld);
         self.publish(ev);
+        if withheld {
+            self.schedule_secret_erasure(id);
+        }
         Ok(view)
     }
 
-    /// Return a secret value once, then erase it.
-    pub fn claim_handoff_secret(&self, id: Uuid) -> Result<String, StoreError> {
+    /// Erase an unused secret answer once [`SECRET_TTL`] has passed.
+    fn schedule_secret_erasure(&self, id: Uuid) {
+        let store = self.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(SECRET_TTL).await;
+            store.erase_expired_secret(id, Utc::now());
+        });
+    }
+
+    /// Drop a secret whose time is up. Returns true if one was erased.
+    pub(super) fn erase_expired_secret(&self, id: Uuid, now: DateTime<Utc>) -> bool {
         let mut inner = self.lock();
+        let Some(h) = inner.handoffs.get_mut(&id) else {
+            return false;
+        };
+        if h.secret.as_ref().is_some_and(|s| s.expires_at <= now) {
+            h.secret = None;
+            tracing::info!(handoff_id = %id, "unused handoff secret erased");
+            return true;
+        }
+        false
+    }
+
+    /// Take a handoff's secret answer, once. With `session_id`, the handoff
+    /// must belong to that session (a `type_secret` action).
+    pub(super) fn take_handoff_secret(
+        inner: &mut Inner,
+        id: Uuid,
+        session_id: Option<Uuid>,
+        now: DateTime<Utc>,
+    ) -> Result<Zeroizing<String>, StoreError> {
         let h = inner
             .handoffs
             .get_mut(&id)
             .ok_or(StoreError::NotFound("handoff"))?;
-        if h.view.input != HandoffInput::Secret {
-            return Err(StoreError::Invalid("handoff has no secret value".into()));
+        if session_id.is_some_and(|s| s != h.view.session_id) {
+            return Err(StoreError::Unprocessable(
+                "handoff_wrong_session",
+                "the handoff belongs to another session".into(),
+            ));
         }
-        h.secret_value.take().ok_or_else(|| {
-            StoreError::Conflict(
-                "no secret value to claim (not answered yet, or already claimed)".into(),
+        if h.view.input != HandoffInput::Secret {
+            return Err(StoreError::Unprocessable(
+                "handoff_not_secret",
+                "the handoff did not ask for a secret".into(),
+            ));
+        }
+        if h.view.status != HandoffStatus::Completed {
+            return Err(StoreError::SecretUnavailable(format!(
+                "the handoff is {}, not completed",
+                serde_json::to_value(h.view.status)
+                    .ok()
+                    .and_then(|v| v.as_str().map(str::to_string))
+                    .unwrap_or_default()
+            )));
+        }
+        let secret = h.secret.take().ok_or_else(|| {
+            StoreError::SecretUnavailable(
+                "the secret was already used, or erased (session ended or it expired)".into(),
             )
-        })
+        })?;
+        if secret.expires_at <= now {
+            return Err(StoreError::SecretUnavailable(
+                "the secret expired unused; ask the person again".into(),
+            ));
+        }
+        Ok(secret.value)
+    }
+
+    /// Return a secret value once, then erase it. Deprecated: a
+    /// `type_secret` action types it without returning it to the caller.
+    pub fn claim_handoff_secret(&self, id: Uuid) -> Result<String, StoreError> {
+        let value = Self::take_handoff_secret(&mut self.lock(), id, None, Utc::now())?;
+        self.log.emit(
+            "handoff.secret_claimed",
+            serde_json::json!({ "handoff_id": id }),
+        );
+        Ok(String::clone(&value))
     }
 
     /// Wait until the handoff leaves `pending` or `wait` elapses.
@@ -464,7 +557,7 @@ impl RuntimeStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hexactra_core::remote::{HandoffKind, RemoteAction};
+    use hexactra_core::remote::{HandoffKind, HostWork, RemoteAction};
 
     fn setup() -> (RuntimeStore, Uuid) {
         let s = RuntimeStore::new();
@@ -551,7 +644,198 @@ mod tests {
         let read = serde_json::to_string(&s.get_handoff(h.id).unwrap()).unwrap();
         assert!(!read.contains("123456"));
         assert_eq!(s.claim_handoff_secret(h.id).unwrap(), "123456");
-        assert!(s.claim_handoff_secret(h.id).is_err());
+        assert!(matches!(
+            s.claim_handoff_secret(h.id),
+            Err(StoreError::SecretUnavailable(_))
+        ));
+    }
+
+    fn type_secret(handoff_id: Uuid) -> RemoteAction {
+        RemoteAction::TypeSecret {
+            handoff_id,
+            selector: "#otp".into(),
+            clear: true,
+            submit: true,
+            tab_id: None,
+        }
+    }
+
+    /// A completed secret handoff on `sess`.
+    fn answered_secret(s: &RuntimeStore, sess: Uuid, value: &str) -> Uuid {
+        let (h, _) = s.create_handoff(sess, req(HandoffInput::Secret)).unwrap();
+        s.respond_handoff(h.id, Responder::Operator, answer(Some(value), None))
+            .unwrap();
+        h.id
+    }
+
+    #[tokio::test]
+    async fn type_secret_reaches_only_the_host_and_is_used_once() {
+        let (s, sess) = setup();
+        let host = s.get_session(sess).unwrap().host_id;
+        let id = answered_secret(&s, sess, "424242");
+        let (view, _) = s
+            .enqueue(sess, type_secret(id), Duration::from_secs(5))
+            .unwrap();
+        // The secret is consumed at enqueue: neither route has it any more.
+        assert!(matches!(
+            s.enqueue(sess, type_secret(id), Duration::from_secs(5)),
+            Err(StoreError::SecretUnavailable(_))
+        ));
+        assert!(s.claim_handoff_secret(id).is_err());
+        let shown = serde_json::to_string(&s.get_operation(view.id).unwrap()).unwrap();
+        assert!(!shown.contains("424242"), "{shown}");
+        let Some(HostWork::Operation(op)) = s
+            .next_work(host, true, false, Duration::from_millis(50))
+            .await
+            .unwrap()
+        else {
+            panic!("no work");
+        };
+        assert_eq!(op.id, view.id);
+        assert_eq!(
+            op.action,
+            RemoteAction::Type {
+                selector: "#otp".into(),
+                text: "424242".into(),
+                clear: true,
+                submit: true,
+                sensitive: true,
+                tab_id: None,
+            }
+        );
+        s.complete(
+            host,
+            op.id,
+            hexactra_core::remote::OperationResult {
+                ok: true,
+                result: Some(serde_json::json!({})),
+                error: None,
+            },
+        )
+        .unwrap();
+        let shown = serde_json::to_string(&s.get_operation(view.id).unwrap()).unwrap();
+        assert!(!shown.contains("424242"), "{shown}");
+        let super::super::events::Replay::Events(log) = s.log.subscribe_from(Some(0)).1 else {
+            panic!("gap");
+        };
+        let log = serde_json::to_string(&log).unwrap();
+        assert!(!log.contains("424242"));
+        assert!(log.contains("handoff.secret_used"));
+    }
+
+    #[tokio::test]
+    async fn type_secret_errors_are_typed() {
+        let (s, sess) = setup();
+        let host = s.get_session(sess).unwrap().host_id;
+        let other = s.create_session(Some(host), None).unwrap().id;
+        // Unknown handoff.
+        assert_eq!(
+            s.enqueue(sess, type_secret(Uuid::new_v4()), Duration::from_secs(1))
+                .unwrap_err(),
+            StoreError::NotFound("handoff")
+        );
+        // Another session's secret is refused and left in place.
+        let id = answered_secret(&s, sess, "111111");
+        assert!(matches!(
+            s.enqueue(other, type_secret(id), Duration::from_secs(1)),
+            Err(StoreError::Unprocessable("handoff_wrong_session", _))
+        ));
+        assert!(s
+            .enqueue(sess, type_secret(id), Duration::from_secs(1))
+            .is_ok());
+        // Not a secret handoff.
+        let (t, _) = s.create_handoff(other, req(HandoffInput::Text)).unwrap();
+        s.respond_handoff(t.id, Responder::Operator, answer(Some("x"), None))
+            .unwrap();
+        assert!(matches!(
+            s.enqueue(other, type_secret(t.id), Duration::from_secs(1)),
+            Err(StoreError::Unprocessable("handoff_not_secret", _))
+        ));
+        // Cancelled before an answer.
+        let (c, _) = s.create_handoff(other, req(HandoffInput::Secret)).unwrap();
+        s.respond_handoff(
+            c.id,
+            Responder::Operator,
+            RespondHandoffRequest {
+                outcome: HandoffOutcome::Cancelled,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(matches!(
+            s.enqueue(other, type_secret(c.id), Duration::from_secs(1)),
+            Err(StoreError::SecretUnavailable(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn sensitive_type_text_is_held_apart_from_the_view() {
+        let (s, sess) = setup();
+        let host = s.get_session(sess).unwrap().host_id;
+        let action = RemoteAction::Type {
+            selector: "#pw".into(),
+            text: "hunter2".into(),
+            clear: false,
+            submit: false,
+            sensitive: true,
+            tab_id: None,
+        };
+        let (view, _) = s.enqueue(sess, action, Duration::from_secs(5)).unwrap();
+        let shown = serde_json::to_string(&s.get_operation(view.id).unwrap()).unwrap();
+        assert!(!shown.contains("hunter2"));
+        assert!(shown.contains(hexactra_core::remote::REDACTED_TEXT));
+        let Some(HostWork::Operation(op)) = s
+            .next_work(host, true, false, Duration::from_millis(50))
+            .await
+            .unwrap()
+        else {
+            panic!("no work");
+        };
+        assert!(matches!(op.action, RemoteAction::Type { ref text, .. } if text == "hunter2"));
+    }
+
+    #[tokio::test]
+    async fn unused_secret_is_erased_after_its_ttl_and_at_session_end() {
+        let (s, sess) = setup();
+        let id = answered_secret(&s, sess, "222222");
+        // Not yet due.
+        assert!(!s.erase_expired_secret(id, Utc::now()));
+        let later = Utc::now() + chrono::Duration::from_std(SECRET_TTL).unwrap();
+        assert!(s.erase_expired_secret(id, later + chrono::Duration::seconds(1)));
+        assert!(matches!(
+            s.enqueue(sess, type_secret(id), Duration::from_secs(1)),
+            Err(StoreError::SecretUnavailable(_))
+        ));
+        // Taking a secret past its TTL fails even before the timer runs.
+        let id = answered_secret(&s, sess, "333333");
+        assert!(matches!(
+            RuntimeStore::take_handoff_secret(
+                &mut s.lock(),
+                id,
+                Some(sess),
+                later + chrono::Duration::seconds(1)
+            ),
+            Err(StoreError::SecretUnavailable(_))
+        ));
+
+        let id = answered_secret(&s, sess, "444444");
+        s.end_session(sess).unwrap();
+        assert!(s.lock().handoffs[&id].secret.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_queued_secret_dies_with_its_operation() {
+        let (s, sess) = setup();
+        let id = answered_secret(&s, sess, "555555");
+        let (view, _) = s
+            .enqueue(sess, type_secret(id), Duration::from_secs(5))
+            .unwrap();
+        s.time_out(view.id);
+        assert!(s.lock().operations_secret_held(view.id) == Some(false));
+        // An expired pending handoff holds no secret either.
+        let (h, _) = s.create_handoff(sess, req(HandoffInput::Secret)).unwrap();
+        s.expire_handoff(h.id);
+        assert!(s.lock().handoffs[&h.id].secret.is_none());
     }
 
     #[tokio::test]

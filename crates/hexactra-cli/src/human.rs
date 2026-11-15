@@ -8,7 +8,7 @@ use hexactra_client::ControlClient;
 use hexactra_core::remote::{
     CreateHandoffRequest, CreateWebhookRequest, HandoffChoice, HandoffChoiceSpec,
     HandoffConstraints, HandoffInput, HandoffKind, HandoffOutcome, HandoffRisk, HandoffStatus,
-    HandoffView, RespondHandoffRequest,
+    HandoffView, OperationState, RemoteAction, RespondHandoffRequest,
 };
 use uuid::Uuid;
 
@@ -208,6 +208,23 @@ pub enum HandoffCmd {
     },
     /// Cancel a handoff.
     Cancel { id: Uuid },
+    /// Type a secret handoff's answer into the page of the handoff's
+    /// session. The control plane types it; it is never shown here, and it
+    /// can be used once.
+    TypeSecret {
+        id: Uuid,
+        /// CSS selector of the field.
+        #[arg(long)]
+        selector: String,
+        /// Replace the field's current value.
+        #[arg(long)]
+        clear: bool,
+        /// Submit (Enter) after typing.
+        #[arg(long)]
+        submit: bool,
+        #[arg(long)]
+        tab: Option<i64>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -253,18 +270,22 @@ async fn wait_resolved(client: &ControlClient, id: Uuid, total: Duration) -> Res
     }
 }
 
-/// Print the outcome; for secrets, claim and print the value.
-async fn report(client: &ControlClient, h: &HandoffView, json: bool) -> Result<()> {
-    let secret = if h.status == HandoffStatus::Completed && h.input == HandoffInput::Secret {
-        Some(client.claim_handoff_secret(h.id).await?)
-    } else {
-        None
-    };
+/// Hint printed where a secret answer would be.
+fn secret_hint(id: Uuid) -> String {
+    format!(
+        "value: (secret; type it with `hexactra-fabric handoff type-secret {id} --selector <css>`)"
+    )
+}
+
+/// Print the outcome. A secret answer is never printed (#287).
+fn report(h: &HandoffView, json: bool) -> Result<()> {
     if json {
-        return print_json(&serde_json::json!({ "handoff": h, "secret_value": secret }));
+        return print_json(&serde_json::json!({ "handoff": h }));
     }
-    let value = secret
-        .or_else(|| h.response.as_ref().and_then(|r| r.value.clone()))
+    let value = h
+        .response
+        .as_ref()
+        .and_then(|r| r.value.clone())
         .or_else(|| {
             h.response
                 .as_ref()
@@ -288,6 +309,9 @@ async fn report(client: &ControlClient, h: &HandoffView, json: bool) -> Result<(
             );
             if let Some(v) = value {
                 println!("{v}");
+            }
+            if h.response.as_ref().is_some_and(|r| r.value_withheld) {
+                println!("{}", secret_hint(h.id));
             }
             Ok(())
         }
@@ -351,7 +375,7 @@ pub async fn handoff(
                 Duration::from_secs(timeout_s + 5),
             )
             .await?;
-            report(client, &h, json).await
+            report(&h, json)
         }
         HandoffCmd::List { all } => {
             let list = client.handoffs(!all).await?;
@@ -384,7 +408,7 @@ pub async fn handoff(
                     println!("by: {by}");
                 }
                 if r.value_withheld {
-                    println!("value: (secret; claimed by the requesting agent)");
+                    println!("{}", secret_hint(h.id));
                 }
             }
             Ok(())
@@ -420,6 +444,41 @@ pub async fn handoff(
                 return print_json(&h);
             }
             println!("{}", summary(&h));
+            Ok(())
+        }
+        HandoffCmd::TypeSecret {
+            id,
+            selector,
+            clear,
+            submit,
+            tab,
+        } => {
+            // The handoff names its session; the secret is typed there.
+            let session = client.handoff(id, None).await?.session_id;
+            let op = client
+                .act(
+                    session,
+                    RemoteAction::TypeSecret {
+                        handoff_id: id,
+                        selector,
+                        clear,
+                        submit,
+                        tab_id: tab,
+                    },
+                    Some(Duration::from_secs(45)),
+                )
+                .await?;
+            if json {
+                return print_json(&op);
+            }
+            if op.state != OperationState::Succeeded {
+                bail!(
+                    "type_secret {:?}: {}",
+                    op.state,
+                    op.error.unwrap_or_default()
+                );
+            }
+            println!("typed the secret ({})", op.id);
             Ok(())
         }
     }

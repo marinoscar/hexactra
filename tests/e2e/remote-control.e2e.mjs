@@ -443,11 +443,42 @@ try {
         timeout_s: 60,
       }, 90_000);
       assert.equal(asked.isError, false, JSON.stringify(asked));
-      const code = JSON.parse(asked.content[0].text.split('\n').pop()).value;
-      assert.equal(code, '424242');
-      assert.equal((await call('browser_type', { selector: '#q', text: code, submit: true })).isError, false);
+      // The model never sees the secret: it is withheld, and the fabric
+      // types it with browser_type_secret (#287).
+      assert.ok(!JSON.stringify(asked).includes('424242'), JSON.stringify(asked));
+      const outcome = JSON.parse(asked.content[0].text.split('\n').find((l) => l.startsWith('{')));
+      assert.equal(outcome.value_withheld, true);
+      assert.equal(outcome.value, undefined);
+      const typedSecret = await call('browser_type_secret', { handoff_id: outcome.handoff_id, selector: '#q', submit: true });
+      assert.equal(typedSecret.isError, false, JSON.stringify(typedSecret));
+      assert.ok(!JSON.stringify(typedSecret).includes('424242'));
+      // The page got it; the agent only learns that by reading the page.
       assert.match((await call('browser_text', { selector: '#out' })).content[0].text, /searched: 424242/);
+      const again = await call('browser_type_secret', { handoff_id: outcome.handoff_id, selector: '#q' });
+      assert.equal(again.isError, true);
+      assert.match(again.content[0].text, /secret_unavailable/);
       proc.stdin.end();
+
+      // CLI: a secret answered by the channel, typed with type-secret; the
+      // operation view and the handoff never carry the value.
+      const waited = await ok(
+        'handoff', 'request', '--kind', 'code', '--prompt', 'Enter the code', '--input', 'secret',
+        '--wait', '--timeout-s', '60',
+      );
+      assert.ok(!waited.includes('424242'), waited);
+      const secretId = (/handoff type-secret ([0-9a-f-]{36})/.exec(waited) ?? [])[1];
+      assert.ok(secretId, waited);
+      await ok('navigate', `${site}/index.html`);
+      const typedOp = JSON.parse(await ok('--json', 'handoff', 'type-secret', secretId, '--selector', '#q', '--submit'));
+      assert.equal(typedOp.state, 'succeeded');
+      assert.equal(typedOp.action.type, 'type_secret');
+      const auth = { headers: { authorization: `Bearer ${token}` } };
+      const opView = await (await fetch(`${controlUrl}/v1/operations/${typedOp.id}`, auth)).text();
+      const handoffView = await (await fetch(`${controlUrl}/v1/handoffs/${secretId}`, auth)).text();
+      for (const [what, body] of [['type-secret output', JSON.stringify(typedOp)], ['operation view', opView], ['handoff view', handoffView]]) {
+        assert.ok(!body.includes('424242'), `${what} leaks the secret: ${body}`);
+      }
+      assert.match(await ok('text', '--selector', '#out'), /searched: 424242/);
 
       // The handoff.created event carried the page the agent was on.
       const codeEvent = channel.events.find((e) => e.type === 'handoff.created' && e.data.handoff.kind === 'code');

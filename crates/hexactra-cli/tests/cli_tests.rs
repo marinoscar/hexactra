@@ -59,6 +59,8 @@ fn missing_token_is_explained() {
 }
 
 /// Start a control plane and a fake host that answers every action.
+const CLI_SECRET: &str = "771177-cli-secret";
+
 fn start_stack() -> String {
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
@@ -99,6 +101,13 @@ fn start_stack() -> String {
                     RemoteAction::Text { .. } => OperationResult {
                         ok: true,
                         result: Some(json!({"text": "hello from the page"})),
+                        error: None,
+                    },
+                    // Only the real secret is accepted, so a typed secret
+                    // proves the host got the value the CLI never saw.
+                    RemoteAction::Type { text, .. } if text == CLI_SECRET => OperationResult {
+                        ok: true,
+                        result: Some(json!({})),
                         error: None,
                     },
                     RemoteAction::Screenshot { .. } => OperationResult {
@@ -328,6 +337,86 @@ fn handoff_and_webhook_commands() {
         .stdout(
             predicate::str::contains("value: -4.5").and(predicate::str::contains("by: operator")),
         );
+
+    // A secret is never printed: not by request --wait, nor by show; it is
+    // typed by the control plane with type-secret, once.
+    let waiter = cli()
+        .args([
+            "handoff",
+            "request",
+            "--kind",
+            "code",
+            "--prompt",
+            "Code?",
+            "--input",
+            "secret",
+            "--wait",
+            "--timeout-s",
+            "30",
+        ])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut id = None;
+    for _ in 0..100 {
+        let out = cli().args(["--json", "handoff", "list"]).output().unwrap();
+        let list: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap_or_default();
+        if let Some(found) = list
+            .as_array()
+            .and_then(|a| a.first())
+            .and_then(|h| h["id"].as_str())
+        {
+            id = Some(found.to_string());
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let id = id.expect("secret handoff never appeared");
+    cli()
+        .args(["handoff", "respond", &id, "--value", CLI_SECRET])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(CLI_SECRET).not());
+    let out = waiter.wait_with_output().unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!stdout.contains(CLI_SECRET), "{stdout}");
+    assert!(stdout.contains("handoff type-secret"), "{stdout}");
+    for args in [
+        vec!["handoff", "show", &id],
+        vec!["--json", "handoff", "show", &id],
+    ] {
+        cli()
+            .args(args)
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(CLI_SECRET).not());
+    }
+    cli()
+        .args([
+            "handoff",
+            "type-secret",
+            &id,
+            "--selector",
+            "#otp",
+            "--submit",
+        ])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("typed the secret")
+                .and(predicate::str::contains(CLI_SECRET).not()),
+        );
+    cli()
+        .args(["handoff", "type-secret", &id, "--selector", "#otp"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("secret_unavailable"));
 
     // Constraints that do not apply to the input are refused.
     cli()

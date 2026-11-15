@@ -12,12 +12,13 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use hexactra_core::remote::{
     valid_profile_name, DispatchedOperation, HostView, HostWork, OperationResult, OperationState,
-    OperationView, RemoteAction, RemoteSessionStatus, SessionView, DEFAULT_PROFILE,
+    OperationView, RemoteAction, RemoteSessionStatus, SessionView, DEFAULT_PROFILE, REDACTED_TEXT,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio::sync::{broadcast, watch, Notify};
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 use super::handoff::{HandoffEntry, RuntimeEvent};
 
@@ -47,6 +48,13 @@ pub enum StoreError {
         "profile {0:?} not found on any online host; create it with --create (create_profile)"
     )]
     ProfileNotFound(String),
+    /// The request is well formed but cannot apply (machine code, message).
+    #[error("{1}")]
+    Unprocessable(&'static str, String),
+    /// A handoff's secret is not available: not answered, already used,
+    /// erased or expired.
+    #[error("{0}")]
+    SecretUnavailable(String),
 }
 
 pub(super) struct HostEntry {
@@ -77,6 +85,42 @@ struct OperationEntry {
     inline_artifacts: bool,
     /// Trace context of the request that queued it (#215).
     traceparent: Option<String>,
+    /// Text of a `type_secret` or sensitive `type` action, held apart from
+    /// the view (which shows `[secret]`) until the host takes it, and
+    /// dropped (zeroed) when the operation ends without being dispatched.
+    secret_text: Option<Zeroizing<String>>,
+}
+
+/// The action a host runs: `type_secret` and sensitive `type` actions get
+/// their real text back, as a plain `type`.
+fn host_action(view: &RemoteAction, secret: Option<Zeroizing<String>>) -> RemoteAction {
+    let Some(text) = secret else {
+        return view.clone();
+    };
+    match view {
+        RemoteAction::TypeSecret {
+            selector,
+            clear,
+            submit,
+            tab_id,
+            ..
+        }
+        | RemoteAction::Type {
+            selector,
+            clear,
+            submit,
+            tab_id,
+            ..
+        } => RemoteAction::Type {
+            selector: selector.clone(),
+            text: String::clone(&text),
+            clear: *clear,
+            submit: *submit,
+            sensitive: true,
+            tab_id: *tab_id,
+        },
+        other => other.clone(),
+    }
 }
 
 #[derive(Default)]
@@ -86,6 +130,14 @@ pub(super) struct Inner {
     operations: HashMap<Uuid, OperationEntry>,
     pub(super) handoffs: HashMap<Uuid, HandoffEntry>,
     pub(super) commands: HashMap<Uuid, super::host_commands::CommandEntry>,
+}
+
+#[cfg(test)]
+impl Inner {
+    /// Whether an operation still holds secret text (None: unknown op).
+    pub(super) fn operations_secret_held(&self, id: Uuid) -> Option<bool> {
+        self.operations.get(&id).map(|o| o.secret_text.is_some())
+    }
 }
 
 /// A host as persisted (no queue, no connection state).
@@ -498,7 +550,7 @@ impl RuntimeStore {
                                 id: op.view.id,
                                 session_id: op.view.session_id,
                                 profile,
-                                action: op.view.action.clone(),
+                                action: host_action(&op.view.action, op.secret_text.take()),
                                 deadline: op.deadline,
                                 traceparent: op.traceparent.clone(),
                             });
@@ -671,6 +723,7 @@ impl RuntimeStore {
         let ended = session.clone();
         for op in inner.operations.values_mut() {
             if op.view.session_id == id && op.view.state == OperationState::Queued {
+                op.secret_text = None;
                 op.view.state = OperationState::Cancelled;
                 op.view.error = Some("session ended".into());
                 op.view.completed_at = Some(now);
@@ -704,13 +757,28 @@ impl RuntimeStore {
 
     /// Queue an action; `inline_artifacts` keeps screenshot data in the
     /// result next to the artifact handle.
+    ///
+    /// A `type_secret` action consumes its handoff's secret here; the text
+    /// of it, or of a `type` action with `sensitive: true`, is held apart
+    /// from the operation view, which reports it as `[secret]`.
     pub fn enqueue_with(
         &self,
         session_id: Uuid,
-        action: RemoteAction,
+        mut action: RemoteAction,
         timeout: Duration,
         inline_artifacts: bool,
     ) -> Result<(OperationView, watch::Receiver<OperationState>), StoreError> {
+        let mut secret_text = match &mut action {
+            RemoteAction::Type {
+                text,
+                sensitive: true,
+                ..
+            } => Some(Zeroizing::new(std::mem::replace(
+                text,
+                REDACTED_TEXT.to_string(),
+            ))),
+            _ => None,
+        };
         let mut inner = self.lock();
         let session = inner
             .sessions
@@ -723,7 +791,23 @@ impl RuntimeStore {
             return Err(StoreError::HandoffPending(h));
         }
         let host_id = session.host_id;
+        if !inner.hosts.contains_key(&host_id) {
+            return Err(StoreError::NotFound("host"));
+        }
         let now = Utc::now();
+        // Last check: the secret is consumed only if the action is queued.
+        let used_handoff = match &action {
+            RemoteAction::TypeSecret { handoff_id, .. } => {
+                secret_text = Some(Self::take_handoff_secret(
+                    &mut inner,
+                    *handoff_id,
+                    Some(session_id),
+                    now,
+                )?);
+                Some(*handoff_id)
+            }
+            _ => None,
+        };
         let deadline = now + chrono::Duration::from_std(timeout).unwrap_or_default();
         let view = OperationView {
             id: Uuid::new_v4(),
@@ -745,6 +829,7 @@ impl RuntimeStore {
                 tx,
                 inline_artifacts,
                 traceparent: hexactra_otel::current_traceparent(),
+                secret_text,
             },
         );
         let host = inner
@@ -754,6 +839,12 @@ impl RuntimeStore {
         host.queue.push_back(view.id);
         host.notify.notify_one();
         self.log.emit("operation.queued", op_event(&view));
+        if let Some(handoff_id) = used_handoff {
+            self.log.emit(
+                "handoff.secret_used",
+                json!({ "handoff_id": handoff_id, "session_id": session_id, "op_id": view.id }),
+            );
+        }
         if inner.operations.len() > PRUNE_THRESHOLD {
             Self::prune(&mut inner, now);
         }
@@ -815,6 +906,7 @@ impl RuntimeStore {
         } else {
             OperationState::Failed
         };
+        op.secret_text = None;
         op.view.state = state;
         op.view.result = result.result;
         if result.ok && matches!(op.view.action, RemoteAction::Screenshot { .. }) {
@@ -879,6 +971,7 @@ impl RuntimeStore {
         let mut inner = self.lock();
         let op = inner.operations.get_mut(&op_id)?;
         if !op.view.state.is_terminal() {
+            op.secret_text = None;
             let was_dispatched = op.view.state == OperationState::Dispatched;
             op.view.state = OperationState::TimedOut;
             op.view.error = Some(if was_dispatched {
