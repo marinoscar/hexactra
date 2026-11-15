@@ -29,6 +29,7 @@ import { USER_SETTINGS_SECTIONS } from './config/userSettingsSections';
 import { WebhooksPage } from '@marinoscar/platform-web/webhooks/ui';
 import { AlertsPage } from '@marinoscar/platform-web/alerts/ui';
 
+import { BrandLogo } from './components/BrandLogo';
 import { ALERTS_ENABLED, WEBHOOKS_ENABLED } from './config/userSettingsSections';
 import { FabricConnectionPage } from './pages/FabricConnectionPage';
 import { FleetPage } from './pages/FleetPage';
@@ -97,11 +98,11 @@ function AppShell() {
   return (
     <ShellLayout
       navigation={NAVIGATION}
-      brand={APP_NAME}
+      brand={<BrandLogo label={APP_NAME} />}
       appBar={
         <ShellAppBar
           navigation={NAVIGATION}
-          brand={APP_NAME}
+          brand={<BrandLogo label={APP_NAME} />}
           actions={<Slot components={sliceAppBarActions} />}
           userMenu={
             <ShellUserMenu
