@@ -37,7 +37,8 @@ trap cleanup EXIT
 dc build >/dev/null
 dc up -d --wait --wait-timeout 300 db fabric-control fabric-host || fail "fabric or database did not become healthy"
 pass "database, fabric control plane and browser host are healthy"
-dc run --rm --no-deps api npm run prisma:migrate >/dev/null || fail "migrations"
+mig=$(mktemp)
+dc run --rm --no-deps api npm run prisma:migrate >"$mig" 2>&1 || { cat "$mig" >&2; fail "migrations"; }
 dc up -d --wait --wait-timeout 300 || fail "stack did not become healthy"
 pass "the whole stack is healthy"
 
