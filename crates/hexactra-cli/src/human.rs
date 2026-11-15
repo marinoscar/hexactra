@@ -1,4 +1,4 @@
-//! `hexactra handoff ...` and `hexactra webhook ...` (#191).
+//! `hexactra-fabric handoff ...` and `hexactra-fabric webhook ...` (#191).
 
 use std::time::Duration;
 
@@ -335,7 +335,7 @@ pub async fn webhook(cmd: WebhookCmd, client: &ControlClient, json: bool) -> Res
             if json {
                 return print_json(&serde_json::json!({ "event_id": ev }));
             }
-            println!("sent {ev}; check `hexactra webhook deliveries {id}`");
+            println!("sent {ev}; check `hexactra-fabric webhook deliveries {id}`");
             Ok(())
         }
         WebhookCmd::Deliveries { id } => {

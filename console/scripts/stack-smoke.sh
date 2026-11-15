@@ -57,11 +57,16 @@ pass "fabric unpublished, reachable from the API on the private network"
 token=$(grep '^HEXACTRA_FABRIC_OPERATOR_TOKEN=' ../../infra/compose/.env 2>/dev/null | cut -d= -f2- || true)
 [ -n "$token" ] || token=$(grep '^HEXACTRA_FABRIC_OPERATOR_TOKEN=' .env | cut -d= -f2-)
 for i in $(seq 1 30); do
-  dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra --url http://127.0.0.1:8787 status 2>/dev/null | grep -q 'online=true' && break
+  dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status 2>/dev/null | grep -q 'online=true' && break
   sleep 2
 done
-dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra --url http://127.0.0.1:8787 status | grep -q 'online=true' || fail "browser host not online"
+dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status | grep -q 'online=true' || fail "browser host not online"
 pass "bundled browser host registered and online"
+
+# The documented way to mint the console's service token (docs/runbooks/vps-stack.md §3).
+dc exec -T fabric-control hexactra-fabric --url http://127.0.0.1:8787 admin service-token-create console | grep -q 'hxs_' \
+  || fail "the documented service-token command does not print an hxs_ token"
+pass "the fabric admin CLI mints a service token"
 
 code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 [ "$(code "$base/viewer/local/vnc.html")" = 401 ] || fail "viewer without a ticket is not refused"
@@ -96,9 +101,9 @@ dc start fabric-control fabric-host >/dev/null || fail "start the fabric after t
 tar tzf "$backups/fabric-control.tgz" | grep -q 'control.db$' || fail "the control-plane backup has no control.db"
 [ -s "$backups/fabric-host.tgz" ] || fail "the browser-host backup is empty"
 for _ in $(seq 1 60); do
-  dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra --url http://127.0.0.1:8787 status 2>/dev/null | grep -q 'online=true' && break
+  dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status 2>/dev/null | grep -q 'online=true' && break
   sleep 2
 done
-dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra --url http://127.0.0.1:8787 status | grep -q 'online=true' || fail "browser host not online after a backup and restart"
+dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status | grep -q 'online=true' || fail "browser host not online after a backup and restart"
 pass "the documented fabric backup works and the host comes back online"
 echo "stack smoke: all checks passed"

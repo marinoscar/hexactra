@@ -3,7 +3,7 @@
 #   docker build -f deploy/container/Dockerfile --target control -t hexactra-control .
 #   docker build -f deploy/container/Dockerfile --target host    -t hexactra-host .
 #
-# control: hexactra-control (API), plus the hexactra CLI and hexactra-mcp.
+# control: hexactra-control (API), plus the hexactra-fabric CLI and hexactra-mcp.
 # host:    Chromium on Xvfb with the Hexactra extension, the agent in launch
 #          mode, the native messaging host and a password-protected noVNC viewer.
 
@@ -19,7 +19,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
       -p hexactra-control -p hexactra-cli -p hexactra-mcp \
       -p hexactra-agent -p hexactra-native-host \
  && mkdir -p /out \
- && for b in hexactra hexactra-control hexactra-mcp hexactra-agent hexactra-native-host; do \
+ && for b in hexactra-fabric hexactra-control hexactra-mcp hexactra-agent hexactra-native-host; do \
       cp "target/release/$b" /out/; \
     done
 
@@ -45,7 +45,7 @@ ENV XDG_CONFIG_HOME=/data/config
 
 # ------------------------------------------------------------ target: control
 FROM runtime-base AS control
-COPY --from=rust-build /out/hexactra-control /out/hexactra /out/hexactra-mcp /usr/local/bin/
+COPY --from=rust-build /out/hexactra-control /out/hexactra-fabric /out/hexactra-mcp /usr/local/bin/
 USER hexactra
 # Listens on all interfaces inside the container; compose publishes it on
 # 127.0.0.1 only. The API token comes from HEXACTRA_API_TOKEN.

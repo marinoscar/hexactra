@@ -11,7 +11,7 @@
 #      the agent (skip with --no-services)
 #
 # Afterwards: load apps/chrome-extension/dist in Chrome (chrome://extensions,
-# Developer mode, "Load unpacked") and run `hexactra status`.
+# Developer mode, "Load unpacked") and run `hexactra-fabric status`.
 
 set -euo pipefail
 
@@ -40,7 +40,7 @@ echo "==> building binaries (release)"
 (cd "$REPO_ROOT" && cargo build --release \
     -p hexactra-cli -p hexactra-control -p hexactra-agent -p hexactra-native-host -p hexactra-mcp)
 mkdir -p "$BIN_DIR"
-for b in hexactra hexactra-control hexactra-agent hexactra-native-host hexactra-mcp; do
+for b in hexactra-fabric hexactra-control hexactra-agent hexactra-native-host hexactra-mcp; do
     install -m 0755 "$REPO_ROOT/target/release/$b" "$BIN_DIR/$b"
 done
 echo "    installed to $BIN_DIR"
@@ -77,10 +77,10 @@ Done. Next:
        $REPO_ROOT/apps/chrome-extension/dist
      The extension id must be afamapffbfhaafbjnneoachpknjpmiof.
   2. Check the connection:
-       $BIN_DIR/hexactra status        # expect browser=true
+       $BIN_DIR/hexactra-fabric status        # expect browser=true
   3. Try it:
-       $BIN_DIR/hexactra navigate https://example.com
-       $BIN_DIR/hexactra screenshot -o page.jpg
+       $BIN_DIR/hexactra-fabric navigate https://example.com
+       $BIN_DIR/hexactra-fabric screenshot -o page.jpg
   4. Let an AI agent use it (MCP), e.g. Claude Code:
        claude mcp add hexactra -- $BIN_DIR/hexactra-mcp
 

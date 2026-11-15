@@ -6,7 +6,7 @@ The control plane and a browser host run as containers, so you can drive a brows
 cd deploy/container
 ./setup.sh                      # writes .env (0600): API token and viewer password
 docker compose up -d --build
-docker compose exec control hexactra --url http://127.0.0.1:8787 status
+docker compose exec control hexactra-fabric --url http://127.0.0.1:8787 status
 ```
 
 | Service | Published on | What it is |

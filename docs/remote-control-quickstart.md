@@ -1,5 +1,7 @@
 # Remote browser control: quickstart
 
+> The fabric's CLI is `hexactra-fabric`. It was called `hexactra` before the console arrived; `hexactra` is now the console's CLI.
+
 Drive your own Chrome on an Ubuntu machine from anywhere, through the CLI or an AI agent. Your Chrome keeps your profile, extensions and sign-ins; Hexactra acts in it through its extension. Epic: #173. API reference: [remote-control-api.md](remote-control-api.md).
 
 ```text
@@ -31,7 +33,7 @@ Then load the extension into the Chrome profile you want to drive:
 Check it:
 
 ```bash
-hexactra status
+hexactra-fabric status
 # host 7c1e… my-ubuntu   online=true browser=true
 ```
 
@@ -61,17 +63,17 @@ The container host packages all of this, so it runs on an always-on machine even
 ## 2. Use it locally
 
 ```bash
-hexactra navigate https://example.com
-hexactra elements                     # interactive elements with selectors
-hexactra click 'a[href="/about"]'
-hexactra type '#search' 'flights to Denver' --submit
-hexactra wait-for '.results'
-hexactra text --max-chars 4000
-hexactra screenshot -o page.jpg
-hexactra tabs
+hexactra-fabric navigate https://example.com
+hexactra-fabric elements                     # interactive elements with selectors
+hexactra-fabric click 'a[href="/about"]'
+hexactra-fabric type '#search' 'flights to Denver' --submit
+hexactra-fabric wait-for '.results'
+hexactra-fabric text --max-chars 4000
+hexactra-fabric screenshot -o page.jpg
+hexactra-fabric tabs
 ```
 
-Add `--profile <name>` (or set `HEXACTRA_PROFILE`) to act in another browser profile. Run `hexactra profile list` to see them, and `hexactra --profile <name> session create --create` to make a new one; see [container-host.md §4](container-host.md#4-profiles-one-per-set-of-sign-ins). The first action creates a session and saves it as current. `hexactra session create`, `session list` and `session end` manage sessions explicitly. Add `--json` for machine-readable output.
+Add `--profile <name>` (or set `HEXACTRA_PROFILE`) to act in another browser profile. Run `hexactra-fabric profile list` to see them, and `hexactra-fabric --profile <name> session create --create` to make a new one; see [container-host.md §4](container-host.md#4-profiles-one-per-set-of-sign-ins). The first action creates a session and saves it as current. `hexactra-fabric session create`, `session list` and `session end` manage sessions explicitly. Add `--json` for machine-readable output.
 
 ## 3. Use it from another machine
 
@@ -84,7 +86,7 @@ The control plane listens on `127.0.0.1` only. Pick one of these:
 ssh -N -L 8787:127.0.0.1:8787 you@ubuntu-box &
 scp you@ubuntu-box:.config/hexactra/api-token ~/.config/hexactra/api-token
 chmod 600 ~/.config/hexactra/api-token
-hexactra status
+hexactra-fabric status
 ```
 
 **Private network (Tailscale or WireGuard)**
@@ -109,7 +111,7 @@ Never bind to a public interface. The token controls a browser signed in to your
 The install script puts it in `~/.local/bin`. Register it with any MCP client, for example Claude Code:
 
 ```bash
-claude mcp add hexactra --env HEXACTRA_URL=http://127.0.0.1:8787 -- ~/.local/bin/hexactra-mcp
+claude mcp add hexactra-fabric --env HEXACTRA_URL=http://127.0.0.1:8787 -- ~/.local/bin/hexactra-mcp
 ```
 
 or in a JSON MCP configuration:
@@ -129,7 +131,7 @@ The token is read from `HEXACTRA_API_TOKEN` or `~/.config/hexactra/api-token`. F
 
 ## 5. Seeing the screen
 
-- `hexactra screenshot` returns the visible tab as JPEG.
+- `hexactra-fabric screenshot` returns the visible tab as JPEG.
 - For a live view or to take over by hand, use the desktop's own remote desktop: GNOME **Settings → Sharing → Remote Desktop**, or `x11vnc` reached through the same SSH tunnel. A built-in viewer is follow-up work on #173.
 
 ## 6. CAPTCHAs, codes and approvals: handing off to you
@@ -138,7 +140,7 @@ Hexactra acts in your real Chrome profile, so sites see your normal browser, coo
 
 1. The session pauses. Browser actions return `handoff_pending` until you answer.
 2. Every webhook channel you registered gets a signed `handoff.created` event. The event holds the prompt, the page, and a single-use link and token to answer with.
-3. You answer from any channel: tap the link and fill in the small form, reply through your bot, or run `hexactra handoff respond`. For a CAPTCHA or passkey, act in the browser through remote desktop, then tap **I've done it**.
+3. You answer from any channel: tap the link and fill in the small form, reply through your bot, or run `hexactra-fabric handoff respond`. For a CAPTCHA or passkey, act in the browser through remote desktop, then tap **I've done it**.
 4. The agent gets the answer (for example the one-time code) and carries on.
 
 With MCP, the agent does this through the `browser_request_human` tool. The server instructions tell it to use the tool for any CAPTCHA, code, passkey, sign-in or purchase confirmation.
@@ -146,10 +148,10 @@ With MCP, the agent does this through the `browser_request_human` tool. The serv
 From the CLI:
 
 ```bash
-hexactra handoff request --kind code --prompt "Enter the code the airline texted you" --input secret --wait
-hexactra handoff list                 # pending requests
-hexactra handoff respond <id> --value 123456
-hexactra handoff cancel <id>
+hexactra-fabric handoff request --kind code --prompt "Enter the code the airline texted you" --input secret --wait
+hexactra-fabric handoff list                 # pending requests
+hexactra-fabric handoff respond <id> --value 123456
+hexactra-fabric handoff cancel <id>
 ```
 
 ### Add channels (webhooks)
@@ -163,9 +165,9 @@ systemctl --user edit hexactra-control
 #   Environment=HEXACTRA_WEBHOOK_ALLOW_INSECURE=1     # only for http or private-address channels
 systemctl --user restart hexactra-control
 
-hexactra webhook add https://hooks.example.test/hexactra --description "phone"
+hexactra-fabric webhook add https://hooks.example.test/hexactra --description "phone"
 # prints the id and the whsec_ signing secret (shown once)
-hexactra webhook test <id> && hexactra webhook deliveries <id>
+hexactra-fabric webhook test <id> && hexactra-fabric webhook deliveries <id>
 ```
 
 Channel recipes:
@@ -195,8 +197,8 @@ Respect each site's terms of use, and keep automated use of your own accounts at
 | `browser=false` | Is the extension loaded with id `afamapffbfhaafbjnneoachpknjpmiof`? Run `ls ~/.config/google-chrome/NativeMessagingHosts/com.hexactra.nativehost.json`, then `journalctl --user -u hexactra-agent`. |
 | `no_host_available` | `systemctl --user status hexactra-agent`; the agent must reach the control plane URL. |
 | `cannot act on this page` | Chrome blocks extensions on `chrome://` pages and the Web Store. Navigate to a normal site first. |
-| `handoff_pending` | The agent asked you for something. Run `hexactra handoff list`, then answer or cancel. |
-| Webhook never arrives | Run `hexactra webhook deliveries <id>`. A target on http or a private address needs `HEXACTRA_WEBHOOK_ALLOW_INSECURE=1`. |
+| `handoff_pending` | The agent asked you for something. Run `hexactra-fabric handoff list`, then answer or cancel. |
+| Webhook never arrives | Run `hexactra-fabric webhook deliveries <id>`. A target on http or a private address needs `HEXACTRA_WEBHOOK_ALLOW_INSECURE=1`. |
 | `Cannot find a next page in history` | Chrome's back button skips entries made without a user gesture; Hexactra falls back to the page's own history, but there may be nothing to go back to. |
 
 ## Running the end-to-end test

@@ -9,8 +9,8 @@ Drive your own signed-in Chrome on a Linux machine from anywhere, through the `h
 ```bash
 scripts/install-remote-control.sh   # build, install to ~/.local/bin, start user services
 # load apps/chrome-extension/dist in Chrome (Developer mode -> Load unpacked)
-hexactra status
-hexactra navigate https://example.com && hexactra screenshot -o page.jpg
+hexactra-fabric status
+hexactra-fabric navigate https://example.com && hexactra-fabric screenshot -o page.jpg
 ```
 
 - Quickstart, remote access and safety: [docs/remote-control-quickstart.md](docs/remote-control-quickstart.md)

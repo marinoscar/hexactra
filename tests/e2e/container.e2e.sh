@@ -36,7 +36,7 @@ export HEXACTRA_LAUNCH_EAGERLY=false
 "${COMPOSE[@]}" up -d --build --wait --wait-timeout 300 || fail "stack did not become healthy"
 pass "stack is up and healthy"
 
-hx() { "${COMPOSE[@]}" exec -T -e HEXACTRA_API_TOKEN="$HEXACTRA_API_TOKEN" control hexactra --url http://127.0.0.1:8787 "$@"; }
+hx() { "${COMPOSE[@]}" exec -T -e HEXACTRA_API_TOKEN="$HEXACTRA_API_TOKEN" control hexactra-fabric --url http://127.0.0.1:8787 "$@"; }
 chromium_running() { "${COMPOSE[@]}" exec -T host pgrep -f 'user-data-dir=/data/profiles/default' >/dev/null; }
 
 curl -fsS http://127.0.0.1:8787/v1/health >/dev/null || fail "API not published on 127.0.0.1:8787"
