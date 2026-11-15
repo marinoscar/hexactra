@@ -3,7 +3,18 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { PlatformHostProvider } from '@marinoscar/platform-web/core';
 import { createTestPlatformHost } from '@marinoscar/platform-web/testing';
 
+import { vi } from 'vitest';
+
 import { RunDetailPage, type Run } from '../pages/RunsPage';
+
+const live = vi.hoisted(() => ({ emit: null as null | ((e: unknown) => void) }));
+vi.mock('../live', () => ({
+  subscribeRun: (_id: string, on: (e: unknown) => void) => {
+    live.emit = on;
+    return () => undefined;
+  },
+  fetchRunScreenshot: async () => 'blob:shot',
+}));
 import { TasksPage, type Task } from '../pages/TasksPage';
 
 const task: Task = {
@@ -75,7 +86,11 @@ describe('RunDetailPage', () => {
   it('shows the steps and cancels a live run', async () => {
     const host = createTestPlatformHost({
       permissions: ['runs:read', 'runs:write'],
-      responses: { [`GET /runs/${run.id}`]: run, [`POST /runs/${run.id}/cancel`]: { ...run, cancelRequested: true } },
+      responses: {
+        [`GET /runs/${run.id}`]: run,
+        [`POST /runs/${run.id}/cancel`]: { ...run, cancelRequested: true },
+        [`GET /runs/${run.id}/viewer`]: { hostName: 'vps', viewerUrl: 'https://viewer.example.test/vnc.html', local: false },
+      },
     });
     render(
       <PlatformHostProvider host={host}>
@@ -88,6 +103,11 @@ describe('RunDetailPage', () => {
     );
     expect(await screen.findByText(/1\. navigate: at https:\/\/flights.example.test/)).toBeInTheDocument();
     expect(screen.getByText('needs you')).toBeInTheDocument();
+    // A step arrives over the stream, and the live browser shows.
+    live.emit?.({ type: 'step', data: { id: 's2', seq: 2, kind: 'action', action: 'click', args: null, ok: true, summary: 'done', reasoning: 'search', createdAt: '2026-11-15T00:00:02Z' } });
+    expect(await screen.findByText('2. click: done')).toBeInTheDocument();
+    expect(await screen.findByAltText("The run's browser, live")).toHaveAttribute('src', 'blob:shot');
+    expect(await screen.findByRole('button', { name: 'Take over on vps' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel run' }));
     expect(host.requests.map((r) => `${r.method} ${r.path}`)).toContain(`POST /runs/${run.id}/cancel`);
   });

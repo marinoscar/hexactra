@@ -78,3 +78,35 @@ describe('tasks and runs, end to end', () => {
     expect(detail).not.toHaveProperty('transcript');
   });
 });
+
+describe('the live run view', () => {
+  it('streams a run\'s steps and state, then ends; refuses a screenshot of a finished run', async () => {
+    const alice = await login(`alice3-${run}@example.test`, 'contributor');
+    const bob = await login(`bob3-${run}@example.test`, 'contributor');
+    const prisma = app.get(PrismaService);
+    const r = await prisma.forUser({ userId: alice.userId }).run.create({ data: { userId: alice.userId, goal: 'g', status: 'succeeded', stepCount: 2, result: 'done' } });
+    await prisma.runStep.createMany({
+      data: [
+        { runId: r.id, seq: 1, kind: 'action', action: 'navigate', summary: 'at https://example.test/' },
+        { runId: r.id, seq: 2, kind: 'finish', summary: 'done' },
+      ],
+    });
+    // SSE needs a real socket (inject's fake one has no keep-alive).
+    await app.listen(0, '127.0.0.1');
+    const base = await app.getUrl();
+    const res = await fetch(`${base.replace('[::1]', '127.0.0.1')}/api/runs/${r.id}/stream`, { headers: as(alice.token) });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toMatch(/text\/event-stream/);
+    const body = await res.text();
+    const events = body.match(/^event: (\w+)/gm)?.map((l) => l.slice(7));
+    expect(events).toEqual(['step', 'step', 'run']);
+    expect(body).toContain('"result":"done"');
+
+    const theirs = await fetch(`${base}/api/runs/${r.id}/stream`, { headers: as(bob.token) });
+    expect(theirs.status).not.toBe(200);
+    await theirs.body?.cancel();
+    expect((await app.inject({ method: 'GET', url: `/api/runs/${r.id}/stream` })).statusCode).toBe(401);
+    const shot = await app.inject({ method: 'GET', url: `/api/runs/${r.id}/screenshot`, headers: as(alice.token) });
+    expect(shot.statusCode).toBe(409);
+  });
+});
