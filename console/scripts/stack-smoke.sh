@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Bring up the whole VPS stack (console + fabric + browser host) and check it
 # (#221): healthy services, the fabric unpublished and reachable from the API,
-# the bundled host registered, and the /viewer/local/ gate (401 without a
-# ticket, a one-time ticket exchanged for a cookie, the ticket refused again).
+# the bundled host registered (it is opt-in: COMPOSE_PROFILES=bundled-host),
+# and its desktop through the fabric's tunnel (#343) behind the console's
+# /viewer/<host>/websockify gate.
 #
 #   console/scripts/stack-smoke.sh            # from the repository root
 #   KEEP=1 console/scripts/stack-smoke.sh     # leave the stack running
@@ -22,7 +23,7 @@ if [ ! -f "$env_file" ]; then
   set_var GOOGLE_CLIENT_ID ci-google-client-id
   set_var GOOGLE_CLIENT_SECRET ci-google-client-secret
   set_var HEXACTRA_FABRIC_OPERATOR_TOKEN "$(openssl rand -hex 32)"
-  set_var HEXACTRA_VIEWER_PASSWORD "$(openssl rand -hex 4)"
+  set_var COMPOSE_PROFILES bundled-host
   set_var POSTGRES_HOST db
   # Blank, so init generates them with the CSPRNG.
   for k in JWT_SECRET COOKIE_SECRET SECRETS_ENCRYPTION_KEY; do set_var "$k" ""; done
@@ -154,25 +155,36 @@ grep -qi '^content-type: application/json' "$tmpdir_headers" || fail "assetlinks
 echo "$links" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{if(!Array.isArray(JSON.parse(s)))process.exit(1)})' \
   || fail "assetlinks.json is not a JSON array"
 pass "/.well-known/assetlinks.json is served by the API"
-[ "$(code "$base/viewer/local/vnc.html")" = 401 ] || fail "viewer without a ticket is not refused"
-[ "$(code "$base/viewer/local/vnc.html?ticket=t.9999999999.x.forged")" = 401 ] || fail "forged ticket accepted"
-[ "$(code -H 'Cookie: hx_viewer=c.9999999999.x.forged' "$base/viewer/local/vnc.html")" = 401 ] || fail "forged cookie accepted"
-pass "viewer refuses unauthenticated, forged-ticket and forged-cookie requests"
+# Remote desktops (#339, #343): the old ticket viewer is gone, and nginx
+# admits a desktop WebSocket only with a console viewer session.
+[ "$(code "$base/viewer/local/vnc.html")" = 404 ] || fail "the legacy /viewer/local/ viewer is still served"
+[ "$(code "$base/viewer/00000000-0000-4000-8000-000000000000/websockify")" = 401 ] || fail "a desktop WebSocket without a session is not refused"
+[ "$(code -H 'Cookie: hx_desktop=forged' "$base/viewer/00000000-0000-4000-8000-000000000000/websockify")" = 401 ] || fail "a forged desktop cookie is accepted"
+pass "desktops need a console viewer session; the legacy viewer is gone"
 
-# A real ticket, signed like ViewerTicketService, inside the api container
-# with the JWT_SECRET the API itself was started with.
-ticket=$(dc exec -T api node -e '
-  const c=require("node:crypto");
-  const key=c.createHmac("sha256",process.env.JWT_SECRET).update("hexactra-viewer-v1").digest();
-  const body=`t.${Math.floor(Date.now()/1000)+60}.${c.randomBytes(12).toString("base64url")}`;
-  process.stdout.write(`${body}.${c.createHmac("sha256",key).update(body).digest("base64url")}`);') || fail "could not sign a ticket"
-jar=$(mktemp)
-got=$(code -c "$jar" "$base/viewer/local/vnc.html?ticket=$ticket")
-[ "$got" = 200 ] || fail "a valid ticket does not open the viewer (HTTP $got)"
-grep -q hx_viewer "$jar" || fail "no viewer cookie set"
-[ "$(code -b "$jar" "$base/viewer/local/vnc.html")" = 200 ] || fail "the viewer cookie does not work"
-[ "$(code "$base/viewer/local/vnc.html?ticket=$ticket")" = 401 ] || fail "a ticket worked twice"
-pass "a one-time ticket opens the viewer, sets its cookie and cannot be reused"
+# The bundled host's desktop through the fabric's tunnel: a tunnel for host
+# "local", the viewer's WebSocket leg, and the RFB greeting from the
+# container's own VNC, relayed by its agent.
+rfb=$(dc exec -T -e T="$token" api node -e '
+  (async () => {
+    const h = { authorization: `Bearer ${process.env.T}`, "content-type": "application/json" };
+    const hosts = await (await fetch("http://fabric-control:8787/v1/hosts", { headers: h })).json();
+    const local = hosts.hosts.find((x) => x.name === "local");
+    if (!local || !local.desktop || local.mode !== "container") throw new Error("host local has no desktop: " + JSON.stringify(local));
+    const s = await (await fetch(`http://fabric-control:8787/v1/hosts/${local.id}/desktop-sessions`, { method: "POST", headers: h, body: JSON.stringify({ actor: { display_name: "smoke" } }) })).json();
+    const ws = new WebSocket(`ws://fabric-control:8787/v1/desktop/${s.tunnel_id}/connect`, { headers: { authorization: `Bearer ${s.connect_token}` } });
+    ws.binaryType = "arraybuffer";
+    const t = setTimeout(() => { console.error("timeout"); process.exit(1); }, 30000);
+    ws.onmessage = (m) => { process.stdout.write(Buffer.from(m.data).toString()); clearTimeout(t); ws.close(); process.exit(0); };
+    ws.onerror = (e) => { console.error(e.message); process.exit(1); };
+  })().catch((e) => { console.error(e.message); process.exit(1); });') || fail "the bundled host's desktop through the tunnel: $rfb"
+[ "$rfb" = "RFB 003.008" ] || [ "$(printf '%s' "$rfb" | head -c 11)" = "RFB 003.008" ] || fail "no RFB greeting through the tunnel (got: $rfb)"
+pass "the bundled host's desktop answers RFB 003.008 through the fabric tunnel"
+
+# Without the profile the bundled host is not part of the stack (#343).
+COMPOSE_PROFILES=none docker compose --env-file .env "${files[@]}" config --services | grep -qx fabric-host \
+  && fail "fabric-host runs without COMPOSE_PROFILES=bundled-host"
+pass "the bundled host is opt-in (COMPOSE_PROFILES)"
 # Back up the fabric's state the way docs/runbooks/operations.md says (stop,
 # archive the volume, start), then check the host comes back online with the
 # state the control plane restored from its database.

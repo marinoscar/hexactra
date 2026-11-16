@@ -81,6 +81,14 @@ if [[ -n "$VIEWER_PASSWORD" ]]; then
     websockify --web /usr/share/novnc 0.0.0.0:6080 127.0.0.1:5900 >/dev/null 2>&1 &
     pids+=($!)
     log "viewer on port 6080 (/vnc.html)"
+elif [[ -n "${HEXACTRA_DESKTOP_VNC:-}" ]]; then
+    # Desktop for the fabric's tunnel (#343): VNC on the container's own
+    # loopback, reached only by the agent in this container, which relays it
+    # to a person in the console. Nothing is published, so no VNC password.
+    x11vnc -display :99 -localhost -rfbport 5900 -nopw \
+        -forever -shared -noxdamage -quiet >/dev/null 2>&1 &
+    pids+=($!)
+    log "desktop shared through the fabric (VNC on 127.0.0.1:5900 in the container)"
 else
     log "viewer disabled (set HEXACTRA_VIEWER_PASSWORD to enable it)"
 fi

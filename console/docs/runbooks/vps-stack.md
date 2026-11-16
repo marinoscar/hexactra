@@ -3,13 +3,13 @@
 One Docker Compose project runs:
 - the **console**: nginx, web, API and Postgres;
 - the **fabric control plane** (`fabric-control`);
-- one **containerized browser host** (`fabric-host`). It is optional: the primary browsers run on **nodes at home** ([docs/nodes.md](../../../docs/nodes.md)), because sites challenge datacenter IPs. New deploys will leave it off (*Planned* #343).
+- one **containerized browser host** (`fabric-host`). It is optional (`COMPOSE_PROFILES=bundled-host` in `infra/compose/.env`): the primary browsers run on **nodes at home** ([docs/nodes.md](../../../docs/nodes.md)), because sites challenge datacenter IPs. A new deploy leaves it off (`COMPOSE_PROFILES=none`); a deploy that already ran it keeps it.
 
 Only nginx is published, and only on `127.0.0.1`. The host proxy terminates TLS in front of it (Tailscale is optional). The fabric is reachable only on the private `app-network`.
 
 ```text
 you (web, Android, CLI, MCP) ──HTTPS──▶ host proxy ──▶ nginx :3535 ──▶ web, /api
-                                                                     └─▶ /viewer/local/ (ticket-gated) ──▶ fabric-host:6080
+                                                                     └─▶ /viewer/<host>/websockify (viewer session) ──▶ fabric tunnel ──▶ the host's desktop
 api ──http://fabric-control:8787 (hxs_ service token)──▶ fabric-control ◀── long-poll ── fabric-host (and your other hosts)
 ```
 
@@ -21,7 +21,7 @@ api ──http://fabric-control:8787 (hxs_ service token)──▶ fabric-contro
 - The console lives in `console/`, so the CLI declares `deploy: { appDir: 'console' }` (`apps/cli/src/app.ts`).
   - The deploy keeps one checkout of the whole repository under `<deploy root>/repo` and builds from `repo/console/infra/compose`.
   - The fabric images build from the repository root.
-- The deploy generates `HEXACTRA_FABRIC_OPERATOR_TOKEN` and `HEXACTRA_VIEWER_PASSWORD` without asking.
+- The deploy generates `HEXACTRA_FABRIC_OPERATOR_TOKEN` without asking, and sets `COMPOSE_PROFILES`: `bundled-host` where the bundled host's data volume already exists, `none` on a new server. Change it in `infra/compose/.env`, then run `hexactra deploy update`.
 - `infra/compose/app.vps.stack-agent-image.compose.yml` runs the platform's published stack-agent image, because only the platform repository ships `apps/stack-agent`.
 
 **Before you start** (`deploy doctor` checks each one):
@@ -90,7 +90,7 @@ Edit `infra/compose/.env`:
 | `INITIAL_ADMIN_EMAIL` | Your email (first admin) |
 | `POSTGRES_HOST` | `db` with the bundled database (below) |
 | `HEXACTRA_FABRIC_OPERATOR_TOKEN` | `openssl rand -hex 32` |
-| `HEXACTRA_VIEWER_PASSWORD` | Up to 8 characters (noVNC) |
+| `COMPOSE_PROFILES` | `bundled-host` to run the bundled browser host, `none` to leave it off |
 | `HEXACTRA_MAX_BROWSERS` | Profiles open at once; about 600 MB each |
 
 ## 2. Start
@@ -134,9 +134,13 @@ Then, signed in as admin:
 ## 4. Use the bundled browser
 
 - **Fleet** lists the host `local`.
-- **Open the viewer** issues a one-time ticket, valid for 60 s, that nginx exchanges for an hour-long cookie scoped to `/viewer/`. It needs `fleet:write`.
+Run it with `COMPOSE_PROFILES=bundled-host`.
+- **Fleet** lists the host `local` (mode Container).
+- **Open desktop** shows its screen, like any node's. You need `fleet:desktop`.
+  - The desktop comes through the fabric's tunnel, from VNC on the container's own loopback; nothing is published.
+  - Use **Take over** to type, and **Release** to hand control back.
 - Sign in to your sites there once per profile. Profiles live in the `fabric-host-data` volume.
-- Without a ticket or cookie, `/viewer/local/` answers `401` and nginx never contacts the host.
+- Without a viewer session, `/viewer/<host>/websockify` answers `401` and nginx never contacts the fabric.
 
 ## 5. Add more hosts (desktop, other machines)
 

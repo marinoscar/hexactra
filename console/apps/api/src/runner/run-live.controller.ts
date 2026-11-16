@@ -138,10 +138,10 @@ export class RunLiveController {
     }
   }
 
-  /** Where a person can see and use the run's browser (to take over). */
+  /** The host the run's browser is on, and whether its desktop can be opened in the console (to take over). */
   @Get(':id/viewer')
   @Auth({ permissions: ['runs:read'] })
-  async viewer(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string): Promise<{ hostName: string | null; viewerUrl: string | null; local: boolean }> {
+  async viewer(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string): Promise<{ hostId: string | null; hostName: string | null; desktop: boolean }> {
     const run = await this.ownRun(userId, id);
     let hostId = run.hostId;
     if (!hostId && run.sessionId) {
@@ -150,9 +150,8 @@ export class RunLiveController {
         .then((s) => s.host_id)
         .catch(() => null);
     }
-    if (!hostId) return { hostName: null, viewerUrl: null, local: false };
+    if (!hostId) return { hostId: null, hostName: null, desktop: false };
     const host = (await this.fabric.hosts().catch(() => [] as FabricHost[])).find((h) => h.id === hostId);
-    const viewerUrl = host?.viewer_url ?? null;
-    return { hostName: host?.name ?? null, viewerUrl, local: Boolean(viewerUrl?.includes('/viewer/local/')) };
+    return { hostId, hostName: host?.name ?? null, desktop: Boolean(host?.desktop) };
   }
 }

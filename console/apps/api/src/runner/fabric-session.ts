@@ -32,6 +32,8 @@ export interface FabricHandoffResponse {
 
 export interface FabricHandoff {
   id: string;
+  /** The fabric session it belongs to. */
+  session_id?: string;
   status: 'pending' | 'completed' | 'cancelled' | 'expired';
   input: FabricHandoffInput;
   kind: string;

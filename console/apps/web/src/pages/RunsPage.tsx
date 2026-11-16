@@ -136,9 +136,10 @@ export function RunsPage() {
 
 /** Where a person can watch and take over the run's browser. */
 interface RunViewer {
+  hostId: string | null;
   hostName: string | null;
-  viewerUrl: string | null;
-  local: boolean;
+  /** The host's desktop can be opened in the console. */
+  desktop: boolean;
 }
 
 /**
@@ -149,6 +150,7 @@ interface RunViewer {
 export function RunDetailPage() {
   const { api, viewer } = usePlatformHost();
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [run, setRun] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [shot, setShot] = useState<string | null>(null);
@@ -215,18 +217,6 @@ export function RunDetailPage() {
     void api.get<RunViewer>(`/runs/${id}/viewer`).then(setWhere).catch(() => setWhere(null));
   }, [api, id, isLive]);
 
-  const takeOver = async () => {
-    if (!where?.viewerUrl) return;
-    if (!where.local) return void window.open(where.viewerUrl, '_blank', 'noopener');
-    const tab = window.open('', '_blank');
-    try {
-      const { url } = await api.post<{ url: string }>('/fleet/viewer-ticket', {});
-      if (tab) tab.location.href = url;
-    } catch (e) {
-      tab?.close();
-      setError(e instanceof Error ? e.message : 'Could not open the viewer');
-    }
-  };
 
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!run) return null;
@@ -254,8 +244,8 @@ export function RunDetailPage() {
           <Button variant="outlined" onClick={() => setWatch((w) => !w)}>
             {watch ? 'Stop watching' : 'Watch the browser'}
           </Button>
-          {where?.viewerUrl && (!where.local || viewer.hasPermission('fleet:write')) && (
-            <Button variant="outlined" onClick={() => void takeOver()}>
+          {where?.desktop && where.hostId && viewer.hasPermission('fleet:desktop') && (
+            <Button variant="outlined" onClick={() => navigate(`/fleet/hosts/${where.hostId}/desktop`)}>
               Take over{where.hostName ? ` on ${where.hostName}` : ''}
             </Button>
           )}

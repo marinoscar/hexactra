@@ -6,7 +6,7 @@ import { generateValue, resolveEnvMetadata } from '@marinoscar/platform-cli/core
 import { resetCliForTests } from '@marinoscar/platform-cli/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { APP_CLI_OPTIONS } from './app.js';
+import { APP_CLI_OPTIONS, bundledHostProfile } from './app.js';
 
 beforeAll(() => {
   resetCliForTests();
@@ -20,13 +20,14 @@ describe('deploy environment of the fabric keys', () => {
     expect(meta).toMatchObject({ secret: true, generate: 'hex-32', autoGenerate: true });
   });
 
-  it('generates a viewer password noVNC accepts (at most 8 characters)', () => {
-    const meta = resolveEnvMetadata('HEXACTRA_VIEWER_PASSWORD');
-    expect(meta).toMatchObject({ secret: true, autoGenerate: true });
-    const a = generateValue(meta!.generate!);
-    const b = generateValue(meta!.generate!);
-    expect(a).toMatch(/^[A-Za-z0-9_-]{8}$/);
-    expect(a).not.toBe(b);
+  it('runs the bundled host only where it already exists (#343)', () => {
+    const meta = resolveEnvMetadata('COMPOSE_PROFILES');
+    expect(meta).toMatchObject({ autoGenerate: true, generate: 'bundled-host-profile' });
+    expect(['bundled-host', 'none']).toContain(generateValue(meta!.generate!));
+    expect(bundledHostProfile(() => 'hexactra_db-data\nhexactra_fabric-host-data\n')).toBe('bundled-host');
+    expect(bundledHostProfile(() => 'hexactra_db-data\nhexactra_fabric-control-data\n')).toBe('none');
+    // Docker cannot be asked: keep what an older deployment ran.
+    expect(bundledHostProfile(() => null)).toBe('bundled-host');
   });
 
   it('lets the fabric OTLP endpoint stay blank', () => {
