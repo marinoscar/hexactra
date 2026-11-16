@@ -4512,6 +4512,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/about": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Report what is deployed here (Admin only)
+         * @description Reports this deployment: the API version the process resolved for itself, the deploy document `appctl deploy` left on disk, and a database liveness fact.
+         *
+         *     **Always answers `200`.** A missing document is `deployInfoStatus: "absent"`, an unreadable or malformed one is `"invalid"`, and a database that does not answer is `database: null` with a `databaseError` string. None of the three is an error status: this endpoint is read when something has gone wrong, so every failure it can have is a field rather than a status code.
+         *
+         *     **Three deploy states, not two.** Beyond `ok` and `absent`, a document can be complete AND describe a run that failed — `deployInfoStatus: "ok"` with `run.outcome: "failure"` and `run.failedStep` naming where it stopped. That run still deployed something, so every fact it recorded is reported.
+         *
+         *     **Never performs network I/O.** `remote` is copied from the document as-is; this route does not contact the deploy remote, run git, or refresh anything. The document is read from disk on every request, so rewriting it needs no restart.
+         *
+         *     `deployInfoPath` is the exact path that was read, and on an `absent` answer it is the actionable fact — the file may simply be at a different path, on an unattached bind mount, or from a run that stopped before writing it.
+         *
+         *     **Deployment details (issue #392).** `lastCommand`, `bindPort`, `proxy`, `host` and `history` (successful runs, newest first, at most 20) are also read from the document, leniently: an invalid sub-field is `null` and an invalid history entry is dropped. `host` and `proxy.certificateExpiresAt` are as the CLI observed them when it wrote the file, not live. `runtime` (`processStartedAt`, `nodeVersion`, `environment`) is the one live object, describing this API process.
+         *
+         *     Requires `system_settings:read`.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:read`.
+         */
+        get: operations["about_getAbout"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/user-data/summary": {
         parameters: {
             query?: never;
@@ -11219,6 +11253,85 @@ export interface components {
                     error: string;
                 };
             };
+        };
+        AboutResponseDto: {
+            api: {
+                version: string;
+                deploymentMode: string;
+            };
+            /** @enum {string} */
+            deployInfoStatus: "ok" | "absent" | "invalid";
+            deployInfoPath: string;
+            deployInfoError: string | null;
+            app: {
+                name: string | null;
+                version: string | null;
+                commitSha: string | null;
+                ref: string | null;
+            } | null;
+            installedAt: string | null;
+            updatedAt: string | null;
+            deployedBy: {
+                cli: string | null;
+                version: string | null;
+            } | null;
+            domain: string | null;
+            remote: {
+                commitsBehind: number | null;
+                checkedAt: string | null;
+            } | null;
+            run: {
+                completed: string[];
+                failedStep: string | null;
+                outcome: ("success" | "failure") | null;
+            } | null;
+            lastCommand: ("install" | "update") | null;
+            bindPort: number | null;
+            proxy: {
+                mode: ("container" | "host") | null;
+                container: string | null;
+                certificateExpiresAt: string | null;
+            } | null;
+            host: {
+                hostname: string | null;
+                os: string | null;
+                kernel: string | null;
+                arch: string | null;
+                cpus: number | null;
+                memoryBytes: number | null;
+                dockerVersion: string | null;
+                composeVersion: string | null;
+                capturedAt: string | null;
+            } | null;
+            history: {
+                at: string;
+                /** @enum {string} */
+                command: "install" | "update";
+                commitSha: string | null;
+                previousCommitSha: string | null;
+                ref: string | null;
+                durationMs: number | null;
+                cliVersion: string | null;
+                /** @constant */
+                outcome: "success";
+            }[] | null;
+            runtime: {
+                processStartedAt: string;
+                nodeVersion: string;
+                environment: string | null;
+            };
+            database: {
+                status: string;
+                responseTime: string;
+            } | null;
+            databaseError: string | null;
+            extras?: {
+                id: string;
+                label: string;
+                facts: {
+                    [key: string]: string | number | boolean;
+                };
+            }[];
         };
         UserDataSummaryDto: {
             categories: {
@@ -26912,6 +27025,59 @@ export interface operations {
              *
              *     Forbidden - Insufficient permissions
              */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    about_getAbout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The deployment report. Returned for every authorized caller, whatever the state of the deploy document or the database. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AboutResponseDto"];
+                        /** @description Present when the endpoint supplies it (pagination) or when the global response interceptor adds it (`{ timestamp }`). Not every response carries one. */
+                        meta?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
             403: {
                 headers: {
                     [name: string]: unknown;
