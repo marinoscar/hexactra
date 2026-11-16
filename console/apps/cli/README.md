@@ -5,7 +5,7 @@ The `hexactra` command-line client for the hexactra Console. Assign browser goal
 Run `hexactra` with no arguments to open the terminal UI:
 
 <p align="center">
-  <img src="docs/images/tui.png" alt="The hexactra terminal UI: the Trace mark and the lowercase wordmark above the menu (Login, Inbox, Runs, Fleet, ...)" width="760">
+  <img src="docs/images/tui.png" alt="The hexactra terminal UI logged out: the Trace mark and the wordmark above the menu (Log in, Agent, Worker, Server, Developer)" width="760">
 </p>
 
 - **Every console capability, from a terminal:** tasks, runs, the handoff inbox, schedules, fleet, the fabric connection, and an MCP server for agent frameworks.
@@ -103,23 +103,34 @@ Create personal access tokens in the web app, under your settings (Access tokens
 
 ## The terminal UI
 
-Run `hexactra` with no arguments in a real terminal. Use ↑ ↓ to move, Enter to select, Esc to go back, and `q` to quit.
+Run `hexactra` with no arguments in a real terminal. Use ↑ ↓ to move, Enter to select, a digit (1-9) to jump, Esc to go up one level, and `q` to quit from the top menu.
 
-| Screen | What it does |
+The menu is grouped, and it changes with the login state (the tree is in `src/menu.ts`):
+
+| Logged in | Logged out |
 |---|---|
-| **Inbox** | What agents are waiting for: a CAPTCHA, a code, a sign-in or a confirmation. Type the answer and press Enter; a secret shows as dots. `x` declines. |
-| **Runs** | Your runs and their status. Enter opens a run's steps, `c` cancels a run, `r` refreshes. |
-| **Fleet** | Browser hosts and their profiles. `d` drains or undrains a host, `r` refreshes. |
-| **Agent** | This machine as a browser host: its install, browser, service and Fleet state. `i` installs (or repairs), `u` updates, `s` starts or stops, `r` restarts, `l` shows the log, `x` uninstalls. |
-| **Call an endpoint** | Any REST call, interactively. |
-| **Status**, **Jobs queue** | The server's health and its background job queue. |
-| **Worker node**, **Deploy** | Run this machine as a worker node, or install and update the console on a server. |
-| **Android app** | Build, sign and publish the Android app (for maintainers). |
+| Agent ▸, Worker ▸, Server ▸, Developer ▸, Account ▸, Quit | Log in…, Agent ▸, Worker ▸, Server ▸, Developer ▸, Quit |
+
+Logged out, the entries that need a server are hidden, and a note under the menu says what logging in adds.
+
+| Group | Entry | What it does | Logged out |
+|---|---|---|---|
+| **Agent** | **Inbox** | What agents are waiting for: a CAPTCHA, a code, a sign-in or a confirmation. Type the answer and press Enter; a secret shows as dots. `x` declines. | hidden |
+| | **Runs** | Your runs and their status. Enter opens a run's steps, `c` cancels a run, `r` refreshes. | hidden |
+| | **Fleet** | Browser nodes and their profiles. `o` shows a node's desktop link, `d` drains or undrains a node, `r` refreshes. | hidden |
+| | **This machine as a browser node** | Its install, browser, service and Fleet state. `i` installs (or repairs), `u` updates, `s` starts or stops, `r` restarts, `l` shows the log, `c` sets up Google Chrome, `n` installs an unattended node, `d` runs the doctor, `x` uninstalls. | shown (installing asks you to log in) |
+| **Worker** | **Jobs queue** | The server's background job queue. | hidden |
+| | **Worker node on this machine** | Run this machine as a worker for server jobs: dashboard, doctor, logs, register, enroll. | shown |
+| **Server** | **Deploy** | Install, update and check the console on this server (doctor, install, update, status). | shown |
+| | **Server status** | The server, the signed-in user and the token's expiry. | shown |
+| **Developer** | **Android app** | Build, sign and publish the Android app (for maintainers): doctor, bump, build, publish, releases. | shown (publishing needs a login) |
+| | **Call an API endpoint** | Any REST call, interactively. | hidden |
+| **Account** | **Switch account or server**, **Log out** | Log in again (another account or server), or clear the stored login. | hidden (Log in is first instead) |
 
 The UI adapts to the terminal width. On a narrow terminal it shows a smaller mark and drops the border:
 
 <p align="center">
-  <img src="docs/images/narrow.png" alt="The terminal UI in a 44-column terminal: a smaller Trace mark and the menu without a border" width="420">
+  <img src="docs/images/narrow.png" alt="The terminal UI in a 44-column terminal: a smaller Trace mark and the grouped menu without a border" width="420">
 </p>
 
 **Colors:**
@@ -218,7 +229,7 @@ hexactra agent doctor                 # every check, and how to fix what fails (
 - **Graphics.** With Intel or AMD graphics, Chrome renders on the GPU. Without them, `agent doctor` warns that rendering is in software.
 - **Other commands.** `status`, `doctor` and `update` cover it; `logs`, `start`, `stop`, `restart` and `uninstall` take `--mode unattended`. `uninstall` keeps the browser profiles unless you add `--purge-profiles`.
 - **Options.** `--resolution 1920x1080` sets the screen size, and `--max-browsers` the number of profiles open at once.
-- **TUI.** Key `n` in the **Agent** screen does the same install.
+- **TUI.** Key `n` in **Agent ▸ This machine as a browser node** does the same install.
 
 **Google Chrome (`--google-chrome`, or `hexactra agent chrome setup`).** Nodes run branded Google Chrome ([docs/nodes.md](../../../docs/nodes.md)). Chrome no longer loads unpacked extensions, so the CLI sets it up in three steps:
 1. Installs Google Chrome from Google's official `.deb`, if it is missing. That also adds Google's apt repository, so the system keeps Chrome updated.
