@@ -8,6 +8,7 @@ import type { CreateCliOptions } from '@marinoscar/platform-cli';
 import { BRAND_TUI_MENU_ROOT, BRAND_TUI_THEME } from './brand.js';
 import { agentCommand } from './agent/agent.command.js';
 import { agentScreen } from './agent/agent.tui.js';
+import { EDGE_WEBSOCKETS_STEPS } from './edge-websockets.step.js';
 import { FABRIC_CONNECT_STEPS } from './fabric-connect.step.js';
 import { fabricCommand } from './fabric.command.js';
 import { fleetCommand } from './fleet.command.js';
@@ -90,7 +91,8 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   // the Rust images from the repository root.
   deploy: { appDir: 'console' },
   // Connect the console to the bundled fabric at the end of install and update (#309).
-  deploySteps: FABRIC_CONNECT_STEPS,
+  // Forward the remote desktop WebSockets at the shared host proxy (#359).
+  deploySteps: [...EDGE_WEBSOCKETS_STEPS, ...FABRIC_CONNECT_STEPS],
   envGenerators: [BUNDLED_HOST_GENERATOR],
   envSpecFragments: [FABRIC_ENV_FRAGMENT],
 };
