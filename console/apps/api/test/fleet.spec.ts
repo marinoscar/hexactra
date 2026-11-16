@@ -51,6 +51,7 @@ describe('FleetService', () => {
       expect(request).toHaveBeenCalledWith('POST', '/v1/admin/hosts/enrollments', { body: { name: 'home pc', ttl_s: 1800 } });
       // The bundled fabric is private: a new host reaches it over the console's TLS vhost.
       expect(e.command).toBe("hexactra-agent daemon --url https://console.example.test/fabric --enrollment-token hxe_abc --name 'home pc'");
+      expect(e.agentUrl).toBe('https://console.example.test/fabric');
     } finally {
       if (saved === undefined) delete process.env.APP_URL;
       else process.env.APP_URL = saved;

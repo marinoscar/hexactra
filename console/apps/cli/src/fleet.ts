@@ -14,6 +14,8 @@ export interface FleetHost {
 
 export interface FleetEnrollment {
   enrollmentToken: string;
+  /** The fabric URL the new host uses. */
+  agentUrl: string;
   expiresAt: string | null;
   command: string;
 }

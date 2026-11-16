@@ -6,6 +6,8 @@ import { androidCommand, androidTuiScreen } from '@marinoscar/platform-cli/andro
 import type { CreateCliOptions } from '@marinoscar/platform-cli';
 
 import { BRAND_TUI_MENU_ROOT, BRAND_TUI_THEME } from './brand.js';
+import { agentCommand } from './agent/agent.command.js';
+import { agentScreen } from './agent/agent.tui.js';
 import { FABRIC_CONNECT_STEPS } from './fabric-connect.step.js';
 import { fabricCommand } from './fabric.command.js';
 import { fleetCommand } from './fleet.command.js';
@@ -56,8 +58,8 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   identity: { name: CLI_NAME, displayName: `${APP_NAME} CLI`, productName: APP_NAME, repoSlug: REPO_SLUG },
   version: readVersion(),
   // `android`: build, version and release the Android app (apps/android) through the platform's group.
-  extraCommands: [fabricCommand, fleetCommand, runsCommand, inboxCommand, questionsCommand, mcpCommand, androidCommand({ identity: ANDROID_IDENTITY_SOURCE })],
-  tuiScreens: [inboxScreen, runsScreen, fleetScreen, androidTuiScreen],
+  extraCommands: [fabricCommand, fleetCommand, agentCommand, runsCommand, inboxCommand, questionsCommand, mcpCommand, androidCommand({ identity: ANDROID_IDENTITY_SOURCE })],
+  tuiScreens: [inboxScreen, runsScreen, fleetScreen, agentScreen, androidTuiScreen],
   // The hexactra brand (docs/brand): its colours, and the Trace mark with the wordmark atop the menu.
   tuiTheme: BRAND_TUI_THEME,
   tuiMenuRoot: BRAND_TUI_MENU_ROOT,
