@@ -1,11 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { PlatformHostProvider } from '@marinoscar/platform-web/core';
 import { createTestPlatformHost } from '@marinoscar/platform-web/testing';
 
 import { vi } from 'vitest';
 
-import { RunDetailPage, type Run } from '../pages/RunsPage';
+import { RunDetailPage, withStreamedSteps, type Run } from '../pages/RunsPage';
 
 const live = vi.hoisted(() => ({ emit: null as null | ((e: unknown) => void) }));
 vi.mock('../live', () => ({
@@ -84,6 +84,7 @@ describe('TasksPage', () => {
 
 describe('RunDetailPage', () => {
   it('shows the steps and cancels a live run', async () => {
+    live.emit = null;
     const host = createTestPlatformHost({
       permissions: ['runs:read', 'runs:write'],
       responses: {
@@ -103,8 +104,10 @@ describe('RunDetailPage', () => {
     );
     expect(await screen.findByText(/1\. navigate: at https:\/\/flights.example.test/)).toBeInTheDocument();
     expect(screen.getByText('needs you')).toBeInTheDocument();
-    // A step arrives over the stream, and the live browser shows.
-    live.emit?.({ type: 'step', data: { id: 's2', seq: 2, kind: 'action', action: 'click', args: null, ok: true, summary: 'done', reasoning: 'search', createdAt: '2026-11-15T00:00:02Z' } });
+    // A step arrives over the stream, and the live browser shows. Wait for
+    // this page's subscription first: emitting earlier would drop the step.
+    await waitFor(() => expect(live.emit).not.toBeNull());
+    act(() => live.emit!({ type: 'step', data: { id: 's2', seq: 2, kind: 'action', action: 'click', args: null, ok: true, summary: 'done', reasoning: 'search', createdAt: '2026-11-15T00:00:02Z' } }));
     expect(await screen.findByText('2. click: done')).toBeInTheDocument();
     expect(await screen.findByAltText("The run's browser, live")).toHaveAttribute('src', 'blob:shot');
     expect(await screen.findByRole('button', { name: 'Take over on vps' })).toBeInTheDocument();
@@ -133,5 +136,19 @@ describe('TaskSchedules', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add schedule' }));
     await screen.findByText('0 9 * * 1-5 (Europe/Madrid)');
     expect(host.requests.find((r) => r.method === 'POST')?.body).toMatchObject({ taskId: task.id, cron: '30 7 * * *' });
+  });
+});
+
+describe('withStreamedSteps', () => {
+  const base = { id: 'r1', stepCount: 1, steps: [{ seq: 1 }] } as unknown as Run;
+  it('keeps steps the stream delivered before a slower load finished', () => {
+    const prev = { ...base, stepCount: 2, steps: [{ seq: 1 }, { seq: 2 }] } as unknown as Run;
+    const merged = withStreamedSteps(base, prev);
+    expect(merged.steps?.map((st) => st.seq)).toEqual([1, 2]);
+    expect(merged.stepCount).toBe(2);
+  });
+  it('uses the fetched run alone when nothing is missing or it is another run', () => {
+    expect(withStreamedSteps(base, null)).toBe(base);
+    expect(withStreamedSteps(base, { ...base, id: 'r2', steps: [{ seq: 9 }] } as unknown as Run)).toBe(base);
   });
 });

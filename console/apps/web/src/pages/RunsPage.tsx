@@ -5,6 +5,16 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { fetchRunScreenshot, subscribeRun } from '../live';
 
+/** `fetched`, plus any step of `prev` (received over the stream) it does not have yet. */
+export function withStreamedSteps(fetched: Run, prev: Run | null): Run {
+  if (!prev || prev.id !== fetched.id || !prev.steps?.length) return fetched;
+  const have = new Set((fetched.steps ?? []).map((st) => st.seq));
+  const extra = prev.steps.filter((st) => !have.has(st.seq));
+  if (!extra.length) return fetched;
+  const steps = [...(fetched.steps ?? []), ...extra].sort((a, b) => a.seq - b.seq);
+  return { ...fetched, steps, stepCount: Math.max(fetched.stepCount, ...steps.map((st) => st.seq)) };
+}
+
 export type RunStatus = 'queued' | 'running' | 'waiting_human' | 'succeeded' | 'failed' | 'cancelled';
 
 export interface RunStep {
@@ -147,7 +157,9 @@ export function RunDetailPage() {
 
   const load = useCallback(async () => {
     try {
-      setRun(await api.get<Run>(`/runs/${id}`));
+      const fetched = await api.get<Run>(`/runs/${id}`);
+      // A load can finish after the stream delivered newer steps: keep them.
+      setRun((prev) => withStreamedSteps(fetched, prev));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the run');
     }

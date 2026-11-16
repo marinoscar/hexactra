@@ -14,6 +14,9 @@ on:
       - 'Cargo.lock'
       - 'Cargo.toml'
       - 'scripts/package-agent-bundle.mjs'
+      - 'scripts/crx3.mjs'
+      - 'scripts/pack-crx3.mjs'
+      - 'scripts/extension-id.mjs'
       - '.github/workflows/agent-release.yml'
   pull_request:
     paths:
@@ -22,6 +25,9 @@ on:
       - 'Cargo.lock'
       - 'Cargo.toml'
       - 'scripts/package-agent-bundle.mjs'
+      - 'scripts/crx3.mjs'
+      - 'scripts/pack-crx3.mjs'
+      - 'scripts/extension-id.mjs'
       - '.github/workflows/agent-release.yml'
   workflow_dispatch:
 
@@ -55,6 +61,35 @@ jobs:
           out=$(node scripts/package-agent-bundle.mjs --out dist/agent)
           echo "$out"
           echo "version=$(node -e 'console.log(JSON.parse(process.argv[1]).version)' "$out")" >> "$GITHUB_OUTPUT"
+      # Google Chrome installs the extension only by policy, from a signed CRX
+      # listed in updates.xml (#335, docs/nodes.md). The signing key's id must be
+      # the manifest's. A pull request without the secret signs with a
+      # throwaway key, to test the packaging; main without it skips the CRX.
+      - name: Sign the extension (CRX3 + updates.xml)
+        env:
+          EXTENSION_CRX_KEY: ${{ secrets.EXTENSION_CRX_KEY }}
+          VERSION: ${{ steps.pkg.outputs.version }}
+        run: |
+          umask 077
+          key="$RUNNER_TEMP/extension-crx-key.pem"
+          any=""
+          if [ -n "$EXTENSION_CRX_KEY" ]; then
+            printf '%s\n' "$EXTENSION_CRX_KEY" > "$key"
+          elif [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$key" 2>/dev/null
+            any="--any-key"
+            echo "::notice::EXTENSION_CRX_KEY is not available here; signed with a throwaway key"
+          else
+            # Keep publishing the agent bundle; nodes cannot force-install until the key is set.
+            echo "::warning::EXTENSION_CRX_KEY is not set: no CRX or updates.xml published (apps/chrome-extension/README.md, Signing key)"
+            exit 0
+          fi
+          # Every build gets a higher version, so Chrome updates installed copies.
+          extver="${VERSION%%[-+]*}.$((GITHUB_RUN_NUMBER % 65536))"
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/agent-latest"
+          node scripts/pack-crx3.mjs --key "$key" --version "$extver" \
+            --codebase "$base/hexactra-extension.crx" --out dist/agent $any
+          rm -f "$key"
       # A pull request builds and verifies the bundle; only main publishes it.
       - name: Publish agent-latest
         if: github.event_name != 'pull_request'
@@ -70,7 +105,9 @@ jobs:
           else
             gh release create agent-latest --title "Agent (latest build)" --notes "$notes" --latest=false
           fi
-          gh release upload agent-latest dist/agent/* --clobber
+          # The CRX before updates.xml, so the manifest never names a missing build.
+          gh release upload agent-latest $(ls dist/agent/* | grep -v '/updates.xml$') --clobber
+          if [ -f dist/agent/updates.xml ]; then gh release upload agent-latest dist/agent/updates.xml --clobber; fi
       - name: Publish agent-v<version> once
         if: github.event_name != 'pull_request'
         env:
@@ -89,3 +126,4 @@ jobs:
           curl -fsSL -o /tmp/b.tgz "$base/hexactra-agent-linux-x86_64.tar.gz"
           curl -fsSL -o /tmp/b.sha "$base/hexactra-agent-linux-x86_64.tar.gz.sha256"
           [ "$(sha256sum /tmp/b.tgz | cut -d' ' -f1)" = "$(cut -d' ' -f1 /tmp/b.sha)" ] || { echo "published checksum mismatch"; exit 1; }
+          if [ -f dist/agent/updates.xml ]; then node scripts/verify-extension-release.mjs "$base/updates.xml"; fi
