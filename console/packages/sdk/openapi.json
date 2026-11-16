@@ -54680,6 +54680,26 @@
           "onDemand": {
             "type": "boolean"
           },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "unattended",
+                  "attended",
+                  "container"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the host runs its browsers; null for older agents"
+          },
+          "desktop": {
+            "type": "boolean",
+            "description": "The host can share its desktop through the fabric"
+          },
           "draining": {
             "type": "boolean"
           },
