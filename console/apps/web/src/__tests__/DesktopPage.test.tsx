@@ -111,6 +111,39 @@ describe('DesktopPage', () => {
     }
   });
 
+  it('a connection that drops right after connecting keeps backing off (#364)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderPage();
+      await waitFor(() => expect(rfb.instances).toHaveLength(1));
+      // Drop right after connecting, twice: the second wait is 2 s, not 1 s.
+      act(() => {
+        const t = rfb.instances[0] as unknown as EventTarget;
+        t.dispatchEvent(new Event('connect'));
+        t.dispatchEvent(new Event('disconnect'));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(1000);
+      });
+      await waitFor(() => expect(rfb.instances).toHaveLength(2));
+      act(() => {
+        const t = rfb.instances[1] as unknown as EventTarget;
+        t.dispatchEvent(new Event('connect'));
+        t.dispatchEvent(new Event('disconnect'));
+      });
+      await act(async () => {
+        vi.advanceTimersByTime(1500);
+      });
+      expect(rfb.instances).toHaveLength(2);
+      await act(async () => {
+        vi.advanceTimersByTime(600);
+      });
+      await waitFor(() => expect(rfb.instances).toHaveLength(3));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('watches by default; Take over pauses the agent and enables input until Release', async () => {
     const { platform } = renderPage();
     await waitFor(() => expect(rfb.instances).toHaveLength(1));

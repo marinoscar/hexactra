@@ -22,6 +22,8 @@ type Status = 'loading' | 'connecting' | 'connected' | 'reconnecting' | 'closed'
 /** Reconnect delays: 1 s doubling to 30 s, ten tries. */
 export const backoff = (attempt: number) => Math.min(30_000, 1000 * 2 ** attempt);
 const MAX_TRIES = 10;
+/** A connection counts as healthy (and resets the backoff) after this long. */
+export const STABLE_MS = 10_000;
 
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
@@ -57,13 +59,18 @@ export function DesktopPage() {
       r.focusOnClick = true;
       // Watching is the default; input needs the takeover lease (the fabric enforces it too).
       r.viewOnly = !leaseRef.current;
+      let connectedAt = 0;
       r.addEventListener('connect', () => {
-        tries.current = 0;
+        connectedAt = Date.now();
         setStatus('connected');
       });
       r.addEventListener('disconnect', () => {
         rfb.current = null;
         if (closing.current) return;
+        // Only a connection that stayed up resets the backoff; one that drops
+        // right after connecting keeps backing off (and stays under the
+        // server's reconnect limit).
+        if (connectedAt && Date.now() - connectedAt >= STABLE_MS) tries.current = 0;
         if (tries.current >= MAX_TRIES) {
           setStatus('error');
           setError('The desktop connection keeps dropping. Check that the node is online, then reconnect.');

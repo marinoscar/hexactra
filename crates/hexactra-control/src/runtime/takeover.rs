@@ -292,6 +292,8 @@ impl Default for RfbInputFilter {
 
 /// Largest clipboard text accepted from a viewer.
 const MAX_CUT_TEXT: usize = 1 << 20;
+/// Extended clipboard flag: this message lists capabilities (not clipboard data).
+const EXT_CLIPBOARD_CAPS: u32 = 1 << 24;
 
 impl RfbInputFilter {
     /// Bytes the next complete unit needs, or `None` until more arrive.
@@ -322,15 +324,32 @@ impl RfbInputFilter {
                     4 => fixed(8, true),   // KeyEvent
                     5 => fixed(6, true),   // PointerEvent
                     6 => {
-                        // ClientCutText: 8 + len
+                        // ClientCutText: 8 + len. A negative (signed) length
+                        // is the extended clipboard (noVNC, TigerVNC): |len|
+                        // bytes of flags + payload. Its capabilities message
+                        // (flag bit 24) is not input and always passes, so the
+                        // server knows what the viewer supports.
                         if !have(8) {
                             None
                         } else {
-                            let len = u32::from_be_bytes([b[4], b[5], b[6], b[7]]) as usize;
+                            let raw = i32::from_be_bytes([b[4], b[5], b[6], b[7]]);
+                            let len = raw.unsigned_abs() as usize;
                             if len > MAX_CUT_TEXT {
                                 return Err(format!("clipboard text of {len} bytes is too large"));
                             }
-                            fixed(8 + len, true)
+                            if raw < 0 {
+                                if len < 4 {
+                                    return Err("extended clipboard message without flags".into());
+                                }
+                                if !have(8 + len) {
+                                    None
+                                } else {
+                                    let flags = u32::from_be_bytes([b[8], b[9], b[10], b[11]]);
+                                    fixed(8 + len, flags & EXT_CLIPBOARD_CAPS == 0)
+                                }
+                            } else {
+                                fixed(8 + len, true)
+                            }
                         }
                     }
                     150 => fixed(10, false), // EnableContinuousUpdates
@@ -468,6 +487,45 @@ mod tests {
         let mut expected = v.clone();
         expected.truncate(v.len() - POINTER.len());
         assert_eq!(f.feed(&v, false).unwrap(), expected);
+    }
+
+    #[test]
+    fn extended_clipboard_caps_pass_and_its_data_needs_the_lease() {
+        // What noVNC sends after the server advertises the extended clipboard:
+        // ClientCutText with length -8 (0xFFFFFFF8): caps flag | text, then
+        // the text size limit. It used to close every desktop (#364).
+        let caps: [u8; 16] = [
+            6, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xF8, 0x01, 0, 0, 0x01, 0, 0, 0x10, 0,
+        ];
+        // Provide (bit 27) with 4 bytes of zlib payload: input.
+        let provide: [u8; 16] = [
+            6, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xF8, 0x08, 0, 0, 0x01, 1, 2, 3, 4,
+        ];
+        let mut f = RfbInputFilter::default();
+        f.feed(&handshake(), false).unwrap();
+        let mut both = caps.to_vec();
+        both.extend(provide);
+        both.extend(POINTER);
+        // Split across frames at an awkward point.
+        let mut out = f.feed(&both[..10], false).unwrap();
+        out.extend(f.feed(&both[10..], false).unwrap());
+        assert_eq!(out, caps.to_vec());
+        assert_eq!(f.dropped, 2);
+        let mut g = RfbInputFilter::default();
+        g.feed(&handshake(), true).unwrap();
+        assert_eq!(g.feed(&both, true).unwrap(), both);
+    }
+
+    #[test]
+    fn refuses_huge_extended_clipboard() {
+        let mut f = RfbInputFilter::default();
+        f.feed(&handshake(), true).unwrap();
+        assert!(f.feed(&[6, 0, 0, 0, 0xF0, 0, 0, 0], true).is_err());
+        let mut g = RfbInputFilter::default();
+        g.feed(&handshake(), true).unwrap();
+        assert!(g
+            .feed(&[6, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFE, 0, 0], true)
+            .is_err());
     }
 
     #[test]
