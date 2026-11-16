@@ -21,6 +21,13 @@ export interface AgentPaths {
   hostIdFile: string;
   unitDir: string;
   unit: string;
+  /** Google Chrome's binary (the official .deb installs it here). */
+  googleChrome: string;
+  /** The one Chrome enterprise policy file Hexactra writes (machine-wide; Linux has no per-user policy). */
+  chromePolicyFile: string;
+  /** Where Google Chrome reads per-user native messaging host manifests. */
+  chromeNativeHostDir: string;
+  osRelease: string;
 }
 
 export const UNIT_NAME = 'hexactra-agent.service';
@@ -45,5 +52,9 @@ export function agentPaths(env: NodeJS.ProcessEnv = process.env, home = homedir(
     hostIdFile: join(configDir, 'host-id'),
     unitDir,
     unit: join(unitDir, UNIT_NAME),
+    googleChrome: '/opt/google/chrome/chrome',
+    chromePolicyFile: '/etc/opt/chrome/policies/managed/hexactra.json',
+    chromeNativeHostDir: join(config, 'google-chrome', 'NativeMessagingHosts'),
+    osRelease: '/etc/os-release',
   };
 }

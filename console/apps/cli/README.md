@@ -201,7 +201,20 @@ hexactra agent logs [-f]              # the service's log
 hexactra agent update                 # latest agent and Chrome for Testing, then a restart
 hexactra agent stop | start | restart
 hexactra agent uninstall --yes        # stops it and revokes the host in Fleet (profiles are kept)
+hexactra agent chrome setup           # Google Chrome + the extension by policy + the native host (sudo once)
+hexactra agent chrome status          # what is set up for Google Chrome
+hexactra agent doctor                 # every check, and how to fix what fails (exit code 1 if any fails)
 ```
+
+**Google Chrome (`--google-chrome`, or `hexactra agent chrome setup`).** Nodes run branded Google Chrome ([docs/nodes.md](../../../docs/nodes.md)). Chrome no longer loads unpacked extensions, so the CLI sets it up in three steps:
+1. Installs Google Chrome from Google's official `.deb`, if it is missing. That also adds Google's apt repository, so the system keeps Chrome updated.
+2. Writes one enterprise policy file, `/etc/opt/chrome/policies/managed/hexactra.json`, which force-installs and pins the Hexactra extension from the signed package each agent release publishes. Chrome then shows "Managed by your organization"; that refers to this one file.
+3. Registers the native messaging host for your user (`~/.config/google-chrome/NativeMessagingHosts/`).
+
+The first two steps need root. The CLI lists them, asks for your sudo password once, and changes nothing that needs root when everything is already current.
+- **TUI:** without a terminal to type the password in, it prints the exact commands instead.
+- **Uninstall:** removes the policy and the native host, never Chrome.
+- **Debian and Ubuntu only** (x86_64).
 
 **What `install` does:**
 1. Downloads the agent bundle from the project's releases and verifies its sha256, and the sha256 of every file in it.
@@ -217,6 +230,7 @@ It reaches the console over HTTPS at `https://<console>/fabric`. Re-running `ins
 **Options:**
 - `--name`: the host's name in Fleet.
 - `--max-browsers`: profiles open at once, 300–600 MB each.
+- `--google-chrome`: use Google Chrome with the extension by policy (above).
 - `--browser <path>`: your own Chromium or Chrome for Testing.
 - `--version`: a specific agent release.
 - `--no-service`: install without a service; then `hexactra agent run` runs the agent in the foreground.

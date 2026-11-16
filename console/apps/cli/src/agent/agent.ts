@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { activate, fetchBundle, type Fetch } from './bundle.js';
 import { ensureChrome, needsSetuidSandbox, sandboxHelperCommands, sandboxHelperReady, chromeFor } from './chrome.js';
+import { chromeSetup, chromeStatus, chromeTeardown, registerNativeHost, type ChromeStatus } from './googleChrome.js';
 import { agentPaths, UNIT_NAME, type AgentPaths } from './paths.js';
 import { agentEnv, unitFile, type AgentConfig } from './service.js';
 
@@ -13,7 +14,7 @@ export interface AgentState extends AgentConfig {
   version: string;
   commit: string;
   hostId: string;
-  browserKind: 'chrome-for-testing' | 'custom';
+  browserKind: 'chrome-for-testing' | 'google-chrome' | 'custom';
   chromeVersion?: string | undefined;
   service: boolean;
   installedAt: string;
@@ -128,6 +129,10 @@ export interface InstallOptions {
   agentUrl?: string | undefined;
   /** Prompt for sudo (a terminal) or only try `sudo -n` (the TUI). */
   interactiveSudo?: boolean | undefined;
+  /** Use Google Chrome with the extension installed by policy (`hexactra agent chrome setup`). */
+  googleChrome?: boolean | undefined;
+  /** Where the Chrome policy points for extension updates (a test or CI mirror). */
+  extensionUpdateUrl?: string | undefined;
   waitSeconds?: number | undefined;
 }
 
@@ -156,7 +161,12 @@ export async function installAgent(d: AgentDeps, o: InstallOptions): Promise<Age
   let sandboxHelper: string | undefined;
   // A re-install keeps the browser chosen before unless a new one is given.
   const chosen = o.browser ?? (previous?.browserKind === 'custom' ? previous.browser : undefined);
-  if (chosen) {
+  const useGoogle = !o.browser && (o.googleChrome ?? previous?.browserKind === 'google-chrome');
+  if (useGoogle) {
+    const chrome = await chromeSetup(d, { interactive: o.interactiveSudo !== false, updateUrl: o.extensionUpdateUrl });
+    browser = chrome.chrome.path;
+    chromeVersion = chrome.chrome.version ?? undefined;
+  } else if (chosen) {
     browser = chosen;
     d.log(`Using the browser at ${browser} (it must load unpacked extensions: Chromium or Chrome for Testing, not branded Chrome)`);
   } else {
@@ -179,6 +189,8 @@ export async function installAgent(d: AgentDeps, o: InstallOptions): Promise<Age
   }
 
   activate(paths, bundle);
+  // The native host manifest points through `current`, so it stays valid across updates.
+  if (useGoogle) registerNativeHost(d);
   const now = new Date().toISOString();
   const state: AgentState = {
     name,
@@ -190,7 +202,7 @@ export async function installAgent(d: AgentDeps, o: InstallOptions): Promise<Age
     version: bundle.version,
     commit: bundle.commit,
     hostId,
-    browserKind: chosen ? 'custom' : 'chrome-for-testing',
+    browserKind: useGoogle ? 'google-chrome' : chosen ? 'custom' : 'chrome-for-testing',
     chromeVersion,
     service,
     installedAt: previous?.installedAt ?? now,
@@ -346,8 +358,9 @@ export function agentLogs(d: AgentDeps, lines: number, follow: boolean): ExecRes
   return d.exec(follow ? [...argv, '-f'] : argv, { interactive: follow });
 }
 
-export async function uninstallAgent(d: AgentDeps, o: { keepHost?: boolean; purgeProfiles?: boolean }): Promise<void> {
+export async function uninstallAgent(d: AgentDeps, o: { keepHost?: boolean; purgeProfiles?: boolean; interactiveSudo?: boolean }): Promise<void> {
   const s = readState(d.paths);
+  if (s?.browserKind === 'google-chrome') chromeTeardown(d, o.interactiveSudo !== false);
   if (s?.service || existsSync(d.paths.unit)) {
     systemctl(d, 'disable', '--now', UNIT_NAME);
     rmSync(d.paths.unit, { force: true });
@@ -386,6 +399,47 @@ export function runAgentForeground(d: AgentDeps): number {
 /** Re-runs the sandbox helper step for the installed Chrome for Testing (needs a terminal for sudo). */
 export function sandboxAgain(d: AgentDeps): void {
   const s = requireState(d);
+  if (s.browserKind === 'google-chrome') {
+    d.log('Google Chrome ships its own sandbox helper; nothing to set up.');
+    return;
+  }
   if (s.browserKind !== 'chrome-for-testing' || !s.chromeVersion) throw new Error('This agent uses its own browser; there is no Chrome for Testing helper to set up.');
   ensureSandbox(d, chromeFor(d.paths, s.chromeVersion).sandboxHelper, true);
+}
+
+export interface DoctorCheck {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+
+/**
+ * Every check `hexactra agent doctor` runs, in the order to fix them:
+ * system, browser, policy, native host, agent, service, Fleet.
+ */
+export async function agentDoctor(d: AgentDeps): Promise<DoctorCheck[]> {
+  const st = await agentStatus(d);
+  const s = st.state;
+  const google = s?.browserKind === 'google-chrome';
+  const checks: DoctorCheck[] = [];
+  const add = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
+  add('system', d.platform.os === 'linux' && d.platform.arch === 'x64', `${d.platform.os}/${d.platform.arch}`);
+  if (google || !s) {
+    const c: ChromeStatus = chromeStatus(d);
+    add('os', c.os.supported, c.os.pretty);
+    add('chrome', c.chrome.installed, c.chrome.installed ? `Google Chrome ${c.chrome.version ?? ''}`.trim() : 'not installed: run `hexactra agent chrome setup`');
+    add('policy', c.policy.current, c.policy.current ? `${c.policy.path} installs the extension (check chrome://policy)` : `${c.policy.present ? 'out of date' : 'missing'}: run \`hexactra agent chrome setup\`, then restart Chrome`);
+    add('native-host', c.nativeHost.current, c.nativeHost.current ? c.nativeHost.path : 'missing or out of date: run `hexactra agent chrome setup`');
+  } else {
+    add('browser', existsSync(s.browser), `${s.browserKind}: ${s.browser}`);
+  }
+  if (!s) {
+    add('agent', false, 'not installed: run `hexactra agent install`');
+    return checks;
+  }
+  add('agent', !!st.activeBundle && existsSync(join(d.paths.current, 'bin', 'hexactra-agent')), `${s.version} (${s.commit.slice(0, 7)})`);
+  add('credential', existsSync(d.paths.credential), existsSync(d.paths.credential) ? 'present (0600)' : 'missing: run `hexactra agent install --reenroll`');
+  if (s.service) add('service', st.service?.active === 'active', `${UNIT_NAME}: ${st.service?.active ?? 'unknown'} (${st.service?.sub ?? 'unknown'})`);
+  add('fleet', !!st.fleet?.online, st.fleet ? `${st.fleet.online ? 'online' : 'offline'}${st.fleet.browserConnected ? ', extension connected' : ', extension not connected yet'}` : (st.fleetError ?? 'unknown'));
+  return checks;
 }

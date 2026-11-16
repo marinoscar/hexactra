@@ -46,7 +46,7 @@ A node can run **unattended**, **attended**, or **both at once**. In both mode, 
 | Best for | An always-on robot with its own signed-in profiles | Letting an agent use the browser you are already signed into |
 | Status | *Planned* (#340) | *Planned* (#341) |
 
-**The extension is installed by Chrome policy.** Google Chrome no longer loads unpacked extensions. `hexactra agent install` installs Google Chrome if needed, and writes one Chrome enterprise policy file (`/etc/opt/chrome/policies/managed/hexactra.json`) that force-installs the Hexactra extension. Chrome then shows "Managed by your organization", which refers to that one file (*Planned* #335, #337).
+**The extension is installed by Chrome policy.** Google Chrome no longer loads unpacked extensions. `hexactra agent install` installs Google Chrome if needed, and writes one Chrome enterprise policy file (`/etc/opt/chrome/policies/managed/hexactra.json`) that force-installs the Hexactra extension. Chrome then shows "Managed by your organization", which refers to that one file. Available now as `hexactra agent chrome setup` (or `hexactra agent install --google-chrome`); `hexactra agent doctor` checks it.
 
 ### Attended mode and Wayland
 Ubuntu 22.04 and later log in to Wayland by default. Wayland blocks the tools that share a live desktop, so attended mode needs an X11 session for now.
@@ -110,7 +110,7 @@ Also:
 | Symptom | What to do |
 |---|---|
 | Attended install refuses: Wayland | Log in with **Ubuntu on Xorg** (see above) |
-| `chrome://policy` does not list Hexactra | Run `hexactra agent doctor`, then restart Chrome |
+| `chrome://policy` does not list Hexactra | Run `hexactra agent doctor`, then `hexactra agent chrome setup`, then restart Chrome |
 | The extension is not connected | `hexactra agent doctor` checks the policy, the native host and the extension |
 | The node shows offline | `hexactra agent status`, then `hexactra agent logs`. The node needs outbound HTTPS to the console. |
 | A warning about software graphics | The machine has no usable Intel or AMD GPU (or uses NVIDIA's proprietary driver). The node works but is easier to detect. |
