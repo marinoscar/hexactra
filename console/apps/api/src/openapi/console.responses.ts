@@ -160,6 +160,8 @@ export const fleetHostResponseSchema = z.object({
   online: z.boolean(),
   browserConnected: z.boolean(),
   onDemand: z.boolean(),
+  mode: z.enum(['unattended', 'attended', 'container']).nullable().describe('How the host runs its browsers; null for older agents'),
+  desktop: z.boolean().describe('The host can share its desktop through the fabric'),
   draining: z.boolean(),
   viewerUrl: z.string().nullable(),
   profiles: z.array(z.object({ name: z.string(), running: z.boolean() })),

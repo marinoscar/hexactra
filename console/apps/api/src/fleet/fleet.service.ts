@@ -39,6 +39,8 @@ function toHost(h: FabricHost): FleetHost {
     onDemand: h.on_demand,
     draining: h.draining ?? false,
     viewerUrl: h.viewer_url ?? null,
+    mode: h.mode ?? null,
+    desktop: h.desktop ?? false,
     profiles: (h.profiles ?? []).map((name) => ({ name, running: running.has(name) })),
     lastSeen: h.last_seen,
   };

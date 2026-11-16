@@ -9,7 +9,7 @@ import { APP_CLI_OPTIONS } from './app.js';
 
 import { setConsoleApiFactory } from './console-api.js';
 import { fleetCommand } from './fleet.command.js';
-import type { FleetHost } from './fleet.js';
+import { hostLine, type FleetHost } from './fleet.js';
 import { FleetScreen } from './fleet.screen.js';
 
 resetCliForTests();
@@ -26,6 +26,8 @@ const hosts: FleetHost[] = [
     onDemand: true,
     draining: false,
     viewerUrl: null,
+    mode: null,
+    desktop: false,
     profiles: [
       { name: 'default', running: false },
       { name: 'travel', running: true },
@@ -72,6 +74,7 @@ describe('hexactra fleet', () => {
   it('lists hosts with running profiles starred', async () => {
     fakeApi({ 'GET /fleet/hosts': hosts });
     expect(await run('fleet', 'hosts')).toContain('vps  [online, launch]  profiles: default, travel*');
+    expect(hostLine({ ...hosts[0]!, mode: 'unattended', desktop: true })).toBe('vps  [online, unattended, desktop]  profiles: default, travel*');
   });
 
   it('drains, manages profiles and enrolls, naming hosts by name', async () => {

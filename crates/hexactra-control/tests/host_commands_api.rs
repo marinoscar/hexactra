@@ -41,6 +41,8 @@ async fn a_command_round_trips_through_the_host_poll() {
             version: "0".into(),
             host_id: None,
             viewer_url: None,
+            mode: None,
+            desktop: false,
         })
         .await
         .unwrap()
@@ -155,6 +157,8 @@ async fn only_the_owning_host_may_report_and_old_agents_get_operations_only() {
                 version: "0".into(),
                 host_id: Some(got.host_id),
                 viewer_url: None,
+                mode: None,
+                desktop: false,
             })
             .await
             .unwrap();

@@ -231,7 +231,7 @@ export const MCP_TOOLS: McpTool[] = [
     input: z.object({ question_id: id, wait_s: z.number().int().min(0).max(MAX_TOOL_WAIT_S).default(0) }),
     call: async (a, ctx) => text(questionResult(await awaitQuestion(ctx, String(a.question_id), Number(a.wait_s)))),
   },
-  { name: 'hosts_list', description: 'Browser hosts with their profiles and running browsers.', input: z.object({}), call: async (_a, ctx) => text(await ctx.api('GET', '/fleet/hosts')) },
+  { name: 'hosts_list', description: 'Browser hosts with their mode (unattended, attended or container), whether they can share a desktop, their profiles and running browsers.', input: z.object({}), call: async (_a, ctx) => text(await ctx.api('GET', '/fleet/hosts')) },
 
   // --- drive a browser directly (an external session) ----------------------
   {

@@ -27,6 +27,8 @@ async fn register(url: &str) -> (HostClient, uuid::Uuid) {
             version: "0".into(),
             host_id: None,
             viewer_url: None,
+            mode: None,
+            desktop: false,
         })
         .await
         .unwrap()
@@ -230,6 +232,8 @@ async fn profiles_over_http() {
             version: "0".into(),
             host_id: None,
             viewer_url: None,
+            mode: None,
+            desktop: false,
         })
         .await
         .unwrap()
@@ -288,4 +292,74 @@ async fn profiles_over_http() {
         .await
         .unwrap();
     assert_eq!(w.profile, "work");
+}
+
+#[tokio::test]
+async fn host_mode_and_desktop_over_http() {
+    use hexactra_core::remote::HostMode;
+    let url = start().await;
+    let host = HostClient::new(&url, TOKEN).unwrap();
+    let id = host
+        .register(&RegisterHostRequest {
+            name: "mini-pc".into(),
+            version: "0".into(),
+            host_id: None,
+            viewer_url: None,
+            mode: Some(HostMode::Unattended),
+            desktop: true,
+        })
+        .await
+        .unwrap()
+        .host_id;
+    let client = ControlClient::new(&url, TOKEN).unwrap();
+    let h = &client.hosts().await.unwrap()[0];
+    assert_eq!(h.mode, Some(HostMode::Unattended));
+    assert!(h.desktop);
+
+    // The wire form is snake_case.
+    let raw: serde_json::Value = reqwest::Client::new()
+        .get(format!("{url}/v1/hosts"))
+        .bearer_auth(TOKEN)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(raw["hosts"][0]["mode"], "unattended");
+    assert_eq!(raw["hosts"][0]["desktop"], true);
+
+    // An older agent's registration (no mode, no desktop) clears both.
+    let old = json!({ "name": "mini-pc", "version": "0", "host_id": id });
+    let r = reqwest::Client::new()
+        .post(format!("{url}/v1/hosts/register"))
+        .bearer_auth(TOKEN)
+        .json(&old)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 200);
+    let h = &client.hosts().await.unwrap()[0];
+    assert_eq!(h.mode, None);
+    assert!(!h.desktop);
+    let raw: serde_json::Value = reqwest::Client::new()
+        .get(format!("{url}/v1/hosts"))
+        .bearer_auth(TOKEN)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(raw["hosts"][0].get("mode").is_none());
+
+    // An unknown mode is refused.
+    let r = reqwest::Client::new()
+        .post(format!("{url}/v1/hosts/register"))
+        .bearer_auth(TOKEN)
+        .json(&json!({ "name": "x", "version": "0", "mode": "headless" }))
+        .send()
+        .await
+        .unwrap();
+    assert!(r.status().is_client_error());
 }

@@ -8,6 +8,8 @@ export interface FleetHost {
   onDemand: boolean;
   draining: boolean;
   viewerUrl: string | null;
+  mode: 'unattended' | 'attended' | 'container' | null;
+  desktop: boolean;
   profiles: { name: string; running: boolean }[];
   lastSeen: string;
 }
@@ -32,7 +34,12 @@ export interface FleetCommandResult {
 
 /** One line per host, for the CLI and the TUI. */
 export function hostLine(h: FleetHost): string {
-  const flags = [h.online ? 'online' : 'offline', h.onDemand ? 'launch' : 'attach', ...(h.draining ? ['draining'] : [])];
+  const flags = [
+    h.online ? 'online' : 'offline',
+    h.mode ?? (h.onDemand ? 'launch' : 'attach'),
+    ...(h.desktop ? ['desktop'] : []),
+    ...(h.draining ? ['draining'] : []),
+  ];
   const profiles = h.profiles.map((p) => (p.running ? `${p.name}*` : p.name)).join(', ') || '-';
   return `${h.name}  [${flags.join(', ')}]  profiles: ${profiles}`;
 }

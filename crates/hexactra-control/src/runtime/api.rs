@@ -359,7 +359,8 @@ async fn register_host(
         .store
         .register_host(req.host_id, name.to_string(), req.version);
     s.store.set_host_viewer_url(host_id, viewer_url)?;
-    tracing::info!(%host_id, "host registered");
+    s.store.set_host_mode(host_id, req.mode, req.desktop)?;
+    tracing::info!(%host_id, mode = ?req.mode, desktop = req.desktop, "host registered");
     Ok(Json(RegisterHostResponse { host_id }))
 }
 

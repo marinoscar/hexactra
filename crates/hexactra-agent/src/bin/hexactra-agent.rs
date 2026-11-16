@@ -6,10 +6,12 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use hexactra_agent::desktop::DesktopTarget;
 use hexactra_agent::launcher::LaunchConfig;
 use hexactra_agent::pool::PoolConfig;
 use hexactra_agent::remote_daemon::{self, DaemonConfig};
 use hexactra_core::bridge::bridge_socket_path;
+use hexactra_core::remote::HostMode;
 
 #[derive(Parser)]
 #[command(name = "hexactra-agent", version, about = "Hexactra host agent")]
@@ -76,6 +78,14 @@ enum Commands {
         /// Web viewer URL for this host's browser, shown in handoffs.
         #[arg(long, env = "HEXACTRA_VIEWER_URL")]
         viewer_url: Option<String>,
+        /// How this host runs: unattended, attended or container. Default:
+        /// unattended with --browser (the agent launches Chrome), else attended.
+        #[arg(long, env = "HEXACTRA_HOST_MODE")]
+        mode: Option<HostMode>,
+        /// Local desktop server to share through the fabric:
+        /// unix:/path/to/vnc.sock or tcp:127.0.0.1:<port>.
+        #[arg(long = "desktop-vnc", env = "HEXACTRA_DESKTOP_VNC")]
+        desktop_vnc: Option<DesktopTarget>,
     },
     /// Print the bridge socket path the native host will use.
     SocketPath,
@@ -214,7 +224,10 @@ async fn main() -> Result<()> {
             launch_eagerly,
             native_host,
             viewer_url,
+            mode,
+            desktop_vnc,
         } => {
+            let mode = Some(default_mode(mode, browser.is_some()));
             let bridge_socket = bridge_socket.unwrap_or_else(bridge_socket_path);
             let launch = match browser {
                 None => None,
@@ -268,12 +281,24 @@ async fn main() -> Result<()> {
                 launch,
                 launch_eagerly,
                 viewer_url,
+                mode,
+                desktop: desktop_vnc,
             };
             // SIGTERM/SIGINT are handled inside: browsers are closed
             // gracefully so their cookies and storage reach the disk.
             remote_daemon::run(cfg).await
         }
     }
+}
+
+/// The mode a host reports: the flag, else unattended when the agent
+/// launches its own browser, else attended (it attaches to the person's).
+fn default_mode(flag: Option<HostMode>, launches_browser: bool) -> HostMode {
+    flag.unwrap_or(if launches_browser {
+        HostMode::Unattended
+    } else {
+        HostMode::Attended
+    })
 }
 
 #[cfg(test)]
@@ -284,5 +309,47 @@ mod tests {
     fn cli_parses_daemon() {
         let cli = Cli::parse_from(["hexactra-agent", "daemon", "--url", "http://h:1"]);
         assert!(matches!(cli.command, Commands::Daemon { .. }));
+    }
+
+    #[test]
+    fn daemon_takes_mode_and_desktop() {
+        let cli = Cli::parse_from([
+            "hexactra-agent",
+            "daemon",
+            "--url",
+            "http://h:1",
+            "--mode",
+            "container",
+            "--desktop-vnc",
+            "tcp:127.0.0.1:5900",
+        ]);
+        match cli.command {
+            Commands::Daemon {
+                mode, desktop_vnc, ..
+            } => {
+                assert_eq!(mode, Some(HostMode::Container));
+                assert_eq!(desktop_vnc, Some("tcp:127.0.0.1:5900".parse().unwrap()));
+            }
+            _ => panic!("expected daemon"),
+        }
+        assert!(Cli::try_parse_from([
+            "hexactra-agent",
+            "daemon",
+            "--url",
+            "http://h:1",
+            "--desktop-vnc",
+            "tcp:0.0.0.0:5900",
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn mode_defaults_from_launch() {
+        assert_eq!(default_mode(None, true), HostMode::Unattended);
+        assert_eq!(default_mode(None, false), HostMode::Attended);
+        assert_eq!(
+            default_mode(Some(HostMode::Container), true),
+            HostMode::Container
+        );
     }
 }

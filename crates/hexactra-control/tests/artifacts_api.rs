@@ -36,6 +36,8 @@ async fn fake_host(url: &str, bytes: &'static [u8]) {
             version: "0".into(),
             host_id: None,
             viewer_url: None,
+            mode: None,
+            desktop: false,
         })
         .await
         .unwrap()

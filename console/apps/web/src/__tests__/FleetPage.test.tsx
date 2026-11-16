@@ -16,6 +16,8 @@ const hosts: FleetHost[] = [
     onDemand: true,
     draining: false,
     viewerUrl: 'https://viewer.example.test/vnc.html',
+    mode: null,
+    desktop: false,
     profiles: [
       { name: 'default', running: false },
       { name: 'travel', running: true },
@@ -45,6 +47,18 @@ describe('FleetPage', () => {
     expect(within(card).getByRole('link', { name: 'Open the viewer' })).toHaveAttribute('href', 'https://viewer.example.test/vnc.html');
     expect(screen.queryByRole('button', { name: 'Enroll host' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Drain' })).not.toBeInTheDocument();
+  });
+
+  it('shows each host mode and which hosts can share a desktop', async () => {
+    const node: FleetHost = { ...hosts[0]!, id: '22222222-2222-4222-8222-222222222222', name: 'mini-pc', viewerUrl: null, mode: 'unattended', desktop: true };
+    const attended: FleetHost = { ...node, id: '33333333-3333-4333-8333-333333333333', name: 'mini-pc-attended', mode: 'attended', desktop: false };
+    renderPage(['fleet:read'], { 'GET /fleet/hosts': [node, attended] });
+    const card = await screen.findByLabelText('Host mini-pc');
+    expect(within(card).getByText('Unattended')).toBeInTheDocument();
+    expect(within(card).getByLabelText('Desktop available')).toBeInTheDocument();
+    const other = screen.getByLabelText('Host mini-pc-attended');
+    expect(within(other).getByText('Attended')).toBeInTheDocument();
+    expect(within(other).queryByLabelText('Desktop available')).not.toBeInTheDocument();
   });
 
   it('opens the bundled host through a one-time viewer ticket', async () => {

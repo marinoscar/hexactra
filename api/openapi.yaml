@@ -1766,6 +1766,13 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/HostView'
+    HostMode:
+      type: string
+      description: How a host runs its browsers (#336, docs/nodes.md).
+      enum:
+      - unattended
+      - attended
+      - container
     HostView:
       type: object
       description: A host agent as seen by the control plane.
@@ -1780,6 +1787,9 @@ components:
         browser_connected:
           type: boolean
           description: The Chrome extension is connected to this host's native bridge.
+        desktop:
+          type: boolean
+          description: The host can share its desktop through the fabric (#338).
         draining:
           type: boolean
           description: New sessions are not placed on this host (see [`HostCommand::Drain`]).
@@ -1789,6 +1799,11 @@ components:
         last_seen:
           type: string
           format: date-time
+        mode:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/HostMode'
+            description: 'How the host runs its browsers; absent for agents older than #336.'
         name:
           type: string
         on_demand:
@@ -1815,7 +1830,9 @@ components:
           type:
           - string
           - 'null'
-          description: Web viewer where a person can see and use this host's browser.
+          description: |-
+            Web viewer where a person can see and use this host's browser.
+            Deprecated: the console's desktop viewer replaces it (#339).
     HostWork:
       oneOf:
       - type: object
@@ -1895,12 +1912,20 @@ components:
       - name
       - version
       properties:
+        desktop:
+          type: boolean
+          description: The host has a local desktop it can share through the fabric.
         host_id:
           type:
           - string
           - 'null'
           format: uuid
           description: Re-register with a previously issued id to keep sessions bound to it.
+        mode:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/HostMode'
+            description: How the host runs its browsers.
         name:
           type: string
         version:
@@ -1911,7 +1936,7 @@ components:
           - 'null'
           description: |-
             Web viewer for this host's browser (`http(s)` URL), shown to people
-            answering handoffs.
+            answering handoffs. Deprecated (#339).
     RegisterHostResponse:
       type: object
       description: Response to host registration.

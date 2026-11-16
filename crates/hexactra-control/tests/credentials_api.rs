@@ -100,6 +100,8 @@ async fn service_and_host_tokens_are_scoped() {
             version: "1.0".into(),
             host_id: Some(uuid::Uuid::new_v4()), // ignored: bound to the credential
             viewer_url: None,
+            mode: None,
+            desktop: false,
         })
         .await
         .unwrap();
@@ -183,6 +185,8 @@ async fn operator_token_still_works_for_hosts() {
             version: "0".into(),
             host_id: None,
             viewer_url: None,
+            mode: None,
+            desktop: false,
         })
         .await
         .unwrap()
