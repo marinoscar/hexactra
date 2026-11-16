@@ -49,6 +49,7 @@ import {
   SettingsDataAdapter,
   SystemSettingsStoreAdapter,
 } from './adapters';
+import { aboutModule } from './about.config';
 import { platformHost } from './host';
 import { ENABLED, enabledSlices } from './slices/manifest';
 import { userDataModule } from './user-data/user-data.config';
@@ -127,6 +128,8 @@ export const PLATFORM_MODULES = [
   ...ENABLED.flatMap((slice) => slice.modules?.(enabledSlices) ?? []),
   // `GET /api/admin/doctor`: every registered check, read-only.
   DoctorModule.forRoot({ host: platformHost }),
+  // `GET /api/admin/about`: what is deployed here (Administration → About).
+  aboutModule,
   // The Danger Zone (`/api/user-data/*`), the admin factory reset and organization
   // offboarding. The manifest in ./user-data/user-data.manifest.ts is the data.
   userDataModule,

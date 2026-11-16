@@ -23245,6 +23245,87 @@
         }
       }
     },
+    "/api/admin/about": {
+      "get": {
+        "description": "Reports this deployment: the API version the process resolved for itself, the deploy document `appctl deploy` left on disk, and a database liveness fact.\n\n**Always answers `200`.** A missing document is `deployInfoStatus: \"absent\"`, an unreadable or malformed one is `\"invalid\"`, and a database that does not answer is `database: null` with a `databaseError` string. None of the three is an error status: this endpoint is read when something has gone wrong, so every failure it can have is a field rather than a status code.\n\n**Three deploy states, not two.** Beyond `ok` and `absent`, a document can be complete AND describe a run that failed — `deployInfoStatus: \"ok\"` with `run.outcome: \"failure\"` and `run.failedStep` naming where it stopped. That run still deployed something, so every fact it recorded is reported.\n\n**Never performs network I/O.** `remote` is copied from the document as-is; this route does not contact the deploy remote, run git, or refresh anything. The document is read from disk on every request, so rewriting it needs no restart.\n\n`deployInfoPath` is the exact path that was read, and on an `absent` answer it is the actionable fact — the file may simply be at a different path, on an unattached bind mount, or from a run that stopped before writing it.\n\n**Deployment details (issue #392).** `lastCommand`, `bindPort`, `proxy`, `host` and `history` (successful runs, newest first, at most 20) are also read from the document, leniently: an invalid sub-field is `null` and an invalid history entry is dropped. `host` and `proxy.certificateExpiresAt` are as the CLI observed them when it wrote the file, not live. `runtime` (`processStartedAt`, `nodeVersion`, `environment`) is the one live object, describing this API process.\n\nRequires `system_settings:read`.\n\n**Requires:** authentication, plus permission `system_settings:read`.",
+        "operationId": "about_getAbout",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The deployment report. Returned for every authorized caller, whatever the state of the deploy document or the database.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AboutResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "description": "Present when the endpoint supplies it (pagination) or when the global response interceptor adds it (`{ timestamp }`). Not every response carries one.",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Report what is deployed here (Admin only)",
+        "tags": [
+          "About"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:read"
+          ]
+        }
+      }
+    },
     "/api/user-data/summary": {
       "get": {
         "description": "Per registered category: the rows the caller owns (in every organization) and, for files, the stored bytes. Plus every scope the caller may request, with its exact confirmation phrase and resolved categories. Read-only. Requires `user_settings:write` (every role holds it).\n\n**Requires:** authentication, plus permission `user_settings:write`.",
@@ -54474,6 +54555,533 @@
           "generatedAt",
           "redaction",
           "sections"
+        ]
+      },
+      "AboutResponseDto": {
+        "type": "object",
+        "properties": {
+          "api": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "string"
+              },
+              "deploymentMode": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{1,31}$"
+              }
+            },
+            "required": [
+              "version",
+              "deploymentMode"
+            ]
+          },
+          "deployInfoStatus": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "absent",
+              "invalid"
+            ]
+          },
+          "deployInfoPath": {
+            "type": "string"
+          },
+          "deployInfoError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "app": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "version": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "commitSha": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "ref": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "version",
+                  "commitSha",
+                  "ref"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "installedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deployedBy": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "cli": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "version": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "cli",
+                  "version"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "domain": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remote": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "commitsBehind": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "checkedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "commitsBehind",
+                  "checkedAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "completed": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "failedStep": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "outcome": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "success",
+                          "failure"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "completed",
+                  "failedStep",
+                  "outcome"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lastCommand": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "install",
+                  "update"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bindPort": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "proxy": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "container",
+                          "host"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "container": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "certificateExpiresAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "mode",
+                  "container",
+                  "certificateExpiresAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "hostname": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "os": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "kernel": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "arch": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "cpus": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "memoryBytes": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "dockerVersion": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "composeVersion": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "capturedAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "hostname",
+                  "os",
+                  "kernel",
+                  "arch",
+                  "cpus",
+                  "memoryBytes",
+                  "dockerVersion",
+                  "composeVersion",
+                  "capturedAt"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "history": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "at": {
+                      "type": "string"
+                    },
+                    "command": {
+                      "type": "string",
+                      "enum": [
+                        "install",
+                        "update"
+                      ]
+                    },
+                    "commitSha": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "previousCommitSha": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "ref": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "durationMs": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "cliVersion": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "outcome": {
+                      "type": "string",
+                      "const": "success"
+                    }
+                  },
+                  "required": [
+                    "at",
+                    "command",
+                    "commitSha",
+                    "previousCommitSha",
+                    "ref",
+                    "durationMs",
+                    "cliVersion",
+                    "outcome"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "runtime": {
+            "type": "object",
+            "properties": {
+              "processStartedAt": {
+                "type": "string"
+              },
+              "nodeVersion": {
+                "type": "string"
+              },
+              "environment": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "processStartedAt",
+              "nodeVersion",
+              "environment"
+            ]
+          },
+          "database": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string"
+                  },
+                  "responseTime": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "status",
+                  "responseTime"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "databaseError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "extras": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "facts": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": [
+                      "string",
+                      "number",
+                      "boolean"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "facts"
+              ]
+            }
+          }
+        },
+        "required": [
+          "api",
+          "deployInfoStatus",
+          "deployInfoPath",
+          "deployInfoError",
+          "app",
+          "installedAt",
+          "updatedAt",
+          "deployedBy",
+          "domain",
+          "remote",
+          "run",
+          "lastCommand",
+          "bindPort",
+          "proxy",
+          "host",
+          "history",
+          "runtime",
+          "database",
+          "databaseError"
         ]
       },
       "UserDataSummaryDto": {
