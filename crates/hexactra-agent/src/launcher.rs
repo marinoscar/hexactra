@@ -142,6 +142,9 @@ impl BrowserLauncher {
             "--no-default-browser-check".into(),
             "--disable-dev-shm-usage".into(),
             "--start-maximized".into(),
+            // The extension drives tabs through chrome.debugger (#366): no
+            // "is debugging this browser" bar, so the page looks as a person sees it.
+            "--silent-debugger-extension-api".into(),
         ];
         if let Some(ext) = &self.cfg.extension_dir {
             a.push(format!("--disable-extensions-except={}", ext.display()));
