@@ -1,5 +1,5 @@
 import { spawnSync, type SpawnSyncOptions } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
 import { hostname, tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
@@ -19,6 +19,7 @@ import {
   readUnattended,
   runPrivileged,
   uninstallSteps,
+  unattendedStateFile,
   withStage,
   writeUnattended,
   type NodeLayout,
@@ -414,7 +415,14 @@ export async function uninstallAgent(d: AgentDeps, o: { keepHost?: boolean; purg
   }
   rmSync(d.paths.credential, { force: true });
   rmSync(d.paths.hostIdFile, { force: true });
-  rmSync(d.paths.agentDir, { recursive: true, force: true });
+  // The agent's own files only: unattended.json in the same directory is the
+  // unattended node's record, which outlives this agent (#376).
+  if (existsSync(d.paths.agentDir)) {
+    for (const entry of readdirSync(d.paths.agentDir)) {
+      if (entry !== basename(unattendedStateFile(d.paths.agentDir))) rmSync(join(d.paths.agentDir, entry), { recursive: true, force: true });
+    }
+    if (readdirSync(d.paths.agentDir).length === 0) rmSync(d.paths.agentDir, { recursive: true, force: true });
+  }
   rmSync(d.paths.chromeDir, { recursive: true, force: true });
   if (o.purgeProfiles) {
     rmSync(d.paths.profilesDir, { recursive: true, force: true });
