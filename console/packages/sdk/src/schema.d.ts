@@ -11302,9 +11302,9 @@ export interface components {
             browserConnected: boolean;
             onDemand: boolean;
             /** @description How the host runs its browsers; null for older agents */
-            mode?: ("unattended" | "attended" | "container") | null;
+            mode: ("unattended" | "attended" | "container") | null;
             /** @description The host can share its desktop through the fabric */
-            desktop?: boolean;
+            desktop: boolean;
             draining: boolean;
             viewerUrl: string | null;
             profiles: {

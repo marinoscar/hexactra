@@ -54739,6 +54739,8 @@
           "online",
           "browserConnected",
           "onDemand",
+          "mode",
+          "desktop",
           "draining",
           "viewerUrl",
           "profiles",
