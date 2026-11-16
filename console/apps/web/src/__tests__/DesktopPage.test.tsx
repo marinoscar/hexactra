@@ -52,6 +52,7 @@ function renderPage(h: FleetHost = host) {
       [`GET /fleet/hosts/${ID}/takeover`]: null,
       [`POST /fleet/hosts/${ID}/takeover`]: { leaseId: 'l1', userId: 'test-user', displayName: 'Person A', expiresAt: '2026-11-16T01:00:00Z' },
       [`DELETE /fleet/hosts/${ID}/takeover/l1`]: undefined,
+      [`POST /fleet/hosts/${ID}/profiles/personal/show`]: { id: 'c1', kind: 'show_profile', profile: 'personal', state: 'succeeded', error: null, createdAt: '', completedAt: '' },
       'GET /fleet/hosts': [h],
     },
   });
@@ -123,6 +124,17 @@ describe('DesktopPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Release' }));
     await waitFor(() => expect(platform.requests.some((q) => q.method === 'DELETE' && q.path === `/fleet/hosts/${ID}/takeover/l1`)).toBe(true));
     expect(r.viewOnly).toBe(true);
+  });
+
+  it('opens a profile at the Google sign-in on an unattended node', async () => {
+    const { platform } = renderPage({ ...host, profiles: [{ name: 'personal', running: false }] });
+    await waitFor(() => expect(rfb.instances).toHaveLength(1));
+    act(() => {
+      (rfb.instances[0] as unknown as EventTarget).dispatchEvent(new Event('connect'));
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign in to profile' }));
+    expect(await screen.findByText(/Chrome for "personal" is open at the Google sign-in/)).toBeInTheDocument();
+    expect(platform.requests.some((r) => r.method === 'POST' && r.path === `/fleet/hosts/${ID}/profiles/personal/show`)).toBe(true);
   });
 
   it('says when the node is offline or shares no desktop, without connecting', async () => {

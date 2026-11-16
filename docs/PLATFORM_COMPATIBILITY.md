@@ -32,7 +32,7 @@ Nodes, the primary deployment, are described in [nodes.md](nodes.md).
 
 **Capabilities:**
 - ✅ Interactive sessions (user logged in)
-- ✅ Unattended sessions: no user logged in, **headful** Chrome on a virtual display. Planned for nodes (#340): KasmVNC + XFCE using the machine's integrated GPU. Chrome is never run headless.
+- ✅ Unattended sessions: no user logged in, **headful** Chrome on a virtual display. On nodes (`hexactra agent install --mode unattended`): TigerVNC's Xvnc + XFCE, with Chrome rendering on the machine's integrated GPU. Chrome is never run headless.
 - ✅ Attended sessions: the logged-in user's own desktop and Chrome (an X11 session for now; Wayland planned)
 - ✅ Virtual display support (Xvfb in the container host)
 - ✅ Native messaging host registration

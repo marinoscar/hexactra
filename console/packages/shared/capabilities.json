@@ -455,13 +455,15 @@
     },
     {
       "id": "fleet.desktop",
-      "description": "See and use a host's remote desktop in the console (a viewer session bound to the host, the person and the organization; fleet:desktop)",
+      "description": "See and use a host's remote desktop in the console (a viewer session bound to the host, the person and the organization; fleet:desktop), and open a profile's browser there to sign in",
       "rest": [
         "POST /api/fleet/hosts/{id}/viewer-session",
-        "DELETE /api/fleet/hosts/{id}/viewer-session"
+        "DELETE /api/fleet/hosts/{id}/viewer-session",
+        "POST /api/fleet/hosts/{id}/profiles/{name}/show"
       ],
       "cli": [
-        "fleet desktop"
+        "fleet desktop",
+        "fleet profile show"
       ],
       "mcp": {
         "none": "Seeing and controlling a desktop is for a person, not an agent"

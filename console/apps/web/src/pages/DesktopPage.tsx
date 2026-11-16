@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
-import { Alert, Box, Button, Chip, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 import RFB from '@novnc/novnc/lib/rfb';
 
@@ -45,6 +45,8 @@ export function DesktopPage() {
   const [lease, setLease] = useState<Lease | null>(null);
   const [heldBy, setHeldBy] = useState<string | null>(null);
   const leaseRef = useRef<Lease | null>(null);
+  const [profile, setProfile] = useState('default');
+  const [notice, setNotice] = useState<string | null>(null);
 
   const connect = useCallback(
     (wsPath: string) => {
@@ -84,6 +86,7 @@ export function DesktopPage() {
     try {
       const h = await api.get<FleetHost>(`/fleet/hosts/${id}`);
       setHost(h);
+      if (h.profiles.length && !h.profiles.some((p) => p.name === 'default')) setProfile(h.profiles[0]!.name);
       if (!h.online) return setStatus('offline');
       if (!h.desktop) return setStatus('unavailable');
       const s = await api.post<{ wsPath: string }>(`/fleet/hosts/${id}/viewer-session`, {});
@@ -170,6 +173,17 @@ export function DesktopPage() {
     }
   };
 
+  /** Opens the profile's Chrome on this desktop at the Google sign-in (#340). */
+  const signIn = async () => {
+    setNotice(null);
+    try {
+      await api.post(`/fleet/hosts/${id}/profiles/${encodeURIComponent(profile)}/show`, {});
+      setNotice(`Chrome for "${profile}" is open at the Google sign-in. Sign in, then close that window to save it.`);
+    } catch (e) {
+      setError(message(e, 'Could not open the profile'));
+    }
+  };
+
   const fullscreen = () => void screen.current?.requestFullscreen?.().catch(() => undefined);
 
   const label: Record<Status, string> = {
@@ -199,6 +213,20 @@ export function DesktopPage() {
           <Button size="small" variant="contained" onClick={() => void takeOver()} disabled={status !== 'connected'}>
             Take over
           </Button>
+        )}
+        {host && host.mode === 'unattended' && host.profiles.length > 0 && (
+          <>
+            <TextField select size="small" label="Profile" value={profile} onChange={(e) => setProfile(e.target.value)} sx={{ minWidth: 120 }}>
+              {host.profiles.map((p) => (
+                <MenuItem key={p.name} value={p.name}>
+                  {p.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <Button size="small" onClick={() => void signIn()} disabled={status !== 'connected'}>
+              Sign in to profile
+            </Button>
+          </>
         )}
         <Button size="small" onClick={fullscreen} disabled={status !== 'connected'}>
           Full screen
@@ -237,6 +265,7 @@ export function DesktopPage() {
           You are watching. Take over to use the mouse and keyboard; the agent pauses until you release it.
         </Typography>
       )}
+      {notice && <Alert severity="info">{notice}</Alert>}
       {error && <Alert severity="error">{error}</Alert>}
       <Box
         ref={screen}

@@ -5,6 +5,9 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { consoleApi } from '../console-api.js';
 import { chromeSetup } from './googleChrome.js';
 import {
+  installUnattended,
+  unattendedStatus,
+  type UnattendedStatus,
   agentDoctor,
   agentLogs,
   agentStatus,
@@ -16,7 +19,7 @@ import {
   type AgentDeps,
   type AgentStatus,
 } from './agent.js';
-import { statusLines } from './agent.command.js';
+import { statusLines, unattendedLines } from './agent.command.js';
 
 type Mode = 'status' | 'logs' | 'doctor' | 'confirm-uninstall';
 
@@ -24,13 +27,15 @@ type Mode = 'status' | 'logs' | 'doctor' | 'confirm-uninstall';
  * Agent: this machine as a browser host. Every `hexactra agent` command has a
  * key here: i install (or repair), u update, s start/stop, r restart,
  * l logs, x uninstall, g refresh, esc back; c sets up Google Chrome (the
- * extension by policy), d runs the doctor. The one step a screen cannot do
+ * extension by policy), n installs (or repairs) an unattended node, d runs
+ * the doctor. The one step a screen cannot do
  * is type a sudo password: when Chrome's sandbox helper needs it, the screen
  * says to run `hexactra agent sandbox` in a terminal.
  */
 export function AgentScreen({ onDone, deps }: TuiScreenProps & { deps?: (log: (l: string) => void) => AgentDeps }): ReactNode {
   const theme = useTuiTheme();
   const [status, setStatus] = useState<AgentStatus | null>(null);
+  const [node, setNode] = useState<UnattendedStatus | null>(null);
   const [lines, setLines] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +51,11 @@ export function AgentScreen({ onDone, deps }: TuiScreenProps & { deps?: (log: (l
   const refresh = useCallback(async () => {
     try {
       const s = await agentStatus(d());
-      if (mounted.current) setStatus(s);
+      const u = unattendedStatus(d());
+      if (mounted.current) {
+        setStatus(s);
+        setNode(u);
+      }
     } catch (e) {
       if (mounted.current) setError(e instanceof Error ? e.message : String(e));
     }
@@ -90,11 +99,12 @@ export function AgentScreen({ onDone, deps }: TuiScreenProps & { deps?: (log: (l
     const installed = !!status?.installed;
     if (input === 'g') void refresh();
     if (input === 'c') run('Setting up Google Chrome', () => chromeSetup(d(), { interactive: false }));
+    if (input === 'n') run('Installing an unattended node', () => installUnattended(d(), { interactiveSudo: false }));
     if (input === 'd') {
       void agentDoctor(d())
         .then((checks) => {
           if (!mounted.current) return;
-          setLogs(checks.map((c) => `${c.ok ? 'ok  ' : 'FAIL'}  ${c.name.padEnd(12)} ${c.detail}`));
+          setLogs(checks.map((c) => `${!c.ok ? 'FAIL' : c.warning ? 'warn' : 'ok  '}  ${c.name.padEnd(22)} ${c.detail}`));
           setMode('doctor');
         })
         .catch((e: unknown) => mounted.current && setError(e instanceof Error ? e.message : String(e)));
@@ -134,8 +144,8 @@ export function AgentScreen({ onDone, deps }: TuiScreenProps & { deps?: (log: (l
       {!status && !error && <Text dimColor>Reading…</Text>}
       {status && (
         <Box flexDirection="column">
-          {statusLines(status).map((l) => (
-            <Text key={l} wrap="truncate">{l}</Text>
+          {[...(status.installed || !node?.installed ? statusLines(status) : []), ...(node ? unattendedLines(node) : [])].map((l, i) => (
+            <Text key={`${i}-${l}`} wrap="truncate">{l}</Text>
           ))}
         </Box>
       )}
@@ -151,8 +161,8 @@ export function AgentScreen({ onDone, deps }: TuiScreenProps & { deps?: (log: (l
       {mode === 'confirm-uninstall' && <Text {...textColor(theme.error)}>Uninstall the agent and revoke this host in Fleet? y to confirm, any other key to cancel</Text>}
       <Text dimColor wrap="truncate">
         {installed
-          ? 'i repair · u update · s start/stop · r restart · l logs · c chrome · d doctor · x uninstall · g refresh · esc back'
-          : 'i install · c chrome · d doctor · g refresh · esc back'}
+          ? 'i repair · n unattended · u update · s start/stop · r restart · l logs · c chrome · d doctor · x uninstall · g refresh · esc back'
+          : 'i install · n unattended node · c chrome · d doctor · g refresh · esc back'}
       </Text>
     </Box>
   );

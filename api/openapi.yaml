@@ -1944,6 +1944,25 @@ components:
             - close_browser
       - type: object
         description: |-
+          Start the profile's browser and open `url` in a new tab (default: the
+          Google sign-in page), so a person signs in through the remote desktop
+          (#340). Closing the browser afterwards saves the sign-in.
+        required:
+        - profile
+        - type
+        properties:
+          profile:
+            type: string
+          type:
+            type: string
+            enum:
+            - show_profile
+          url:
+            type:
+            - string
+            - 'null'
+      - type: object
+        description: |-
           Stop (or resume) placing new sessions on the host. Existing sessions
           keep working. Handled by the control plane; never sent to the host.
         required:

@@ -20,6 +20,12 @@ export const drainSchema = z.object({ enabled: z.boolean() });
 export class DrainDto extends createZodDto(drainSchema) {}
 
 export const createProfileSchema = z.object({ name: profileNameSchema });
+
+/** `POST /api/fleet/hosts/:id/profiles/:name/show`: an https page to open (default: the Google sign-in). */
+export const showProfileSchema = z.object({
+  url: z.string().url().max(2048).refine((u) => /^https?:\/\//.test(u), 'url must be http(s)').optional(),
+});
+export class ShowProfileDto extends createZodDto(showProfileSchema) {}
 export class CreateProfileDto extends createZodDto(createProfileSchema) {}
 
 /** A host as the console shows it. */

@@ -1,12 +1,27 @@
 import { spawnSync, type SpawnSyncOptions } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
-import { hostname } from 'node:os';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
+import { hostname, tmpdir } from 'node:os';
+import { basename, dirname, join } from 'node:path';
 
 import { activate, fetchBundle, type Fetch } from './bundle.js';
 import { ensureChrome, needsSetuidSandbox, sandboxHelperCommands, sandboxHelperReady, chromeFor } from './chrome.js';
 import { chromeSetup, chromeStatus, chromeTeardown, registerNativeHost, type ChromeStatus } from './googleChrome.js';
 import { agentPaths, UNIT_NAME, type AgentPaths } from './paths.js';
+import {
+  DEFAULT_LAYOUT,
+  NODE_USER,
+  UNITS,
+  detectGpu,
+  freeDisplay,
+  installSteps,
+  readUnattended,
+  runPrivileged,
+  uninstallSteps,
+  withStage,
+  writeUnattended,
+  type NodeLayout,
+  type UnattendedState,
+} from './unattended.js';
 import { agentEnv, unitFile, type AgentConfig } from './service.js';
 
 /** What `hexactra agent install` recorded (no secret: the credential is its own 0600 file). */
@@ -220,7 +235,12 @@ export async function installAgent(d: AgentDeps, o: InstallOptions): Promise<Age
 }
 
 /** Creates an enrollment with the console login and exchanges it at the fabric; the token never leaves memory. */
-async function enroll(d: AgentDeps, name: string, o: InstallOptions): Promise<{ hostId: string; agentUrl: string }> {
+async function enroll(
+  d: AgentDeps,
+  name: string,
+  o: InstallOptions,
+  into: { credential: string; hostIdFile: string | null } = { credential: d.paths.credential, hostIdFile: d.paths.hostIdFile },
+): Promise<{ hostId: string; agentUrl: string }> {
   let token: string;
   let agentUrl: string;
   if (o.enrollmentToken) {
@@ -239,9 +259,9 @@ async function enroll(d: AgentDeps, name: string, o: InstallOptions): Promise<{ 
   if (!res.ok) throw new Error(`The fabric refused the enrollment (${res.status}) at ${agentUrl}`);
   const c = (await res.json()) as { host_id?: string; host_token?: string };
   if (!c.host_id || !c.host_token) throw new Error('The fabric returned no host credential');
-  mkdirSync(d.paths.configDir, { recursive: true, mode: 0o700 });
-  writeFileSync(d.paths.credential, JSON.stringify({ host_id: c.host_id, host_token: c.host_token }, null, 2), { mode: 0o600 });
-  writeFileSync(d.paths.hostIdFile, `${c.host_id}\n`);
+  mkdirSync(dirname(into.credential), { recursive: true, mode: 0o700 });
+  writeFileSync(into.credential, JSON.stringify({ host_id: c.host_id, host_token: c.host_token }, null, 2), { mode: 0o600 });
+  if (into.hostIdFile) writeFileSync(into.hostIdFile, `${c.host_id}\n`);
   d.log(`Enrolled as host ${c.host_id.slice(0, 8)} at ${agentUrl}`);
   return { hostId: c.host_id, agentUrl };
 }
@@ -411,6 +431,8 @@ export interface DoctorCheck {
   name: string;
   ok: boolean;
   detail: string;
+  /** Works, but worth fixing (does not fail the doctor). */
+  warning?: boolean;
 }
 
 /**
@@ -433,8 +455,18 @@ export async function agentDoctor(d: AgentDeps): Promise<DoctorCheck[]> {
   } else {
     add('browser', existsSync(s.browser), `${s.browserKind}: ${s.browser}`);
   }
+  const u = unattendedStatus(d);
+  if (u.state) {
+    for (const [unit, st] of Object.entries(u.units)) add(unit.replace('.service', ''), st === 'active', st === 'active' ? 'active' : `${st}: run \`hexactra agent logs --mode unattended\``);
+    checks.push({
+      name: 'graphics',
+      ok: true,
+      warning: !u.state.gpu,
+      detail: u.state.gpu ? `${u.state.gpu.driver} (${u.state.gpu.renderNode}); check chrome://gpu on the desktop` : 'software rendering: no Intel or AMD GPU found, so sites can tell more easily',
+    });
+  }
   if (!s) {
-    add('agent', false, 'not installed: run `hexactra agent install`');
+    if (!u.state) add('agent', false, 'not installed: run `hexactra agent install`');
     return checks;
   }
   add('agent', !!st.activeBundle && existsSync(join(d.paths.current, 'bin', 'hexactra-agent')), `${s.version} (${s.commit.slice(0, 7)})`);
@@ -442,4 +474,137 @@ export async function agentDoctor(d: AgentDeps): Promise<DoctorCheck[]> {
   if (s.service) add('service', st.service?.active === 'active', `${UNIT_NAME}: ${st.service?.active ?? 'unknown'} (${st.service?.sub ?? 'unknown'})`);
   add('fleet', !!st.fleet?.online, st.fleet ? `${st.fleet.online ? 'online' : 'offline'}${st.fleet.browserConnected ? ', extension connected' : ', extension not connected yet'}` : (st.fleetError ?? 'unknown'));
   return checks;
+}
+
+export interface UnattendedOptions extends InstallOptions {
+  /** e.g. 1920x1080 */
+  resolution?: string | undefined;
+  /** Where the node's files go (tests). */
+  layout?: NodeLayout | undefined;
+}
+
+/**
+ * `hexactra agent install --mode unattended` (#340): Google Chrome with the
+ * extension by policy, then one sudo prompt for the rest: the desktop
+ * packages, the `hexactra` user, the agent in /opt/hexactra, its credential
+ * and three system units that start at boot with nobody logged in. Then it
+ * waits for Fleet to show the host online with its desktop.
+ */
+export async function installUnattended(d: AgentDeps, o: UnattendedOptions): Promise<UnattendedState> {
+  if (d.platform.os !== 'linux' || d.platform.arch !== 'x64') {
+    throw new Error(`Unattended nodes run on Linux x86_64 (this is ${d.platform.os}/${d.platform.arch}).`);
+  }
+  const layout = o.layout ?? DEFAULT_LAYOUT;
+  const interactive = o.interactiveSudo !== false;
+  const resolution = o.resolution ?? readUnattended(d.paths.agentDir)?.resolution ?? '1920x1080';
+  if (!/^\d{3,4}x\d{3,4}$/.test(resolution)) throw new Error(`--resolution must look like 1920x1080 (got ${resolution})`);
+  await chromeSetup(d, { interactive, updateUrl: o.extensionUpdateUrl });
+  const bundle = await fetchBundle(d.paths, { bundle: o.bundle, version: o.version }, d.fetch, d.log);
+  const prev = readUnattended(d.paths.agentDir);
+  const name = o.name ?? prev?.name ?? d.hostname();
+  const credDir = mkdtempSync(join(tmpdir(), 'hexactra-enroll-'));
+  try {
+    let hostId = prev?.hostId;
+    let agentUrl = prev?.agentUrl;
+    let credential: string | null = null;
+    if (!hostId || !agentUrl || o.reenroll || o.enrollmentToken) {
+      credential = join(credDir, 'host-credential.json');
+      ({ hostId, agentUrl } = await enroll(d, name, o, { credential, hostIdFile: null }));
+    } else {
+      d.log(`Keeping this node's host ${hostId.slice(0, 8)} (use --reenroll for a new one)`);
+    }
+    const gpu = detectGpu(layout);
+    d.log(gpu ? `Graphics: ${gpu.driver} at ${gpu.renderNode}; Chrome will render with it` : 'Graphics: no Intel or AMD GPU found; Chrome renders in software, which sites can detect more easily');
+    const display = prev?.display ?? freeDisplay(layout);
+    const config = { name, agentUrl, display, maxBrowsers: o.maxBrowsers ?? prev?.maxBrowsers ?? 2, gpu, resolution };
+    const userExists = d.exec(['id', '-u', NODE_USER]).code === 0;
+    const bundleId = basename(bundle.dir);
+    withStage((stage) => runPrivileged(d, installSteps(config, { bundleDir: bundle.dir, bundleId, credential, stage, userExists }, layout), interactive));
+    const now = new Date().toISOString();
+    const state: UnattendedState = { hostId, ...config, bundle: bundleId, installedAt: prev?.installedAt ?? now, updatedAt: now };
+    writeUnattended(d.paths.agentDir, state);
+    d.log(`Unattended desktop :${display} (${resolution}) and agent started; they start at every boot`);
+    await waitOnline(d, hostId, o.waitSeconds ?? 120);
+    d.log('Open its desktop from Fleet, then set up a profile: `hexactra fleet profile show <host> <profile>` opens the Google sign-in there.');
+    return state;
+  } finally {
+    rmSync(credDir, { recursive: true, force: true });
+  }
+}
+
+export interface UnattendedStatus {
+  installed: boolean;
+  state: UnattendedState | null;
+  units: Record<string, string>;
+}
+
+export function unattendedStatus(d: AgentDeps): UnattendedStatus {
+  const state = readUnattended(d.paths.agentDir);
+  const units: Record<string, string> = {};
+  if (state) for (const u of Object.values(UNITS)) units[u] = (d.exec(['systemctl', 'is-active', u]).stdout.trim() || 'unknown');
+  return { installed: !!state, state, units };
+}
+
+/** Starts, stops or restarts the unattended desktop and agent (sudo). */
+export function unattendedControl(d: AgentDeps, action: 'start' | 'stop' | 'restart', interactive = true): void {
+  if (!readUnattended(d.paths.agentDir)) throw new Error('No unattended node is installed here. Run `hexactra agent install --mode unattended`.');
+  const units = action === 'stop' ? [UNITS.agent, UNITS.session, UNITS.display] : [UNITS.display, UNITS.session, UNITS.agent];
+  runPrivileged(d, [{ what: `${action} the unattended desktop and agent`, argv: ['systemctl', action, ...units] }], interactive);
+}
+
+/** The unattended agent's journal (system unit: readable with sudo or the adm group). */
+export function unattendedLogs(d: AgentDeps, lines: number, follow: boolean): ExecResult {
+  const argv = ['journalctl', '-u', UNITS.agent, '-u', UNITS.display, '-n', String(lines), '--no-pager', '-o', 'short-iso'];
+  const full = follow ? [...argv, '-f'] : argv;
+  const plain = d.exec(full, { interactive: follow });
+  if (follow || /\S/.test(plain.stdout.replace(/^-- No entries --\s*$/m, ''))) return plain;
+  return d.exec(['sudo', '-n', ...full]);
+}
+
+/** Copies the active bundle to the node and restarts its agent (sudo). */
+export function updateUnattended(d: AgentDeps, interactive = true, layout: NodeLayout = DEFAULT_LAYOUT): void {
+  const s = readUnattended(d.paths.agentDir);
+  if (!s) return;
+  const dir = readlinkSync(d.paths.current);
+  const bundleId = basename(dir);
+  if (bundleId === s.bundle) return;
+  const target = `${layout.opt}/agent/${bundleId}`;
+  runPrivileged(
+    d,
+    [
+      { what: `copy the agent ${bundleId} to ${target}`, argv: ['install', '-d', '-m', '0755', target] },
+      { what: 'copy the agent files', argv: ['cp', '-a', '--no-preserve=ownership', `${dir}/.`, `${target}/`] },
+      { what: 'point the agent at this version', argv: ['ln', '-sfn', target, `${layout.opt}/agent/current`] },
+      { what: 'restart the unattended agent', argv: ['systemctl', 'restart', UNITS.agent] },
+    ],
+    interactive,
+  );
+  writeUnattended(d.paths.agentDir, { ...s, bundle: bundleId, updatedAt: new Date().toISOString() });
+  d.log(`Unattended agent updated to ${bundleId}`);
+}
+
+export async function uninstallUnattended(d: AgentDeps, o: { keepHost?: boolean; purgeProfiles?: boolean; interactiveSudo?: boolean; layout?: NodeLayout }): Promise<void> {
+  const s = readUnattended(d.paths.agentDir);
+  if (!s) throw new Error('No unattended node is installed here.');
+  runPrivileged(d, uninstallSteps({ purgeProfiles: !!o.purgeProfiles }, o.layout ?? DEFAULT_LAYOUT), o.interactiveSudo !== false);
+  if (!o.keepHost) {
+    try {
+      await d.api().delete(`/fleet/hosts/${s.hostId}`);
+      d.log(`Host ${s.hostId.slice(0, 8)} revoked in Fleet`);
+    } catch (e) {
+      d.log(`Could not revoke the host in Fleet (${e instanceof Error ? e.message : String(e)}); revoke it on the Fleet page.`);
+    }
+  }
+  rmSync(join(d.paths.agentDir, 'unattended.json'), { force: true });
+  d.log(o.purgeProfiles ? 'The unattended node and its profiles are removed' : 'The unattended node is removed (its browser profiles stay; --purge-profiles deletes them)');
+}
+
+/** An attended (user service) agent is installed here. */
+export function agentStatusInstalled(d: AgentDeps): boolean {
+  return readState(d.paths) !== null;
+}
+
+/** Downloads, verifies and activates a bundle (for an unattended-only machine's update). */
+export async function fetchAndActivate(d: AgentDeps, o: { bundle?: string; version?: string }): Promise<void> {
+  activate(d.paths, await fetchBundle(d.paths, o, d.fetch, d.log));
 }

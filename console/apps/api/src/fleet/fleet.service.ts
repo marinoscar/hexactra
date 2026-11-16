@@ -24,6 +24,7 @@ interface FabricCommandView {
 
 type HostCommand =
   | { type: 'create_profile' | 'delete_profile' | 'restart_browser' | 'close_browser'; profile: string }
+  | { type: 'show_profile'; profile: string; url?: string }
   | { type: 'drain'; enabled: boolean };
 
 const COMMAND_TIMEOUT_MS = 90_000;
