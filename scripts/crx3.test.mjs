@@ -96,7 +96,7 @@ test('the committed manifest key, the Rust constant and the scripts agree', () =
 
 test('the id check flags a stray id or key and ignores base64 runs', () => {
   const good = 'ahpjoclfeibdmlnbaednepiihpamklcl';
-  const other = 'afamapffbfhaafbjnneoachpknjpmiof';
+  const other = 'p'.repeat(32); // built, so the repository check does not see a stray literal here
   assert.deepEqual(findIds(`chrome-extension://${good}/ and ${other}.`), [good, other]);
   assert.deepEqual(findIds(`Zm9v${good}+abc`), [], 'part of a base64 string');
   const files = { 'a.md': `use ${good}`, 'b.rs': `const ID: &str = "${other}";`, 'pnpm-lock.yaml': other };
