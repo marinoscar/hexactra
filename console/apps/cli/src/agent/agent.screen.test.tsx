@@ -106,8 +106,9 @@ const text = (s: TuiTestHandle) => stripAnsi(s.lastFrame() ?? '');
 describe('the Agent screen', () => {
   it('shows a machine with nothing installed, its health and what to do', async () => {
     const s = await open(fake());
-    const frame = await s.waitForFrame((f) => f.includes('Health'));
-    expect(frame).toContain('Not set up');
+    // Status first; the doctor's health line follows.
+    expect(await s.waitForFrame((f) => f.includes('Not set up'))).toContain('Health  checking…');
+    const frame = await s.waitForFrame((f) => /Health\s+\d+ ok/.test(f));
     expect(frame).toContain('Install…');
     expect(frame).toContain('Doctor and dependencies');
     expect(frame).not.toContain('Uninstall');

@@ -60,6 +60,12 @@ type View =
   | { kind: 'run'; job: Job; done: boolean; error: string | null; result: string[] };
 
 const REFRESH_MS = 5_000;
+/**
+ * The doctor runs a moment after the first paint: its checks call system tools
+ * synchronously (`google-chrome --version`, dpkg, systemctl), which must not
+ * hold up opening the screen, nor run at all for a screen closed at once.
+ */
+const DOCTOR_DELAY_MS = 600;
 const LOG_POLL_MS = 2_000;
 const LOG_LINES = 300;
 
@@ -127,8 +133,10 @@ export function AgentScreen({ onDone, deps }: TuiScreenProps & { deps?: (log: (l
 
   useEffect(() => {
     mounted.current = true;
-    void refresh(true);
+    void refresh(false);
+    const doctor = setTimeout(() => void refresh(true), DOCTOR_DELAY_MS);
     return () => {
+      clearTimeout(doctor);
       mounted.current = false;
     };
   }, [refresh]);
@@ -520,6 +528,7 @@ export function AgentScreen({ onDone, deps }: TuiScreenProps & { deps?: (log: (l
             <CompactPanels panels={ps} />
           )
         )}
+        {!h && status && <Text dimColor>Health  checking…</Text>}
         {h && (
           <Box flexDirection="column">
             <Text>
