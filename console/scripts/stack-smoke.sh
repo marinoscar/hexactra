@@ -78,6 +78,32 @@ echo "$connect_out" | grep -q '"state":"connected"' || fail "the console did not
 dc exec -T api node dist/fabric/fabric-connect.cli.js status | grep -q '"state":"connected"' || fail "fabric-connect status after connecting"
 pass "the deploy's fabric-connect step connects the console to the bundled fabric"
 
+# Browser hosts reach the fabric over the console's own HTTPS vhost at /fabric/
+# (infra/nginx/app.d/locations/fabric-agents.conf): only the host protocol is
+# published; the client, admin and operator APIs stay private.
+fabric_pub="$base/fabric"
+curl -fsS "$fabric_pub/v1/health" | grep -q '"status"' || fail "/fabric/v1/health through nginx"
+for private in "GET /v1/hosts" "GET /v1/sessions" "GET /v1/events" "POST /v1/admin/hosts/enrollments" "GET /v1/admin/service-tokens"; do
+  set -- $private
+  [ "$(curl -s -o /dev/null -w '%{http_code}' -X "$1" "$fabric_pub$2")" = 404 ] || fail "$1 /fabric$2 must not be published"
+done
+hxe=$(dc exec -T fabric-control hexactra-fabric --url http://127.0.0.1:8787 admin enroll --name smoke-desktop 2>/dev/null | grep -o 'hxe_[A-Za-z0-9_-]*' | head -1)
+[ -n "$hxe" ] || fail "the fabric admin CLI did not mint an enrollment token"
+enrolled=$(curl -fsS -X POST "$fabric_pub/v1/hosts/enroll" -H 'content-type: application/json' \
+  -d "{\"enrollment_token\":\"$hxe\",\"name\":\"smoke-desktop\",\"version\":\"smoke\"}") || fail "enroll through /fabric/"
+host_id=$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.host_id||"")' "$enrolled")
+host_token=$(node -e 'const j=JSON.parse(process.argv[1]);process.stdout.write(j.host_token||"")' "$enrolled")
+[ -n "$host_id" ] && [ -n "$host_token" ] || fail "enroll through /fabric/ returned no host credential"
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$fabric_pub/v1/hosts/enroll" -H 'content-type: application/json' \
+  -d "{\"enrollment_token\":\"$hxe\"}")" != 200 ] || fail "an enrollment token was accepted twice"
+curl -fsS -X POST "$fabric_pub/v1/hosts/register" -H "authorization: Bearer $host_token" -H 'content-type: application/json' \
+  -d "{\"name\":\"smoke-desktop\",\"version\":\"smoke\",\"host_id\":\"$host_id\"}" >/dev/null || fail "register through /fabric/"
+next_code=$(curl -s -o /dev/null -w '%{http_code}' -H "authorization: Bearer $host_token" "$fabric_pub/v1/hosts/$host_id/next?wait_ms=1000&browser_connected=false")
+case "$next_code" in 200|204) ;; *) fail "long-poll through /fabric/ answered $next_code" ;; esac
+[ "$(curl -s -o /dev/null -w '%{http_code}' "$fabric_pub/v1/hosts/$host_id/next?wait_ms=1")" = 401 ] || fail "/fabric/ host routes must require the host credential"
+dc exec -T fabric-control hexactra-fabric --url http://127.0.0.1:8787 admin revoke-host "$host_id" >/dev/null 2>&1 || true
+pass "browser hosts enroll, register and long-poll over HTTPS at /fabric/; private APIs are not published"
+
 code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 tmpdir_headers=$(mktemp)
 
