@@ -348,10 +348,62 @@ try {
     assert.match(r.err, /no element matches #does-not-exist/);
   });
 
-  await step('non-web URLs are refused', async () => {
+  await step('javascript: URLs are refused (use evaluate)', async () => {
     const r = await cli('navigate', 'javascript:alert(1)');
     assert.notEqual(r.code, 0);
-    assert.match(r.err, /only http\(s\)/);
+    assert.match(r.err, /use the evaluate action/);
+  });
+
+  await step('full powers (#366): JavaScript, trusted input by position, marked screenshots and the desktop', async () => {
+    const mcp = mcpClient();
+    await mcp.rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e', version: '0' } });
+    mcp.proc.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
+    const call = async (name, args) => {
+      const r = await mcp.call(name, args);
+      assert.equal(r.isError, false, `${name}: ${JSON.stringify(r)}`);
+      return r;
+    };
+    const value = async (script) => JSON.parse((await call('browser_evaluate', { script })).content[0].text).value;
+
+    // A fresh page, a listener that records whether clicks are trusted, and the button's center.
+    await call('browser_navigate', { url: `${site}/index.html` });
+    assert.equal(await value('document.title'), 'Hexactra Fixture Home');
+    const at = await value(`scrollTo(0, 0);
+      window.__trusted = [];
+      document.querySelector('#counter').addEventListener('click', (e) => window.__trusted.push(e.isTrusted));
+      const r = document.querySelector('#counter').getBoundingClientRect();
+      ({ x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) })`);
+    assert.ok(at.x > 0 && at.y > 0, JSON.stringify(at));
+
+    await call('browser_click_at', { x: at.x, y: at.y });
+    assert.match(await value("document.querySelector('#counter').textContent"), /Clicked 1/);
+    assert.deepEqual(await value('window.__trusted'), [true], 'click_at must reach the page as a trusted event');
+
+    // Real typing at the focus, then Enter submits the form.
+    await call('browser_click', { selector: '#q' });
+    await call('browser_type_keys', { text: 'typed by keys' });
+    await call('browser_key', { key: 'Enter' });
+    assert.match(await value("document.querySelector('#out').textContent"), /searched: typed by keys/);
+
+    // Top-level await works; a thrown error fails the call with its message.
+    assert.equal(await value('await new Promise((r) => setTimeout(() => r(42), 50))'), 42);
+    const thrown = await mcp.call('browser_evaluate', { script: 'nope()' });
+    assert.equal(thrown.isError, true);
+    assert.match(thrown.content[0].text, /nope is not defined/);
+
+    // A marked screenshot: the image, plus the numbered marks with selectors.
+    const shot = await call('browser_screenshot', { marks: true });
+    assert.equal(shot.content[0].type, 'image');
+    assert.match(shot.content[1].text, /marks: .*#counter/);
+    // The overlay is gone afterwards.
+    assert.equal(await value("document.getElementById('__hexactra_marks__')"), null);
+
+    // The node's desktop, through the host agent (xdotool + ImageMagick on the CI display).
+    const desk = await call('browser_desktop_screenshot', {});
+    assert.equal(desk.content[0].type, 'image');
+    assert.ok(desk.content[0].data.length > 1000);
+    await call('browser_desktop_move', { x: 10, y: 10 });
+    mcp.proc.stdin.end();
   });
 
   await step('an MCP client operates the browser through hexactra-mcp', async () => {

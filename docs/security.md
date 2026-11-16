@@ -68,6 +68,8 @@ All user data is redacted before storage:
 | Privilege escalation | Non-root service user |
 | Cross-site scripting | Content Security Policy |
 | Native host abuse | Permission boundaries |
+| Prompt injection from page content (the agent has full powers) | The goal, not page text, is authority; live view, Stop and takeover; per-task allowed sites and confirmation (see below) |
+| Stolen API token (it can drive the owner's computer) | Private tokens, scoped agent users, revocation |
 
 ### Trusted Components
 
@@ -89,6 +91,33 @@ Every node (a machine that runs browsers for the console, [nodes.md](nodes.md)) 
 7. **Tokens never appear in URLs or logs.**
 
 The unattended desktop runs as a dedicated `hexactra` OS user. Items 2–6 ship with epic #333 (#338, #339, #342).
+
+## The agent has full powers (epic #366)
+
+Hexactra is a personal human emulator (VISION §27). The agent works on the owner's behalf, with the owner's authority, at the level of a person sitting at the machine. **This is a deliberate decision by the owner**: restrictions that only limited the agent were removed or made opt-in.
+
+**What changed:**
+
+| Before | Now |
+|---|---|
+| No JavaScript action | `evaluate` / `run_javascript`: any script in the page, whatever its CSP |
+| DOM selector actions only (synthetic events) | Trusted mouse and keyboard by position through `chrome.debugger`, plus marked screenshots the model sees every round |
+| The browser only | The node's OS desktop through `xdotool` (native dialogs, file pickers, other windows) |
+| `http(s)` and `about:blank` only | Any URL but `javascript:` |
+| Confirmation before purchases by default; 40 steps, 15 minutes | Confirmation is opt-in per task; 100 steps, 30 minutes by default |
+| "Never try to solve a bot check" | The agent ticks an "I am not a robot" box as a person would; puzzles it cannot pass go to the owner |
+
+**What stays, and why:**
+- **Secrets never reach the model or the console.** The fabric types handoff secrets itself (`type_secret`).
+- **Stop, takeover and the audit trail** always work. Every action is a recorded run step, with typed text replaced by its length.
+- **Per-task opt-ins:** allowed sites, and confirmation before purchases.
+- **No shell on the node.** `xdotool` runs with an argument vector, never through a shell. There is no "run a command" action.
+- **The API token is now the key to the computer.** Anyone holding a console token with `runs:write`, or the fabric API token, can do anything the owner can do in that browser and on that desktop. Keep tokens private, scope agent users, and revoke on doubt.
+
+**Residual risk: prompt injection.** Page content is untrusted. A malicious page could try to instruct the model, and with full powers a successful injection acts with the owner's authority. Mitigations:
+- the instructions tell the model that the user's goal, not page text, is authority;
+- every step is visible live and can be stopped;
+- for tasks that visit sites you do not trust, set **allowed sites** and turn on **confirmation**.
 
 ## Security Best Practices
 

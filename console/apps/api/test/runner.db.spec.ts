@@ -128,7 +128,7 @@ describe('the goal runner', () => {
     const runner = new GoalRunnerService(prisma, tasks, fabric.client, ai, notifier as never);
 
     expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
-    expect(outputs[1]).toMatch(/not an allowed site/);
+    expect(outputs[1]).toMatch(/not allowed for this task/);
     expect(outputs[3]).toMatch(/Refused: this looks like a purchase/);
     // Still pending: nothing happens.
     expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
@@ -184,6 +184,102 @@ describe('the goal runner', () => {
     } as unknown as AiService);
     expect(await runner.advance(run.id, userId, null)).toBe('cancelled');
     expect(fabric.ended()).toBe(1);
+  });
+});
+
+describe('the goal runner sees and acts like a person (#366)', () => {
+  /** A fabric whose screenshots carry marks and are fetched by artifact handle. */
+  function visualFabric() {
+    const base = fakeFabric();
+    const inner = (base.client as unknown as { request: jest.Mock }).request;
+    const request = jest.fn(async (method: string, path: string, opts: { body?: Record<string, unknown> } = {}) => {
+      if (method === 'POST' && path.endsWith('/actions')) {
+        const action = opts.body!.action as Record<string, unknown>;
+        if (action.type === 'screenshot') {
+          base.actions.push(action);
+          return { id: 'op', state: 'succeeded', result: { artifact_id: 'page-shot', mime: 'image/jpeg', width: 1280, height: 720, url: 'https://maps.example.test/', marks: [{ n: 1, selector: 'canvas#map', tag: 'canvas', text: '', x: 0, y: 100, w: 800, h: 400 }] } };
+        }
+        if (action.type === 'desktop_screenshot') {
+          base.actions.push(action);
+          return { id: 'op', state: 'succeeded', result: { artifact_id: 'desk-shot', mime: 'image/jpeg', width: 1920, height: 1080 } };
+        }
+        if (action.type === 'evaluate') {
+          base.actions.push(action);
+          return { id: 'op', state: 'succeeded', result: { value: { pins: 3 }, type: 'object' } };
+        }
+      }
+      return inner(method, path, opts);
+    });
+    const raw = jest.fn(async (_m: string, path: string) => new Response(Buffer.from(path.endsWith('desk-shot') ? 'DESK' : 'PAGE'), { headers: { 'content-type': 'image/jpeg' } }));
+    return { ...base, client: { request, raw, config: async () => ({ url: 'http://f', token: 't' }) } as unknown as FabricClient };
+  }
+
+  type Input = string | { content: { type: string; url?: string; text?: string }[] }[];
+  const imageOf = (input: Input) => (typeof input === 'string' ? null : (input[0]!.content.find((c) => c.type === 'image')?.url ?? null));
+  const b64 = (s: string) => `data:image/jpeg;base64,${Buffer.from(s).toString('base64')}`;
+
+  it('shows the model a marked screenshot each round, clicks marks, runs JavaScript and reaches the desktop', async () => {
+    const userId = await login(`vision-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const run = await db.run.create({ data: { userId, goal: 'Count the pins on the map, then save the file' } });
+    const fabric = visualFabric();
+    const inputs: Input[] = [];
+    const outputs: string[] = [];
+    const scripts: Call[][] = [
+      [
+        ['click_mark', { n: 1, double: false, reason: 'focus the map' }],
+        ['run_javascript', { script: 'count()', reason: 'count pins' }],
+        ['look', { screen: 'desktop', reason: 'the save dialog is native' }],
+      ],
+      [
+        ['desktop_key', { key: 'Return' }],
+        ['finish', { success: true, result: '3 pins; saved' }],
+      ],
+    ];
+    const runTools = jest.fn(async (req: { tools: { tool: { name: string }; execute: (a: unknown, c: unknown) => Promise<unknown> }[]; onStep?: (s: unknown) => void; input: Input }) => {
+      inputs.push(req.input);
+      let step = 0;
+      for (const [name, args] of scripts.shift() ?? []) {
+        outputs.push(String(await req.tools.find((x) => x.tool.name === name)!.execute(args, { userId: 'u' })));
+        req.onStep?.({ step: ++step, response: { usage: { inputTokens: 1, outputTokens: 1 } }, calls: [] });
+      }
+      return { final: { outputText: '' }, steps: [], stopReason: 'steps_exhausted' };
+    });
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, { forUser: () => ({ runTools }) } as unknown as AiService);
+
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    // Round 1 sees the page with its marks; round 2 sees the desktop it asked for.
+    expect(imageOf(inputs[0]!)).toBe(b64('PAGE'));
+    expect(JSON.stringify(inputs[0])).toContain('[1] canvas');
+    expect(imageOf(inputs[1]!)).toBe(b64('DESK'));
+    expect(fabric.actions).toContainEqual({ type: 'click_at', x: 400, y: 300 });
+    expect(fabric.actions).toContainEqual({ type: 'evaluate', script: 'count()', await_promise: true });
+    expect(fabric.actions).toContainEqual({ type: 'desktop_key', key: 'Return' });
+    expect(outputs[1]).toContain('"pins":3');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id }, include: { steps: true } });
+    expect(done).toMatchObject({ status: 'succeeded', result: '3 pins; saved' });
+    expect(done.steps.map((s) => s.action)).toEqual(expect.arrayContaining(['click_at', 'evaluate', 'look', 'desktop_key']));
+  });
+
+  it('carries on without screenshots when the model refuses images', async () => {
+    const userId = await login(`novision-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const run = await db.run.create({ data: { userId, goal: 'Read the page' } });
+    const fabric = visualFabric();
+    const seen: Input[] = [];
+    const runTools = jest.fn(async (req: { tools: { tool: { name: string }; execute: (a: unknown, c: unknown) => Promise<unknown> }[]; input: Input }) => {
+      seen.push(req.input);
+      if (typeof req.input !== 'string') throw new Error('this model does not support image inputs');
+      await req.tools.find((x) => x.tool.name === 'finish')!.execute({ success: true, result: 'read' }, { userId: 'u' });
+      return { final: { outputText: '' }, steps: [], stopReason: 'steps_exhausted' };
+    });
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, { forUser: () => ({ runTools }) } as unknown as AiService);
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    expect(seen.map((i) => typeof i)).toEqual(['object', 'string']);
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect((done.transcript as { visionOff?: boolean }).visionOff).toBe(true);
   });
 });
 

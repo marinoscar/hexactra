@@ -15,17 +15,32 @@ const PROTOCOL_VERSION: &str = "2025-06-18";
 const TOOL_PREFIX: &str = "browser_";
 
 const INSTRUCTIONS: &str =
-    "These tools operate a real Chrome browser that belongs to the user and is \
-signed in to their accounts. Typical loop: browser_navigate, then browser_elements to get CSS \
-selectors, then browser_click / browser_type, then browser_text or browser_screenshot to check the \
-result. Act at a human pace and only on the user's own behalf. If a page shows a CAPTCHA, a \
-verification code, a passkey prompt, a payment confirmation or any other security check, call \
-browser_request_human and wait for the person; never try to solve or bypass the check yourself. \
-Browser actions are paused while a request to the person is open. A secret the person gives \
-(input=secret) is never shown to you: type it with browser_type_secret.";
+    "These tools operate a real Chrome browser, and the computer it runs on, on behalf of the \
+user who owns them; it is signed in to their accounts. Work like a person at the machine. Start \
+with browser_navigate, then browser_elements (CSS selectors) and browser_click / browser_type. \
+When the page structure does not help (canvas, custom widgets, unlabeled icons), look at it: \
+browser_screenshot with marks=true numbers the interactive elements and gives their boxes, and \
+browser_click_at / browser_mouse / browser_drag / browser_scroll_at / browser_type_keys / \
+browser_key act by position with trusted input. browser_evaluate runs any JavaScript in the page. \
+For anything outside the page (native dialogs, file pickers, other windows) use the browser_desktop_* \
+tools on the whole screen. When the person themself is needed (a CAPTCHA puzzle, a code sent to \
+their phone, a passkey), call browser_request_human; browser actions pause while it is open. A \
+secret the person gives (input=secret) is never shown to you: type it with browser_type_secret.";
 
 fn tab_prop() -> Value {
     json!({"type": "integer", "description": "Tab id from browser_tabs; defaults to the active tab."})
+}
+
+fn coord() -> Value {
+    json!({"type": "integer", "minimum": 0})
+}
+
+fn button_prop() -> Value {
+    json!({"type": "string", "enum": ["left", "middle", "right"]})
+}
+
+fn modifiers_prop() -> Value {
+    json!({"type": "array", "items": {"type": "string", "enum": ["alt", "ctrl", "meta", "shift"]}})
 }
 
 fn tool(name: &str, description: &str, props: Value, required: &[&str]) -> Value {
@@ -119,9 +134,93 @@ pub fn tools() -> Vec<Value> {
         ),
         tool(
             "browser_screenshot",
-            "Capture the visible part of the tab as an image.",
-            json!({"tab_id": tab_prop()}),
+            "Capture the visible part of the tab as an image, in CSS pixels (the coordinates browser_click_at takes). With marks=true, interactive elements are boxed and numbered, and their selectors and boxes are listed.",
+            json!({"marks": {"type": "boolean"}, "tab_id": tab_prop()}),
             &[],
+        ),
+        tool(
+            "browser_evaluate",
+            "Run JavaScript in the page and return its JSON value. The script is an expression, or statements whose last expression is the value; await_promise awaits a returned promise.",
+            json!({"script": {"type": "string"}, "await_promise": {"type": "boolean"}, "tab_id": tab_prop()}),
+            &["script"],
+        ),
+        tool(
+            "browser_click_at",
+            "Trusted click at viewport CSS-pixel coordinates from browser_screenshot. click_count 2 double-clicks; button left, middle or right; modifiers alt, ctrl, meta, shift.",
+            json!({"x": coord(), "y": coord(), "button": button_prop(), "click_count": {"type": "integer", "minimum": 1, "maximum": 3}, "modifiers": modifiers_prop(), "tab_id": tab_prop()}),
+            &["x", "y"],
+        ),
+        tool(
+            "browser_mouse",
+            "Trusted pointer move (hover), button press or release at viewport coordinates.",
+            json!({"op": {"type": "string", "enum": ["move", "down", "up"]}, "x": coord(), "y": coord(), "button": button_prop(), "tab_id": tab_prop()}),
+            &["op", "x", "y"],
+        ),
+        tool(
+            "browser_drag",
+            "Trusted drag from one viewport point to another (sliders, drag and drop, drawing).",
+            json!({"from_x": coord(), "from_y": coord(), "to_x": coord(), "to_y": coord(), "steps": {"type": "integer", "minimum": 1, "maximum": 100}, "tab_id": tab_prop()}),
+            &["from_x", "from_y", "to_x", "to_y"],
+        ),
+        tool(
+            "browser_scroll_at",
+            "Trusted mouse-wheel scroll at a viewport point (scrolls the element under it).",
+            json!({"x": coord(), "y": coord(), "dx": {"type": "integer"}, "dy": {"type": "integer"}, "tab_id": tab_prop()}),
+            &["x", "y"],
+        ),
+        tool(
+            "browser_type_keys",
+            "Type text into the focused element with trusted keyboard input, as a person would.",
+            json!({"text": {"type": "string"}, "tab_id": tab_prop()}),
+            &["text"],
+        ),
+        tool(
+            "browser_key",
+            "Press one key with trusted keyboard input, optionally with modifiers (key a with modifiers [ctrl] selects all).",
+            json!({"key": {"type": "string"}, "modifiers": modifiers_prop(), "tab_id": tab_prop()}),
+            &["key"],
+        ),
+        tool(
+            "browser_desktop_screenshot",
+            "Capture the computer's whole screen (outside the page too), in screen pixels.",
+            json!({}),
+            &[],
+        ),
+        tool(
+            "browser_desktop_click",
+            "Click anywhere on the computer's screen, at screen coordinates from browser_desktop_screenshot.",
+            json!({"x": coord(), "y": coord(), "button": button_prop(), "click_count": {"type": "integer", "minimum": 1, "maximum": 3}}),
+            &["x", "y"],
+        ),
+        tool(
+            "browser_desktop_move",
+            "Move the computer's pointer to screen coordinates.",
+            json!({"x": coord(), "y": coord()}),
+            &["x", "y"],
+        ),
+        tool(
+            "browser_desktop_drag",
+            "Drag on the computer's screen.",
+            json!({"from_x": coord(), "from_y": coord(), "to_x": coord(), "to_y": coord()}),
+            &["from_x", "from_y", "to_x", "to_y"],
+        ),
+        tool(
+            "browser_desktop_type",
+            "Type text into whatever has focus on the computer (a native file dialog, another window).",
+            json!({"text": {"type": "string"}}),
+            &["text"],
+        ),
+        tool(
+            "browser_desktop_key",
+            "Press a key chord on the computer, xdotool style: Return, Escape, ctrl+l, alt+F4.",
+            json!({"key": {"type": "string"}}),
+            &["key"],
+        ),
+        tool(
+            "browser_desktop_scroll",
+            "Scroll the computer's screen by mouse-wheel clicks (positive dy scrolls down), optionally at x,y.",
+            json!({"x": coord(), "y": coord(), "dy": {"type": "integer", "minimum": -100, "maximum": 100}}),
+            &["dy"],
         ),
         tool(
             "browser_wait_for",
@@ -590,7 +689,7 @@ impl Server {
             );
         }
         let result = op.result.unwrap_or(Value::Null);
-        if let RemoteAction::Screenshot { .. } = action {
+        if action.returns_image() {
             let (mime, bytes) = match self.client.screenshot_bytes(&result).await {
                 Ok(v) => v,
                 Err(e) => return text_result(format!("fetching the screenshot: {e}"), true),
@@ -599,11 +698,15 @@ impl Server {
                 use base64::Engine;
                 base64::engine::general_purpose::STANDARD.encode(bytes)
             };
-            let caption = format!(
+            let mut caption = format!(
                 "{}  {}",
                 result["url"].as_str().unwrap_or(""),
                 result["title"].as_str().unwrap_or("")
             );
+            if let Some(marks) = result.get("marks").filter(|m| m.is_array()) {
+                caption.push_str("\nmarks: ");
+                caption.push_str(&marks.to_string());
+            }
             return json!({
                 "content": [
                     {"type": "image", "data": data, "mimeType": mime},
@@ -645,6 +748,11 @@ mod tests {
                     "tab_id" => json!(1),
                     "key" => json!("Enter"),
                     "handoff_id" => json!(Uuid::nil()),
+                    "x" | "y" | "from_x" | "from_y" | "to_x" | "to_y" => json!(10),
+                    "dy" => json!(1),
+                    "op" => json!("move"),
+                    "script" => json!("document.title"),
+                    "text" => json!("hi"),
                     _ => json!("#x"),
                 };
                 args.insert(r.into(), v);
@@ -663,7 +771,7 @@ mod tests {
         a.insert("url".into(), json!("javascript:alert(1)"));
         assert!(action_for("browser_navigate", &a)
             .unwrap_err()
-            .contains("http"));
+            .contains("evaluate"));
         assert!(action_for("browser_execute_script", &Map::new()).is_err());
         assert!(action_for("other", &Map::new()).is_err());
     }

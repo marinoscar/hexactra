@@ -11540,11 +11540,11 @@ export interface components {
             hostId?: string | null;
             /** @default [] */
             allowedDomains?: string[];
-            /** @default 40 */
+            /** @default 100 */
             maxSteps?: number;
-            /** @default 15 */
+            /** @default 30 */
             maxMinutes?: number;
-            /** @default true */
+            /** @default false */
             confirmRiskyActions?: boolean;
             model?: string | null;
         };
@@ -11765,7 +11765,7 @@ export interface components {
         ActionDto: {
             action: {
                 /** @enum {string} */
-                type: "navigate" | "click" | "type" | "press" | "scroll" | "screenshot" | "text" | "elements" | "wait_for" | "tabs" | "new_tab" | "activate_tab" | "close_tab" | "back" | "forward" | "reload" | "type_handoff_secret";
+                type: "navigate" | "click" | "type" | "press" | "scroll" | "screenshot" | "text" | "elements" | "wait_for" | "tabs" | "new_tab" | "activate_tab" | "close_tab" | "back" | "forward" | "reload" | "evaluate" | "click_at" | "mouse" | "drag" | "scroll_at" | "type_keys" | "key" | "desktop_screenshot" | "desktop_click" | "desktop_move" | "desktop_drag" | "desktop_type" | "desktop_key" | "desktop_scroll" | "type_handoff_secret";
             } & {
                 [key: string]: unknown;
             };

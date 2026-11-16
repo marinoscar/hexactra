@@ -31,13 +31,13 @@ Hermes Agent, OpenClaw and Pi: ready-made, CI-tested recipes in [agent-framework
 | Delegate to Hexactra's agent | `run_goal`, `run_status`, `runs_list`, `run_cancel`, `tasks_list`, `task_create`, `task_run`, `schedule_create`, `schedules_list` |
 | Ask the user a question | `ask_human` (no browser: text, choice, multi_choice, number, confirm, none, takeover; `wait_s` ≤ 300 waits for the answer), `question_status` |
 | Relay a person's answers | `inbox_list`, `inbox_answer` (by `question_id` or `run_id`): only answers the user actually gave |
-| Drive a browser yourself | `browser_open`, then `browser_navigate`, `browser_elements`, `browser_text`, `browser_click`, `browser_type`, `browser_press`, `browser_scroll`, `browser_wait_for`, `browser_back`, `browser_tabs`, `browser_screenshot` (an image), `browser_request_human`, `browser_handoff_status`, `browser_type_secret`, `browser_close` |
+| Drive a browser yourself | `browser_open`, then `browser_navigate`, `browser_elements`, `browser_text`, `browser_click`, `browser_type`, `browser_press`, `browser_scroll`, `browser_wait_for`, `browser_back`, `browser_tabs`, `browser_screenshot` (an image, with numbered marks by default); full powers (VISION §27): `browser_evaluate` (JavaScript), `browser_click_at`, `browser_hover_at`, `browser_drag`, `browser_scroll_at`, `browser_type_keys`, `browser_key` (trusted input by position), `browser_desktop_screenshot`, `browser_desktop_click`, `browser_desktop_type`, `browser_desktop_key`, `browser_desktop_scroll`, `browser_desktop_drag` (the node's OS desktop); `browser_request_human`, `browser_handoff_status`, `browser_type_secret`, `browser_close` |
 | Fleet | `hosts_list` (each host's mode, unattended or attended, is *Planned* in #336). Viewing and controlling a node's desktop is for people only, so there is no viewer tool ([nodes.md](../../docs/nodes.md)). |
 
 **Rules the server gives every client (`instructions`):**
-- Never bypass a CAPTCHA or bot check, and never guess codes: ask the person (`browser_request_human`).
+- You act with the user's full authority, like a person at their computer: look at the page, act by selector or by position, run JavaScript, and use the desktop.
+- Ask the person (`browser_request_human`) only for what only they have: a code sent to them, a passkey, a password you were not given, a CAPTCHA puzzle you cannot pass. Never guess codes.
 - Type codes with `browser_type_secret`, so the agent never sees them.
-- Ask before purchases and other irreversible steps.
 - Close sessions when done.
 
 Sessions are limited to `allowed_domains` when the client sets them.

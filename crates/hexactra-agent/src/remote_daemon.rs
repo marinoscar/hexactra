@@ -307,7 +307,15 @@ async fn run_attach_mode(cfg: DaemonConfig, client: HostClient) -> Result<()> {
                 let span = op_span(&op);
                 async {
                     tracing::info!(op_id = %op.id, kind = op.action.kind(), "executing operation");
-                    let result = if op.profile != DEFAULT_PROFILE {
+                    let result = if op.action.is_desktop() {
+                        // The node's OS desktop (#366): the agent drives it itself,
+                        // in attach mode (attended nodes) as in launch mode.
+                        let left = (op.deadline - chrono::Utc::now())
+                            .to_std()
+                            .unwrap_or(Duration::ZERO)
+                            .max(Duration::from_secs(1));
+                        hexactra_desktop_input::xdotool::execute(&op.action, left).await
+                    } else if op.profile != DEFAULT_PROFILE {
                         failure(format!(
                             "this host attaches to one browser (profile {DEFAULT_PROFILE:?}); profile {:?} is not available here",
                             op.profile

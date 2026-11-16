@@ -9,11 +9,13 @@ import { dirname, join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { agentDoctor, installAgent, installUnattended, sessionKind, unattendedControl, uninstallUnattended, type AgentDeps, type ExecResult } from './agent.js';
+import { ATTENDED_PACKAGES, agentDoctor, installAgent, installUnattended, sessionKind, unattendedControl, uninstallUnattended, updateUnattended, type AgentDeps, type ExecResult } from './agent.js';
+import { DESKTOP_INPUT_PACKAGES } from './desktopTools.js';
 import { BUNDLE_NAME } from './bundle.js';
 import { policyText } from './googleChrome.js';
 import { agentPaths } from './paths.js';
 import {
+  APT_PACKAGES,
   agentUnit,
   chromeArgs,
   detectGpu,
@@ -213,6 +215,9 @@ describe('hexactra agent install --mode unattended', () => {
   it('controls and removes the node with sudo, keeping profiles by default', async () => {
     const h = harness({ userExists: true });
     await installUnattended(h.d, { bundle: makeBundle(join(h.root, 'b')), layout: h.layout });
+    // `agent update` activates the bundle locally first; here it is the one the node runs.
+    mkdirSync(dirname(h.paths.current), { recursive: true });
+    symlinkSync(join(h.root, 'bundles', readUnattended(h.paths.agentDir)!.bundle), h.paths.current);
     h.exec.length = 0;
     unattendedControl(h.d, 'restart');
     expect(h.exec.find((a) => a[2] === 'systemctl')).toEqual(['sudo', '-n', 'systemctl', 'restart', UNITS.display, UNITS.session, UNITS.agent]);
@@ -241,6 +246,9 @@ describe('hexactra agent install --mode attended (#341)', () => {
   it('drives your own Chrome: attach mode, desktop shared on demand, its own name next to an unattended node', async () => {
     const h = harness();
     await installUnattended(h.d, { bundle: makeBundle(join(h.root, 'b')), layout: h.layout });
+    // `agent update` activates the bundle locally first; here it is the one the node runs.
+    mkdirSync(dirname(h.paths.current), { recursive: true });
+    symlinkSync(join(h.root, 'bundles', readUnattended(h.paths.agentDir)!.bundle), h.paths.current);
     h.exec.length = 0;
     const s = await withEnv({ DISPLAY: ':0', XDG_SESSION_TYPE: 'x11', WAYLAND_DISPLAY: undefined }, () =>
       installAgent(h.d, { bundle: makeBundle(join(h.root, 'b2')), attended: true }),
@@ -278,5 +286,86 @@ describe('hexactra agent install --mode attended (#341)', () => {
     expect(sessionKind(d, { XDG_SESSION_ID: '3' })).toBe('wayland');
     expect(sessionKind(d, { WAYLAND_DISPLAY: 'wayland-0' })).toBe('wayland');
     expect(sessionKind({ exec: () => ({ code: 1, stdout: '', stderr: '' }) }, {})).toBe('none');
+  });
+});
+
+describe('the desktop tools the agent drives the whole screen with (#373)', () => {
+  const APT = ['apt-get', 'install', '-y', '--no-install-recommends'];
+  /** dpkg reports `missing` as not installed. */
+  const missing = (h: ReturnType<typeof harness>, names: readonly string[]) => {
+    const exec = h.d.exec;
+    h.d.exec = (argv, o) => (argv[0] === 'dpkg' ? { code: names.includes(argv[2]!) ? 1 : 0, stdout: '', stderr: '' } : exec(argv, o));
+  };
+  const aptCalls = (h: ReturnType<typeof harness>) => h.exec.filter((a) => a[0] === 'sudo' && a[2] === 'apt-get');
+
+  it('are part of every node install', () => {
+    expect(DESKTOP_INPUT_PACKAGES).toEqual(['xdotool', 'imagemagick']);
+    expect(APT_PACKAGES).toEqual(expect.arrayContaining(['xdotool', 'imagemagick']));
+    expect(ATTENDED_PACKAGES).toEqual(expect.arrayContaining(['x11vnc', 'libnotify-bin', 'xdotool', 'imagemagick']));
+  });
+
+  it('unattended: installed with the desktop packages, in the one sudo step', async () => {
+    const h = harness();
+    await installUnattended(h.d, { bundle: makeBundle(join(h.root, 'b')), layout: h.layout });
+    const apt = aptCalls(h);
+    expect(apt).toHaveLength(1);
+    expect(apt[0]).toEqual(expect.arrayContaining(['xdotool', 'imagemagick', 'xfce4']));
+  });
+
+  it('attended: only the missing ones are installed', async () => {
+    const h = harness();
+    missing(h, ['xdotool', 'imagemagick']);
+    h.d.env = { DISPLAY: ':0', XDG_SESSION_TYPE: 'x11' };
+    const saved = { DISPLAY: process.env.DISPLAY, XDG_SESSION_TYPE: process.env.XDG_SESSION_TYPE };
+    Object.assign(process.env, { DISPLAY: ':0', XDG_SESSION_TYPE: 'x11' });
+    try {
+      await installAgent(h.d, { bundle: makeBundle(join(h.root, 'b')), attended: true });
+    } finally {
+      for (const [k, v] of Object.entries(saved)) v === undefined ? delete process.env[k] : (process.env[k] = v);
+    }
+    expect(aptCalls(h)).toEqual([['sudo', '-n', ...APT, 'xdotool', 'imagemagick']]);
+  });
+
+  it('default mode in an X11 session: installs the missing ones', async () => {
+    const h = harness();
+    missing(h, ['imagemagick']);
+    h.d.env = { DISPLAY: ':0', XDG_SESSION_TYPE: 'x11' };
+    await installAgent(h.d, { bundle: makeBundle(join(h.root, 'b')), browser: '/usr/bin/true', service: false });
+    expect(aptCalls(h)).toEqual([['sudo', '-n', ...APT, 'imagemagick']]);
+  });
+
+  it('default mode without a desktop (a server, CI, --no-desktop): skips them, says why, and never asks for sudo', async () => {
+    for (const [env, noDesktop] of [[{}, false], [{ DISPLAY: ':0', XDG_SESSION_TYPE: 'x11' }, true]] as const) {
+      const h = harness();
+      missing(h, ['xdotool', 'imagemagick']);
+      h.d.env = env;
+      await installAgent(h.d, { bundle: makeBundle(join(h.root, 'b')), browser: '/usr/bin/true', service: false, noDesktop });
+      expect(h.exec.some((a) => a[0] === 'sudo')).toBe(false);
+      expect(h.logs.join('\n')).toMatch(/skipping the desktop tools \(xdotool, imagemagick\)/);
+    }
+  });
+
+  it('agent update installs them on an unattended node installed before #373, even with the same agent', async () => {
+    const h = harness();
+    await installUnattended(h.d, { bundle: makeBundle(join(h.root, 'b')), layout: h.layout });
+    // `agent update` activates the bundle locally first; here it is the one the node runs.
+    mkdirSync(dirname(h.paths.current), { recursive: true });
+    symlinkSync(join(h.root, 'bundles', readUnattended(h.paths.agentDir)!.bundle), h.paths.current);
+    h.exec.length = 0;
+    updateUnattended(h.d, true, h.layout);
+    expect(aptCalls(h)).toEqual([]); // nothing missing, same agent: nothing to do
+    missing(h, ['xdotool']);
+    updateUnattended(h.d, true, h.layout);
+    expect(aptCalls(h)).toEqual([['sudo', '-n', ...APT, 'xdotool']]);
+    expect(h.exec).toContainEqual(['sudo', '-n', 'systemctl', 'restart', UNITS.agent]);
+    expect(h.exec.some((a) => a[2] === 'cp')).toBe(false);
+  });
+
+  it('doctor reports them and how to fix them', async () => {
+    const h = harness();
+    await installUnattended(h.d, { bundle: makeBundle(join(h.root, 'b')), layout: h.layout });
+    expect((await agentDoctor(h.d)).find((c) => c.name === 'desktop-input')).toMatchObject({ ok: true });
+    missing(h, ['xdotool']);
+    expect((await agentDoctor(h.d)).find((c) => c.name === 'desktop-input')).toMatchObject({ ok: false, detail: expect.stringContaining('hexactra agent update') });
   });
 });

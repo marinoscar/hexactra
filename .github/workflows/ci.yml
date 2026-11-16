@@ -120,7 +120,7 @@ jobs:
       # Chromium (not branded Chrome) honours --load-extension.
       - name: Install Chromium and Xvfb
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb xdotool imagemagick
           npx -y playwright@1.49.1 install --with-deps chromium
           # Ubuntu 24.04 restricts unprivileged user namespaces, which the
           # Chromium sandbox needs; allow them instead of disabling the sandbox.

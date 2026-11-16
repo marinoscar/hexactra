@@ -35,7 +35,7 @@ export function TasksPage() {
   const [goal, setGoal] = useState('');
   const [profile, setProfile] = useState('default');
   const [domains, setDomains] = useState('');
-  const [confirmRisky, setConfirmRisky] = useState(true);
+  const [confirmRisky, setConfirmRisky] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
 
   const reset = () => {
@@ -44,7 +44,7 @@ export function TasksPage() {
     setGoal('');
     setProfile('default');
     setDomains('');
-    setConfirmRisky(true);
+    setConfirmRisky(false);
   };
 
   const edit = (t: Task) => {

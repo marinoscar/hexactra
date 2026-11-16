@@ -12,6 +12,7 @@ import { TasksService } from '../tasks/tasks.service';
 import { BROWSER_AGENT_FEATURE_ID } from './browser-agent.feature';
 import { FabricSession, handoffOutcome, type CreatedHandoff } from './fabric-session';
 import { domainAllowed, looksRisky } from './policy';
+import { captureScreen, markCenter, roundInput, type Screen, type ScreenMark, type ScreenView } from './vision';
 
 /** Round-trips per `runTools` call (the platform's cap is 20). */
 const CHUNK_STEPS = 20;
@@ -27,24 +28,41 @@ export interface RunMemory {
   /** A person approved one risky action. */
   confirmationGranted?: boolean;
   chunks: number;
+  /** The provider refused images: the run continues without screenshots (#366). */
+  visionOff?: boolean;
+  /** The screen the next round shows the model (default: the page). */
+  look?: Screen | null;
 }
 
 export type RunOutcome = 'succeeded' | 'failed' | 'cancelled' | 'waiting_human' | 'requeue';
 
 /** Ends a chunk early: the loop is stopped from `onStep`. */
 class StopLoop extends Error {
-  constructor(readonly reason: 'finish' | 'pause' | 'cancel' | 'budget') {
+  constructor(readonly reason: 'finish' | 'pause' | 'cancel' | 'budget' | 'look') {
     super(reason);
   }
 }
 
-const INSTRUCTIONS = `You operate a real web browser for the user to reach their goal.
-- Observe with observe_elements (interactive elements with CSS selectors) and read_text before acting. Use the selectors you were given.
-- Act with navigate, click, type_text, press_key, scroll, wait_for and go_back. One action at a time; check the page after each.
-- If a CAPTCHA, a one-time code, a passkey, a login you have no credentials for, or an approval is needed, call request_human. Never try to bypass or solve a bot check yourself.
-- For a code or password the person gives you, call type_handoff_secret: you never see secret values.
-- Before buying, paying, booking or submitting something irreversible, call request_human with kind "confirmation" unless you were told it was approved.
-- Stay on the allowed sites. When done, or when the goal is impossible, call finish with a short, factual result.`;
+const INSTRUCTIONS = `You are the user's hands and eyes on their own computer. You operate a real Chrome browser, and the desktop it runs on, to reach their goal the way a skilled person sitting at the machine would. You act with the user's full authority.
+
+How to see:
+- A round may start with a screenshot of the page, with interactive elements boxed and numbered, and their positions listed. Use it to understand the layout, what is visible, and what changed.
+- observe_elements lists interactive elements with CSS selectors; read_text reads the page text. Use them for exact targets and content.
+- look takes a fresh screenshot (screen "desktop" shows the whole computer screen). It ends your turn; the next turn starts with the image.
+
+How to act (choose what works, as a person would):
+- By element: click and type_text with selectors, or click_mark with a number from the screenshot.
+- By position, with real mouse and keyboard events: click_at, hover_at, drag, scroll_at, type_keys, key. Use them for canvas, custom widgets, hover menus, sliders, drag and drop, and whenever a selector click does nothing.
+- run_javascript runs any JavaScript in the page and returns its value: read state, fill complex forms, call the page's own functions, or get past a stubborn widget.
+- Tabs: tabs, switch_tab, new_tab. navigate opens any URL.
+- Outside the page (native file pickers, OS dialogs, permission prompts, other windows): look at the desktop, then desktop_click, desktop_type, desktop_key, desktop_scroll, desktop_drag.
+- Check the result of each action before the next one. If something does not work, try another way before giving up.
+
+When you need the person:
+- Only for what only they have: a code sent to their phone or email, a passkey or security-key touch, a password you were not given, or a CAPTCHA puzzle you cannot pass (tick an "I am not a robot" box yourself, as a person would). Call request_human. For a code or password they give you, call type_handoff_secret: you never see secret values.
+- If a click is refused because the task asks for confirmation before purchases, call request_human with kind "confirmation", then try again.
+
+When done, or when the goal is impossible, call finish with a short, factual result.`;
 
 function trim(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n)}…` : s;
@@ -200,9 +218,9 @@ export class GoalRunnerService {
 
     const policy = {
       allowedDomains: run.task?.allowedDomains ?? [],
-      maxSteps: run.task?.maxSteps ?? 40,
-      deadline: (run.startedAt ?? new Date()).getTime() + (run.task?.maxMinutes ?? 15) * 60_000,
-      confirmRisky: run.task?.confirmRiskyActions ?? true,
+      maxSteps: run.task?.maxSteps ?? 100,
+      deadline: (run.startedAt ?? new Date()).getTime() + (run.task?.maxMinutes ?? 30) * 60_000,
+      confirmRisky: run.task?.confirmRiskyActions ?? false,
       model: run.task?.model ?? undefined,
     };
     const state = {
@@ -213,6 +231,10 @@ export class GoalRunnerService {
       handoffExpiresAt: null as Date | null,
       handoffAsk: null as { prompt: string; kind: string; input: string } | null,
       labels: new Map<string, string>(),
+      /** The numbered marks of the last page screenshot. */
+      marks: new Map<number, ScreenMark>(),
+      /** The last screen the model was shown. */
+      view: null as ScreenView | null,
     };
 
     const record = async (kind: string, action: string | null, args: Record<string, unknown> | null, ok: boolean, summary: string, started: number, reasoning?: string) => {
@@ -277,6 +299,17 @@ export class GoalRunnerService {
         forModel = trim(JSON.stringify(els.map((el) => ({ selector: el.selector, tag: el.tag, role: el.role, text: el.text, type: el.type, name: el.name }))), OBSERVATION_CHARS);
       }
       if (type === 'scroll') summary = forModel = `scrolled to ${String(result.y ?? '?')}`;
+      if (type === 'evaluate') {
+        const value = JSON.stringify(result.value ?? null) ?? 'undefined';
+        summary = `returned ${String(result.type ?? typeof result.value)} (${value.length} characters)`;
+        forModel = trim(`${String(result.type ?? '')}: ${value}${result.description ? ` (${String(result.description)})` : ''}`, OBSERVATION_CHARS);
+      }
+      if (type === 'tabs') {
+        const tabs = (result.tabs as Record<string, unknown>[] | undefined) ?? [];
+        summary = `${tabs.length} tabs`;
+        forModel = trim(JSON.stringify(tabs.map((t) => ({ id: t.id, title: t.title, url: t.url, active: t.active }))), OBSERVATION_CHARS);
+      }
+      if (type === 'new_tab') summary = forModel = `opened tab ${String(result.tab_id ?? '?')}`;
       await record('action', type, action, true, summary, started, reason);
       return forModel;
     };
@@ -296,12 +329,12 @@ export class GoalRunnerService {
       }),
       defineTool({
         name: 'navigate',
-        description: 'Open a URL in the current tab.',
-        parameters: z.object({ url: z.string().max(2000), reason: z.string().max(500) }),
+        description: 'Open any URL in the current tab.',
+        parameters: z.object({ url: z.string().max(8000), reason: z.string().max(500) }),
         execute: async ({ url, reason }) => {
           if (!domainAllowed(url, policy.allowedDomains)) {
             await record('action', 'navigate', { url }, false, 'refused by policy: site not allowed', Date.now(), reason);
-            return `Refused: ${new URL(url, 'https://x.invalid').hostname} is not an allowed site (${policy.allowedDomains.join(', ') || 'http(s) only'}).`;
+            return `Refused: ${url.startsWith('javascript:') ? 'use run_javascript instead of a javascript: URL' : `that site is not allowed for this task (${policy.allowedDomains.join(', ')})`}.`;
           }
           return act({ type: 'navigate', url }, reason);
         },
@@ -349,6 +382,152 @@ export class GoalRunnerService {
         description: 'Go back one page.',
         parameters: z.object({}),
         execute: () => act({ type: 'back' }),
+      }),
+      defineTool({
+        name: 'look',
+        description:
+          'Take a fresh screenshot and end this turn; the next turn starts with the image. screen "page" shows the tab with numbered interactive elements; "desktop" shows the whole computer screen (native dialogs, file pickers, other windows).',
+        parameters: z.object({ screen: z.enum(['page', 'desktop']), reason: z.string().max(500) }),
+        execute: async ({ screen, reason }) => {
+          if (memory.visionOff) return 'Screenshots are not available with this model: use observe_elements and read_text.';
+          if (state.stepCount >= policy.maxSteps) {
+            state.stop = 'budget';
+            return 'Step budget exhausted.';
+          }
+          await record('observe', 'look', { screen }, true, `looked at the ${screen}`, Date.now(), reason);
+          memory.look = screen;
+          state.stop = 'look';
+          return 'Looking; the screenshot comes with the next turn.';
+        },
+      }),
+      defineTool({
+        name: 'click_mark',
+        description: 'Click the element numbered n on the latest page screenshot, with a real mouse click at its center.',
+        parameters: z.object({ n: z.number().int().min(1), double: z.boolean(), reason: z.string().max(500) }),
+        execute: async ({ n, double, reason }) => {
+          const mark = state.marks.get(n);
+          if (!mark) return `There is no mark ${n} on the latest screenshot. Call look to refresh it.`;
+          if (policy.confirmRisky && !memory.confirmationGranted && looksRisky(mark.selector, mark.text, reason)) {
+            await record('action', 'click_at', { mark: n }, false, "paused by policy: needs a person's confirmation", Date.now(), reason);
+            return 'Refused: this looks like a purchase, payment or irreversible submission. Call request_human with kind "confirmation" describing exactly what will happen, then try again.';
+          }
+          const { x, y } = markCenter(mark);
+          const out = await act({ type: 'click_at', x, y, ...(double ? { click_count: 2 } : {}) }, reason);
+          if (looksRisky(mark.selector, mark.text, reason)) memory.confirmationGranted = false;
+          return out;
+        },
+      }),
+      defineTool({
+        name: 'click_at',
+        description: 'Real mouse click at viewport coordinates (CSS pixels, as on the page screenshot). button left/middle/right; double for a double click; modifiers alt, ctrl, meta, shift.',
+        parameters: z.object({
+          x: z.number().int().min(0),
+          y: z.number().int().min(0),
+          button: z.enum(['left', 'middle', 'right']),
+          double: z.boolean(),
+          modifiers: z.array(z.enum(['alt', 'ctrl', 'meta', 'shift'])),
+          reason: z.string().max(500),
+        }),
+        execute: async ({ x, y, button, double, modifiers, reason }) => {
+          if (policy.confirmRisky && !memory.confirmationGranted && looksRisky(reason)) {
+            await record('action', 'click_at', { x, y }, false, "paused by policy: needs a person's confirmation", Date.now(), reason);
+            return 'Refused: this looks like a purchase, payment or irreversible submission. Call request_human with kind "confirmation" describing exactly what will happen, then try again.';
+          }
+          const out = await act({ type: 'click_at', x, y, ...(button !== 'left' ? { button } : {}), ...(double ? { click_count: 2 } : {}), ...(modifiers.length ? { modifiers } : {}) }, reason);
+          if (looksRisky(reason)) memory.confirmationGranted = false;
+          return out;
+        },
+      }),
+      defineTool({
+        name: 'hover_at',
+        description: 'Move the mouse to viewport coordinates (opens hover menus and tooltips).',
+        parameters: z.object({ x: z.number().int().min(0), y: z.number().int().min(0) }),
+        execute: ({ x, y }) => act({ type: 'mouse', op: 'move', x, y }),
+      }),
+      defineTool({
+        name: 'drag',
+        description: 'Real mouse drag from one viewport point to another (sliders, drag and drop, drawing).',
+        parameters: z.object({ from_x: z.number().int().min(0), from_y: z.number().int().min(0), to_x: z.number().int().min(0), to_y: z.number().int().min(0) }),
+        execute: (a) => act({ type: 'drag', ...a }),
+      }),
+      defineTool({
+        name: 'scroll_at',
+        description: 'Mouse-wheel scroll at a viewport point: scrolls whatever is under it (a list, a map, a panel). Positive dy scrolls down.',
+        parameters: z.object({ x: z.number().int().min(0), y: z.number().int().min(0), dy: z.number().int().min(-20000).max(20000) }),
+        execute: ({ x, y, dy }) => act({ type: 'scroll_at', x, y, dx: 0, dy }),
+      }),
+      defineTool({
+        name: 'type_keys',
+        description: 'Type text into whatever has focus with real keyboard events (click the field first). Use for fields that ignore type_text.',
+        parameters: z.object({ text: z.string().min(1).max(10_000) }),
+        execute: ({ text }) => act({ type: 'type_keys', text }),
+      }),
+      defineTool({
+        name: 'key',
+        description: 'Press one key with real keyboard events, with modifiers: key "a" with ["ctrl"] selects all, "Enter", "Escape", "Tab", "ArrowDown", "PageDown", "F5".',
+        parameters: z.object({ key: z.string().min(1).max(40), modifiers: z.array(z.enum(['alt', 'ctrl', 'meta', 'shift'])) }),
+        execute: ({ key, modifiers }) => act({ type: 'key', key, ...(modifiers.length ? { modifiers } : {}) }),
+      }),
+      defineTool({
+        name: 'run_javascript',
+        description:
+          'Run JavaScript in the current page and get its value back (like the DevTools console: the last expression is the value; top-level await works). Use it to read page state, fill or submit complex forms, call the page\'s functions, or work around stubborn widgets.',
+        parameters: z.object({ script: z.string().min(1).max(100_000), reason: z.string().max(500) }),
+        execute: ({ script, reason }) => act({ type: 'evaluate', script, await_promise: true }, reason),
+      }),
+      defineTool({
+        name: 'tabs',
+        description: 'List the open tabs (id, title, URL, which is active).',
+        parameters: z.object({}),
+        execute: () => act({ type: 'tabs' }),
+      }),
+      defineTool({
+        name: 'switch_tab',
+        description: 'Make a tab (by id from tabs) the active one; later actions use it.',
+        parameters: z.object({ tab_id: z.number().int() }),
+        execute: ({ tab_id }) => act({ type: 'activate_tab', tab_id }),
+      }),
+      defineTool({
+        name: 'new_tab',
+        description: 'Open a new tab, optionally at a URL, and make it active.',
+        parameters: z.object({ url: z.string().max(8000).nullable() }),
+        execute: async ({ url }) => {
+          if (url && !domainAllowed(url, policy.allowedDomains)) {
+            await record('action', 'new_tab', { url }, false, 'refused by policy: site not allowed', Date.now());
+            return `Refused: that site is not allowed for this task (${policy.allowedDomains.join(', ')}).`;
+          }
+          return act({ type: 'new_tab', ...(url ? { url } : {}) });
+        },
+      }),
+      defineTool({
+        name: 'desktop_click',
+        description: 'Click anywhere on the computer screen, at screen coordinates from a desktop screenshot (look with screen "desktop").',
+        parameters: z.object({ x: z.number().int().min(0), y: z.number().int().min(0), button: z.enum(['left', 'middle', 'right']), double: z.boolean() }),
+        execute: ({ x, y, button, double }) => act({ type: 'desktop_click', x, y, ...(button !== 'left' ? { button } : {}), ...(double ? { click_count: 2 } : {}) }),
+      }),
+      defineTool({
+        name: 'desktop_type',
+        description: 'Type text into whatever has focus on the computer (a native file dialog\'s path box, another window).',
+        parameters: z.object({ text: z.string().min(1).max(10_000) }),
+        execute: ({ text }) => act({ type: 'desktop_type', text }),
+      }),
+      defineTool({
+        name: 'desktop_key',
+        description: 'Press a key chord on the computer, xdotool style: "Return", "Escape", "ctrl+l", "alt+F4", "ctrl+a BackSpace".',
+        parameters: z.object({ key: z.string().min(1).max(64) }),
+        execute: ({ key }) => act({ type: 'desktop_key', key }),
+      }),
+      defineTool({
+        name: 'desktop_scroll',
+        description: 'Scroll on the computer screen by mouse-wheel clicks at a point (positive dy scrolls down).',
+        parameters: z.object({ x: z.number().int().min(0), y: z.number().int().min(0), dy: z.number().int().min(-100).max(100) }),
+        execute: ({ x, y, dy }) => act({ type: 'desktop_scroll', x, y, dy }),
+      }),
+      defineTool({
+        name: 'desktop_drag',
+        description: 'Drag on the computer screen from one point to another.',
+        parameters: z.object({ from_x: z.number().int().min(0), from_y: z.number().int().min(0), to_x: z.number().int().min(0), to_y: z.number().int().min(0) }),
+        execute: (a) => act({ type: 'desktop_drag', ...a }),
       }),
       defineTool({
         name: 'request_human',
@@ -450,21 +629,37 @@ export class GoalRunnerService {
     let usage = { input: 0, output: 0 };
     for (let chunk = 0; chunk < remainingChunks; chunk++) {
       memory.chunks += 1;
+      state.stop = null;
+      const stepsBefore = state.stepCount;
       const input = [
         `Goal: ${goal}`,
-        `Allowed sites: ${policy.allowedDomains.join(', ') || 'any http(s) site'}. Steps used: ${state.stepCount} of ${policy.maxSteps}.`,
+        `Allowed sites: ${policy.allowedDomains.join(', ') || 'any'}. Steps used: ${state.stepCount} of ${policy.maxSteps}.`,
         memory.log.length ? `Progress so far (latest last):\n${memory.log.slice(-LOG_LINES).join('\n')}` : 'Nothing has been done yet. Start by navigating or observing the page.',
         memory.confirmationGranted ? 'The person approved the next irreversible step.' : '',
         'Continue toward the goal.',
       ]
         .filter(Boolean)
         .join('\n\n');
+      // What the model sees this round: the screen, as a person would (#366).
+      let view: ScreenView | null = null;
+      if (!memory.visionOff) {
+        const screen: Screen = memory.look ?? 'page';
+        memory.look = null;
+        try {
+          view = await captureScreen(session, this.fabric, sessionId!, screen);
+          if (screen === 'page') state.marks = new Map(view.marks.map((m) => [m.n, m]));
+          state.view = view;
+        } catch (e) {
+          this.log.debug(`run ${run.id}: no ${screen} screenshot this round: ${e instanceof Error ? e.message : String(e)}`);
+          memory.log.push(`(No ${screen} screenshot this round: ${trim(e instanceof Error ? e.message : String(e), 200)})`);
+        }
+      }
       let result: AiToolLoopResult | null = null;
-      try {
-        result = await this.ai.forUser(userId, { feature: BROWSER_AGENT_FEATURE_ID, ...(orgId ? { orgId } : {}) }).runTools({
+      const call = (withImage: boolean) =>
+        this.ai.forUser(userId, { feature: BROWSER_AGENT_FEATURE_ID, ...(orgId ? { orgId } : {}) }).runTools({
           ...(policy.model ? { model: policy.model } : {}),
           instructions: INSTRUCTIONS,
-          input,
+          input: roundInput(input, withImage ? view : null),
           tools,
           maxSteps: CHUNK_STEPS,
           onStep: (step) => {
@@ -473,6 +668,17 @@ export class GoalRunnerService {
             if (state.stop) throw new StopLoop(state.stop);
           },
         });
+      try {
+        try {
+          result = await call(view !== null);
+        } catch (e) {
+          // A provider or model without vision refuses the image: carry on without.
+          if (e instanceof StopLoop || view === null || state.stepCount > stepsBefore) throw e;
+          this.log.warn(`run ${run.id}: the model refused the screenshot, continuing without vision: ${e instanceof Error ? e.message : String(e)}`);
+          memory.visionOff = true;
+          memory.log.push('(Screenshots are off: this model does not accept images. Use observe_elements and read_text.)');
+          result = await call(false);
+        }
       } catch (e) {
         if (!(e instanceof StopLoop)) {
           await this.saveMemory(userId, run.id, memory, usage);

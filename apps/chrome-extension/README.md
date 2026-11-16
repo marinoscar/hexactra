@@ -2,6 +2,17 @@
 
 The MV3 extension that drives the browser for Hexactra. It works standalone (side-panel chat with your own model provider) and, on a node, as the agent's hands in Chrome (docs/nodes.md).
 
+## How it acts (full powers, VISION §27)
+
+`src/remote.ts` executes the fabric's actions; the wire shapes are in [docs/remote-control-api.md](../../docs/remote-control-api.md#actions).
+- **DOM actions** (`click`, `type`, `text`, `elements`, ...) run as page functions through `chrome.scripting`.
+- **Trusted input and JavaScript** go through `chrome.debugger` (`src/cdp.ts`, permission `debugger`):
+  - `click_at`, `mouse`, `drag`, `scroll_at`, `type_keys`, `key` dispatch `Input.*` events that pages see as `isTrusted`;
+  - `evaluate` runs `Runtime.evaluate` in REPL mode, whatever the page's CSP.
+- **Screenshots** are captured with `Page.captureScreenshot` (`captureVisibleTab` as a fallback) and scaled to CSS pixels, so image coordinates are `click_at` coordinates. With `marks`, interactive elements are boxed and numbered for the model, then the overlay is removed.
+- **Stealth:** no CDP domain is ever `enable`d, and the host agent starts Chrome with `--silent-debugger-extension-api`, so there is no debugging bar.
+- `navigate` and `new_tab` open any URL but `javascript:`.
+
 ## Build
 
 ```bash

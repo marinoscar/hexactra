@@ -149,17 +149,13 @@ The following MCP tools are available:
 
 ## Browser Actions
 
-Supported action types:
-- `navigate` - Navigate to URL
-- `click` - Click element by selector
-- `type` - Type text into input
-- `get_value` - Get element value
-- `screenshot` - Screenshot page
-- `execute_script` - Execute JavaScript
-- `wait_for_element` - Wait for element
-- `back` - Navigate back
-- `forward` - Navigate forward
-- `refresh` - Refresh page
+The authoritative list, with fields and results, is [remote-control-api.md, Actions](remote-control-api.md#actions). In short:
+- **By element:** `navigate`, `click`, `type`, `type_secret`, `press`, `scroll`, `wait_for`, `text`, `elements`.
+- **What the agent sees:** `screenshot` (with `marks`: numbered interactive elements), `desktop_screenshot`.
+- **Trusted input by position:** `click_at`, `mouse`, `drag`, `scroll_at`, `type_keys`, `key`.
+- **JavaScript:** `evaluate`, any script in the page.
+- **The node's OS desktop:** `desktop_click`, `desktop_move`, `desktop_drag`, `desktop_type`, `desktop_key`, `desktop_scroll`.
+- **Tabs and history:** `tabs`, `new_tab`, `activate_tab`, `close_tab`, `back`, `forward`, `reload`.
 
 ## Security Considerations
 

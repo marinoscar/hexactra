@@ -30,7 +30,7 @@ fn help_and_version() {
 }
 
 #[test]
-fn rejects_non_web_url_before_contacting_server() {
+fn rejects_javascript_url_before_contacting_server() {
     Command::cargo_bin("hexactra-fabric")
         .unwrap()
         .env("HEXACTRA_API_TOKEN", TOKEN)
@@ -38,11 +38,11 @@ fn rejects_non_web_url_before_contacting_server() {
             "--url",
             "http://127.0.0.1:9",
             "navigate",
-            "file:///etc/passwd",
+            "javascript:alert(1)",
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("only http(s)"));
+        .stderr(predicate::str::contains("evaluate"));
 }
 
 #[test]

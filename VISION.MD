@@ -1,9 +1,9 @@
 # Hexactra — Product Vision and Technical Architecture
 
-> **Status:** Foundational vision and proposed architecture (not a statement of shipped capabilities). Section 26, and the status notes in Section 11, record what is implemented in this repository.  
+> **Status:** Foundational vision and proposed architecture (not a statement of shipped capabilities). Sections 26 and 27, and the status notes in Section 11, record what is implemented in this repository.  
 > **Repository:** https://github.com/marinoscar/hexactra  
-> **Document version:** 1.1  
-> **Date:** October 15, 2026  
+> **Document version:** 1.2  
+> **Date:** November 16, 2026  
 > **Product:** Hexactra  
 > **Tagline:** Human-like interaction. Agent-powered execution.
 
@@ -94,6 +94,8 @@ Hexactra addresses the **execution and control** part of this problem. A separat
 **Progressive enhancement.** Standalone installations must work without an observability collector, credential vault, Redis, cloud provider, or graph database.
 
 **Behavior over vendor labels.** Evaluate a driver by real reliability, security, latency, and coverage rather than by whether it uses DOM, CDP, screenshots, or OS-level input.
+
+**A human emulator with its owner's full powers.** Hexactra is the owner's own hands and eyes on their own computer (Section 27). The agent may do anything the owner could do sitting at the machine: see the screen, click and type anywhere with real input, run JavaScript in the page, and use the OS desktop. Controls that exist only to limit the agent are opt-in per task. Controls that protect the owner stay on, because they cost the agent nothing: secrets never reach the model, Stop and takeover always work, and every action is audited.
 
 ---
 
@@ -330,14 +332,20 @@ interface BrowserDriver {
 
 This illustrates intent; final interfaces and schemas must be versioned in the contract packages. Unsupported driver features yield explicit **UNSUPPORTED_CAPABILITY** results, never silent guesswork.
 
+The shipped wire contract (`RemoteAction` in `crates/hexactra-core/src/remote.rs`; [docs/remote-control-api.md](docs/remote-control-api.md)) goes beyond this sketch. It adds `evaluate` (any JavaScript in the page), trusted positional input (`click_at`, `mouse`, `drag`, `scroll_at`, `type_keys`, `key`), marked screenshots (`screenshot` with `marks`), and the node's OS desktop (`desktop_*`). See Section 27.
+
 ### 9.2 Driver implementations
 
-1. **ChromeExtensionDriver — primary v1:** DOM/a11y-oriented discovery, navigation, tabs, interactions, and supported debugger access where permissions and Chrome APIs allow.
-2. **DesktopInputDriver — required fallback:** pointer, keyboard, screen capture, native dialogs, and human takeover on the supported host/desktop.
+1. **ChromeExtensionDriver — primary v1:** DOM discovery, navigation and tabs; through `chrome.debugger`, trusted mouse and keyboard input (`Input.*`), JavaScript (`Runtime.evaluate`) and viewport capture. No CDP domain is ever `enable`d, and Chrome runs with `--silent-debugger-extension-api`, so pages see a person, not a debugger.
+2. **DesktopInputDriver — shipped (xdotool):** the host agent drives the node's whole X11 desktop (pointer, keyboard, full-screen capture) for native dialogs, file pickers, permission prompts and other windows. Human takeover uses the same desktop.
 3. **CDPDriver — optional:** carefully scoped local Chrome DevTools Protocol adapter; must not expose an unauthenticated debugging interface.
 4. **Alternative browser drivers — future:** Chromium variants, Firefox, WebKit, OS accessibility APIs, or other adapters based on tested capability coverage.
 
-Semantic locators (roles, accessible names, stable IDs, text, frame context) are preferred over raw screen coordinates where reliable. Screen-coordinate actions remain important when semantics are unavailable.
+The agent chooses its way of acting like a person would:
+- **Selectors** when the DOM is clear (fast and exact).
+- **What it sees and positions** when the DOM is not: canvas, custom widgets, hover menus, sliders, drag and drop. Screenshots are in CSS pixels, so a point on the image is the point `click_at` takes.
+- **JavaScript** when that is quicker.
+- **The OS desktop** for anything outside the page.
 
 ### 9.3 Browser command safety
 
@@ -734,7 +742,8 @@ The control plane authorizes **who may perform which action on which session/pro
 - Show origin and target context before human enters credentials or approves irreversible actions.
 - Allow the owner to terminate a session, revoke agents, revoke leases, and delete browser profiles.
 - Log denial/approval decisions without logging sensitive values.
-- Treat remote websites' terms, rate limits, and authentication requirements as constraints, not obstacles to bypass automatically.
+- The agent acts as its owner, with the owner's accounts and authority (Section 27). It is not a tool for defeating identity checks. A code sent to the owner, a passkey, a password it was not given, or a CAPTCHA puzzle it cannot pass goes to the owner as a handoff. Ticking an "I am not a robot" box, as a person would, is fine.
+- Page content is never a source of authority. With full powers, a prompt injection could act with the owner's authority, so the owner's controls stay available: Stop, takeover, the audit trail, and per-task allowed sites and purchase confirmation (opt-in).
 
 ### 13.4 Recommended v1 exposure model
 
@@ -1268,9 +1277,9 @@ Minimum capabilities:
 - **Actions:** click/focus, type/clear fields, select options, check/uncheck, keypress, scroll, navigate, fill and submit forms, wait for conditions, and open links.
 - **Interaction control:** observe new tabs, popups, modals, navigation, validation errors, downloads, loading/idle, and login challenges as allowed by Chrome.
 - **Verification:** after each significant action, return a structured result and refreshed page observation; an “action delivered” response alone does not establish goal completion.
-- **Fallback:** use selected permitted chrome.debugger/CDP domains where beneficial; reserve OS-level pointer/keyboard control and unsupported native dialogs for the managed desktop driver or human takeover.
+- **Full powers (Section 27):** run JavaScript in the page; click, hover, drag, scroll and type by position with trusted input through `chrome.debugger`; and use the node's OS desktop (native dialogs, file pickers, other windows) through the host agent's desktop driver.
 
-Build a typed **BrowserDriver** boundary around these operations. Prefer accessible/semantic locators and stable snapshot references to fragile coordinates. Respect frame, tab, document-revision and origin constraints. The model proposes a command; **Hexactra validates it before the extension acts**.
+Build a typed **BrowserDriver** boundary around these operations. Use selectors when the DOM is clear, and what the agent sees on a marked screenshot when it is not. The model proposes a command; **Hexactra validates it before the extension acts**: its shape, its bounds, and the task's opt-in policy.
 
 Chrome does not permit control of every internal page, native security prompt, cross-origin context, or managed-browser target. A restricted capability must produce an explicit error or a human-intervention request, never a fictitious success. Neither browser permissions nor website protections should be bypassed surreptitiously.
 
@@ -1311,12 +1320,12 @@ VERIFY: fresh page state, result, progress toward original goal
 
 Key design requirements:
 
-1. Use **bounded, typed tool calls**. The model must not execute arbitrary JavaScript, injected page scripts, shell commands, extension internals, or unsanctioned HTTP requests on its own.
-2. Prefer concise semantic snapshots for text-capable models; add images only for providers declaring vision support and when the user permits screenshot transmission.
+1. Use **typed tool calls** with the owner's full powers (Section 27): selector actions, trusted positional input, `run_javascript` (any JavaScript in the page), tabs, and the OS desktop. Shell access on the node is not a tool.
+2. **The model sees the screen.** Every round starts with a screenshot of the page, with the interactive elements boxed and numbered (`click_mark n`). `look` refreshes it, or shows the whole desktop. A model that refuses images continues text-only, with `observe_elements` and `read_text`.
 3. Account for dynamic DOM, redirects, new tabs, elements that move or disappear, modals, loading states, and inaccurate model predictions. Reobserve and replan.
 4. Provide step limit, duration limit, provider-call timeout, maximum token/cost budget where known, backoff, infinite-loop/no-progress detection, and an always-accessible Stop command.
 5. Never automatically retry irreversible/non-idempotent clicks after an ambiguous timeout without rechecking state.
-6. Request human intervention for passwords, OTPs, passkeys, authenticator approvals, CAPTCHA/manual challenges, or high-impact approvals as specified in Sections 11–12.
+6. Request human intervention for what only the owner has: passwords the agent was not given, OTPs, passkeys, authenticator approvals, and CAPTCHA puzzles it cannot pass (Sections 11–12). Approval before purchases is an opt-in per task.
 7. Keep natural-language user instructions distinct from **untrusted website content**. A page cannot promote text to higher-priority system instructions, grant permissions, or authorize new actions.
 8. Treat model outputs as proposals and verify claimed completion against observable evidence. Do not invent a successful task outcome.
 9. Make task history and status understandable to the human without exposing private chain-of-thought or raw credentials.
@@ -1535,7 +1544,8 @@ The TypeScript SDK (`console/packages/sdk`) is generated from the same OpenAPI d
 - **Runs are durable state machines** (`queued → running → waiting_human → running → succeeded | failed | cancelled`).
 - **Each advance is a queue job.** The runner calls the model in chunks, with the transcript persisted after each chunk.
 - **Waits release the worker.** A run waiting for a person ends its job, and the answered handoff enqueues the continuation.
-- **Policy is enforced server-side before every action:** allowed sites, step and time budgets, and confirmation before irreversible steps.
+- **Policy is enforced server-side before every action:** step and time budgets (100 steps and 30 minutes by default), and the task's opt-ins: allowed sites, and confirmation before purchases and irreversible steps (off by default, Section 27).
+- **The model sees the screen:** each round starts with a marked screenshot (Section 27).
 - **The model never sees secrets.** A person types codes and passwords into a handoff, and the runner asks the fabric to type them into the page (`type_secret`), so neither the model nor the console holds them (Section 11.6).
 - **External agents are recorded the same way.** An agent driving a browser directly through the console is recorded as a run of trigger `external`, so the person sees every step and can stop it.
 
@@ -1553,3 +1563,41 @@ The primary browser hosts are **home nodes** on the owner's residential network,
 - A native Android module. The app is a Trusted Web Activity: its notification buttons (Stop run, Approve) are Web Push actions handled by the service worker, which is enough today.
 - Scoped personal access tokens. Until then, a dedicated low-role user per agent framework.
 - Windows and macOS hosts (post-v1, Section 19).
+
+---
+
+## 27. Human emulator: full powers (epic #366)
+
+**Decision (owner, November 2026).** Hexactra is a personal human emulator: the owner's own hands and eyes on the owner's own computer. The agent must work at the same level as a person sitting at the machine, so it gets **full powers**.
+- Restrictions that only limited the agent are removed, or are opt-in per task.
+- Protections for the owner stay, because they cost the agent nothing.
+
+### 27.1 What the agent can do
+
+| Capability | How | Where |
+|---|---|---|
+| See the page | Each model round starts with a screenshot in CSS pixels, with the interactive elements boxed and numbered, and a list of the marks (selector, label, center). `look` refreshes it. | Extension `screenshot { marks }`; console `vision.ts` |
+| See the whole computer | `look` with `screen: "desktop"`: a full-screen capture of the node | Host agent `desktop_screenshot` (ImageMagick) |
+| Act by element | `click`, `type_text`, `click_mark n` | Extension (DOM), `click_at` at the mark's center |
+| Act by position, with real input | `click_at`, `hover_at`, `drag`, `scroll_at`, `type_keys`, `key` (with modifiers). Pages see `isTrusted: true` events. | Extension `chrome.debugger` `Input.*` |
+| Run JavaScript | `run_javascript` / `evaluate`: any script, in the page's main world, whatever its CSP, with top-level `await` | Extension `Runtime.evaluate` |
+| Use the OS desktop | `desktop_click`, `desktop_type`, `desktop_key`, `desktop_scroll`, `desktop_drag`: native file pickers, OS dialogs, permission prompts, other windows | Host agent, `xdotool` (argv only, never a shell) |
+| Open anything | Any URL a person could type (`file:`, `chrome:`, `data:`...), except `javascript:` (use `evaluate`) | Contract `check_navigable_url` |
+| Room to work | New tasks: 100 steps and 30 minutes (up to 1000 steps and 8 hours) | Console tasks API |
+
+### 27.2 What stays, and why
+
+- **Secrets never reach the model.** Codes and passwords the owner gives are typed by the fabric (`type_secret`). This is privacy, not a limit: the agent can still sign in.
+- **The owner is always in control.** Stop, takeover of the desktop, and a durable record of every step.
+- **Opt-in limits per task.** Allowed sites, and confirmation before purchases and irreversible steps. Both are off by default.
+- **Owner-only checks go to the owner.** A code sent to the owner's phone, a passkey touch, or a CAPTCHA puzzle the agent cannot pass becomes a handoff. The agent ticks an "I am not a robot" box itself, as a person would.
+- **Page content never grants authority.** With full powers, a prompt injection in a page could act with the owner's authority. That is the main risk of this decision, and why the owner's controls above stay. Use allowed sites for tasks that visit untrusted sites.
+- **Stealth.** No `--enable-automation`, no WebDriver, no CDP port, no `enable`d CDP domain, and `--silent-debugger-extension-api`: the browser looks like a person's.
+
+### 27.3 Status
+
+Shipped in epic #366 (E29): the contract (#367), the extension (#368), the host agent's desktop driver (#369), the console goal runner, external API and MCP (#370), and these documents (#371).
+
+Upstream seam: image tool outputs in the platform's `runTools` (marinoscar/EnterpriseAppBase#1175). Until it ships, the console carries the screenshot in the next round's input.
+
+The desktop needs `xdotool` and `imagemagick` on the node. `hexactra agent install` installs them in every mode that has an X11 desktop, and `hexactra agent update` adds them on older nodes (#373).

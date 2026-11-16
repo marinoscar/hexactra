@@ -33,9 +33,15 @@ function action(name: string, description: string, input: z.ZodObject, build: (a
     async call(args, ctx) {
       const r = await ctx.api<{ state: string; result?: Record<string, unknown>; error?: string }>('POST', `/browser/sessions/${String(args.session_id)}/actions`, { action: build(args) });
       if (r.state !== 'succeeded') return { ...text(`${name} ${r.state}: ${r.error ?? ''}`), isError: true };
-      if (name === 'browser_screenshot' && typeof r.result?.url_path === 'string') {
+      if ((name === 'browser_screenshot' || name === 'browser_desktop_screenshot') && typeof r.result?.url_path === 'string') {
         const img = await ctx.bytes(String(r.result.url_path).replace(/^\/api/, ''));
-        return { content: [{ type: 'image', data: img.data.toString('base64'), mimeType: img.mime }] };
+        const marks = Array.isArray(r.result.marks) ? r.result.marks : null;
+        return {
+          content: [
+            { type: 'image', data: img.data.toString('base64'), mimeType: img.mime },
+            ...(marks ? [{ type: 'text' as const, text: `marks (CSS pixels): ${JSON.stringify(marks)}` }] : []),
+          ],
+        };
       }
       if (name === 'browser_text' && typeof r.result?.text === 'string') return text(r.result.text);
       return text(r.result ?? 'ok');
@@ -130,7 +136,8 @@ Two ways to work:
 1. Delegate: run_goal (or task_run) hands a goal to Hexactra's own browser agent; follow it with run_status. It asks the person for CAPTCHAs, codes and confirmations itself.
 2. Drive: browser_open, then browser_* tools step by step; every action is recorded and the user can stop you at any time.
 3. Ask: ask_human asks the user a question with no browser involved (text, choice, multi_choice, number, confirm, none, takeover) and can wait for the answer (wait_s); question_status follows it. The user answers on any of their devices.
-Rules: never try to bypass a CAPTCHA or a bot check, never guess a code or a password. Call browser_request_human and wait (browser_handoff_status); type codes with browser_type_secret, so you never see them. Ask before buying, paying or submitting anything irreversible. Close sessions with browser_close.`;
+You act with the user's full authority on their own machines, like a person at the computer: look at the page (browser_screenshot with marks), act by selector or by position with real mouse and keyboard events (browser_click_at, browser_hover_at, browser_drag, browser_scroll_at, browser_type_keys, browser_key), run JavaScript (browser_evaluate), and reach the whole desktop for native dialogs and file pickers (browser_desktop_*).
+When only the person can help (a code sent to their phone, a passkey, a password you do not have, a CAPTCHA puzzle you cannot pass), call browser_request_human and wait (browser_handoff_status); type codes with browser_type_secret, so you never see them. Close sessions with browser_close.`;
 
 export const MCP_TOOLS: McpTool[] = [
   // --- delegate to the console's goal runner -------------------------------
@@ -253,7 +260,20 @@ export const MCP_TOOLS: McpTool[] = [
   action('browser_wait_for', 'Wait for an element (up to 15 s).', z.object({ selector: z.string().max(2000) }), (a) => ({ type: 'wait_for', selector: a.selector, timeout_ms: 15000 })),
   action('browser_back', 'Go back.', z.object({}), () => ({ type: 'back' })),
   action('browser_tabs', 'List tabs.', z.object({}), () => ({ type: 'tabs' })),
-  action('browser_screenshot', 'A screenshot of the page.', z.object({}), () => ({ type: 'screenshot' })),
+  action('browser_screenshot', 'A screenshot of the page in CSS pixels (the coordinates browser_click_at takes). marks=true boxes and numbers the interactive elements and lists them with their boxes.', z.object({ marks: z.boolean().default(true) }), (a) => ({ type: 'screenshot', ...(a.marks ? { marks: true } : {}) })),
+  action('browser_evaluate', 'Run JavaScript in the page and get its JSON value (the last expression is the value; top-level await works).', z.object({ script: z.string().min(1).max(100_000) }), (a) => ({ type: 'evaluate', script: a.script, await_promise: true })),
+  action('browser_click_at', 'Real mouse click at viewport coordinates from browser_screenshot.', z.object({ x: z.number().int().min(0), y: z.number().int().min(0), button: z.enum(['left', 'middle', 'right']).default('left'), double: z.boolean().default(false), modifiers: z.array(z.enum(['alt', 'ctrl', 'meta', 'shift'])).default([]) }), (a) => ({ type: 'click_at', x: a.x, y: a.y, button: a.button, ...(a.double ? { click_count: 2 } : {}), modifiers: a.modifiers })),
+  action('browser_hover_at', 'Move the mouse to viewport coordinates (hover menus, tooltips).', z.object({ x: z.number().int().min(0), y: z.number().int().min(0) }), (a) => ({ type: 'mouse', op: 'move', x: a.x, y: a.y })),
+  action('browser_drag', 'Real mouse drag between two viewport points.', z.object({ from_x: z.number().int().min(0), from_y: z.number().int().min(0), to_x: z.number().int().min(0), to_y: z.number().int().min(0) }), (a) => ({ type: 'drag', from_x: a.from_x, from_y: a.from_y, to_x: a.to_x, to_y: a.to_y })),
+  action('browser_scroll_at', 'Mouse-wheel scroll at a viewport point.', z.object({ x: z.number().int().min(0), y: z.number().int().min(0), dy: z.number().int().min(-20000).max(20000) }), (a) => ({ type: 'scroll_at', x: a.x, y: a.y, dx: 0, dy: a.dy })),
+  action('browser_type_keys', 'Type into the focused element with real keyboard events.', z.object({ text: z.string().min(1).max(10000) }), (a) => ({ type: 'type_keys', text: a.text })),
+  action('browser_key', 'Press a key with modifiers (key "a" with ["ctrl"]).', z.object({ key: z.string().min(1).max(40), modifiers: z.array(z.enum(['alt', 'ctrl', 'meta', 'shift'])).default([]) }), (a) => ({ type: 'key', key: a.key, modifiers: a.modifiers })),
+  action('browser_desktop_screenshot', "A screenshot of the computer's whole screen (screen pixels).", z.object({}), () => ({ type: 'desktop_screenshot' })),
+  action('browser_desktop_click', 'Click anywhere on the computer screen.', z.object({ x: z.number().int().min(0), y: z.number().int().min(0), button: z.enum(['left', 'middle', 'right']).default('left'), double: z.boolean().default(false) }), (a) => ({ type: 'desktop_click', x: a.x, y: a.y, button: a.button, ...(a.double ? { click_count: 2 } : {}) })),
+  action('browser_desktop_type', 'Type into whatever has focus on the computer (a native dialog, another window).', z.object({ text: z.string().min(1).max(10000) }), (a) => ({ type: 'desktop_type', text: a.text })),
+  action('browser_desktop_key', 'Press a key chord on the computer: Return, Escape, ctrl+l, alt+F4.', z.object({ key: z.string().min(1).max(64) }), (a) => ({ type: 'desktop_key', key: a.key })),
+  action('browser_desktop_scroll', 'Scroll the computer screen by wheel clicks at a point.', z.object({ x: z.number().int().min(0), y: z.number().int().min(0), dy: z.number().int().min(-100).max(100) }), (a) => ({ type: 'desktop_scroll', x: a.x, y: a.y, dy: a.dy })),
+  action('browser_desktop_drag', 'Drag on the computer screen.', z.object({ from_x: z.number().int().min(0), from_y: z.number().int().min(0), to_x: z.number().int().min(0), to_y: z.number().int().min(0) }), (a) => ({ type: 'desktop_drag', from_x: a.from_x, from_y: a.from_y, to_x: a.to_x, to_y: a.to_y })),
   {
     name: 'browser_request_human',
     description:
@@ -295,5 +315,5 @@ export const MCP_TOOLS: McpTool[] = [
  */
 export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
   'run_status', 'runs_list', 'tasks_list', 'schedules_list', 'inbox_list', 'hosts_list',
-  'browser_elements', 'browser_text', 'browser_tabs', 'browser_screenshot', 'browser_handoff_status', 'question_status',
+  'browser_elements', 'browser_text', 'browser_tabs', 'browser_screenshot', 'browser_desktop_screenshot', 'browser_handoff_status', 'question_status',
 ]);

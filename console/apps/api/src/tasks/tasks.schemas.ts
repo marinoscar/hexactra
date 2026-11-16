@@ -15,8 +15,8 @@ const taskFields = {
   profile: profileNameSchema,
   hostId: z.uuid().nullable(),
   allowedDomains: z.array(domain).max(50),
-  maxSteps: z.number().int().min(1).max(200),
-  maxMinutes: z.number().int().min(1).max(240),
+  maxSteps: z.number().int().min(1).max(1000),
+  maxMinutes: z.number().int().min(1).max(480),
   confirmRiskyActions: z.boolean(),
   model: z.string().trim().min(1).max(200).nullable(),
 };
@@ -26,9 +26,11 @@ export const createTaskSchema = z.object({
   profile: taskFields.profile.default('default'),
   hostId: taskFields.hostId.optional(),
   allowedDomains: taskFields.allowedDomains.default([]),
-  maxSteps: taskFields.maxSteps.default(40),
-  maxMinutes: taskFields.maxMinutes.default(15),
-  confirmRiskyActions: taskFields.confirmRiskyActions.default(true),
+  // A human emulator with the owner's full authority (#366): room to work,
+  // and no confirmation before purchases unless the task opts in.
+  maxSteps: taskFields.maxSteps.default(100),
+  maxMinutes: taskFields.maxMinutes.default(30),
+  confirmRiskyActions: taskFields.confirmRiskyActions.default(false),
   model: taskFields.model.optional(),
 });
 export class CreateTaskDto extends createZodDto(createTaskSchema) {}

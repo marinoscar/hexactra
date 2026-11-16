@@ -57,6 +57,8 @@ pub struct BrowserPool {
     entries: Mutex<HashMap<String, Entry>>,
     /// Serialises launch and eviction decisions.
     capacity: Mutex<()>,
+    /// Serialises `desktop_*` actions: the node has one pointer and keyboard.
+    desktop: Mutex<()>,
 }
 
 fn failure(msg: impl Into<String>) -> OperationResult {
@@ -78,6 +80,7 @@ impl BrowserPool {
             cfg,
             entries: Mutex::new(HashMap::new()),
             capacity: Mutex::new(()),
+            desktop: Mutex::new(()),
         }))
     }
 
@@ -212,6 +215,15 @@ impl BrowserPool {
     ) -> OperationResult {
         if !valid_profile_name(profile) {
             return failure(format!("invalid profile name {profile:?}"));
+        }
+        // The node's OS desktop (#366): the agent drives it itself.
+        if action.is_desktop() {
+            let _desktop = self.desktop.lock().await; // one desktop, one hand
+            let left = (deadline - Utc::now())
+                .to_std()
+                .unwrap_or(Duration::ZERO)
+                .max(Duration::from_secs(1));
+            return hexactra_desktop_input::xdotool::execute(action, left).await;
         }
         let (launcher, bridge, busy) = match self.entry(profile).await {
             Ok(e) => e,

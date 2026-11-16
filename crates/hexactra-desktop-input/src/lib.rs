@@ -6,6 +6,8 @@
 //! - Simple native dialog handling
 //! - Capability reporting
 
+pub mod xdotool;
+
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
