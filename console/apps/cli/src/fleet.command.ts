@@ -113,5 +113,16 @@ export const fleetCommand: CliCommandRegistration = (program: Command) => {
   profile.command('create <host> <name>').description('Create an empty (signed-out) profile').option('--json').action(profileAction('create'));
   profile.command('delete <host> <name>').description('Delete a profile and its sign-ins').option('--yes', 'confirm').option('--json').action(profileAction('delete'));
   profile.command('restart <host> <name>').description("Restart the profile's browser").option('--json').action(profileAction('restart'));
+  profile
+    .command('show <host> <name>')
+    .description("Open the profile's browser on the host's desktop, at the Google sign-in (or --url), to sign in through the remote desktop")
+    .option('--url <url>', 'the page to open instead of the Google sign-in')
+    .option('--json')
+    .action(async (ref: string, name: string, o: { url?: string; json?: boolean }) => {
+      const h = findHost(await consoleApi().get<FleetHost[]>('/fleet/hosts'), ref);
+      const r = await consoleApi().post<FleetCommandResult>(`/fleet/hosts/${h.id}/profiles/${encodeURIComponent(name)}/show`, o.url ? { url: o.url } : {});
+      done(r, !!o.json);
+      if (!o.json && r.state === 'succeeded') out(`Now sign in on the desktop: ${desktopUrl(consoleWebUrl(), h.id)}`);
+    });
   profile.command('close <host> <name>').description("Close the profile's browser").option('--json').action(profileAction('close'));
 };

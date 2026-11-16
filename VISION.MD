@@ -274,7 +274,7 @@ Do not pin an unverified “latest” major release in the vision. Maintain tool
 
 **Home node (the primary deployment).** A Linux machine the owner runs on a residential network, installed and managed entirely with the `hexactra` CLI. It connects outbound over HTTPS to the console (`https://<console>/fabric/`): no inbound port, no VPN. It runs real, headful **Google Chrome** with the Hexactra extension installed by Chrome enterprise policy, in one or both modes, each registered as its own host:
 
-- **Unattended:** a persistent full desktop (XFCE) on a virtual display (KasmVNC) that uses the machine's integrated GPU, started at boot as a dedicated `hexactra` OS user with nobody logged in. The owner opens the remote desktop from the console, signs into Chrome once per profile, and the agent then drives that profile.
+- **Unattended:** a persistent full desktop (XFCE) on a virtual display (Xvnc) with Chrome rendering on the machine's integrated GPU, started at boot as a dedicated `hexactra` OS user with nobody logged in. The owner opens the remote desktop from the console, signs into Chrome once per profile, and the agent then drives that profile.
 - **Attended:** the person's own logged-in desktop (an X11 session for now) and their own Chrome profile; the person can also view and control that desktop remotely.
 
 Both modes may run on one machine at once (for example hosts `mini-pc` and `mini-pc-attended`). Why residential: sites block or challenge datacenter IPs, and a node at home keeps a residential IP. A VPS-hosted browser (the bundled container host) remains available as an **opt-in** option for sites that do not care about IP reputation. Details: [docs/nodes.md](docs/nodes.md).

@@ -49,6 +49,7 @@ function renderPage(h: FleetHost = host) {
       [`GET /fleet/hosts/${ID}`]: h,
       [`POST /fleet/hosts/${ID}/viewer-session`]: { hostId: ID, wsPath: `/viewer/${ID}/websockify`, expiresAt: '2026-11-16T01:00:00Z' },
       [`DELETE /fleet/hosts/${ID}/viewer-session`]: undefined,
+      [`POST /fleet/hosts/${ID}/profiles/personal/show`]: { id: 'c1', kind: 'show_profile', profile: 'personal', state: 'succeeded', error: null, createdAt: '', completedAt: '' },
       'GET /fleet/hosts': [h],
     },
   });
@@ -103,6 +104,17 @@ describe('DesktopPage', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('opens a profile at the Google sign-in on an unattended node', async () => {
+    const { platform } = renderPage({ ...host, profiles: [{ name: 'personal', running: false }] });
+    await waitFor(() => expect(rfb.instances).toHaveLength(1));
+    act(() => {
+      (rfb.instances[0] as unknown as EventTarget).dispatchEvent(new Event('connect'));
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Sign in to profile' }));
+    expect(await screen.findByText(/Chrome for "personal" is open at the Google sign-in/)).toBeInTheDocument();
+    expect(platform.requests.some((r) => r.method === 'POST' && r.path === `/fleet/hosts/${ID}/profiles/personal/show`)).toBe(true);
   });
 
   it('says when the node is offline or shares no desktop, without connecting', async () => {

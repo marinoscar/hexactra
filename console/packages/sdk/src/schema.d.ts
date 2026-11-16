@@ -4902,6 +4902,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fleet/hosts/{id}/profiles/{name}/show": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `fleet:desktop`. */
+        post: operations["fleet_show"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fleet/hosts/{id}/profiles/{name}/restart": {
         parameters: {
             query?: never;
@@ -11359,6 +11376,10 @@ export interface components {
         };
         CreateProfileDto: {
             name: string;
+        };
+        ShowProfileDto: {
+            /** Format: uri */
+            url?: string;
         };
         TaskResponseDto: {
             /** Format: uuid */
@@ -28054,6 +28075,51 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    fleet_show: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShowProfileDto"];
+            };
+        };
         responses: {
             /** @description Unauthorized - Invalid or missing token */
             401: {
