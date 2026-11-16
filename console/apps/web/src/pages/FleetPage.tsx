@@ -27,6 +27,7 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import StopCircleOutlinedIcon from '@mui/icons-material/StopCircleOutlined';
 import DesktopWindowsOutlined from '@mui/icons-material/DesktopWindowsOutlined';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
+import { Link as RouterLink } from 'react-router-dom';
 
 /** One host, as `GET /api/fleet/hosts` returns it. */
 export interface FleetHost {
@@ -71,6 +72,7 @@ function message(e: unknown, fallback: string): string {
 export function FleetPage() {
   const { api, viewer } = usePlatformHost();
   const canWrite = viewer.hasPermission('fleet:write');
+  const canDesktop = viewer.hasPermission('fleet:desktop');
   const [hosts, setHosts] = useState<FleetHost[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -166,6 +168,11 @@ export function FleetPage() {
                   v{h.version}
                 </Typography>
               </Stack>
+              {h.desktop && canDesktop && (
+                <Button size="small" component={RouterLink} to={`/fleet/hosts/${h.id}/desktop`} disabled={!h.online}>
+                  Open desktop
+                </Button>
+              )}
               {h.viewerUrl && h.viewerUrl.includes(LOCAL_VIEWER) ? (
                 canWrite && (
                   <Button size="small" onClick={() => void openLocalViewer()}>

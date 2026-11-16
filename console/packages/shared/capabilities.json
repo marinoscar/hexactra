@@ -2,6 +2,7 @@
   "$comment": "Every Hexactra capability and where it lives on each surface. A surface is a value or a list of values (REST operations as 'METHOD /api/path', a CLI command path, an MCP tool name, a TUI screen route, a web route) or {\"none\": \"why\"}. Tests on each surface fail when a value is missing there: apps/api/test/capabilities.db.spec.ts (REST, MCP), apps/cli/src/capabilities.test.ts (CLI, TUI), apps/web/src/__tests__/capabilities.test.ts (web). Every app REST operation and every MCP tool must belong to a capability.",
   "restExempt": {
     "GET /api/fleet/viewer-auth": "nginx's auth_request for the viewer, not a client operation",
+    "GET /api/fleet/desktop-auth": "nginx's auth_request for a host's remote desktop WebSocket, not a client operation",
     "POST /api/mcp": "the MCP transport itself",
     "GET /api/mcp": "the MCP transport itself (405)",
     "POST /api/notification-actions": "the notification buttons' token-authenticated channel from the service worker; on every surface the same actions are runs.cancel and inbox.answer",
@@ -451,6 +452,22 @@
         "none": "A terminal cannot show a browser"
       },
       "web": "/fleet"
+    },
+    {
+      "id": "fleet.desktop",
+      "description": "See and use a host's remote desktop in the console (a viewer session bound to the host, the person and the organization; fleet:desktop)",
+      "rest": [
+        "POST /api/fleet/hosts/{id}/viewer-session",
+        "DELETE /api/fleet/hosts/{id}/viewer-session"
+      ],
+      "cli": [
+        "fleet desktop"
+      ],
+      "mcp": {
+        "none": "Seeing and controlling a desktop is for a person, not an agent"
+      },
+      "tui": "fleet",
+      "web": "/fleet/hosts/:id/desktop"
     },
     {
       "id": "fleet.agent",

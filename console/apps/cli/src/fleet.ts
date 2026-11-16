@@ -52,3 +52,8 @@ export function findHost(hosts: FleetHost[], ref: string): FleetHost {
   if (!matches.length) throw new Error(`No host matches "${ref}". List them with \`hexactra fleet hosts\`.`);
   throw new Error(`"${ref}" matches ${matches.length} hosts: ${matches.map((h) => h.name).join(', ')}. Use the id.`);
 }
+
+/** The console page that shows a host's remote desktop. */
+export function desktopUrl(consoleUrl: string, hostId: string): string {
+  return `${consoleUrl.replace(/\/+$/, '')}/fleet/hosts/${hostId}/desktop`;
+}
