@@ -140,9 +140,28 @@ Then, signed in as admin:
 
 ## 5. Add more hosts (desktop, other machines)
 
-1. **Fleet → Enroll host** prints a single-use command: `hexactra-agent daemon --url … --enrollment-token hxe_…`.
-2. The new host must reach the fabric, which is not published. Give it a private route, e.g. Tailscale: `tailscale serve --bg --tcp=8787 tcp://127.0.0.1:8787`, with a `127.0.0.1:8787:8787` port added to `fabric-control` in an `app.vps.fabric-port.compose.yml` overlay that publishes on loopback only.
-3. Pass `--agent-url https://<vps>.<tailnet>.ts.net:8787` when enrolling, so the printed command uses that URL.
+A browser host only makes outbound HTTPS requests to the console's own domain, at `https://<console>/fabric`. You need no VPN, no open port and no extra certificate.
+
+**What is published there.** Only the host protocol (`infra/nginx/app.d/locations/fabric-agents.conf`):
+- `POST /v1/hosts/enroll`: takes a single-use `hxe_` token an admin minted;
+- `register`, `next`, `offline`, and the result posts: each takes that host's own credential, and a host may act only for its own id.
+
+Everything else under `/fabric/` answers 404: the fabric's client, admin and operator APIs, sessions, events and artifacts. The console still reaches the fabric privately.
+
+**Real time.** The agent keeps one long-poll request open (`GET …/next`, up to 30 s). The fabric answers it the moment work is queued for that host, and the agent posts each result straight back. Work starts within milliseconds, with no polling delay. A 4-core machine handles over 1,000 actions a second ([capacity.md](capacity.md)).
+
+**Steps:**
+1. **Fleet → Enroll host** (or `hexactra fleet enroll --name <name>`). It prints a single-use command already pointing at `https://<console>/fabric`:
+   `hexactra-agent daemon --url https://<console>/fabric --enrollment-token hxe_… --name <name>`.
+2. **Install the agent on the machine:**
+   ```bash
+   git clone https://github.com/marinoscar/hexactra && cd hexactra && scripts/install-remote-control.sh --no-services
+   ```
+   This needs Rust, Node 22+, pnpm and Chromium. See [remote-control-quickstart.md](../../../docs/remote-control-quickstart.md) for attach and launch modes.
+3. **Run the printed command once.** The agent swaps the token for its own credential in `~/.config/hexactra/host-credential.json`. Then run it as a service (`systemctl --user edit hexactra-agent`): set `HEXACTRA_URL=https://<console>/fabric`, plus `HEXACTRA_BROWSER` and `HEXACTRA_EXTENSION_DIR` for launch mode.
+4. **Check it in Fleet.** The host shows as online. Create profiles on it and pick them in tasks.
+
+**A fabric you run elsewhere.** If the console points at a fabric other than the bundled one, the enroll command uses that fabric's URL as it is.
 
 ## 6. Operate
 

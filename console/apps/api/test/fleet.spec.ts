@@ -1,7 +1,7 @@
 import { BadGatewayException, ConflictException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 
 import { FabricError, type FabricClient } from '../src/fabric/fabric.client';
-import { FleetService } from '../src/fleet/fleet.service';
+import { FleetService, agentUrlFor } from '../src/fleet/fleet.service';
 
 function fakeFabric(overrides: Partial<Record<'hosts' | 'request' | 'config', jest.Mock>> = {}) {
   const hosts = jest.fn().mockResolvedValue([
@@ -44,11 +44,27 @@ describe('FleetService', () => {
   it('enrolls with a single-use token and a ready-to-run agent command', async () => {
     const { fabric, request } = fakeFabric();
     request.mockResolvedValue({ enrollment: { expires_at: '2026-11-15T01:00:00Z' }, enrollment_token: 'hxe_abc' });
-    const e = await new FleetService(fabric).enroll({ name: 'home pc', ttlMinutes: 30 });
-    expect(request).toHaveBeenCalledWith('POST', '/v1/admin/hosts/enrollments', { body: { name: 'home pc', ttl_s: 1800 } });
-    expect(e.command).toBe("hexactra-agent daemon --url http://fabric-control:8787 --enrollment-token hxe_abc --name 'home pc'");
+    const saved = process.env.APP_URL;
+    process.env.APP_URL = 'https://console.example.test/';
+    try {
+      const e = await new FleetService(fabric).enroll({ name: 'home pc', ttlMinutes: 30 });
+      expect(request).toHaveBeenCalledWith('POST', '/v1/admin/hosts/enrollments', { body: { name: 'home pc', ttl_s: 1800 } });
+      // The bundled fabric is private: a new host reaches it over the console's TLS vhost.
+      expect(e.command).toBe("hexactra-agent daemon --url https://console.example.test/fabric --enrollment-token hxe_abc --name 'home pc'");
+    } finally {
+      if (saved === undefined) delete process.env.APP_URL;
+      else process.env.APP_URL = saved;
+    }
     const viaTailnet = await new FleetService(fabric).enroll({ agentUrl: 'https://fabric.example.test' });
     expect(viaTailnet.command).toContain('--url https://fabric.example.test');
+  });
+
+  it('gives new hosts the public /fabric URL only for the bundled fabric', () => {
+    expect(agentUrlFor('http://fabric-control:8787', 'https://console.example.test')).toBe('https://console.example.test/fabric');
+    expect(agentUrlFor('http://fabric-control:8787/', 'https://console.example.test/')).toBe('https://console.example.test/fabric');
+    // An operator's own fabric is used as it is, and without APP_URL nothing is guessed.
+    expect(agentUrlFor('https://fabric.example.test', 'https://console.example.test')).toBe('https://fabric.example.test');
+    expect(agentUrlFor('http://fabric-control:8787', undefined)).toBe('http://fabric-control:8787');
   });
 
   it('runs host commands and turns a failed command into a 409 with the reason', async () => {

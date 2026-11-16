@@ -56,6 +56,21 @@ function toResult(c: FabricCommandView): FleetCommandResult {
   };
 }
 
+/** The fabric bundled with the console's stack, as the api container reaches it. */
+const BUNDLED_FABRIC_URL = 'http://fabric-control:8787';
+
+/**
+ * The fabric URL a NEW host should use. The bundled fabric is private, but its
+ * host protocol is published over this deployment's own TLS vhost at
+ * `<APP_URL>/fabric` (infra/nginx/app.d/locations/fabric-agents.conf), so a
+ * desktop enrolls with no VPN. Any other fabric URL is used as it is.
+ */
+export function agentUrlFor(fabricUrl: string | undefined, appUrl: string | undefined): string {
+  const fabric = (fabricUrl ?? '').replace(/\/+$/, '');
+  if (fabric === BUNDLED_FABRIC_URL && appUrl) return `${appUrl.replace(/\/+$/, '')}/fabric`;
+  return fabric;
+}
+
 /** Quote a value for a POSIX shell command line. */
 function shellQuote(v: string): string {
   return /^[A-Za-z0-9_./:@=-]+$/.test(v) ? v : `'${v.replace(/'/g, `'\\''`)}'`;
@@ -111,7 +126,7 @@ export class FleetService {
         '/v1/admin/hosts/enrollments',
         { body: { name: input.name ?? null, ttl_s: input.ttlMinutes ? input.ttlMinutes * 60 : undefined } },
       );
-      const url = input.agentUrl ?? (await this.fabric.config())?.url ?? '';
+      const url = input.agentUrl ?? agentUrlFor((await this.fabric.config())?.url, process.env.APP_URL);
       const parts = ['hexactra-agent', 'daemon', '--url', shellQuote(url), '--enrollment-token', created.enrollment_token];
       if (input.name) parts.push('--name', shellQuote(input.name));
       this.log.log('host enrollment created');
