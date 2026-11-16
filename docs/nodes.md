@@ -93,7 +93,7 @@ Everything goes through the console. A node is just another host in **Fleet**.
   - Tasks and runs pick a host and profile.
 - **MCP:** `hosts_list` shows hosts with their mode. Browser tools and goals take a profile. Viewing and controlling a desktop is for people, so MCP has no viewer tool.
 - **API and SDK:** the same operations over REST (`/api/docs`).
-- **CLI on the node:** `hexactra agent install | status | logs | update | start | stop | restart | uninstall`, also in the terminal UI's **Agent** screen.
+- **CLI on the node:** `hexactra agent install | status | logs | update | start | stop | restart | uninstall`, also in the terminal UI under **Agent ▸ This machine as a browser node**.
 
 When a site needs you (a CAPTCHA, a code, an approval), the run pauses and asks in the Inbox and on your phone. You answer, or **take over** the desktop: the agent pauses between steps until you release it. On the desktop page you watch by default: **Take over** gives you the mouse and keyboard and pauses the agent, and **Release** hands it back. `hexactra fleet takeover | release <host>` does the same.
 

@@ -15,6 +15,7 @@ import { fleetCommand } from './fleet.command.js';
 import { inboxCommand } from './inbox.command.js';
 import { questionsCommand } from './questions.command.js';
 import { inboxScreen } from './inbox.tui.js';
+import { HEXACTRA_TUI_MENU } from './menu.js';
 import { mcpCommand } from './mcp.command.js';
 import { fleetScreen } from './fleet.tui.js';
 import { runsCommand } from './runs.command.js';
@@ -82,6 +83,8 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   // The hexactra brand (docs/brand): its colours, and the Trace mark with the wordmark atop the menu.
   tuiTheme: BRAND_TUI_THEME,
   tuiMenuRoot: BRAND_TUI_MENU_ROOT,
+  // The grouped root menu, different logged in and logged out (#357): menu.ts.
+  tuiMenu: HEXACTRA_TUI_MENU,
   // This app lives in console/ of the hexactra repository: `deploy install`
   // and `deploy update` clone the whole repository (git stays at its root)
   // and run compose from console/infra/compose, whose fabric overlay builds

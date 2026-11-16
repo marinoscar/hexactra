@@ -33,6 +33,14 @@ describe('settings registries', () => {
     expect(dangerZoneLastViolations(USER_SETTINGS_SECTIONS, '/settings/danger-zone')).toEqual([]);
   });
 
+  it('gate the About card with the permission GET /api/admin/about enforces (the host slice default)', () => {
+    const card = cards.find((c) => c.path === '/admin/settings/about');
+    expect(card?.permission).toBe('system_settings:read');
+    expect(appSource).toMatch(/path="admin\/settings\/about" element=\{<Gate permission="system_settings:read">/);
+    // The API binds AboutModule without a `permission` override, so the slice's default applies.
+    expect(read('../../../api/src/platform/about.config.ts')).not.toMatch(/permission\s*:/);
+  });
+
   it('gate the notes card with the permission GET /api/notes enforces', () => {
     const controller = read('../../../api/src/notes/notes.controller.ts');
     const listRoute = /@Get\(\)\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(controller);
