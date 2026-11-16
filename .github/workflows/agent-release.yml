@@ -1,0 +1,91 @@
+name: Agent release
+
+# Publishes the prebuilt browser-host agent bundle the `hexactra agent` CLI
+# installs (#326): the agent and native-host binaries plus the Chrome
+# extension, checksummed. The rolling release `agent-latest` always points at
+# the newest build from main; `agent-v<version>` is kept once per version.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'apps/chrome-extension/**'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'scripts/package-agent-bundle.mjs'
+      - '.github/workflows/agent-release.yml'
+  pull_request:
+    paths:
+      - 'crates/**'
+      - 'apps/chrome-extension/**'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'scripts/package-agent-bundle.mjs'
+      - '.github/workflows/agent-release.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: agent-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  bundle:
+    name: Agent bundle (linux x86_64)
+    # The oldest supported runner: binaries built against its glibc run on Ubuntu 22.04 and later.
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: cargo build --release --locked -p hexactra-agent -p hexactra-native-host
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter "@hexactra/chrome-extension..." build
+      - name: Package and verify
+        id: pkg
+        run: |
+          out=$(node scripts/package-agent-bundle.mjs --out dist/agent)
+          echo "$out"
+          echo "version=$(node -e 'console.log(JSON.parse(process.argv[1]).version)' "$out")" >> "$GITHUB_OUTPUT"
+      # A pull request builds and verifies the bundle; only main publishes it.
+      - name: Publish agent-latest
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.pkg.outputs.version }}
+        run: |
+          notes="Browser-host agent bundle ${VERSION} from ${GITHUB_SHA}. Installed with: hexactra agent install"
+          git tag -f agent-latest "$GITHUB_SHA"
+          git push -f origin refs/tags/agent-latest
+          if gh release view agent-latest >/dev/null 2>&1; then
+            gh release edit agent-latest --title "Agent (latest build)" --notes "$notes" --prerelease=false --latest=false
+          else
+            gh release create agent-latest --title "Agent (latest build)" --notes "$notes" --latest=false
+          fi
+          gh release upload agent-latest dist/agent/* --clobber
+      - name: Publish agent-v<version> once
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.pkg.outputs.version }}
+        run: |
+          tag="agent-v${VERSION}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" dist/agent/* --target "$GITHUB_SHA" --title "Agent ${VERSION}" \
+              --notes "Browser-host agent bundle ${VERSION} (${GITHUB_SHA}). Install with: hexactra agent install --version ${VERSION}" --latest=false
+          fi
+      - name: Check the published download
+        if: github.event_name != 'pull_request'
+        run: |
+          base=https://github.com/${GITHUB_REPOSITORY}/releases/download/agent-latest
+          curl -fsSL -o /tmp/b.tgz "$base/hexactra-agent-linux-x86_64.tar.gz"
+          curl -fsSL -o /tmp/b.sha "$base/hexactra-agent-linux-x86_64.tar.gz.sha256"
+          [ "$(sha256sum /tmp/b.tgz | cut -d' ' -f1)" = "$(cut -d' ' -f1 /tmp/b.sha)" ] || { echo "published checksum mismatch"; exit 1; }
