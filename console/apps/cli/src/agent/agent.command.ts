@@ -1,8 +1,10 @@
-import type { Command } from 'commander';
+import { Option, type Command } from 'commander';
 import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 
 import { consoleApi } from '../console-api.js';
+import { chromeSetup, chromeStatus, chromeStatusLines } from './googleChrome.js';
 import {
+  agentDoctor,
   agentLogs,
   agentStatus,
   defaultDeps,
@@ -29,7 +31,7 @@ export function statusLines(s: AgentStatus): string[] {
     `Host:     ${st.name} (${st.hostId.slice(0, 8)})`,
     `Fabric:   ${st.agentUrl}`,
     `Agent:    ${st.version} (${st.commit.slice(0, 7)})`,
-    `Browser:  ${st.browserKind === 'chrome-for-testing' ? `Chrome for Testing ${st.chromeVersion}` : st.browser}${st.sandboxHelper ? ' (setuid sandbox)' : ''}`,
+    `Browser:  ${st.browserKind === 'chrome-for-testing' ? `Chrome for Testing ${st.chromeVersion}` : st.browserKind === 'google-chrome' ? `Google Chrome ${st.chromeVersion ?? ''} (extension by policy)`.replace('  ', ' ') : st.browser}${st.sandboxHelper ? ' (setuid sandbox)' : ''}`,
     `Service:  ${st.service ? `${s.service?.active ?? 'unknown'} (${s.service?.sub ?? 'unknown'})` : 'none (run with `hexactra agent run`)'}`,
     `Fleet:    ${s.fleet ? `${s.fleet.online ? 'online' : 'offline'}${s.fleet.browserConnected ? ', browser connected' : ''}` : (s.fleetError ?? 'unknown')}`,
   ];
@@ -58,7 +60,9 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
     .option('--enrollment-token <hxe>', 'join with a token an admin minted (Fleet → Enroll host) instead of your login')
     .option('--agent-url <url>', 'the fabric URL for --enrollment-token (the enroll command prints it)')
     .option('--wait <seconds>', 'how long to wait for the host to come online', int)
-    .action(async (o: { name?: string; browser?: string; maxBrowsers?: number; bundle?: string; version?: string; service?: boolean; desktop?: boolean; reenroll?: boolean; enrollmentToken?: string; agentUrl?: string; wait?: number }) => {
+    .option('--google-chrome', 'use Google Chrome, with the extension installed by policy (one sudo step)')
+    .addOption(new Option('--extension-update-url <url>', 'where the Chrome policy gets the extension (a test mirror)').hideHelp())
+    .action(async (o: { googleChrome?: boolean; extensionUpdateUrl?: string; name?: string; browser?: string; maxBrowsers?: number; bundle?: string; version?: string; service?: boolean; desktop?: boolean; reenroll?: boolean; enrollmentToken?: string; agentUrl?: string; wait?: number }) => {
       out('Installing the Hexactra agent on this machine');
       const s = await installAgent(deps(), {
         name: o.name,
@@ -73,6 +77,8 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
         agentUrl: o.agentUrl,
         interactiveSudo: true,
         waitSeconds: o.wait,
+        googleChrome: o.googleChrome,
+        extensionUpdateUrl: o.extensionUpdateUrl ?? process.env.HEXACTRA_EXTENSION_UPDATE_URL,
       });
       out(`Done: "${s.name}" is a browser host. Create profiles for it on the Fleet page or with \`hexactra fleet profile create\`.`);
     });
@@ -125,6 +131,36 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
     .command('sandbox')
     .description("Install Chrome's sandbox helper with sudo (needed once on Ubuntu 23.10 and later)")
     .action(() => sandboxAgain(deps()));
+
+  const chrome = agent.command('chrome').description('Google Chrome on this machine: install it, force-install the extension by policy, register the native host');
+  chrome
+    .command('status')
+    .description('Show Google Chrome, the extension policy and the native host on this machine')
+    .option('--json', 'print JSON')
+    .action((o: { json?: boolean }) => {
+      const s = chromeStatus(deps());
+      if (o.json) return out(JSON.stringify(s, null, 2));
+      for (const line of chromeStatusLines(s)) out(line);
+    });
+  chrome
+    .command('setup')
+    .description('Install Google Chrome if needed, write the extension policy and register the native host (asks for sudo once)')
+    .addOption(new Option('--extension-update-url <url>', 'where the Chrome policy gets the extension (a test mirror)').hideHelp())
+    .action(async (o: { extensionUpdateUrl?: string }) => {
+      const s = await chromeSetup(deps(), { interactive: true, updateUrl: o.extensionUpdateUrl ?? process.env.HEXACTRA_EXTENSION_UPDATE_URL });
+      for (const line of chromeStatusLines(s)) out(line);
+    });
+
+  agent
+    .command('doctor')
+    .description('Check everything this machine needs as a browser host, and say how to fix what is wrong')
+    .option('--json', 'print JSON')
+    .action(async (o: { json?: boolean }) => {
+      const checks = await agentDoctor(deps());
+      if (o.json) out(JSON.stringify(checks, null, 2));
+      else for (const c of checks) out(`${c.ok ? 'ok  ' : 'FAIL'}  ${c.name.padEnd(12)} ${c.detail}`);
+      if (checks.some((c) => !c.ok)) process.exitCode = 1;
+    });
 
   agent
     .command('uninstall')

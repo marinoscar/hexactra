@@ -3,7 +3,9 @@ import { Box, Text, useInput } from 'ink';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { consoleApi } from '../console-api.js';
+import { chromeSetup } from './googleChrome.js';
 import {
+  agentDoctor,
   agentLogs,
   agentStatus,
   defaultDeps,
@@ -16,12 +18,13 @@ import {
 } from './agent.js';
 import { statusLines } from './agent.command.js';
 
-type Mode = 'status' | 'logs' | 'confirm-uninstall';
+type Mode = 'status' | 'logs' | 'doctor' | 'confirm-uninstall';
 
 /**
  * Agent: this machine as a browser host. Every `hexactra agent` command has a
  * key here: i install (or repair), u update, s start/stop, r restart,
- * l logs, x uninstall, g refresh, esc back. The one step a screen cannot do
+ * l logs, x uninstall, g refresh, esc back; c sets up Google Chrome (the
+ * extension by policy), d runs the doctor. The one step a screen cannot do
  * is type a sudo password: when Chrome's sandbox helper needs it, the screen
  * says to run `hexactra agent sandbox` in a terminal.
  */
@@ -79,13 +82,23 @@ export function AgentScreen({ onDone, deps }: TuiScreenProps & { deps?: (log: (l
       } else setMode('status');
       return;
     }
-    if (mode === 'logs') {
-      if (key.escape || input === 'q' || input === 'l') setMode('status');
+    if (mode === 'logs' || mode === 'doctor') {
+      if (key.escape || input === 'q' || input === 'l' || input === 'd') setMode('status');
       return;
     }
     if (key.escape || input === 'q') return onDone();
     const installed = !!status?.installed;
     if (input === 'g') void refresh();
+    if (input === 'c') run('Setting up Google Chrome', () => chromeSetup(d(), { interactive: false }));
+    if (input === 'd') {
+      void agentDoctor(d())
+        .then((checks) => {
+          if (!mounted.current) return;
+          setLogs(checks.map((c) => `${c.ok ? 'ok  ' : 'FAIL'}  ${c.name.padEnd(12)} ${c.detail}`));
+          setMode('doctor');
+        })
+        .catch((e: unknown) => mounted.current && setError(e instanceof Error ? e.message : String(e)));
+    }
     if (input === 'i') run(installed ? 'Repairing' : 'Installing', () => installAgent(d(), { interactiveSudo: false }));
     if (!installed) return;
     if (input === 'u') run('Updating', () => updateAgent(d(), {}));
@@ -102,14 +115,14 @@ export function AgentScreen({ onDone, deps }: TuiScreenProps & { deps?: (log: (l
     if (input === 'x') setMode('confirm-uninstall');
   });
 
-  if (mode === 'logs') {
+  if (mode === 'logs' || mode === 'doctor') {
     return (
       <Box flexDirection="column">
-        <Text bold {...textColor(theme.primary)}>Agent log (last 40 lines)</Text>
+        <Text bold {...textColor(theme.primary)}>{mode === 'doctor' ? 'Agent doctor' : 'Agent log (last 40 lines)'}</Text>
         {logs.map((l, i) => (
           <Text key={i} wrap="truncate">{l}</Text>
         ))}
-        <Text dimColor>l/esc back · `hexactra agent logs -f` follows it</Text>
+        <Text dimColor>{mode === 'doctor' ? 'd/esc back' : 'l/esc back · `hexactra agent logs -f` follows it'}</Text>
       </Box>
     );
   }
@@ -137,7 +150,9 @@ export function AgentScreen({ onDone, deps }: TuiScreenProps & { deps?: (log: (l
       {error && <Text {...textColor(theme.error)}>{error}</Text>}
       {mode === 'confirm-uninstall' && <Text {...textColor(theme.error)}>Uninstall the agent and revoke this host in Fleet? y to confirm, any other key to cancel</Text>}
       <Text dimColor wrap="truncate">
-        {installed ? 'i repair · u update · s start/stop · r restart · l logs · x uninstall · g refresh · esc back' : 'i install · g refresh · esc back'}
+        {installed
+          ? 'i repair · u update · s start/stop · r restart · l logs · c chrome · d doctor · x uninstall · g refresh · esc back'
+          : 'i install · c chrome · d doctor · g refresh · esc back'}
       </Text>
     </Box>
   );
