@@ -18,6 +18,7 @@ use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::browser_bridge::BrowserBridge;
+use crate::desktop_tunnel::DesktopBridge;
 use crate::pool::{BrowserPool, PoolConfig};
 
 /// Daemon configuration.
@@ -202,6 +203,36 @@ async fn announce_offline(client: &HostClient, current: &CurrentHost) {
     }
 }
 
+/// Handles [`HostCommand::OpenDesktop`] in either mode: connects the local
+/// desktop to the fabric, reporting `desktop_unavailable`, `desktop_busy`,
+/// `vnc_unavailable` or `tunnel_failed` when it cannot.
+fn spawn_open_desktop(
+    desktop: &DesktopBridge,
+    client: &HostClient,
+    host_id: Uuid,
+    command: DispatchedCommand,
+) {
+    let HostCommand::OpenDesktop { tunnel_id, .. } = command.command else {
+        return;
+    };
+    let desktop = desktop.clone();
+    let client = client.clone();
+    tokio::spawn(async move {
+        let result = match desktop.open(host_id, tunnel_id).await {
+            Ok(()) => OperationResult {
+                ok: true,
+                result: Some(serde_json::json!({ "tunnel_id": tunnel_id })),
+                error: None,
+            },
+            Err(e) => {
+                tracing::warn!(%tunnel_id, error = %e, "could not open the desktop");
+                failure(e.to_string())
+            }
+        };
+        report_command(&client, host_id, command.id, &result).await;
+    });
+}
+
 /// Attach mode: one browser (the operator's own Chrome) = the `default` profile.
 async fn run_attach_mode(cfg: DaemonConfig, client: HostClient) -> Result<()> {
     let current: CurrentHost = Default::default();
@@ -219,6 +250,7 @@ async fn run_attach_mode(cfg: DaemonConfig, client: HostClient) -> Result<()> {
     let bridge = BrowserBridge::bind(&cfg.bridge_socket)
         .await
         .context("starting browser bridge")?;
+    let desktop = DesktopBridge::new(cfg.desktop.clone(), &cfg.control_url, &cfg.token);
     let mut host_id = register(&client, &cfg, load_host_id(&cfg.host_id_file)).await;
     set_current(&current, host_id);
     let mut backoff = Duration::from_secs(1);
@@ -250,6 +282,12 @@ async fn run_attach_mode(cfg: DaemonConfig, client: HostClient) -> Result<()> {
             )),
         };
         match client.poll(host_id, &status, wait).await {
+            Ok(Some(HostWork::Command { command }))
+                if matches!(command.command, HostCommand::OpenDesktop { .. }) =>
+            {
+                backoff = Duration::from_secs(1);
+                spawn_open_desktop(&desktop, &client, host_id, command);
+            }
             Ok(Some(HostWork::Command { command })) => {
                 backoff = Duration::from_secs(1);
                 tracing::info!(command_id = %command.id, kind = command.command.kind(), "refusing host command");
@@ -300,6 +338,7 @@ async fn run_launch_mode(
     pool_cfg: PoolConfig,
 ) -> Result<()> {
     let pool = BrowserPool::new(pool_cfg)?;
+    let desktop = DesktopBridge::new(cfg.desktop.clone(), &cfg.control_url, &cfg.token);
     let current: CurrentHost = Default::default();
     {
         // On SIGTERM/SIGINT (docker stop, reboot, Ctrl-C) close every
@@ -334,6 +373,12 @@ async fn run_launch_mode(
         // Short polls keep the reported running profiles fresh.
         let wait = cfg.poll_wait.min(Duration::from_secs(10));
         match client.poll(host_id, &status, wait).await {
+            Ok(Some(HostWork::Command { command }))
+                if matches!(command.command, HostCommand::OpenDesktop { .. }) =>
+            {
+                backoff = Duration::from_secs(1);
+                spawn_open_desktop(&desktop, &client, host_id, command);
+            }
             Ok(Some(HostWork::Command { command })) => {
                 backoff = Duration::from_secs(1);
                 tracing::info!(command_id = %command.id, kind = command.command.kind(), profile = ?command.command.profile(), "running host command");

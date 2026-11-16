@@ -261,7 +261,9 @@ impl RuntimeStore {
                     HostCommand::CloseBrowser { profile } => {
                         h.running_profiles.retain(|p| p != profile);
                     }
-                    HostCommand::RestartBrowser { .. } | HostCommand::Drain { .. } => {}
+                    HostCommand::RestartBrowser { .. }
+                    | HostCommand::Drain { .. }
+                    | HostCommand::OpenDesktop { .. } => {}
                 }
             }
         }

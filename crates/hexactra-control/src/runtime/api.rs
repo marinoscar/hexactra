@@ -42,6 +42,8 @@ pub struct ApiState {
     pub store: RuntimeStore,
     pub webhooks: super::webhooks::Webhooks,
     pub credentials: Credentials,
+    /// Remote desktop tunnels (#338).
+    pub desktop: super::desktop::DesktopTunnels,
 }
 
 impl ApiState {
@@ -70,6 +72,7 @@ impl ApiState {
             store,
             webhooks,
             credentials,
+            desktop: Default::default(),
         }
     }
 
@@ -232,6 +235,10 @@ pub fn router(state: ApiState) -> Router {
             post(post_result).layer(DefaultBodyLimit::max(RESULT_BODY_LIMIT)),
         )
         .merge(super::host_commands_api::host_routes())
+        .route(
+            "/v1/hosts/{host_id}/desktop/{tunnel_id}",
+            get(super::desktop::host_connect),
+        )
         .route_layer(middleware::from_fn_with_state(state.clone(), require_host));
     let client = Router::new()
         .route("/v1/hosts", get(list_hosts))
@@ -245,6 +252,10 @@ pub fn router(state: ApiState) -> Router {
         .merge(super::events_api::routes())
         .merge(super::host_commands_api::client_routes())
         .route("/v1/artifacts/{id}", get(get_artifact))
+        .route(
+            "/v1/hosts/{id}/desktop-sessions",
+            post(super::desktop::create_desktop_session),
+        )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             require_client,
@@ -256,6 +267,11 @@ pub fn router(state: ApiState) -> Router {
         .route("/v1/health", get(health))
         .merge(super::handoff_api::public_routes())
         .merge(super::credentials_api::public_routes())
+        // Authenticated by its single-use `hxd_` token, not a client token.
+        .route(
+            "/v1/desktop/{tunnel_id}/connect",
+            get(super::desktop::client_connect),
+        )
         .merge(host)
         .merge(client)
         .merge(operator)

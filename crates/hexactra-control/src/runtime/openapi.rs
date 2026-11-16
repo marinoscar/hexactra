@@ -102,6 +102,9 @@ impl Modify for Bearer {
         super::credentials_api::create_service_token,
         super::credentials_api::list_service_tokens,
         super::credentials_api::revoke_service_token,
+        super::desktop::create_desktop_session,
+        super::desktop::client_connect,
+        super::desktop::host_connect,
     ),
     tags(
         (name = "sessions", description = "Sessions, actions and operations"),
@@ -113,6 +116,7 @@ impl Modify for Bearer {
         (name = "artifacts", description = "Short-lived screenshot bytes"),
         (name = "credentials", description = "Host enrollment and service tokens"),
         (name = "agent", description = "Routes used by host agents"),
+        (name = "desktop", description = "Remote desktop tunnels to a node (the WebSocket legs are `GET /v1/desktop/{tunnel_id}/connect` and `GET /v1/hosts/{host_id}/desktop/{tunnel_id}`)"),
         (name = "health", description = "Liveness"),
     )
 )]

@@ -360,6 +360,38 @@ pub struct SessionView {
     pub ended_at: Option<DateTime<Utc>>,
 }
 
+/// Who opens a remote desktop (from the console: the signed-in person).
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DesktopActor {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub org_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+}
+
+/// `POST /v1/hosts/{id}/desktop-sessions`
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateDesktopSessionRequest {
+    #[serde(default)]
+    pub actor: DesktopActor,
+}
+
+/// A desktop tunnel waiting for its viewer. `connect_token` is shown once:
+/// the viewer presents it as `Authorization: Bearer` on
+/// `GET /v1/desktop/{tunnel_id}/connect` (WebSocket) within 30 seconds.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DesktopSession {
+    pub tunnel_id: Uuid,
+    pub host_id: Uuid,
+    pub connect_token: String,
+    pub expires_at: DateTime<Utc>,
+}
+
 /// How a host runs its browsers (#336, docs/nodes.md).
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -550,6 +582,17 @@ pub enum HostCommand {
         #[serde(default = "default_true")]
         enabled: bool,
     },
+    /// Connect this host's local desktop server to the fabric for a remote
+    /// desktop tunnel (#338): the agent opens
+    /// `GET /v1/hosts/{host_id}/desktop/{tunnel_id}` with its own credential.
+    /// Issued only by `POST /v1/hosts/{id}/desktop-sessions`.
+    OpenDesktop {
+        tunnel_id: Uuid,
+        expires_at: DateTime<Utc>,
+        /// Who asked, for the attended desktop's on-screen notice.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        actor_display_name: Option<String>,
+    },
 }
 
 fn default_true() -> bool {
@@ -565,6 +608,7 @@ impl HostCommand {
             HostCommand::RestartBrowser { .. } => "restart_browser",
             HostCommand::CloseBrowser { .. } => "close_browser",
             HostCommand::Drain { .. } => "drain",
+            HostCommand::OpenDesktop { .. } => "open_desktop",
         }
     }
 
@@ -575,7 +619,7 @@ impl HostCommand {
             | HostCommand::DeleteProfile { profile }
             | HostCommand::RestartBrowser { profile }
             | HostCommand::CloseBrowser { profile } => Some(profile),
-            HostCommand::Drain { .. } => None,
+            HostCommand::Drain { .. } | HostCommand::OpenDesktop { .. } => None,
         }
     }
 

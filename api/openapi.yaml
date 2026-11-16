@@ -159,6 +159,26 @@ paths:
           description: Token not allowed here
         '404':
           description: Unknown or expired
+  /v1/desktop/{tunnel_id}/connect:
+    get:
+      tags:
+      - desktop
+      summary: '`GET /v1/desktop/{tunnel_id}/connect` (WebSocket): the viewer''s leg.'
+      operationId: client_connect
+      parameters:
+      - name: tunnel_id
+        in: path
+        description: Tunnel id from POST /v1/hosts/{id}/desktop-sessions
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '101':
+          description: 'WebSocket upgrade: binary messages carry the desktop stream (RFB). `Authorization: Bearer hxd_…` (single use, 30 s). Close codes: 4504 the node did not connect, 4408 idle, 4000 maximum duration'
+        '401':
+          description: Missing, invalid, used or expired desktop token
+      security: []
   /v1/events:
     get:
       tags:
@@ -588,6 +608,38 @@ paths:
           description: Unknown command
         '409':
           description: Not dispatched
+  /v1/hosts/{host_id}/desktop/{tunnel_id}:
+    get:
+      tags:
+      - agent
+      summary: '`GET /v1/hosts/{host_id}/desktop/{tunnel_id}` (WebSocket): the node''s leg.'
+      operationId: host_connect
+      parameters:
+      - name: host_id
+        in: path
+        description: This host's id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: tunnel_id
+        in: path
+        description: From the open_desktop host command
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '101':
+          description: 'WebSocket upgrade: the agent relays its local desktop server''s bytes as binary messages'
+        '401':
+          description: Missing or invalid host credential
+        '403':
+          description: This credential belongs to another host
+        '404':
+          description: No such tunnel for this host
+        '409':
+          description: The tunnel already has its host
   /v1/hosts/{host_id}/next:
     get:
       tags:
@@ -704,6 +756,45 @@ paths:
           description: Unknown operation
         '409':
           description: Not dispatched, or already reported
+  /v1/hosts/{id}/desktop-sessions:
+    post:
+      tags:
+      - desktop
+      summary: |-
+        `POST /v1/hosts/{id}/desktop-sessions`: reserve a tunnel, ask the host to
+        connect its desktop, return the single-use connect token.
+      operationId: create_desktop_session
+      parameters:
+      - name: id
+        in: path
+        description: Host id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDesktopSessionRequest'
+        required: true
+      responses:
+        '201':
+          description: Connect within 30 seconds with the token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DesktopSession'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown host
+        '409':
+          description: host_offline or desktop_unavailable
+        '429':
+          description: Too many open desktops
   /v1/operations/{id}:
     get:
       tags:
@@ -1057,6 +1148,12 @@ components:
       properties:
         value:
           type: string
+    CreateDesktopSessionRequest:
+      type: object
+      description: '`POST /v1/hosts/{id}/desktop-sessions`'
+      properties:
+        actor:
+          $ref: '#/components/schemas/DesktopActor'
     CreateEnrollmentRequest:
       type: object
       properties:
@@ -1229,6 +1326,45 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WebhookDelivery'
+    DesktopActor:
+      type: object
+      description: 'Who opens a remote desktop (from the console: the signed-in person).'
+      properties:
+        display_name:
+          type:
+          - string
+          - 'null'
+        org_id:
+          type:
+          - string
+          - 'null'
+        user_id:
+          type:
+          - string
+          - 'null'
+    DesktopSession:
+      type: object
+      description: |-
+        A desktop tunnel waiting for its viewer. `connect_token` is shown once:
+        the viewer presents it as `Authorization: Bearer` on
+        `GET /v1/desktop/{tunnel_id}/connect` (WebSocket) within 30 seconds.
+      required:
+      - tunnel_id
+      - host_id
+      - connect_token
+      - expires_at
+      properties:
+        connect_token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        host_id:
+          type: string
+          format: uuid
+        tunnel_id:
+          type: string
+          format: uuid
     DispatchedCommand:
       type: object
       description: A command handed to a host on its poll.
@@ -1700,6 +1836,32 @@ components:
             type: string
             enum:
             - drain
+      - type: object
+        description: |-
+          Connect this host's local desktop server to the fabric for a remote
+          desktop tunnel (#338): the agent opens
+          `GET /v1/hosts/{host_id}/desktop/{tunnel_id}` with its own credential.
+          Issued only by `POST /v1/hosts/{id}/desktop-sessions`.
+        required:
+        - tunnel_id
+        - expires_at
+        - type
+        properties:
+          actor_display_name:
+            type:
+            - string
+            - 'null'
+            description: Who asked, for the attended desktop's on-screen notice.
+          expires_at:
+            type: string
+            format: date-time
+          tunnel_id:
+            type: string
+            format: uuid
+          type:
+            type: string
+            enum:
+            - open_desktop
       description: A management command for a host rather than an action in a session.
     HostCommandList:
       type: object
@@ -2473,5 +2635,7 @@ tags:
   description: Host enrollment and service tokens
 - name: agent
   description: Routes used by host agents
+- name: desktop
+  description: Remote desktop tunnels to a node (the WebSocket legs are `GET /v1/desktop/{tunnel_id}/connect` and `GET /v1/hosts/{host_id}/desktop/{tunnel_id}`)
 - name: health
   description: Liveness

@@ -7,6 +7,7 @@
 pub mod browser_bridge;
 pub mod chrome;
 pub mod desktop;
+pub mod desktop_tunnel;
 pub mod launcher;
 pub mod platform;
 pub mod pool;

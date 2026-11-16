@@ -12,7 +12,7 @@ use axum::{
     Json, Router,
 };
 use hexactra_core::remote::{
-    HostCommandRequest, OperationResult, DEFAULT_HOST_COMMAND_TIMEOUT_MS,
+    HostCommand, HostCommandRequest, OperationResult, DEFAULT_HOST_COMMAND_TIMEOUT_MS,
     MAX_HOST_COMMAND_TIMEOUT_MS,
 };
 use serde::Deserialize;
@@ -60,6 +60,13 @@ async fn create_command(
     Query(q): Query<CreateQuery>,
     Json(req): Json<HostCommandRequest>,
 ) -> Result<Response, AppError> {
+    if matches!(req.command, HostCommand::OpenDesktop { .. }) {
+        return Err(AppError(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "open a desktop with POST /v1/hosts/{id}/desktop-sessions".into(),
+        ));
+    }
     let timeout = Duration::from_millis(
         req.timeout_ms
             .unwrap_or(DEFAULT_HOST_COMMAND_TIMEOUT_MS)

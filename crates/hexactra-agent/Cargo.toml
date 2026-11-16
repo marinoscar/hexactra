@@ -20,6 +20,8 @@ anyhow.workspace = true
 async-trait.workspace = true
 clap.workspace = true
 tokio-native-tls.workspace = true
+tokio-tungstenite = { workspace = true, features = ["native-tls"] }
+futures-util.workspace = true
 libc = "0.2"
 chrono.workspace = true
 

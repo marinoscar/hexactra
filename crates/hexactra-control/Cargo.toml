@@ -51,6 +51,7 @@ hexactra-core = { path = "../hexactra-core", features = ["openapi"] }
 hexactra-telemetry = { path = "../hexactra-telemetry" }
 
 [dev-dependencies]
+tokio-tungstenite.workspace = true
 serde_yaml = "0.9"
 hexactra-client = { path = "../hexactra-client" }
 tokio-test.workspace = true

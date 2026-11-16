@@ -21,7 +21,7 @@ web app · Android app · MCP · API
 Console (your VPS, e.g. https://hex.example.test) ── fabric control plane (private)
         ▲
         │  outbound HTTPS only: enroll, then a long-poll for work, results back
-        │  (and, Planned in #338, a tunnel for the remote desktop)
+        │  (and a WebSocket tunnel for the remote desktop, #338)
 Node at home: hexactra-agent ── Google Chrome (headful) ── Hexactra extension
 ```
 

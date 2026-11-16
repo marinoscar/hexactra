@@ -11,6 +11,10 @@ struct Instruments {
     operations: Counter<u64>,
     operation_duration: Histogram<f64>,
     host_commands: Counter<u64>,
+    desktop_opened: Counter<u64>,
+    desktop_bytes: Counter<u64>,
+    desktop_failures: Counter<u64>,
+    desktop_duration: Histogram<f64>,
 }
 
 fn instruments() -> &'static Instruments {
@@ -30,6 +34,24 @@ fn instruments() -> &'static Instruments {
             host_commands: m
                 .u64_counter("hexactra.host_commands")
                 .with_description("Host commands that reached a final state")
+                .build(),
+            desktop_opened: m
+                .u64_counter("hexactra.desktop.tunnels")
+                .with_description("Remote desktop tunnels opened (both legs joined)")
+                .build(),
+            desktop_bytes: m
+                .u64_counter("hexactra.desktop.tunnel_bytes")
+                .with_unit("By")
+                .with_description("Bytes relayed through desktop tunnels, by direction")
+                .build(),
+            desktop_failures: m
+                .u64_counter("hexactra.desktop.tunnel_failures")
+                .with_description("Desktop tunnels that never opened, by reason")
+                .build(),
+            desktop_duration: m
+                .f64_histogram("hexactra.desktop.tunnel_duration")
+                .with_unit("s")
+                .with_description("How long desktop tunnels stayed open")
                 .build(),
         }
     })
@@ -63,4 +85,23 @@ pub(super) fn host_command_finished(v: &HostCommandView) {
             KeyValue::new("state", state(v.state)),
         ],
     );
+}
+
+pub(super) fn desktop_opened() {
+    instruments().desktop_opened.add(1, &[]);
+}
+
+pub(super) fn desktop_failure(reason: &'static str) {
+    instruments()
+        .desktop_failures
+        .add(1, &[KeyValue::new("reason", reason)]);
+}
+
+pub(super) fn desktop_closed(reason: &'static str, up: u64, down: u64, seconds: f64) {
+    let i = instruments();
+    i.desktop_bytes.add(up, &[KeyValue::new("direction", "up")]);
+    i.desktop_bytes
+        .add(down, &[KeyValue::new("direction", "down")]);
+    i.desktop_duration
+        .record(seconds, &[KeyValue::new("reason", reason)]);
 }
