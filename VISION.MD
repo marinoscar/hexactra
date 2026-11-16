@@ -1600,4 +1600,4 @@ Shipped in epic #366 (E29): the contract (#367), the extension (#368), the host 
 
 Upstream seam: image tool outputs in the platform's `runTools` (marinoscar/EnterpriseAppBase#1175). Until it ships, the console carries the screenshot in the next round's input.
 
-Node prerequisites for the desktop: `xdotool`, and `imagemagick` (or `x11-apps` for `xwd`).
+The desktop needs `xdotool` and `imagemagick` on the node. `hexactra agent install` installs them in every mode that has an X11 desktop, and `hexactra agent update` adds them on older nodes (#373).

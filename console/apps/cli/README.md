@@ -219,7 +219,7 @@ One command turns a Linux x86_64 desktop into a browser host. You need no script
 hexactra agent install                # needs `hexactra login` as someone with fleet:write
 hexactra agent status                 # version, browser, service, and online/offline in Fleet
 hexactra agent logs [-f]              # the service's log
-hexactra agent update                 # latest agent and Chrome for Testing, then a restart
+hexactra agent update                 # latest agent and Chrome for Testing, missing packages, then a restart
 hexactra agent stop | start | restart
 hexactra agent uninstall --yes        # stops it and revokes the host in Fleet (profiles are kept)
 hexactra agent chrome setup           # Google Chrome + the extension by policy + the native host (sudo once)
@@ -227,13 +227,19 @@ hexactra agent chrome status          # what is set up for Google Chrome
 hexactra agent doctor                 # every check, and how to fix what fails (exit code 1 if any fails)
 ```
 
+**Desktop tools, installed for you (#373).** The agent also drives the computer's desktop for native file pickers, OS dialogs and other windows (VISION §27). It needs `xdotool` and `imagemagick`, and the install puts them in with sudo wherever the agent has an X11 desktop to drive:
+- attended and unattended nodes, always;
+- the default mode when you run it from your X11 desktop session.
+
+Without a desktop session (a server, CI, `--no-desktop`) or on Wayland, the install skips them and says why. `agent update` installs whatever is missing on nodes set up earlier. `agent doctor` reports them as `desktop-input`.
+
 **Attended (`--mode attended`).** The agent drives your own Google Chrome in your logged-in desktop, with the extension installed by policy and the native host registered for you.
 - **Remote view on demand.** Your X11 desktop is shared only while someone views it from the console: x11vnc runs on a private socket, a notice names the viewer, and it stops 30 s after they leave.
 - **X11 only for now.** Wayland is refused, with how to switch (**Ubuntu on Xorg**).
 - **Same machine as a node.** On a machine that is also an unattended node, the attended host is named `<name>-attended`. `--mode both` installs both.
 
 **Unattended node (`--mode unattended`).** It gives the machine its own desktop: it starts at boot with nobody logged in, and the agent drives its Google Chrome profiles (see [docs/nodes.md](../../../docs/nodes.md#set-up-an-unattended-node)).
-- **Asks for sudo once.** It sets up Google Chrome and the extension policy (below) and installs TigerVNC, XFCE and fonts.
+- **Asks for sudo once.** It sets up Google Chrome and the extension policy (below) and installs TigerVNC, XFCE, fonts and the desktop tools (`xdotool`, `imagemagick`).
 - **A dedicated user.** It creates the system user `hexactra` and copies the agent to `/opt/hexactra`. The host credential goes to `hexactra` only, with mode 0600; you keep no copy.
 - **Three system units.** `hexactra-desktop` is the 1920x1080 display, served only on a 0600 Unix socket and never on TCP; `hexactra-session` runs XFCE; `hexactra-node-agent` runs the agent.
 - **Graphics.** With Intel or AMD graphics, Chrome renders on the GPU. Without them, `agent doctor` warns that rendering is in software.

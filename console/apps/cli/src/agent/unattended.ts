@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlink
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
+import { DESKTOP_INPUT_PACKAGES } from './desktopTools.js';
 import { runPrivileged, type ChromeDeps, type PrivilegedStep } from './googleChrome.js';
 
 /**
@@ -56,6 +57,8 @@ export const APT_PACKAGES = [
   'fonts-noto-color-emoji',
   'fonts-liberation2',
   'mesa-vulkan-drivers',
+  // The agent drives this desktop for desktop_* actions (#373).
+  ...DESKTOP_INPUT_PACKAGES,
 ] as const;
 
 const GPU_DRIVERS = new Set(['i915', 'xe', 'amdgpu']);

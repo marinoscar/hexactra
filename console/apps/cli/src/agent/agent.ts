@@ -5,9 +5,11 @@ import { basename, dirname, join } from 'node:path';
 
 import { activate, fetchBundle, type Fetch } from './bundle.js';
 import { ensureChrome, needsSetuidSandbox, sandboxHelperCommands, sandboxHelperReady, chromeFor } from './chrome.js';
+import { DESKTOP_INPUT_PACKAGES, DESKTOP_INPUT_WHY, aptInstallStep, missingPackages } from './desktopTools.js';
 import { chromeSetup, chromeStatus, chromeTeardown, registerNativeHost, type ChromeStatus } from './googleChrome.js';
 import { agentPaths, UNIT_NAME, type AgentPaths } from './paths.js';
 import {
+  APT_PACKAGES,
   DEFAULT_LAYOUT,
   NODE_USER,
   UNITS,
@@ -60,6 +62,8 @@ export interface AgentDeps {
   sleep(ms: number): Promise<void>;
   hostname(): string;
   platform: { os: string; arch: string };
+  /** The environment the session kind is read from (default: process.env). */
+  env?: NodeJS.ProcessEnv;
 }
 
 export function defaultDeps(log: (line: string) => void, api: () => AgentApi): AgentDeps {
@@ -182,6 +186,7 @@ export async function installAgent(d: AgentDeps, o: InstallOptions): Promise<Age
   if (attended) requireX11(d);
   const useGoogle = attended || (!o.browser && (o.googleChrome ?? previous?.browserKind === 'google-chrome'));
   if (attended) ensureAttendedTools(d, o.interactiveSudo !== false);
+  else ensureDesktopTools(d, o.noDesktop ?? previous?.noDesktop ?? false, o.interactiveSudo !== false);
   if (useGoogle) {
     const chrome = await chromeSetup(d, { interactive: o.interactiveSudo !== false, updateUrl: o.extensionUpdateUrl });
     browser = chrome.chrome.path;
@@ -356,6 +361,9 @@ function requireState(d: AgentDeps): AgentState {
 export async function updateAgent(d: AgentDeps, o: { bundle?: string; version?: string; force?: boolean }): Promise<AgentState> {
   const s = requireState(d);
   const bundle = await fetchBundle(d.paths, o, d.fetch, d.log);
+  // Nodes installed before #373 get the desktop tools now.
+  if (s.attended) ensureAttendedTools(d, true);
+  else ensureDesktopTools(d, s.noDesktop ?? false, true);
   let next: AgentState = { ...s, version: bundle.version, commit: bundle.commit, updatedAt: new Date().toISOString() };
   if (s.browserKind === 'chrome-for-testing') {
     const chrome = await ensureChrome(d.paths, d.fetch, d.log);
@@ -458,6 +466,16 @@ export async function agentDoctor(d: AgentDeps): Promise<DoctorCheck[]> {
     const kind = sessionKind(d);
     add('session', kind === 'x11', kind === 'x11' ? 'X11 desktop session' : kind === 'wayland' ? WAYLAND_HELP.split('\n')[0]! : 'no desktop session here (run doctor from your desktop)');
     add('x11vnc', d.exec(['dpkg', '-s', 'x11vnc']).code === 0, 'shares your desktop only while someone views it');
+  }
+  // The desktop tools (#373), wherever the agent drives an X11 desktop.
+  const unattendedNode = !!readUnattended(d.paths.agentDir);
+  if (s?.attended || unattendedNode || (s && !s.noDesktop && sessionKind(d, d.env ?? process.env) === 'x11')) {
+    const missing = missingPackages(d, DESKTOP_INPUT_PACKAGES);
+    add(
+      'desktop-input',
+      missing.length === 0,
+      missing.length === 0 ? `${DESKTOP_INPUT_PACKAGES.join(' and ')}: the agent can use the whole desktop` : `missing ${missing.join(', ')}: run \`hexactra agent update\` (or sudo apt install ${missing.join(' ')})`,
+    );
   }
   if (google || !s) {
     const c: ChromeStatus = chromeStatus(d);
@@ -580,20 +598,32 @@ export function updateUnattended(d: AgentDeps, interactive = true, layout: NodeL
   if (!s) return;
   const dir = readlinkSync(d.paths.current);
   const bundleId = basename(dir);
-  if (bundleId === s.bundle) return;
+  // Packages added since the node was installed (the desktop tools, #373).
+  const packages = aptInstallStep(missingPackages(d, APT_PACKAGES), 'packages added since this node was installed');
+  const changed = bundleId !== s.bundle;
+  if (!changed && packages.length === 0) return;
   const target = `${layout.opt}/agent/${bundleId}`;
   runPrivileged(
     d,
     [
-      { what: `copy the agent ${bundleId} to ${target}`, argv: ['install', '-d', '-m', '0755', target] },
-      { what: 'copy the agent files', argv: ['cp', '-a', '--no-preserve=ownership', `${dir}/.`, `${target}/`] },
-      { what: 'point the agent at this version', argv: ['ln', '-sfn', target, `${layout.opt}/agent/current`] },
+      ...packages,
+      ...(changed
+        ? [
+            { what: `copy the agent ${bundleId} to ${target}`, argv: ['install', '-d', '-m', '0755', target] },
+            { what: 'copy the agent files', argv: ['cp', '-a', '--no-preserve=ownership', `${dir}/.`, `${target}/`] },
+            { what: 'point the agent at this version', argv: ['ln', '-sfn', target, `${layout.opt}/agent/current`] },
+          ]
+        : []),
       { what: 'restart the unattended agent', argv: ['systemctl', 'restart', UNITS.agent] },
     ],
     interactive,
   );
-  writeUnattended(d.paths.agentDir, { ...s, bundle: bundleId, updatedAt: new Date().toISOString() });
-  d.log(`Unattended agent updated to ${bundleId}`);
+  if (changed) {
+    writeUnattended(d.paths.agentDir, { ...s, bundle: bundleId, updatedAt: new Date().toISOString() });
+    d.log(`Unattended agent updated to ${bundleId}`);
+  } else {
+    d.log('Unattended node: missing packages installed');
+  }
 }
 
 export async function uninstallUnattended(d: AgentDeps, o: { keepHost?: boolean; purgeProfiles?: boolean; interactiveSudo?: boolean; layout?: NodeLayout }): Promise<void> {
@@ -645,10 +675,32 @@ function requireX11(d: AgentDeps, env: NodeJS.ProcessEnv = process.env): void {
   if (kind === 'none') throw new Error('Attended mode runs in your desktop session: run this from a terminal in your logged-in X11 desktop.');
 }
 
-/** x11vnc (screen sharing) and notify-send (the on-screen notice), with sudo if missing. */
+/** Packages attended mode needs: x11vnc and notify-send (sharing your desktop, and the notice), and the desktop tools. */
+export const ATTENDED_PACKAGES = ['x11vnc', 'libnotify-bin', ...DESKTOP_INPUT_PACKAGES] as const;
+
+/**
+ * xdotool and ImageMagick (#373), with sudo if missing, when the agent has an
+ * X11 desktop to drive. Without one (a server, CI, `--no-desktop`) or on
+ * Wayland it says why it skips them.
+ */
+function ensureDesktopTools(d: AgentDeps, noDesktop: boolean, interactive: boolean): void {
+  const kind = noDesktop ? 'none' : sessionKind(d, d.env ?? process.env);
+  if (kind !== 'x11') {
+    d.log(
+      kind === 'wayland'
+        ? `Skipping the desktop tools (${DESKTOP_INPUT_PACKAGES.join(', ')}): desktop actions need an X11 session.`
+        : `No desktop session here: skipping the desktop tools (${DESKTOP_INPUT_PACKAGES.join(', ')}). Install from your desktop session so the agent can use the whole screen.`,
+    );
+    return;
+  }
+  const steps = aptInstallStep(missingPackages(d, DESKTOP_INPUT_PACKAGES), DESKTOP_INPUT_WHY);
+  if (steps.length) runPrivileged(d, steps, interactive);
+}
+
+/** x11vnc (screen sharing), notify-send (the on-screen notice) and the desktop tools, with sudo if missing. */
 function ensureAttendedTools(d: AgentDeps, interactive: boolean): void {
-  const missing = ['x11vnc', 'libnotify-bin'].filter((p) => d.exec(['dpkg', '-s', p]).code !== 0);
-  if (missing.length) runPrivileged(d, [{ what: `install ${missing.join(' and ')} (sharing your desktop while someone views it, and the notice)`, argv: ['apt-get', 'install', '-y', '--no-install-recommends', ...missing] }], interactive);
+  const steps = aptInstallStep(missingPackages(d, ATTENDED_PACKAGES), `sharing your desktop while someone views it, the notice, and ${DESKTOP_INPUT_WHY}`);
+  if (steps.length) runPrivileged(d, steps, interactive);
   // The agent's user service needs the session's DISPLAY: import it now and at every login.
   d.exec(['systemctl', '--user', 'import-environment', 'DISPLAY', 'XAUTHORITY']);
   const autostart = join(dirname(dirname(d.paths.unitDir)), 'autostart');

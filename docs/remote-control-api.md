@@ -246,7 +246,7 @@ Actions are JSON objects tagged by `type`. `tab_id` is optional on tab-scoped ac
 
 Hexactra is a human emulator for its owner (VISION §27): an agent may do anything a person at the machine could do.
 - **In the page:** the extension executes `evaluate` and the positional actions through `chrome.debugger`. Pages receive trusted events (`isTrusted: true`). No CDP domain is ever `enable`d, and Chrome runs with `--silent-debugger-extension-api`, so there is no debugging bar.
-- **On the desktop:** the host agent runs the `desktop_*` actions itself, on its X11 display, with `xdotool` (arguments are passed directly, never through a shell). It captures the screen with ImageMagick `import`, or `xwd` + `convert`. A node without them fails the action, naming the package to install (`sudo apt install xdotool imagemagick`). Desktop actions are serialised per node: one pointer, one keyboard.
+- **On the desktop:** the host agent runs the `desktop_*` actions itself, on its X11 display, with `xdotool` (arguments are passed directly, never through a shell). It captures the screen with ImageMagick `import`, or `xwd` + `convert`. `hexactra agent install` and `update` install both. A node without them fails the action and names the package to install. Desktop actions are serialised per node: one pointer, one keyboard.
 
 Policy enforced before an action is queued:
 
