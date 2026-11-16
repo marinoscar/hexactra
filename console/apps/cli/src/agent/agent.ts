@@ -148,6 +148,8 @@ export interface InstallOptions {
   googleChrome?: boolean | undefined;
   /** Where the Chrome policy points for extension updates (a test or CI mirror). */
   extensionUpdateUrl?: string | undefined;
+  /** Attended mode (#341): the person's own Google Chrome and X11 desktop. */
+  attended?: boolean | undefined;
   waitSeconds?: number | undefined;
 }
 
@@ -176,7 +178,10 @@ export async function installAgent(d: AgentDeps, o: InstallOptions): Promise<Age
   let sandboxHelper: string | undefined;
   // A re-install keeps the browser chosen before unless a new one is given.
   const chosen = o.browser ?? (previous?.browserKind === 'custom' ? previous.browser : undefined);
-  const useGoogle = !o.browser && (o.googleChrome ?? previous?.browserKind === 'google-chrome');
+  const attended = o.attended ?? previous?.attended ?? false;
+  if (attended) requireX11(d);
+  const useGoogle = attended || (!o.browser && (o.googleChrome ?? previous?.browserKind === 'google-chrome'));
+  if (attended) ensureAttendedTools(d, o.interactiveSudo !== false);
   if (useGoogle) {
     const chrome = await chromeSetup(d, { interactive: o.interactiveSudo !== false, updateUrl: o.extensionUpdateUrl });
     browser = chrome.chrome.path;
@@ -194,7 +199,9 @@ export async function installAgent(d: AgentDeps, o: InstallOptions): Promise<Age
     }
   }
 
-  const name = o.name ?? previous?.name ?? d.hostname();
+  // On a machine that is also an unattended node, the attended host has its own name.
+  const base = o.name ?? previous?.name ?? d.hostname();
+  const name = attended && readUnattended(d.paths.agentDir) && !base.endsWith('-attended') ? `${base}-attended` : base;
   let hostId = previous?.hostId;
   let agentUrl = previous?.agentUrl;
   if (!hostId || !agentUrl || !existsSync(paths.credential) || o.reenroll || o.enrollmentToken) {
@@ -213,7 +220,8 @@ export async function installAgent(d: AgentDeps, o: InstallOptions): Promise<Age
     browser,
     maxBrowsers: o.maxBrowsers ?? previous?.maxBrowsers ?? 1,
     sandboxHelper,
-    noDesktop: o.noDesktop ?? previous?.noDesktop ?? false,
+    noDesktop: attended ? false : (o.noDesktop ?? previous?.noDesktop ?? false),
+    attended,
     version: bundle.version,
     commit: bundle.commit,
     hostId,
@@ -446,6 +454,11 @@ export async function agentDoctor(d: AgentDeps): Promise<DoctorCheck[]> {
   const checks: DoctorCheck[] = [];
   const add = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
   add('system', d.platform.os === 'linux' && d.platform.arch === 'x64', `${d.platform.os}/${d.platform.arch}`);
+  if (s?.attended) {
+    const kind = sessionKind(d);
+    add('session', kind === 'x11', kind === 'x11' ? 'X11 desktop session' : kind === 'wayland' ? WAYLAND_HELP.split('\n')[0]! : 'no desktop session here (run doctor from your desktop)');
+    add('x11vnc', d.exec(['dpkg', '-s', 'x11vnc']).code === 0, 'shares your desktop only while someone views it');
+  }
   if (google || !s) {
     const c: ChromeStatus = chromeStatus(d);
     add('os', c.os.supported, c.os.pretty);
@@ -607,4 +620,41 @@ export function agentStatusInstalled(d: AgentDeps): boolean {
 /** Downloads, verifies and activates a bundle (for an unattended-only machine's update). */
 export async function fetchAndActivate(d: AgentDeps, o: { bundle?: string; version?: string }): Promise<void> {
   activate(d.paths, await fetchBundle(d.paths, o, d.fetch, d.log));
+}
+
+export type SessionKind = 'x11' | 'wayland' | 'none';
+
+/** The person's graphical session, from the environment and logind. */
+export function sessionKind(d: Pick<AgentDeps, 'exec'>, env: NodeJS.ProcessEnv = process.env): SessionKind {
+  const type = env.XDG_SESSION_TYPE ?? (env.XDG_SESSION_ID ? d.exec(['loginctl', 'show-session', env.XDG_SESSION_ID, '-p', 'Type', '--value']).stdout.trim() : '');
+  if (type === 'wayland' || (env.WAYLAND_DISPLAY && !env.DISPLAY)) return 'wayland';
+  if (type === 'x11' || env.DISPLAY) return 'x11';
+  return 'none';
+}
+
+export const WAYLAND_HELP = [
+  'Attended mode shares your live desktop, which Wayland does not allow; it needs an X11 session for now.',
+  '  - On the login screen, choose your user, click the gear and pick "Ubuntu on Xorg"; or',
+  '  - set WaylandEnable=false in /etc/gdm3/custom.conf and reboot.',
+  'Then run `hexactra agent install --mode attended` again. (Unattended mode works on any session.)',
+].join('\n');
+
+function requireX11(d: AgentDeps, env: NodeJS.ProcessEnv = process.env): void {
+  const kind = sessionKind(d, env);
+  if (kind === 'wayland') throw new Error(WAYLAND_HELP);
+  if (kind === 'none') throw new Error('Attended mode runs in your desktop session: run this from a terminal in your logged-in X11 desktop.');
+}
+
+/** x11vnc (screen sharing) and notify-send (the on-screen notice), with sudo if missing. */
+function ensureAttendedTools(d: AgentDeps, interactive: boolean): void {
+  const missing = ['x11vnc', 'libnotify-bin'].filter((p) => d.exec(['dpkg', '-s', p]).code !== 0);
+  if (missing.length) runPrivileged(d, [{ what: `install ${missing.join(' and ')} (sharing your desktop while someone views it, and the notice)`, argv: ['apt-get', 'install', '-y', '--no-install-recommends', ...missing] }], interactive);
+  // The agent's user service needs the session's DISPLAY: import it now and at every login.
+  d.exec(['systemctl', '--user', 'import-environment', 'DISPLAY', 'XAUTHORITY']);
+  const autostart = join(dirname(dirname(d.paths.unitDir)), 'autostart');
+  mkdirSync(autostart, { recursive: true });
+  writeFileSync(
+    join(autostart, 'hexactra-session.desktop'),
+    ['[Desktop Entry]', 'Type=Application', 'Name=Hexactra session', 'Comment=Gives the Hexactra agent this desktop session', 'Exec=systemctl --user import-environment DISPLAY XAUTHORITY', 'NoDisplay=true', 'X-GNOME-Autostart-enabled=true', ''].join('\n'),
+  );
 }

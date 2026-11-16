@@ -50,6 +50,12 @@ const mode = (v: string | undefined): 'attended' | 'unattended' => {
   throw new Error(`--mode must be attended or unattended (got ${v})`);
 };
 
+const installMode = (v: string | undefined): 'default' | 'attended' | 'unattended' | 'both' => {
+  if (v === undefined) return 'default';
+  if (v === 'attended' || v === 'unattended' || v === 'both') return v;
+  throw new Error(`--mode must be attended, unattended or both (got ${v})`);
+};
+
 /** One readable block for `agent status` (and the TUI). */
 export function statusLines(s: AgentStatus): string[] {
   if (!s.installed || !s.state) return ['No agent is installed on this machine. Run `hexactra agent install`.'];
@@ -88,11 +94,12 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
     .option('--agent-url <url>', 'the fabric URL for --enrollment-token (the enroll command prints it)')
     .option('--wait <seconds>', 'how long to wait for the host to come online', int)
     .option('--google-chrome', 'use Google Chrome, with the extension installed by policy (one sudo step)')
-    .option('--mode <mode>', 'attended (your desktop session, the default) or unattended (its own desktop from boot, user hexactra, sudo once)')
+    .option('--mode <mode>', 'attended (your own Google Chrome and X11 desktop), unattended (its own desktop from boot, user hexactra) or both')
     .option('--resolution <WxH>', 'unattended: the desktop size (default 1920x1080)')
     .addOption(new Option('--extension-update-url <url>', 'where the Chrome policy gets the extension (a test mirror)').hideHelp())
     .action(async (o: { mode?: string; resolution?: string; googleChrome?: boolean; extensionUpdateUrl?: string; name?: string; browser?: string; maxBrowsers?: number; bundle?: string; version?: string; service?: boolean; desktop?: boolean; reenroll?: boolean; enrollmentToken?: string; agentUrl?: string; wait?: number }) => {
-      if (mode(o.mode) === 'unattended') {
+      const m = installMode(o.mode);
+      if (m === 'unattended' || m === 'both') {
         out('Installing an unattended node on this machine');
         const u = await installUnattended(deps(), {
           name: o.name,
@@ -107,7 +114,8 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
           extensionUpdateUrl: o.extensionUpdateUrl ?? process.env.HEXACTRA_EXTENSION_UPDATE_URL,
           resolution: o.resolution,
         });
-        return out(`Done: "${u.name}" is an unattended node. Open its desktop from Fleet to sign in to its profiles.`);
+        out(`Done: "${u.name}" is an unattended node. Open its desktop from Fleet to sign in to its profiles.`);
+        if (m === 'unattended') return;
       }
       out('Installing the Hexactra agent on this machine');
       const s = await installAgent(deps(), {
@@ -124,6 +132,7 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
         interactiveSudo: true,
         waitSeconds: o.wait,
         googleChrome: o.googleChrome,
+        attended: m === 'attended' || m === 'both' ? true : undefined,
         extensionUpdateUrl: o.extensionUpdateUrl ?? process.env.HEXACTRA_EXTENSION_UPDATE_URL,
       });
       out(`Done: "${s.name}" is a browser host. Create profiles for it on the Fleet page or with \`hexactra fleet profile create\`.`);

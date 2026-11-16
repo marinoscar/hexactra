@@ -9,7 +9,7 @@ import { dirname, join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { agentDoctor, installUnattended, unattendedControl, uninstallUnattended, type AgentDeps, type ExecResult } from './agent.js';
+import { agentDoctor, installAgent, installUnattended, sessionKind, unattendedControl, uninstallUnattended, type AgentDeps, type ExecResult } from './agent.js';
 import { BUNDLE_NAME } from './bundle.js';
 import { policyText } from './googleChrome.js';
 import { agentPaths } from './paths.js';
@@ -224,5 +224,59 @@ describe('hexactra agent install --mode unattended', () => {
   it('refuses a malformed resolution', async () => {
     const h = harness();
     await expect(installUnattended(h.d, { resolution: 'big', layout: h.layout })).rejects.toThrow(/1920x1080/);
+  });
+});
+
+describe('hexactra agent install --mode attended (#341)', () => {
+  const withEnv = async <T,>(env: Record<string, string | undefined>, fn: () => Promise<T>): Promise<T> => {
+    const saved = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
+    for (const [k, v] of Object.entries(env)) v === undefined ? delete process.env[k] : (process.env[k] = v);
+    try {
+      return await fn();
+    } finally {
+      for (const [k, v] of Object.entries(saved)) v === undefined ? delete process.env[k] : (process.env[k] = v);
+    }
+  };
+
+  it('drives your own Chrome: attach mode, desktop shared on demand, its own name next to an unattended node', async () => {
+    const h = harness();
+    await installUnattended(h.d, { bundle: makeBundle(join(h.root, 'b')), layout: h.layout });
+    h.exec.length = 0;
+    const s = await withEnv({ DISPLAY: ':0', XDG_SESSION_TYPE: 'x11', WAYLAND_DISPLAY: undefined }, () =>
+      installAgent(h.d, { bundle: makeBundle(join(h.root, 'b2')), attended: true }),
+    );
+    expect(s).toMatchObject({ attended: true, name: 'mini-pc-attended', browserKind: 'google-chrome' });
+    const unit = readFileSync(h.paths.unit, 'utf8');
+    expect(unit).toContain('Environment="HEXACTRA_HOST_MODE=attended"');
+    expect(unit).toContain('Environment="HEXACTRA_DESKTOP_VNC=x11vnc"');
+    expect(unit).not.toContain('HEXACTRA_BROWSER');
+    expect(unit).toContain('WantedBy=graphical-session.target');
+    expect(h.exec).toContainEqual(['systemctl', '--user', 'import-environment', 'DISPLAY', 'XAUTHORITY']);
+    expect(readFileSync(join(dirname(dirname(h.paths.unitDir)), 'autostart', 'hexactra-session.desktop'), 'utf8')).toContain('Exec=systemctl --user import-environment DISPLAY XAUTHORITY');
+    // The native host is registered for your own Chrome.
+    expect(existsSync(join(h.paths.chromeNativeHostDir, 'com.hexactra.nativehost.json'))).toBe(true);
+  });
+
+  it('refuses a Wayland session and says how to switch', async () => {
+    const h = harness();
+    await expect(withEnv({ XDG_SESSION_TYPE: 'wayland', DISPLAY: ':0' }, () => installAgent(h.d, { bundle: makeBundle(join(h.root, 'b')), attended: true }))).rejects.toThrow(/Ubuntu on Xorg[\s\S]*WaylandEnable=false/);
+    expect(h.exec.some((a) => a[0] === 'sudo')).toBe(false);
+  });
+
+  it('installs x11vnc and the notice tool only when missing', async () => {
+    const h = harness();
+    const exec = h.d.exec;
+    h.d.exec = (argv, o) => (argv[0] === 'dpkg' ? { code: argv[2] === 'x11vnc' ? 1 : 0, stdout: '', stderr: '' } : exec(argv, o));
+    await withEnv({ DISPLAY: ':0', XDG_SESSION_TYPE: 'x11' }, () => installAgent(h.d, { bundle: makeBundle(join(h.root, 'b')), attended: true }));
+    expect(h.exec).toContainEqual(['sudo', '-n', 'apt-get', 'install', '-y', '--no-install-recommends', 'x11vnc']);
+  });
+
+  it('tells X11 from Wayland', () => {
+    const d = { exec: (): ExecResult => ({ code: 0, stdout: 'wayland\n', stderr: '' }) };
+    expect(sessionKind(d, { XDG_SESSION_TYPE: 'x11', DISPLAY: ':0' })).toBe('x11');
+    expect(sessionKind(d, { XDG_SESSION_TYPE: 'wayland', DISPLAY: ':0' })).toBe('wayland');
+    expect(sessionKind(d, { XDG_SESSION_ID: '3' })).toBe('wayland');
+    expect(sessionKind(d, { WAYLAND_DISPLAY: 'wayland-0' })).toBe('wayland');
+    expect(sessionKind({ exec: () => ({ code: 1, stdout: '', stderr: '' }) }, {})).toBe('none');
   });
 });
