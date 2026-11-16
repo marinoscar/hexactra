@@ -62,3 +62,8 @@ Run the dev stack with the Compose commands in README, "Run it". Use the `npm ru
 ## Commits
 
 Conventional Commits (`<type>(<scope>): <summary>`), small and single-purpose, a behaviour change with its tests. Do not push or open a pull request unless asked.
+
+**Version bump.** A pull request that changes what users get (a CLI command, a TUI screen, an API route, a page) bumps the console version in the same pull request:
+- **Minor** for a new command or capability. **Patch** for a fix.
+- **All four manifests together:** `apps/api`, `apps/web`, `apps/cli` and `packages/shared` `package.json`, plus `npm install --package-lock-only`. These are the files `hexactra deploy` bumps, so they never drift apart.
+- **Why:** the installer shows the old and new CLI version, and `hexactra --version` is how people know they have a change. A deploy's own `chore(release): x.y.z` commit is a patch on top of that.
