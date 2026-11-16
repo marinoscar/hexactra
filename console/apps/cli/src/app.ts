@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 import { ANDROID_IDENTITY_SOURCE, APP_NAME, CLI_NAME, REPO_SLUG } from '@app/shared';
@@ -40,14 +40,32 @@ export const FABRIC_ENV_FRAGMENT = {
   metadata: {
     // app.fabric.compose.yml refuses to start without it (`:?`).
     HEXACTRA_FABRIC_OPERATOR_TOKEN: { secret: true, generate: 'hex-32', autoGenerate: true },
-    // noVNC passwords are at most 8 characters.
-    HEXACTRA_VIEWER_PASSWORD: { secret: true, generate: 'viewer-8', autoGenerate: true },
+    // Whether the bundled browser host runs (#343): see bundledHostProfile.
+    COMPOSE_PROFILES: { generate: 'bundled-host-profile', autoGenerate: true },
     HEXACTRA_FABRIC_OTLP_ENDPOINT: { allowBlank: true },
   },
 } as const;
 
-/** 8 URL-safe characters from 6 random bytes: the noVNC password limit. */
-export const VIEWER_PASSWORD_GENERATOR = { kind: 'viewer-8', generate: () => randomBytes(6).toString('base64url') };
+/**
+ * `COMPOSE_PROFILES` on the first deploy that knows it (#343): browsers belong
+ * on nodes at home (docs/nodes.md), so a NEW deployment runs no bundled host
+ * (`none`, a profile nothing uses). A deployment that already has the bundled
+ * host's profiles (its `fabric-host-data` volume) keeps it (`bundled-host`),
+ * and so does one where Docker cannot be asked. Set it yourself in
+ * infra/compose/.env to switch: `bundled-host` on, `none` off.
+ */
+export function bundledHostProfile(volumes: () => string | null = dockerVolumes): string {
+  const list = volumes();
+  if (list === null) return 'bundled-host';
+  return /(^|[_-])fabric-host-data$/m.test(list) ? 'bundled-host' : 'none';
+}
+
+function dockerVolumes(): string | null {
+  const r = spawnSync('docker', ['volume', 'ls', '--format', '{{.Name}}'], { encoding: 'utf8' });
+  return r.status === 0 ? String(r.stdout) : null;
+}
+
+export const BUNDLED_HOST_GENERATOR = { kind: 'bundled-host-profile', generate: () => bundledHostProfile() };
 
 /**
  * The CLI is `@marinoscar/platform-cli`, composed with this app's identity
@@ -70,6 +88,6 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   deploy: { appDir: 'console' },
   // Connect the console to the bundled fabric at the end of install and update (#309).
   deploySteps: FABRIC_CONNECT_STEPS,
-  envGenerators: [VIEWER_PASSWORD_GENERATOR],
+  envGenerators: [BUNDLED_HOST_GENERATOR],
   envSpecFragments: [FABRIC_ENV_FRAGMENT],
 };

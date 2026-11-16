@@ -1,25 +1,21 @@
 import { useCallback } from 'react';
-import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 /**
- * Opens a question's browser viewer in a new tab. The bundled local viewer
- * (`/viewer/local/`) needs a short-lived ticket first; the tab is opened
- * before the request so a popup blocker lets it through.
+ * Opens a question's browser view: a host's desktop page in this console
+ * (#343) in the same tab, any other link in a new tab.
  */
-export function useOpenViewer(onError: (message: string) => void): (viewerUrl: string) => Promise<void> {
-  const { api } = usePlatformHost();
-  return useCallback(
-    async (viewerUrl: string) => {
-      if (!viewerUrl.includes('/viewer/local/')) return void window.open(viewerUrl, '_blank', 'noopener');
-      const tab = window.open('', '_blank');
-      try {
-        const { url } = await api.post<{ url: string }>('/fleet/viewer-ticket', {});
-        if (tab) tab.location.href = url;
-      } catch (e) {
-        tab?.close();
-        onError(e instanceof Error ? e.message : 'Could not open the viewer');
-      }
-    },
-    [api, onError],
-  );
+export function useOpenViewer(_onError: (message: string) => void): (viewerUrl: string) => Promise<void> {
+  return useCallback(async (viewerUrl: string) => {
+    let url: URL;
+    try {
+      url = new URL(viewerUrl, window.location.origin);
+    } catch {
+      return;
+    }
+    if (url.origin === window.location.origin && /^\/fleet\/hosts\/[0-9a-f-]{36}\/desktop$/i.test(url.pathname)) {
+      window.location.assign(url.pathname);
+      return;
+    }
+    if (url.protocol === 'https:' || url.protocol === 'http:') window.open(url.toString(), '_blank', 'noopener');
+  }, []);
 }
