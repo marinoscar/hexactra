@@ -257,6 +257,8 @@ export function installSteps(
   steps.push(
     { what: `let ${NODE_USER} use the graphics card (groups video and render)`, argv: ['usermod', '-aG', 'video,render', NODE_USER] },
     { what: `make ${layout.home} private to ${NODE_USER}`, argv: ['chmod', '0700', layout.home] },
+    // Owned by the node user, so the agent can write its own state next to the credential.
+    { what: `create ${NODE_USER}'s config directory`, argv: ['install', '-d', '-m', '0700', '-o', NODE_USER, '-g', NODE_USER, `${layout.home}/.config`, `${layout.home}/.config/hexactra`] },
     { what: `create ${target}`, argv: ['install', '-d', '-m', '0755', target] },
     { what: `copy the agent ${o.bundleId} there (root-owned, read-only for ${NODE_USER})`, argv: ['cp', '-a', '--no-preserve=ownership', `${o.bundleDir}/.`, `${target}/`] },
     { what: 'point the agent at this version', argv: ['ln', '-sfn', target, `${layout.opt}/agent/current`] },

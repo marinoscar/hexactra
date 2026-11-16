@@ -126,6 +126,12 @@ Also:
 - The unattended desktop runs as a separate `hexactra` user, so a page in its browser cannot reach your home directory.
 - With nobody logged in there is no keyring. Chrome then stores saved passwords and cookies with a fixed key (`--password-store=basic`), so use full-disk encryption on the node.
 
+## Acceptance and security review
+
+- [nodes-acceptance.md](nodes-acceptance.md): the manual check on a real mini PC.
+- [nodes-security-review.md](nodes-security-review.md): each security invariant with the code and the test that proves it.
+- CI's **Unattended node end to end** job installs a node with the CLI on a real Ubuntu 24.04 machine on every change.
+
 ## Requirements
 
 - **OS:** Linux x86_64: Ubuntu 22.04 or 24.04, or Debian 12. Windows and macOS nodes are planned.
