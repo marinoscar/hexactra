@@ -454,6 +454,27 @@
       "web": "/fleet/hosts/:id/desktop"
     },
     {
+      "id": "fleet.takeover",
+      "description": "Take control of a host's desktop: its agent's next actions wait until the person releases it (a lease the fabric enforces, also on keyboard and mouse input)",
+      "rest": [
+        "GET /api/fleet/hosts/{id}/takeover",
+        "POST /api/fleet/hosts/{id}/takeover",
+        "POST /api/fleet/hosts/{id}/takeover/{leaseId}/renew",
+        "DELETE /api/fleet/hosts/{id}/takeover/{leaseId}"
+      ],
+      "cli": [
+        "fleet takeover",
+        "fleet release"
+      ],
+      "mcp": {
+        "none": "Taking over a browser is for a person, not an agent"
+      },
+      "tui": {
+        "none": "A terminal cannot show the desktop; use `fleet takeover` and the console"
+      },
+      "web": "/fleet/hosts/:id/desktop"
+    },
+    {
       "id": "fleet.agent",
       "description": "Run THIS machine as a browser host: install (verified bundle, Google Chrome with the extension by policy or Chrome for Testing, enrollment, systemd user service), Chrome setup and status, doctor, status, logs, update, start/stop/restart, run in the foreground, sandbox helper, uninstall",
       "rest": [

@@ -56,6 +56,12 @@ pub enum StoreError {
     /// erased or expired.
     #[error("{0}")]
     SecretUnavailable(String),
+    /// A person controls this host's desktop (#342): new actions wait.
+    #[error("a person is controlling this browser until {0}; try again after that")]
+    TakeoverActive(DateTime<Utc>),
+    /// Someone else holds the takeover lease.
+    #[error("{0} is controlling this desktop")]
+    TakeoverHeld(String),
 }
 
 pub(super) struct HostEntry {
@@ -78,6 +84,8 @@ pub(super) struct HostEntry {
     /// The agent polls with `commands=true` and can run host commands.
     pub(super) accepts_commands: bool,
     pub(super) command_queue: VecDeque<Uuid>,
+    /// A person's takeover lease (#342); not persisted.
+    pub(super) takeover: Option<super::takeover::Lease>,
 }
 
 struct OperationEntry {
@@ -315,6 +323,7 @@ impl RuntimeStore {
                         draining: h.draining,
                         accepts_commands: false,
                         command_queue: VecDeque::new(),
+                        takeover: None,
                     },
                 );
             }
@@ -370,6 +379,7 @@ impl RuntimeStore {
                         draining: false,
                         accepts_commands: false,
                         command_queue: VecDeque::new(),
+                        takeover: None,
                     },
                 );
             }
@@ -824,6 +834,15 @@ impl RuntimeStore {
             return Err(StoreError::HandoffPending(h));
         }
         let host_id = session.host_id;
+        if let Some(until) = inner
+            .hosts
+            .get(&host_id)
+            .and_then(|h| h.takeover.as_ref())
+            .filter(|l| l.expires_at > Utc::now())
+            .map(|l| l.expires_at)
+        {
+            return Err(StoreError::TakeoverActive(until));
+        }
         if !inner.hosts.contains_key(&host_id) {
             return Err(StoreError::NotFound("host"));
         }

@@ -795,6 +795,125 @@ paths:
           description: host_offline or desktop_unavailable
         '429':
           description: Too many open desktops
+  /v1/hosts/{id}/takeover:
+    get:
+      tags:
+      - desktop
+      summary: '`GET /v1/hosts/{id}/takeover`: the live lease, or 404.'
+      operationId: current
+      parameters:
+      - name: id
+        in: path
+        description: Host id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lease'
+        '404':
+          description: Nobody controls it
+    post:
+      tags:
+      - desktop
+      summary: '`POST /v1/hosts/{id}/takeover`'
+      operationId: take_over
+      parameters:
+      - name: id
+        in: path
+        description: Host id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TakeoverRequest'
+        required: true
+      responses:
+        '201':
+          description: The person controls the desktop; new actions on this host answer 409 takeover_active
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lease'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: Unknown host
+        '409':
+          description: 'takeover_held: someone else controls it'
+  /v1/hosts/{id}/takeover/{lease_id}:
+    delete:
+      tags:
+      - desktop
+      summary: '`DELETE /v1/hosts/{id}/takeover/{lease_id}`'
+      operationId: release
+      parameters:
+      - name: id
+        in: path
+        description: Host id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: lease_id
+        in: path
+        description: Lease id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '204':
+          description: 'Released: the agent continues'
+        '404':
+          description: No such lease
+  /v1/hosts/{id}/takeover/{lease_id}/renew:
+    post:
+      tags:
+      - desktop
+      summary: '`POST /v1/hosts/{id}/takeover/{lease_id}/renew`'
+      operationId: renew
+      parameters:
+      - name: id
+        in: path
+        description: Host id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: lease_id
+        in: path
+        description: Lease id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenewRequest'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Lease'
+        '404':
+          description: No such live lease
   /v1/operations/{id}:
     get:
       tags:
@@ -2026,6 +2145,29 @@ components:
       description: |-
         What `GET /v1/hosts/{id}/next` returns: an operation, or (to agents that
         poll with `commands=true`) a host command wrapped as `{"command": …}`.
+    Lease:
+      type: object
+      required:
+      - lease_id
+      - host_id
+      - actor
+      - started_at
+      - expires_at
+      properties:
+        actor:
+          $ref: '#/components/schemas/TakeoverActor'
+        expires_at:
+          type: string
+          format: date-time
+        host_id:
+          type: string
+          format: uuid
+        lease_id:
+          type: string
+          format: uuid
+        started_at:
+          type: string
+          format: date-time
     OperationResult:
       type: object
       description: '`POST /v1/operations/{id}/result`'
@@ -2454,6 +2596,16 @@ components:
       enum:
       - active
       - ended
+    RenewRequest:
+      type: object
+      description: '`POST /v1/hosts/{id}/takeover/{lease_id}/renew`'
+      properties:
+        ttl_s:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
     RespondHandoffRequest:
       type: object
       description: '`POST /v1/handoffs/{id}/respond`'
@@ -2560,6 +2712,33 @@ components:
           description: Browser profile this session drives.
         status:
           $ref: '#/components/schemas/RemoteSessionStatus'
+    TakeoverActor:
+      type: object
+      description: Who holds a lease.
+      required:
+      - user_id
+      properties:
+        display_name:
+          type:
+          - string
+          - 'null'
+        user_id:
+          type: string
+          description: The console user; a desktop tunnel opened for the same user may send input.
+    TakeoverRequest:
+      type: object
+      description: '`POST /v1/hosts/{id}/takeover`'
+      required:
+      - actor
+      properties:
+        actor:
+          $ref: '#/components/schemas/TakeoverActor'
+        ttl_s:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
     WebhookDelivery:
       type: object
       description: One delivery attempt.

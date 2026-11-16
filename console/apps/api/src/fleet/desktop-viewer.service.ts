@@ -135,6 +135,60 @@ export class DesktopViewerService {
     return count;
   }
 
+  /**
+   * Takes control of a host's desktop for this person (#342): the agent's
+   * next actions wait, and this person's desktop tunnel may send input.
+   */
+  async takeOver(userId: string, hostId: string): Promise<TakeoverLease> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { displayName: true, email: true } });
+    try {
+      const l = await this.fabric.request<FabricLease>('POST', `/v1/hosts/${hostId}/takeover`, {
+        body: { actor: { user_id: userId, display_name: user?.displayName ?? user?.email ?? undefined }, ttl_s: TAKEOVER_TTL_S },
+      });
+      this.logger.log(`takeover started: host ${hostId} by user ${userId}`);
+      return toLease(l);
+    } catch (e) {
+      throw takeoverError(e);
+    }
+  }
+
+  async renewTakeover(userId: string, hostId: string, leaseId: string): Promise<TakeoverLease> {
+    await this.ownLease(userId, hostId, leaseId);
+    try {
+      return toLease(await this.fabric.request<FabricLease>('POST', `/v1/hosts/${hostId}/takeover/${leaseId}/renew`, { body: { ttl_s: TAKEOVER_TTL_S } }));
+    } catch (e) {
+      throw takeoverError(e);
+    }
+  }
+
+  async release(userId: string, hostId: string, leaseId: string): Promise<void> {
+    await this.ownLease(userId, hostId, leaseId);
+    try {
+      await this.fabric.request('DELETE', `/v1/hosts/${hostId}/takeover/${leaseId}`);
+      this.logger.log(`takeover released: host ${hostId} by user ${userId}`);
+    } catch (e) {
+      throw takeoverError(e);
+    }
+  }
+
+  /** Who controls a host's desktop right now, if anyone. */
+  async currentTakeover(hostId: string): Promise<TakeoverLease | null> {
+    try {
+      return toLease(await this.fabric.request<FabricLease>('GET', `/v1/hosts/${hostId}/takeover`));
+    } catch (e) {
+      if (e instanceof FabricError && e.status === 404) return null;
+      throw takeoverError(e);
+    }
+  }
+
+  /** Only the person holding a lease renews or releases it. */
+  private async ownLease(userId: string, hostId: string, leaseId: string): Promise<void> {
+    const l = await this.currentTakeover(hostId);
+    if (!l || l.leaseId !== leaseId || l.userId !== userId) {
+      throw new NotFoundException({ code: 'TAKEOVER_NOT_FOUND', message: 'You do not control this desktop' });
+    }
+  }
+
   cookieHeader(hostId: string, token: string, secure: boolean): string {
     return `${DESKTOP_COOKIE}=${token}; Path=${viewerPath(hostId)}; Max-Age=${VIEWER_SESSION_TTL_S}; HttpOnly; SameSite=Strict${secure ? '; Secure' : ''}`;
   }
@@ -156,4 +210,41 @@ export function fabricError(e: unknown): Error {
     if (e.status === 429) return new ConflictException({ code: 'DESKTOP_BUSY', message: e.message });
   }
   return new ServiceUnavailableException({ code: 'FABRIC_UNAVAILABLE', message: 'The fabric is not reachable' });
+}
+
+/** A takeover lease asks for this long and is renewed while the page is open. */
+export const TAKEOVER_TTL_S = 300;
+
+interface FabricLease {
+  lease_id: string;
+  host_id: string;
+  actor: { user_id: string; display_name?: string };
+  started_at: string;
+  expires_at: string;
+}
+
+export interface TakeoverLease {
+  leaseId: string;
+  hostId: string;
+  userId: string;
+  displayName: string | null;
+  startedAt: string;
+  expiresAt: string;
+}
+
+const toLease = (l: FabricLease): TakeoverLease => ({
+  leaseId: l.lease_id,
+  hostId: l.host_id,
+  userId: l.actor.user_id,
+  displayName: l.actor.display_name ?? null,
+  startedAt: l.started_at,
+  expiresAt: l.expires_at,
+});
+
+function takeoverError(e: unknown): Error {
+  if (e instanceof FabricError && e.status === 409 && e.code === 'takeover_held') {
+    return new ConflictException({ code: 'TAKEOVER_HELD', message: e.message });
+  }
+  if (e instanceof FabricError && e.status === 404) return new NotFoundException({ code: 'TAKEOVER_NOT_FOUND', message: e.message });
+  return fabricError(e);
 }
