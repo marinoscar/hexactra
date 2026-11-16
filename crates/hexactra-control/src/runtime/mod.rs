@@ -6,6 +6,7 @@ pub mod api;
 pub mod artifacts;
 pub mod credentials;
 mod credentials_api;
+pub mod desktop;
 pub mod events;
 mod events_api;
 pub mod handoff;

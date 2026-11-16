@@ -152,6 +152,39 @@ Host commands manage a host's profiles and browsers rather than act in a session
   - `hexactra-fabric profile create|delete|close|restart NAME [--host ID]`. `delete` needs `--yes`.
   - `hexactra-fabric host drain|undrain|commands HOST`.
 
+## Remote desktop tunnels
+
+A person can see and use a node's desktop through the console (#338, [nodes.md](nodes.md)). The fabric joins two WebSockets and relays the desktop stream (RFB) between them; the node opens no inbound port.
+
+1. `POST /v1/hosts/{id}/desktop-sessions` (client token, body `{ "actor": { "user_id", "org_id", "display_name" } }`) returns `201 { tunnel_id, host_id, connect_token, expires_at }` and sends the host an `open_desktop` command.
+   - `404` unknown host
+   - `409 host_offline`, `409 desktop_unavailable` (the host registered no `--desktop-vnc`)
+   - `429 too_many_desktops`: at most `HEXACTRA_DESKTOP_MAX_PER_HOST` (2) per host and `HEXACTRA_DESKTOP_MAX` (50) per fabric.
+2. The viewer opens `GET /v1/desktop/{tunnel_id}/connect` as a WebSocket with `Authorization: Bearer hxd_…`.
+   - The token works once and lasts 30 seconds. Only its hash is stored.
+   - The fabric waits up to 20 seconds for the node.
+3. The agent dials `GET /v1/hosts/{host_id}/desktop/{tunnel_id}` with its own host credential, after connecting its local desktop server (a Unix socket or a loopback port). If it cannot, the command fails with `desktop_unavailable`, `desktop_busy`, `vnc_unavailable` or `tunnel_failed`.
+
+The relay forwards binary messages (up to 1 MiB each) both ways and pings both legs every 20 seconds.
+
+| Close code | Meaning |
+|---|---|
+| 1000 | The other leg closed |
+| 4504 | The node did not connect in time |
+| 4408 | Idle for `HEXACTRA_DESKTOP_IDLE_S` (900 s) |
+| 4000 | Open for `HEXACTRA_DESKTOP_MAX_S` (3600 s) |
+
+**Events:**
+- `desktop.requested`, with `actor`;
+- `desktop.opened`;
+- `desktop.closed`, with `reason`, `bytes_up`, `bytes_down` and `duration_ms`.
+
+**Metrics:** `hexactra.desktop.tunnels`, `hexactra.desktop.tunnel_bytes{direction}`, `hexactra.desktop.tunnel_failures{reason}` and `hexactra.desktop.tunnel_duration`.
+
+Tokens appear in no event, log or URL. Tunnels live in the memory of the fabric replica both legs reach, so run one `fabric-control` replica.
+
+**On the console domain:** only the node's leg is published, at `https://<console>/fabric/v1/hosts/<id>/desktop/<tunnel>`. Creating tunnels and the viewer's leg stay on the private network.
+
 ## Actions
 
 Actions are JSON objects tagged by `type`. `tab_id` is optional on tab-scoped actions; without it the active tab of the last focused window is used.

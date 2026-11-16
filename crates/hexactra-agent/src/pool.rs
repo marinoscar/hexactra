@@ -259,6 +259,9 @@ impl BrowserPool {
             HostCommand::RestartBrowser { profile } => self.restart_browser(profile, left).await,
             HostCommand::CloseBrowser { profile } => self.close_browser(profile, left).await,
             HostCommand::Drain { .. } => Ok(serde_json::json!({})),
+            HostCommand::OpenDesktop { .. } => Err(anyhow::anyhow!(
+                "the agent opens desktops, not the browser pool"
+            )),
         };
         match r {
             Ok(v) => OperationResult {

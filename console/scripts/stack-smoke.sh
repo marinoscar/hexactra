@@ -101,6 +101,11 @@ curl -fsS -X POST "$fabric_pub/v1/hosts/register" -H "authorization: Bearer $hos
 next_code=$(curl -s -o /dev/null -w '%{http_code}' -H "authorization: Bearer $host_token" "$fabric_pub/v1/hosts/$host_id/next?wait_ms=1000&browser_connected=false")
 case "$next_code" in 200|204) ;; *) fail "long-poll through /fabric/ answered $next_code" ;; esac
 [ "$(curl -s -o /dev/null -w '%{http_code}' "$fabric_pub/v1/hosts/$host_id/next?wait_ms=1")" = 401 ] || fail "/fabric/ host routes must require the host credential"
+# Desktop tunnels (#338): only the node's leg is published, and it needs the host credential.
+zero=00000000-0000-4000-8000-000000000000
+[ "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$fabric_pub/v1/hosts/$host_id/desktop-sessions")" = 404 ] || fail "desktop-sessions must not be published"
+[ "$(curl -s -o /dev/null -w '%{http_code}' "$fabric_pub/v1/desktop/$zero/connect")" = 404 ] || fail "the viewer's tunnel leg must not be published"
+[ "$(curl -s -o /dev/null -w '%{http_code}' "$fabric_pub/v1/hosts/$host_id/desktop/$zero")" = 401 ] || fail "the node's tunnel leg must require the host credential"
 dc exec -T fabric-control hexactra-fabric --url http://127.0.0.1:8787 admin revoke-host "$host_id" >/dev/null 2>&1 || true
 pass "browser hosts enroll, register and long-poll over HTTPS at /fabric/; private APIs are not published"
 

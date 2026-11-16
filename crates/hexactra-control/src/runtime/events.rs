@@ -116,6 +116,11 @@ impl EventLog {
         (rx, replay)
     }
 
+    /// Every event still in the buffer, oldest first.
+    pub fn recent(&self) -> Vec<FabricEvent> {
+        self.lock().buffer.iter().cloned().collect()
+    }
+
     /// Latest assigned seq (0 if none).
     pub fn last_seq(&self) -> u64 {
         self.lock().next_seq - 1
