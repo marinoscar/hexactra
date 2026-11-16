@@ -150,16 +150,27 @@ Everything else under `/fabric/` answers 404: the fabric's client, admin and ope
 
 **Real time.** The agent keeps one long-poll request open (`GET …/next`, up to 30 s). The fabric answers it the moment work is queued for that host, and the agent posts each result straight back. Work starts within milliseconds, with no polling delay. A 4-core machine handles over 1,000 actions a second ([capacity.md](capacity.md)).
 
-**Steps:**
-1. **Fleet → Enroll host** (or `hexactra fleet enroll --name <name>`). It prints a single-use command already pointing at `https://<console>/fabric`:
-   `hexactra-agent daemon --url https://<console>/fabric --enrollment-token hxe_… --name <name>`.
-2. **Install the agent on the machine:**
-   ```bash
-   git clone https://github.com/marinoscar/hexactra && cd hexactra && scripts/install-remote-control.sh --no-services
-   ```
-   This needs Rust, Node 22+, pnpm and Chromium. See [remote-control-quickstart.md](../../../docs/remote-control-quickstart.md) for attach and launch modes.
-3. **Run the printed command once.** The agent swaps the token for its own credential in `~/.config/hexactra/host-credential.json`. Then run it as a service (`systemctl --user edit hexactra-agent`): set `HEXACTRA_URL=https://<console>/fabric`, plus `HEXACTRA_BROWSER` and `HEXACTRA_EXTENSION_DIR` for launch mode.
-4. **Check it in Fleet.** The host shows as online. Create profiles on it and pick them in tasks.
+**Steps: only the `hexactra` CLI, on the machine that joins (Linux x86_64 desktop):**
+1. Install the CLI and log in: `hexactra login` (see [the CLI guide](../../apps/cli/README.md#install)).
+2. `hexactra agent install`. Or, in the terminal UI, open **Agent** and press `i`. It:
+   - downloads the agent bundle and verifies it;
+   - downloads Chrome for Testing, and sets up its sandbox helper with `sudo` once on Ubuntu 23.10 and later;
+   - enrolls the machine with your login;
+   - starts a systemd user service in your desktop session;
+   - waits until the host is online.
+3. Check it with `hexactra agent status`. Fleet also shows the host. Create profiles on it and pick them in tasks.
+
+**Managing the agent:**
+- `hexactra agent logs -f`
+- `hexactra agent update`
+- `hexactra agent stop`, `start` and `restart`
+- `hexactra agent uninstall --yes`: also revokes the host in Fleet.
+
+**Joining without being a Fleet admin.** An admin gives you the token from **Fleet → Enroll host**. You run:
+
+```bash
+hexactra agent install --enrollment-token hxe_… --agent-url https://<console>/fabric
+```
 
 **A fabric you run elsewhere.** If the console points at a fabric other than the bundled one, the enroll command uses that fabric's URL as it is.
 

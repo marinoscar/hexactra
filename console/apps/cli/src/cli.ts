@@ -20,6 +20,14 @@ async function main(): Promise<void> {
   process.exitCode = await cli.run(argv);
 }
 
+// The reader went away (`hexactra … | head`, `| grep -q`): stop quietly, as Unix tools do, instead of crashing on EPIPE.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on('error', (error: NodeJS.ErrnoException) => {
+    if (error.code === 'EPIPE') process.exit(process.exitCode ?? 0);
+    throw error;
+  });
+}
+
 process.on('unhandledRejection', (reason) => {
   process.stderr.write(`${formatError(reason)}\n`);
   process.exitCode = EXIT.FAILURE;

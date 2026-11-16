@@ -110,6 +110,7 @@ Run `hexactra` with no arguments in a real terminal. Use ↑ ↓ to move, Enter 
 | **Inbox** | What agents are waiting for: a CAPTCHA, a code, a sign-in or a confirmation. Type the answer and press Enter; a secret shows as dots. `x` declines. |
 | **Runs** | Your runs and their status. Enter opens a run's steps, `c` cancels a run, `r` refreshes. |
 | **Fleet** | Browser hosts and their profiles. `d` drains or undrains a host, `r` refreshes. |
+| **Agent** | This machine as a browser host: its install, browser, service and Fleet state. `i` installs (or repairs), `u` updates, `s` starts or stops, `r` restarts, `l` shows the log, `x` uninstalls. |
 | **Call an endpoint** | Any REST call, interactively. |
 | **Status**, **Jobs queue** | The server's health and its background job queue. |
 | **Worker node**, **Deploy** | Run this machine as a worker node, or install and update the console on a server. |
@@ -188,6 +189,38 @@ hexactra fleet revoke <host>          # its credential stops working and its ses
 hexactra fleet commands <host>        # recent host commands
 hexactra fleet profile --help         # create, restart, close and delete profiles
 ```
+
+### Agent: run this machine as a browser host
+
+One command turns a Linux x86_64 desktop into a browser host. You need no script, no source build and no VPN:
+
+```bash
+hexactra agent install                # needs `hexactra login` as someone with fleet:write
+hexactra agent status                 # version, browser, service, and online/offline in Fleet
+hexactra agent logs [-f]              # the service's log
+hexactra agent update                 # latest agent and Chrome for Testing, then a restart
+hexactra agent stop | start | restart
+hexactra agent uninstall --yes        # stops it and revokes the host in Fleet (profiles are kept)
+```
+
+**What `install` does:**
+1. Downloads the agent bundle from the project's releases and verifies its sha256, and the sha256 of every file in it.
+2. Downloads Chrome for Testing. It loads the Hexactra extension, which branded Chrome ignores, and it can start the native host, which the snap Chromium blocks.
+3. On Ubuntu 23.10 and later, installs Chrome's sandbox helper with `sudo`, once (`hexactra agent sandbox` repeats this step).
+4. Enrolls the machine through your console login.
+5. Stores its credential in `~/.config/hexactra/host-credential.json` (mode 600). The credential appears in no command line, service file or log.
+6. Starts a systemd user service that runs with your desktop session.
+7. Waits until Fleet shows the host online.
+
+It reaches the console over HTTPS at `https://<console>/fabric`. Re-running `install` repairs or reconfigures the agent and keeps the same host; `--reenroll` makes a new host.
+
+**Options:**
+- `--name`: the host's name in Fleet.
+- `--max-browsers`: profiles open at once, 300–600 MB each.
+- `--browser <path>`: your own Chromium or Chrome for Testing.
+- `--version`: a specific agent release.
+- `--no-service`: install without a service; then `hexactra agent run` runs the agent in the foreground.
+- `--enrollment-token hxe_… --agent-url <url>`: join with a token an administrator made (Fleet → Enroll host), without logging in.
 
 ### MCP for agent frameworks
 
