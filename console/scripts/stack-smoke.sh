@@ -131,7 +131,8 @@ for i in $(seq 1 30); do
 done
 dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status | grep -q 'ci-cli-host .*online=true' \
   || { kill "$agent_pid" 2>/dev/null; cat "$agent_tmp/agent.log" >&2; fail "the CLI-installed agent did not come online over /fabric/"; }
-"${cli_env[@]}" node "$console/apps/cli/dist/cli.js" agent status | grep -q 'Host:     ci-cli-host' || fail "hexactra agent status"
+agent_status=$("${cli_env[@]}" node "$console/apps/cli/dist/cli.js" agent status) || fail "hexactra agent status"
+grep -q 'Host:     ci-cli-host' <<<"$agent_status" || fail "hexactra agent status: $agent_status"
 kill "$agent_pid" 2>/dev/null || true
 "${cli_env[@]}" node "$console/apps/cli/dist/cli.js" agent uninstall --yes --keep-host >/dev/null || fail "hexactra agent uninstall"
 [ ! -e "$agent_tmp/home/config/hexactra/host-credential.json" ] || fail "uninstall left the host credential"
