@@ -158,7 +158,7 @@ Everything else under `/fabric/` answers 404: the fabric's client, admin and ope
 
 **Steps: only the `hexactra` CLI, on the machine that joins (Linux x86_64 desktop):**
 1. Install the CLI and log in: `hexactra login` (see [the CLI guide](../../apps/cli/README.md#install)).
-2. `hexactra agent install`. Or, in the terminal UI, open **Agent** and press `i`. It:
+2. `hexactra agent install`. Or, in the terminal UI, open **Agent ▸ This machine as a browser node** and press `i`. It:
    - downloads the agent bundle and verifies it;
    - downloads Chrome for Testing, and sets up its sandbox helper with `sudo` once on Ubuntu 23.10 and later;
    - enrolls the machine with your login;

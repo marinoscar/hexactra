@@ -2,10 +2,10 @@
 
 The `hexactra` command-line client for the hexactra Console. Assign browser goals to AI agents, watch their runs, answer what they wait for, and manage the browser fleet, from a terminal or from scripts.
 
-Run `hexactra` with no arguments to open the terminal UI:
+Run `hexactra` with no arguments to open the terminal UI. Its menu is grouped (Agent, Worker, Server, Developer, Account) and changes once you log in:
 
 <p align="center">
-  <img src="docs/images/tui.png" alt="The hexactra terminal UI logged out: the Trace mark and the wordmark above the menu (Log in, Agent, Worker, Server, Developer)" width="760">
+  <img src="docs/images/tui-logged-in.png" alt="The hexactra terminal UI logged in: the Trace mark and the wordmark above the grouped menu (Agent, Worker, Server, Developer, Account)" width="760">
 </p>
 
 - **Every console capability, from a terminal:** tasks, runs, the handoff inbox, schedules, fleet, the fabric connection, and an MCP server for agent frameworks.
@@ -111,7 +111,17 @@ The menu is grouped, and it changes with the login state (the tree is in `src/me
 |---|---|
 | Agent ▸, Worker ▸, Server ▸, Developer ▸, Account ▸, Quit | Log in…, Agent ▸, Worker ▸, Server ▸, Developer ▸, Quit |
 
-Logged out, the entries that need a server are hidden, and a note under the menu says what logging in adds.
+Logged out, the entries that need a server are hidden, and a note under the menu says what logging in adds:
+
+<p align="center">
+  <img src="docs/images/tui.png" alt="The hexactra terminal UI logged out: Log in, Agent, Worker, Server, Developer, and a note that logging in shows Inbox, Runs, Fleet, Jobs queue and Call an endpoint" width="760">
+</p>
+
+Enter a group (or press its number) to see its entries. Esc goes back up. For example, **Agent**:
+
+<p align="center">
+  <img src="docs/images/tui-agent.png" alt="The Agent group: Inbox, Runs, Fleet, and this machine as a browser node" width="760">
+</p>
 
 | Group | Entry | What it does | Logged out |
 |---|---|---|---|

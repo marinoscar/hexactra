@@ -90,6 +90,7 @@ The `hexactra` CLI and its terminal UI use the dark-scheme tokens, which read we
 Color is off under `NO_COLOR`, `--no-color` and `TERM=dumb`.
 
 - The theme and the banner live in `console/apps/cli/src/brand.ts`. They reach the platform CLI through `createCli({ tuiTheme, tuiMenuRoot })`.
+- The root menu is grouped (Agent, Worker, Server, Developer, Account) and differs logged in and logged out; the tree is `console/apps/cli/src/menu.ts` (`createCli({ tuiMenu })`), and its logged-out note is the `tuiMenuRoot` footnote. Screenshots: [console/apps/cli/README.md](../../console/apps/cli/README.md#the-terminal-ui).
 - The banner is the Trace mark in Unicode Braille beside the wordmark and tagline. It shrinks to a smaller mark under 60 columns and to `⬡ hexactra` under 26. `hexactra --help` prints it too, as plain text when piped.
 - The Braille mark (`console/apps/cli/src/brand-mark.ts`) is generated from `hexactra-mark-mono.svg`: `node scripts/brand/render-terminal-mark.mjs` (needs Playwright with Chromium).
 
