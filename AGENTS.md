@@ -97,7 +97,7 @@ Dev machine is Ubuntu 24.04 x86_64. Installed: Rust via rustup (stable, with cli
 
 ## Product in one paragraph
 
-A portable, self-hostable computer-use runtime letting authorized AI agents operate real graphical browsers (initially Chrome on Linux) through an HTTP API, TypeScript SDK, CLI and MCP, with persistent profiles, human-in-the-loop (HITL) control, and OpenTelemetry. The Chrome extension must also work **standalone** as an AI browser assistant (built-in chat, provider/model settings, OpenAI-compatible providers) without a Hexactra server — a v1 requirement (§25).
+A portable, self-hostable computer-use runtime letting authorized AI agents operate real graphical browsers (initially Chrome on Linux) through an HTTP API, TypeScript SDK, CLI and MCP, with persistent profiles, human-in-the-loop (HITL) control, and OpenTelemetry. Browsers run on **nodes**: the primary node is a machine on the owner's residential network (sites block datacenter IPs), connected outbound over HTTPS to the console, in unattended mode (its own GPU-backed virtual desktop, nobody logged in) or attended mode (the person's own desktop and Chrome), never headless (docs/nodes.md, epic #333). The Chrome extension must also work **standalone** as an AI browser assistant (built-in chat, provider/model settings, OpenAI-compatible providers) without a Hexactra server — a v1 requirement (§25).
 
 ## Architecture (see VISION.MD §5–§6, §18)
 

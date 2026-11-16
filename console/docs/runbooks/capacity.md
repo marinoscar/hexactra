@@ -55,10 +55,12 @@ The control plane is not the limit: one 4-core machine handles more than a thous
 
 ## 3. Sizing
 
+Browsers belong on **nodes at home** where you can: a residential IP faces fewer challenges than a VPS ([docs/nodes.md](../../../docs/nodes.md)). An unattended node also runs a desktop (XFCE), so add about 1 GB of RAM for it. The bundled VPS host is optional.
+
 | Deployment | Console + fabric machine | Browser hosts | Settings |
 |---|---|---|---|
-| Just me (1–3 profiles) | 2 vCPU, 4 GB: everything on one VPS, bundled host included | Bundled | `HEXACTRA_MAX_BROWSERS=2`, `JOBS_WORKER_CONCURRENCY=2` |
-| Family or small team (≈10 profiles, ≤5 runs at once) | 4 vCPU, 8 GB | Bundled, plus desktops where people already sign in | `HEXACTRA_MAX_BROWSERS=3` on the VPS, `JOBS_WORKER_CONCURRENCY=5` |
+| Just me (1–3 profiles) | 2 vCPU, 4 GB on one VPS | One home node (a mini PC, 8 GB), or the bundled host | `HEXACTRA_MAX_BROWSERS=2`, `JOBS_WORKER_CONCURRENCY=2` |
+| Family or small team (≈10 profiles, ≤5 runs at once) | 4 vCPU, 8 GB | Home nodes, unattended plus attended desktops where people already sign in | `HEXACTRA_MAX_BROWSERS=3` per node, `JOBS_WORKER_CONCURRENCY=5` |
 | Team fleet (≈50 profiles, ≤20 runs at once) | 4 vCPU, 8 GB for console and fabric | 5–10 hosts of 4 vCPU and 8–16 GB, 3–6 browsers each | `JOBS_WORKER_CONCURRENCY=20`, or 2 API replicas with `JOBS_WORKER_MODE` split |
 | Large (hundreds of profiles) | As above. The control plane holds 100 hosts × 4 profiles at under 150 MB | One host per 4–6 browsers | Drain hosts for maintenance (Fleet → Drain); the **Browser host offline** alert watches them |
 

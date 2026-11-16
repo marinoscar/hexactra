@@ -83,14 +83,14 @@ The full reference is [`api/openapi.yaml`](../api/openapi.yaml) (OpenAPI 3.1).
 | Method and path | Who | Purpose |
 |---|---|---|
 | `GET /v1/health` | anyone | Liveness and version |
-| `GET /v1/hosts` | client | Hosts, with `online`, `browser_connected`, `on_demand` (launches its browser when needed) and `viewer_url` |
+| `GET /v1/hosts` | client | Hosts, with `online`, `browser_connected`, `on_demand` (launches its browser when needed) and `viewer_url`. *Planned* (#336): `mode` (`unattended`, `attended`, `container`) and `desktop` (true when the host can share its desktop); `viewer_url` is then deprecated |
 | `POST /v1/sessions` | client | Create a session; body `{ "host_id"?, "label"?, "profile"?, "create_profile"? }`. `profile` defaults to `default`. Without `host_id` the control plane picks the most recently seen host that has a connected browser or launches one on demand. `503 no_host_available` if none |
 | `GET /v1/sessions`, `GET /v1/sessions/{id}` | client | List or read sessions |
 | `DELETE /v1/sessions/{id}` | client | End a session; queued operations become `cancelled` |
 | `POST /v1/sessions/{id}/actions` | client | Run one action. Body `{ "action": {...}, "timeout_ms"? }`. Waits for a terminal state and returns the operation. `?async=true` returns `202` at once |
 | `GET /v1/operations/{id}?wait_ms=` | client | Read an operation, optionally waiting for it to finish |
 | `GET /v1/artifacts/{id}` | client | Bytes of a screenshot, by the handle in its result |
-| `POST /v1/hosts/register` | host | Register; body `{ "name", "version", "host_id"?, "viewer_url"? }` |
+| `POST /v1/hosts/register` | host | Register; body `{ "name", "version", "host_id"?, "viewer_url"? }`. *Planned* (#336, #338): `mode`, `desktop`, `desktop_protocol` (`rfb` or `kasmvnc`) |
 | `GET /v1/hosts/{id}/next?wait_ms=&browser_connected=&on_demand=&profiles=&running=&commands=` | host | Long-poll (max 30 s) for the next operation, or with `commands=true` a host command (`{ "command": {...} }`, sent first); `204` when none |
 | `POST /v1/hosts/{id}/operations/{op}/result` | host | Report `{ "ok", "result"?, "error"? }`. Only the host the operation was dispatched to may report, once |
 | `POST /v1/hosts/{id}/commands` | client | Run a [host command](#host-commands); body `{ "command": {...}, "timeout_ms"? }`. Waits for the result; `?async=true` returns `202` |

@@ -21,7 +21,9 @@ Hexactra supports running browser automation sessions on multiple platforms. Eac
 **Supported Distributions:**
 - Ubuntu 22.04 LTS and later
 - Debian 12 and later
-- Fedora 38 and later
+- Fedora 38 and later (developer builds; `hexactra agent install` nodes support Ubuntu and Debian x86_64)
+
+Nodes, the primary deployment, are described in [nodes.md](nodes.md).
 
 **Requirements:**
 - X11 or Wayland display server
@@ -30,8 +32,9 @@ Hexactra supports running browser automation sessions on multiple platforms. Eac
 
 **Capabilities:**
 - ✅ Interactive sessions (user logged in)
-- ✅ Unattended sessions (no user logged in, headless)
-- ✅ Virtual display (Xvfb) support
+- ✅ Unattended sessions: no user logged in, **headful** Chrome on a virtual display. Planned for nodes (#340): KasmVNC + XFCE using the machine's integrated GPU. Chrome is never run headless.
+- ✅ Attended sessions: the logged-in user's own desktop and Chrome (an X11 session for now; Wayland planned)
+- ✅ Virtual display support (Xvfb in the container host)
 - ✅ Native messaging host registration
 - ✅ Screen recording via X11
 

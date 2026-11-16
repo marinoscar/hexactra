@@ -51,7 +51,7 @@ hexactra-agent daemon \
   --idle-shutdown-s 900          # close after 15 idle minutes; 0 keeps it open
 ```
 
-- The browser needs a display. Use your desktop session, or Xvfb on a headless machine.
+- The browser needs a display. Use your desktop session, or Xvfb on a machine without a monitor. For a managed node (unattended or attended, installed with `hexactra agent install`), see [nodes.md](nodes.md).
 - Use Chromium or Chrome for Testing: branded Google Chrome ignores `--extension-dir` (`--load-extension`).
 - Each profile is a subdirectory of `--profiles-dir`, with its own cookies and sign-ins. `--max-browsers` (default 1) caps how many run at once: at the cap, the least recently used idle browser is closed to make room.
 - Idle and evicted browsers are closed through the extension, so Chromium flushes cookies and storage. Chromium usually restores the tabs they had when they reopen.
@@ -77,6 +77,8 @@ Add `--profile <name>` (or set `HEXACTRA_PROFILE`) to act in another browser pro
 
 ## 3. Use it from another machine
 
+> **Using the console?** Then you need none of this. A node connects outbound over HTTPS to `https://<console>/fabric/` and you use it from the web app, the Android app, MCP and the API ([nodes.md](nodes.md)). The options below are only for this standalone control plane.
+
 The control plane listens on `127.0.0.1` only. Pick one of these:
 
 **SSH tunnel (simplest)**
@@ -89,7 +91,7 @@ chmod 600 ~/.config/hexactra/api-token
 hexactra-fabric status
 ```
 
-**Private network (Tailscale or WireGuard)**
+**Private network (optional: Tailscale or WireGuard)**
 
 ```bash
 # on the Ubuntu machine: listen on the private interface only

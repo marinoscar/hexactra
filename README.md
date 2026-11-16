@@ -13,7 +13,8 @@
 
 **hexactra** is a self-hosted computer-use runtime. It lets AI agents operate real, visible Chrome browsers with persistent sign-ins, the way a person would: they click, type, read the page and wait for you when they need a human. You assign the work from the web, your phone, a terminal or your own agent framework, and you watch every step.
 
-- **Real browsers, not headless scripts.** Each browser profile keeps its cookies and sign-ins, on your desktop or an always-on server.
+- **Real browsers, not headless scripts.** Real, headful Google Chrome with persistent profiles that keep their cookies and sign-ins.
+- **On machines you own, at home.** Browsers run on **nodes**, such as a mini PC on your residential network, because many sites block or challenge datacenter IPs. A node connects out over HTTPS to your console, with no inbound ports and no VPN, and runs **unattended** (its own desktop, nobody logged in) or **attended** (your own desktop and Chrome). See [docs/nodes.md](docs/nodes.md).
 - **A human in the loop by design.** CAPTCHAs, one-time codes, sign-ins and purchases come to you as handoffs; your answer resumes the run.
 - **The model never sees secrets.** You type codes and passwords into a handoff, and the runner types them into the page.
 - **One capability, every surface.** Web app (installable PWA), Android app, CLI and TUI, REST with a TypeScript SDK, and MCP for agent frameworks.
@@ -76,7 +77,8 @@ flowchart LR
 ```
 
 - **The Console** is the single user-facing control point. It holds identity, roles, tasks, runs and the AI goal runner, and it is the only client that holds the fabric's service token.
-- **The Fabric** is the browser execution layer: a Rust control plane with durable state, and host agents that keep one Chromium per profile on a desktop, a VPS container or any machine.
+- **The Fabric** is the browser execution layer: a Rust control plane with durable state, and host agents that keep one browser per profile.
+- **Nodes** are where the host agents run. The primary node is a machine on your residential network (a mini PC at home), connected outbound over HTTPS, in unattended or attended mode, or both. A browser host bundled on the VPS is optional, and expect more challenges from sites there. See [docs/nodes.md](docs/nodes.md).
 - Architecture in depth: [VISION.MD §26](VISION.MD) (console and fabric) and §5 to §6.
 
 ## Get started
@@ -94,8 +96,17 @@ Re-running the same command updates the CLI. It prints the current and the new v
 Install options, commands and screenshots: [console/apps/cli/README.md](console/apps/cli/README.md).
 
 
-**Run the whole stack on a server** (console, fabric and a browser host in one Compose stack):
+**Run the console on a server** (console and fabric in one Compose stack, with an optional bundled browser host):
 [console/docs/runbooks/vps-stack.md](console/docs/runbooks/vps-stack.md)
+
+**Add a node at home** (the primary way to run browsers). On a Linux machine on your home network, with the CLI logged in to your console:
+
+```bash
+hexactra agent install                       # today: a browser host in your desktop session
+# planned (epic #333): hexactra agent install --mode unattended|attended|both
+```
+
+The node model, modes, security and troubleshooting: [docs/nodes.md](docs/nodes.md).
 
 **Drive your own signed-in Chrome on a Linux desktop**, from the `hexactra-fabric` CLI or the `hexactra-mcp` MCP server:
 

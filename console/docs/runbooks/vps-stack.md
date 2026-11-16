@@ -3,12 +3,12 @@
 One Docker Compose project runs:
 - the **console**: nginx, web, API and Postgres;
 - the **fabric control plane** (`fabric-control`);
-- one **containerized browser host** (`fabric-host`).
+- one **containerized browser host** (`fabric-host`). It is optional: the primary browsers run on **nodes at home** ([docs/nodes.md](../../../docs/nodes.md)), because sites challenge datacenter IPs. New deploys will leave it off (*Planned* #343).
 
-Only nginx is published, and only on `127.0.0.1`. A host proxy or Tailscale terminates TLS in front of it. The fabric is reachable only on the private `app-network`.
+Only nginx is published, and only on `127.0.0.1`. The host proxy terminates TLS in front of it (Tailscale is optional). The fabric is reachable only on the private `app-network`.
 
 ```text
-you (web, Android, CLI, MCP) ──HTTPS──▶ host proxy / Tailscale ──▶ nginx :3535 ──▶ web, /api
+you (web, Android, CLI, MCP) ──HTTPS──▶ host proxy ──▶ nginx :3535 ──▶ web, /api
                                                                      └─▶ /viewer/local/ (ticket-gated) ──▶ fabric-host:6080
 api ──http://fabric-control:8787 (hxs_ service token)──▶ fabric-control ◀── long-poll ── fabric-host (and your other hosts)
 ```
@@ -139,6 +139,8 @@ Then, signed in as admin:
 - Without a ticket or cookie, `/viewer/local/` answers `401` and nginx never contacts the host.
 
 ## 5. Add more hosts (desktop, other machines)
+
+This is how you add **nodes**, the recommended place to run browsers: a machine on your home network keeps a residential IP ([docs/nodes.md](../../../docs/nodes.md)).
 
 A browser host only makes outbound HTTPS requests to the console's own domain, at `https://<console>/fabric`. You need no VPN, no open port and no extra certificate.
 

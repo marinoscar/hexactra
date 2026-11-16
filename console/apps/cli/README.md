@@ -96,7 +96,7 @@ The device flow prints a code and opens your browser. Approve the machine there,
 | Situation | How |
 |---|---|
 | A machine without a browser | `hexactra login --server https://console.example.com --no-browser`, then open the printed URL anywhere |
-| Headless, with an existing personal access token | `hexactra login --server https://console.example.com --token pat_...` |
+| No browser on this machine, with an existing personal access token | `hexactra login --server https://console.example.com --token pat_...` |
 | CI or containers | Skip `login`. Set `HEXACTRA_SERVER_URL` and `HEXACTRA_TOKEN` |
 
 Create personal access tokens in the web app, under your settings (Access tokens).
