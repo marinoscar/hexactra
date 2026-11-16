@@ -4,7 +4,7 @@
 // against fakes, with the host token only ever in the 0600 credential file.
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deflateRawSync } from 'node:zlib';
@@ -12,6 +12,7 @@ import { deflateRawSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 
 import { agentStatus, ensureSandbox, installAgent, uninstallAgent, updateAgent, type AgentDeps, type ExecResult } from './agent.js';
+import { readUnattended } from './unattended.js';
 import { BUNDLE_NAME, bundleSource, fetchBundle } from './bundle.js';
 import { needsSetuidSandbox } from './chrome.js';
 import { agentPaths } from './paths.js';
@@ -192,6 +193,17 @@ describe('install, re-install and uninstall', () => {
     expect(api.deletes).toEqual([`/fleet/hosts/${HOST_ID}`]);
     expect(existsSync(paths.credential) || existsSync(paths.unit) || existsSync(paths.agentDir)).toBe(false);
     expect(existsSync(paths.profilesDir)).toBe(true);
+  });
+
+  it('keeps the unattended node\'s record when only the agent is uninstalled (#376)', async () => {
+    const { home, paths, d } = harness();
+    await installAgent(d, { bundle: makeBundle(home), browser: '/usr/bin/chromium' });
+    const record = join(paths.agentDir, 'unattended.json');
+    writeFileSync(record, JSON.stringify({ display: 90, resolution: '1920x1080' }));
+    await uninstallAgent(d, {});
+    expect(existsSync(paths.credential) || existsSync(paths.unit) || existsSync(paths.current) || existsSync(paths.state)).toBe(false);
+    expect(readdirSync(paths.agentDir)).toEqual(['unattended.json']);
+    expect(readUnattended(paths.agentDir)).toMatchObject({ display: 90 });
   });
 
   it('joins with an admin-minted token without the console login', async () => {

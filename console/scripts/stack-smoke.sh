@@ -131,7 +131,8 @@ grep -q 'Checksum verified' "$agent_tmp/install.log" || fail "hexactra agent ins
 ! grep -q "$hxe" "$agent_tmp/install.log" "$agent_tmp/home/data/hexactra/agent/install.json" || fail "the enrollment token was written out"
 "${cli_env[@]}" node "$console/apps/cli/dist/cli.js" agent run >"$agent_tmp/agent.log" 2>&1 &
 agent_pid=$!
-for i in $(seq 1 30); do
+# The agent starts its browser before it registers (up to 60 s), so wait longer than that.
+for i in $(seq 1 90); do
   dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status 2>/dev/null | grep -q 'ci-cli-host .*online=true' && break
   sleep 1
 done
