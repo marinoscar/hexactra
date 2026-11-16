@@ -3,7 +3,7 @@
 // (#326): the agent and native-host release binaries plus the built Chrome
 // extension, with a BUNDLE.json listing every file's sha256.
 //
-//   node scripts/package-agent-bundle.mjs [--target-dir target/release] [--out dist/agent]
+//   node scripts/package-agent-bundle.mjs [--target-dir target/release] [--extension-dir apps/chrome-extension/dist] [--out dist/agent]
 //
 // Writes <out>/hexactra-agent-linux-x86_64.tar.gz and its .sha256, then
 // re-extracts the archive and verifies every file against BUNDLE.json.
@@ -22,7 +22,7 @@ const arg = (name, fallback) => {
 };
 const targetDir = resolve(root, arg('--target-dir', 'target/release'));
 const outDir = resolve(root, arg('--out', 'dist/agent'));
-const extensionDir = join(root, 'apps/chrome-extension/dist');
+const extensionDir = resolve(root, arg('--extension-dir', 'apps/chrome-extension/dist'));
 const NAME = 'hexactra-agent-linux-x86_64';
 
 const fail = (msg) => {
