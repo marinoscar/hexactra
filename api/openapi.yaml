@@ -2168,6 +2168,20 @@ components:
         started_at:
           type: string
           format: date-time
+    MouseButton:
+      type: string
+      description: A mouse button.
+      enum:
+      - left
+      - middle
+      - right
+    MouseOp:
+      type: string
+      description: A low-level mouse operation (`mouse` action).
+      enum:
+      - move
+      - down
+      - up
     OperationResult:
       type: object
       description: '`POST /v1/operations/{id}/result`'
@@ -2415,10 +2429,17 @@ components:
             enum:
             - scroll
       - type: object
-        description: 'Capture the visible area of a tab. Result: `{ "mime": ..., "data": <base64> }`.'
+        description: |-
+          Capture the visible area of a tab. Result: `{ "mime": ..., "data": <base64> }`
+          (the control plane swaps `data` for an artifact handle). The image is
+          in CSS pixels, so its coordinates are the ones `click_at` takes. With
+          `marks`, interactive elements are boxed and numbered in the image and
+          the result lists them: `marks: [{ n, selector, x, y, w, h, text }]`.
         required:
         - type
         properties:
+          marks:
+            type: boolean
           tab_id:
             type:
             - integer
@@ -2428,6 +2449,320 @@ components:
             type: string
             enum:
             - screenshot
+      - type: object
+        description: |-
+          Run JavaScript in the page's main world and return its JSON value
+          (`{ "value": ... }`). The script is an expression or a block whose
+          last expression is the value; `await_promise` awaits a returned promise.
+        required:
+        - script
+        - type
+        properties:
+          await_promise:
+            type: boolean
+          script:
+            type: string
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - evaluate
+      - type: object
+        description: A trusted click at viewport CSS-pixel coordinates.
+        required:
+        - x
+        - y
+        - type
+        properties:
+          button:
+            $ref: '#/components/schemas/MouseButton'
+          click_count:
+            type:
+            - integer
+            - 'null'
+            format: int32
+            description: 2 for a double click.
+            minimum: 0
+          modifiers:
+            type: array
+            items:
+              type: string
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - click_at
+          x:
+            type: integer
+            format: int64
+          y:
+            type: integer
+            format: int64
+      - type: object
+        description: A trusted pointer move (hover), press or release.
+        required:
+        - op
+        - x
+        - y
+        - type
+        properties:
+          button:
+            $ref: '#/components/schemas/MouseButton'
+          op:
+            $ref: '#/components/schemas/MouseOp'
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - mouse
+          x:
+            type: integer
+            format: int64
+          y:
+            type: integer
+            format: int64
+      - type: object
+        description: A trusted drag from one point to another.
+        required:
+        - from_x
+        - from_y
+        - to_x
+        - to_y
+        - type
+        properties:
+          from_x:
+            type: integer
+            format: int64
+          from_y:
+            type: integer
+            format: int64
+          steps:
+            type:
+            - integer
+            - 'null'
+            format: int32
+            description: Intermediate pointer moves (default 10).
+            minimum: 0
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          to_x:
+            type: integer
+            format: int64
+          to_y:
+            type: integer
+            format: int64
+          type:
+            type: string
+            enum:
+            - drag
+      - type: object
+        description: A trusted mouse-wheel scroll at a point.
+        required:
+        - x
+        - y
+        - type
+        properties:
+          dx:
+            type: integer
+            format: int64
+          dy:
+            type: integer
+            format: int64
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - scroll_at
+          x:
+            type: integer
+            format: int64
+          y:
+            type: integer
+            format: int64
+      - type: object
+        description: Trusted typing at the focused element, as a keyboard would.
+        required:
+        - text
+        - type
+        properties:
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          text:
+            type: string
+          type:
+            type: string
+            enum:
+            - type_keys
+      - type: object
+        description: 'One trusted key press, with modifiers (`key: "a", modifiers: ["ctrl"]`).'
+        required:
+        - key
+        - type
+        properties:
+          key:
+            type: string
+          modifiers:
+            type: array
+            items:
+              type: string
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - key
+      - type: object
+        description: Capture the node's whole desktop (host agent). Screen pixels.
+        required:
+        - type
+        properties:
+          type:
+            type: string
+            enum:
+            - desktop_screenshot
+      - type: object
+        description: Click on the node's desktop at screen coordinates (host agent).
+        required:
+        - x
+        - y
+        - type
+        properties:
+          button:
+            $ref: '#/components/schemas/MouseButton'
+          click_count:
+            type:
+            - integer
+            - 'null'
+            format: int32
+            minimum: 0
+          type:
+            type: string
+            enum:
+            - desktop_click
+          x:
+            type: integer
+            format: int64
+          y:
+            type: integer
+            format: int64
+      - type: object
+        description: Move the desktop pointer (host agent).
+        required:
+        - x
+        - y
+        - type
+        properties:
+          type:
+            type: string
+            enum:
+            - desktop_move
+          x:
+            type: integer
+            format: int64
+          y:
+            type: integer
+            format: int64
+      - type: object
+        description: Drag on the desktop (host agent).
+        required:
+        - from_x
+        - from_y
+        - to_x
+        - to_y
+        - type
+        properties:
+          from_x:
+            type: integer
+            format: int64
+          from_y:
+            type: integer
+            format: int64
+          to_x:
+            type: integer
+            format: int64
+          to_y:
+            type: integer
+            format: int64
+          type:
+            type: string
+            enum:
+            - desktop_drag
+      - type: object
+        description: Type text into whatever has the desktop focus (host agent).
+        required:
+        - text
+        - type
+        properties:
+          text:
+            type: string
+          type:
+            type: string
+            enum:
+            - desktop_type
+      - type: object
+        description: |-
+          Press a key chord on the desktop, xdotool style: `Return`, `ctrl+l`,
+          `alt+F4` (host agent).
+        required:
+        - key
+        - type
+        properties:
+          key:
+            type: string
+          type:
+            type: string
+            enum:
+            - desktop_key
+      - type: object
+        description: |-
+          Scroll the desktop by wheel clicks, optionally after moving to a point
+          (host agent). Positive `dy` scrolls down.
+        required:
+        - dy
+        - type
+        properties:
+          dy:
+            type: integer
+            format: int64
+          type:
+            type: string
+            enum:
+            - desktop_scroll
+          x:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          y:
+            type:
+            - integer
+            - 'null'
+            format: int64
       - type: object
         description: Read visible text of the page or of `selector`.
         required:

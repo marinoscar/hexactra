@@ -70,7 +70,10 @@ async fn shoot(url: &str, session: uuid::Uuid, inline: bool) -> OperationView {
         .post(format!("{url}/v1/sessions/{session}/actions"))
         .bearer_auth(TOKEN)
         .json(&ActionRequest {
-            action: RemoteAction::Screenshot { tab_id: None },
+            action: RemoteAction::Screenshot {
+                marks: false,
+                tab_id: None,
+            },
             timeout_ms: Some(5_000),
             inline_artifacts: inline,
         })

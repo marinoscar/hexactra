@@ -811,7 +811,10 @@ async fn run() -> Result<()> {
             selector: selector.clone(),
             tab_id: *tab,
         },
-        Commands::Screenshot { tab, .. } => RemoteAction::Screenshot { tab_id: *tab },
+        Commands::Screenshot { tab, .. } => RemoteAction::Screenshot {
+            marks: false,
+            tab_id: *tab,
+        },
         Commands::Text {
             selector,
             max_chars,

@@ -1,6 +1,6 @@
 {
   "description": "Hexactra MCP server (hexactra-mcp): operate the user's browser through the control plane /v1 API.",
-  "instructions": "These tools operate a real Chrome browser that belongs to the user and is signed in to their accounts. Typical loop: browser_navigate, then browser_elements to get CSS selectors, then browser_click / browser_type, then browser_text or browser_screenshot to check the result. Act at a human pace and only on the user's own behalf. If a page shows a CAPTCHA, a verification code, a passkey prompt, a payment confirmation or any other security check, call browser_request_human and wait for the person; never try to solve or bypass the check yourself. Browser actions are paused while a request to the person is open. A secret the person gives (input=secret) is never shown to you: type it with browser_type_secret.",
+  "instructions": "These tools operate a real Chrome browser, and the computer it runs on, on behalf of the user who owns them; it is signed in to their accounts. Work like a person at the machine. Start with browser_navigate, then browser_elements (CSS selectors) and browser_click / browser_type. When the page structure does not help (canvas, custom widgets, unlabeled icons), look at it: browser_screenshot with marks=true numbers the interactive elements and gives their boxes, and browser_click_at / browser_mouse / browser_drag / browser_scroll_at / browser_type_keys / browser_key act by position with trusted input. browser_evaluate runs any JavaScript in the page. For anything outside the page (native dialogs, file pickers, other windows) use the browser_desktop_* tools on the whole screen. When the person themself is needed (a CAPTCHA puzzle, a code sent to their phone, a passkey), call browser_request_human; browser actions pause while it is open. A secret the person gives (input=secret) is never shown to you: type it with browser_type_secret.",
   "name": "hexactra",
   "tools": [
     {
@@ -233,10 +233,13 @@
       "name": "browser_text"
     },
     {
-      "description": "Capture the visible part of the tab as an image.",
+      "description": "Capture the visible part of the tab as an image, in CSS pixels (the coordinates browser_click_at takes). With marks=true, interactive elements are boxed and numbered, and their selectors and boxes are listed.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "marks": {
+            "type": "boolean"
+          },
           "tab_id": {
             "description": "Tab id from browser_tabs; defaults to the active tab.",
             "type": "integer"
@@ -246,6 +249,405 @@
         "type": "object"
       },
       "name": "browser_screenshot"
+    },
+    {
+      "description": "Run JavaScript in the page and return its JSON value. The script is an expression, or statements whose last expression is the value; await_promise awaits a returned promise.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "await_promise": {
+            "type": "boolean"
+          },
+          "script": {
+            "type": "string"
+          },
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "script"
+        ],
+        "type": "object"
+      },
+      "name": "browser_evaluate"
+    },
+    {
+      "description": "Trusted click at viewport CSS-pixel coordinates from browser_screenshot. click_count 2 double-clicks; button left, middle or right; modifiers alt, ctrl, meta, shift.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "button": {
+            "enum": [
+              "left",
+              "middle",
+              "right"
+            ],
+            "type": "string"
+          },
+          "click_count": {
+            "maximum": 3,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "modifiers": {
+            "items": {
+              "enum": [
+                "alt",
+                "ctrl",
+                "meta",
+                "shift"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          },
+          "x": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "y": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "type": "object"
+      },
+      "name": "browser_click_at"
+    },
+    {
+      "description": "Trusted pointer move (hover), button press or release at viewport coordinates.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "button": {
+            "enum": [
+              "left",
+              "middle",
+              "right"
+            ],
+            "type": "string"
+          },
+          "op": {
+            "enum": [
+              "move",
+              "down",
+              "up"
+            ],
+            "type": "string"
+          },
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          },
+          "x": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "y": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "op",
+          "x",
+          "y"
+        ],
+        "type": "object"
+      },
+      "name": "browser_mouse"
+    },
+    {
+      "description": "Trusted drag from one viewport point to another (sliders, drag and drop, drawing).",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "from_x": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "from_y": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "steps": {
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          },
+          "to_x": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "to_y": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from_x",
+          "from_y",
+          "to_x",
+          "to_y"
+        ],
+        "type": "object"
+      },
+      "name": "browser_drag"
+    },
+    {
+      "description": "Trusted mouse-wheel scroll at a viewport point (scrolls the element under it).",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "dx": {
+            "type": "integer"
+          },
+          "dy": {
+            "type": "integer"
+          },
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          },
+          "x": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "y": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "type": "object"
+      },
+      "name": "browser_scroll_at"
+    },
+    {
+      "description": "Type text into the focused element with trusted keyboard input, as a person would.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "name": "browser_type_keys"
+    },
+    {
+      "description": "Press one key with trusted keyboard input, optionally with modifiers (key a with modifiers [ctrl] selects all).",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "modifiers": {
+            "items": {
+              "enum": [
+                "alt",
+                "ctrl",
+                "meta",
+                "shift"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tab_id": {
+            "description": "Tab id from browser_tabs; defaults to the active tab.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "name": "browser_key"
+    },
+    {
+      "description": "Capture the computer's whole screen (outside the page too), in screen pixels.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "name": "browser_desktop_screenshot"
+    },
+    {
+      "description": "Click anywhere on the computer's screen, at screen coordinates from browser_desktop_screenshot.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "button": {
+            "enum": [
+              "left",
+              "middle",
+              "right"
+            ],
+            "type": "string"
+          },
+          "click_count": {
+            "maximum": 3,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "x": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "y": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "type": "object"
+      },
+      "name": "browser_desktop_click"
+    },
+    {
+      "description": "Move the computer's pointer to screen coordinates.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "x": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "y": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "type": "object"
+      },
+      "name": "browser_desktop_move"
+    },
+    {
+      "description": "Drag on the computer's screen.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "from_x": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "from_y": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "to_x": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "to_y": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from_x",
+          "from_y",
+          "to_x",
+          "to_y"
+        ],
+        "type": "object"
+      },
+      "name": "browser_desktop_drag"
+    },
+    {
+      "description": "Type text into whatever has focus on the computer (a native file dialog, another window).",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "name": "browser_desktop_type"
+    },
+    {
+      "description": "Press a key chord on the computer, xdotool style: Return, Escape, ctrl+l, alt+F4.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "name": "browser_desktop_key"
+    },
+    {
+      "description": "Scroll the computer's screen by mouse-wheel clicks (positive dy scrolls down), optionally at x,y.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "dy": {
+            "maximum": 100,
+            "minimum": -100,
+            "type": "integer"
+          },
+          "x": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "y": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "dy"
+        ],
+        "type": "object"
+      },
+      "name": "browser_desktop_scroll"
     },
     {
       "description": "Wait until an element matching selector exists (timeout_ms up to 60000).",

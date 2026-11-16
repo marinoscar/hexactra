@@ -961,7 +961,7 @@ impl RuntimeStore {
         op.secret_text = None;
         op.view.state = state;
         op.view.result = result.result;
-        if result.ok && matches!(op.view.action, RemoteAction::Screenshot { .. }) {
+        if result.ok && op.view.action.returns_image() {
             if let Some(r) = op.view.result.as_mut() {
                 Self::store_screenshot(&self.artifacts, op.view.session_id, r, op.inline_artifacts);
             }

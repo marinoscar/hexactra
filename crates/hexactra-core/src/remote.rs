@@ -11,8 +11,12 @@
 //! host agent --POST /v1/operations/{id}/result--> control plane --> client
 //! ```
 //!
-//! There is deliberately no "execute arbitrary JavaScript" action: remote
-//! callers can only perform the bounded operations listed here.
+//! Hexactra is a human emulator for its owner (epic #366): the agent may do
+//! anything a person at the machine could do. That includes running
+//! JavaScript in the page (`evaluate`), trusted mouse and keyboard input by
+//! position (`click_at`, `mouse`, `drag`, `scroll_at`, `type_keys`, `key`),
+//! marked screenshots for vision, and the node's whole OS desktop
+//! (`desktop_*`, executed by the host agent itself, never the extension).
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -27,6 +31,44 @@ pub const MAX_TYPE_TEXT_LEN: usize = 100_000;
 pub const MAX_WAIT_MS: u64 = 60_000;
 /// Maximum URL length accepted for navigation.
 pub const MAX_URL_LEN: usize = 8_192;
+/// Maximum JavaScript source a single `evaluate` action may carry.
+pub const MAX_SCRIPT_LEN: usize = 200_000;
+/// Largest coordinate (CSS or screen pixels) a positional action accepts.
+pub const MAX_COORD: i64 = 100_000;
+/// Longest key name or chord (`Enter`, `ctrl+shift+t`).
+pub const MAX_KEY_LEN: usize = 64;
+/// Modifier names accepted by `click_at` and `key`.
+pub const MODIFIERS: &[&str] = &["alt", "ctrl", "meta", "shift"];
+
+/// A mouse button.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MouseButton {
+    #[default]
+    Left,
+    Middle,
+    Right,
+}
+
+impl MouseButton {
+    fn is_left(&self) -> bool {
+        *self == MouseButton::Left
+    }
+}
+
+/// A low-level mouse operation (`mouse` action).
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MouseOp {
+    /// Move the pointer (hover).
+    Move,
+    /// Press a button.
+    Down,
+    /// Release a button.
+    Up,
+}
 /// What the control plane stores, reports and logs in place of a secret
 /// typed by `type_secret` or a `type` action with `sensitive: true`.
 pub const REDACTED_TEXT: &str = "[secret]";
@@ -104,10 +146,121 @@ pub enum RemoteAction {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tab_id: Option<i64>,
     },
-    /// Capture the visible area of a tab. Result: `{ "mime": ..., "data": <base64> }`.
+    /// Capture the visible area of a tab. Result: `{ "mime": ..., "data": <base64> }`
+    /// (the control plane swaps `data` for an artifact handle). The image is
+    /// in CSS pixels, so its coordinates are the ones `click_at` takes. With
+    /// `marks`, interactive elements are boxed and numbered in the image and
+    /// the result lists them: `marks: [{ n, selector, x, y, w, h, text }]`.
     Screenshot {
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        marks: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tab_id: Option<i64>,
+    },
+    /// Run JavaScript in the page's main world and return its JSON value
+    /// (`{ "value": ... }`). The script is an expression or a block whose
+    /// last expression is the value; `await_promise` awaits a returned promise.
+    Evaluate {
+        script: String,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        await_promise: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// A trusted click at viewport CSS-pixel coordinates.
+    ClickAt {
+        x: i64,
+        y: i64,
+        #[serde(default, skip_serializing_if = "MouseButton::is_left")]
+        button: MouseButton,
+        /// 2 for a double click.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        click_count: Option<u32>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        modifiers: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// A trusted pointer move (hover), press or release.
+    Mouse {
+        op: MouseOp,
+        x: i64,
+        y: i64,
+        #[serde(default, skip_serializing_if = "MouseButton::is_left")]
+        button: MouseButton,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// A trusted drag from one point to another.
+    Drag {
+        from_x: i64,
+        from_y: i64,
+        to_x: i64,
+        to_y: i64,
+        /// Intermediate pointer moves (default 10).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        steps: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// A trusted mouse-wheel scroll at a point.
+    ScrollAt {
+        x: i64,
+        y: i64,
+        #[serde(default)]
+        dx: i64,
+        #[serde(default)]
+        dy: i64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Trusted typing at the focused element, as a keyboard would.
+    TypeKeys {
+        text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// One trusted key press, with modifiers (`key: "a", modifiers: ["ctrl"]`).
+    Key {
+        key: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        modifiers: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Capture the node's whole desktop (host agent). Screen pixels.
+    DesktopScreenshot,
+    /// Click on the node's desktop at screen coordinates (host agent).
+    DesktopClick {
+        x: i64,
+        y: i64,
+        #[serde(default, skip_serializing_if = "MouseButton::is_left")]
+        button: MouseButton,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        click_count: Option<u32>,
+    },
+    /// Move the desktop pointer (host agent).
+    DesktopMove { x: i64, y: i64 },
+    /// Drag on the desktop (host agent).
+    DesktopDrag {
+        from_x: i64,
+        from_y: i64,
+        to_x: i64,
+        to_y: i64,
+    },
+    /// Type text into whatever has the desktop focus (host agent).
+    DesktopType { text: String },
+    /// Press a key chord on the desktop, xdotool style: `Return`, `ctrl+l`,
+    /// `alt+F4` (host agent).
+    DesktopKey { key: String },
+    /// Scroll the desktop by wheel clicks, optionally after moving to a point
+    /// (host agent). Positive `dy` scrolls down.
+    DesktopScroll {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        x: Option<i64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        y: Option<i64>,
+        dy: i64,
     },
     /// Read visible text of the page or of `selector`.
     Text {
@@ -179,28 +332,103 @@ fn check_selector(selector: &str) -> Result<(), ActionValidationError> {
     Ok(())
 }
 
-/// Only web pages may be opened remotely: `http`, `https` and `about:blank`.
-/// `javascript:`, `file:`, `chrome:`, `data:` and extension URLs are refused.
+/// Any URL a person could type in the address bar may be opened (`http(s)`,
+/// `file:`, `chrome:`, `data:`, `about:`, extension pages...), except
+/// `javascript:`: run script with `evaluate` instead.
 pub fn check_navigable_url(url: &str) -> Result<(), ActionValidationError> {
     if url.len() > MAX_URL_LEN {
         return Err(ActionValidationError(format!(
             "url longer than {MAX_URL_LEN} characters"
         )));
     }
-    if url == "about:blank" {
-        return Ok(());
-    }
     let lower = url.trim().to_ascii_lowercase();
-    if lower.starts_with("http://") || lower.starts_with("https://") {
-        let rest = &lower[lower.find("://").map(|i| i + 3).unwrap_or(0)..];
-        if rest.is_empty() || rest.starts_with('/') {
+    if lower.starts_with("javascript:") {
+        return Err(ActionValidationError(
+            "javascript: URLs are not opened: use the evaluate action".into(),
+        ));
+    }
+    let Some(colon) = lower.find(':') else {
+        return Err(ActionValidationError("url has no scheme".into()));
+    };
+    let scheme = &lower[..colon];
+    if scheme.is_empty()
+        || !scheme.starts_with(|c: char| c.is_ascii_alphabetic())
+        || !scheme
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.')
+    {
+        return Err(ActionValidationError("url has no valid scheme".into()));
+    }
+    if scheme == "http" || scheme == "https" {
+        let rest = &lower[colon + 1..];
+        let host = rest.strip_prefix("//").unwrap_or(rest);
+        if host.is_empty() || host.starts_with('/') {
             return Err(ActionValidationError("url has no host".into()));
         }
-        return Ok(());
     }
-    Err(ActionValidationError(
-        "only http(s) URLs and about:blank may be opened".into(),
-    ))
+    Ok(())
+}
+
+fn check_point(x: i64, y: i64) -> Result<(), ActionValidationError> {
+    if !(0..=MAX_COORD).contains(&x) || !(0..=MAX_COORD).contains(&y) {
+        return Err(ActionValidationError(format!(
+            "coordinates must be between 0 and {MAX_COORD}"
+        )));
+    }
+    Ok(())
+}
+
+fn check_delta(d: i64) -> Result<(), ActionValidationError> {
+    if d.abs() > MAX_COORD {
+        return Err(ActionValidationError(format!(
+            "scroll delta must be at most {MAX_COORD}"
+        )));
+    }
+    Ok(())
+}
+
+fn check_key(key: &str) -> Result<(), ActionValidationError> {
+    if key.is_empty() || key.len() > MAX_KEY_LEN {
+        return Err(ActionValidationError(format!(
+            "key must be 1-{MAX_KEY_LEN} characters"
+        )));
+    }
+    if key.chars().any(char::is_control) {
+        return Err(ActionValidationError(
+            "key must not contain control characters".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn check_modifiers(modifiers: &[String]) -> Result<(), ActionValidationError> {
+    for m in modifiers {
+        if !MODIFIERS.contains(&m.as_str()) {
+            return Err(ActionValidationError(format!(
+                "unknown modifier {m:?}: use {}",
+                MODIFIERS.join(", ")
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn check_text(text: &str) -> Result<(), ActionValidationError> {
+    if text.len() > MAX_TYPE_TEXT_LEN {
+        return Err(ActionValidationError(format!(
+            "text longer than {MAX_TYPE_TEXT_LEN} characters"
+        )));
+    }
+    Ok(())
+}
+
+fn check_clicks(click_count: Option<u32>) -> Result<(), ActionValidationError> {
+    match click_count {
+        Some(n) if n == 0 || n > 3 => Err(ActionValidationError(
+            "click_count must be 1, 2 or 3".into(),
+        )),
+        _ => Ok(()),
+    }
 }
 
 impl RemoteAction {
@@ -225,7 +453,45 @@ impl RemoteAction {
             RemoteAction::Back { .. } => "back",
             RemoteAction::Forward { .. } => "forward",
             RemoteAction::Reload { .. } => "reload",
+            RemoteAction::Evaluate { .. } => "evaluate",
+            RemoteAction::ClickAt { .. } => "click_at",
+            RemoteAction::Mouse { .. } => "mouse",
+            RemoteAction::Drag { .. } => "drag",
+            RemoteAction::ScrollAt { .. } => "scroll_at",
+            RemoteAction::TypeKeys { .. } => "type_keys",
+            RemoteAction::Key { .. } => "key",
+            RemoteAction::DesktopScreenshot => "desktop_screenshot",
+            RemoteAction::DesktopClick { .. } => "desktop_click",
+            RemoteAction::DesktopMove { .. } => "desktop_move",
+            RemoteAction::DesktopDrag { .. } => "desktop_drag",
+            RemoteAction::DesktopType { .. } => "desktop_type",
+            RemoteAction::DesktopKey { .. } => "desktop_key",
+            RemoteAction::DesktopScroll { .. } => "desktop_scroll",
         }
+    }
+
+    /// Whether the host agent executes this action on its OS desktop itself,
+    /// instead of handing it to the browser extension.
+    pub fn is_desktop(&self) -> bool {
+        matches!(
+            self,
+            RemoteAction::DesktopScreenshot
+                | RemoteAction::DesktopClick { .. }
+                | RemoteAction::DesktopMove { .. }
+                | RemoteAction::DesktopDrag { .. }
+                | RemoteAction::DesktopType { .. }
+                | RemoteAction::DesktopKey { .. }
+                | RemoteAction::DesktopScroll { .. }
+        )
+    }
+
+    /// Whether a successful result carries an image (`mime` + base64 `data`)
+    /// that the control plane moves into the artifact store.
+    pub fn returns_image(&self) -> bool {
+        matches!(
+            self,
+            RemoteAction::Screenshot { .. } | RemoteAction::DesktopScreenshot
+        )
     }
 
     /// Validate bounds and URL policy before an action is queued.
@@ -238,10 +504,92 @@ impl RemoteAction {
             }
             RemoteAction::Type { selector, text, .. } => {
                 check_selector(selector)?;
-                if text.len() > MAX_TYPE_TEXT_LEN {
+                check_text(text)
+            }
+            RemoteAction::Evaluate { script, .. } => {
+                if script.trim().is_empty() {
+                    return Err(ActionValidationError("script must not be empty".into()));
+                }
+                if script.len() > MAX_SCRIPT_LEN {
                     return Err(ActionValidationError(format!(
-                        "text longer than {MAX_TYPE_TEXT_LEN} characters"
+                        "script longer than {MAX_SCRIPT_LEN} characters"
                     )));
+                }
+                Ok(())
+            }
+            RemoteAction::ClickAt {
+                x,
+                y,
+                click_count,
+                modifiers,
+                ..
+            } => {
+                check_point(*x, *y)?;
+                check_clicks(*click_count)?;
+                check_modifiers(modifiers)
+            }
+            RemoteAction::Mouse { x, y, .. } | RemoteAction::DesktopMove { x, y } => {
+                check_point(*x, *y)
+            }
+            RemoteAction::Drag {
+                from_x,
+                from_y,
+                to_x,
+                to_y,
+                steps,
+                ..
+            } => {
+                check_point(*from_x, *from_y)?;
+                check_point(*to_x, *to_y)?;
+                if steps.unwrap_or(1) == 0 || steps.unwrap_or(1) > 100 {
+                    return Err(ActionValidationError("steps must be 1-100".into()));
+                }
+                Ok(())
+            }
+            RemoteAction::DesktopDrag {
+                from_x,
+                from_y,
+                to_x,
+                to_y,
+            } => {
+                check_point(*from_x, *from_y)?;
+                check_point(*to_x, *to_y)
+            }
+            RemoteAction::ScrollAt { x, y, dx, dy, .. } => {
+                check_point(*x, *y)?;
+                check_delta(*dx)?;
+                check_delta(*dy)
+            }
+            RemoteAction::TypeKeys { text, .. } | RemoteAction::DesktopType { text } => {
+                if text.is_empty() {
+                    return Err(ActionValidationError("text must not be empty".into()));
+                }
+                check_text(text)
+            }
+            RemoteAction::Key { key, modifiers, .. } => {
+                check_key(key)?;
+                check_modifiers(modifiers)
+            }
+            RemoteAction::DesktopKey { key } => check_key(key),
+            RemoteAction::DesktopClick {
+                x, y, click_count, ..
+            } => {
+                check_point(*x, *y)?;
+                check_clicks(*click_count)
+            }
+            RemoteAction::DesktopScroll { x, y, dy } => {
+                if let (Some(x), Some(y)) = (x, y) {
+                    check_point(*x, *y)?;
+                }
+                if x.is_some() != y.is_some() {
+                    return Err(ActionValidationError(
+                        "give both x and y, or neither".into(),
+                    ));
+                }
+                if dy.abs() > 100 {
+                    return Err(ActionValidationError(
+                        "dy must be at most 100 wheel clicks".into(),
+                    ));
                 }
                 Ok(())
             }
@@ -1619,22 +1967,111 @@ mod tests {
     }
 
     #[test]
+    fn full_power_actions_round_trip() {
+        // Wire shapes of the human-emulator actions (#366).
+        for v in [
+            json!({"type": "evaluate", "script": "document.title"}),
+            json!({"type": "evaluate", "script": "await fetch('/x')", "await_promise": true, "tab_id": 3}),
+            json!({"type": "click_at", "x": 10, "y": 20}),
+            json!({"type": "click_at", "x": 10, "y": 20, "button": "right", "click_count": 2, "modifiers": ["ctrl", "shift"]}),
+            json!({"type": "mouse", "op": "move", "x": 1, "y": 2}),
+            json!({"type": "mouse", "op": "down", "x": 1, "y": 2, "button": "middle"}),
+            json!({"type": "drag", "from_x": 1, "from_y": 2, "to_x": 30, "to_y": 40, "steps": 5}),
+            json!({"type": "scroll_at", "x": 100, "y": 100, "dx": 0, "dy": 400}),
+            json!({"type": "type_keys", "text": "hello"}),
+            json!({"type": "key", "key": "a", "modifiers": ["ctrl"]}),
+            json!({"type": "screenshot", "marks": true}),
+            json!({"type": "desktop_screenshot"}),
+            json!({"type": "desktop_click", "x": 5, "y": 6, "button": "right"}),
+            json!({"type": "desktop_move", "x": 5, "y": 6}),
+            json!({"type": "desktop_drag", "from_x": 1, "from_y": 2, "to_x": 3, "to_y": 4}),
+            json!({"type": "desktop_type", "text": "/home/user/report.pdf"}),
+            json!({"type": "desktop_key", "key": "ctrl+l"}),
+            json!({"type": "desktop_scroll", "x": 5, "y": 6, "dy": -3}),
+        ] {
+            let a: RemoteAction =
+                serde_json::from_value(v.clone()).unwrap_or_else(|e| panic!("{v}: {e}"));
+            assert_eq!(serde_json::to_value(&a).unwrap(), v);
+            assert!(a.validate().is_ok(), "{v}");
+            assert_eq!(a.kind(), v["type"].as_str().unwrap());
+        }
+        let plain: RemoteAction = serde_json::from_value(json!({"type": "screenshot"})).unwrap();
+        assert_eq!(
+            plain,
+            RemoteAction::Screenshot {
+                marks: false,
+                tab_id: None
+            }
+        );
+        assert_eq!(
+            serde_json::to_value(&plain).unwrap(),
+            json!({"type": "screenshot"})
+        );
+    }
+
+    #[test]
+    fn desktop_actions_are_flagged_for_the_host_agent() {
+        assert!(RemoteAction::DesktopScreenshot.is_desktop());
+        assert!(RemoteAction::DesktopKey {
+            key: "Return".into()
+        }
+        .is_desktop());
+        assert!(!RemoteAction::Tabs.is_desktop());
+        assert!(RemoteAction::DesktopScreenshot.returns_image());
+        assert!(RemoteAction::Screenshot {
+            marks: true,
+            tab_id: None
+        }
+        .returns_image());
+        assert!(!RemoteAction::Tabs.returns_image());
+    }
+
+    #[test]
+    fn full_power_validation_bounds() {
+        let bad = [
+            json!({"type": "evaluate", "script": "  "}),
+            json!({"type": "evaluate", "script": "x".repeat(MAX_SCRIPT_LEN + 1)}),
+            json!({"type": "click_at", "x": -1, "y": 0}),
+            json!({"type": "click_at", "x": 0, "y": MAX_COORD + 1}),
+            json!({"type": "click_at", "x": 0, "y": 0, "click_count": 0}),
+            json!({"type": "click_at", "x": 0, "y": 0, "modifiers": ["hyper"]}),
+            json!({"type": "drag", "from_x": 0, "from_y": 0, "to_x": 1, "to_y": 1, "steps": 0}),
+            json!({"type": "scroll_at", "x": 0, "y": 0, "dy": MAX_COORD + 1}),
+            json!({"type": "type_keys", "text": ""}),
+            json!({"type": "key", "key": ""}),
+            json!({"type": "key", "key": "a\nb"}),
+            json!({"type": "desktop_key", "key": "x".repeat(MAX_KEY_LEN + 1)}),
+            json!({"type": "desktop_scroll", "x": 1, "dy": 1}),
+            json!({"type": "desktop_scroll", "dy": 1000}),
+        ];
+        for v in bad {
+            let a: RemoteAction =
+                serde_json::from_value(v.clone()).unwrap_or_else(|e| panic!("{v}: {e}"));
+            assert!(a.validate().is_err(), "{v} should be refused");
+        }
+    }
+
+    #[test]
     fn navigation_policy() {
+        // A human emulator opens whatever a person could type (#366).
         for ok in [
             "https://example.test/a",
             "http://localhost:8080",
             "about:blank",
+            "file:///tmp/report.pdf",
+            "chrome://settings",
+            "data:text/html,hi",
+            "chrome-extension://abc/x.html",
+            "ftp://example.test",
         ] {
             assert!(check_navigable_url(ok).is_ok(), "{ok}");
         }
         for bad in [
             "javascript:alert(1)",
-            "file:///etc/passwd",
-            "chrome://settings",
-            "data:text/html,hi",
-            "chrome-extension://abc/x.html",
+            "  JavaScript:alert(1)",
             "https://",
-            "ftp://example.test",
+            "no-scheme",
+            "1abc:x",
         ] {
             assert!(check_navigable_url(bad).is_err(), "{bad}");
         }
