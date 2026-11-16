@@ -15,9 +15,14 @@ const SPEC = resolve(__dirname, '../../../packages/sdk/openapi.json');
 let app: NestFastifyApplication;
 let base = '';
 
-/** The served document without what changes per build (the version). */
-function normalized(doc: { info?: { version?: string } }) {
-  return JSON.stringify({ ...doc, info: { ...doc.info, version: '0.0.0' } }, null, 2) + '\n';
+/**
+ * The served document without what changes per build: the version, and the
+ * build number the description quotes. `deploy update` bumps the version and
+ * commits it, so a snapshot holding it would break CI on every deploy.
+ */
+function normalized(doc: { info?: { version?: string; description?: string } }) {
+  const description = doc.info?.description?.replace(/\(build `[^`]*`\)/g, '(build `0.0.0`)');
+  return JSON.stringify({ ...doc, info: { ...doc.info, version: '0.0.0', ...(description === undefined ? {} : { description }) } }, null, 2) + '\n';
 }
 
 beforeAll(async () => {
