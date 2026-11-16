@@ -38,7 +38,7 @@ export const HEXACTRA_TUI_MENU: readonly TuiMenuNode[] = [
     id: 'browser-node',
     parent: 'agent-group',
     route: 'agent',
-    label: 'This machine as a browser node: install, Chrome, unattended desktop',
+    label: 'This machine as a browser node: dashboard, install, logs, doctor',
     order: 40,
     requiresLogin: false,
   },

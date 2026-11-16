@@ -128,7 +128,7 @@ Enter a group (or press its number) to see its entries. Esc goes back up. For ex
 | **Agent** | **Inbox** | What agents are waiting for: a CAPTCHA, a code, a sign-in or a confirmation. Type the answer and press Enter; a secret shows as dots. `x` declines. | hidden |
 | | **Runs** | Your runs and their status. Enter opens a run's steps, `c` cancels a run, `r` refreshes. | hidden |
 | | **Fleet** | Browser nodes and their profiles. `o` shows a node's desktop link, `d` drains or undrains a node, `r` refreshes. | hidden |
-| | **This machine as a browser node** | Its install, browser, service and Fleet state. `i` installs (or repairs), `u` updates, `s` starts or stops, `r` restarts, `l` shows the log, `c` sets up Google Chrome, `n` installs an unattended node, `d` runs the doctor, `x` uninstalls. | shown (installing asks you to log in) |
+| | **This machine as a browser node** | A dashboard of the agent, the unattended node and Fleet, with a health line from the doctor; see [The Agent screen](#the-agent-screen). | shown (installing asks you to log in) |
 | **Worker** | **Jobs queue** | The server's background job queue. | hidden |
 | | **Worker node on this machine** | Run this machine as a worker for server jobs: dashboard, doctor, logs, register, enroll. | shown |
 | **Server** | **Deploy** | Install, update and check the console on this server (doctor, install, update, status). | shown |
@@ -147,6 +147,21 @@ The UI adapts to the terminal width. On a narrow terminal it shows a smaller mar
 - The UI uses the hexactra brand colors (see [docs/brand](../../../docs/brand/README.md#terminal-cli-and-tui)).
 - Set `NO_COLOR=1` or pass `--no-color` for plain text.
 - Set `HEXACTRA_NO_TUI=1` to keep a bare `hexactra` from opening the UI.
+
+
+### The Agent screen
+
+**Agent ▸ This machine as a browser node** manages this machine as a browser host without leaving the terminal UI (#374).
+
+| View | What it shows and does |
+|---|---|
+| **Dashboard** | The agent (version, browser, service), the unattended node (desktop, graphics, each unit) and Fleet (online, extension connected), coloured by state and refreshed every 5 s. A health line counts the doctor's checks and names the first problems. The menu lists only what fits the current state, by arrow keys or hotkey: `i` install or repair, `u` update, `s` / `r` start, stop and restart the agent, `n` / `e` the unattended node, `l` logs, `d` doctor, `c` Google Chrome setup, `x` uninstall. `g` refreshes, `q` or Esc goes back. |
+| **Install…** | 1) the mode: Default, Attended, Unattended or Both, each with what it does. 2) a review: the host name and resolution (editable) and every package the mode needs, installed or missing. Then it installs, showing the log live. |
+| **Uninstall…** | What to remove (the agent, the unattended node, or both), whether to keep the browser profiles and whether to revoke the host in Fleet, then a confirmation. |
+| **Logs** | The agent service's journal, or the unattended node's units (`a` / `n`), following live (`f` pauses). Errors are red, warnings yellow. Scroll with the arrows, `g` / `G` for the top and the bottom. |
+| **Doctor and dependencies** | Every check with ✓ / ! / ✗ and its fix, then every package the installed modes need (`a`: every mode), with what it is for. `m` installs the missing ones; `r` re-runs. |
+
+**sudo in the terminal UI.** Work that needs root (installs, uninstalls, the unattended node, Google Chrome setup, packages) asks for your password in a masked field first. The password goes only to `sudo -S -v` on its standard input, which unlocks sudo for this terminal for a few minutes. It is never stored, logged or shown, and the steps then run with `sudo -n`. When sudo is already unlocked, or passwordless, nothing is asked.
 
 ## Commands
 
@@ -225,6 +240,7 @@ hexactra agent uninstall --yes        # stops it and revokes the host in Fleet (
 hexactra agent chrome setup           # Google Chrome + the extension by policy + the native host (sudo once)
 hexactra agent chrome status          # what is set up for Google Chrome
 hexactra agent doctor                 # every check, and how to fix what fails (exit code 1 if any fails)
+hexactra agent deps [--install]       # every package this machine needs, installed or missing (--install adds them)
 ```
 
 **Desktop tools, installed for you (#373).** The agent also drives the computer's desktop for native file pickers, OS dialogs and other windows (VISION §27). It needs `xdotool` and `imagemagick`, and the install puts them in with sudo wherever the agent has an X11 desktop to drive:
@@ -245,7 +261,7 @@ Without a desktop session (a server, CI, `--no-desktop`) or on Wayland, the inst
 - **Graphics.** With Intel or AMD graphics, Chrome renders on the GPU. Without them, `agent doctor` warns that rendering is in software.
 - **Other commands.** `status`, `doctor` and `update` cover it; `logs`, `start`, `stop`, `restart` and `uninstall` take `--mode unattended`. `uninstall` keeps the browser profiles unless you add `--purge-profiles`.
 - **Options.** `--resolution 1920x1080` sets the screen size, and `--max-browsers` the number of profiles open at once.
-- **TUI.** Key `n` in **Agent ▸ This machine as a browser node** does the same install.
+- **TUI.** **Agent ▸ This machine as a browser node ▸ Install…** offers the same install (mode *Unattended*), with the resolution and a preview of the packages.
 
 **Google Chrome (`--google-chrome`, or `hexactra agent chrome setup`).** Nodes run branded Google Chrome ([docs/nodes.md](../../../docs/nodes.md)). Chrome no longer loads unpacked extensions, so the CLI sets it up in three steps:
 1. Installs Google Chrome from Google's official `.deb`, if it is missing. That also adds Google's apt repository, so the system keeps Chrome updated.
@@ -253,7 +269,7 @@ Without a desktop session (a server, CI, `--no-desktop`) or on Wayland, the inst
 3. Registers the native messaging host for your user (`~/.config/google-chrome/NativeMessagingHosts/`).
 
 The first two steps need root. The CLI lists them, asks for your sudo password once, and changes nothing that needs root when everything is already current.
-- **TUI:** without a terminal to type the password in, it prints the exact commands instead.
+- **TUI:** it asks for your sudo password in a masked field (see [The Agent screen](#the-agent-screen)).
 - **Uninstall:** removes the policy and the native host, never Chrome.
 - **Debian and Ubuntu only** (x86_64).
 

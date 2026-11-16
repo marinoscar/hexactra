@@ -2,7 +2,9 @@ import { Option, type Command } from 'commander';
 import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 
 import { consoleApi } from '../console-api.js';
+import { dependencyLines, dependencyReport, installedModes, installMissing, type InstallMode } from './dependencies.js';
 import { chromeSetup, chromeStatus, chromeStatusLines } from './googleChrome.js';
+import { installChoice, uninstallTarget } from './lifecycle.js';
 import {
   installUnattended,
   uninstallUnattended,
@@ -99,26 +101,7 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
     .addOption(new Option('--extension-update-url <url>', 'where the Chrome policy gets the extension (a test mirror)').hideHelp())
     .action(async (o: { mode?: string; resolution?: string; googleChrome?: boolean; extensionUpdateUrl?: string; name?: string; browser?: string; maxBrowsers?: number; bundle?: string; version?: string; service?: boolean; desktop?: boolean; reenroll?: boolean; enrollmentToken?: string; agentUrl?: string; wait?: number }) => {
       const m = installMode(o.mode);
-      if (m === 'unattended' || m === 'both') {
-        out('Installing an unattended node on this machine');
-        const u = await installUnattended(deps(), {
-          name: o.name,
-          maxBrowsers: o.maxBrowsers,
-          bundle: o.bundle,
-          version: o.version,
-          reenroll: o.reenroll,
-          enrollmentToken: o.enrollmentToken ?? process.env.HEXACTRA_ENROLLMENT_TOKEN,
-          agentUrl: o.agentUrl,
-          interactiveSudo: true,
-          waitSeconds: o.wait,
-          extensionUpdateUrl: o.extensionUpdateUrl ?? process.env.HEXACTRA_EXTENSION_UPDATE_URL,
-          resolution: o.resolution,
-        });
-        out(`Done: "${u.name}" is an unattended node. Open its desktop from Fleet to sign in to its profiles.`);
-        if (m === 'unattended') return;
-      }
-      out('Installing the Hexactra agent on this machine');
-      const s = await installAgent(deps(), {
+      const done = await installChoice(deps(), m, {
         name: o.name,
         browser: o.browser,
         maxBrowsers: o.maxBrowsers,
@@ -132,10 +115,10 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
         interactiveSudo: true,
         waitSeconds: o.wait,
         googleChrome: o.googleChrome,
-        attended: m === 'attended' || m === 'both' ? true : undefined,
         extensionUpdateUrl: o.extensionUpdateUrl ?? process.env.HEXACTRA_EXTENSION_UPDATE_URL,
+        resolution: o.resolution,
       });
-      out(`Done: "${s.name}" is a browser host. Create profiles for it on the Fleet page or with \`hexactra fleet profile create\`.`);
+      for (const line of done) out(`Done: ${line}`);
     });
 
   agent
@@ -225,6 +208,27 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
     });
 
   agent
+    .command('deps')
+    .description('List the packages this machine needs as a browser host, installed or missing (--install adds the missing ones)')
+    .option('--mode <mode>', 'default, attended or unattended (default: the modes installed here, or all)')
+    .option('--install', 'install the missing packages (sudo)')
+    .option('--json', 'print JSON')
+    .action((o: { mode?: string; install?: boolean; json?: boolean }) => {
+      const d = deps();
+      if (o.mode !== undefined && !['default', 'attended', 'unattended'].includes(o.mode)) throw new Error(`--mode must be default, attended or unattended (got ${o.mode})`);
+      const modes = o.mode ? [o.mode as InstallMode] : installedModes(d);
+      let rows = dependencyReport(d, modes);
+      if (o.install) {
+        installMissing(d, rows, true);
+        rows = dependencyReport(d, modes);
+      }
+      if (o.json) return out(JSON.stringify(rows, null, 2));
+      out(`Packages for: ${modes.join(', ')}`);
+      for (const line of dependencyLines(rows)) out(line);
+      if (rows.some((r) => !r.installed)) process.exitCode = 1;
+    });
+
+  agent
     .command('uninstall')
     .description('Stop and remove the agent, and revoke this host in Fleet')
     .option('--keep-host', 'keep the host in Fleet')
@@ -233,7 +237,6 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
     .option('--mode <mode>', 'attended (default) or unattended')
     .action(async (o: { keepHost?: boolean; purgeProfiles?: boolean; yes?: boolean; mode?: string }) => {
       if (!o.yes) throw new Error('Uninstalling stops this host and revokes it in Fleet; pass --yes.');
-      if (mode(o.mode) === 'unattended') return uninstallUnattended(deps(), o);
-      await uninstallAgent(deps(), o);
+      await uninstallTarget(deps(), mode(o.mode) === 'unattended' ? 'node' : 'agent', o);
     });
 };

@@ -57,7 +57,8 @@ export interface AgentDeps {
   /** POST JSON to the fabric (the enrollment exchange). */
   postJson(url: string, body: unknown): Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
   api(): AgentApi;
-  exec(argv: string[], opts?: { interactive?: boolean }): ExecResult;
+  /** `input` is written to the command's stdin (the TUI's sudo password, #374); never logged. */
+  exec(argv: string[], opts?: { interactive?: boolean; input?: string }): ExecResult;
   log(line: string): void;
   sleep(ms: number): Promise<void>;
   hostname(): string;
@@ -73,7 +74,7 @@ export function defaultDeps(log: (line: string) => void, api: () => AgentApi): A
     postJson: (url, body) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }),
     api,
     exec: (argv, opts) => {
-      const o: SpawnSyncOptions = opts?.interactive ? { stdio: 'inherit' } : { encoding: 'utf8' };
+      const o: SpawnSyncOptions = opts?.interactive ? { stdio: 'inherit' } : { encoding: 'utf8', ...(opts?.input !== undefined ? { input: opts.input } : {}) };
       const r = spawnSync(argv[0]!, argv.slice(1), o);
       if (r.error) return { code: 127, stdout: '', stderr: r.error.message };
       return { code: r.status ?? 1, stdout: String(r.stdout ?? ''), stderr: String(r.stderr ?? '') };
