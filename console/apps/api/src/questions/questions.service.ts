@@ -172,8 +172,27 @@ export class QuestionsService {
     };
   }
 
+  /**
+   * The console page showing the desktop of the host a fabric session runs
+   * on, when that host shares one (#343): where a person solves a CAPTCHA or
+   * takes over. Null when the host has no desktop or cannot be found.
+   */
+  async desktopLink(fabricSessionId: string | null): Promise<string | null> {
+    if (!fabricSessionId) return null;
+    try {
+      const s = await this.fabric.request<{ host_id?: string }>('GET', `/v1/sessions/${encodeURIComponent(fabricSessionId)}`);
+      if (!s.host_id) return null;
+      const hosts = await this.fabric.hosts();
+      if (!hosts.find((x) => x.id === s.host_id)?.desktop) return null;
+      return `${(process.env.APP_URL ?? '').replace(/\/+$/, '')}/fleet/hosts/${s.host_id}/desktop`;
+    } catch {
+      return null;
+    }
+  }
+
   /** Record the question a fabric handoff asks (the goal runner's and external agents' handoffs). */
   async mirrorHandoff(owner: QuestionActor, spec: QuestionSpec, h: CreatedHandoff, opts: { askedBy: string; runId: string | null; fabricSessionId: string | null }): Promise<QuestionView> {
+    const viewerUrl = h.viewerUrl && h.viewerUrl.length <= 2000 ? h.viewerUrl : await this.desktopLink(opts.fabricSessionId);
     const q = await this.db(owner.id).question.create({
       data: {
         ownerUserId: owner.id,
@@ -183,7 +202,7 @@ export class QuestionsService {
         handoffId: h.id,
         ...this.specData(spec),
         pageTitle: h.pageTitle?.slice(0, 500) ?? null,
-        viewerUrl: h.viewerUrl && h.viewerUrl.length <= 2000 ? h.viewerUrl : null,
+        viewerUrl,
         expiresAt: h.expiresAt ?? new Date(Date.now() + spec.timeoutMs),
       },
     });
@@ -219,7 +238,7 @@ export class QuestionsService {
           prompt: (h.prompt ?? '').slice(0, 2000) || 'The agent needs you.',
           options: options ? (options as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
           pageTitle: h.page?.title?.slice(0, 500) ?? null,
-          viewerUrl: h.viewer_url ?? null,
+          viewerUrl: h.viewer_url ?? (await this.desktopLink(h.session_id ?? null)),
           status: h.status === 'pending' ? 'pending' : h.status === 'expired' ? 'expired' : handoffOutcome(h) === 'cancelled' ? 'cancelled' : 'answered',
           expiresAt: Number.isNaN(expires.getTime()) ? new Date(Date.now() + QUESTION_TIMEOUT.defaultMs) : expires,
         },

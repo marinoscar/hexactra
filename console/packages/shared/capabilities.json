@@ -1,7 +1,6 @@
 {
   "$comment": "Every Hexactra capability and where it lives on each surface. A surface is a value or a list of values (REST operations as 'METHOD /api/path', a CLI command path, an MCP tool name, a TUI screen route, a web route) or {\"none\": \"why\"}. Tests on each surface fail when a value is missing there: apps/api/test/capabilities.db.spec.ts (REST, MCP), apps/cli/src/capabilities.test.ts (CLI, TUI), apps/web/src/__tests__/capabilities.test.ts (web). Every app REST operation and every MCP tool must belong to a capability.",
   "restExempt": {
-    "GET /api/fleet/viewer-auth": "nginx's auth_request for the viewer, not a client operation",
     "GET /api/fleet/desktop-auth": "nginx's auth_request for a host's remote desktop WebSocket, not a client operation",
     "POST /api/mcp": "the MCP transport itself",
     "GET /api/mcp": "the MCP transport itself (405)",
@@ -433,23 +432,6 @@
       },
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
-      },
-      "web": "/fleet"
-    },
-    {
-      "id": "fleet.viewer",
-      "description": "Open a host's browser viewer (a one-time ticket)",
-      "rest": [
-        "POST /api/fleet/viewer-ticket"
-      ],
-      "cli": {
-        "none": "The viewer is a web page; open it from the Fleet page"
-      },
-      "mcp": {
-        "none": "Taking over a browser is for a person, not an agent"
-      },
-      "tui": {
-        "none": "A terminal cannot show a browser"
       },
       "web": "/fleet"
     },

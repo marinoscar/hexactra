@@ -2,7 +2,7 @@
 
 Run Hexactra on an always-on machine, so you can drive a browser on demand even when your desktop is off. Epic: #195.
 
-> **Prefer a node at home.** The primary way to run browsers is a node on your own residential network, connected outbound over HTTPS to the console ([nodes.md](nodes.md)). This container host is the optional alternative, mainly for a VPS. With the console, the bundled container host is opt-in (*Planned* #343) and the console's own HTTPS is the way in: Tailscale and SSH below are only for running this stack on its own.
+> **Prefer a node at home.** The primary way to run browsers is a node on your own residential network, connected outbound over HTTPS to the console ([nodes.md](nodes.md)). This container host is the optional alternative, mainly for a VPS. With the console, the bundled container host is opt-in (`COMPOSE_PROFILES=bundled-host`, see [the VPS runbook](../console/docs/runbooks/vps-stack.md)), its desktop opens in the console like a node's, and the console's own HTTPS is the way in: Tailscale and SSH below are only for running this stack on its own.
 
 ```text
 laptop / phone / AI agent ──(Tailscale or SSH)──▶ control  (API :8787)
