@@ -105,6 +105,10 @@ impl Modify for Bearer {
         super::desktop::create_desktop_session,
         super::desktop::client_connect,
         super::desktop::host_connect,
+        super::takeover::take_over,
+        super::takeover::renew,
+        super::takeover::release,
+        super::takeover::current,
     ),
     tags(
         (name = "sessions", description = "Sessions, actions and operations"),

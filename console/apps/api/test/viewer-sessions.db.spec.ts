@@ -141,4 +141,27 @@ describe('remote desktop viewer sessions', () => {
     expect(await viewer.purge(new Date(Date.now() - 24 * 3600_000))).toBeGreaterThanOrEqual(1);
     expect(await prisma.viewerSession.count({ where: { userId: admin.id } })).toBe(0);
   });
+
+  it('takes over, renews and releases through the fabric; only the holder releases', async () => {
+    const admin = await login(`desk-t-${Date.now()}@example.test`, 'admin');
+    const other = await login(`desk-t2-${Date.now()}@example.test`, 'admin');
+    const lease = { lease_id: '88888888-8888-4888-8888-888888888888', host_id: HOST, actor: { user_id: admin.id, display_name: 'Person A' }, started_at: '2026-11-16T00:00:00Z', expires_at: '2026-11-16T00:05:00Z' };
+    fabricAnswer = () => lease;
+    const auth = (t: string) => ({ authorization: `Bearer ${t}` });
+    const taken = await app.inject({ method: 'POST', url: `/api/fleet/hosts/${HOST}/takeover`, headers: auth(admin.token) });
+    expect(taken.statusCode).toBe(201);
+    expect(taken.json<{ data: { leaseId: string } }>().data.leaseId).toBe(lease.lease_id);
+    expect(fabricCalls.at(-1)).toEqual(['POST', `/v1/hosts/${HOST}/takeover`, { actor: { user_id: admin.id, display_name: expect.anything() }, ttl_s: 300 }]);
+    // Someone else cannot release it.
+    const steal = await app.inject({ method: 'DELETE', url: `/api/fleet/hosts/${HOST}/takeover/${lease.lease_id}`, headers: auth(other.token) });
+    expect(steal.statusCode).toBe(404);
+    expect((await app.inject({ method: 'POST', url: `/api/fleet/hosts/${HOST}/takeover/${lease.lease_id}/renew`, headers: auth(admin.token) })).statusCode).toBe(200);
+    const released = await app.inject({ method: 'DELETE', url: `/api/fleet/hosts/${HOST}/takeover/${lease.lease_id}`, headers: auth(admin.token) });
+    expect(released.statusCode).toBe(204);
+    expect(fabricCalls.at(-1)?.slice(0, 2)).toEqual(['DELETE', `/v1/hosts/${HOST}/takeover/${lease.lease_id}`]);
+    // A contributor cannot take over.
+    const contributor = await login(`desk-t3-${Date.now()}@example.test`, 'contributor');
+    expect((await app.inject({ method: 'POST', url: `/api/fleet/hosts/${HOST}/takeover`, headers: auth(contributor.token) })).statusCode).toBe(403);
+    fabricAnswer = () => ({ tunnel_id: 't', connect_token: 'hxd_x' });
+  });
 });

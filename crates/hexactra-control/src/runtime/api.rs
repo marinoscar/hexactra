@@ -14,7 +14,7 @@ use axum::{
     http::{header, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
     Json, Router,
 };
 use hexactra_core::remote::{
@@ -115,6 +115,12 @@ impl From<StoreError> for AppError {
                 AppError(StatusCode::BAD_REQUEST, "invalid_request", e.to_string())
             }
             StoreError::Forbidden => AppError(StatusCode::FORBIDDEN, "forbidden", e.to_string()),
+            StoreError::TakeoverActive(_) => {
+                AppError(StatusCode::CONFLICT, "takeover_active", e.to_string())
+            }
+            StoreError::TakeoverHeld(_) => {
+                AppError(StatusCode::CONFLICT, "takeover_held", e.to_string())
+            }
             StoreError::ProfileNotFound(_) => {
                 AppError(StatusCode::NOT_FOUND, "profile_not_found", e.to_string())
             }
@@ -255,6 +261,18 @@ pub fn router(state: ApiState) -> Router {
         .route(
             "/v1/hosts/{id}/desktop-sessions",
             post(super::desktop::create_desktop_session),
+        )
+        .route(
+            "/v1/hosts/{id}/takeover",
+            get(super::takeover::current).post(super::takeover::take_over),
+        )
+        .route(
+            "/v1/hosts/{id}/takeover/{lease_id}/renew",
+            post(super::takeover::renew),
+        )
+        .route(
+            "/v1/hosts/{id}/takeover/{lease_id}",
+            delete(super::takeover::release),
         )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),

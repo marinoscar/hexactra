@@ -49,6 +49,9 @@ function renderPage(h: FleetHost = host) {
       [`GET /fleet/hosts/${ID}`]: h,
       [`POST /fleet/hosts/${ID}/viewer-session`]: { hostId: ID, wsPath: `/viewer/${ID}/websockify`, expiresAt: '2026-11-16T01:00:00Z' },
       [`DELETE /fleet/hosts/${ID}/viewer-session`]: undefined,
+      [`GET /fleet/hosts/${ID}/takeover`]: null,
+      [`POST /fleet/hosts/${ID}/takeover`]: { leaseId: 'l1', userId: 'test-user', displayName: 'Person A', expiresAt: '2026-11-16T01:00:00Z' },
+      [`DELETE /fleet/hosts/${ID}/takeover/l1`]: undefined,
       'GET /fleet/hosts': [h],
     },
   });
@@ -103,6 +106,23 @@ describe('DesktopPage', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('watches by default; Take over pauses the agent and enables input until Release', async () => {
+    const { platform } = renderPage();
+    await waitFor(() => expect(rfb.instances).toHaveLength(1));
+    const r = rfb.instances[0] as unknown as { viewOnly: boolean } & EventTarget;
+    expect(r.viewOnly).toBe(true);
+    act(() => {
+      r.dispatchEvent(new Event('connect'));
+    });
+    expect(await screen.findByText(/You are watching/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Take over' }));
+    expect(await screen.findByText(/the agent is paused until you release it/)).toBeInTheDocument();
+    expect(r.viewOnly).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Release' }));
+    await waitFor(() => expect(platform.requests.some((q) => q.method === 'DELETE' && q.path === `/fleet/hosts/${ID}/takeover/l1`)).toBe(true));
+    expect(r.viewOnly).toBe(true);
   });
 
   it('says when the node is offline or shares no desktop, without connecting', async () => {

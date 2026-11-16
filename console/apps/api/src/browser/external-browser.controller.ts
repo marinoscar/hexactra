@@ -25,7 +25,7 @@ import { profileNameSchema } from '../fleet/fleet.schemas';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUESTION_INPUTS, QUESTION_KINDS, questionSpecObject, questionSpecSchema, type QuestionSpec } from '../questions/questions.contract';
 import { QuestionsService } from '../questions/questions.service';
-import { FabricSession, handoffOutcome } from '../runner/fabric-session';
+import { FabricSession, handoffOutcome, isTakeoverActive } from '../runner/fabric-session';
 import { domainAllowed } from '../runner/policy';
 import { redactActionArgs, redactUrl } from '../tasks/redact';
 import { RunNotifier } from '../tasks/run-notifier';
@@ -178,10 +178,13 @@ export class ExternalBrowserController {
 
     let op;
     try {
-      op = await session.act(run.sessionId!, action, body.timeoutMs);
+      op = await session.act(run.sessionId!, action, body.timeoutMs, { waitForTakeover: false });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       await this.record(runId, userId, 'action', type, action, false, msg, started);
+      if (isTakeoverActive(e)) {
+        throw new ConflictException({ code: 'TAKEOVER_ACTIVE', message: `A person is controlling this browser. Try again later. (${msg})` });
+      }
       throw new ConflictException({ code: 'ACTION_FAILED', message: msg });
     }
     const result = op.result ?? {};

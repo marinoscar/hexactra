@@ -6,6 +6,17 @@ import RFB from '@novnc/novnc/lib/rfb';
 
 import type { FleetHost } from './FleetPage';
 
+/** A takeover lease (`/api/fleet/hosts/:id/takeover`). */
+interface Lease {
+  leaseId: string;
+  userId: string;
+  displayName: string | null;
+  expiresAt: string;
+}
+
+/** Renew the lease this often while the page is open. */
+export const RENEW_MS = 60_000;
+
 type Status = 'loading' | 'connecting' | 'connected' | 'reconnecting' | 'closed' | 'offline' | 'unavailable' | 'error';
 
 /** Reconnect delays: 1 s doubling to 30 s, ten tries. */
@@ -31,6 +42,9 @@ export function DesktopPage() {
   const [host, setHost] = useState<FleetHost | null>(null);
   const [status, setStatus] = useState<Status>('loading');
   const [error, setError] = useState<string | null>(null);
+  const [lease, setLease] = useState<Lease | null>(null);
+  const [heldBy, setHeldBy] = useState<string | null>(null);
+  const leaseRef = useRef<Lease | null>(null);
 
   const connect = useCallback(
     (wsPath: string) => {
@@ -39,7 +53,8 @@ export function DesktopPage() {
       const r = new RFB(screen.current, `${scheme}//${window.location.host}${wsPath}`, { shared: true });
       r.scaleViewport = true;
       r.focusOnClick = true;
-      r.viewOnly = false;
+      // Watching is the default; input needs the takeover lease (the fabric enforces it too).
+      r.viewOnly = !leaseRef.current;
       r.addEventListener('connect', () => {
         tries.current = 0;
         setStatus('connected');
@@ -84,14 +99,62 @@ export function DesktopPage() {
   useEffect(() => {
     closing.current = false;
     void open();
+    void api
+      .get<Lease | null>(`/fleet/hosts/${id}/takeover`)
+      .then((l) => setHeldBy(l ? (l.displayName ?? 'Someone') : null))
+      .catch(() => undefined);
     return () => {
       closing.current = true;
       rfb.current?.disconnect();
+      const l = leaseRef.current;
+      if (l) void api.delete(`/fleet/hosts/${id}/takeover/${l.leaseId}`).catch(() => undefined);
       void api.delete(`/fleet/hosts/${id}/viewer-session`).catch(() => undefined);
     };
   }, [api, id, open]);
 
+  const setControl = (l: Lease | null) => {
+    leaseRef.current = l;
+    setLease(l);
+    if (rfb.current) rfb.current.viewOnly = !l;
+  };
+
+  /** Pauses the agent and lets this person use the desktop (#342). */
+  const takeOver = async () => {
+    setError(null);
+    try {
+      const l = await api.post<Lease>(`/fleet/hosts/${id}/takeover`, {});
+      setControl(l);
+      setHeldBy(null);
+      rfb.current?.focus();
+    } catch (e) {
+      setError(message(e, 'Could not take over'));
+    }
+  };
+
+  const release = async () => {
+    const l = leaseRef.current;
+    setControl(null);
+    if (l) await api.delete(`/fleet/hosts/${id}/takeover/${l.leaseId}`).catch(() => undefined);
+  };
+
+  // Keep the lease while the page is open.
+  useEffect(() => {
+    if (!lease) return;
+    const t = window.setInterval(() => {
+      const l = leaseRef.current;
+      if (!l) return;
+      void api
+        .post<Lease>(`/fleet/hosts/${id}/takeover/${l.leaseId}/renew`, {})
+        .then((n) => {
+          leaseRef.current = n;
+        })
+        .catch(() => setControl(null));
+    }, RENEW_MS);
+    return () => window.clearInterval(t);
+  }, [api, id, lease]);
+
   const close = async () => {
+    await release();
     closing.current = true;
     rfb.current?.disconnect();
     await api.delete(`/fleet/hosts/${id}/viewer-session`).catch(() => undefined);
@@ -128,6 +191,15 @@ export function DesktopPage() {
         </Typography>
         <Chip size="small" color={status === 'connected' ? 'success' : 'default'} label={label[status]} />
         <Box sx={{ flexGrow: 1 }} />
+        {lease ? (
+          <Button size="small" variant="contained" color="warning" onClick={() => void release()}>
+            Release
+          </Button>
+        ) : (
+          <Button size="small" variant="contained" onClick={() => void takeOver()} disabled={status !== 'connected'}>
+            Take over
+          </Button>
+        )}
         <Button size="small" onClick={fullscreen} disabled={status !== 'connected'}>
           Full screen
         </Button>
@@ -153,6 +225,17 @@ export function DesktopPage() {
         <Alert severity="info">
           {host.name} does not share a desktop. Attended nodes need an X11 session (not Wayland); see the node guide.
         </Alert>
+      )}
+      {lease && (
+        <Alert severity="warning">
+          You are controlling {host?.name ?? 'this node'}; the agent is paused until you release it.
+        </Alert>
+      )}
+      {!lease && heldBy && <Alert severity="info">{heldBy} is controlling this desktop; you are watching.</Alert>}
+      {!lease && status === 'connected' && !heldBy && (
+        <Typography variant="caption" color="text.secondary">
+          You are watching. Take over to use the mouse and keyboard; the agent pauses until you release it.
+        </Typography>
       )}
       {error && <Alert severity="error">{error}</Alert>}
       <Box

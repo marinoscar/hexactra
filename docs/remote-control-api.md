@@ -185,6 +185,28 @@ Tokens appear in no event, log or URL. Tunnels live in the memory of the fabric 
 
 **On the console domain:** only the node's leg is published, at `https://<console>/fabric/v1/hosts/<id>/desktop/<tunnel>`. Creating tunnels and the viewer's leg stay on the private network.
 
+### Takeover
+
+A person takes control of a host's desktop and the agent pauses (#342).
+
+**Routes** (client token):
+- `POST /v1/hosts/{id}/takeover` with `{ "actor": { "user_id", "display_name"? }, "ttl_s"? }` takes the lease. The default is 300 s and the maximum 600 s.
+  - It returns `201 { lease_id, host_id, actor, started_at, expires_at }`.
+  - The same person asking again extends their lease.
+  - Anyone else gets `409 takeover_held`.
+- `POST …/takeover/{lease_id}/renew` and `DELETE …/takeover/{lease_id}` renew and release it.
+- `GET /v1/hosts/{id}/takeover` returns the live lease, or `404`.
+
+**While the lease is held:**
+- New actions on that host answer `409 takeover_active`, with the time it ends. An action already running finishes.
+- The console's goal runner waits and retries the step, for up to 30 minutes. An external agent (MCP) gets "A person is controlling this browser" and retries itself.
+
+**On desktop tunnels:**
+- The fabric parses the viewer's RFB stream and drops keyboard, pointer, clipboard, resize and power messages, unless the viewer the tunnel was opened for (`actor.user_id`) holds the lease. Watching is the default.
+- A message that is not RFB closes the tunnel with `4400`.
+
+**Events:** `takeover.started`, `takeover.renewed` and `takeover.released`.
+
 ## Actions
 
 Actions are JSON objects tagged by `type`. `tab_id` is optional on tab-scoped actions; without it the active tab of the last focused window is used.
