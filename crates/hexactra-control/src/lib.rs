@@ -14,7 +14,6 @@ pub mod routes {
     pub mod operations;
     pub mod session_lifecycle;
     pub mod sessions;
-    pub mod viewers;
 }
 pub mod runtime;
 pub mod scheduler;
@@ -32,7 +31,6 @@ pub fn create_router(_config: &Config, db_state: DbState) -> Router<DbState> {
         .merge(routes::sessions::router())
         .merge(routes::hosts::router())
         .merge(routes::session_lifecycle::router())
-        .merge(routes::viewers::router())
         .merge(routes::mcp::router(db_state.clone()))
         .merge(routes::fleet::router())
 }

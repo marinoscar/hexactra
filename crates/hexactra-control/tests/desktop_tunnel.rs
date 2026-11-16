@@ -326,3 +326,172 @@ async fn closes_an_idle_tunnel() {
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert_eq!(events(&f.store, "desktop.closed")[0]["reason"], "idle");
 }
+
+async fn take(url: &str, host: uuid::Uuid, user: &str, name: &str) -> reqwest::Response {
+    reqwest::Client::new()
+        .post(format!("{url}/v1/hosts/{host}/takeover"))
+        .bearer_auth(OPERATOR)
+        .json(&json!({ "actor": { "user_id": user, "display_name": name }, "ttl_s": 60 }))
+        .send()
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn takeover_pauses_actions_and_is_held_by_one_person() {
+    use hexactra_client::ControlClient;
+    use hexactra_core::remote::{CreateSessionRequest, RemoteAction};
+    let f = start(Limits::default()).await;
+    let (host, id) = register(&f.url, "node", true).await;
+    // A connected browser, so a session can be created.
+    let status = HostPollStatus {
+        browser_connected: true,
+        on_demand: false,
+        profiles: None,
+        accepts_commands: true,
+    };
+    host.poll(id, &status, Duration::from_millis(10))
+        .await
+        .unwrap();
+    let client = ControlClient::new(&f.url, OPERATOR).unwrap();
+    let session = client
+        .create_session(&CreateSessionRequest::default())
+        .await
+        .unwrap();
+
+    let r = take(&f.url, id, "u1", "Person A").await;
+    assert_eq!(r.status(), 201);
+    let lease: Value = r.json().await.unwrap();
+    let lease_id = lease["lease_id"].as_str().unwrap().to_string();
+
+    // Someone else cannot take it; the same person extends it.
+    let held = take(&f.url, id, "u2", "Person B").await;
+    assert_eq!(held.status(), 409);
+    assert_eq!(
+        held.json::<Value>().await.unwrap()["error"],
+        "takeover_held"
+    );
+    let again: Value = take(&f.url, id, "u1", "Person A")
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(again["lease_id"].as_str().unwrap(), lease_id);
+
+    // The agent's next action waits.
+    let nav = RemoteAction::Navigate {
+        url: "https://example.test".into(),
+        tab_id: None,
+    };
+    let err = client
+        .act(session.id, nav.clone(), Some(Duration::from_millis(100)))
+        .await
+        .unwrap_err();
+    assert_eq!(err.status(), Some(409));
+    assert!(err.to_string().contains("takeover_active"), "{err}");
+
+    let renew = reqwest::Client::new()
+        .post(format!("{}/v1/hosts/{id}/takeover/{lease_id}/renew", f.url))
+        .bearer_auth(OPERATOR)
+        .json(&json!({ "ttl_s": 120 }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(renew.status(), 200);
+    let del = reqwest::Client::new()
+        .delete(format!("{}/v1/hosts/{id}/takeover/{lease_id}", f.url))
+        .bearer_auth(OPERATOR)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(del.status(), 204);
+    // Released: the action is queued again (it times out here: no browser runs it).
+    let err = client
+        .act(session.id, nav.clone(), Some(Duration::from_millis(100)))
+        .await;
+    assert!(err
+        .as_ref()
+        .map(|_| true)
+        .unwrap_or_else(|e| e.status() != Some(409)));
+    let kinds: Vec<String> = f.store.log.recent().into_iter().map(|e| e.kind).collect();
+    for k in ["takeover.started", "takeover.renewed", "takeover.released"] {
+        assert!(kinds.iter().any(|x| x == k), "missing {k}");
+    }
+}
+
+#[tokio::test]
+async fn input_reaches_the_node_only_while_the_viewer_holds_the_lease() {
+    let f = start(Limits::default()).await;
+    let (host, id) = register(&f.url, "node", true).await;
+    let s: Value = open(&f.url, id).await.json().await.unwrap(); // actor user_id "u1"
+    let path = format!("/v1/desktop/{}/connect", s["tunnel_id"].as_str().unwrap());
+    let url = f.url.clone();
+    let token = s["connect_token"].as_str().unwrap().to_string();
+    let viewer = tokio::spawn(async move { dial(&url, &path, &token).await.unwrap() });
+    let mut node = host_leg(&f.url, &host, id).await;
+    let mut viewer = viewer.await.unwrap();
+
+    let mut hello = RFB.to_vec();
+    hello.extend([1, 1]); // security None, ClientInit
+    viewer
+        .send(Message::Binary(hello.clone().into()))
+        .await
+        .unwrap();
+    assert_eq!(next_binary(&mut node).await, hello);
+
+    let pointer = [5u8, 1, 0, 10, 0, 20];
+    let fb_request = [3u8, 1, 0, 0, 0, 0, 7, 128, 4, 56];
+    let mut both = pointer.to_vec();
+    both.extend(fb_request);
+    viewer
+        .send(Message::Binary(both.clone().into()))
+        .await
+        .unwrap();
+    assert_eq!(
+        next_binary(&mut node).await,
+        fb_request,
+        "watching: the click is dropped"
+    );
+
+    // Someone else's lease does not let this viewer type either.
+    assert_eq!(take(&f.url, id, "u2", "Person B").await.status(), 201);
+    viewer
+        .send(Message::Binary(both.clone().into()))
+        .await
+        .unwrap();
+    assert_eq!(next_binary(&mut node).await, fb_request);
+    let lease: Value = reqwest::Client::new()
+        .get(format!("{}/v1/hosts/{id}/takeover", f.url))
+        .bearer_auth(OPERATOR)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    reqwest::Client::new()
+        .delete(format!(
+            "{}/v1/hosts/{id}/takeover/{}",
+            f.url,
+            lease["lease_id"].as_str().unwrap()
+        ))
+        .bearer_auth(OPERATOR)
+        .send()
+        .await
+        .unwrap();
+
+    // With its own lease, the viewer's click goes through.
+    assert_eq!(take(&f.url, id, "u1", "Person A").await.status(), 201);
+    viewer
+        .send(Message::Binary(both.clone().into()))
+        .await
+        .unwrap();
+    assert_eq!(next_binary(&mut node).await, both);
+
+    // Not RFB: the tunnel closes.
+    viewer
+        .send(Message::Binary(vec![42u8].into()))
+        .await
+        .unwrap();
+    assert_eq!(close_code(&mut node).await, 4400);
+}

@@ -3,7 +3,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { Auth, CurrentOrg, CurrentUser, Public } from '@marinoscar/platform-api/identity';
 import type { FastifyReply } from 'fastify';
 
-import { DESKTOP_COOKIE, DesktopViewerService, viewerPath } from './desktop-viewer.service';
+import { DESKTOP_COOKIE, DesktopViewerService, viewerPath, type TakeoverLease } from './desktop-viewer.service';
 
 const secure = () => (process.env.APP_URL ?? '').startsWith('https://');
 
@@ -47,6 +47,36 @@ export class DesktopViewerController {
   ): Promise<void> {
     await this.viewer.revoke(userId, hostId);
     reply.header('set-cookie', this.viewer.clearCookieHeader(hostId, secure()));
+  }
+
+  /** Who controls the host's desktop now (null: nobody; the agent runs). */
+  @Get('hosts/:id/takeover')
+  @Auth({ permissions: ['fleet:desktop'] })
+  takeover(@Param('id', ParseUUIDPipe) hostId: string): Promise<TakeoverLease | null> {
+    return this.viewer.currentTakeover(hostId);
+  }
+
+  /** Takes control of the host's desktop: the agent pauses until you release it (5 minutes, renewed while you watch). */
+  @Post('hosts/:id/takeover')
+  @HttpCode(201)
+  @Auth({ permissions: ['fleet:desktop'] })
+  takeOver(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) hostId: string): Promise<TakeoverLease> {
+    return this.viewer.takeOver(userId, hostId);
+  }
+
+  @Post('hosts/:id/takeover/:leaseId/renew')
+  @HttpCode(200)
+  @Auth({ permissions: ['fleet:desktop'] })
+  renew(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) hostId: string, @Param('leaseId', ParseUUIDPipe) leaseId: string): Promise<TakeoverLease> {
+    return this.viewer.renewTakeover(userId, hostId, leaseId);
+  }
+
+  /** Gives control back: the agent continues. */
+  @Delete('hosts/:id/takeover/:leaseId')
+  @HttpCode(204)
+  @Auth({ permissions: ['fleet:desktop'] })
+  release(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) hostId: string, @Param('leaseId', ParseUUIDPipe) leaseId: string): Promise<void> {
+    return this.viewer.release(userId, hostId, leaseId);
   }
 
   /**
