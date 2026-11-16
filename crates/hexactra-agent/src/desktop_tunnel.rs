@@ -6,6 +6,7 @@
 //! same outbound HTTPS it uses for work, with its own host credential, and
 //! pipes bytes both ways. The node opens no inbound port.
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -38,6 +39,158 @@ pub enum DesktopError {
     Vnc { target: String, reason: String },
     #[error("tunnel_failed: {0}")]
     Tunnel(String),
+    #[error("desktop_unavailable:wayland: this desktop session is Wayland, which blocks screen sharing; log in with an X11 session (\"Ubuntu on Xorg\")")]
+    Wayland,
+}
+
+/// The person's X11 desktop shared on demand (attended mode, #341): x11vnc
+/// runs only while someone views it, on a Unix socket in a 0700 directory,
+/// and the person sees a notice while it runs.
+pub struct OnDemandVnc {
+    /// x11vnc (overridable for tests).
+    pub binary: PathBuf,
+    /// Where its socket goes (a private directory, created 0700).
+    pub dir: PathBuf,
+    /// Grace after the last viewer leaves before x11vnc stops.
+    pub grace: Duration,
+    state: tokio::sync::Mutex<OnDemandState>,
+}
+
+#[derive(Default)]
+struct OnDemandState {
+    child: Option<tokio::process::Child>,
+    viewers: usize,
+    generation: u64,
+}
+
+impl OnDemandVnc {
+    pub fn new(binary: PathBuf, dir: PathBuf) -> Self {
+        Self {
+            binary,
+            dir,
+            grace: Duration::from_secs(30),
+            state: Default::default(),
+        }
+    }
+
+    /// The default for this user: `x11vnc` and `$XDG_RUNTIME_DIR/hexactra/vnc`.
+    pub fn from_env() -> Self {
+        let runtime = std::env::var_os("XDG_RUNTIME_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir);
+        Self::new(
+            std::env::var_os("HEXACTRA_X11VNC")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| "x11vnc".into()),
+            runtime.join("hexactra").join("vnc"),
+        )
+    }
+
+    fn socket(&self) -> PathBuf {
+        self.dir.join("vnc.sock")
+    }
+
+    /// Wayland blocks the tools that share a live desktop (x11vnc on
+    /// XWayland shows a black screen), so a Wayland session is refused even
+    /// when it sets DISPLAY.
+    pub fn wayland() -> bool {
+        Self::wayland_in(|k| std::env::var(k).ok())
+    }
+
+    pub fn wayland_in(env: impl Fn(&str) -> Option<String>) -> bool {
+        env("XDG_SESSION_TYPE").is_some_and(|t| t == "wayland")
+            || (env("WAYLAND_DISPLAY").is_some() && env("DISPLAY").is_none())
+    }
+
+    /// Starts x11vnc if needed and connects to it; counts the viewer.
+    async fn connect(&self) -> Result<tokio::net::UnixStream, String> {
+        let mut st = self.state.lock().await;
+        let running = match st.child.as_mut() {
+            Some(c) => c.try_wait().ok().flatten().is_none(),
+            None => false,
+        };
+        if !running {
+            std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&self.dir, std::fs::Permissions::from_mode(0o700));
+            }
+            let _ = std::fs::remove_file(self.socket());
+            let display = std::env::var("DISPLAY")
+                .map_err(|_| "no DISPLAY: not in an X11 desktop session".to_string())?;
+            let mut cmd = tokio::process::Command::new(&self.binary);
+            cmd.args(["-display", &display])
+                // No TCP listener: only the Unix socket in our 0700 directory.
+                .args(["-rfbport", "0", "-unixsock"])
+                .arg(self.socket())
+                .args(["-shared", "-forever", "-nopw", "-noxdamage", "-quiet"])
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .kill_on_drop(true);
+            if let Ok(auth) = std::env::var("XAUTHORITY") {
+                cmd.args(["-auth", &auth]);
+            }
+            st.child = Some(
+                cmd.spawn()
+                    .map_err(|e| format!("starting {}: {e}", self.binary.display()))?,
+            );
+        }
+        let deadline = tokio::time::Instant::now() + LOCAL_CONNECT;
+        let stream = loop {
+            match tokio::net::UnixStream::connect(self.socket()).await {
+                Ok(s) => break s,
+                Err(e) if tokio::time::Instant::now() >= deadline => {
+                    return Err(format!("x11vnc did not start: {e}"))
+                }
+                Err(_) => tokio::time::sleep(Duration::from_millis(100)).await,
+            }
+        };
+        st.viewers += 1;
+        st.generation += 1;
+        Ok(stream)
+    }
+
+    /// One viewer left; x11vnc stops after the grace period if nobody else views.
+    async fn release(self: Arc<Self>) {
+        let generation = {
+            let mut st = self.state.lock().await;
+            st.viewers = st.viewers.saturating_sub(1);
+            if st.viewers > 0 {
+                return;
+            }
+            st.generation
+        };
+        tokio::time::sleep(self.grace).await;
+        let mut st = self.state.lock().await;
+        if st.viewers == 0 && st.generation == generation {
+            if let Some(mut c) = st.child.take() {
+                let _ = c.kill().await;
+                tracing::info!("stopped sharing the desktop (no viewer)");
+            }
+            let _ = std::fs::remove_file(self.socket());
+        }
+    }
+
+    /// Whether x11vnc runs now.
+    pub async fn running(&self) -> bool {
+        let mut st = self.state.lock().await;
+        match st.child.as_mut() {
+            Some(c) => c.try_wait().ok().flatten().is_none(),
+            None => false,
+        }
+    }
+}
+
+/// Tells the person at the machine that someone views their desktop.
+fn notify(summary: &str, body: &str) {
+    let _ = std::process::Command::new("notify-send")
+        .args(["--app-name=Hexactra", "--icon=video-display", summary, body])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn();
 }
 
 /// Opens desktops for this host.
@@ -47,6 +200,7 @@ pub struct DesktopBridge {
     control_url: String,
     token: String,
     slots: Arc<Semaphore>,
+    on_demand: Option<Arc<OnDemandVnc>>,
 }
 
 trait Stream: AsyncRead + AsyncWrite + Unpin + Send {}
@@ -55,11 +209,19 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> Stream for T {}
 impl DesktopBridge {
     pub fn new(target: Option<DesktopTarget>, control_url: &str, token: &str) -> Self {
         Self {
-            target,
             control_url: control_url.trim_end_matches('/').to_string(),
             token: token.to_string(),
             slots: Arc::new(Semaphore::new(MAX_OPEN)),
+            on_demand: (target == Some(DesktopTarget::X11vncOnDemand))
+                .then(|| Arc::new(OnDemandVnc::from_env())),
+            target,
         }
+    }
+
+    /// Uses this on-demand provider (tests).
+    pub fn with_on_demand(mut self, v: OnDemandVnc) -> Self {
+        self.on_demand = Some(Arc::new(v));
+        self
     }
 
     /// The fabric WebSocket URL of a tunnel's host leg.
@@ -92,6 +254,13 @@ impl DesktopBridge {
             DesktopTarget::Unix(_) => {
                 return Err(vnc("Unix sockets are not supported here".into()))
             }
+            DesktopTarget::X11vncOnDemand => {
+                if OnDemandVnc::wayland() {
+                    return Err(DesktopError::Wayland);
+                }
+                let v = self.on_demand.as_ref().ok_or(DesktopError::Unavailable)?;
+                Box::new(v.connect().await.map_err(vnc)?)
+            }
             DesktopTarget::Tcp(addr) => Box::new(
                 tokio::time::timeout(LOCAL_CONNECT, tokio::net::TcpStream::connect(addr))
                     .await
@@ -105,6 +274,16 @@ impl DesktopBridge {
     /// Connects the local desktop to the fabric and pipes it in the
     /// background. Returns once both ends are connected.
     pub async fn open(&self, host_id: Uuid, tunnel_id: Uuid) -> Result<(), DesktopError> {
+        self.open_for(host_id, tunnel_id, None).await
+    }
+
+    /// As [`open`](Self::open), naming who views (for the on-screen notice).
+    pub async fn open_for(
+        &self,
+        host_id: Uuid,
+        tunnel_id: Uuid,
+        viewer: Option<&str>,
+    ) -> Result<(), DesktopError> {
         if self.target.is_none() {
             return Err(DesktopError::Unavailable);
         }
@@ -114,6 +293,15 @@ impl DesktopBridge {
             .try_acquire_owned()
             .map_err(|_| DesktopError::Busy)?;
         let local = self.connect_local().await?;
+        let shared = self
+            .on_demand
+            .clone()
+            .filter(|_| self.target == Some(DesktopTarget::X11vncOnDemand));
+        let release = |v: Option<Arc<OnDemandVnc>>| async move {
+            if let Some(v) = v {
+                v.release().await;
+            }
+        };
         let mut req = self
             .host_leg_url(host_id, tunnel_id)
             .into_client_request()
@@ -126,18 +314,43 @@ impl DesktopBridge {
         let config = tokio_tungstenite::tungstenite::protocol::WebSocketConfig::default()
             .max_message_size(Some(MAX_MESSAGE))
             .max_frame_size(Some(MAX_MESSAGE));
-        let (ws, _) = tokio::time::timeout(
+        let dialed = tokio::time::timeout(
             DIAL,
             tokio_tungstenite::connect_async_with_config(req, Some(config), false),
         )
-        .await
-        .map_err(|_| DesktopError::Tunnel("timed out connecting to the fabric".into()))?
-        // The error never includes the request headers (the credential).
-        .map_err(|e| DesktopError::Tunnel(e.to_string()))?;
+        .await;
+        let (ws, _) = match dialed {
+            Ok(Ok(ws)) => ws,
+            // The error never includes the request headers (the credential).
+            Ok(Err(e)) => {
+                release(shared).await;
+                return Err(DesktopError::Tunnel(e.to_string()));
+            }
+            Err(_) => {
+                release(shared).await;
+                return Err(DesktopError::Tunnel(
+                    "timed out connecting to the fabric".into(),
+                ));
+            }
+        };
         tracing::info!(%tunnel_id, "desktop tunnel connected");
+        let who = viewer.unwrap_or("Someone").to_string();
+        if shared.is_some() {
+            notify(
+                "Your desktop is being viewed",
+                &format!("{who} is viewing this desktop through Hexactra."),
+            );
+        }
         tokio::spawn(async move {
             let (up, down) = pipe(local, ws).await;
             tracing::info!(%tunnel_id, bytes_up = up, bytes_down = down, "desktop tunnel closed");
+            if shared.is_some() {
+                notify(
+                    "Desktop viewing ended",
+                    &format!("{who} stopped viewing this desktop."),
+                );
+            }
+            release(shared).await;
             drop(permit);
         });
         Ok(())
@@ -266,6 +479,99 @@ mod tests {
         );
         let e = gone.open(Uuid::new_v4(), Uuid::new_v4()).await.unwrap_err();
         assert!(e.to_string().starts_with("vnc_unavailable: "), "{e}");
+    }
+
+    #[test]
+    fn wayland_sessions_are_refused() {
+        let env = |pairs: &'static [(&'static str, &'static str)]| {
+            move |k: &str| {
+                pairs
+                    .iter()
+                    .find(|(n, _)| *n == k)
+                    .map(|(_, v)| v.to_string())
+            }
+        };
+        assert!(OnDemandVnc::wayland_in(env(&[
+            ("XDG_SESSION_TYPE", "wayland"),
+            ("DISPLAY", ":0")
+        ])));
+        assert!(OnDemandVnc::wayland_in(env(&[(
+            "WAYLAND_DISPLAY",
+            "wayland-0"
+        )])));
+        assert!(!OnDemandVnc::wayland_in(env(&[
+            ("XDG_SESSION_TYPE", "x11"),
+            ("DISPLAY", ":0")
+        ])));
+        assert!(!OnDemandVnc::wayland_in(env(&[("DISPLAY", ":0")])));
+    }
+
+    /// A fake x11vnc: listens on the -unixsock path, greets each viewer with
+    /// RFB, records it ran, and runs until killed.
+    fn fake_x11vnc(dir: &std::path::Path) -> PathBuf {
+        let script = dir.join("x11vnc");
+        std::fs::write(
+            &script,
+            format!(
+                "#!/usr/bin/env python3\nimport os,socket,sys\nargs=sys.argv\npath=args[args.index('-unixsock')+1]\nassert args[args.index('-rfbport')+1]=='0'\nopen('{}','a').write('start\\n')\ns=socket.socket(socket.AF_UNIX);s.bind(path);s.listen(4)\nwhile True:\n  c,_=s.accept();c.sendall(b'RFB 003.008\\n')\n",
+                dir.join("starts").display()
+            ),
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        script
+    }
+
+    #[tokio::test]
+    async fn shares_the_x11_desktop_only_while_someone_views_it() {
+        if std::process::Command::new("python3")
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+        std::env::set_var("DISPLAY", ":0");
+        let dir = tempfile::tempdir().unwrap();
+        let mut v = OnDemandVnc::new(fake_x11vnc(dir.path()), dir.path().join("vnc"));
+        v.grace = Duration::from_millis(300);
+        let (url, fabric) = fake_fabric().await;
+        let bridge = DesktopBridge::new(Some(DesktopTarget::X11vncOnDemand), &url, "hxh_t")
+            .with_on_demand(v);
+        let shared = bridge.on_demand.clone().unwrap();
+        assert!(!shared.running().await, "nothing runs before anyone views");
+        bridge
+            .open_for(Uuid::new_v4(), Uuid::new_v4(), Some("Person A"))
+            .await
+            .unwrap();
+        assert!(shared.running().await);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(dir.path().join("vnc"))
+                .unwrap()
+                .permissions()
+                .mode();
+            assert_eq!(mode & 0o777, 0o700, "the socket directory is private");
+        }
+        let (_, mut ws) = fabric.await.unwrap();
+        match ws.next().await.unwrap().unwrap() {
+            Message::Binary(b) => assert_eq!(&b[..], RFB),
+            m => panic!("{m:?}"),
+        }
+        // The viewer leaves: x11vnc stops after the grace period.
+        ws.close(None).await.unwrap();
+        drop(ws);
+        tokio::time::sleep(Duration::from_millis(900)).await;
+        assert!(!shared.running().await, "x11vnc stops once nobody views");
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("starts")).unwrap(),
+            "start\n"
+        );
     }
 
     #[test]

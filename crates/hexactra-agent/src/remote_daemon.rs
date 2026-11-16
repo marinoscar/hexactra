@@ -212,13 +212,21 @@ fn spawn_open_desktop(
     host_id: Uuid,
     command: DispatchedCommand,
 ) {
-    let HostCommand::OpenDesktop { tunnel_id, .. } = command.command else {
+    let HostCommand::OpenDesktop {
+        tunnel_id,
+        actor_display_name,
+        ..
+    } = command.command
+    else {
         return;
     };
     let desktop = desktop.clone();
     let client = client.clone();
     tokio::spawn(async move {
-        let result = match desktop.open(host_id, tunnel_id).await {
+        let result = match desktop
+            .open_for(host_id, tunnel_id, actor_display_name.as_deref())
+            .await
+        {
             Ok(()) => OperationResult {
                 ok: true,
                 result: Some(serde_json::json!({ "tunnel_id": tunnel_id })),

@@ -44,7 +44,7 @@ A node can run **unattended**, **attended**, or **both at once**. In both mode, 
 | Chrome | Google Chrome, one browser per profile. You sign into Google **once** per profile through the remote desktop; the agent then works in that profile. | Your own Google Chrome profile |
 | Remote view and takeover | Yes, from the web app and the Android app | Yes. Your live desktop, with a notification on the machine while someone watches. |
 | Best for | An always-on robot with its own signed-in profiles | Letting an agent use the browser you are already signed into |
-| Status | `hexactra agent install --mode unattended` | *Planned* (#341) |
+| Install | `hexactra agent install --mode unattended` | `hexactra agent install --mode attended` (or `--mode both`) |
 
 **The extension is installed by Chrome policy.** Google Chrome no longer loads unpacked extensions. `hexactra agent install` installs Google Chrome if needed, and writes one Chrome enterprise policy file (`/etc/opt/chrome/policies/managed/hexactra.json`) that force-installs the Hexactra extension. Chrome then shows "Managed by your organization", which refers to that one file. Available now as `hexactra agent chrome setup` (or `hexactra agent install --google-chrome`); `hexactra agent doctor` checks it.
 
@@ -79,7 +79,9 @@ Ubuntu 22.04 and later log in to Wayland by default. Wayland blocks the tools th
 - **To switch:** on the login screen, choose your user, click the gear and pick **Ubuntu on Xorg**.
 - **Or:** set `WaylandEnable=false` in `/etc/gdm3/custom.conf` and reboot.
 
-`hexactra agent install` detects Wayland and tells you this. Wayland support is planned.
+`hexactra agent install --mode attended` detects Wayland and tells you this. Wayland support is planned.
+
+**While someone views your desktop**, the agent runs x11vnc on a private socket and Chrome shows nothing extra. A notice on your screen names the person, and x11vnc stops 30 seconds after they leave. Nothing listens on the network.
 
 ## Using a node
 

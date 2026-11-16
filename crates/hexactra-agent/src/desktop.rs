@@ -12,6 +12,10 @@ pub enum DesktopTarget {
     Unix(PathBuf),
     /// `tcp:127.0.0.1:5900`: an RFB server on a loopback port.
     Tcp(SocketAddr),
+    /// `x11vnc`: the person's own X11 desktop (attended mode, #341). The
+    /// agent starts x11vnc on a private Unix socket only while someone
+    /// views it, and stops it 30 seconds after the last viewer leaves.
+    X11vncOnDemand,
 }
 
 impl std::str::FromStr for DesktopTarget {
@@ -19,6 +23,9 @@ impl std::str::FromStr for DesktopTarget {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.trim();
+        if s == "x11vnc" {
+            return Ok(DesktopTarget::X11vncOnDemand);
+        }
         if let Some(path) = s.strip_prefix("unix:") {
             let path = PathBuf::from(path);
             if !path.is_absolute() {
@@ -38,7 +45,7 @@ impl std::str::FromStr for DesktopTarget {
             return Ok(DesktopTarget::Tcp(addr));
         }
         Err(format!(
-            "expected unix:/path/to/socket or tcp:127.0.0.1:<port>, got {s}"
+            "expected unix:/path/to/socket, tcp:127.0.0.1:<port> or x11vnc, got {s}"
         ))
     }
 }
@@ -48,6 +55,7 @@ impl std::fmt::Display for DesktopTarget {
         match self {
             DesktopTarget::Unix(p) => write!(f, "unix:{}", p.display()),
             DesktopTarget::Tcp(a) => write!(f, "tcp:{a}"),
+            DesktopTarget::X11vncOnDemand => write!(f, "x11vnc"),
         }
     }
 }
@@ -81,7 +89,7 @@ mod tests {
 
     #[test]
     fn displays_round_trip() {
-        for s in ["unix:/tmp/x.sock", "tcp:127.0.0.1:5900"] {
+        for s in ["unix:/tmp/x.sock", "tcp:127.0.0.1:5900", "x11vnc"] {
             assert_eq!(s.parse::<DesktopTarget>().unwrap().to_string(), s);
         }
     }

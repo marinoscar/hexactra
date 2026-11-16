@@ -12,10 +12,25 @@ export interface AgentConfig {
   sandboxHelper?: string | undefined;
   /** Run without a desktop session (WantedBy=default.target); the browser then needs a display some other way. */
   noDesktop?: boolean | undefined;
+  /**
+   * Attended mode (#341): the agent drives the person's own Google Chrome
+   * (extension by policy) and shares their X11 desktop on demand; it
+   * launches no browser of its own.
+   */
+  attended?: boolean | undefined;
 }
 
 /** The agent's environment: no secret in it (the host credential is a 0600 file the agent reads). */
 export function agentEnv(paths: AgentPaths, c: AgentConfig): Record<string, string> {
+  if (c.attended) {
+    return {
+      HEXACTRA_URL: c.agentUrl,
+      HEXACTRA_HOST_NAME: c.name,
+      HEXACTRA_HOST_MODE: 'attended',
+      // x11vnc on a private socket, only while someone views (with a notice on screen).
+      HEXACTRA_DESKTOP_VNC: 'x11vnc',
+    };
+  }
   return {
     HEXACTRA_URL: c.agentUrl,
     HEXACTRA_HOST_NAME: c.name,
@@ -42,7 +57,7 @@ export function unitFile(paths: AgentPaths, c: AgentConfig): string {
   return [
     '# Managed by `hexactra agent`; edits are replaced by the next install or update.',
     '[Unit]',
-    'Description=Hexactra browser host (hexactra agent)',
+    `Description=Hexactra browser host (hexactra agent${c.attended ? ', attended: your own Chrome and desktop' : ''})`,
     ...(c.noDesktop ? [] : ['PartOf=graphical-session.target', 'After=graphical-session.target']),
     '',
     '[Service]',
