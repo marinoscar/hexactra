@@ -1,0 +1,29 @@
+# Security review: nodes and remote desktops (epic #333)
+
+This page checks each security invariant of epic #333 against the code and the test that proves it. Re-check it when any of these files change.
+
+| # | Invariant | Where it is enforced | Proof |
+|---|---|---|---|
+| 1 | **No inbound ports on a node.** It only dials out over HTTPS. | The agent polls `/fabric/v1/hosts/{id}/next` and dials the tunnel's node leg (`crates/hexactra-agent/src/desktop_tunnel.rs`). Unattended display: `Xtigervnc -rfbport -1 -nolisten tcp -rfbunixpath …` (`console/apps/cli/src/agent/unattended.ts`). Attended: `x11vnc -rfbport 0 -unixsock …` (`OnDemandVnc`). | CI `node-e2e`: `ss -ltnH` before and after the install shows no new listener. Manual check on a real attended run: x11vnc has no TCP listener. `unattended.test.ts` asserts the exact `ExecStart`. |
+| 2 | **The desktop server is local only**, on a Unix socket in a 0700 directory, or on loopback inside a container. | `RuntimeDirectoryMode=0700` and `-rfbunixmode 0600` (unattended). `OnDemandVnc` sets its directory to 0700 (attended). The bundled host uses `x11vnc -localhost` in its own network namespace, unpublished. `DesktopTarget` refuses any non-loopback TCP target. | CI `node-e2e`: `/run/hexactra` is `700`. `shares_the_x11_desktop_only_while_someone_views_it` asserts 0700. `refuses_network_and_relative_targets`. The stack smoke checks that fabric-host publishes no port. |
+| 3 | **Tunnels are authenticated at both ends.** The node's leg uses its own host credential, for its own id only. The viewer's leg uses a single-use `hxd_` token that lasts 30 s and is stored only as a hash. | `crates/hexactra-control/src/runtime/desktop.rs`: `host_connect` with `check_host`, and `client_connect` with a constant-time hash compare and `claimed`. | `desktop_tunnel.rs`: reuse gives `401`, a wrong or client token `401`, another host's tunnel `404`, a non-credential `401`. |
+| 4 | **A viewer session is bound** to one host, one user and one organization. It is stored in the database, revocable, and the permission is re-checked on every connect. | `console/apps/api/src/fleet/desktop-viewer.service.ts` (`ViewerSession`, `authorize`, `holdsPermission`). The cookie is HttpOnly, SameSite=Strict and scoped to `/viewer/<hostId>/`. | `viewer-sessions.db.spec.ts`: another host's path `401`, revoked `401`, expired `401`, a deactivated user `403`, no permission `403`, and the sweep. |
+| 5 | **Watching is the default.** Keyboard and mouse input pass only while that viewer holds the takeover lease, and the fabric enforces it. | `RfbInputFilter` in `crates/hexactra-control/src/runtime/takeover.rs`, applied in the relay. The web page also opens view-only. | `input_reaches_the_node_only_while_the_viewer_holds_the_lease` (real WebSockets), plus the filter unit tests (split frames, unknown types close the tunnel with `4400`). |
+| 6 | **Everything is audited.** | Fabric events: `desktop.requested` (with the actor), `desktop.opened`, `desktop.closed` (reason and byte counts), `takeover.started`, `takeover.renewed`, `takeover.released`. Console logs for sessions opened and revoked, and for takeovers. | `relays_the_desktop_both_ways_and_audits_it` and `takeover_pauses_actions_and_is_held_by_one_person`. |
+| 7 | **Tokens never appear in URLs or logs.** | The `hxd_` token travels in `Authorization` from the API to nginx (`auth_request_set`), then to the fabric, never to the browser. nginx's default log format has no request headers. The enrollment token is never printed. | The tunnel test asserts the token is absent from every event. `node-e2e.sh` greps the install log for the enrollment token. `viewer-sessions.db.spec.ts` checks the cookie holds only a random value whose hash is stored. |
+
+## Also checked
+
+- **Chrome policy scope.** Exactly one file, `/etc/opt/chrome/policies/managed/hexactra.json`, with one `ExtensionSettings` entry for the Hexactra id. Uninstall removes it and never removes Chrome. Proof: `googleChrome.test.ts`.
+- **`--password-store=basic`.** A node where nobody logs in has no keyring, so Chrome stores cookies and saved passwords with a fixed key. This is stated in docs/nodes.md, with the advice to use full-disk encryption.
+- **The unattended user is isolated.** The `hexactra` system user has no login shell and a home at 0700. It owns its profiles and its 0600 credential; the owner keeps no copy. Proof: `unattended.test.ts` and CI `node-e2e` (owner and mode checks).
+- **Attended notice.** When someone views a person's own desktop, x11vnc runs only during the view, and a notice names the viewer. Proof: `OnDemandVnc` and the manual check in docs/nodes-acceptance.md §5.
+- **CRX signing key.** It lives in a GitHub secret, is written to a 0600 file in `$RUNNER_TEMP` and deleted after packing. A different key changes the extension id: `scripts/extension-id.mjs --check` fails, and `pack-crx3.mjs` refuses to pack. Rotating the key means updating the manifest key and every id literal (apps/chrome-extension/README.md).
+- **Agent pauses at a safe point.** A takeover refuses new actions, and an action already running finishes. The console's runner waits up to 30 minutes; external agents are told at once.
+- **Legacy surfaces removed.** The ticket viewer (`/viewer/local/`, `POST /api/fleet/viewer-ticket`) and the unused `routes/viewers.rs` are gone. Anything under `/viewer/` other than a desktop WebSocket answers 404.
+
+## Residual risks
+
+- **One fabric replica.** Tunnels and takeover leases live in memory, so run a single `fabric-control`. A restart drops open desktops; viewers reconnect.
+- **Google may still challenge a new sign-in**, even from a residential IP. The person answers it through the desktop.
+- **Software rendering is detectable.** On a machine without an Intel or AMD GPU, WebGL reports software rendering; `agent doctor` warns.

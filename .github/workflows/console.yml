@@ -4,10 +4,10 @@ name: Console CI
 on:
   push:
     branches: [main]
-    paths: ['console/**', 'deploy/container/**', 'crates/**', 'apps/chrome-extension/**', '.github/workflows/console.yml']
+    paths: ['console/**', 'deploy/container/**', 'crates/**', 'apps/chrome-extension/**', 'scripts/package-agent-bundle.mjs', 'scripts/pack-crx3.mjs', 'scripts/crx3.mjs', '.github/workflows/console.yml']
   pull_request:
     branches: [main]
-    paths: ['console/**', 'deploy/container/**', 'crates/**', 'apps/chrome-extension/**', '.github/workflows/console.yml']
+    paths: ['console/**', 'deploy/container/**', 'crates/**', 'apps/chrome-extension/**', 'scripts/package-agent-bundle.mjs', 'scripts/pack-crx3.mjs', 'scripts/crx3.mjs', '.github/workflows/console.yml']
   workflow_dispatch:
 
 concurrency:
@@ -125,3 +125,37 @@ jobs:
       # Builds every image, brings the stack up, and checks health, the private
       # fabric, the bundled host and the /viewer/local/ ticket gate.
       - run: bash scripts/stack-smoke.sh
+
+  node-e2e:
+    name: Unattended node end to end (real sudo and systemd)
+    # A VM runner, like a mini PC: systemd, passwordless sudo, no GPU (the
+    # node falls back to software rendering and doctor warns).
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Build the agent, native host and fabric (release)
+        run: cargo build --release --locked -p hexactra-agent -p hexactra-native-host -p hexactra-control
+      - name: Build the extension
+        run: pnpm install --frozen-lockfile && pnpm --filter "@hexactra/chrome-extension..." build
+      - name: Build the console CLI
+        working-directory: console
+        run: npm ci && npm run build --workspace=cli
+      - run: sudo apt-get update -qq
+      # Installs the node exactly as a person would, then checks it from the
+      # fabric's side (console/scripts/node-e2e.sh). With the signing key it
+      # also checks Google Chrome's policy install of the extension.
+      - name: Unattended node end to end
+        env:
+          EXTENSION_CRX_KEY: ${{ secrets.EXTENSION_CRX_KEY }}
+        run: bash console/scripts/node-e2e.sh
+      - name: Logs
+        if: failure()
+        run: |
+          sudo journalctl -u hexactra-desktop -u hexactra-session -u hexactra-node-agent -n 300 --no-pager || true
+          ls -la /run/hexactra /var/lib/hexactra 2>&1 | head -40 || true
