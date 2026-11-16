@@ -2,8 +2,8 @@ import { textColor, useTuiTheme, type TuiScreenProps } from '@marinoscar/platfor
 import { Box, Text, useInput } from 'ink';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
-import { consoleApi } from './console-api.js';
-import { hostLine, type FleetHost } from './fleet.js';
+import { consoleApi, consoleWebUrl } from './console-api.js';
+import { desktopUrl, hostLine, type FleetHost } from './fleet.js';
 
 /**
  * Fleet: hosts and their profiles. Up/down selects a host; `d` drains or
@@ -39,6 +39,14 @@ export function FleetScreen({ onDone }: TuiScreenProps): ReactNode {
     if (key.upArrow) setSelected((i) => Math.max(0, i - 1));
     if (key.downArrow) setSelected((i) => Math.min(hosts.length - 1, i + 1));
     if (input === 'r') void load();
+    if (input === 'o') {
+      const h = hosts[selected]!;
+      try {
+        setStatus(h.desktop ? `Open in a browser: ${desktopUrl(consoleWebUrl(), h.id)}` : `${h.name} does not share a desktop`);
+      } catch (e) {
+        setStatus(e instanceof Error ? e.message : String(e));
+      }
+    }
     if (input === 'd') {
       const h = hosts[selected]!;
       setStatus(`${h.draining ? 'Undraining' : 'Draining'} ${h.name}…`);
@@ -67,7 +75,7 @@ export function FleetScreen({ onDone }: TuiScreenProps): ReactNode {
         ))}
       </Box>
       {status && <Text>{status}</Text>}
-      <Text dimColor>↑/↓ select · d drain/undrain · r refresh · esc back</Text>
+      <Text dimColor>↑/↓ select · o desktop link · d drain/undrain · r refresh · esc back</Text>
     </Box>
   );
 }

@@ -54,3 +54,11 @@ export function consoleApi(fetch?: FetchLike): ApiClient {
   const { apiBaseUrl, token } = consoleCredentials();
   return new ApiClient({ baseUrl: apiBaseUrl, token, ...(fetch ? { fetch } : {}) });
 }
+
+/** The console's web address (no trailing slash), for links to its pages. */
+export function consoleWebUrl(): string {
+  const file = stored();
+  const serverUrl = process.env[envVar('SERVER_URL')] || file.serverUrl;
+  if (!serverUrl) throw new AuthRequiredError('Not logged in. Run `hexactra login` first.');
+  return resolveApiBaseUrl(serverUrl).replace(/\/api\/?$/, '').replace(/\/+$/, '');
+}

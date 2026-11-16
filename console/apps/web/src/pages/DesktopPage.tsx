@@ -1,0 +1,168 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { Alert, Box, Button, Chip, Stack, Typography } from '@mui/material';
+import { usePlatformHost } from '@marinoscar/platform-web/core';
+import RFB from '@novnc/novnc/lib/rfb';
+
+import type { FleetHost } from './FleetPage';
+
+type Status = 'loading' | 'connecting' | 'connected' | 'reconnecting' | 'closed' | 'offline' | 'unavailable' | 'error';
+
+/** Reconnect delays: 1 s doubling to 30 s, ten tries. */
+export const backoff = (attempt: number) => Math.min(30_000, 1000 * 2 ** attempt);
+const MAX_TRIES = 10;
+
+const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
+
+/**
+ * A host's remote desktop (#339, docs/nodes.md), from the web app and the
+ * Android app. The page opens a viewer session (an HttpOnly cookie scoped to
+ * this host's /viewer/ path), then a WebSocket to /viewer/<id>/websockify
+ * that nginx checks with the API and relays through the fabric to the node.
+ */
+export function DesktopPage() {
+  const { id = '' } = useParams<{ id: string }>();
+  const { api } = usePlatformHost();
+  const navigate = useNavigate();
+  const screen = useRef<HTMLDivElement | null>(null);
+  const rfb = useRef<RFB | null>(null);
+  const tries = useRef(0);
+  const closing = useRef(false);
+  const [host, setHost] = useState<FleetHost | null>(null);
+  const [status, setStatus] = useState<Status>('loading');
+  const [error, setError] = useState<string | null>(null);
+
+  const connect = useCallback(
+    (wsPath: string) => {
+      if (!screen.current) return;
+      const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const r = new RFB(screen.current, `${scheme}//${window.location.host}${wsPath}`, { shared: true });
+      r.scaleViewport = true;
+      r.focusOnClick = true;
+      r.viewOnly = false;
+      r.addEventListener('connect', () => {
+        tries.current = 0;
+        setStatus('connected');
+      });
+      r.addEventListener('disconnect', () => {
+        rfb.current = null;
+        if (closing.current) return;
+        if (tries.current >= MAX_TRIES) {
+          setStatus('error');
+          setError('The desktop connection keeps dropping. Check that the node is online, then reconnect.');
+          return;
+        }
+        setStatus('reconnecting');
+        const wait = backoff(tries.current++);
+        window.setTimeout(() => {
+          if (!closing.current) connect(wsPath);
+        }, wait);
+      });
+      rfb.current = r;
+    },
+    [],
+  );
+
+  const open = useCallback(async () => {
+    setError(null);
+    setStatus('loading');
+    try {
+      const h = await api.get<FleetHost>(`/fleet/hosts/${id}`);
+      setHost(h);
+      if (!h.online) return setStatus('offline');
+      if (!h.desktop) return setStatus('unavailable');
+      const s = await api.post<{ wsPath: string }>(`/fleet/hosts/${id}/viewer-session`, {});
+      setStatus('connecting');
+      tries.current = 0;
+      connect(s.wsPath);
+    } catch (e) {
+      setStatus('error');
+      setError(message(e, 'Could not open the desktop'));
+    }
+  }, [api, connect, id]);
+
+  useEffect(() => {
+    closing.current = false;
+    void open();
+    return () => {
+      closing.current = true;
+      rfb.current?.disconnect();
+      void api.delete(`/fleet/hosts/${id}/viewer-session`).catch(() => undefined);
+    };
+  }, [api, id, open]);
+
+  const close = async () => {
+    closing.current = true;
+    rfb.current?.disconnect();
+    await api.delete(`/fleet/hosts/${id}/viewer-session`).catch(() => undefined);
+    navigate('/fleet');
+  };
+
+  const paste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      rfb.current?.clipboardPasteFrom(text);
+    } catch {
+      setError('The browser did not allow reading the clipboard.');
+    }
+  };
+
+  const fullscreen = () => void screen.current?.requestFullscreen?.().catch(() => undefined);
+
+  const label: Record<Status, string> = {
+    loading: 'Opening…',
+    connecting: 'Connecting…',
+    connected: 'Connected',
+    reconnecting: 'Reconnecting…',
+    closed: 'Closed',
+    offline: 'Node offline',
+    unavailable: 'No desktop',
+    error: 'Not connected',
+  };
+
+  return (
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: 'calc(100dvh - 64px)', p: { xs: 1, sm: 2 }, gap: 1 }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
+        <Typography variant="h6" component="h1" sx={{ mr: 1 }}>
+          {host ? `${host.name}: desktop` : 'Desktop'}
+        </Typography>
+        <Chip size="small" color={status === 'connected' ? 'success' : 'default'} label={label[status]} />
+        <Box sx={{ flexGrow: 1 }} />
+        <Button size="small" onClick={fullscreen} disabled={status !== 'connected'}>
+          Full screen
+        </Button>
+        <Button size="small" onClick={() => rfb.current?.sendCtrlAltDel()} disabled={status !== 'connected'}>
+          Ctrl-Alt-Del
+        </Button>
+        <Button size="small" onClick={() => void paste()} disabled={status !== 'connected'}>
+          Paste clipboard
+        </Button>
+        <Button size="small" onClick={() => void open()} disabled={status === 'connected' || status === 'loading'}>
+          Reconnect
+        </Button>
+        <Button size="small" color="inherit" onClick={() => void close()}>
+          Close
+        </Button>
+      </Stack>
+      {status === 'offline' && host && (
+        <Alert severity="warning">
+          {host.name} is offline (last seen {new Date(host.lastSeen).toLocaleString()}). On the node, run `hexactra agent status`.
+        </Alert>
+      )}
+      {status === 'unavailable' && host && (
+        <Alert severity="info">
+          {host.name} does not share a desktop. Attended nodes need an X11 session (not Wayland); see the node guide.
+        </Alert>
+      )}
+      {error && <Alert severity="error">{error}</Alert>}
+      <Box
+        ref={screen}
+        aria-label="Remote desktop"
+        sx={{ flexGrow: 1, minHeight: 240, bgcolor: '#000', borderRadius: 1, overflow: 'hidden', touchAction: 'none' }}
+      />
+      <Typography variant="caption" color="text.secondary">
+        Everything you do here happens on the node. Opening and closing the desktop is recorded. <RouterLink to="/fleet">Back to Fleet</RouterLink>
+      </Typography>
+    </Box>
+  );
+}

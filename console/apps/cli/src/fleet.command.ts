@@ -1,8 +1,8 @@
 import type { Command } from 'commander';
 import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 
-import { consoleApi } from './console-api.js';
-import { findHost, hostLine, type FleetCommandResult, type FleetEnrollment, type FleetHost } from './fleet.js';
+import { consoleApi, consoleWebUrl } from './console-api.js';
+import { desktopUrl, findHost, hostLine, type FleetCommandResult, type FleetEnrollment, type FleetHost } from './fleet.js';
 
 const out = (s: string): void => {
   process.stdout.write(`${s}\n`);
@@ -83,6 +83,19 @@ export const fleetCommand: CliCommandRegistration = (program: Command) => {
       const list = await consoleApi().get<FleetCommandResult[]>(`/fleet/hosts/${await hostId(ref)}/commands`);
       if (o.json) return json(list);
       for (const c of list) out(`${c.createdAt}  ${c.kind}  ${c.profile ?? '-'}  ${c.state}${c.error ? `  ${c.error}` : ''}`);
+    });
+
+  fleet
+    .command('desktop <host>')
+    .description("Print the console link to a host's remote desktop (it opens in the web or Android app; needs fleet:desktop)")
+    .option('--json', 'print JSON')
+    .action(async (ref: string, o: { json?: boolean }) => {
+      const h = findHost(await consoleApi().get<FleetHost[]>('/fleet/hosts'), ref);
+      if (!h.desktop) throw new Error(`${h.name} does not share a desktop. Unattended nodes do; attended nodes need X11.`);
+      const url = desktopUrl(consoleWebUrl(), h.id);
+      if (o.json) return json({ hostId: h.id, name: h.name, online: h.online, url });
+      out(url);
+      if (!h.online) out(`(${h.name} is offline right now)`);
     });
 
   const profile = fleet.command('profile').description('Profiles on a host');

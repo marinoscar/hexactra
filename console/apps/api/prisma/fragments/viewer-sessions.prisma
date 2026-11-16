@@ -1,0 +1,25 @@
+// Remote desktop viewer sessions (#339, docs/nodes.md): what lets a person's
+// browser open one node's desktop through nginx at /viewer/<hostId>/.
+// Only the sha256 of the cookie value is stored. A session is bound to one
+// host, one user and one organization; it ends when it expires or is revoked,
+// and every connect re-checks that the user still holds `fleet:desktop`.
+// No foreign keys (like action tokens): the `fleet.viewer-sessions.sweep` job
+// deletes rows a day after they expire.
+
+model ViewerSession {
+  id             String    @id @default(uuid()) @db.Uuid
+  /// sha256 (hex) of the cookie value.
+  tokenHash      String    @unique @map("token_hash") @db.Char(64)
+  hostId         String    @map("host_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  /// The organization the person acted in (null in single-organization mode without one).
+  organizationId String?   @map("organization_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz
+  lastConnectAt  DateTime? @map("last_connect_at") @db.Timestamptz
+
+  @@index([expiresAt])
+  @@index([userId, hostId])
+  @@map("viewer_sessions")
+}

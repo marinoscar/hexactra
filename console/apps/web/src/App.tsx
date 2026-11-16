@@ -34,6 +34,7 @@ import { AlertsPage } from '@marinoscar/platform-web/alerts/ui';
 import { BrandLogo, BrandMark } from './components/BrandLogo';
 import { ALERTS_ENABLED, WEBHOOKS_ENABLED } from './config/userSettingsSections';
 import { FabricConnectionPage } from './pages/FabricConnectionPage';
+import { DesktopPage } from './pages/DesktopPage';
 import { FleetPage } from './pages/FleetPage';
 import { InboxPage } from './pages/InboxPage';
 import { QuestionPage } from './pages/QuestionPage';
@@ -188,6 +189,7 @@ export function AppRoutes() {
           <Route path="runs" element={<Gate permission="runs:read"><RunsPage /></Gate>} />
           <Route path="runs/:id" element={<Gate permission="runs:read"><RunDetailPage /></Gate>} />
           <Route path="fleet" element={<Gate permission="fleet:read"><FleetPage /></Gate>} />
+          <Route path="fleet/hosts/:id/desktop" element={<Gate permission="fleet:desktop"><DesktopPage /></Gate>} />
           <Route path="settings" element={<Hub sections={USER_SETTINGS_SECTIONS} hubKey="user-settings-hub" title="Settings" subtitle="Manage your account preferences." />} />
           <Route path="settings/tokens" element={<UserTokensPage />} />
           <Route path="admin/settings" element={<Hub sections={ADMIN_SECTIONS} hubKey="admin-settings-hub" title="Administration" subtitle="Users, background jobs and the health of this deployment." />} />

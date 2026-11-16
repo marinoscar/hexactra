@@ -60,7 +60,7 @@ Ubuntu 22.04 and later log in to Wayland by default. Wayland blocks the tools th
 Everything goes through the console. A node is just another host in **Fleet**.
 - **Web app and Android app:**
   - Fleet shows each host's mode and whether it is online.
-  - **Open desktop** shows its screen (*Planned* #339).
+  - **Open desktop** shows its screen in the console, for people with `fleet:desktop` (`hexactra fleet desktop <host>` prints the link).
   - **Set up a profile…** opens a Chrome window on the node for you to sign in (*Planned* #340).
   - Tasks and runs pick a host and profile.
 - **MCP:** `hosts_list` shows hosts with their mode. Browser tools and goals take a profile. Viewing and controlling a desktop is for people, so MCP has no viewer tool.
