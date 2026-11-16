@@ -129,7 +129,7 @@ or in a JSON MCP configuration:
 }
 ```
 
-The token is read from `HEXACTRA_API_TOKEN` or `~/.config/hexactra/api-token`. From another machine, point `HEXACTRA_URL` at the SSH tunnel or private address from section 3. The server tells the agent to stop and ask you when it meets a CAPTCHA, a verification code, a passkey or a payment confirmation.
+The token is read from `HEXACTRA_API_TOKEN` or `~/.config/hexactra/api-token`. From another machine, point `HEXACTRA_URL` at the SSH tunnel or private address from section 3. The server tells the agent to work like a person at your computer, and to ask you only for what only you have: a verification code sent to you, a passkey, a password it was not given, or a CAPTCHA puzzle it cannot pass.
 
 ## 5. Seeing the screen
 
@@ -189,7 +189,7 @@ Respect each site's terms of use, and keep automated use of your own accounts at
 
 - The token file (`~/.config/hexactra/api-token`, mode `0600`) is the only credential. Rotate it by deleting the file and restarting `hexactra-control` (it generates a new one), then restart `hexactra-agent`.
 - The bridge socket lives in `$XDG_RUNTIME_DIR/hexactra` (mode `0700`) and refuses other Unix users.
-- Remote callers can only run the bounded actions in [remote-control-api.md](remote-control-api.md). There is no arbitrary JavaScript. Navigation is limited to `http(s)` and `about:blank`.
+- Remote callers have the owner's full powers (VISION §27): every action in [remote-control-api.md](remote-control-api.md), including JavaScript in the page (`evaluate`), trusted input by position, and the node's OS desktop (`desktop_*`). Any URL but `javascript:` opens. Treat the API token like the keys to your computer.
 - To stop remote control: `systemctl --user stop hexactra-agent`, or disable the extension.
 
 ## Troubleshooting

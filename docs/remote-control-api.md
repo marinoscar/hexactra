@@ -219,7 +219,7 @@ Actions are JSON objects tagged by `type`. `tab_id` is optional on tab-scoped ac
 | `type_secret` | `handoff_id`, `selector`, `clear`?, `submit`? | `{}`. Types the answer of a `secret` handoff; see [secrets](#secrets-typed-by-the-fabric) |
 | `press` | `key`, `selector`? | `{}` |
 | `scroll` | `dx`?, `dy`?, `selector`? | `{ x, y }` |
-| `screenshot` | — | `{ artifact_id, mime, size, expires_at }`: fetch the bytes from `GET /v1/artifacts/{artifact_id}` ([artifacts](#artifacts)) |
+| `screenshot` | `marks`? | `{ artifact_id, mime, size, expires_at, width, height, url, title }`: fetch the bytes from `GET /v1/artifacts/{artifact_id}` ([artifacts](#artifacts)). The image is in CSS pixels, the coordinates `click_at` takes. With `"marks": true`, interactive elements are boxed and numbered in the image and listed as `marks: [{ n, selector, tag, role, text, x, y, w, h }]` |
 | `text` | `selector`?, `max_chars`? | `{ text, truncated }` |
 | `elements` | `max_elements`? | `{ elements: [{ selector, tag, role, text, ... }] }` |
 | `wait_for` | `selector`, `timeout_ms`? (≤ 60000) | `{}` |
@@ -227,12 +227,31 @@ Actions are JSON objects tagged by `type`. `tab_id` is optional on tab-scoped ac
 | `new_tab` | `url`? | `{ tab_id }` |
 | `activate_tab`, `close_tab` | `tab_id` | `{}` |
 | `back`, `forward`, `reload` | — | `{}` |
+| `evaluate` | `script`, `await_promise`? | `{ value, type, description? }`. Runs any JavaScript in the page's main world, whatever its CSP, like the DevTools console: the last expression is the value, and top-level `await` works. A thrown exception fails the operation with its message |
+| `click_at` | `x`, `y`, `button`? (`left`, `middle`, `right`), `click_count`? (1–3), `modifiers`? (`alt`, `ctrl`, `meta`, `shift`) | `{}`. A trusted click at viewport CSS pixels |
+| `mouse` | `op` (`move`, `down`, `up`), `x`, `y`, `button`? | `{}`. A trusted hover, press or release |
+| `drag` | `from_x`, `from_y`, `to_x`, `to_y`, `steps`? (1–100, default 10) | `{}`. A trusted drag with intermediate moves |
+| `scroll_at` | `x`, `y`, `dx`?, `dy`? | `{}`. A trusted mouse-wheel scroll at a point |
+| `type_keys` | `text` | `{}`. Trusted typing at the focus: key events per character (one insert above 300 characters) |
+| `key` | `key`, `modifiers`? | `{}`. One trusted key press: `Enter`, `Escape`, `ArrowDown`, `F5`, or a character with modifiers (`a` + `ctrl`) |
+| `desktop_screenshot` | — | Like `screenshot`, for the node's **whole screen** (screen pixels), with `width` and `height` |
+| `desktop_click` | `x`, `y`, `button`?, `click_count`? | `{}`. Anywhere on the node's screen |
+| `desktop_move` | `x`, `y` | `{}` |
+| `desktop_drag` | `from_x`, `from_y`, `to_x`, `to_y` | `{}` |
+| `desktop_type` | `text` | `{}`. Into whatever has the desktop focus (a native file dialog, another window) |
+| `desktop_key` | `key` | `{}`. xdotool chords: `Return`, `ctrl+l`, `alt+F4`, `ctrl+a BackSpace` |
+| `desktop_scroll` | `dy` (−100–100 wheel clicks), `x`? and `y`? (both or neither) | `{}` |
+
+### Full powers (#366)
+
+Hexactra is a human emulator for its owner (VISION §27): an agent may do anything a person at the machine could do.
+- **In the page:** the extension executes `evaluate` and the positional actions through `chrome.debugger`. Pages receive trusted events (`isTrusted: true`). No CDP domain is ever `enable`d, and Chrome runs with `--silent-debugger-extension-api`, so there is no debugging bar.
+- **On the desktop:** the host agent runs the `desktop_*` actions itself, on its X11 display, with `xdotool` (arguments are passed directly, never through a shell). It captures the screen with ImageMagick `import`, or `xwd` + `convert`. A node without them fails the action, naming the package to install (`sudo apt install xdotool imagemagick`). Desktop actions are serialised per node: one pointer, one keyboard.
 
 Policy enforced before an action is queued:
 
-- `navigate` and `new_tab` accept only `http(s)` URLs and `about:blank`. `javascript:`, `file:`, `chrome:`, `data:` and extension URLs are refused.
-- There is no "run arbitrary JavaScript" action.
-- Selectors are limited to 2,000 characters and typed text to 100,000.
+- `navigate` and `new_tab` open any URL a person could type (`http(s)`, `file:`, `chrome:`, `data:`, `about:`, extension pages). Only `javascript:` is refused: use `evaluate`.
+- Selectors are limited to 2,000 characters, typed text to 100,000, scripts to 200,000, and coordinates to 0–100,000.
 - Logs record the action `type` only, never URLs, selectors or typed text.
 - A `type` action with `"sensitive": true` (CLI: `type --sensitive`) still sends its text to the host, but the operation view reports it as `[secret]`; use it for passwords the caller already holds.
 
@@ -251,7 +270,7 @@ Screenshots do not travel inside operation results. The control plane keeps the 
 
 ## Human handoff
 
-When an agent meets something only a person should do (a CAPTCHA, a one-time code, a passkey, a purchase to approve), it opens a **handoff**. The session pauses: actions return `409 handoff_pending` until a person answers or the handoff expires. Hexactra never tries to solve or bypass these checks.
+When an agent meets something only its owner can do (a one-time code sent to them, a passkey, a password it was not given, a CAPTCHA puzzle it cannot pass, or a purchase the task asks to confirm), it opens a **handoff**. The session pauses: actions return `409 handoff_pending` until a person answers or the handoff expires.
 
 | Method and path | Auth | Purpose |
 |---|---|---|

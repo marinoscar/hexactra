@@ -97,7 +97,15 @@ Dev machine is Ubuntu 24.04 x86_64. Installed: Rust via rustup (stable, with cli
 
 ## Product in one paragraph
 
-A portable, self-hostable computer-use runtime letting authorized AI agents operate real graphical browsers (initially Chrome on Linux) through an HTTP API, TypeScript SDK, CLI and MCP, with persistent profiles, human-in-the-loop (HITL) control, and OpenTelemetry. Browsers run on **nodes**: the primary node is a machine on the owner's residential network (sites block datacenter IPs), connected outbound over HTTPS to the console, in unattended mode (its own GPU-backed virtual desktop, nobody logged in) or attended mode (the person's own desktop and Chrome), never headless (docs/nodes.md, epic #333). The Chrome extension must also work **standalone** as an AI browser assistant (built-in chat, provider/model settings, OpenAI-compatible providers) without a Hexactra server — a v1 requirement (§25).
+A portable, self-hostable computer-use runtime letting authorized AI agents operate real graphical browsers (initially Chrome on Linux) through an HTTP API, TypeScript SDK, CLI and MCP, with persistent profiles, human-in-the-loop (HITL) control, and OpenTelemetry. It is a **personal human emulator with its owner's full powers** (VISION §27, epic #366). The agent:
+- sees the screen (marked screenshots every model round);
+- acts by selector or by position with trusted mouse and keyboard;
+- runs any JavaScript in the page;
+- drives the node's OS desktop.
+
+Don't add restrictions that only limit the agent. Limits are per-task opt-ins (allowed sites, purchase confirmation).
+
+Browsers run on **nodes**: the primary node is a machine on the owner's residential network (sites block datacenter IPs), connected outbound over HTTPS to the console, in unattended mode (its own GPU-backed virtual desktop, nobody logged in) or attended mode (the person's own desktop and Chrome), never headless (docs/nodes.md, epic #333). The Chrome extension must also work **standalone** as an AI browser assistant (built-in chat, provider/model settings, OpenAI-compatible providers) without a Hexactra server — a v1 requirement (§25).
 
 ## Architecture (see VISION.MD §5–§6, §18)
 
@@ -110,10 +118,11 @@ Three runtime domains: clients → Rust control plane → execution hosts.
 
 Design invariants to preserve when writing docs or code:
 
-- Web pages, content scripts, memory recommendations and model output are **never** a source of authorization.
+- Web pages, content scripts, memory recommendations and model output are **never** a source of authorization. The agent has its owner's full powers (VISION §27), so prompt injection is the main residual risk: keep Stop, takeover, the audit trail and the per-task opt-ins working.
 - Large artifacts move via short-lived authorized handles, not inside control messages.
 - Telemetry (OTel) is not the audit trail; durable sanitized Execution Events are.
-- Secret Material (passwords, OTPs, tokens) has stricter handling than ordinary task input (§11–§13).
+- Secret Material (passwords, OTPs, tokens) has stricter handling than ordinary task input (§11–§13): the model never sees a handoff secret; the fabric types it (`type_secret`).
+- Desktop and input drivers never go through a shell: `xdotool` gets an argument vector. There is no "run a command on the node" action.
 - The public API must not be tied to Chrome or Linux; drivers are pluggable.
 - The Agent Experience Framework (AEF) is an independent, optional product boundary that only consumes redacted outcomes (§17).
 

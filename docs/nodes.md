@@ -103,7 +103,8 @@ A node is built to look like what it is: a person's computer at home.
 - **Network:** your residential IP.
 - **Headful Google Chrome**, never headless. Headless browsers are the first thing anti-bot systems detect.
 - **A real GPU.** On a virtual display without a GPU, Chrome reports a software graphics renderer (SwiftShader) to WebGL, or WebGL fails, and anti-bot scripts read that string. On an unattended node Chrome renders with the machine's integrated Intel or AMD graphics directly (Vulkan through the render node), which every mini PC has, so WebGL names the real hardware. You need no extra hardware, and this has nothing to do with AI.
-- **Driven by the extension:** no `--enable-automation` flag, no DevTools or CDP port, and no WebDriver.
+- **Driven by the extension:** no `--enable-automation` flag, no DevTools or CDP port, and no WebDriver. The extension's trusted input and JavaScript go through `chrome.debugger` without enabling any CDP domain, and Chrome runs with `--silent-debugger-extension-api`, so there is no debugging bar.
+- **Real input, and the whole desktop:** the agent clicks, types and scrolls with trusted events, and drives the node's desktop (native file pickers, OS dialogs) with `xdotool`. Install the desktop tools on every node: `sudo apt install xdotool imagemagick` (VISION §27).
 - **Your environment:** the system's timezone and locale, and a normal screen size (1920x1080).
 - **Persistent profiles:** real sign-ins, kept between runs.
 
