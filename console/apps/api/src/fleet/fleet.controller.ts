@@ -3,7 +3,7 @@ import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { ApiTags } from '@nestjs/swagger';
 import { Auth } from '@marinoscar/platform-api/identity';
 
-import { CreateEnrollmentDto, CreateProfileDto, DrainDto, profileNameSchema, type FleetCommandResult, type FleetEnrollment, type FleetHost } from './fleet.schemas';
+import { CreateEnrollmentDto, CreateProfileDto, DrainDto, ShowProfileDto, profileNameSchema, type FleetCommandResult, type FleetEnrollment, type FleetHost } from './fleet.schemas';
 import { FleetService } from './fleet.service';
 import { FleetHostResponseDto } from '../openapi/console.responses';
 
@@ -74,6 +74,18 @@ export class FleetController {
   @Auth({ permissions: ['fleet:write'] })
   deleteProfile(@Param('id', ParseUUIDPipe) id: string, @Param('name') name: string): Promise<FleetCommandResult> {
     return this.fleet.command(id, { type: 'delete_profile', profile: profile(name) });
+  }
+
+  /**
+   * Starts the profile's browser on the host's desktop and opens a page in it
+   * (default: the Google sign-in), so a person signs in through the remote
+   * desktop (#340). Showing a signed-in browser needs `fleet:desktop`.
+   */
+  @Post('hosts/:id/profiles/:name/show')
+  @HttpCode(200)
+  @Auth({ permissions: ['fleet:desktop'] })
+  show(@Param('id', ParseUUIDPipe) id: string, @Param('name') name: string, @Body() body: ShowProfileDto): Promise<FleetCommandResult> {
+    return this.fleet.command(id, { type: 'show_profile', profile: profile(name), ...(body?.url ? { url: body.url } : {}) });
   }
 
   @Post('hosts/:id/profiles/:name/restart')

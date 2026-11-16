@@ -39,14 +39,40 @@ A node can run **unattended**, **attended**, or **both at once**. In both mode, 
 | | Unattended | Attended |
 |---|---|---|
 | Who is logged in | Nobody. It starts at boot. | You, at the machine's desktop |
-| Desktop | A persistent full desktop (XFCE) on a virtual display (KasmVNC) that uses the machine's built-in GPU | Your own desktop (an **X11** session for now, see below) |
+| Desktop | A persistent full desktop (XFCE) on a virtual display (TigerVNC's Xvnc, served only on a private Unix socket); Chrome renders with the machine's built-in GPU | Your own desktop (an **X11** session for now, see below) |
 | OS user | A dedicated `hexactra` user, isolated from your account and files | Your own account |
 | Chrome | Google Chrome, one browser per profile. You sign into Google **once** per profile through the remote desktop; the agent then works in that profile. | Your own Google Chrome profile |
 | Remote view and takeover | Yes, from the web app and the Android app | Yes. Your live desktop, with a notification on the machine while someone watches. |
 | Best for | An always-on robot with its own signed-in profiles | Letting an agent use the browser you are already signed into |
-| Status | *Planned* (#340) | *Planned* (#341) |
+| Status | `hexactra agent install --mode unattended` | *Planned* (#341) |
 
 **The extension is installed by Chrome policy.** Google Chrome no longer loads unpacked extensions. `hexactra agent install` installs Google Chrome if needed, and writes one Chrome enterprise policy file (`/etc/opt/chrome/policies/managed/hexactra.json`) that force-installs the Hexactra extension. Chrome then shows "Managed by your organization", which refers to that one file. Available now as `hexactra agent chrome setup` (or `hexactra agent install --google-chrome`); `hexactra agent doctor` checks it.
+
+### Set up an unattended node
+
+On the mini PC, logged in as yourself:
+
+```bash
+hexactra login https://hex.example.test
+hexactra agent install --mode unattended      # asks for your sudo password once
+hexactra agent doctor                          # every check, and how to fix what fails
+```
+
+It installs:
+- Google Chrome, with the extension by policy;
+- the desktop (TigerVNC, XFCE);
+- the `hexactra` user;
+- the agent in `/opt/hexactra`;
+- three system units: `hexactra-desktop`, `hexactra-session` and `hexactra-node-agent`.
+
+They start at every boot with nobody logged in.
+
+To use it:
+1. In the console, open **Fleet → Open desktop**.
+2. Pick a profile and click **Sign in to profile**, then sign in to Google there.
+3. Close that Chrome window to save the sign-in.
+
+Manage it with `hexactra agent status | logs | start | stop | restart | uninstall --mode unattended`. `hexactra agent update` updates it too.
 
 ### Attended mode and Wayland
 Ubuntu 22.04 and later log in to Wayland by default. Wayland blocks the tools that share a live desktop, so attended mode needs an X11 session for now.
@@ -61,7 +87,7 @@ Everything goes through the console. A node is just another host in **Fleet**.
 - **Web app and Android app:**
   - Fleet shows each host's mode and whether it is online.
   - **Open desktop** shows its screen in the console, for people with `fleet:desktop` (`hexactra fleet desktop <host>` prints the link).
-  - **Set up a profile…** opens a Chrome window on the node for you to sign in (*Planned* #340).
+  - **Sign in to profile** (on the desktop page) opens that profile's Chrome on the node at the Google sign-in; `hexactra fleet profile show <host> <profile>` does the same.
   - Tasks and runs pick a host and profile.
 - **MCP:** `hosts_list` shows hosts with their mode. Browser tools and goals take a profile. Viewing and controlling a desktop is for people, so MCP has no viewer tool.
 - **API and SDK:** the same operations over REST (`/api/docs`).
@@ -74,7 +100,7 @@ When a site needs you (a CAPTCHA, a code, an approval), the run pauses and asks 
 A node is built to look like what it is: a person's computer at home.
 - **Network:** your residential IP.
 - **Headful Google Chrome**, never headless. Headless browsers are the first thing anti-bot systems detect.
-- **A real GPU.** On a virtual display without a GPU, Chrome reports a software graphics renderer (SwiftShader) to WebGL, or WebGL fails, and anti-bot scripts read that string. The unattended desktop uses the machine's integrated Intel or AMD graphics, which every mini PC has. You need no extra hardware, and this has nothing to do with AI.
+- **A real GPU.** On a virtual display without a GPU, Chrome reports a software graphics renderer (SwiftShader) to WebGL, or WebGL fails, and anti-bot scripts read that string. On an unattended node Chrome renders with the machine's integrated Intel or AMD graphics directly (Vulkan through the render node), which every mini PC has, so WebGL names the real hardware. You need no extra hardware, and this has nothing to do with AI.
 - **Driven by the extension:** no `--enable-automation` flag, no DevTools or CDP port, and no WebDriver.
 - **Your environment:** the system's timezone and locale, and a normal screen size (1920x1080).
 - **Persistent profiles:** real sign-ins, kept between runs.

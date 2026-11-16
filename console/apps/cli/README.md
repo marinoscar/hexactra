@@ -206,6 +206,15 @@ hexactra agent chrome status          # what is set up for Google Chrome
 hexactra agent doctor                 # every check, and how to fix what fails (exit code 1 if any fails)
 ```
 
+**Unattended node (`--mode unattended`).** It gives the machine its own desktop: it starts at boot with nobody logged in, and the agent drives its Google Chrome profiles (see [docs/nodes.md](../../../docs/nodes.md#set-up-an-unattended-node)).
+- **Asks for sudo once.** It sets up Google Chrome and the extension policy (below) and installs TigerVNC, XFCE and fonts.
+- **A dedicated user.** It creates the system user `hexactra` and copies the agent to `/opt/hexactra`. The host credential goes to `hexactra` only, with mode 0600; you keep no copy.
+- **Three system units.** `hexactra-desktop` is the 1920x1080 display, served only on a 0600 Unix socket and never on TCP; `hexactra-session` runs XFCE; `hexactra-node-agent` runs the agent.
+- **Graphics.** With Intel or AMD graphics, Chrome renders on the GPU. Without them, `agent doctor` warns that rendering is in software.
+- **Other commands.** `status`, `doctor` and `update` cover it; `logs`, `start`, `stop`, `restart` and `uninstall` take `--mode unattended`. `uninstall` keeps the browser profiles unless you add `--purge-profiles`.
+- **Options.** `--resolution 1920x1080` sets the screen size, and `--max-browsers` the number of profiles open at once.
+- **TUI.** Key `n` in the **Agent** screen does the same install.
+
 **Google Chrome (`--google-chrome`, or `hexactra agent chrome setup`).** Nodes run branded Google Chrome ([docs/nodes.md](../../../docs/nodes.md)). Chrome no longer loads unpacked extensions, so the CLI sets it up in three steps:
 1. Installs Google Chrome from Google's official `.deb`, if it is missing. That also adds Google's apt repository, so the system keeps Chrome updated.
 2. Writes one enterprise policy file, `/etc/opt/chrome/policies/managed/hexactra.json`, which force-installs and pins the Hexactra extension from the signed package each agent release publishes. Chrome then shows "Managed by your organization"; that refers to this one file.
