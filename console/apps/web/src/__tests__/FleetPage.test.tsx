@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { PlatformHostProvider } from '@marinoscar/platform-web/core';
 import { createTestPlatformHost } from '@marinoscar/platform-web/testing';
+import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 
 import { FleetPage, type FleetEnrollment, type FleetHost } from '../pages/FleetPage';
@@ -31,7 +32,9 @@ function renderPage(permissions: string[], responses: Record<string, unknown> = 
   const host = createTestPlatformHost({ permissions, responses: { 'GET /fleet/hosts': hosts, ...responses } });
   render(
     <PlatformHostProvider host={host}>
-      <FleetPage />
+      <MemoryRouter>
+        <FleetPage />
+      </MemoryRouter>
     </PlatformHostProvider>,
   );
   return host;
@@ -59,6 +62,17 @@ describe('FleetPage', () => {
     const other = screen.getByLabelText('Host mini-pc-attended');
     expect(within(other).getByText('Attended')).toBeInTheDocument();
     expect(within(other).queryByLabelText('Desktop available')).not.toBeInTheDocument();
+    // Opening a desktop needs fleet:desktop.
+    expect(within(card).queryByRole('link', { name: 'Open desktop' })).not.toBeInTheDocument();
+  });
+
+  it('links desktop hosts to the console desktop page for fleet:desktop, never to an external viewer', async () => {
+    const node: FleetHost = { ...hosts[0]!, id: '22222222-2222-4222-8222-222222222222', name: 'mini-pc', viewerUrl: null, mode: 'unattended', desktop: true };
+    const attended: FleetHost = { ...node, id: '33333333-3333-4333-8333-333333333333', name: 'mini-pc-attended', mode: 'attended', desktop: false };
+    renderPage(['fleet:read', 'fleet:desktop'], { 'GET /fleet/hosts': [node, attended] });
+    const card = await screen.findByLabelText('Host mini-pc');
+    expect(within(card).getByRole('link', { name: 'Open desktop' })).toHaveAttribute('href', `/fleet/hosts/${node.id}/desktop`);
+    expect(within(screen.getByLabelText('Host mini-pc-attended')).queryByRole('link', { name: 'Open desktop' })).not.toBeInTheDocument();
   });
 
   it('opens the bundled host through a one-time viewer ticket', async () => {

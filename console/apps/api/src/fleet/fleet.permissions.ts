@@ -15,4 +15,10 @@ export const FLEET_PERMISSIONS = {
     scope: 'org',
     defaultGrants: ['org_admin'],
   },
+  FLEET_DESKTOP: {
+    id: 'fleet:desktop',
+    description: "See and control a host's remote desktop (its signed-in browsers)",
+    scope: 'org',
+    defaultGrants: ['org_admin'],
+  },
 } as const;
