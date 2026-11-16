@@ -40,7 +40,8 @@ describe('tasks and runs, end to end', () => {
     });
     expect(created.statusCode).toBe(201);
     const task = body<{ id: string; maxSteps: number; profile: string }>(created);
-    expect(task).toMatchObject({ maxSteps: 40, profile: 'travel' });
+    // Full-power defaults (#366).
+    expect(task).toMatchObject({ maxSteps: 100, maxMinutes: 30, confirmRiskyActions: false, profile: 'travel' });
 
     expect(body<{ id: string }[]>(await app.inject({ method: 'GET', url: '/api/tasks', headers: as(bob.token) })).map((t) => t.id)).not.toContain(task.id);
     expect((await app.inject({ method: 'PATCH', url: `/api/tasks/${task.id}`, headers: as(bob.token), payload: { name: 'x' } })).statusCode).toBe(404);

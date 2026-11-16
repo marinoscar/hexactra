@@ -55967,19 +55967,19 @@
             }
           },
           "maxSteps": {
-            "default": 40,
+            "default": 100,
             "type": "integer",
             "minimum": 1,
-            "maximum": 200
+            "maximum": 1000
           },
           "maxMinutes": {
-            "default": 15,
+            "default": 30,
             "type": "integer",
             "minimum": 1,
-            "maximum": 240
+            "maximum": 480
           },
           "confirmRiskyActions": {
-            "default": true,
+            "default": false,
             "type": "boolean"
           },
           "model": {
@@ -56040,12 +56040,12 @@
           "maxSteps": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 200
+            "maximum": 1000
           },
           "maxMinutes": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 240
+            "maximum": 480
           },
           "confirmRiskyActions": {
             "type": "boolean"
@@ -57110,6 +57110,20 @@
                   "back",
                   "forward",
                   "reload",
+                  "evaluate",
+                  "click_at",
+                  "mouse",
+                  "drag",
+                  "scroll_at",
+                  "type_keys",
+                  "key",
+                  "desktop_screenshot",
+                  "desktop_click",
+                  "desktop_move",
+                  "desktop_drag",
+                  "desktop_type",
+                  "desktop_key",
+                  "desktop_scroll",
                   "type_handoff_secret"
                 ]
               }

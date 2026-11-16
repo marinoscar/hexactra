@@ -283,7 +283,7 @@
     },
     {
       "id": "browser.session",
-      "description": "Drive a browser directly: open, act, read artifacts, close (recorded as an external run)",
+      "description": "Drive a browser and its computer directly, like a person at the machine: open, look, act by selector or position, run JavaScript, use the desktop, read artifacts, close (recorded as an external run)",
       "rest": [
         "POST /api/browser/sessions",
         "POST /api/browser/sessions/{runId}/actions",
@@ -306,6 +306,19 @@
         "browser_back",
         "browser_tabs",
         "browser_screenshot",
+        "browser_evaluate",
+        "browser_click_at",
+        "browser_hover_at",
+        "browser_drag",
+        "browser_scroll_at",
+        "browser_type_keys",
+        "browser_key",
+        "browser_desktop_screenshot",
+        "browser_desktop_click",
+        "browser_desktop_type",
+        "browser_desktop_key",
+        "browser_desktop_scroll",
+        "browser_desktop_drag",
         "browser_close"
       ],
       "tui": {

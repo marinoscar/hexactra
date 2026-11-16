@@ -38,7 +38,8 @@ describe('the console MCP server', () => {
 
     const init = await rpc(t, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } } });
     expect(init.json.result).toMatchObject({ protocolVersion: '2025-06-18', serverInfo: { name: 'hexactra-console' }, capabilities: { tools: {} } });
-    expect(init.json.result.instructions).toMatch(/never try to bypass a CAPTCHA/i);
+    expect(init.json.result.instructions).toMatch(/full authority/i);
+    expect(init.json.result.instructions).toMatch(/browser_request_human/);
     expect((await rpc(t, { jsonrpc: '2.0', method: 'notifications/initialized' })).status).toBe(202);
 
     const list = await rpc(t, { jsonrpc: '2.0', id: 2, method: 'tools/list' });

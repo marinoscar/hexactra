@@ -42,7 +42,12 @@ const openSchema = z.object({
 });
 class OpenDto extends createZodDto(openSchema) {}
 
-const ACTION_TYPES = ['navigate', 'click', 'type', 'press', 'scroll', 'screenshot', 'text', 'elements', 'wait_for', 'tabs', 'new_tab', 'activate_tab', 'close_tab', 'back', 'forward', 'reload'] as const;
+const ACTION_TYPES = [
+  'navigate', 'click', 'type', 'press', 'scroll', 'screenshot', 'text', 'elements', 'wait_for', 'tabs', 'new_tab', 'activate_tab', 'close_tab', 'back', 'forward', 'reload',
+  // Full powers (#366): JavaScript, trusted positional input, the OS desktop.
+  'evaluate', 'click_at', 'mouse', 'drag', 'scroll_at', 'type_keys', 'key',
+  'desktop_screenshot', 'desktop_click', 'desktop_move', 'desktop_drag', 'desktop_type', 'desktop_key', 'desktop_scroll',
+] as const;
 const actionSchema = z.object({
   action: z.looseObject({ type: z.enum([...ACTION_TYPES, 'type_handoff_secret']) }),
   timeoutMs: z.number().int().min(100).max(120_000).optional(),
@@ -200,7 +205,7 @@ export class ExternalBrowserController {
               : 'done';
     await this.record(runId, userId, 'action', type, action, op.state === 'succeeded', summary, started);
     // A screenshot is returned by handle; fetch it from this console.
-    if (type === 'screenshot' && typeof result.artifact_id === 'string') {
+    if ((type === 'screenshot' || type === 'desktop_screenshot') && typeof result.artifact_id === 'string') {
       return { ...op, result: { ...result, url_path: `/api/browser/sessions/${runId}/artifacts/${result.artifact_id}` } };
     }
     return op;
