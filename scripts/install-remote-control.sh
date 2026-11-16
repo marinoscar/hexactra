@@ -75,7 +75,7 @@ Done. Next:
   1. In Chrome open chrome://extensions, turn on Developer mode, click
      "Load unpacked" and choose:
        $REPO_ROOT/apps/chrome-extension/dist
-     The extension id must be afamapffbfhaafbjnneoachpknjpmiof.
+     The extension id must be ahpjoclfeibdmlnbaednepiihpamklcl.
   2. Check the connection:
        $BIN_DIR/hexactra-fabric status        # expect browser=true
   3. Try it:

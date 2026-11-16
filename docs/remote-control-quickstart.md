@@ -28,7 +28,7 @@ Then load the extension into the Chrome profile you want to drive:
 
 1. Open `chrome://extensions` and turn on **Developer mode**.
 2. Click **Load unpacked** and choose `apps/chrome-extension/dist`.
-3. Check the id is `afamapffbfhaafbjnneoachpknjpmiof`. The native host only accepts that id.
+3. Check the id is `ahpjoclfeibdmlnbaednepiihpamklcl`. The native host only accepts that id.
 
 Check it:
 
@@ -196,7 +196,7 @@ Respect each site's terms of use, and keep automated use of your own accounts at
 
 | Symptom | Check |
 |---|---|
-| `browser=false` | Is the extension loaded with id `afamapffbfhaafbjnneoachpknjpmiof`? Run `ls ~/.config/google-chrome/NativeMessagingHosts/com.hexactra.nativehost.json`, then `journalctl --user -u hexactra-agent`. |
+| `browser=false` | Is the extension loaded with id `ahpjoclfeibdmlnbaednepiihpamklcl`? Run `ls ~/.config/google-chrome/NativeMessagingHosts/com.hexactra.nativehost.json`, then `journalctl --user -u hexactra-agent`. |
 | `no_host_available` | `systemctl --user status hexactra-agent`; the agent must reach the control plane URL. |
 | `cannot act on this page` | Chrome blocks extensions on `chrome://` pages and the Web Store. Navigate to a normal site first. |
 | `handoff_pending` | The agent asked you for something. Run `hexactra-fabric handoff list`, then answer or cancel. |

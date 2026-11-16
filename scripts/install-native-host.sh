@@ -22,7 +22,7 @@
 set -euo pipefail
 
 HOST_NAME="com.hexactra.nativehost"
-EXTENSION_ID="afamapffbfhaafbjnneoachpknjpmiof"
+EXTENSION_ID="ahpjoclfeibdmlnbaednepiihpamklcl"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BINARY=""
 EXTRA_DIRS=()

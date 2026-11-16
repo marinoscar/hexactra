@@ -14,7 +14,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 pub const NATIVE_HOST_NAME: &str = "com.hexactra.nativehost";
 
 /// Id of the Hexactra extension, pinned by the public key in its manifest.
-pub const EXTENSION_ID: &str = "afamapffbfhaafbjnneoachpknjpmiof";
+pub const EXTENSION_ID: &str = "ahpjoclfeibdmlnbaednepiihpamklcl";
 
 /// Native messaging host manifest for `binary`, allowing only the Hexactra
 /// extension.
