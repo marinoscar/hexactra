@@ -98,6 +98,28 @@ export const fleetCommand: CliCommandRegistration = (program: Command) => {
       if (!h.online) out(`(${h.name} is offline right now)`);
     });
 
+  fleet
+    .command('takeover <host>')
+    .description('Take control of a host\'s desktop: its agent pauses for 5 minutes (until you release it); use the desktop from the console')
+    .option('--json', 'print JSON')
+    .action(async (ref: string, o: { json?: boolean }) => {
+      const h = findHost(await consoleApi().get<FleetHost[]>('/fleet/hosts'), ref);
+      const l = await consoleApi().post<{ leaseId: string; expiresAt: string }>(`/fleet/hosts/${h.id}/takeover`, {});
+      if (o.json) return json(l);
+      out(`You control ${h.name} until ${l.expiresAt}; its agent is paused. Release it with \`hexactra fleet release ${h.name}\`.`);
+    });
+
+  fleet
+    .command('release <host>')
+    .description('Give a host\'s desktop back to its agent')
+    .action(async (ref: string) => {
+      const h = findHost(await consoleApi().get<FleetHost[]>('/fleet/hosts'), ref);
+      const l = await consoleApi().get<{ leaseId: string } | null>(`/fleet/hosts/${h.id}/takeover`);
+      if (!l) return out(`Nobody controls ${h.name}; its agent runs.`);
+      await consoleApi().delete(`/fleet/hosts/${h.id}/takeover/${l.leaseId}`);
+      out(`Released ${h.name}; its agent continues.`);
+    });
+
   const profile = fleet.command('profile').description('Profiles on a host');
   const profileAction = (verb: 'create' | 'delete' | 'restart' | 'close') => async (ref: string, name: string, o: { json?: boolean; yes?: boolean }) => {
     const id = await hostId(ref);

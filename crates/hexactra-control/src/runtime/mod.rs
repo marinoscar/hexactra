@@ -17,6 +17,7 @@ mod metrics;
 pub mod openapi;
 pub mod persist;
 pub mod store;
+pub mod takeover;
 mod webhook_api;
 pub mod webhooks;
 

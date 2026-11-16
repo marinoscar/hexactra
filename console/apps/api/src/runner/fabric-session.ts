@@ -1,4 +1,11 @@
-import { FabricClient } from '../fabric/fabric.client';
+import { FabricClient, FabricError } from '../fabric/fabric.client';
+
+/** How long a run waits for a person who took over its browser (#342). */
+export const TAKEOVER_WAIT_MS = 30 * 60_000;
+const TAKEOVER_POLL_MS = 5_000;
+
+/** The fabric refused because a person controls the host's desktop. */
+export const isTakeoverActive = (e: unknown): e is FabricError => e instanceof FabricError && e.status === 409 && e.code === 'takeover_active';
 
 /** An operation as the fabric reports it (fields the runner reads). */
 export interface FabricOperation {
@@ -119,7 +126,10 @@ export function handoffBody(req: HandoffRequest): Record<string, unknown> {
 
 /** The fabric calls a run makes, over the console's FabricClient. */
 export class FabricSession {
-  constructor(private readonly fabric: FabricClient) {}
+  constructor(
+    private readonly fabric: FabricClient,
+    private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+  ) {}
 
   async create(opts: { profile: string; hostId: string | null; label: string }): Promise<string> {
     const s = await this.fabric.request<{ id: string }>('POST', '/v1/sessions', {
@@ -128,11 +138,26 @@ export class FabricSession {
     return s.id;
   }
 
-  async act(sessionId: string, action: Record<string, unknown>, timeoutMs = 45_000): Promise<FabricOperation> {
-    return this.fabric.request<FabricOperation>('POST', `/v1/sessions/${sessionId}/actions`, {
-      body: { action, timeout_ms: timeoutMs },
-      timeoutMs: timeoutMs + 15_000,
-    });
+  /**
+   * Runs one action. While a person controls the host's desktop (#342) the
+   * fabric refuses new actions with `409 takeover_active`: by default this
+   * waits (up to 30 minutes) and runs the step once they release it;
+   * `waitForTakeover: false` throws at once instead (an external agent
+   * decides itself when to retry).
+   */
+  async act(sessionId: string, action: Record<string, unknown>, timeoutMs = 45_000, opts: { waitForTakeover?: boolean } = {}): Promise<FabricOperation> {
+    const until = Date.now() + TAKEOVER_WAIT_MS;
+    for (;;) {
+      try {
+        return await this.fabric.request<FabricOperation>('POST', `/v1/sessions/${sessionId}/actions`, {
+          body: { action, timeout_ms: timeoutMs },
+          timeoutMs: timeoutMs + 15_000,
+        });
+      } catch (e) {
+        if (opts.waitForTakeover === false || !isTakeoverActive(e) || Date.now() >= until) throw e;
+        await this.sleep(TAKEOVER_POLL_MS);
+      }
+    }
   }
 
   async end(sessionId: string): Promise<void> {
