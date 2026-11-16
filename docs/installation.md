@@ -11,6 +11,20 @@ This guide covers installing Hexactra on Linux systems with systemd or Docker. H
 - Internet connectivity
 - Chrome 125+ (for browser automation)
 
+## Add a node (recommended)
+
+With the Hexactra Console, a machine joins as a **node** through the `hexactra` CLI; you run no install scripts on it:
+
+```bash
+npm install -g @marinoscar/hexactra   # the console's CLI
+hexactra login https://hex.example.test
+hexactra agent install               # also in the terminal UI: Agent screen
+```
+
+The node connects outbound over HTTPS only. Unattended and attended modes (`--mode unattended|attended|both`) are *Planned* in #340 and #341. Full guide: [nodes.md](nodes.md).
+
+The methods below install the standalone runtime without a console.
+
 ## Installation Methods
 
 ### Method 1: Using the Installation Script

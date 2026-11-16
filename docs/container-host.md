@@ -2,6 +2,8 @@
 
 Run Hexactra on an always-on machine, so you can drive a browser on demand even when your desktop is off. Epic: #195.
 
+> **Prefer a node at home.** The primary way to run browsers is a node on your own residential network, connected outbound over HTTPS to the console ([nodes.md](nodes.md)). This container host is the optional alternative, mainly for a VPS. With the console, the bundled container host is opt-in (*Planned* #343) and the console's own HTTPS is the way in: Tailscale and SSH below are only for running this stack on its own.
+
 ```text
 laptop / phone / AI agent ──(Tailscale or SSH)──▶ control  (API :8787)
                                                      ▲ long-poll
@@ -26,12 +28,12 @@ Any always-on Linux machine with Docker works: a home server, mini PC, NAS that 
 | Disk | 5 GB for the images, plus 200–500 MB per profile |
 | Network | Outbound internet. Nothing needs to be exposed publicly. |
 
-A home machine keeps your home IP, which looks like you to most sites. A VPS IP sits in a data-centre range and is more likely to face extra checks. Hexactra hands those checks to you; it does not try to get around them.
+A home machine keeps your home IP, which looks like you to most sites. A VPS IP sits in a data-centre range and is more likely to face extra checks; see [nodes.md](nodes.md#why-a-machine-at-home). Hexactra hands those checks to you; it does not try to get around them.
 
 ### On a VPS
 
 - **Choose a region near you.** Sites compare your location with your account history, and a nearby region causes fewer "new sign-in" checks.
-- **Expose nothing publicly.** Keep the defaults (ports on `127.0.0.1`) and use Tailscale. Your cloud firewall can then block all inbound traffic except SSH, or even SSH if you use Tailscale SSH.
+- **Expose nothing publicly.** Keep the defaults (ports on `127.0.0.1`) and reach it through the console's HTTPS, or optionally Tailscale. Your cloud firewall can then block all inbound traffic except SSH, or even SSH if you use Tailscale SSH.
 - **Expect more checks at first.** The first sign-in to each site from a new data-centre IP usually triggers a verification. Do it once through the viewer; the profile then remembers the device.
 - **Keep the IP stable.** Use a static or reserved IP if your provider offers one. Changing IPs re-triggers checks.
 - **Back up profiles** (section 7). Rebuilding a VPS without the `host-data` volume means signing in everywhere again.
@@ -54,7 +56,7 @@ docker compose exec control hexactra-fabric --url http://127.0.0.1:8787 status
 
 Both ports are published on `127.0.0.1` only. Pick one of the following.
 
-**Tailscale (recommended).** Install Tailscale on the machine, then:
+**Tailscale (optional).** Install Tailscale on the machine, then:
 
 ```bash
 sudo tailscale serve --bg --https=443  http://127.0.0.1:8787   # API

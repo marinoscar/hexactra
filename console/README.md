@@ -25,7 +25,7 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 | Fleet: hosts, enrollment, drain, revoke, profiles | `/fleet` | `/api/fleet/…` | `hexactra fleet hosts\|enroll\|drain\|undrain\|revoke\|commands`, `hexactra fleet profile create\|delete\|restart\|close`; TUI **Fleet** screen | `fleet:read` / `fleet:write` |
 | Alerts: a browser host offline (or the fabric unreachable), a schedule failing 3+ runs in a row, a user's runs over their token or budget limits; incidents fire, notify the holders of `alerts:read` (and `alerts.alert.*` webhooks) and resolve on their own | Administration → Alerts | `/api/admin/alerts/…` (the platform slice) | — | `alerts:read` / `alerts:write` |
 
-Run it all on a VPS (console, fabric and a browser host in one stack): [docs/runbooks/vps-stack.md](docs/runbooks/vps-stack.md).
+Run it all on a VPS (console, fabric and an optional browser host in one stack): [docs/runbooks/vps-stack.md](docs/runbooks/vps-stack.md). Run the browsers on **nodes** at home, which keep a residential IP and connect outbound over HTTPS: [../docs/nodes.md](../docs/nodes.md).
 
 **The goal runner**:
 - It uses the AI slice: feature `browser_agent`, a model with `tools`. Configure a provider at Administration → AI.

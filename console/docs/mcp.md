@@ -32,7 +32,7 @@ Hermes Agent, OpenClaw and Pi: ready-made, CI-tested recipes in [agent-framework
 | Ask the user a question | `ask_human` (no browser: text, choice, multi_choice, number, confirm, none, takeover; `wait_s` ≤ 300 waits for the answer), `question_status` |
 | Relay a person's answers | `inbox_list`, `inbox_answer` (by `question_id` or `run_id`): only answers the user actually gave |
 | Drive a browser yourself | `browser_open`, then `browser_navigate`, `browser_elements`, `browser_text`, `browser_click`, `browser_type`, `browser_press`, `browser_scroll`, `browser_wait_for`, `browser_back`, `browser_tabs`, `browser_screenshot` (an image), `browser_request_human`, `browser_handoff_status`, `browser_type_secret`, `browser_close` |
-| Fleet | `hosts_list` |
+| Fleet | `hosts_list` (each host's mode, unattended or attended, is *Planned* in #336). Viewing and controlling a node's desktop is for people only, so there is no viewer tool ([nodes.md](../../docs/nodes.md)). |
 
 **Rules the server gives every client (`instructions`):**
 - Never bypass a CAPTCHA or bot check, and never guess codes: ask the person (`browser_request_human`).

@@ -13,7 +13,7 @@ F="-f base.compose.yml -f prod.compose.yml -f app.fabric.compose.yml"   # + -f d
 | Postgres (the console) | Users, roles, tasks, runs and steps (redacted), questions and their answers (never a secret), single-use action tokens (sha256 only), schedules, notifications, alert rules and incidents, webhooks, the encrypted credentials (the fabric service token, AI keys) | Encrypted secrets inside; back up with the `SECRETS_ENCRYPTION_KEY` kept separately |
 | Object storage (the console) | Run screenshots, database backups | Screenshots can show what was on screen |
 | Volume `fabric-control-data` | The control plane's state database `control.db`: hosts, host credentials (digests), sessions, handoffs (token digests; a `secret` answer is held in memory only, never written), host commands; its webhook registry | Digests only: no raw tokens |
-| Volume `fabric-host-data` | The browser profiles of the bundled host: cookies and live sign-ins | **Secret**: whoever has a profile is signed in as you |
+| Volume `fabric-host-data` | The browser profiles of the bundled host (optional; nodes keep their profiles on the node, see [docs/nodes.md](../../../docs/nodes.md)): cookies and live sign-ins | **Secret**: whoever has a profile is signed in as you |
 | `infra/compose/.env` | `JWT_SECRET`, `COOKIE_SECRET`, `SECRETS_ENCRYPTION_KEY`, `HEXACTRA_FABRIC_OPERATOR_TOKEN`, database password | Secret; keep it apart from the backups |
 
 Other browser hosts (your desktop, other machines) keep their profiles on their own disk. Back them up there.

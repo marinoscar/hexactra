@@ -76,6 +76,20 @@ All user data is redacted before storage:
 - **Chrome Extension**: Partial trust, user-facing interface
 - **Worker**: Partial trust, manages sessions
 
+## Node Security Invariants
+
+Every node (a machine that runs browsers for the console, [nodes.md](nodes.md)) keeps these:
+
+1. **No inbound ports.** A node only dials out over HTTPS to `https://<console>/fabric/`.
+2. **The desktop server is local only** (a Unix socket or 127.0.0.1 with credentials only the agent can read).
+3. **Tunnels are authenticated at both ends:** the node's leg by its own host credential, the viewer's leg by a single-use token that lasts 30 seconds.
+4. **Remote-desktop access is bound** to one host, one user and one organization, stored in the database and revocable.
+5. **Watching is the default.** Input passes only while a person holds the takeover lease, enforced by the fabric.
+6. **Opening, closing, taking over and releasing a desktop are audited.**
+7. **Tokens never appear in URLs or logs.**
+
+The unattended desktop runs as a dedicated `hexactra` OS user. Items 2–6 ship with epic #333 (#338, #339, #342).
+
 ## Security Best Practices
 
 ### Network Security

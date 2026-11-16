@@ -45,7 +45,7 @@ Hexactra addresses the **execution and control** part of this problem. A separat
 ### 3.1 Goals
 
 1. **Real computer use:** operate genuine, visible browser sessions rather than substituting a mock browser or a headless-only representation.
-2. **Unattended hosting:** launch graphical Chrome sessions on a Linux host with no interactive host-user login.
+2. **Unattended hosting on machines you own:** launch real, headful Chrome sessions on a Linux node with no interactive host-user login. The primary node is a machine on the owner's **residential network** (for example a mini PC at home), because many sites block or challenge datacenter IP addresses; the node connects outbound over HTTPS and needs no inbound port. See [docs/nodes.md](docs/nodes.md).
 3. **Persistent identity:** allow intentional reuse of isolated browser profiles and their signed-in sessions across jobs.
 4. **Remote control:** allow agents and human operators on different devices to access the same authorized session.
 5. **Developer portability:** support SDK, CLI, and MCP clients without requiring the client to run alongside Chrome.
@@ -103,13 +103,13 @@ Hexactra addresses the **execution and control** part of this problem. A separat
 
 - Developers embedding computer-use in agentic applications.
 - Operators automating repeatable workflows across SaaS applications.
-- Individuals running self-hosted agents from a home server or mini PC.
+- Individuals running self-hosted agents from a home server or mini PC: a **node** on their residential network, unattended (its own desktop, nobody logged in) or attended (the person's own desktop and Chrome), used on demand from the web app, the Android app, MCP and the API.
 - Teams needing observable, auditable automation with human approvals.
 - Researchers testing browser-control methods and experiential memory.
 
 ### 4.2 Representative end-to-end scenarios
 
-**Remote persistent browser.** An agent on a laptop starts a session using a Chrome profile stored on an unattended Linux machine, signs in with human assistance if necessary, performs a task, disconnects, and later resumes the same profile from a different device.
+**Remote persistent browser.** An agent on a laptop starts a session using a Chrome profile stored on an unattended Linux node at home (a residential IP the site already trusts), signs in with human assistance if necessary, performs a task, disconnects, and later resumes the same profile from a different device.
 
 **MCP integration.** An MCP client calls browser tools on a remote Hexactra service; the service owns lifecycle, authorization, artifacts, and telemetry. The MCP server does not own the browser process.
 
@@ -272,6 +272,13 @@ Do not pin an unverified “latest” major release in the vision. Maintain tool
 
 **Native host-agent:** Install a Rust agent and native messaging host on a compatible physical/virtual desktop system. Relevant OS session requirements are adapter-specific.
 
+**Home node (the primary deployment).** A Linux machine the owner runs on a residential network, installed and managed entirely with the `hexactra` CLI. It connects outbound over HTTPS to the console (`https://<console>/fabric/`): no inbound port, no VPN. It runs real, headful **Google Chrome** with the Hexactra extension installed by Chrome enterprise policy, in one or both modes, each registered as its own host:
+
+- **Unattended:** a persistent full desktop (XFCE) on a virtual display (KasmVNC) that uses the machine's integrated GPU, started at boot as a dedicated `hexactra` OS user with nobody logged in. The owner opens the remote desktop from the console, signs into Chrome once per profile, and the agent then drives that profile.
+- **Attended:** the person's own logged-in desktop (an X11 session for now) and their own Chrome profile; the person can also view and control that desktop remotely.
+
+Both modes may run on one machine at once (for example hosts `mini-pc` and `mini-pc-attended`). Why residential: sites block or challenge datacenter IPs, and a node at home keeps a residential IP. A VPS-hosted browser (the bundled container host) remains available as an **opt-in** option for sites that do not care about IP reputation. Details: [docs/nodes.md](docs/nodes.md).
+
 **Remote developer:** An SDK, CLI, or MCP client connects to an existing Hexactra server over authenticated HTTPS or a private overlay network.
 
 ### 8.2 Platform targets
@@ -352,7 +359,7 @@ Respect Chrome Native Messaging size limits: send small control/event envelopes 
 
 ### 9.5 Graphical browser and human observation
 
-The Linux runtime provides a visible graphical Chrome instance inside a managed display environment. A remote viewer shows the same browser state to an authorized human. Human takeover suspends agent input through the central control lease; releasing takeover returns control only after the session is revalidated.
+The Linux runtime provides a visible graphical Chrome instance inside a managed display environment: on an unattended node, a virtual desktop backed by the machine's real GPU (so Chrome reports real graphics hardware, not a software renderer); on an attended node, the person's own desktop. A remote viewer shows the same desktop to an authorized human, for every host the same way: console → fabric WebSocket relay → the node agent's outbound HTTPS tunnel → the node's local desktop server, which is never reachable from the network. Human takeover suspends agent input through the central control lease; releasing takeover returns control only after the session is revalidated.
 
 No capability should assume a human desktop login on the physical Linux host.
 
@@ -421,7 +428,7 @@ Every operation is bound to a subject, session, permission scope, idempotency ke
 
 - Multiple clients may **observe** the same permitted session.
 - Only one principal/role at a time may actively **inject input**.
-- Human takeover preempts agent input after the current action reaches a safe boundary.
+- Human takeover preempts agent input after the current action reaches a safe boundary. Viewers watch by default; input from a viewer is forwarded only while that viewer holds the takeover lease, and the fabric enforces it.
 - Leases are short-lived, renewable, and released or expired on disconnect.
 - Authorization is reevaluated before each sensitive action and at resume boundaries.
 - A queued action cannot execute after the session owner revokes consent simply because it was accepted earlier.
@@ -731,7 +738,7 @@ The control plane authorizes **who may perform which action on which session/pro
 
 ### 13.4 Recommended v1 exposure model
 
-Initially support private networks such as Tailscale and an optional authenticated HTTPS reverse proxy. Public exposure requires hardened authentication, TLS, Origin checks, rate limits, CSRF protection for dashboard workflows, and authenticated remote viewing. Never assume that knowing the session ID is sufficient authorization.
+Nodes reach the console over its authenticated HTTPS endpoint (only the host protocol is published, at `/fabric/`), so no private network is required; a private network such as Tailscale is an optional extra. Public exposure requires hardened authentication, TLS, Origin checks, rate limits, CSRF protection for dashboard workflows, and authenticated remote viewing. Never assume that knowing the session ID is sufficient authorization.
 
 ### 13.5 Audit is not telemetry
 
@@ -1025,7 +1032,7 @@ Build **vertical slices** through the complete system before proliferating inter
 - Manage persistent and ephemeral profiles.
 - Start/stop/restart browser sessions.
 - Enable authenticated remote viewing.
-- Verify host boot -> Chrome session without a human OS login.
+- Verify host boot -> Chrome session without a human OS login, on a home node on a residential network (epic #333).
 
 **Exit:** an authorized remote operator can create, observe, stop, and resume a profile-backed session.
 
@@ -1506,7 +1513,7 @@ The Phase 2 extension milestone in Section 19 must therefore include **Side Pane
 
 - **Hexactra Fabric** (`crates/`) is the browser execution layer:
   - the Rust control plane (`/v1`: sessions, actions, handoffs, host commands, artifacts, events, webhooks), with durable SQLite state;
-  - host agents (`hexactra-agent`) that keep a Chromium per profile on a VPS container, a desktop or any machine, long-polling the control plane with per-host credentials;
+  - host agents (`hexactra-agent`) that keep a browser per profile on a home node (the primary deployment), a desktop or an optional VPS container, long-polling the control plane over HTTPS with per-host credentials;
   - the extension and native host that act inside each browser.
 - **Hexactra Console** (`console/`) is the single user-facing control point. It is an application on the EnterpriseAppBase platform packages, and it adds:
   - identity, roles and personal access tokens;
@@ -1536,10 +1543,10 @@ The TypeScript SDK (`console/packages/sdk`) is generated from the same OpenAPI d
 
 One compose stack on a VPS (`console/docs/runbooks/vps-stack.md`):
 - the console (nginx, API, web, Postgres);
-- the fabric control plane and a bundled browser host on a private network;
-- the browser viewer, behind the console's single-use tickets.
+- the fabric control plane on a private network, with only its host protocol published at `/fabric/`;
+- optionally, a bundled browser host (moving to opt-in, because a VPS IP is often challenged).
 
-More hosts enroll from any machine with a one-time token. Day-2 operations are in `console/docs/runbooks/operations.md`, and measured capacity in `console/docs/runbooks/capacity.md`.
+The primary browser hosts are **home nodes** on the owner's residential network, installed with `hexactra agent install` and enrolled with a one-time token over HTTPS (Section 8.1, [docs/nodes.md](docs/nodes.md); epic #333 adds unattended and attended modes with a remote desktop for every host). Day-2 operations are in `console/docs/runbooks/operations.md`, and measured capacity in `console/docs/runbooks/capacity.md`.
 
 ### 26.5 What stays open
 
