@@ -6,14 +6,12 @@ import { ViewerSessionsSweepHandler, ViewerSessionsSweepTask } from './desktop-v
 import { DesktopViewerService } from './desktop-viewer.service';
 import { FleetController } from './fleet.controller';
 import { FleetService } from './fleet.service';
-import { ViewerTicketService } from './viewer-ticket.service';
-import { ViewerController } from './viewer.controller';
 
 /** Fleet management over the fabric: hosts, enrollment, drain, profiles. */
 @Module({
   imports: [FabricModule],
-  controllers: [FleetController, ViewerController, DesktopViewerController],
-  providers: [FleetService, ViewerTicketService, DesktopViewerService, ViewerSessionsSweepHandler, ViewerSessionsSweepTask],
+  controllers: [FleetController, DesktopViewerController],
+  providers: [FleetService, DesktopViewerService, ViewerSessionsSweepHandler, ViewerSessionsSweepTask],
   exports: [FleetService],
 })
 export class FleetModule {}

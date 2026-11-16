@@ -86,11 +86,11 @@ describe('RunDetailPage', () => {
   it('shows the steps and cancels a live run', async () => {
     live.emit = null;
     const host = createTestPlatformHost({
-      permissions: ['runs:read', 'runs:write'],
+      permissions: ['runs:read', 'runs:write', 'fleet:desktop'],
       responses: {
         [`GET /runs/${run.id}`]: run,
         [`POST /runs/${run.id}/cancel`]: { ...run, cancelRequested: true },
-        [`GET /runs/${run.id}/viewer`]: { hostName: 'vps', viewerUrl: 'https://viewer.example.test/vnc.html', local: false },
+        [`GET /runs/${run.id}/viewer`]: { hostId: '44444444-4444-4444-8444-444444444444', hostName: 'vps', desktop: true },
       },
     });
     render(

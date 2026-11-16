@@ -29,7 +29,9 @@ services:
     networks:
       - app-network
 
+  # Optional (#343): runs only with COMPOSE_PROFILES=bundled-host in .env.
   fabric-host:
+    profiles: ["bundled-host"]
     build:
       context: ../../..
       dockerfile: deploy/container/Dockerfile
@@ -52,9 +54,11 @@ services:
       HEXACTRA_URL: http://fabric-control:8787
       HEXACTRA_API_TOKEN: ${HEXACTRA_FABRIC_OPERATOR_TOKEN:?set HEXACTRA_FABRIC_OPERATOR_TOKEN in infra/compose/.env}
       HEXACTRA_HOST_NAME: ${HEXACTRA_FABRIC_HOST_NAME:-local}
-      HEXACTRA_VIEWER_PASSWORD: ${HEXACTRA_VIEWER_PASSWORD:-}
-      # The console turns this into a one-time ticket link (Fleet page).
-      HEXACTRA_VIEWER_URL: ${APP_URL:-http://localhost:3535}/viewer/local/vnc.html
+      HEXACTRA_HOST_MODE: container
+      # Its desktop is shared through the fabric's tunnel, like a node's (#343):
+      # VNC on the container's own loopback, never published; the console opens it.
+      HEXACTRA_DESKTOP_VNC: tcp:127.0.0.1:5900
+      HEXACTRA_SCREEN: 1920x1080x24
       HEXACTRA_MAX_BROWSERS: ${HEXACTRA_MAX_BROWSERS:-1}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${HEXACTRA_FABRIC_OTLP_ENDPOINT:-}
       RUST_LOG: ${RUST_LOG:-info}
