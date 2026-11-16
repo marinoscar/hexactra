@@ -133,6 +133,7 @@ export class FleetService {
       return {
         enrollmentToken: created.enrollment_token,
         expiresAt: created.enrollment.expires_at ?? null,
+        agentUrl: url,
         command: parts.join(' '),
       };
     } catch (e) {

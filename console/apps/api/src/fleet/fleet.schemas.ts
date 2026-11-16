@@ -41,6 +41,8 @@ export interface FleetHost {
 export interface FleetEnrollment {
   enrollmentToken: string;
   expiresAt: string | null;
+  /** The fabric URL the new host uses (`<APP_URL>/fabric` for the bundled fabric). */
+  agentUrl: string;
   command: string;
 }
 
