@@ -18,7 +18,7 @@ export const DEFAULT_UPDATE_URL = 'https://github.com/marinoscar/hexactra/releas
 export const CHROME_DEB_URL = 'https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb';
 
 export interface Exec {
-  (argv: string[], opts?: { interactive?: boolean }): { code: number; stdout: string; stderr: string };
+  (argv: string[], opts?: { interactive?: boolean; input?: string }): { code: number; stdout: string; stderr: string };
 }
 
 export interface ChromeDeps {

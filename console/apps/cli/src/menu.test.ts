@@ -62,7 +62,7 @@ describe('the TUI menu', () => {
       'Inbox: agents waiting for you',
       'Runs: watch browser agents',
       'Fleet: nodes and profiles',
-      'This machine as a browser node: install, Chrome, unattended desktop',
+      'This machine as a browser node: dashboard, install, logs, doctor',
     ]);
     expect(rows('worker-group', true)).toEqual(['Jobs queue', 'Worker node on this machine: dashboard, doctor, logs, enroll']);
     expect(rows('server-group', true)).toEqual([
@@ -74,7 +74,7 @@ describe('the TUI menu', () => {
   });
 
   it('lays out every group logged out, without the entries that need a login', () => {
-    expect(rows('agent-group', false)).toEqual(['This machine as a browser node: install, Chrome, unattended desktop']);
+    expect(rows('agent-group', false)).toEqual(['This machine as a browser node: dashboard, install, logs, doctor']);
     expect(rows('worker-group', false)).toEqual(['Worker node on this machine: dashboard, doctor, logs, enroll']);
     expect(rows('server-group', false)).toEqual(['Deploy the console on this server', 'Server status: URL, signed-in user, token expiry']);
     expect(rows('developer-group', false)).toEqual(['Android app: doctor, bump, build, publish, releases']);

@@ -489,7 +489,7 @@
     },
     {
       "id": "fleet.agent",
-      "description": "Run THIS machine as a browser host: install (verified bundle, Google Chrome with the extension by policy or Chrome for Testing, enrollment, systemd user service), Chrome setup and status, doctor, status, logs, update, start/stop/restart, run in the foreground, sandbox helper, uninstall",
+      "description": "Run THIS machine as a browser host: install (verified bundle, Google Chrome with the extension by policy or Chrome for Testing, enrollment, systemd user service), Chrome setup and status, doctor, dependencies (agent deps), status, logs, update, start/stop/restart, run in the foreground, sandbox helper, uninstall",
       "rest": [
         "POST /api/fleet/enrollments",
         "GET /api/fleet/hosts",
@@ -508,6 +508,7 @@
         "agent chrome status",
         "agent chrome setup",
         "agent doctor",
+        "agent deps",
         "agent uninstall"
       ],
       "mcp": {
