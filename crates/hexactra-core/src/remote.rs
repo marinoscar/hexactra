@@ -360,6 +360,43 @@ pub struct SessionView {
     pub ended_at: Option<DateTime<Utc>>,
 }
 
+/// How a host runs its browsers (#336, docs/nodes.md).
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostMode {
+    /// Its own persistent desktop, nobody logged in; one browser per profile.
+    Unattended,
+    /// The person's own logged-in desktop and Chrome.
+    Attended,
+    /// A container with a virtual display (the bundled VPS host).
+    Container,
+}
+
+impl HostMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            HostMode::Unattended => "unattended",
+            HostMode::Attended => "attended",
+            HostMode::Container => "container",
+        }
+    }
+}
+
+impl std::str::FromStr for HostMode {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "unattended" => Ok(HostMode::Unattended),
+            "attended" => Ok(HostMode::Attended),
+            "container" => Ok(HostMode::Container),
+            other => Err(format!(
+                "unknown host mode '{other}' (expected unattended, attended or container)"
+            )),
+        }
+    }
+}
+
 /// A host agent as seen by the control plane.
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -376,8 +413,15 @@ pub struct HostView {
     #[serde(default)]
     pub on_demand: bool,
     /// Web viewer where a person can see and use this host's browser.
+    /// Deprecated: the console's desktop viewer replaces it (#339).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewer_url: Option<String>,
+    /// How the host runs its browsers; absent for agents older than #336.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<HostMode>,
+    /// The host can share its desktop through the fabric (#338).
+    #[serde(default)]
+    pub desktop: bool,
     /// Browser profiles this host has.
     #[serde(default)]
     pub profiles: Vec<String>,
@@ -433,9 +477,15 @@ pub struct RegisterHostRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub host_id: Option<Uuid>,
     /// Web viewer for this host's browser (`http(s)` URL), shown to people
-    /// answering handoffs.
+    /// answering handoffs. Deprecated (#339).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewer_url: Option<String>,
+    /// How the host runs its browsers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<HostMode>,
+    /// The host has a local desktop it can share through the fabric.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub desktop: bool,
 }
 
 /// Response to host registration.

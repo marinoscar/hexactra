@@ -34,6 +34,9 @@ export interface FabricRequest {
 }
 
 /** A host as `GET /v1/hosts` reports it (the fields the console uses). */
+/** How a host runs its browsers (docs/nodes.md). */
+export type HostMode = 'unattended' | 'attended' | 'container';
+
 export interface FabricHost {
   id: string;
   name: string;
@@ -42,6 +45,9 @@ export interface FabricHost {
   browser_connected: boolean;
   on_demand: boolean;
   viewer_url?: string;
+  /** Absent for agents older than #336. */
+  mode?: HostMode | null;
+  desktop?: boolean;
   profiles: string[];
   running_profiles: string[];
   draining?: boolean;

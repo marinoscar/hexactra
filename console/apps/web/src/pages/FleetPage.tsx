@@ -25,6 +25,7 @@ import {
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import StopCircleOutlinedIcon from '@mui/icons-material/StopCircleOutlined';
+import DesktopWindowsOutlined from '@mui/icons-material/DesktopWindowsOutlined';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 /** One host, as `GET /api/fleet/hosts` returns it. */
@@ -37,6 +38,8 @@ export interface FleetHost {
   onDemand: boolean;
   draining: boolean;
   viewerUrl: string | null;
+  mode: 'unattended' | 'attended' | 'container' | null;
+  desktop: boolean;
   profiles: { name: string; running: boolean }[];
   lastSeen: string;
 }
@@ -50,6 +53,13 @@ export interface FleetEnrollment {
 
 /** The bundled host's viewer, proxied by the console behind one-time tickets. */
 const LOCAL_VIEWER = '/viewer/local/';
+
+/** How each host mode reads in the list (docs/nodes.md). */
+const MODE_LABEL: Record<NonNullable<FleetHost['mode']>, string> = {
+  unattended: 'Unattended',
+  attended: 'Attended',
+  container: 'Container',
+};
 
 const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 
@@ -145,7 +155,12 @@ export function FleetPage() {
                   {h.name}
                 </Typography>
                 <Chip size="small" color={h.online ? 'success' : 'default'} label={h.online ? 'Online' : 'Offline'} />
-                <Chip size="small" variant="outlined" label={h.onDemand ? 'Launch mode' : 'Attach mode'} />
+                <Chip size="small" variant="outlined" label={h.mode ? MODE_LABEL[h.mode] : h.onDemand ? 'Launch mode' : 'Attach mode'} />
+                {h.desktop && (
+                  <Tooltip title="Can share its desktop">
+                    <DesktopWindowsOutlined fontSize="small" color="action" aria-label="Desktop available" />
+                  </Tooltip>
+                )}
                 {h.draining && <Chip size="small" color="warning" label="Draining" />}
                 <Typography variant="caption" color="text.secondary">
                   v{h.version}

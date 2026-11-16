@@ -42,6 +42,10 @@ pub struct DaemonConfig {
     pub launch_eagerly: bool,
     /// Web viewer URL for this host's browser (reported to the control plane).
     pub viewer_url: Option<String>,
+    /// How this host runs its browsers (reported to the control plane).
+    pub mode: Option<hexactra_core::remote::HostMode>,
+    /// The local desktop server the fabric may relay to (#338).
+    pub desktop: Option<crate::desktop::DesktopTarget>,
 }
 
 fn load_host_id(file: &Option<PathBuf>) -> Option<Uuid> {
@@ -68,6 +72,8 @@ async fn register(client: &HostClient, cfg: &DaemonConfig, previous: Option<Uuid
             version: env!("CARGO_PKG_VERSION").to_string(),
             host_id: previous,
             viewer_url: cfg.viewer_url.clone(),
+            mode: cfg.mode,
+            desktop: cfg.desktop.is_some(),
         };
         match client.register(&req).await {
             Ok(r) => {

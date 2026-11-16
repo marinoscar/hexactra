@@ -34,11 +34,23 @@ describe('FleetService', () => {
       onDemand: true,
       draining: true,
       viewerUrl: 'https://viewer.example.test/vnc.html',
+      // An agent older than #336 reports neither.
+      mode: null,
+      desktop: false,
       profiles: [
         { name: 'default', running: false },
         { name: 'travel', running: true },
       ],
     });
+  });
+
+  it('maps the host mode and desktop capability', async () => {
+    const { fabric, hosts } = fakeFabric();
+    hosts.mockResolvedValue([
+      { id: 'h2', name: 'mini-pc', version: '0.3.0', online: true, browser_connected: false, on_demand: true, mode: 'unattended', desktop: true, profiles: [], running_profiles: [], last_seen: '2026-11-15T00:00:00Z' },
+    ]);
+    const [h] = await new FleetService(fabric).hosts();
+    expect(h).toMatchObject({ name: 'mini-pc', mode: 'unattended', desktop: true });
   });
 
   it('enrolls with a single-use token and a ready-to-run agent command', async () => {

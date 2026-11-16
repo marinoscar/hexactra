@@ -98,6 +98,8 @@ async fn start() -> Fabric {
             version: "0".into(),
             host_id: None,
             viewer_url: None,
+            mode: None,
+            desktop: false,
         })
         .await
         .unwrap()

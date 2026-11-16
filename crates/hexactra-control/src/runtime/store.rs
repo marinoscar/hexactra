@@ -11,8 +11,9 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use hexactra_core::remote::{
-    valid_profile_name, DispatchedOperation, HostView, HostWork, OperationResult, OperationState,
-    OperationView, RemoteAction, RemoteSessionStatus, SessionView, DEFAULT_PROFILE, REDACTED_TEXT,
+    valid_profile_name, DispatchedOperation, HostMode, HostView, HostWork, OperationResult,
+    OperationState, OperationView, RemoteAction, RemoteSessionStatus, SessionView, DEFAULT_PROFILE,
+    REDACTED_TEXT,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -64,6 +65,8 @@ pub(super) struct HostEntry {
     browser_connected: bool,
     on_demand: bool,
     pub(super) viewer_url: Option<String>,
+    pub(super) mode: Option<HostMode>,
+    pub(super) desktop: bool,
     /// Profiles the host reported; empty means a host that only knows the
     /// default profile (older agents).
     pub(super) profiles: Vec<String>,
@@ -149,6 +152,10 @@ pub(crate) struct HostRecord {
     pub last_seen: DateTime<Utc>,
     pub on_demand: bool,
     pub viewer_url: Option<String>,
+    #[serde(default)]
+    pub mode: Option<HostMode>,
+    #[serde(default)]
+    pub desktop: bool,
     pub profiles: Vec<String>,
     #[serde(default)]
     pub draining: bool,
@@ -217,6 +224,8 @@ fn host_view(id: Uuid, h: &HostEntry, now: DateTime<Utc>) -> HostView {
         browser_connected: online && h.browser_connected,
         on_demand: online && h.on_demand,
         viewer_url: h.viewer_url.clone(),
+        mode: h.mode,
+        desktop: h.desktop,
         profiles: h.known_profiles(),
         running_profiles: h.running_profiles.clone(),
         draining: h.draining,
@@ -257,6 +266,8 @@ impl RuntimeStore {
                 last_seen: h.last_seen,
                 on_demand: h.on_demand,
                 viewer_url: h.viewer_url.clone(),
+                mode: h.mode,
+                desktop: h.desktop,
                 profiles: h.profiles.clone(),
                 draining: h.draining,
             })
@@ -295,6 +306,8 @@ impl RuntimeStore {
                         browser_connected: false,
                         on_demand: h.on_demand,
                         viewer_url: h.viewer_url,
+                        mode: h.mode,
+                        desktop: h.desktop,
                         profiles: h.profiles,
                         running_profiles: Vec::new(),
                         queue: VecDeque::new(),
@@ -348,6 +361,8 @@ impl RuntimeStore {
                         browser_connected: false,
                         on_demand: false,
                         viewer_url: None,
+                        mode: None,
+                        desktop: false,
                         profiles: Vec::new(),
                         running_profiles: Vec::new(),
                         queue: VecDeque::new(),
@@ -409,6 +424,24 @@ impl RuntimeStore {
             .get_mut(&id)
             .ok_or(StoreError::NotFound("host"))?;
         h.viewer_url = url;
+        Ok(())
+    }
+
+    /// Record how a host runs and whether it can share its desktop (from
+    /// registration; an older agent reports neither).
+    pub fn set_host_mode(
+        &self,
+        id: Uuid,
+        mode: Option<HostMode>,
+        desktop: bool,
+    ) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let h = inner
+            .hosts
+            .get_mut(&id)
+            .ok_or(StoreError::NotFound("host"))?;
+        h.mode = mode;
+        h.desktop = desktop;
         Ok(())
     }
 
@@ -1020,6 +1053,34 @@ impl RuntimeStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn host_mode_survives_a_snapshot_and_old_records_load() {
+        let s = RuntimeStore::new();
+        let h = s.register_host(None, "mini-pc".into(), "0".into());
+        s.set_host_mode(h, Some(HostMode::Attended), true).unwrap();
+        let snap = s.export_snapshot();
+        let json = serde_json::to_string(&snap).unwrap();
+
+        let restored = RuntimeStore::new();
+        restored.import_snapshot(serde_json::from_str(&json).unwrap());
+        let v = &restored.list_hosts()[0];
+        assert_eq!(v.mode, Some(HostMode::Attended));
+        assert!(v.desktop);
+
+        // A record saved before #336 has neither field.
+        let old: HostRecord = serde_json::from_value(json!({
+            "id": h, "name": "n", "version": "0", "last_seen": Utc::now(),
+            "on_demand": false, "viewer_url": null, "profiles": []
+        }))
+        .unwrap();
+        assert_eq!(old.mode, None);
+        assert!(!old.desktop);
+        assert_eq!(
+            s.set_host_mode(Uuid::new_v4(), None, false).unwrap_err(),
+            StoreError::NotFound("host")
+        );
+    }
 
     fn nav() -> RemoteAction {
         RemoteAction::Navigate {

@@ -33,6 +33,10 @@ export interface FleetHost {
   onDemand: boolean;
   draining: boolean;
   viewerUrl: string | null;
+  /** unattended, attended or container; null for agents older than #336. */
+  mode: 'unattended' | 'attended' | 'container' | null;
+  /** The host can share its desktop through the fabric. */
+  desktop: boolean;
   profiles: { name: string; running: boolean }[];
   lastSeen: string;
 }
