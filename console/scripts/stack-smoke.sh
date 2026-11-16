@@ -104,6 +104,39 @@ case "$next_code" in 200|204) ;; *) fail "long-poll through /fabric/ answered $n
 dc exec -T fabric-control hexactra-fabric --url http://127.0.0.1:8787 admin revoke-host "$host_id" >/dev/null 2>&1 || true
 pass "browser hosts enroll, register and long-poll over HTTPS at /fabric/; private APIs are not published"
 
+# A machine joins with nothing but the hexactra CLI (#328): the agent bundle
+# (packaged from this stack's host image with the release script), then
+# `hexactra agent install` with an admin-minted token and `hexactra agent run`,
+# reaching the fabric through nginx at /fabric/. The host must come online.
+agent_tmp=$(mktemp -d)
+cid=$(docker create "$(dc images -q fabric-host | head -1)")
+docker cp "$cid:/usr/local/bin/hexactra-agent" "$agent_tmp/" && docker cp "$cid:/usr/local/bin/hexactra-native-host" "$agent_tmp/" \
+  && docker cp "$cid:/opt/hexactra/extension" "$agent_tmp/extension" || fail "extract the agent from the host image"
+docker rm "$cid" >/dev/null
+node "$console/../scripts/package-agent-bundle.mjs" --target-dir "$agent_tmp" --extension-dir "$agent_tmp/extension" --out "$agent_tmp/dist" >/dev/null \
+  || fail "package the agent bundle"
+hxe=$(dc exec -T fabric-control hexactra-fabric --url http://127.0.0.1:8787 admin enroll --name ci-cli-host 2>/dev/null | grep -o 'hxe_[A-Za-z0-9_-]*' | head -1)
+mkdir -p "$agent_tmp/run" && chmod 700 "$agent_tmp/run"
+cli_env=(env HOME="$agent_tmp/home" XDG_DATA_HOME="$agent_tmp/home/data" XDG_CONFIG_HOME="$agent_tmp/home/config" XDG_RUNTIME_DIR="$agent_tmp/run")
+"${cli_env[@]}" node "$console/apps/cli/dist/cli.js" agent install --no-service --name ci-cli-host \
+  --bundle "$agent_tmp/dist/hexactra-agent-linux-x86_64.tar.gz" --browser /usr/bin/true \
+  --enrollment-token "$hxe" --agent-url "$fabric_pub" >"$agent_tmp/install.log" 2>&1 || { cat "$agent_tmp/install.log" >&2; fail "hexactra agent install"; }
+grep -q 'Checksum verified' "$agent_tmp/install.log" || fail "hexactra agent install did not verify the bundle"
+! grep -q "$hxe" "$agent_tmp/install.log" "$agent_tmp/home/data/hexactra/agent/install.json" || fail "the enrollment token was written out"
+"${cli_env[@]}" node "$console/apps/cli/dist/cli.js" agent run >"$agent_tmp/agent.log" 2>&1 &
+agent_pid=$!
+for i in $(seq 1 30); do
+  dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status 2>/dev/null | grep -q 'ci-cli-host .*online=true' && break
+  sleep 1
+done
+dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status | grep -q 'ci-cli-host .*online=true' \
+  || { kill "$agent_pid" 2>/dev/null; cat "$agent_tmp/agent.log" >&2; fail "the CLI-installed agent did not come online over /fabric/"; }
+"${cli_env[@]}" node "$console/apps/cli/dist/cli.js" agent status | grep -q 'Host:     ci-cli-host' || fail "hexactra agent status"
+kill "$agent_pid" 2>/dev/null || true
+"${cli_env[@]}" node "$console/apps/cli/dist/cli.js" agent uninstall --yes --keep-host >/dev/null || fail "hexactra agent uninstall"
+[ ! -e "$agent_tmp/home/config/hexactra/host-credential.json" ] || fail "uninstall left the host credential"
+pass "a machine joins with only the hexactra CLI: verified bundle, enrollment, online over HTTPS at /fabric/"
+
 code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }
 tmpdir_headers=$(mktemp)
 
