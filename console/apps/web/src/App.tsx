@@ -19,7 +19,7 @@ import { registerSettingsFeature, useSettingsFeatures } from '@marinoscar/platfo
 import { SettingsHub, type SettingsHubProps } from '@marinoscar/platform-web/settings/ui';
 import { FactoryResetPage, OffboardOrganizationButton, UserDangerZonePage, factoryResetSettingsPage } from '@marinoscar/platform-web/user-data/ui';
 import { ShellProviders, type ShellProvider } from '@marinoscar/platform-web/shell/headless';
-import { InstallPrompt } from '@marinoscar/platform-web/host/ui';
+import { AboutPage, InstallPrompt } from '@marinoscar/platform-web/host/ui';
 import { ShellAppBar, ShellLayout, ShellUserMenu } from '@marinoscar/platform-web/shell/ui';
 import { UserTimeZoneSync } from '@marinoscar/platform-web/timezone/headless';
 import type { ReactElement } from 'react';
@@ -208,6 +208,7 @@ export function AppRoutes() {
           <Route path="admin/settings/jobs" element={<Gate permission="jobs:read"><JobsPage /></Gate>} />
           <Route path="admin/settings/jobs/insights" element={<Gate permission="jobs:read"><JobInsightsPage /></Gate>} />
           <Route path="admin/settings/doctor" element={<Gate permission="system_settings:read"><DoctorPage /></Gate>} />
+          <Route path="admin/settings/about" element={<Gate permission="system_settings:read"><AboutPage /></Gate>} />
           <Route path="admin/settings/fabric" element={<Gate permission="fabric_config:read"><FabricConnectionPage /></Gate>} />
           {WEBHOOKS_ENABLED && <Route path="settings/webhooks" element={<Gate permission="webhooks:read"><WebhooksPage scope="user" /></Gate>} />}
           {WEBHOOKS_ENABLED && <Route path="admin/settings/webhooks" element={<Gate permission="system_webhooks:read"><WebhooksPage scope="system" /></Gate>} />}

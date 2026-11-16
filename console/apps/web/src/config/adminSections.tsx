@@ -8,6 +8,7 @@ import { factoryResetSettingsPage } from '@marinoscar/platform-web/user-data/ui'
 import { webhooksAdminSections } from '@marinoscar/platform-web/webhooks/ui';
 
 import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 import { composeSections } from '../slices/sections';
 import { sliceAdminCards } from '../slices/manifest';
@@ -42,6 +43,15 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
       // Alerts: rules (browser host offline, schedule failing, run budget, …) and incidents.
       // `alerts:read` is what every read route of `/api/admin/alerts` enforces; writes are gated in the page.
       ...(ALERTS_ENABLED ? alertsAdminCards : []),
+      // What is deployed here: versions, the deploy record, the database and the fabric.
+      // `system_settings:read` is what the host slice's `GET /api/admin/about` enforces.
+      {
+        title: 'About',
+        description: 'What is deployed here: versions, the last deploy and its history, the database and the Fabric.',
+        Icon: InfoOutlinedIcon,
+        path: '/admin/settings/about',
+        permission: 'system_settings:read',
+      },
     ],
   },
   // `Danger Zone` stays LAST (docs/specs/settings-ui.md): new groups go above it.
