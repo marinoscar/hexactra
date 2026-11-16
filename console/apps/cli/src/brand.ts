@@ -1,6 +1,7 @@
 import type { TuiMenuSlotContext, TuiMenuSlots, TuiThemeOverrides } from '@marinoscar/platform-cli/tui';
 
 import { TRACE_MARK } from './brand-mark.js';
+import { ROOT_MENU_FOOTNOTE } from './menu.js';
 
 /**
  * The hexactra brand in the terminal (docs/brand/README.md). Terminals are
@@ -56,9 +57,10 @@ export function brandBanner(columns: number): string[] {
   return [`⬡ ${WORDMARK}`];
 }
 
-/** The TUI root menu's banner: `createCli({ tuiMenuRoot })`. */
+/** The TUI root menu's banner, and the logged-out footnote (#357): `createCli({ tuiMenuRoot })`. */
 export const BRAND_TUI_MENU_ROOT: TuiMenuSlots = {
   banner: { content: ({ columns }: TuiMenuSlotContext) => brandBanner(columns), color: 'banner' },
+  footnote: ROOT_MENU_FOOTNOTE,
 };
 
 // --- `hexactra --help` --------------------------------------------------------

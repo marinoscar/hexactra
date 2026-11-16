@@ -91,6 +91,12 @@ hexactra login --server https://<your console>
 hexactra            # the terminal UI
 ```
 
+<p align="center">
+  <img src="console/apps/cli/docs/images/tui-logged-in.png" alt="The hexactra terminal UI: the grouped menu (Agent, Worker, Server, Developer, Account)" width="640">
+</p>
+
+The terminal UI groups everything into **Agent** (Inbox, Runs, Fleet, this machine as a browser node), **Worker** (jobs queue, worker node), **Server** (deploy, status), **Developer** (Android app, API calls) and **Account**. Logged out, it shows only what works without a server. Details and screenshots: [console/apps/cli/README.md](console/apps/cli/README.md#the-terminal-ui).
+
 Re-running the same command updates the CLI. It prints the current and the new version (with their commits) before it builds, for example `current version: hexactra 0.1.1 (0822b47)` and `new version: hexactra 0.1.2 (…)`.
 
 Install options, commands and screenshots: [console/apps/cli/README.md](console/apps/cli/README.md).
