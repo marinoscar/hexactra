@@ -103,6 +103,9 @@ describe('install and uninstall steps', () => {
     expect(cmds).toContain('useradd --system --create-home --home-dir /var/lib/hexactra --shell /usr/sbin/nologin hexactra');
     expect(cmds).toContain(`install -D -m 0600 -o hexactra -g hexactra ${join(stage, 'c.json')} /var/lib/hexactra/.config/hexactra/host-credential.json`);
     expect(cmds).toContain('ln -sfn /opt/hexactra/agent/0.3.0-abcdef1 /opt/hexactra/agent/current');
+    // The agent (user hexactra) can write next to its credential.
+    expect(cmds).toContain('install -d -m 0700 -o hexactra -g hexactra /var/lib/hexactra/.config /var/lib/hexactra/.config/hexactra');
+    expect(cmds.indexOf('install -d -m 0700 -o hexactra -g hexactra /var/lib/hexactra/.config /var/lib/hexactra/.config/hexactra')).toBeLessThan(cmds.findIndex((c) => c.includes('host-credential.json')));
     expect(cmds.at(-2)).toBe(`systemctl enable --now ${UNITS.display} ${UNITS.session} ${UNITS.agent}`);
     expect(readdirSync(stage).sort()).toEqual(['hexactra-desktop.service', 'hexactra-node-agent.service', 'hexactra-session.service']);
 
