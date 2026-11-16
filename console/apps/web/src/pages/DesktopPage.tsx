@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { Alert, Box, Button, Chip, MenuItem, Stack, TextField, Typography } from '@mui/material';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
-import RFB from '@novnc/novnc/lib/rfb';
+import RFB from '@novnc/novnc/core/rfb.js';
 
 import type { FleetHost } from './FleetPage';
 
@@ -104,7 +104,7 @@ export function DesktopPage() {
     void open();
     void api
       .get<Lease | null>(`/fleet/hosts/${id}/takeover`)
-      .then((l) => setHeldBy(l ? (l.displayName ?? 'Someone') : null))
+      .then((l) => setHeldBy(l && typeof l === 'object' && l.leaseId ? (l.displayName ?? 'Someone') : null))
       .catch(() => undefined);
     return () => {
       closing.current = true;

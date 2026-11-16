@@ -1,5 +1,5 @@
 // The part of noVNC's RFB client the desktop page uses (@novnc/novnc ships no types).
-declare module '@novnc/novnc/lib/rfb' {
+declare module '@novnc/novnc/core/rfb.js' {
   export default class RFB extends EventTarget {
     constructor(target: HTMLElement, urlOrChannel: string | WebSocket, options?: { shared?: boolean; credentials?: Record<string, string> });
     viewOnly: boolean;

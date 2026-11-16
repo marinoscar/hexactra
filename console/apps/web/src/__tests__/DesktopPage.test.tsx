@@ -8,7 +8,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { vi } from 'vitest';
 
 const rfb = vi.hoisted(() => ({ instances: [] as Array<{ url: string; target: EventTarget; disconnect: ReturnType<typeof vi.fn>; sendCtrlAltDel: ReturnType<typeof vi.fn> }> }));
-vi.mock('@novnc/novnc/lib/rfb', () => ({
+vi.mock('@novnc/novnc/core/rfb.js', () => ({
   default: class extends EventTarget {
     viewOnly = true;
     scaleViewport = false;
@@ -42,6 +42,8 @@ const host: FleetHost = {
   lastSeen: '2026-11-16T00:00:00Z',
 };
 
+let takeoverAnswer: unknown = null;
+
 function renderPage(h: FleetHost = host) {
   const platform = createTestPlatformHost({
     permissions: ['fleet:read', 'fleet:desktop'],
@@ -49,7 +51,7 @@ function renderPage(h: FleetHost = host) {
       [`GET /fleet/hosts/${ID}`]: h,
       [`POST /fleet/hosts/${ID}/viewer-session`]: { hostId: ID, wsPath: `/viewer/${ID}/websockify`, expiresAt: '2026-11-16T01:00:00Z' },
       [`DELETE /fleet/hosts/${ID}/viewer-session`]: undefined,
-      [`GET /fleet/hosts/${ID}/takeover`]: null,
+      [`GET /fleet/hosts/${ID}/takeover`]: takeoverAnswer,
       [`POST /fleet/hosts/${ID}/takeover`]: { leaseId: 'l1', userId: 'test-user', displayName: 'Person A', expiresAt: '2026-11-16T01:00:00Z' },
       [`DELETE /fleet/hosts/${ID}/takeover/l1`]: undefined,
       [`POST /fleet/hosts/${ID}/profiles/personal/show`]: { id: 'c1', kind: 'show_profile', profile: 'personal', state: 'succeeded', error: null, createdAt: '', completedAt: '' },
@@ -135,6 +137,24 @@ describe('DesktopPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Sign in to profile' }));
     expect(await screen.findByText(/Chrome for "personal" is open at the Google sign-in/)).toBeInTheDocument();
     expect(platform.requests.some((r) => r.method === 'POST' && r.path === `/fleet/hosts/${ID}/profiles/personal/show`)).toBe(true);
+  });
+
+  it('says nobody controls the desktop when the takeover answer is empty', async () => {
+    for (const answer of [null, {}, '']) {
+      takeoverAnswer = answer;
+      const { view } = renderPage();
+      await waitFor(() => expect(rfb.instances.length).toBeGreaterThan(0));
+      act(() => {
+        (rfb.instances.at(-1) as unknown as EventTarget).dispatchEvent(new Event('connect'));
+      });
+      expect(await screen.findByText(/You are watching\. Take over/)).toBeInTheDocument();
+      expect(screen.queryByText(/is controlling this desktop/)).not.toBeInTheDocument();
+      view.unmount();
+    }
+    takeoverAnswer = { leaseId: 'l9', userId: 'u2', displayName: 'Person B', expiresAt: '2026-11-16T01:00:00Z' };
+    renderPage();
+    expect(await screen.findByText('Person B is controlling this desktop; you are watching.')).toBeInTheDocument();
+    takeoverAnswer = null;
   });
 
   it('says when the node is offline or shares no desktop, without connecting', async () => {
