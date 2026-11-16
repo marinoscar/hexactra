@@ -3,7 +3,8 @@
 // The service worker connects to the native messaging host
 // `com.hexactra.nativehost`, which relays frames to the local Hexactra host
 // agent. The agent sends bounded actions (see crates/hexactra-core/src/remote.rs);
-// this module executes them with chrome.tabs / chrome.scripting and replies.
+// this module executes them with chrome.tabs / chrome.scripting, and with
+// chrome.debugger (cdp.ts) for trusted input, JavaScript and capture (#366).
 //
 // Wire format (both directions are JSON objects):
 //   agent -> extension: { "type": "request", "id": string, "action": RemoteAction, "deadline_ms": number }
@@ -11,7 +12,11 @@
 //   extension -> agent: { "type": "hello", "version": string }
 //   agent <-> extension: { "type": "ping" } / { "type": "pong" }
 
+import * as cdp from './cdp.js';
+
 export const NATIVE_HOST_NAME = 'com.hexactra.nativehost';
+
+type Button = 'left' | 'middle' | 'right';
 
 export type RemoteAction =
   | { type: 'navigate'; url: string; tab_id?: number }
@@ -19,7 +24,14 @@ export type RemoteAction =
   | { type: 'type'; selector: string; text: string; clear?: boolean; submit?: boolean; tab_id?: number }
   | { type: 'press'; key: string; selector?: string; tab_id?: number }
   | { type: 'scroll'; dx?: number; dy?: number; selector?: string; tab_id?: number }
-  | { type: 'screenshot'; tab_id?: number }
+  | { type: 'screenshot'; marks?: boolean; tab_id?: number }
+  | { type: 'evaluate'; script: string; await_promise?: boolean; tab_id?: number }
+  | { type: 'click_at'; x: number; y: number; button?: Button; click_count?: number; modifiers?: string[]; tab_id?: number }
+  | { type: 'mouse'; op: 'move' | 'down' | 'up'; x: number; y: number; button?: Button; tab_id?: number }
+  | { type: 'drag'; from_x: number; from_y: number; to_x: number; to_y: number; steps?: number; tab_id?: number }
+  | { type: 'scroll_at'; x: number; y: number; dx?: number; dy?: number; tab_id?: number }
+  | { type: 'type_keys'; text: string; tab_id?: number }
+  | { type: 'key'; key: string; modifiers?: string[]; tab_id?: number }
   | { type: 'text'; selector?: string; max_chars?: number; tab_id?: number }
   | { type: 'elements'; max_elements?: number; tab_id?: number }
   | { type: 'wait_for'; selector: string; timeout_ms?: number; tab_id?: number }
@@ -53,12 +65,16 @@ const DEFAULT_NAV_TIMEOUT_MS = 30_000;
 const DEFAULT_TEXT_CHARS = 20_000;
 const DEFAULT_MAX_ELEMENTS = 150;
 
-/** Only web pages may be opened remotely (mirrors check_navigable_url in Rust). */
+/**
+ * Any URL a person could type may be opened, except `javascript:` (use the
+ * evaluate action). Mirrors check_navigable_url in Rust.
+ */
 export function isNavigableUrl(url: string): boolean {
-  if (url === 'about:blank') return true;
   try {
-    const u = new URL(url);
-    return (u.protocol === 'http:' || u.protocol === 'https:') && u.host.length > 0;
+    const u = new URL(url.trim());
+    if (u.protocol === 'javascript:') return false;
+    if ((u.protocol === 'http:' || u.protocol === 'https:') && u.host.length === 0) return false;
+    return true;
   } catch {
     return false;
   }
@@ -313,13 +329,192 @@ export function pageElements(max: number) {
   return { elements: out, url: location.href, title: document.title };
 }
 
+/** The overlay's element id. */
+export const MARKS_ID = '__hexactra_marks__';
+
+/**
+ * Box and number the interactive elements in the viewport, for a model that
+ * looks at the screenshot; returns them with selectors and CSS-pixel boxes.
+ */
+export function pageMarks(max: number, overlayId: string) {
+  document.getElementById(overlayId)?.remove();
+  const query =
+    'a[href], button, input:not([type=hidden]), select, textarea, summary, label, [role=button], [role=link], ' +
+    '[role=checkbox], [role=radio], [role=switch], [role=tab], [role=menuitem], [role=option], [role=combobox], ' +
+    '[role=slider], [role=textbox], [onclick], [tabindex]:not([tabindex="-1"]), [contenteditable=""], [contenteditable=true], canvas, iframe';
+  const esc = (s: string) => (window.CSS && CSS.escape ? CSS.escape(s) : s.replace(/[^a-zA-Z0-9_-]/g, '\\$&'));
+  const unique = (sel: string) => {
+    try {
+      return document.querySelectorAll(sel).length === 1;
+    } catch {
+      return false;
+    }
+  };
+  const selectorFor = (el: Element): string => {
+    if (el.id && unique(`#${esc(el.id)}`)) return `#${esc(el.id)}`;
+    for (const attr of ['data-testid', 'data-test', 'name', 'aria-label']) {
+      const v = el.getAttribute(attr);
+      if (v) {
+        const s = `${el.tagName.toLowerCase()}[${attr}="${v.replace(/"/g, '\\"')}"]`;
+        if (unique(s)) return s;
+      }
+    }
+    const parts: string[] = [];
+    let cur: Element | null = el;
+    while (cur && cur !== document.documentElement) {
+      let part = cur.tagName.toLowerCase();
+      if (cur.id && unique(`#${esc(cur.id)}`)) {
+        parts.unshift(`#${esc(cur.id)}`);
+        break;
+      }
+      const parent: Element | null = cur.parentElement;
+      if (parent) {
+        const same = Array.from(parent.children).filter((c) => c.tagName === cur!.tagName);
+        if (same.length > 1) part += `:nth-of-type(${same.indexOf(cur) + 1})`;
+      }
+      parts.unshift(part);
+      cur = parent;
+    }
+    return parts.join(' > ');
+  };
+  const candidates = new Set<Element>(Array.from(document.querySelectorAll(query)));
+  // Custom widgets: anything drawn with a pointer cursor.
+  for (const el of Array.from(document.querySelectorAll('div, span, li, img, svg, td'))) {
+    if (candidates.size > max * 4) break;
+    if (getComputedStyle(el).cursor === 'pointer' && !(el.parentElement && getComputedStyle(el.parentElement).cursor === 'pointer')) candidates.add(el);
+  }
+  const overlay = document.createElement('div');
+  overlay.id = overlayId;
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483647;';
+  const palette = ['#e6194b', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#008080', '#9a6324', '#800000'];
+  const marks: Record<string, unknown>[] = [];
+  for (const el of candidates) {
+    if (marks.length >= max) break;
+    const h = el as HTMLElement;
+    const r = h.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) continue;
+    if (r.bottom <= 0 || r.right <= 0 || r.top >= innerHeight || r.left >= innerWidth) continue;
+    const style = getComputedStyle(h);
+    if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0) continue;
+    // Skip elements covered by something else at their center.
+    const cx = Math.min(Math.max(r.left + r.width / 2, 0), innerWidth - 1);
+    const cy = Math.min(Math.max(r.top + r.height / 2, 0), innerHeight - 1);
+    const top = document.elementFromPoint(cx, cy);
+    if (top && top !== h && !h.contains(top) && !top.contains(h)) continue;
+    const n = marks.length + 1;
+    const color = palette[n % palette.length];
+    const box = document.createElement('div');
+    box.style.cssText = `position:fixed;left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;border:2px solid ${color};box-sizing:border-box;`;
+    const tag = document.createElement('div');
+    tag.textContent = String(n);
+    tag.style.cssText = `position:absolute;left:-2px;top:-2px;transform:translateY(${r.top < 16 ? 0 : -100}%);background:${color};color:#fff;font:bold 11px/14px monospace;padding:0 3px;`;
+    box.appendChild(tag);
+    overlay.appendChild(box);
+    const label =
+      h.getAttribute('aria-label') ||
+      (h as HTMLInputElement).placeholder ||
+      (h.innerText || '').trim() ||
+      (h as HTMLInputElement).value ||
+      h.getAttribute('title') ||
+      h.getAttribute('alt') ||
+      '';
+    marks.push({
+      n,
+      selector: selectorFor(h),
+      tag: h.tagName.toLowerCase(),
+      role: h.getAttribute('role') ?? undefined,
+      text: label.replace(/\s+/g, ' ').slice(0, 80),
+      x: Math.round(r.left),
+      y: Math.round(r.top),
+      w: Math.round(r.width),
+      h: Math.round(r.height),
+    });
+  }
+  document.documentElement.appendChild(overlay);
+  return { marks, ...pageViewportInfo() };
+
+  function pageViewportInfo() {
+    return { width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1, url: location.href, title: document.title };
+  }
+}
+
+export function pageClearMarks(overlayId: string) {
+  document.getElementById(overlayId)?.remove();
+  return {};
+}
+
+export function pageViewport() {
+  return { width: innerWidth, height: innerHeight, dpr: devicePixelRatio || 1, url: location.href, title: document.title };
+}
+
+/** Scale a device-pixel JPEG to CSS pixels, so image coordinates are click_at coordinates. */
+async function toCssPixels(base64: string, width: number, height: number, dpr: number): Promise<string> {
+  if (dpr === 1 || typeof OffscreenCanvas === 'undefined' || typeof createImageBitmap === 'undefined') return base64;
+  try {
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const bitmap = await createImageBitmap(new Blob([bytes], { type: 'image/jpeg' }));
+    const canvas = new OffscreenCanvas(width, height);
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, width, height);
+    const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 });
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+    return btoa(bin);
+  } catch {
+    return base64;
+  }
+}
+
+/** Run a CDP operation, mapping its failure to an ActionError. */
+async function viaCdp<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    throw new ActionError(e instanceof Error ? e.message : String(e));
+  }
+}
+
+const DEFAULT_MAX_MARKS = 120;
+
+async function screenshot(tabId: number | undefined, marks: boolean) {
+  let tab = await resolveTab(tabId);
+  let info: { width: number; height: number; dpr: number; url?: string; title?: string; marks?: unknown[] } | null = null;
+  try {
+    info = marks ? await inPage(tab.id!, pageMarks, [DEFAULT_MAX_MARKS, MARKS_ID]) : await inPage(tab.id!, pageViewport, []);
+  } catch {
+    // Pages that refuse scripts (chrome://, the web store) are still captured.
+  }
+  let data: string;
+  try {
+    if (!cdp.cdpAvailable()) throw new Error('no debugger');
+    data = await cdp.captureViewport(tab.id!);
+  } catch {
+    if (!tab.active) tab = (await chrome.tabs.update(tab.id!, { active: true })) ?? tab;
+    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: 80 });
+    data = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  } finally {
+    if (marks && info) await inPage(tab.id!, pageClearMarks, [MARKS_ID]).catch(() => undefined);
+  }
+  if (info) data = await toCssPixels(data, info.width, info.height, info.dpr);
+  return {
+    mime: 'image/jpeg',
+    data,
+    tab_id: tab.id,
+    url: info?.url ?? tab.url,
+    title: info?.title ?? tab.title,
+    ...(info ? { width: info.width, height: info.height } : {}),
+    ...(marks ? { marks: info?.marks ?? [] } : {}),
+  };
+}
+
 // ---------------------------------------------------------------------------
 
 /** Execute one remote action. Throws ActionError on failure. */
 export async function executeAction(action: RemoteAction, deadline: number): Promise<unknown> {
   switch (action.type) {
     case 'navigate': {
-      if (!isNavigableUrl(action.url)) throw new ActionError('only http(s) URLs and about:blank may be opened');
+      if (!isNavigableUrl(action.url)) throw new ActionError('not an openable URL (javascript: URLs are refused: use evaluate)');
       const tab = await resolveTab(action.tab_id);
       const loaded = waitForTabComplete(tab.id!, Math.min(remaining(deadline), DEFAULT_NAV_TIMEOUT_MS));
       await chrome.tabs.update(tab.id!, { url: action.url });
@@ -364,14 +559,41 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
         await new Promise((r) => setTimeout(r, 250));
       }
     }
-    case 'screenshot': {
-      let tab = await resolveTab(action.tab_id);
-      if (!tab.active) {
-        tab = await chrome.tabs.update(tab.id!, { active: true }) ?? tab;
-      }
-      const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: 80 });
-      const comma = dataUrl.indexOf(',');
-      return { mime: 'image/jpeg', data: dataUrl.slice(comma + 1), tab_id: tab.id, url: tab.url, title: tab.title };
+    case 'screenshot':
+      return screenshot(action.tab_id, !!action.marks);
+    case 'evaluate': {
+      const tab = await resolveTab(action.tab_id);
+      return viaCdp(() => cdp.evaluate(tab.id!, action.script, !!action.await_promise));
+    }
+    case 'click_at': {
+      const tab = await resolveTab(action.tab_id);
+      await viaCdp(() => cdp.clickAt(tab.id!, action.x, action.y, { button: action.button, clickCount: action.click_count, modifiers: action.modifiers }));
+      return {};
+    }
+    case 'mouse': {
+      const tab = await resolveTab(action.tab_id);
+      await viaCdp(() => cdp.mouse(tab.id!, action.op, action.x, action.y, action.button));
+      return {};
+    }
+    case 'drag': {
+      const tab = await resolveTab(action.tab_id);
+      await viaCdp(() => cdp.drag(tab.id!, { x: action.from_x, y: action.from_y }, { x: action.to_x, y: action.to_y }, action.steps ?? 10));
+      return {};
+    }
+    case 'scroll_at': {
+      const tab = await resolveTab(action.tab_id);
+      await viaCdp(() => cdp.wheel(tab.id!, action.x, action.y, action.dx ?? 0, action.dy ?? 0));
+      return {};
+    }
+    case 'type_keys': {
+      const tab = await resolveTab(action.tab_id);
+      await viaCdp(() => cdp.typeText(tab.id!, action.text));
+      return {};
+    }
+    case 'key': {
+      const tab = await resolveTab(action.tab_id);
+      await viaCdp(() => cdp.pressKey(tab.id!, action.key, action.modifiers ?? []));
+      return {};
     }
     case 'tabs': {
       const tabs = await chrome.tabs.query({});
@@ -381,7 +603,7 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
     }
     case 'new_tab': {
       if (action.url !== undefined && !isNavigableUrl(action.url)) {
-        throw new ActionError('only http(s) URLs and about:blank may be opened');
+        throw new ActionError('not an openable URL (javascript: URLs are refused: use evaluate)');
       }
       const tab = await chrome.tabs.create({ url: action.url ?? 'about:blank', active: true });
       if (action.url) await waitForTabComplete(tab.id!, Math.min(remaining(deadline), DEFAULT_NAV_TIMEOUT_MS)).catch(() => undefined);
