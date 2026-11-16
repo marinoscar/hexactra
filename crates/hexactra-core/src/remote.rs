@@ -392,6 +392,9 @@ pub struct DesktopSession {
     pub expires_at: DateTime<Utc>,
 }
 
+/// Where [`HostCommand::ShowProfile`] opens by default: the Google sign-in.
+pub const SHOW_PROFILE_DEFAULT_URL: &str = "https://accounts.google.com/";
+
 /// How a host runs its browsers (#336, docs/nodes.md).
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -576,6 +579,14 @@ pub enum HostCommand {
     RestartBrowser { profile: String },
     /// Close the profile's browser (it starts again on the next action).
     CloseBrowser { profile: String },
+    /// Start the profile's browser and open `url` in a new tab (default: the
+    /// Google sign-in page), so a person signs in through the remote desktop
+    /// (#340). Closing the browser afterwards saves the sign-in.
+    ShowProfile {
+        profile: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        url: Option<String>,
+    },
     /// Stop (or resume) placing new sessions on the host. Existing sessions
     /// keep working. Handled by the control plane; never sent to the host.
     Drain {
@@ -607,6 +618,7 @@ impl HostCommand {
             HostCommand::DeleteProfile { .. } => "delete_profile",
             HostCommand::RestartBrowser { .. } => "restart_browser",
             HostCommand::CloseBrowser { .. } => "close_browser",
+            HostCommand::ShowProfile { .. } => "show_profile",
             HostCommand::Drain { .. } => "drain",
             HostCommand::OpenDesktop { .. } => "open_desktop",
         }
@@ -618,7 +630,8 @@ impl HostCommand {
             HostCommand::CreateProfile { profile }
             | HostCommand::DeleteProfile { profile }
             | HostCommand::RestartBrowser { profile }
-            | HostCommand::CloseBrowser { profile } => Some(profile),
+            | HostCommand::CloseBrowser { profile }
+            | HostCommand::ShowProfile { profile, .. } => Some(profile),
             HostCommand::Drain { .. } | HostCommand::OpenDesktop { .. } => None,
         }
     }
@@ -630,6 +643,9 @@ impl HostCommand {
                     "invalid profile name {p:?}: use 1-32 of a-z, 0-9, '-' and '_'"
                 )));
             }
+        }
+        if let HostCommand::ShowProfile { url: Some(url), .. } = self {
+            check_navigable_url(url)?;
         }
         if let HostCommand::DeleteProfile { profile } = self {
             if profile == DEFAULT_PROFILE {

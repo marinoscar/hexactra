@@ -17,6 +17,7 @@ use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
 use hexactra_core::remote::{
     valid_profile_name, HostCommand, OperationResult, RemoteAction, DEFAULT_PROFILE,
+    SHOW_PROFILE_DEFAULT_URL,
 };
 use tokio::sync::Mutex;
 use tokio::time::Instant;
@@ -258,6 +259,9 @@ impl BrowserPool {
             HostCommand::DeleteProfile { profile } => self.delete_profile(profile, left).await,
             HostCommand::RestartBrowser { profile } => self.restart_browser(profile, left).await,
             HostCommand::CloseBrowser { profile } => self.close_browser(profile, left).await,
+            HostCommand::ShowProfile { profile, url } => {
+                self.show_profile(profile, url.as_deref(), deadline).await
+            }
             HostCommand::Drain { .. } => Ok(serde_json::json!({})),
             HostCommand::OpenDesktop { .. } => Err(anyhow::anyhow!(
                 "the agent opens desktops, not the browser pool"
@@ -305,6 +309,31 @@ impl BrowserPool {
         let was_running = launcher.is_running().await;
         launcher.shutdown().await;
         Ok(serde_json::json!({ "profile": name, "closed": was_running }))
+    }
+
+    /// Start a profile's browser and open `url` (default: the Google
+    /// sign-in) in a new tab, for a person on the remote desktop.
+    pub async fn show_profile(
+        &self,
+        name: &str,
+        url: Option<&str>,
+        deadline: DateTime<Utc>,
+    ) -> Result<serde_json::Value> {
+        if !self.exists(name) {
+            bail!("profile {name:?} not found on this host");
+        }
+        let url = url.unwrap_or(SHOW_PROFILE_DEFAULT_URL).to_string();
+        let action = RemoteAction::NewTab {
+            url: Some(url.clone()),
+        };
+        let r = self.execute(name, Uuid::new_v4(), &action, deadline).await;
+        if !r.ok {
+            bail!(
+                "{}",
+                r.error.unwrap_or_else(|| "could not open the page".into())
+            );
+        }
+        Ok(serde_json::json!({ "profile": name, "url": url, "running": true }))
     }
 
     /// Close a profile's browser and start it again.
@@ -510,6 +539,25 @@ mod tests {
         assert!(r.ok, "{:?}", r.error);
         assert_eq!(p.running().await, vec!["travel"]);
         assert_eq!(act(&p, "travel").await["launches"], 2);
+
+        // ShowProfile starts the browser and opens the sign-in page for a person.
+        let r = run(HostCommand::ShowProfile {
+            profile: "travel".into(),
+            url: None,
+        })
+        .await;
+        assert!(r.ok, "{:?}", r.error);
+        assert_eq!(
+            r.result.unwrap()["url"],
+            hexactra_core::remote::SHOW_PROFILE_DEFAULT_URL
+        );
+        assert_eq!(p.running().await, vec!["travel"]);
+        let bad = run(HostCommand::ShowProfile {
+            profile: "travel".into(),
+            url: Some("javascript:alert(1)".into()),
+        })
+        .await;
+        assert!(!bad.ok);
 
         let r = run(HostCommand::CloseBrowser {
             profile: "travel".into(),

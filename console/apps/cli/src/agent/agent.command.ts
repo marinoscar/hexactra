@@ -4,6 +4,13 @@ import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 import { consoleApi } from '../console-api.js';
 import { chromeSetup, chromeStatus, chromeStatusLines } from './googleChrome.js';
 import {
+  installUnattended,
+  uninstallUnattended,
+  unattendedControl,
+  unattendedLogs,
+  unattendedStatus,
+  updateUnattended,
+  type UnattendedStatus,
   agentDoctor,
   agentLogs,
   agentStatus,
@@ -14,6 +21,8 @@ import {
   serviceControl,
   uninstallAgent,
   updateAgent,
+  agentStatusInstalled,
+  fetchAndActivate,
   type AgentStatus,
 } from './agent.js';
 
@@ -22,6 +31,24 @@ const out = (s: string): void => {
 };
 const deps = () => defaultDeps((line) => out(`  ${line}`), () => consoleApi());
 const int = (v: string) => Number.parseInt(v, 10);
+
+/** The unattended node's lines for `agent status` (and the TUI). */
+export function unattendedLines(u: UnattendedStatus): string[] {
+  if (!u.state) return [];
+  const s = u.state;
+  return [
+    '',
+    `Unattended: ${s.name} (${s.hostId.slice(0, 8)}), desktop :${s.display} ${s.resolution}, user hexactra`,
+    `Graphics:   ${s.gpu ? `${s.gpu.driver} (${s.gpu.renderNode})` : 'software rendering (no Intel or AMD GPU found)'}`,
+    `Units:      ${Object.entries(u.units).map(([k, v]) => `${k.replace('.service', '')} ${v}`).join(', ')}`,
+  ];
+}
+
+const mode = (v: string | undefined): 'attended' | 'unattended' => {
+  if (v === undefined || v === 'attended') return 'attended';
+  if (v === 'unattended') return 'unattended';
+  throw new Error(`--mode must be attended or unattended (got ${v})`);
+};
 
 /** One readable block for `agent status` (and the TUI). */
 export function statusLines(s: AgentStatus): string[] {
@@ -61,8 +88,27 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
     .option('--agent-url <url>', 'the fabric URL for --enrollment-token (the enroll command prints it)')
     .option('--wait <seconds>', 'how long to wait for the host to come online', int)
     .option('--google-chrome', 'use Google Chrome, with the extension installed by policy (one sudo step)')
+    .option('--mode <mode>', 'attended (your desktop session, the default) or unattended (its own desktop from boot, user hexactra, sudo once)')
+    .option('--resolution <WxH>', 'unattended: the desktop size (default 1920x1080)')
     .addOption(new Option('--extension-update-url <url>', 'where the Chrome policy gets the extension (a test mirror)').hideHelp())
-    .action(async (o: { googleChrome?: boolean; extensionUpdateUrl?: string; name?: string; browser?: string; maxBrowsers?: number; bundle?: string; version?: string; service?: boolean; desktop?: boolean; reenroll?: boolean; enrollmentToken?: string; agentUrl?: string; wait?: number }) => {
+    .action(async (o: { mode?: string; resolution?: string; googleChrome?: boolean; extensionUpdateUrl?: string; name?: string; browser?: string; maxBrowsers?: number; bundle?: string; version?: string; service?: boolean; desktop?: boolean; reenroll?: boolean; enrollmentToken?: string; agentUrl?: string; wait?: number }) => {
+      if (mode(o.mode) === 'unattended') {
+        out('Installing an unattended node on this machine');
+        const u = await installUnattended(deps(), {
+          name: o.name,
+          maxBrowsers: o.maxBrowsers,
+          bundle: o.bundle,
+          version: o.version,
+          reenroll: o.reenroll,
+          enrollmentToken: o.enrollmentToken ?? process.env.HEXACTRA_ENROLLMENT_TOKEN,
+          agentUrl: o.agentUrl,
+          interactiveSudo: true,
+          waitSeconds: o.wait,
+          extensionUpdateUrl: o.extensionUpdateUrl ?? process.env.HEXACTRA_EXTENSION_UPDATE_URL,
+          resolution: o.resolution,
+        });
+        return out(`Done: "${u.name}" is an unattended node. Open its desktop from Fleet to sign in to its profiles.`);
+      }
       out('Installing the Hexactra agent on this machine');
       const s = await installAgent(deps(), {
         name: o.name,
@@ -89,8 +135,9 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
     .option('--json', 'print JSON')
     .action(async (o: { json?: boolean }) => {
       const s = await agentStatus(deps());
-      if (o.json) return out(JSON.stringify(s, null, 2));
-      for (const line of statusLines(s)) out(line);
+      const u = unattendedStatus(deps());
+      if (o.json) return out(JSON.stringify({ ...s, unattended: u }, null, 2));
+      for (const line of u.installed && !s.installed ? unattendedLines(u).slice(1) : [...statusLines(s), ...unattendedLines(u)]) out(line);
     });
 
   agent
@@ -98,8 +145,9 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
     .description("Show the agent service's log")
     .option('-n, --lines <n>', 'lines to show', int, 100)
     .option('-f, --follow', 'keep printing new lines')
-    .action((o: { lines: number; follow?: boolean }) => {
-      const r = agentLogs(deps(), o.lines, !!o.follow);
+    .option('--mode <mode>', 'attended (default) or unattended')
+    .action((o: { lines: number; follow?: boolean; mode?: string }) => {
+      const r = mode(o.mode) === 'unattended' ? unattendedLogs(deps(), o.lines, !!o.follow) : agentLogs(deps(), o.lines, !!o.follow);
       if (!o.follow) process.stdout.write(r.stdout || r.stderr);
     });
 
@@ -110,14 +158,19 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
     .option('--version <version>', 'agent release to install')
     .option('--force', 'reinstall even when up to date')
     .action(async (o: { bundle?: string; version?: string; force?: boolean }) => {
-      await updateAgent(deps(), o);
+      const d = deps();
+      const u = unattendedStatus(d);
+      if (agentStatusInstalled(d)) await updateAgent(d, o);
+      else if (u.installed) await fetchAndActivate(d, o);
+      updateUnattended(d);
     });
 
   for (const action of ['start', 'stop', 'restart'] as const) {
     agent
       .command(action)
-      .description(`${action[0]!.toUpperCase()}${action.slice(1)} the agent service`)
-      .action(() => serviceControl(deps(), action));
+      .description(`${action[0]!.toUpperCase()}${action.slice(1)} the agent service (--mode unattended: the node's desktop and agent, with sudo)`)
+      .option('--mode <mode>', 'attended (default) or unattended')
+      .action((o: { mode?: string }) => (mode(o.mode) === 'unattended' ? unattendedControl(deps(), action) : serviceControl(deps(), action)));
   }
 
   agent
@@ -158,7 +211,7 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
     .action(async (o: { json?: boolean }) => {
       const checks = await agentDoctor(deps());
       if (o.json) out(JSON.stringify(checks, null, 2));
-      else for (const c of checks) out(`${c.ok ? 'ok  ' : 'FAIL'}  ${c.name.padEnd(12)} ${c.detail}`);
+      else for (const c of checks) out(`${!c.ok ? 'FAIL' : c.warning ? 'warn' : 'ok  '}  ${c.name.padEnd(22)} ${c.detail}`);
       if (checks.some((c) => !c.ok)) process.exitCode = 1;
     });
 
@@ -168,8 +221,10 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
     .option('--keep-host', 'keep the host in Fleet')
     .option('--purge-profiles', 'also delete the browser profiles (they hold sign-ins)')
     .option('--yes', 'confirm')
-    .action(async (o: { keepHost?: boolean; purgeProfiles?: boolean; yes?: boolean }) => {
+    .option('--mode <mode>', 'attended (default) or unattended')
+    .action(async (o: { keepHost?: boolean; purgeProfiles?: boolean; yes?: boolean; mode?: string }) => {
       if (!o.yes) throw new Error('Uninstalling stops this host and revokes it in Fleet; pass --yes.');
+      if (mode(o.mode) === 'unattended') return uninstallUnattended(deps(), o);
       await uninstallAgent(deps(), o);
     });
 };
