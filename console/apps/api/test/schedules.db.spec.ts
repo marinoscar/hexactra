@@ -75,7 +75,8 @@ describe('schedules', () => {
       const r = await schedules.tick(new Date(cur.nextRunAt!.getTime() + 1_000));
       failing = failing.concat(r.failing.filter((f) => f.scheduleId === s.id));
     }
-    expect(failing).toEqual([expect.objectContaining({ scheduleId: s.id, taskName: 'Daily', failures: 3 })]);
+    // The task id is what the notice deep-links with (`/tasks/:id#schedule`, #428).
+    expect(failing).toEqual([expect.objectContaining({ scheduleId: s.id, taskId: task.id, taskName: 'Daily', failures: 3 })]);
   });
 });
 

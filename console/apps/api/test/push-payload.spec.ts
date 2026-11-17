@@ -12,6 +12,8 @@ import {
   hexactraPushPayload,
 } from '../src/platform/notifications/hexactra.notifications';
 
+import { RunNotifier } from '../src/tasks/run-notifier';
+
 const RUN = '11111111-1111-4111-8111-111111111111';
 const reg = (key: string) => HEXACTRA_NOTIFICATIONS.find((n) => n.event.key === key)!;
 const event = (key: string) => reg(key).event as NotificationEventDef;
@@ -34,6 +36,25 @@ describe('push payloads of the console events', () => {
   it('a failing schedule collapses per schedule; other events get no extras', () => {
     expect(sanitizePushExtras(hexactraPushPayload(event(SCHEDULE_FAILING_EVENT), { scheduleId: 's1', taskName: 'x', failures: 3 })).payload).toEqual({ tag: 'schedule-s1' });
     expect(hexactraPushPayload({ key: 'auth.signed_in' } as NotificationEventDef, {})).toBeNull();
+  });
+
+  it("a failing schedule deep-links to its task's schedules (#428): the browser notice and the payload's tasksUrl", async () => {
+    const TASK = '22222222-2222-4222-8222-222222222222';
+    const data = { scheduleId: 's1', taskId: TASK, taskName: 'Daily report', failures: 3 };
+    expect(reg(SCHEDULE_FAILING_EVENT).browserTemplate!(data as never)).toEqual({
+      title: 'A schedule keeps failing',
+      body: '"Daily report" failed 3 times in a row.',
+      link: `/tasks/${TASK}#schedule`,
+    });
+    // A notice queued before the task id was carried still opens the Tasks list.
+    expect(reg(SCHEDULE_FAILING_EVENT).browserTemplate!({ scheduleId: 's1', taskName: 'Daily report', failures: 3 } as never).link).toBe('/tasks');
+
+    const sent: { event: string; userId: string; data: Record<string, unknown> }[] = [];
+    const notifications = { notify: async (event: string, userId: string, payload: Record<string, unknown>) => void sent.push({ event, userId, data: payload }) };
+    const config = { get: () => 'https://console.example.test/' };
+    const notifier = new RunNotifier(config as never, notifications as never, undefined as never, undefined as never);
+    await notifier.scheduleFailing('user-1', data);
+    expect(sent).toEqual([{ event: SCHEDULE_FAILING_EVENT, userId: 'user-1', data: { ...data, tasksUrl: `https://console.example.test/tasks/${TASK}#schedule` } }]);
   });
 
   it('reaches the Android app (android_app) and Web Push on every console event', () => {

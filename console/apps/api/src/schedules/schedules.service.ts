@@ -156,7 +156,7 @@ export class SchedulesService {
    * missed firings while the console was down are not replayed (only the
    * latest one runs). Returns the schedules that just became "failing".
    */
-  async tick(now = new Date()): Promise<{ started: number; skipped: number; failing: { userId: string; scheduleId: string; taskName: string; failures: number }[] }> {
+  async tick(now = new Date()): Promise<{ started: number; skipped: number; failing: { userId: string; scheduleId: string; taskId: string; taskName: string; failures: number }[] }> {
     const due = await this.prisma.taskSchedule.findMany({
       where: { enabled: true, nextRunAt: { lte: now } },
       include: { task: true },
@@ -164,7 +164,7 @@ export class SchedulesService {
     });
     let started = 0;
     let skipped = 0;
-    const failing: { userId: string; scheduleId: string; taskName: string; failures: number }[] = [];
+    const failing: { userId: string; scheduleId: string; taskId: string; taskName: string; failures: number }[] = [];
     for (const s of due) {
       const next = nextFiring(s.cron, s.timezone, now);
       // Claim the firing (compare-and-set on nextRunAt) before doing anything.
@@ -180,7 +180,7 @@ export class SchedulesService {
       }
       if (failures !== s.consecutiveFailures) {
         await this.prisma.taskSchedule.updateMany({ where: { id: s.id }, data: { consecutiveFailures: failures } });
-        if (failures === FAILING_AFTER) failing.push({ userId: s.userId, scheduleId: s.id, taskName: s.task.name, failures });
+        if (failures === FAILING_AFTER) failing.push({ userId: s.userId, scheduleId: s.id, taskId: s.taskId, taskName: s.task.name, failures });
       }
 
       if (s.concurrency === 'skip') {
