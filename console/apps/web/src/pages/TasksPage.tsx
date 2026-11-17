@@ -5,6 +5,8 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import type { FleetHost } from './FleetPage';
 import { TaskSchedules } from './TaskSchedules';
+import { TaskSpendLine } from '../components/RunBudgetMeter';
+import type { TaskSpend } from '../components/runBudget';
 
 /** The machine's state as the picker shows it (#384). */
 export function machineState(h: FleetHost): string {
@@ -26,6 +28,8 @@ export interface Task {
   maxMinutes: number;
   confirmRiskyActions: boolean;
   model: string | null;
+  /** What the task's runs spent in the last 30 days (#400, #408). */
+  spend30d?: TaskSpend;
 }
 
 function message(e: unknown, fallback: string): string {
@@ -207,6 +211,8 @@ export function TasksPage() {
                 <Chip size="small" label={t.allowedDomains.length ? t.allowedDomains.join(', ') : 'any site'} />
                 <Chip size="small" variant="outlined" label={`${t.maxSteps} steps · ${t.maxMinutes} min`} />
               </Stack>
+              {/* Spend (#408) */}
+              <TaskSpendLine spend={t.spend30d} />
               <TaskSchedules taskId={t.id} canWrite={canWrite} />
             </CardContent>
             <CardActions>
