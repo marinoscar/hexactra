@@ -50,6 +50,7 @@ export const runActivitySchema = z
       .object({ x: z.number(), y: z.number(), w: z.number().optional(), h: z.number().optional() })
       .optional()
       .describe('Where on the page it acts, in page screenshot (CSS viewport) pixels: a point, or a box with w and h'),
+    note: z.string().optional().describe('Why the run is on a stronger model, while it is (for example "Escalated to Frontier (stuck: repeated click on #submit)")'),
   })
   .describe('What a running run is doing right now; null when it is not running');
 
@@ -91,6 +92,8 @@ export const runResponseSchema = z.object({
   policy: policySummarySchema.nullable(),
   stopReason: z.enum(RUN_STOP_REASONS).nullable().describe('Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field.'),
   budget: runBudgetSchema.nullable(),
+  currentTier: z.enum(['fast', 'standard', 'frontier']).nullable().describe('The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts.'),
+  escalations: z.number().int().describe('How many times the run moved to a stronger tier because it stalled'),
   cachedInputTokens: z.number().int().describe('Input tokens the provider served from its cache (part of inputTokens)'),
   modelCalls: z.number().int().describe('Model calls (provider round trips) made so far'),
   costUsd: z.number().describe('USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false'),
@@ -105,7 +108,7 @@ export const runStepResponseSchema = z.object({
   id: z.uuid(),
   runId: z.uuid(),
   seq: z.number().int(),
-  kind: z.string().describe('action | handoff | finish | error | note'),
+  kind: z.string().describe('action | handoff | finish | error | note | routing (a tier change or provider fallback, with `args` { from, to, reason }; not an action)'),
   action: z.string().nullable(),
   args: z.record(z.string(), z.unknown()).nullable().describe('Redacted: typed text is its length, URLs lose their query'),
   ok: z.boolean(),

@@ -22,6 +22,8 @@ export interface RunActivity {
   timeoutMs?: number;
   /** Where on the page it acts, in page screenshot (CSS viewport) pixels (#381). */
   target?: ActivityTarget;
+  /** Why the run is on a stronger model, while it is: "Escalated to Frontier (stuck: repeated click on #submit)" (#405). */
+  note?: string;
 }
 
 /** A point (a click, a hover) or a box (an element). */
@@ -63,7 +65,7 @@ const REASON_CHARS = 500;
 /** The activity for one phase, stamped now. `action` arguments are redacted. */
 export function runActivity(
   phase: RunActivityPhase,
-  opts: { action?: Record<string, unknown>; reason?: string; timeoutMs?: number; target?: ActivityTarget } = {},
+  opts: { action?: Record<string, unknown>; reason?: string; timeoutMs?: number; target?: ActivityTarget; note?: string } = {},
   now: Date = new Date(),
 ): RunActivity {
   const out: RunActivity = { phase, startedAt: now.toISOString() };
@@ -75,5 +77,6 @@ export function runActivity(
   if (opts.reason) out.reason = opts.reason.length > REASON_CHARS ? `${opts.reason.slice(0, REASON_CHARS)}…` : opts.reason;
   if (opts.timeoutMs !== undefined) out.timeoutMs = opts.timeoutMs;
   if (opts.target) out.target = opts.target;
+  if (opts.note) out.note = opts.note.length > REASON_CHARS ? `${opts.note.slice(0, REASON_CHARS)}…` : opts.note;
   return out;
 }

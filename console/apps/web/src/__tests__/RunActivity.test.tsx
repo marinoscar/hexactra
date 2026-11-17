@@ -58,6 +58,11 @@ describe('run activity (#379)', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  it('shows why the run is on a stronger model (#405)', () => {
+    render(<RunActivityBar activity={{ ...acting, note: 'Escalated to Frontier (stuck: repeated click on #submit)' }} now={at} />);
+    expect(screen.getByTestId('activity-note')).toHaveTextContent('Escalated to Frontier (stuck: repeated click on #submit)');
+  });
+
   it('shows the stall banner past the threshold', () => {
     render(<RunActivityBar activity={acting} now={at + 24_000} />);
     expect(screen.getByRole('alert')).toHaveTextContent('waiting on the browser for 47 s');
