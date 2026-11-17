@@ -235,7 +235,7 @@ const schedulePreview = (_url, body) => {
   const cron = body?.cron ?? '0 9 * * 1-5';
   if (/^\*(\/[1-4])? /.test(cron)) return { valid: false, code: 'CRON_TOO_FREQUENT', message: 'A schedule may run at most every 5 minutes.' };
   const description = { '0 9 * * 1-5': 'Monday to Friday at 09:00', '0 8 * * 6': 'Every Saturday at 08:00', '30 7 1 * *': 'On day 1 of every month at 07:30', '0 9 * * *': 'Every day at 09:00' }[cron] ?? `Custom schedule (${cron})`;
-  return { valid: true, cron, timezone: body?.timezone ?? 'Etc/UTC', description, next: Array.from({ length: body?.count ?? 5 }, (_, i) => iso((i + 1) * 86_400_000)), intervalSeconds: 86_400 };
+  return { valid: true, cron, timezone: body?.timezone ?? 'Etc/UTC', description, next: Array.from({ length: body?.count ?? 5 }, (_, i) => `${iso((i + 1) * 86_400_000).slice(0, 10)}T09:00:00.000Z`), intervalSeconds: 86_400 };
 };
 
 /** `"<METHOD> <path>"` to the response `data`. A function gets the request URL and its JSON body. */
