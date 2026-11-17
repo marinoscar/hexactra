@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
   Box,
   Button,
   Card,
   CardActions,
   CardContent,
   Chip,
-  Container,
   FormControlLabel,
   Dialog,
   DialogActions,
@@ -23,6 +21,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import StopCircleOutlinedIcon from '@mui/icons-material/StopCircleOutlined';
@@ -30,29 +29,8 @@ import DesktopWindowsOutlined from '@mui/icons-material/DesktopWindowsOutlined';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { Link as RouterLink } from 'react-router-dom';
 
-/** One host, as `GET /api/fleet/hosts` returns it. */
-export interface FleetHost {
-  id: string;
-  name: string;
-  version: string;
-  online: boolean;
-  browserConnected: boolean;
-  onDemand: boolean;
-  draining: boolean;
-  viewerUrl: string | null;
-  mode: 'unattended' | 'attended' | 'container' | null;
-  desktop: boolean;
-  profiles: { name: string; running: boolean }[];
-  lastSeen: string;
-}
-
-/** `POST /api/fleet/enrollments`. */
-export interface FleetEnrollment {
-  enrollmentToken: string;
-  expiresAt: string | null;
-  command: string;
-}
-
+import type { FleetEnrollment, FleetHost } from '../types/fleet';
+import { CardSkeleton, EmptyState, ErrorBanner, PageContainer, PageHeader, formatDateTime, useApiAction, useConfirm, useProfileTimeZone } from '../ui';
 
 /** How each host mode reads in the list (docs/nodes.md). */
 const MODE_LABEL: Record<NonNullable<FleetHost['mode']>, string> = {
@@ -86,8 +64,9 @@ export function FleetPage() {
   const canWrite = viewer.hasPermission('fleet:write');
   const canDesktop = viewer.hasPermission('fleet:desktop');
   const [hosts, setHosts] = useState<FleetHost[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const { run, busy, error, setError } = useApiAction();
+  const confirm = useConfirm();
+  useProfileTimeZone();
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [enrollName, setEnrollName] = useState('');
   const [enrollment, setEnrollment] = useState<FleetEnrollment | null>(null);
@@ -100,24 +79,37 @@ export function FleetPage() {
     } catch (e) {
       setError(message(e, 'Could not load the fleet'));
     }
-  }, [api]);
+  }, [api, setError]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   /** Run a change, then reload; one at a time. */
-  const act = async (key: string, run: () => Promise<unknown>) => {
-    setBusy(key);
-    setError(null);
-    try {
-      await run();
+  const act = (key: string, change: () => Promise<unknown>) =>
+    run(key, async () => {
+      await change();
       await load();
-    } catch (e) {
-      setError(message(e, 'The change failed'));
-    } finally {
-      setBusy(null);
-    }
+    });
+
+  const deleteProfile = async (h: FleetHost, profile: string) => {
+    const ok = await confirm({
+      title: 'Delete profile',
+      body: `Delete profile "${profile}" on ${h.name}? Its cookies and sign-ins are removed.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (ok) await act(`${h.id}/${profile}`, () => api.delete(`/fleet/hosts/${h.id}/profiles/${profile}`));
+  };
+
+  const revoke = async (h: FleetHost) => {
+    const ok = await confirm({
+      title: 'Revoke host',
+      body: `Revoke ${h.name}? Its credential stops working and its sessions end.`,
+      confirmLabel: 'Revoke',
+      destructive: true,
+    });
+    if (ok) await act(h.id, () => api.delete(`/fleet/hosts/${h.id}`));
   };
 
   const enroll = async () => {
@@ -130,23 +122,11 @@ export function FleetPage() {
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Stack direction="row" sx={{ mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
-        <Typography variant="h4" component="h1">
-          Fleet
-        </Typography>
-        {canWrite && (
-          <Button variant="contained" onClick={() => setEnrollOpen(true)}>
-            Enroll host
-          </Button>
-        )}
-      </Stack>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-      {hosts?.length === 0 && <Alert severity="info">No host is enrolled yet.</Alert>}
+    <PageContainer>
+      <PageHeader title="Fleet" primary={{ key: 'enroll', label: 'Enroll host', Icon: AddIcon, onClick: () => setEnrollOpen(true), hidden: !canWrite }} />
+      <ErrorBanner error={error} />
+      {hosts === null && !error && <CardSkeleton rows={2} />}
+      {hosts?.length === 0 && <EmptyState Icon={DesktopWindowsOutlined} title="No host is enrolled yet" />}
       <Stack spacing={2} aria-label="Hosts">
         {hosts?.map((h) => (
           <Card key={h.id} variant="outlined" aria-label={`Host ${h.name}`}>
@@ -213,11 +193,7 @@ export function FleetPage() {
                               <IconButton
                                 aria-label={`Delete ${p.name} on ${h.name}`}
                                 disabled={busy !== null}
-                                onClick={() => {
-                                  if (window.confirm(`Delete profile "${p.name}" on ${h.name}? Its cookies and sign-ins are removed.`)) {
-                                    void act(`${h.id}/${p.name}`, () => api.delete(`/fleet/hosts/${h.id}/profiles/${p.name}`));
-                                  }
-                                }}
+                                onClick={() => void deleteProfile(h, p.name)}
                               >
                                 <DeleteOutlineIcon />
                               </IconButton>
@@ -273,11 +249,7 @@ export function FleetPage() {
                 <Button
                   color="error"
                   disabled={busy !== null}
-                  onClick={() => {
-                    if (window.confirm(`Revoke ${h.name}? Its credential stops working and its sessions end.`)) {
-                      void act(h.id, () => api.delete(`/fleet/hosts/${h.id}`));
-                    }
-                  }}
+                  onClick={() => void revoke(h)}
                 >
                   Revoke
                 </Button>
@@ -302,7 +274,7 @@ export function FleetPage() {
             <TextField autoFocus margin="dense" label="Host name (optional)" value={enrollName} onChange={(e) => setEnrollName(e.target.value)} fullWidth />
           ) : (
             <Box>
-              <Typography gutterBottom>Run this on the new host. The token works once{enrollment.expiresAt ? ` and expires ${new Date(enrollment.expiresAt).toLocaleString()}` : ''}.</Typography>
+              <Typography gutterBottom>Run this on the new host. The token works once{enrollment.expiresAt ? ` and expires ${formatDateTime(enrollment.expiresAt)}` : ''}.</Typography>
               <Box component="pre" aria-label="Agent command" sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
                 {enrollment.command}
               </Box>
@@ -319,6 +291,6 @@ export function FleetPage() {
           )}
         </DialogActions>
       </Dialog>
-    </Container>
+    </PageContainer>
   );
 }

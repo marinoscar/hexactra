@@ -94,6 +94,11 @@ export function formatUsd(amount: number, known = true): string {
   return known ? text : `≥ ${text}`;
 }
 
+/** A run's cost as text, or null before it made a model call. */
+export function runCost(r: { costUsd?: number | null; costKnown?: boolean; modelCalls?: number }): string | null {
+  return typeof r.costUsd === 'number' && (r.modelCalls ?? 0) > 0 ? formatUsd(r.costUsd, r.costKnown ?? true) : null;
+}
+
 const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
 
 /** A budget amount in its unit: "12", "3.5 min", "1.2M", "$0.42". */

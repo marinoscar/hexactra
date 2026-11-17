@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Console UI foundation** (#419).
+  - A shared page kit in `apps/web/src/ui`: page container and header, status chip with the stop reason in words, confirm dialog, empty state, error banner, skeletons, a list that is a table on desktop and cards on phones, and date, relative-time and cost formatting in the profile's time zone.
+  - Every destructive action asks through the same confirm dialog; no `window.confirm` remains. Deleting a task or a schedule now asks first.
+  - The run page is its own file with a back link to Runs. The agent policy, model tier, ceiling and pricing pages use the kit.
 - **Runs API: paging, filters, search and counts** (#420).
   - `GET /runs?envelope=1` returns `{ items, nextCursor }` with keyset paging. Filters: `status`, `state`, `taskId`, `trigger`, `from`, `to`, `q`, `stopReason` and `policyId`. Without `envelope` the answer is the array it always was.
   - `GET /runs/counts` returns the total, the live count, a count per status and the cost of the filtered set.

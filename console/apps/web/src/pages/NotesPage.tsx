@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Alert, Box, Button, Checkbox, Container, IconButton, List, ListItem, ListItemText, Stack, TextField, Typography } from '@mui/material';
+import { Box, Button, Checkbox, IconButton, List, ListItem, ListItemText, Stack, TextField, Typography } from '@mui/material';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
+
+import { ErrorBanner, PageContainer, PageHeader } from '../ui';
 
 /** One note, as `GET /api/notes` returns it. */
 export interface Note {
@@ -40,11 +42,9 @@ export function NotesPage() {
   };
 
   return (
-    <Container maxWidth="sm" sx={{ py: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        My notes
-      </Typography>
-      {error && <Alert severity="error">{error}</Alert>}
+    <PageContainer width="narrow">
+      <PageHeader title="My notes" />
+      <ErrorBanner error={error} />
       {canWrite && (
         <Box component="form" onSubmit={add}>
           <Stack direction="row" spacing={1}>
@@ -78,6 +78,6 @@ export function NotesPage() {
         ))}
       </List>
       {notes.length === 0 && !error && <Typography color="text.secondary">No notes yet.</Typography>}
-    </Container>
+    </PageContainer>
   );
 }

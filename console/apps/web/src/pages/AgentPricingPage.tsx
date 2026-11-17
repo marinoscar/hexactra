@@ -1,6 +1,6 @@
 import AddIcon from '@mui/icons-material/Add';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
-import { Alert, Box, Button, CircularProgress, Container, IconButton, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, IconButton, Paper, Stack, TextField } from '@mui/material';
 import { useUsableAiModels } from '@marinoscar/platform-web/ai/headless';
 import { isPlatformApiError, usePlatformHost } from '@marinoscar/platform-web/core';
 import { useCallback, useEffect, useState } from 'react';
@@ -9,6 +9,7 @@ import { getAgentSystemSettings, patchAgentSystemSettings } from '../policies/ap
 import { ModelPicker } from '../policies/ModelPicker';
 import type { ModelPrice } from '../policies/types';
 import { errorText } from '../policies/usePolicyCatalog';
+import { ErrorBanner, PageContainer, PageHeader } from '../ui';
 
 /** The API's key rule: `'<provider>:<model id>'` (apps/api/src/runner/agent-pricing.schemas.ts). */
 const MODEL_PRICE_KEY = /^[a-z0-9][a-z0-9_.-]*:\S.*$/;
@@ -98,18 +99,12 @@ export function AgentPricingPage() {
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: { xs: 2, sm: 4 } }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Model prices
-      </Typography>
-      <Typography color="text.secondary" sx={{ mb: 2 }}>
-        What each model costs, in US dollars per million tokens. Run cost, cost budgets and the AI usage report use these prices. A model that is not listed is unpriced: its runs show their cost as “at least”.
-      </Typography>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+    <PageContainer>
+      <PageHeader
+        title="Model prices"
+        subtitle="What each model costs, in US dollars per million tokens. Run cost, cost budgets and the AI usage report use these prices. A model that is not listed is unpriced: its runs show their cost as “at least”."
+      />
+      <ErrorBanner error={error} />
       {!rows && !error && <CircularProgress aria-label="Loading" />}
       {rows && (
         <Stack spacing={1.5} aria-label="Prices">
@@ -167,6 +162,6 @@ export function AgentPricingPage() {
           )}
         </Stack>
       )}
-    </Container>
+    </PageContainer>
   );
 }

@@ -4,7 +4,8 @@ import { Alert, Box, Button, Chip, MenuItem, Stack, TextField, Typography } from
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 import RFB from '@novnc/novnc/core/rfb.js';
 
-import type { FleetHost } from './FleetPage';
+import type { FleetHost } from '../types/fleet';
+import { formatDateTime } from '../ui';
 
 /** A takeover lease (`/api/fleet/hosts/:id/takeover`). */
 interface Lease {
@@ -253,7 +254,7 @@ export function DesktopPage() {
       </Stack>
       {status === 'offline' && host && (
         <Alert severity="warning">
-          {host.name} is offline (last seen {new Date(host.lastSeen).toLocaleString()}). On the node, run `hexactra agent status`.
+          {host.name} is offline (last seen {formatDateTime(host.lastSeen)}). On the node, run `hexactra agent status`.
         </Alert>
       )}
       {status === 'unavailable' && host && (
