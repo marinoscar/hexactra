@@ -47,7 +47,8 @@ const run: Run = {
   steps: [{ id: 's1', seq: 1, kind: 'action', action: 'navigate', args: { url: 'https://flights.example.test/' }, ok: true, summary: 'at https://flights.example.test/ — Flights', reasoning: 'open the site', createdAt: '2026-11-15T00:00:01Z' }],
 };
 
-// The Tasks list is covered by TasksPage.test.tsx (#426); the task form (machine picker, fallback, offline warning) by the form pages' tests (#427).
+// The Tasks list is covered by TasksPage.test.tsx (#426); the task form (machine picker, fallback, offline warning) and a task's
+// schedules (add, edit, policy override, remove) by TaskForm.test.tsx (#427).
 
 describe('RunDetailPage', () => {
   it('shows the steps and cancels a live run', async () => {
@@ -102,37 +103,6 @@ describe('RunDetailPage', () => {
     expect(await screen.findByText(/waiting on the browser for 1 min/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel run' }));
     expect(host.requests.map((r) => `${r.method} ${r.path}`)).toContain(`POST /runs/${run.id}/cancel`);
-  });
-});
-
-describe('TaskSchedules', () => {
-  it('lists a schedule and adds one through the editor', async () => {
-    const { TaskSchedules } = await import('../pages/TaskSchedules');
-    const host = createTestPlatformHost({
-      permissions: ['tasks:read', 'tasks:write'],
-      responses: {
-        [`GET /schedules?taskId=${task.id}`]: [
-          { id: 'sc1', taskId: task.id, cron: '0 9 * * 1-5', timezone: 'Europe/Madrid', enabled: true, concurrency: 'skip', nextRunAt: '2026-11-16T08:00:00Z', lastRunAt: null, consecutiveFailures: 0, description: 'Monday to Friday at 09:00' },
-        ],
-        'POST /schedules/preview': { valid: true, cron: '30 7 * * *', timezone: 'UTC', description: 'Every day at 07:30', next: [], intervalSeconds: 86400 },
-        'POST /schedules': { id: 'sc2' },
-      },
-    });
-    render(
-      <PlatformHostProvider host={host}>
-        <ConfirmProvider>
-          <TaskSchedules taskId={task.id} canWrite />
-        </ConfirmProvider>
-      </PlatformHostProvider>,
-    );
-    expect(await screen.findByText(/Monday to Friday at 09:00/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Add schedule' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Add schedule' });
-    fireEvent.change(within(dialog).getByLabelText('Time'), { target: { value: '07:30' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Add schedule' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    const post = host.requests.find((r) => r.method === 'POST' && r.path === '/schedules');
-    expect(post?.body).toMatchObject({ taskId: task.id, cron: '30 7 * * *', enabled: true, concurrency: 'skip', policyId: null });
   });
 });
 

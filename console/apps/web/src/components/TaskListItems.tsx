@@ -105,9 +105,6 @@ export function TaskOverflowMenu({ task, canWrite, canReadRuns, onDelete }: Task
       <ListItemText>{label}</ListItemText>
     </MenuItem>
   );
-  // Until the task page exists (#428) "Open" is the edit page, which needs `tasks:write`.
-  const canOpen = taskPaths.detail(task.id) !== taskPaths.edit(task.id);
-  if (!canOpen && !canWrite && !canReadRuns) return null;
   return (
     <>
       <IconButton
@@ -121,7 +118,7 @@ export function TaskOverflowMenu({ task, canWrite, canReadRuns, onDelete }: Task
         <MoreVertIcon />
       </IconButton>
       <Menu id={menuId} anchorEl={anchor} open={Boolean(anchor)} onClose={close}>
-        {canOpen && link(taskPaths.detail(task.id), 'Open')}
+        {link(taskPaths.detail(task.id), 'Open')}
         {canWrite && link(taskPaths.edit(task.id), 'Edit')}
         {canWrite && link(taskPaths.duplicate(task.id), 'Duplicate')}
         {canReadRuns && link(taskPaths.runs(task.id), 'View runs')}

@@ -76,9 +76,9 @@ export function taskListPath(query: TaskListQuery, limit: number = TASK_PAGE_SIZ
 }
 
 /**
- * Where a task's links go. The detail page (`/tasks/:id`) arrives with #428:
- * until then `detail` is the edit page and `runs` the Runs page filtered to
- * the task. #428 changes these two lines and nothing else.
+ * Where a task's links go. The task page (`/tasks/:id`) arrives with #428;
+ * until then App.tsx redirects that address to the list, and `runs` is the
+ * Runs page filtered to the task (#428 points it at `/tasks/:id#runs`).
  */
 export const taskPaths = {
   list: '/tasks',
@@ -90,7 +90,7 @@ export const taskPaths = {
   edit: (id: string) => `/tasks/${id}/edit`,
   /** The edit page, at its schedules. */
   editSchedule: (id: string) => `/tasks/${id}/edit#schedule`,
-  detail: (id: string) => `/tasks/${id}/edit`,
+  detail: (id: string) => `/tasks/${id}`,
   runs: (id: string) => `/runs?taskId=${id}`,
   run: (runId: string) => `/runs/${runId}`,
 };

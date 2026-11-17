@@ -48,6 +48,8 @@ function mount(responses: Record<string, unknown>, permissions: string[] = ALL, 
             {/* The form pages (#427) and the run page are not this page's: stubs. */}
             <Route path="/tasks/new" element={<div>new task page</div>} />
             <Route path="/tasks/:id/edit" element={<div>edit task page</div>} />
+            {/* The task page arrives with #428. */}
+            <Route path="/tasks/:id" element={<div>task page</div>} />
             <Route path="/runs/:id" element={<div>run page</div>} />
           </Routes>
         </MemoryRouter>
@@ -109,12 +111,13 @@ describe('the Tasks list', () => {
     const live = taskRow({ summary: { liveRunId: RUN_ID, lastRun: { id: RUN_ID, status: 'running', trigger: 'manual', createdAt: '2026-11-17T09:00:00Z', finishedAt: null } } });
     mount({ 'GET /tasks': page([live]) });
     const r = await row('Check fare');
-    expect(within(r).getByRole('link', { name: 'Check fare' })).toHaveAttribute('href', taskPaths.detail(TASK_ID));
+    expect(within(r).getByRole('link', { name: 'Check fare' })).toHaveAttribute('href', `/tasks/${TASK_ID}`);
     const chip = within(r).getByRole('link', { name: 'Live run of Check fare' });
     expect(chip).toHaveAttribute('href', `/runs/${RUN_ID}`);
     expect(chip).toHaveTextContent('running');
     fireEvent.click(within(r).getByRole('button', { name: 'More actions: Check fare' }));
     const menu = await screen.findByRole('menu');
+    expect(within(menu).getByRole('menuitem', { name: 'Open' })).toHaveAttribute('href', `/tasks/${TASK_ID}`);
     expect(within(menu).getByRole('menuitem', { name: 'Edit' })).toHaveAttribute('href', `/tasks/${TASK_ID}/edit`);
     expect(within(menu).getByRole('menuitem', { name: 'Duplicate' })).toHaveAttribute('href', `/tasks/new?from=${TASK_ID}`);
     expect(within(menu).getByRole('menuitem', { name: 'View runs' })).toHaveAttribute('href', taskPaths.runs(TASK_ID));
@@ -431,7 +434,7 @@ describe('delete', () => {
 });
 
 describe('permissions', () => {
-  it('without tasks:write: no New task, no Edit, Duplicate or Delete; the name is not a link to the form', async () => {
+  it('without tasks:write: no New task, no Add schedule, no Edit, Duplicate or Delete', async () => {
     mount({}, ['tasks:read', 'runs:read', 'runs:write']);
     const r = await row('Check fare');
     expect(screen.queryByRole('link', { name: 'New task' })).not.toBeInTheDocument();
@@ -440,6 +443,7 @@ describe('permissions', () => {
     fireEvent.click(within(r).getByRole('button', { name: 'More actions: Check fare' }));
     const menu = await screen.findByRole('menu');
     expect(within(menu).getByRole('menuitem', { name: 'View runs' })).toBeInTheDocument();
+    expect(within(menu).getByRole('menuitem', { name: 'Open' })).toBeInTheDocument();
     for (const name of ['Edit', 'Duplicate', 'Delete']) expect(within(menu).queryByRole('menuitem', { name })).not.toBeInTheDocument();
   });
 
@@ -458,8 +462,10 @@ describe('permissions', () => {
   it('a reader sees the list and nothing to change', async () => {
     mount({}, ['tasks:read']);
     const r = await row('Check fare');
-    expect(within(r).queryByRole('button')).not.toBeInTheDocument();
-    expect(within(r).queryByRole('link', { name: 'Check fare' })).not.toBeInTheDocument();
+    // Open is all the menu has; the name opens the task too.
+    expect(within(r).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['More actions: Check fare']);
+    expect(within(r).getByRole('link', { name: 'Check fare' })).toHaveAttribute('href', `/tasks/${TASK_ID}`);
+    expect(within(r).queryByRole('switch')).not.toBeInTheDocument();
   });
 });
 
@@ -568,7 +574,7 @@ describe('layout', () => {
     await screen.findByText('Run started');
     expect(screen.getByTestId('where')).toHaveTextContent('/tasks?sort=name_asc');
     fireEvent.click(within(card).getByText('Find the cheapest fare'));
-    expect(await screen.findByText('edit task page')).toBeInTheDocument();
+    expect(await screen.findByText('task page')).toBeInTheDocument();
   });
 
   it('builds the request path of a query', () => {

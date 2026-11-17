@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 
 import { deleteTaskBody } from './taskList';
 import { runTaskWith } from '../policies/api';
+import { deleteTask } from '../taskForm/api';
 import type { Task, TaskSchedulesChanged, TaskSummary } from '../types/tasks';
 import { useConfirm } from '../ui';
 
@@ -68,7 +69,7 @@ export function useTaskActions(): TaskActions {
         const ok = await confirm({ title: `Delete “${task.name}”?`, body: deleteTaskBody(task.summary), confirmLabel: 'Delete', destructive: true });
         if (!ok) return false;
         try {
-          await api.delete(`/tasks/${task.id}`);
+          await deleteTask(api, task.id);
         } catch (e) {
           // Already gone is what the person wanted.
           if (isPlatformApiError(e) && e.status === 404) return true;

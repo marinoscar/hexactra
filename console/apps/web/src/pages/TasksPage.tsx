@@ -44,8 +44,8 @@ export function TasksPage() {
   const canRun = viewer.hasPermission('runs:write');
   const canReadRuns = viewer.hasPermission('runs:read');
   const canReadPolicies = viewer.hasPermission('agent_policies:read');
-  // Until the task page exists (#428) a task opens in the edit form, which needs `tasks:write`.
-  const canOpen = canWrite || taskPaths.detail('x') !== taskPaths.edit('x');
+  // Reading tasks is what the page needs, so everyone here may open a task.
+  const canOpen = true;
 
   const [params, setParams] = useSearchParams();
   const query = useMemo(() => parseTaskListQuery(params), [params]);
