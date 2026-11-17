@@ -1,8 +1,11 @@
 import { z } from 'zod';
 
+import { agentPolicySpecSchema } from '../policies/agent-policy.schema';
+import { parsePolicyRef } from '../policies/builtin-policies';
+
 /** How a tool reaches the console: its own REST API, as the caller. */
 export interface McpContext {
-  api<T = unknown>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T>;
+  api<T = unknown>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, body?: unknown, headers?: Record<string, string>): Promise<T>;
   /** Raw bytes of a GET (screenshots). */
   bytes(path: string): Promise<{ mime: string; data: Buffer }>;
 }
@@ -22,6 +25,16 @@ export interface McpTool {
 
 const text = (v: unknown): McpToolResult => ({ content: [{ type: 'text', text: typeof v === 'string' ? v : JSON.stringify(v, null, 2) }] });
 const id = z.string().uuid();
+/** A policy reference: an own policy's UUID or `builtin:<economy|balanced|thorough|unlimited>`. */
+const policyRef = z
+  .string()
+  .trim()
+  .max(64)
+  .refine((v) => parsePolicyRef(v) !== null, { message: 'A policy id: a UUID or builtin:<economy|balanced|thorough|unlimited>' });
+const policyIdParam = policyRef.describe("An agent policy: its id from policies_list (a UUID, or builtin:economy|balanced|thorough|unlimited). It sets the budgets and the model tiers of the run.");
+const POLICY_NOTE =
+  'A policy holds the run budgets (actions, model calls, active minutes, tokens, cost; `null` means unlimited) and the model tiers (fast, standard, frontier; start tier and the highest tier a stalled run may escalate to). ' +
+  'Pick models through tiers, not model ids: pins are an advanced override. ';
 const profile = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/).default('default').describe('Browser profile (its own cookies and sign-ins)');
 
 /** One browser action through an external session (recorded as a step). */
@@ -135,7 +148,8 @@ export const MCP_INSTRUCTIONS = `Hexactra runs real browsers for the user, on th
 Two ways to work:
 1. Delegate: run_goal (or task_run) hands a goal to Hexactra's own browser agent; follow it with run_status. It asks the person for CAPTCHAs, codes and confirmations itself.
 2. Drive: browser_open, then browser_* tools step by step; every action is recorded and the user can stop you at any time.
-3. Ask: ask_human asks the user a question with no browser involved (text, choice, multi_choice, number, confirm, none, takeover) and can wait for the answer (wait_s); question_status follows it. The user answers on any of their devices.
+3. Policies: every delegated run follows an agent policy (budgets and model tiers). policies_list shows them; pass policy_id to run_goal, task_run, task_create, task_update or schedule_create to choose one, otherwise the user's default applies.
+4. Ask: ask_human asks the user a question with no browser involved (text, choice, multi_choice, number, confirm, none, takeover) and can wait for the answer (wait_s); question_status follows it. The user answers on any of their devices.
 You act with the user's full authority on their own machines, like a person at the computer: look at the page (browser_screenshot with marks), act by selector or by position with real mouse and keyboard events (browser_click_at, browser_hover_at, browser_drag, browser_scroll_at, browser_type_keys, browser_key), run JavaScript (browser_evaluate), and reach the whole desktop for native dialogs and file pickers (browser_desktop_*).
 When only the person can help (a code sent to their phone, a passkey, a password you do not have, a CAPTCHA puzzle you cannot pass), call browser_request_human and wait (browser_handoff_status); type codes with browser_type_secret, so you never see them. Close sessions with browser_close.`;
 
@@ -143,13 +157,15 @@ export const MCP_TOOLS: McpTool[] = [
   // --- delegate to the console's goal runner -------------------------------
   {
     name: 'run_goal',
-    description: "Hand a goal to Hexactra's browser agent (it plans and acts by itself). Returns the run id; follow it with run_status.",
-    input: z.object({ goal: z.string().min(1).max(4000), profile }),
-    call: async (a, ctx) => text(await ctx.api('POST', '/runs', { goal: a.goal, profile: a.profile })),
+    description: "Hand a goal to Hexactra's browser agent (it plans and acts by itself). Returns the run id; follow it with run_status. Without policy_id the run uses the user's default agent policy (see policies_list).",
+    input: z.object({ goal: z.string().min(1).max(4000), profile, policy_id: policyIdParam.optional() }),
+    call: async (a, ctx) => text(await ctx.api('POST', '/runs', { goal: a.goal, profile: a.profile, ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}) })),
   },
   {
     name: 'run_status',
-    description: 'A run: status (queued, running, waiting_human = needs the person, succeeded, failed, cancelled), result, and its latest steps.',
+    description:
+      'A run: status (queued, running, waiting_human = needs the person, succeeded, failed, cancelled), result, and its latest steps. ' +
+      'Also the agent policy it runs under (`policy`), its cost (`costUsd`, `costKnown`, `modelCalls`) and, when the console reports them, the current tier, model, budget use (`budget`: used, limit, percent) and why it stopped (`stopReason`).',
     input: z.object({ run_id: id, steps: z.number().int().min(0).max(50).default(10) }),
     async call(a, ctx) {
       const r = await ctx.api<{ steps?: unknown[] } & Record<string, unknown>>('GET', `/runs/${String(a.run_id)}`);
@@ -157,19 +173,19 @@ export const MCP_TOOLS: McpTool[] = [
       return text({ ...r, steps });
     },
   },
-  { name: 'runs_list', description: 'Recent runs.', input: z.object({ status: z.enum(['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled']).optional() }), call: async (a, ctx) => text(await ctx.api('GET', `/runs${a.status ? `?status=${String(a.status)}` : ''}`)) },
+  { name: 'runs_list', description: 'Recent runs, each with its agent policy, cost and (when reported) budget use and stop reason.', input: z.object({ status: z.enum(['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled']).optional() }), call: async (a, ctx) => text(await ctx.api('GET', `/runs${a.status ? `?status=${String(a.status)}` : ''}`)) },
   { name: 'run_cancel', description: 'Stop a run (after its current step).', input: z.object({ run_id: id }), call: async (a, ctx) => text(await ctx.api('POST', `/runs/${String(a.run_id)}/cancel`, {})) },
-  { name: 'tasks_list', description: 'Saved tasks (reusable goals with a profile, allowed sites and budgets).', input: z.object({}), call: async (_a, ctx) => text(await ctx.api('GET', '/tasks')) },
+  { name: 'tasks_list', description: 'Saved tasks (reusable goals with a profile, allowed sites and an agent policy that sets budgets and models).', input: z.object({}), call: async (_a, ctx) => text(await ctx.api('GET', '/tasks')) },
   {
     name: 'task_create',
-    description: 'Save a task. allowed_domains limits where the agent may go (empty = any site).',
-    input: z.object({ name: z.string().min(1).max(200), goal: z.string().min(1).max(4000), profile, allowed_domains: z.array(z.string()).max(50).default([]) }),
-    call: async (a, ctx) => text(await ctx.api('POST', '/tasks', { name: a.name, goal: a.goal, profile: a.profile, allowedDomains: a.allowed_domains })),
+    description: 'Save a task. allowed_domains limits where the agent may go (empty = any site). policy_id picks the agent policy (budgets and model tiers); without it the task follows the user\'s default policy.',
+    input: z.object({ name: z.string().min(1).max(200), goal: z.string().min(1).max(4000), profile, allowed_domains: z.array(z.string()).max(50).default([]), policy_id: policyIdParam.optional() }),
+    call: async (a, ctx) => text(await ctx.api('POST', '/tasks', { name: a.name, goal: a.goal, profile: a.profile, allowedDomains: a.allowed_domains, ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}) })),
   },
   {
     name: 'task_update',
     description: 'Change a saved task; only the fields you pass change.',
-    input: z.object({ task_id: id, name: z.string().min(1).max(200).optional(), goal: z.string().min(1).max(4000).optional(), profile: profile.optional(), allowed_domains: z.array(z.string()).max(50).optional() }),
+    input: z.object({ task_id: id, name: z.string().min(1).max(200).optional(), goal: z.string().min(1).max(4000).optional(), profile: profile.optional(), allowed_domains: z.array(z.string()).max(50).optional(), policy_id: policyIdParam.nullable().optional().describe('The task\'s agent policy; null makes it follow the user\'s default policy.') }),
     call: async (a, ctx) =>
       text(
         await ctx.api('PATCH', `/tasks/${String(a.task_id)}`, {
@@ -177,15 +193,21 @@ export const MCP_TOOLS: McpTool[] = [
           ...(a.goal !== undefined ? { goal: a.goal } : {}),
           ...(a.profile !== undefined ? { profile: a.profile } : {}),
           ...(a.allowed_domains !== undefined ? { allowedDomains: a.allowed_domains } : {}),
+          ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}),
         }),
       ),
   },
-  { name: 'task_run', description: 'Run a saved task now. Returns the run.', input: z.object({ task_id: id }), call: async (a, ctx) => text(await ctx.api('POST', `/tasks/${String(a.task_id)}/runs`, {})) },
+  {
+    name: 'task_run',
+    description: 'Run a saved task now. Returns the run. policy_id runs it under another agent policy for this run only ("Run with..."); otherwise the task\'s or the default policy applies.',
+    input: z.object({ task_id: id, policy_id: policyIdParam.optional() }),
+    call: async (a, ctx) => text(await ctx.api('POST', `/tasks/${String(a.task_id)}/runs`, a.policy_id !== undefined ? { policyId: a.policy_id } : {})),
+  },
   {
     name: 'schedule_create',
-    description: 'Run a task on a schedule: a 5-field cron expression in an IANA time zone (at most every 5 minutes).',
-    input: z.object({ task_id: id, cron: z.string().min(9).max(100), timezone: z.string().default('UTC') }),
-    call: async (a, ctx) => text(await ctx.api('POST', '/schedules', { taskId: a.task_id, cron: a.cron, timezone: a.timezone })),
+    description: 'Run a task on a schedule: a 5-field cron expression in an IANA time zone (at most every 5 minutes). policy_id makes the scheduled runs use that agent policy instead of the task\'s.',
+    input: z.object({ task_id: id, cron: z.string().min(9).max(100), timezone: z.string().default('UTC'), policy_id: policyIdParam.optional() }),
+    call: async (a, ctx) => text(await ctx.api('POST', '/schedules', { taskId: a.task_id, cron: a.cron, timezone: a.timezone, ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}) })),
   },
   { name: 'schedules_list', description: 'Task schedules.', input: z.object({}), call: async (_a, ctx) => text(await ctx.api('GET', '/schedules')) },
   { name: 'inbox_list', description: "What the user's agents are waiting for (CAPTCHAs, codes, sign-ins, confirmations). Relay these to the user.", input: z.object({}), call: async (_a, ctx) => text(await ctx.api('GET', '/inbox')) },
@@ -237,6 +259,90 @@ export const MCP_TOOLS: McpTool[] = [
     description: 'A question: pending, answered (with outcome, value or values), cancelled (declined) or expired. With wait_s (at most 300) waits while it is pending. A secret is never returned.',
     input: z.object({ question_id: id, wait_s: z.number().int().min(0).max(MAX_TOOL_WAIT_S).default(0) }),
     call: async (a, ctx) => text(questionResult(await awaitQuestion(ctx, String(a.question_id), Number(a.wait_s)))),
+  },
+
+  // --- agent policies (budgets and model tiers of a run) --------------------
+  {
+    name: 'policies_list',
+    description:
+      'The agent policies you can run under: the built-ins (economy, balanced, thorough, unlimited) and the user\'s own. For each: id, name, builtin, isDefault, the model tiers (startTier to maxTier), a budget summary and hasNoHardStop (every budget limit is unlimited). ' +
+      POLICY_NOTE +
+      'Pass an id as policy_id to run_goal, task_create, task_update, task_run or schedule_create.',
+    input: z.object({}),
+    async call(_a, ctx) {
+      const list = await ctx.api<Array<{ id: string; name: string; description: string | null; builtin: boolean; isDefault: boolean; hasNoHardStop: boolean; version: number; spec: { models: { startTier: string; maxTier: string }; budget: Record<string, number | null> }; usage: unknown }>>('GET', '/agent-policies');
+      return text(
+        list.map((p) => ({
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          builtin: p.builtin,
+          isDefault: p.isDefault,
+          version: p.version,
+          tiers: `${p.spec.models.startTier} -> ${p.spec.models.maxTier}`,
+          budget: p.spec.budget,
+          hasNoHardStop: p.hasNoHardStop,
+          usage: p.usage,
+        })),
+      );
+    },
+  },
+  {
+    name: 'policy_get',
+    description: 'One agent policy with its full spec (models, budget, stall detection, context). `null` in a budget limit means unlimited. ' + POLICY_NOTE,
+    input: z.object({ policy_id: policyIdParam }),
+    call: async (a, ctx) => text(await ctx.api('GET', `/agent-policies/${encodeURIComponent(String(a.policy_id))}`)),
+  },
+  {
+    name: 'policy_create',
+    description:
+      'Create an agent policy from a full spec (get an existing one with policy_get and change it, or duplicate a built-in\'s spec). Names are unique among the user\'s policies. ' +
+      POLICY_NOTE +
+      'The spec is validated by the console; the error lists what is wrong.',
+    input: z.object({ name: z.string().trim().min(1).max(100), description: z.string().trim().max(500).nullable().optional(), spec: agentPolicySpecSchema }),
+    call: async (a, ctx) => text(await ctx.api('POST', '/agent-policies', { name: a.name, ...(a.description !== undefined ? { description: a.description } : {}), spec: a.spec })),
+  },
+  {
+    name: 'policy_update',
+    description:
+      'Change one of the user\'s own agent policies (built-ins are read-only: create a copy). Only the fields you pass change, but `spec` replaces the whole spec, so start from policy_get. ' +
+      'Pass version (from policy_get) to refuse the change when someone edited the policy meanwhile (412 POLICY_VERSION_CONFLICT); omit it to overwrite. Runs already started keep the policy they started with.',
+    input: z.object({
+      policy_id: policyIdParam,
+      name: z.string().trim().min(1).max(100).optional(),
+      description: z.string().trim().max(500).nullable().optional(),
+      spec: agentPolicySpecSchema.optional(),
+      version: z.number().int().min(0).optional().describe('The `version` you read; the update is refused when it moved'),
+    }),
+    call: async (a, ctx) =>
+      text(
+        await ctx.api(
+          'PATCH',
+          `/agent-policies/${encodeURIComponent(String(a.policy_id))}`,
+          { ...(a.name !== undefined ? { name: a.name } : {}), ...(a.description !== undefined ? { description: a.description } : {}), ...(a.spec !== undefined ? { spec: a.spec } : {}) },
+          a.version !== undefined ? { 'if-match': String(a.version) } : undefined,
+        ),
+      ),
+  },
+  {
+    name: 'policy_set_default',
+    description: "Choose the user's default agent policy, used by every run that names none (tasks, schedules and run_goal without policy_id). null goes back to builtin:balanced.",
+    input: z.object({ policy_id: policyIdParam.nullable() }),
+    call: async (a, ctx) => text(await ctx.api('PUT', '/agent-policies/default', { policyId: a.policy_id })),
+  },
+  {
+    name: 'policies_export',
+    description:
+      'Export agent policies as the portable JSON file the console imports (no ids, users or secrets). ids: "all" (default; the user\'s own policies) or a comma-separated list of policy ids (built-ins allowed, as templates). include_pins false strips model pins so the file works on any deployment. Hand the result to policies_import.',
+    input: z.object({ ids: z.string().max(8000).default('all'), include_pins: z.boolean().default(true) }),
+    call: async (a, ctx) => text(await ctx.api('GET', `/agent-policies/export?ids=${encodeURIComponent(String(a.ids))}&includePins=${String(a.include_pins)}`)),
+  },
+  {
+    name: 'policies_import',
+    description:
+      'Import agent policies from a file made by policies_export (pass its JSON as `file`; at most 100 policies and 256 KB). on_conflict decides what happens when the user already has a policy of that name: rename (default; adds " (2)"), skip, or replace (overwrites theirs). Returns created, replaced, skipped and warnings.',
+    input: z.object({ file: z.record(z.string(), z.unknown()).describe('The exported file, as JSON'), on_conflict: z.enum(['rename', 'skip', 'replace']).default('rename') }),
+    call: async (a, ctx) => text(await ctx.api('POST', '/agent-policies/import', { file: a.file, onConflict: a.on_conflict })),
   },
   { name: 'hosts_list', description: 'Browser hosts with their mode (unattended, attended or container), whether they can share a desktop, their profiles and running browsers.', input: z.object({}), call: async (_a, ctx) => text(await ctx.api('GET', '/fleet/hosts')) },
 
@@ -314,6 +420,6 @@ export const MCP_TOOLS: McpTool[] = [
  * them without asking. Every other tool acts and is announced as such.
  */
 export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
-  'run_status', 'runs_list', 'tasks_list', 'schedules_list', 'inbox_list', 'hosts_list',
+  'run_status', 'runs_list', 'tasks_list', 'policies_list', 'policy_get', 'policies_export', 'schedules_list', 'inbox_list', 'hosts_list',
   'browser_elements', 'browser_text', 'browser_tabs', 'browser_screenshot', 'browser_desktop_screenshot', 'browser_handoff_status', 'question_status',
 ]);

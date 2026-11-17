@@ -212,3 +212,109 @@ describe('MCP questions (#290)', () => {
     }
   });
 });
+
+describe('MCP agent policies (#409)', () => {
+  const POLICY_TOOLS = ['policies_list', 'policy_get', 'policy_create', 'policy_update', 'policy_set_default', 'policies_export', 'policies_import'];
+
+  it('lists the policy tools, marks the reads read-only and says what null and tiers mean', async () => {
+    const t = await token(`mcp-pol-list-${stamp}@example.test`, 'contributor');
+    const list = await rpc(t, { jsonrpc: '2.0', id: 1, method: 'tools/list' });
+    const tools = list.json.result.tools as { name: string; description: string; annotations: { readOnlyHint: boolean }; inputSchema: { properties: Record<string, unknown> } }[];
+    for (const n of POLICY_TOOLS) expect(tools.map((x) => x.name)).toContain(n);
+    for (const n of ['policies_list', 'policy_get', 'policies_export']) expect(tools.find((x) => x.name === n)!.annotations.readOnlyHint).toBe(true);
+    for (const n of ['policy_create', 'policy_update', 'policy_set_default', 'policies_import']) expect(tools.find((x) => x.name === n)!.annotations.readOnlyHint).toBe(false);
+    // The descriptions teach the two rules an agent must know.
+    for (const n of ['policies_list', 'policy_get', 'policy_create']) {
+      const d = tools.find((x) => x.name === n)!.description;
+      expect(d).toMatch(/`null` means unlimited/);
+      expect(d).toMatch(/tiers, not model ids/);
+    }
+    // The spec input is the policy schema, with its field descriptions.
+    const create = tools.find((x) => x.name === 'policy_create')!;
+    expect(JSON.stringify(create.inputSchema)).toMatch(/Most browser actions a run may take/);
+    // policy_id on the delegating tools.
+    for (const n of ['run_goal', 'task_create', 'task_update', 'task_run', 'schedule_create']) expect(Object.keys(tools.find((x) => x.name === n)!.inputSchema.properties)).toContain('policy_id');
+  });
+
+  it('creates, reads, updates, defaults, exports and imports a policy', async () => {
+    const t = await token(`mcp-pol-${stamp}@example.test`, 'contributor');
+    const listed = (await call(t, 'policies_list', {})).body as unknown as { id: string; name: string; builtin: boolean; tiers: string; hasNoHardStop: boolean; budget: unknown }[];
+    expect(listed.map((p) => p.id)).toEqual(expect.arrayContaining(['builtin:economy', 'builtin:balanced', 'builtin:thorough', 'builtin:unlimited']));
+    const unlimited = listed.find((p) => p.id === 'builtin:unlimited')!;
+    expect(unlimited).toMatchObject({ builtin: true, hasNoHardStop: true });
+    expect(listed.find((p) => p.id === 'builtin:balanced')!.tiers).toMatch(/ -> /);
+
+    const base = (await call(t, 'policy_get', { policy_id: 'builtin:balanced' })).body as unknown as { spec: Record<string, unknown> & { budget: Record<string, unknown> } };
+    const spec = { ...base.spec, budget: { ...base.spec.budget, maxActions: 40, maxCostUsd: null } };
+    const created = await call(t, 'policy_create', { name: `Mcp policy ${stamp}`, description: 'Made by an agent', spec });
+    expect(created.isError).toBe(false);
+    const policy = created.body as unknown as { id: string; version: number; spec: { budget: { maxActions: number; maxCostUsd: number | null } } };
+    expect(policy.spec.budget).toMatchObject({ maxActions: 40, maxCostUsd: null });
+
+    // An invalid spec is refused with the console's own message.
+    const bad = await call(t, 'policy_create', { name: 'Bad', spec: { ...spec, budget: { ...spec.budget, maxActions: 0 } } });
+    expect(bad.isError).toBe(true);
+
+    const updated = await call(t, 'policy_update', { policy_id: policy.id, name: `Mcp policy ${stamp} v2`, version: policy.version });
+    expect(updated.body).toMatchObject({ name: `Mcp policy ${stamp} v2`, version: policy.version + 1 });
+    const stale = await call(t, 'policy_update', { policy_id: policy.id, name: 'Stale', version: policy.version });
+    expect(stale.isError).toBe(true);
+    expect(stale.body).toMatch(/^412/);
+
+    expect((await call(t, 'policy_set_default', { policy_id: policy.id })).body).toMatchObject({ policyId: policy.id, explicit: true });
+    expect(((await call(t, 'policies_list', {})).body as unknown as { id: string; isDefault: boolean }[]).find((p) => p.id === policy.id)!.isDefault).toBe(true);
+    expect((await call(t, 'policy_set_default', { policy_id: null })).body).toMatchObject({ policyId: 'builtin:balanced', explicit: false });
+
+    // Export, drop pins, import with each conflict mode.
+    const file = (await call(t, 'policies_export', { ids: policy.id, include_pins: false })).body as unknown as { kind: string; policies: { name: string }[] };
+    expect(file).toMatchObject({ kind: 'hexactra.agent-policies', policies: [{ name: `Mcp policy ${stamp} v2` }] });
+    const renamed = (await call(t, 'policies_import', { file })).body as unknown as { created: { name: string; renamedFrom: string | null }[] };
+    expect(renamed.created[0]).toMatchObject({ name: `Mcp policy ${stamp} v2 (2)`, renamedFrom: `Mcp policy ${stamp} v2` });
+    expect((await call(t, 'policies_import', { file, on_conflict: 'skip' })).body).toMatchObject({ skipped: [{ name: `Mcp policy ${stamp} v2` }] });
+    expect((await call(t, 'policies_import', { file, on_conflict: 'replace' })).body).toMatchObject({ replaced: [{ name: `Mcp policy ${stamp} v2` }] });
+  });
+
+  it('refuses the write tools to a read-only token and still reads', async () => {
+    const t = await token(`mcp-pol-viewer-${stamp}@example.test`, 'viewer');
+    expect((await call(t, 'policies_list', {})).isError).toBe(false);
+    expect((await call(t, 'policy_get', { policy_id: 'builtin:thorough' })).isError).toBe(false);
+    expect((await call(t, 'policies_export', {})).isError).toBe(false);
+    const file = { kind: 'hexactra.agent-policies', formatVersion: 1, exportedAt: new Date().toISOString(), policies: [] };
+    const writes: [string, Record<string, unknown>][] = [
+      ['policy_create', { name: 'No', spec: ((await call(t, 'policy_get', { policy_id: 'builtin:balanced' })).body as unknown as { spec: unknown }).spec }],
+      ['policy_update', { policy_id: 'builtin:balanced', name: 'No' }],
+      ['policy_set_default', { policy_id: 'builtin:economy' }],
+      ['policies_import', { file }],
+    ];
+    for (const [name, args] of writes) {
+      const r = await call(t, name, args);
+      expect([name, r.isError]).toEqual([name, true]);
+      expect(r.body).toMatch(/^403/);
+    }
+  });
+
+  it('passes policy_id to runs, tasks and schedules', async () => {
+    const t = await token(`mcp-pol-run-${stamp}@example.test`, 'contributor');
+    const prisma = app.get(PrismaService);
+    const policy = (await call(t, 'policy_create', { name: `Run policy ${stamp}`, spec: ((await call(t, 'policy_get', { policy_id: 'builtin:economy' })).body as unknown as { spec: unknown }).spec })).body as unknown as { id: string };
+
+    const run = (await call(t, 'run_goal', { goal: 'Find a fare', policy_id: policy.id })).body as unknown as { id: string };
+    const row = await prisma.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(row).toMatchObject({ policyRef: policy.id, policySource: 'run' });
+    const withBuiltin = (await call(t, 'run_goal', { goal: 'Find another', policy_id: 'builtin:thorough' })).body as unknown as { id: string };
+    expect((await prisma.run.findFirstOrThrow({ where: { id: withBuiltin.id } })).policyRef).toBe('builtin:thorough');
+    expect((await call(t, 'run_goal', { goal: 'x', policy_id: 'nope' })).body).toMatch(/Invalid arguments/);
+    // The status tool returns the run with its policy fields as the API reports them.
+    expect((await call(t, 'run_status', { run_id: run.id })).body).toHaveProperty('policy');
+    expect((await call(t, 'runs_list', {})).body).toEqual(expect.arrayContaining([expect.objectContaining({ id: run.id })]));
+
+    const task = (await call(t, 'task_create', { name: `Policy task ${stamp}`, goal: 'g', policy_id: policy.id })).body as unknown as { id: string; policyId: string };
+    expect(task.policyId).toBe(policy.id);
+    expect((await call(t, 'task_update', { task_id: task.id, policy_id: 'builtin:thorough' })).body).toMatchObject({ policyId: 'builtin:thorough' });
+    expect((await call(t, 'task_update', { task_id: task.id, policy_id: null })).body).toMatchObject({ policyId: null });
+    const taskRun = (await call(t, 'task_run', { task_id: task.id, policy_id: 'builtin:economy' })).body as unknown as { id: string };
+    expect((await prisma.run.findFirstOrThrow({ where: { id: taskRun.id } }))).toMatchObject({ policyRef: 'builtin:economy', policySource: 'run' });
+    const schedule = (await call(t, 'schedule_create', { task_id: task.id, cron: '0 9 * * 1-5', policy_id: policy.id })).body as unknown as { policyId: string };
+    expect(schedule.policyId).toBe(policy.id);
+  });
+});
