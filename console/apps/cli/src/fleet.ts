@@ -38,7 +38,7 @@ export function hostLine(h: FleetHost): string {
     h.online ? 'online' : 'offline',
     h.mode ?? (h.onDemand ? 'launch' : 'attach'),
     ...(h.desktop ? ['desktop'] : []),
-    ...(h.draining ? ['draining'] : []),
+    ...(h.draining ? ['disabled'] : []),
   ];
   const profiles = h.profiles.map((p) => (p.running ? `${p.name}*` : p.name)).join(', ') || '-';
   return `${h.name}  [${flags.join(', ')}]  profiles: ${profiles}`;

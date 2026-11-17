@@ -36,6 +36,8 @@ model Task {
   profile        String   @default("default") @db.VarChar(32)
   /// Pin runs to one fabric host; null lets the fabric choose.
   hostId         String?  @map("host_id") @db.Uuid
+  /// When the chosen host cannot take a run, run on another available one (#384).
+  hostFallback   Boolean  @default(true) @map("host_fallback")
   /// Hostnames the agent may navigate to (suffix match); empty allows any.
   allowedDomains String[] @default([]) @map("allowed_domains")
   maxSteps       Int      @default(40) @map("max_steps")
@@ -65,6 +67,8 @@ model Run {
   goal            String     @db.VarChar(4000)
   profile         String     @default("default") @db.VarChar(32)
   hostId          String?    @map("host_id") @db.Uuid
+  /// Copied from the task (or the request) at start (#384).
+  hostFallback    Boolean    @default(true) @map("host_fallback")
   /// Fabric session the run drives.
   sessionId       String?    @map("session_id") @db.Uuid
   /// Open fabric handoff while `waiting_human`.

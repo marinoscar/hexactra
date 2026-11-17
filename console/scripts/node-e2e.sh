@@ -53,6 +53,9 @@ if [ -n "${EXTENSION_CRX_KEY:-}" ]; then
   for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:8099/updates.xml >/dev/null 2>&1 && break; sleep 0.2; done
   curl -fsS http://127.0.0.1:8099/updates.xml >/dev/null || fail "the extension server did not start"
   update_args=(--extension-update-url http://127.0.0.1:8099/updates.xml)
+  # Snapshot only once it listens, or its port looks opened by the node (#393).
+  for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:8099/updates.xml >/dev/null 2>&1 && break; sleep 0.2; done
+  curl -fsS http://127.0.0.1:8099/updates.xml >/dev/null || fail "the extension update server did not start"
   before=$(listeners)
 fi
 

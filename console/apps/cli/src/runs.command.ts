@@ -2,6 +2,13 @@ import type { Command } from 'commander';
 import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 
 import { consoleApi } from './console-api.js';
+import { findHost, type FleetHost } from './fleet.js';
+
+/** `--host <name|id>`: "any" lets the fabric choose (#384). */
+async function hostRef(ref: string): Promise<string | null> {
+  if (ref === 'any') return null;
+  return findHost(await consoleApi().get<FleetHost[]>('/fleet/hosts'), ref).id;
+}
 
 const out = (s: string): void => {
   process.stdout.write(`${s}\n`);
@@ -77,12 +84,16 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
     .option('--allow <domains>', 'comma-separated allowed sites')
     .option('--max-steps <n>', 'step budget', (v) => Number.parseInt(v, 10))
     .option('--no-confirm', 'do not ask before purchases and irreversible steps')
+    .option('--host <host>', 'machine that runs it (name, id or id prefix); default: any available')
+    .option('--no-host-fallback', 'fail instead of using another machine when it is unavailable')
     .option('--json', 'print JSON')
-    .action(async (name: string, goal: string, o: { profile: string; allow?: string; maxSteps?: number; confirm: boolean; json?: boolean }) => {
+    .action(async (name: string, goal: string, o: { profile: string; allow?: string; maxSteps?: number; confirm: boolean; host?: string; hostFallback: boolean; json?: boolean }) => {
       const t = await consoleApi().post<Task>('/tasks', {
         name,
         goal,
         profile: o.profile,
+        ...(o.host ? { hostId: await hostRef(o.host) } : {}),
+        hostFallback: o.hostFallback,
         allowedDomains: o.allow ? o.allow.split(',').map((d) => d.trim()).filter(Boolean) : [],
         confirmRiskyActions: o.confirm,
         ...(o.maxSteps ? { maxSteps: o.maxSteps } : {}),
@@ -100,8 +111,11 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
     .option('--max-steps <n>', 'step budget', (v) => Number.parseInt(v, 10))
     .option('--confirm', 'ask before purchases and irreversible steps')
     .option('--no-confirm', 'do not ask before purchases and irreversible steps')
+    .option('--host <host>', 'machine that runs it (name, id or id prefix; "any" for any available)')
+    .option('--host-fallback', 'use another available machine when it is unavailable')
+    .option('--no-host-fallback', 'fail instead of using another machine when it is unavailable')
     .option('--json', 'print JSON')
-    .action(async (id: string, o: { name?: string; goal?: string; profile?: string; allow?: string; maxSteps?: number; confirm?: boolean; json?: boolean }) => {
+    .action(async (id: string, o: { name?: string; goal?: string; profile?: string; allow?: string; maxSteps?: number; confirm?: boolean; host?: string; hostFallback?: boolean; json?: boolean }) => {
       const body = {
         ...(o.name !== undefined ? { name: o.name } : {}),
         ...(o.goal !== undefined ? { goal: o.goal } : {}),
@@ -109,8 +123,10 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
         ...(o.allow !== undefined ? { allowedDomains: o.allow.split(',').map((d) => d.trim()).filter(Boolean) } : {}),
         ...(o.maxSteps ? { maxSteps: o.maxSteps } : {}),
         ...(o.confirm !== undefined ? { confirmRiskyActions: o.confirm } : {}),
+        ...(o.host !== undefined ? { hostId: await hostRef(o.host) } : {}),
+        ...(o.hostFallback !== undefined ? { hostFallback: o.hostFallback } : {}),
       };
-      if (!Object.keys(body).length) throw new Error('Nothing to change: pass --goal, --name, --profile, --allow, --max-steps or --[no-]confirm.');
+      if (!Object.keys(body).length) throw new Error('Nothing to change: pass --goal, --name, --profile, --allow, --max-steps, --host, --[no-]host-fallback or --[no-]confirm.');
       const t = await consoleApi().patch<Task>(`/tasks/${id}`, body);
       if (o.json) return json(t);
       out(`updated ${t.id}`);
@@ -150,9 +166,11 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
     .command('start <goal>')
     .description('Run an ad-hoc goal')
     .option('--profile <profile>', 'browser profile', 'default')
+    .option('--host <host>', 'machine to run on (name, id or id prefix); default: any available')
+    .option('--no-host-fallback', 'fail instead of using another machine when it is unavailable')
     .option('--watch', 'follow the run')
-    .action(async (goal: string, o: { profile: string; watch?: boolean }) => {
-      const r = await consoleApi().post<Run>('/runs', { goal, profile: o.profile });
+    .action(async (goal: string, o: { profile: string; host?: string; hostFallback: boolean; watch?: boolean }) => {
+      const r = await consoleApi().post<Run>('/runs', { goal, profile: o.profile, ...(o.host ? { hostId: await hostRef(o.host) } : {}), hostFallback: o.hostFallback });
       out(`run ${r.id}`);
       if (o.watch) await show(r.id, true, false);
     });
