@@ -1,4 +1,4 @@
-# Runbook: run retention
+# Runbook: run history cleanup (retention)
 
 How to check that old runs are being removed, and how to remove them without waiting for the night. What the rule is and how a user sets it: [README, Run history and retention](../../README.md#run-history-and-retention). The API: [runs.md](../runs.md#retention).
 
@@ -64,6 +64,17 @@ One user failing every night does not fail the job. Look for that user's line in
 
   It applies their saved rule at once, without the first-night notice. It needs `runs:delete`. To see what it would delete first: `GET /api/runs/retention/preview?keepDays=30&keepPerTask=50`.
 - **For everyone:** there is no route that starts the nightly job on request. Wait for 03:20, or retry a failed nightly job from Administration → Jobs.
+
+## Recover from a rule that deleted too much
+
+There is no undelete. A deleted run is gone from the database with its steps, its questions and its stored screenshots, and its cost and stop reason are gone from task spend and from the alert counts. The AI usage report keeps its own records. What can be done:
+
+1. **Stop further deletion first.** The user sets **Forever** (or a longer number) on Settings → Run history and saves; nothing more is deleted for them from the next pass. If the cause is the deployment limit, lift it (below). A rule only deletes at 03:20 or on **Apply now**, so there is time.
+2. **Find out what went.** The API log line `runs.delete user=… mode=retention matched=… deleted=…` and the audit event `runs.deleted` (with `mode: retention`) say how many runs each pass deleted for the user, and when.
+3. **Restore from the database backup**, if the runs matter. Restoring replaces the whole database with the backup's state: everything every user did since that backup is lost, so this is a decision for the deployment's owner, not a routine step. The procedure is Administration → Database backup → restore ([operations.md](operations.md)). To get back only the runs, restore the backup into a separate database and copy the rows of `runs`, `run_steps` and `questions` for that user by hand; the console has no tool for that.
+4. **Before anyone presses Apply now again**, read the preview on the page: it names the number of runs and their recorded spend, and the confirmation repeats the number.
+
+The same holds for runs deleted by hand (the Runs page, `hexactra runs delete`, the REST routes): the confirmation is the last chance.
 
 ## Set or lift the deployment limit
 

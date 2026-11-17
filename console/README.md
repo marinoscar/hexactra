@@ -16,9 +16,9 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 |---|---|---|---|---|
 | Fabric connection (URL and `hxs_` service token, stored encrypted; Doctor checks `fabric.*`) | Administration → Fabric connection | `GET/PUT/DELETE /api/fabric/connection`, `POST …/test` | `hexactra fabric show\|set URL --token-stdin\|test\|clear --yes` | `fabric_config:read` / `:write` |
 | Home: what needs you, what is running, what runs next, what just happened, the week and the machines, in one request ([Home](#home)) | `/` | `GET /api/home/summary` | none: the CLI and TUI list each part on their own | any signed-in user; each block needs its own (`runs:read`, `tasks:read`, `fleet:read`) |
-| Tasks: saved goals with a profile, an agent policy (budgets and models), optional allowed sites, opt-in confirm-before-purchase ([Create a task](#create-a-task), [A task's page](#a-tasks-page)) | `/tasks`, `/tasks/new`, `/tasks/:id`, `/tasks/:id/edit` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
+| Tasks: saved goals with a profile, an agent policy (budgets and models), optional allowed sites, opt-in confirm-before-purchase ([Create a task](#create-a-task), [A task's page](#a-tasks-page)) | `/tasks`, `/tasks/new`, `/tasks/:id`, `/tasks/:id/edit` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|pause\|resume\|delete` | `tasks:read` / `tasks:write` |
 | Agent policies: named, versioned bundles of model tiers, budgets (any of them unlimited), stall detection and context settings; four built-ins, a default per user, one per task, schedule or run ([Agent policies](#agent-policies)) | Settings → Browser agent → Agent policies; Administration → Browser agent | `/api/agent-policies` | `hexactra policies`; MCP `policies_*` and `policy_*` tools; SDK `hx.policies` | `agent_policies:read` / `:write` |
-| Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel; the list is paged, filtered and searched on the server, with counts per status; finished runs can be deleted, one, many or everything a filter matches ([docs/runs.md](docs/runs.md)) | `/runs`, `/runs/:id` | `/api/runs`, `GET /api/runs/counts`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel`, `DELETE /api/runs/:id`, `POST /api/runs/delete` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` / `runs:delete` |
+| Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel; the list is paged, filtered and searched on the server, with counts per status; finished runs can be deleted, one, many or everything a filter matches ([docs/runs.md](docs/runs.md)) | `/runs`, `/runs/:id` | `/api/runs`, `GET /api/runs/counts`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel`, `DELETE /api/runs/:id`, `POST /api/runs/delete` | `hexactra runs list\|start\|show\|watch\|cancel\|delete [--older-than DAYS]` | `runs:read` / `runs:write` / `runs:delete` |
 | Run history: each user's retention rule (keep N days, the newest N per task), enforced nightly; a deployment limit for administrators ([Run history and retention](#run-history-and-retention)) | Settings → Browser agent → Run history; Administration → Browser agent → Run history limit | `GET /api/runs/retention`, `GET /api/runs/retention/preview`, `POST /api/runs/retention/apply`; the `runs` namespace of `/api/user-settings` and `/api/system-settings` | — | `runs:delete`; `system_settings:read` / `:write` for the limit |
 | Inbox: what agents wait for (CAPTCHA, code, sign-in, confirmation); answers resume the run | `/inbox` | `GET /api/inbox`, `POST /api/inbox/:runId/respond` | `hexactra inbox list\|answer RUN --done\|--value\|--choice\|--secret-stdin\|--decline`; TUI **Agent ▸ Inbox** | `runs:read` / `runs:write` |
 | Questions: an agent asks its user a typed question (text, choice, multi-choice, number, confirm, none, takeover; a secret only in a browser session) and waits for the typed answer; the person answers on any channel, the first answer wins ([docs/questions.md](docs/questions.md)) | `/inbox`, `/inbox/q/:id` | `/api/questions`, `POST /api/questions/:id/answer\|cancel\|answer-by-token` | `hexactra questions ask\|list\|show\|answer`; TUI **Agent ▸ Inbox** | `runs:read` / `runs:write` |
@@ -38,35 +38,6 @@ Run it all on a VPS (console, fabric and an optional browser host in one stack):
 - Live runs are never deleted: a run that is queued, running or waiting for a person must be cancelled first.
 - A filter that matches more than 500 finished runs is deleted by a queue job (`browser.runs.delete`); the request answers `202` with the job id.
 - Deleting runs also removes their cost and stop-reason history from task spend and from alert counts. The AI usage report keeps its own records and is not affected.
-
-### Run history and retention
-
-Run history does not grow without limit: each user has a retention rule, and a nightly job deletes the finished runs that fall outside it. Set it at **Settings → Browser agent → Run history**.
-
-**By default, finished runs are kept for 90 days.** This applies to every user who has not chosen a rule, including users who existed before this feature.
-
-The rule has three limits. A run is deleted when either of the first two says so:
-
-| Limit | Meaning | Default |
-|---|---|---|
-| Keep runs for N days | A finished run is deleted N days after it finished. **Forever** switches this off. | 90 |
-| Keep only the latest N runs of each task | Only the newest N finished runs of each task are kept. Runs started without a task count together as one group. | no limit |
-| Keep failed runs longer | A separate number of days for failed runs. Empty: the same as the first limit. | empty |
-
-What retention never deletes:
-- a live run (queued, running or waiting for a person);
-- a run with an unanswered question;
-- a run that finished less than 24 hours ago. This floor is longer when an enabled alert rule looks further back at runs (its `windowHours`), so retention never empties a window an alert is counting.
-
-How it runs:
-- **Nightly.** The `browser.runs.retention` job is enqueued at 03:20 server time and deletes through the same service as [deleting runs](docs/runs.md#deleting-runs): steps, questions and stored screenshots go with the run.
-- **The first-night notice.** A user who never chose a rule is told once, in a notification, before the default deletes anything. Nothing is deleted for them that night; deletion starts the next night. Saving a rule on the page counts as choosing: no notice is sent.
-- **The preview.** The settings page shows how many runs the rule would delete, their recorded spend and the oldest run that would be kept, before you save.
-- **Apply now.** Applies the saved rule at once, after a confirmation that names the count.
-- **The administrator's limit.** Administration → Browser agent → **Run history limit** sets the most days any user's runs are kept. A longer rule, or Forever, is cut to it when the job runs; the user's page says "Capped at N days by your administrator".
-- **Task spend.** A task's spend covers 30 days. With fewer than 30 days kept, it only reflects the runs that remain.
-
-Operators: [docs/runbooks/run-retention.md](docs/runbooks/run-retention.md). The API: [docs/runs.md](docs/runs.md#retention).
 
 **The goal runner**:
 - It uses the AI slice: feature `browser_agent`, a model with `tools`. Configure a provider at Administration → AI.
@@ -321,31 +292,78 @@ The same policies are reachable from scripts and agents ([docs/mcp.md](docs/mcp.
 - **MCP:** `policies_list`, `policy_get`, `policy_create`, `policy_update`, `policy_set_default`, `policies_export`, `policies_import`, and `policy_id` on `run_goal`, `task_create`, `task_update`, `task_run` and `schedule_create`. Each tool calls the REST route as the caller, so `agent_policies:read` / `:write` apply: a read-only user is refused the write tools with `403`. Deleting a policy is not an MCP tool.
 - **SDK:** `hx.policies.list|get|create|update|setDefault|export|import`, `hx.tasks.create|update|run` and `hx.runs.start` (each with `policyId`), and the exported `AgentPolicySpec` type.
 
-## Home
+Tasks, schedules and runs have the same reach: `hexactra tasks pause|resume` and `runs delete`, the MCP tools `schedule_preview`, `task_pause`, `task_resume`, `task_create` with `schedules` and a paged `runs_list`, and the SDK's `hx.runs.list|delete|deleteMany`, `hx.tasks.pauseSchedules|resumeSchedules` and `hx.schedules.preview`. What each client has and what it deliberately does not (an agent cannot delete runs) is in [docs/api-tasks-runs.md](docs/api-tasks-runs.md#client-parity).
+
+## Using the console
+
+What each page of the web app is for and how to use it, from a phone, a tablet or a desktop. The pages share one design: lists are searched, filtered and paged by the API, every destructive action asks first, and a table becomes cards on a phone.
+
+| Page | What it is for |
+|---|---|
+| [Home](#home) (`/`) | What needs you, what is running, what runs next, what just happened. |
+| [Inbox](#inbox) (`/inbox`) | The questions your agents are waiting on. |
+| [Tasks](#tasks) (`/tasks`), [a task's page](#a-tasks-page), [the task form](#create-a-task) | What your agents do, and when: create, schedule, pause, run. |
+| [Schedules](#schedules) | The schedule editor inside the task form and the task's page. |
+| [Runs](#runs-find-filter-and-delete) (`/runs`) | Every run: find, filter, open, delete. |
+| [Run history](#run-history-and-retention) (Settings → Browser agent) | How long finished runs are kept. |
+
+Models, tiers and budgets are [agent policies](#agent-policies): these pages show a policy where you choose one (the task form's **Model and budget**, a schedule's **Policy override**, **Run with…**) and show what it cost (the lists' cost and stop reason, spend on a task's page and on Home). The routes behind the pages are in [docs/api-tasks-runs.md](docs/api-tasks-runs.md); what the CLI, the SDK and MCP can do with them is in its [client parity](docs/api-tasks-runs.md#client-parity) table. The screenshots in this chapter are the production build with sample data, at 1440 px and 390 px.
+
+### Home
 
 `/` is the page to open first. It answers, from one request (`GET /api/home/summary`): is an agent waiting for me, what is running, what will run next, how did the recent runs go, are my machines up. And it starts a run.
 
-| | |
+| On a desktop | On a phone |
 |---|---|
-| ![Home on a desktop: Needs you, Running now, Quick start, Recent runs, Up next, This week, Machines](docs/images/home-desktop.png) | ![Home on a phone](docs/images/home-phone.png) |
+| ![Home: Needs you, Running now, Quick start, Recent runs, Up next, This week, Machines, on a desktop](docs/images/home-desktop.png) | ![Home: Needs you, Running now, Quick start, Recent runs, Up next, This week, Machines, on a phone](docs/images/home-phone.png) |
 
 - **Greeting** and one status sentence ("2 agents are running and 1 is waiting for you.", "Nothing is running. Next: Morning report in 3 h.", "All quiet.").
 - **Needs you** (only when a question is pending, always first): up to three questions, the ones that expire first, each with a countdown and an **Answer** link to the Inbox. A confirmation that is not high-risk can be approved or denied in place; a high-risk one, a secret and every other input go to the Inbox.
 - **Running now**: a card per live run with what it is doing, its step and time, its machine, and a budget bar ("62 % of budget": orange from the policy's warning threshold, red at 100 %, absent for an unlimited run). A run on a stronger tier than its policy starts on says so.
-- **Quick start** (with `runs:write`): a goal and **Run** (the default profile and policy), and a chip per task you ran most recently (the task's own policy). "More options" opens the Runs page.
-- **Up next**: the next five firings, with the schedule in words, and how many tasks are paused or failing.
+- **Quick start** (with `runs:write`): a goal and **Run** (the default profile and policy), and a chip per task you ran most recently (the task's own policy). "More options" opens the Runs page with its **New run** dialog (profile, machine and policy).
+- **Up next**: the next five firings, with the schedule in words (a task's name opens [its page](#a-tasks-page)), and how many tasks are paused or failing (links to the Tasks list with that filter).
 - **Recent runs**: the eight most recently finished, with the stop reason, the duration and the cost.
 - **This week**: runs, success rate, failed and spend over the last seven days of your profile time zone, a stacked bar per day (the chart is loaded on demand), and how many runs a budget or a stall stopped.
 - **Machines**: how many are online, and each one's state in words.
 
-A new account sees a **Get started** card instead of the dashboard blocks until it has a machine, a task and a run: three steps, ticked from the data, each only if you may do it.
+A new account sees a **Get started** card instead of the dashboard blocks until it has a machine, a task and a run: three steps, ticked from the data, each only if you may do it. "Create a task" opens the [task form](#create-a-task).
 
 The page reads the summary when it opens, when the window gets the focus, and every 10 seconds while the tab is visible (every 5 while an agent runs or waits for you). When a read fails, the last data stays on screen, dimmed, with when it was read and a Retry.
 
-**`GET /api/home/summary`** needs a sign-in and no permission of its own. A block is built only when the caller holds its permission and is `null` otherwise, never an empty list: `needsYou`, `liveRuns`, `recentRuns` and `week` need `runs:read`; `upcoming` needs `tasks:read`; `fleet` needs `fleet:read`; `counts.tasks` and `counts.runs` are `null` without theirs. Limits: 3 questions, 6 live runs (running first), 5 firings, 8 finished runs, 6 machines; `needsYou.count` and `liveRuns.count` are the real totals. The response never carries a question's answer, a secret, a transcript, a policy snapshot, an action's arguments or a viewer URL: a live run's `activity` is its phase, the action's name and the reason only. `budgetPercent` is the highest percent among the run's limited budgets, from the run's stored budget. The week is bucketed in the profile time zone (else the `X-Time-Zone` header, else UTC). The fleet comes from the fabric with a 1.5 second limit: a fabric that is slow or down answers `fleet.stale: true` with the last hosts read, and never fails the request. It costs six SQL statements whatever the account holds, and records `app.home.summary.duration`.
-## Tasks
+The route behind it, `GET /api/home/summary`, is one read that never fails because a part is slow: what each block needs, its limits and what it never carries are in [docs/api-tasks-runs.md](docs/api-tasks-runs.md#home).
+### Inbox
+
+**Inbox** (`/inbox`) is where an agent's questions wait for you. The number of pending questions is on the Inbox entry of the navigation (rail, bottom bar and user menu) and in the tab's title ("(2) Hexactra Console"), and Home lists the first three under **Needs you**. A notification about a question opens the Inbox with that question first; `/inbox/q/:id` shows one question on its own.
+
+| On a desktop | On a phone |
+|---|---|
+| ![The Inbox: a code request from a run and a high-risk confirmation, on a desktop](docs/images/inbox-desktop.png) | ![The Inbox: a code request from a run and a high-risk confirmation, on a phone](docs/images/inbox-phone.png) |
+
+Each request is a card: what kind it is, how long you have ("4 min 05 s left", ticking; at zero the form is replaced by "This request expired."), the prompt, the run or agent that asked, and for a question from a browser a small picture of the page. What you answer with depends on the question:
+
+| The agent asks for | You get |
+|---|---|
+| Text or a number | A field with its limits (length, range, unit) and a counter. |
+| A choice, or several | Full-width rows; "2 of 3 selected" for several. |
+| A confirmation | The two buttons the agent named. A high-risk one asks "Are you sure?" first. |
+| A code, a password or another secret | One field with an eye button. See below. |
+| You to do something in the browser (a CAPTCHA, a sign-in) | **Open the browser**, then **Done**. |
+
+- **A secret is typed, sent and gone.** It goes straight to the agent's browser, which types it into the page; the console never stores it, logs it or shows it again, and the model never sees it. The field's label is "Code", "Password" or "Secret".
+- **Show or hide what you type.** The eye button switches between dots and the characters. A one-time code starts shown (typing it blind causes retries); a password starts hidden. A shown value hides again when you send it, when you leave the tab, and after 30 seconds without a keystroke.
+- **Decline** is always the last button. Declining a question from a run asks first, because the run cannot go on without an answer.
+- **After you answer**, the card says "Sent." and folds away, and the run resumes. If the question was answered on another device or expired meanwhile, the card says so instead of showing an error.
+- The list refreshes every 5 seconds without interrupting what you type. Answering needs `runs:write`; with `runs:read` alone you see the questions.
+
+The reference for question types, channels (Android app, CLI, notification buttons, webhooks) and the REST routes is [docs/questions.md](docs/questions.md).
+
+### Tasks
 
 **Tasks** (`/tasks`) lists what your agents do, and when. Each row answers five questions without opening the task: what it does, whether it is scheduled, when it runs next, how the last run went and what it cost in the last 30 days. On a phone each task is a card with the same facts.
+
+| On a desktop | On a phone |
+|---|---|
+| ![The Tasks list: search, filter chips, each task with its schedule, next run, last run, spend and Scheduled switch, on a desktop](docs/images/tasks-desktop.png) | ![The Tasks list: search, filter chips, each task with its schedule, next run, last run, spend and Scheduled switch, on a phone](docs/images/tasks-phone.png) |
 
 | On the row | What it tells you |
 |---|---|
@@ -359,11 +377,13 @@ The page reads the summary when it opens, when the window gets the focus, and ev
 - **New task** opens the form ([Create a task](#create-a-task)); **Edit** in a task's ⋮ menu opens the same form for that task.
 - **The ⋮ menu.** Open ([the task's page](#a-tasks-page)), Edit, Duplicate (a new task that starts as a copy, with its schedules paused), View runs (the task's page, at its runs), and Delete. Delete asks first and says what happens: the task's schedules are deleted, and its runs stay in Runs as one-off runs.
 
-## A task's page
+### A task's page
 
 `/tasks/:id` is a task's home: open it from the task's name in the list. It shows what the task does, how it is set up, when it runs next, how its runs have gone and what they cost. The page needs `tasks:read`.
 
-![A task's page: the header with Run now, statistics with the runs per day, the run history, and the goal, schedules and configuration](docs/images/task-page.png)
+| On a desktop | On a phone |
+|---|---|
+| ![A task's page: the header with Run now, statistics, the run history, the goal, schedules and configuration, on a desktop](docs/images/task-page-desktop.png) | ![A task's page: the header with Run now, statistics, the run history, the goal, schedules and configuration, on a phone](docs/images/task-page-phone.png) |
 
 - **The header** says when the task runs next and on which schedule ("Next run in 3 h · Monday to Friday at 09:00"), "Schedule paused", or "Runs only when you start it".
   - **Run now** starts a run and opens it; the arrow is **Run with…** another policy for that run only. While a run is going it reads **Run again** and asks first. Needs `runs:write`.
@@ -391,9 +411,13 @@ The page reads the summary when it opens, when the window gets the focus, and ev
 
 On a phone the page is one column in this order: statistics, runs, goal, schedules, configuration. Goal and Configuration fold, and start folded when the goal is long.
 
-## Create a task
+### Create a task
 
 A task is created at `/tasks/new` and changed at `/tasks/:id/edit`. Both are one form with five sections, read top to bottom, and **Save** stores everything in one step. Both pages need `tasks:write`.
+
+| On a desktop | On a phone |
+|---|---|
+| ![The task form: what the agent should do, where it runs, model and budget, safety and schedule, on a desktop](docs/images/task-form-desktop.png) | ![The task form: what the agent should do, where it runs, model and budget, safety and schedule, on a phone](docs/images/task-form-phone.png) |
 
 1. **What should the agent do?** A name (up to 200 characters) and the goal (up to 4,000). Say what you want done and what you want back; **Tips** has three reminders.
 2. **Where it runs.**
@@ -411,11 +435,13 @@ A task is created at `/tasks/new` and changed at `/tasks/:id/edit`. Both are one
 - `/tasks/new?goal=<text>` starts with that goal; `/tasks/new?from=<task id>` starts from a copy of that task, with its schedules paused.
 - On the edit page, **Danger zone** deletes the task (its schedules go with it; its runs are kept).
 
-## Schedules
+### Schedules
 
-A task runs on a schedule you build in the schedule editor (in the [task form](#create-a-task); a task without a schedule has an **Add schedule** link on the Tasks list). You do not need to know cron: choose how it repeats, and the editor says in words what that means and lists the next five runs before you save.
+A task runs on a schedule you build in the schedule editor (in the [task form](#create-a-task) and on [a task's page](#a-tasks-page); a task without a schedule has an **Add schedule** link on the Tasks list). You do not need to know cron: choose how it repeats, and the editor says in words what that means and lists the next five runs before you save.
 
-![The schedule editor: Weekly, Monday to Friday at 09:00, with the next runs](docs/images/schedule-editor.png)
+| On a desktop | On a phone |
+|---|---|
+| ![The schedule editor: Weekly, Monday to Friday at 09:00, with the next runs, on a desktop](docs/images/schedules-desktop.png) | ![The schedule editor: Weekly, Monday to Friday at 09:00, with the next runs, on a phone](docs/images/schedules-phone.png) |
 
 | Repeats | What you choose |
 |---|---|
@@ -432,20 +458,22 @@ A task runs on a schedule you build in the schedule editor (in the [task form](#
 - **Policy override.** A schedule's runs use the task's agent policy unless you choose another for that schedule.
 - **Active or Paused.** A paused schedule keeps its settings and does not run.
 
-What is stored is always a 5-field cron expression, so the CLI, the SDK and MCP read and write the same schedules. A schedule the builder cannot show (for example one made with `hexactra schedules create`) opens in Advanced, unchanged.
+What is stored is always a 5-field cron expression, so the CLI, the SDK and MCP read and write the same schedules. An agent can check an expression before saving it with the `schedule_preview` MCP tool, and the SDK has `hx.schedules.preview`. A schedule the builder cannot show (for example one made with `hexactra schedules create`) opens in Advanced, unchanged.
 
-## Runs: find, filter and delete
+### Runs: find, filter and delete
 
 `/runs` lists every run, newest first, 50 at a time (**Load more**, or scroll to the end). It stays usable with thousands of runs: the API filters, searches and pages ([docs/runs.md](docs/runs.md)), and the page never loads everything.
 
-![The Runs page: status tabs with counts, filters, and the list](docs/images/runs-list.png)
+| On a desktop | On a phone |
+|---|---|
+| ![The Runs page: status tabs with counts, search and filters, and the list, on a desktop](docs/images/runs-desktop.png) | ![The Runs page: status tabs with counts, search and filters, and the list, on a phone](docs/images/runs-phone.png) |
 
 - **Status tabs** with the number of runs in each: All, Live, Needs you, Succeeded, Failed, Cancelled. Beside them, how many runs match and what they cost ("≥" when a call could not be priced).
 - **Search** looks in the goal. **Filters**: task (or "One-off goals"), trigger, a date range (Today, 7, 30 or 90 days, or two dates, cut in your profile time zone), "Stopped by" (Budget, Stalled, Error, No model; on the All and Failed tabs) and policy. On a phone they are behind the **Filters** button.
 - **Every filter is in the URL** (`?view=failed&q=invoice&trigger=schedule&from=2026-11-01`), so a filtered view can be bookmarked or sent, and survives a reload. Active filters show as chips; **Clear all** removes them.
 - **Each run** shows its status (with the reason a failed run stopped), goal, task, trigger, steps, when it started, how long it took, its cost, and what a running one is doing right now. The list refreshes the live runs every 5 seconds while the tab is visible.
 - **The ⋮ menu of a run:** Open, Run again, Run again with… (another policy), Cancel (a live run) and Delete (a finished run). "Run again" keeps the original policy only when it was chosen for that one run.
-- **New run** (top right) starts a one-off goal: the goal, the browser profile, the machine and the policy.
+- **New run** (top right) starts a one-off goal: the goal, the browser profile, the machine and the policy. `/runs?new=1` opens the page with this dialog (Home's "More options").
 
 **Deleting runs** needs the `runs:delete` permission (contributors and organization administrators have it).
 
@@ -457,37 +485,44 @@ A run's steps and answers are deleted with it, and its cost and stop reason leav
 
 For code: the list is `RunList` (`apps/web/src/components/RunList.tsx`) over the `useRunList` hook (`useRunList.ts`); `<RunList scope={{ taskId }} />` is the same list fixed to one task.
 
-## Tasks and schedules API
+### Run history and retention
 
-What the Tasks pages and the schedule editor read and write. Every route is the signed-in user's own data; another user's task answers `404`. The per-endpoint reference is the OpenAPI document at `/api/docs`.
+Run history does not grow without limit: each user has a retention rule, and a nightly job deletes the finished runs that fall outside it. Set it at **Settings → Browser agent → Run history**.
 
-**The task list, `GET /api/tasks`** (`tasks:read`). With no parameter it returns every task, newest first, as an array (unchanged). All parameters are optional:
-
-| Parameter | Meaning |
+| On a desktop | On a phone |
 |---|---|
-| `envelope=1` | Return a page, `{ items, nextCursor, total }`, instead of an array. `total` counts the tasks that match the filters, on every page. |
-| `include=summary` | Add a `summary` to each task: its `schedules` (each with a `description` such as "Monday to Friday at 09:00" and its `policyId` override), `scheduleState` (`none`, `active`, `paused`, `partial`), `nextRunAt`, `lastRun`, `liveRunId`, `runCounts` (`total`, and `last7d` by outcome) and `policy` (the policy a run started now would use). Also on `GET /api/tasks/:id?include=summary`. |
-| `q` | Case-insensitive text in the name or the goal (1 to 200 characters). |
-| `filter` | `scheduled` (an enabled schedule), `paused` (schedules, none enabled), `unscheduled`, `failing` (a schedule failed 3 times in a row, or the last run failed), `never_run`. |
-| `policyId` | Tasks whose own policy is this one; `default` is the tasks that follow your default policy. |
-| `sort` | `created_desc` (default), `name_asc`, `last_run_desc`, `next_run_asc` (no next run: last), `spend_desc` (cost of the last 30 days). |
-| `limit`, `cursor` | 1 to 100 (50 with `envelope`). `cursor` is the previous page's `nextCursor`: opaque, do not parse it, and valid only with the same `sort` (`400 INVALID_TASK_CURSOR` otherwise). |
+| ![Settings, Run history: the three limits, the preview of what would be deleted, Save and Apply now, on a desktop](docs/images/run-history-desktop.png) | ![Settings, Run history: the three limits, the preview of what would be deleted, Save and Apply now, on a phone](docs/images/run-history-phone.png) |
 
-A page costs the same number of database queries whatever its size. `created_desc` and `name_asc` page by keyset; the three computed sorts page by an offset inside the cursor, because their sort key moves whenever a run starts.
+**By default, finished runs are kept for 90 days.** This applies to every user who has not chosen a rule, including users who existed before this feature.
 
-**A task with its schedules.** `POST /api/tasks` takes an optional `schedules` list (at most 10; each `{ cron, timezone?, enabled?, concurrency?, policyId? }`). The task and its schedules are created in one transaction. One invalid schedule fails the whole request with `400`, a typed `code` (`INVALID_CRON`, `INVALID_TIMEZONE`, `CRON_TOO_FREQUENT`, `POLICY_REF_INVALID`) and `details.path` naming it, for example `schedules[1].cron`; nothing is created. The response is the task with its `summary`.
+The rule has three limits. A run is deleted when either of the first two says so:
 
-`PUT /api/tasks/:id/schedules` replaces the task's schedules in one transaction: an item with an `id` updates that schedule (its last run and failure count are kept, and a field left out is unchanged), an item without creates one, and schedules that are not listed are deleted. An `id` that is not this task's answers `400 SCHEDULE_NOT_IN_TASK`. `POST`, `PATCH` and `DELETE /api/schedules` still work one schedule at a time; a task holds at most 10 (`409 SCHEDULE_LIMIT`).
+| Limit | Meaning | Default |
+|---|---|---|
+| Keep runs for N days | A finished run is deleted N days after it finished. **Forever** switches this off. | 90 |
+| Keep only the latest N runs of each task | Only the newest N finished runs of each task are kept. Runs started without a task count together as one group. | no limit |
+| Keep failed runs longer | A separate number of days for failed runs. Empty: the same as the first limit. | empty |
 
-Deleting a task (`DELETE /api/tasks/:id`) deletes its schedules and keeps its runs, with `taskId` set to `null`.
+What retention never deletes:
+- a live run (queued, running or waiting for a person);
+- a run with an unanswered question;
+- a run that finished less than 24 hours ago. This floor is longer when an enabled alert rule looks further back at runs (its `windowHours`), so retention never empties a window an alert is counting.
 
-**Pause and resume.** `POST /api/tasks/:id/schedules/pause` disables every schedule of the task; `…/resume` enables them all, recomputes their next firing and resets their failure count (`tasks:write`; `409 NO_SCHEDULES` for a task without a schedule). This is what "disable a task" means: there is no enabled flag on a task. A run that is live when the task is paused finishes, and the task can still be started by hand, the API or MCP.
+How it runs:
+- **Nightly.** The `browser.runs.retention` job is enqueued at 03:20 server time and deletes through the same service as [deleting runs](docs/runs.md#deleting-runs): steps, questions and stored screenshots go with the run.
+- **The first-night notice.** A user who never chose a rule is told once, in a notification, before the default deletes anything. Nothing is deleted for them that night; deletion starts the next night. Saving a rule on the page counts as choosing: no notice is sent.
+- **The preview.** The settings page shows how many runs the rule would delete, their recorded spend and the oldest run that would be kept, before you save.
+- **Apply now.** Applies the saved rule at once, after a confirmation that names the count.
+- **The administrator's limit.** Administration → Browser agent → **Run history limit** sets the most days any user's runs are kept. A longer rule, or Forever, is cut to it when the job runs; the user's page says "Capped at N days by your administrator".
+- **Task spend.** A task's spend covers 30 days. With fewer than 30 days kept, it only reflects the runs that remain.
+- **What goes with a run.** Deleting runs, by hand or by retention, removes their cost and stop-reason history from task spend and from alert counts. There is no undelete: a run that is gone comes back only from a [database backup](docs/runbooks/run-retention.md#recover-from-a-rule-that-deleted-too-much).
+- **From the CLI.** `hexactra runs delete --older-than <days>` deletes once, by age; the standing rule is set on this page.
 
-**Check a schedule before saving it.** `POST /api/schedules/preview` with `{ cron, timezone?, count? }` (`count` 1 to 10, default 5; `tasks:read`) always answers `200`: `{ valid: true, cron, timezone, description, next, intervalSeconds }` with the next firings as ISO instants, or `{ valid: false, code, message }` with the reason saving would be refused. `description` is English and 24-hour; expressions the schedule builder does not write read "Custom schedule (<expression>)".
+Operators: [docs/runbooks/run-retention.md](docs/runbooks/run-retention.md). The API: [docs/runs.md](docs/runs.md#retention).
 
-**The time zone rule.** A schedule that is created without `timezone` gets the owner's profile time zone (Settings → Profile). When the profile follows the device ("Automatic"), it gets the zone the client sent in the `X-Time-Zone` header, which the web app always sends; with neither, `UTC`. `GET /api/schedules/defaults` returns `{ timezone, source }` (`profile`, `device` or `default`), so a client can show the zone before saving. An explicit `timezone` is still accepted. Changing the profile later does not move existing schedules.
+### On a phone, a tablet and a desktop
 
-**Statistics.** `GET /api/tasks/:id/stats?days=30` (`runs:read`; 7 to 90 days, today included) returns `totals` (runs, outcomes, `successRate`, `costUsd`, `costKnown`), `avgDurationSeconds`, `p95DurationSeconds`, `avgSteps`, `avgCostPerSuccessUsd`, a `series` with one entry per day (zeros included) and `stopReasons`. Days are bucketed in the viewer's time zone (the same rule as above). `costUsd` is `null` when no run of the period has a cost, and `costKnown` is `false` when a run could not be priced.
+Every page above works at any width, and none scrolls sideways. On a phone the bottom bar has Home, Inbox, Tasks and Runs (Fleet, Settings and Administration are in the user menu), tables are cards, a page's main action stays in reach, and filters fold behind a **Filters** button. The breakpoints, what is pinned where and how it is checked (`npm run ui:screens`) are in [Responsive rules](#responsive-rules).
 
 ## Layout
 
@@ -559,6 +594,10 @@ npm run ui:screens -- --mock --base http://localhost:4173
 ```
 
 The saved sign-in holds your refresh cookie: never commit it. A route that needs an id (a run, a task, a host) takes the first one your account has, and a route with nothing to open is listed as not checked, never as passed (`--strict` makes that a failure). To add a page, append one line to `ROUTES` in the script; the enabled slices' routes are read from `apps/web/src/slices/`.
+
+In `--mock` mode the answers come from `scripts/ui-screens.fixtures.mjs`, which has data for every page of this app (Home, Inbox, the task list, form and page, the runs list and a run, Fleet, Run history, the agent policy pages). A fixture is a value, or a function of the request when the answer depends on it (a list that is an array or a page, the schedule preview). A packaged page whose endpoint is not mocked renders its empty or error state, and the run lists those endpoints.
+
+**Known overflows, all in packaged (platform) pages**, which this app does not edit: `/admin/settings/users` (below 600 px), `/admin/settings/jobs` (below 900 px), `/admin/settings/broadcasts` and `/admin/settings/db-backup` (below 1200 px). They are reported upstream ([EnterpriseAppBase#1176](https://github.com/marinoscar/EnterpriseAppBase/issues/1176), [#1177](https://github.com/marinoscar/EnterpriseAppBase/issues/1177)); until a platform release fixes them the script exits non-zero on those four routes. Every page of this app passes at the five widths in both themes.
 
 ## Run it
 
