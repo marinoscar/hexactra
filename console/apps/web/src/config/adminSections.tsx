@@ -1,3 +1,4 @@
+import AutoDeleteOutlinedIcon from '@mui/icons-material/AutoDeleteOutlined';
 import { alertsAdminCards } from '@marinoscar/platform-web/alerts/ui';
 import { doctorSettingsPage } from '@marinoscar/platform-web/doctor/ui';
 import { identityAdminSections } from '@marinoscar/platform-web/identity/ui';
@@ -83,6 +84,14 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
         description: 'What each model costs per million tokens, for run cost, cost budgets and the AI usage report.',
         Icon: PaidOutlinedIcon,
         path: '/admin/settings/agent-pricing',
+        permission: 'system_settings:read',
+      },
+      // Run retention (#422): the `runs` namespace of the system settings document.
+      {
+        title: 'Run history limit',
+        description: "The most days any user's finished runs are kept, whatever their own setting says.",
+        Icon: AutoDeleteOutlinedIcon,
+        path: '/admin/settings/run-history',
         permission: 'system_settings:read',
       },
     ],
