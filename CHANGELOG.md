@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Agent policies in MCP, the SDK and the CLI** (#409).
+  - MCP: new tools `policies_list`, `policy_get`, `policy_create`, `policy_update`, `policy_set_default`, `policies_export` and `policies_import`. `policy_id` is accepted on `run_goal`, `task_create`, `task_update`, `task_run` and `schedule_create`.
+  - SDK: typed helpers `hx.policies`, `hx.tasks` and `hx.runs`, plus the `AgentPolicySpec` type.
+  - CLI: `policies list|show|export|import|default`, and `--policy` on `runs start`, `tasks run|create|update` and `schedules create`.
+  - Runs show their policy, tier, cost and budget use in the CLI and the TUI.
 - **Stall detection, tier escalation and provider fallback** (#405).
   - Stall detection is always on, including under the Unlimited policy. It watches for consecutive failures, a repeated action, no progress and idle rounds.
   - The policy's `onStall` response decides what happens: nudge, then escalate to a stronger tier; escalate at once; ask a person; or stop as `stalled`.
