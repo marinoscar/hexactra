@@ -159,6 +159,8 @@ model Run {
   steps RunStep[]
 
   @@index([userId, createdAt])
+  /// The runs list filtered by status, newest first (#420).
+  @@index([userId, status, createdAt])
   @@index([taskId, createdAt])
   @@index([status])
   @@index([remindAt])
