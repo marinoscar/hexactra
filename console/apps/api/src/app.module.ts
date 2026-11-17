@@ -11,6 +11,7 @@ import { BrowserModule } from './browser/browser.module';
 import { FabricModule } from './fabric/fabric.module';
 import { McpModule } from './mcp/mcp.module';
 import { FleetModule } from './fleet/fleet.module';
+import { HomeModule } from './home/home.module';
 import { webhooksModule } from './platform/webhooks/webhooks.config';
 import { HexactraAlertsModule } from './alerts/alerts.module';
 import { alertsModule } from './platform/alerts/alerts.config';
@@ -46,6 +47,7 @@ import { PrismaModule } from './prisma/prisma.service';
     QuestionsModule,
     BrowserModule,
     McpModule,
+    HomeModule,
     // The goal runner needs the AI slice (packages/shared/slices.json).
     ...(isSliceEnabled('ai') ? [RunnerModule, SchedulesModule] : []),
     // Outbound webhooks need the credential store (signing secrets) and notifications.

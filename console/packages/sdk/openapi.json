@@ -30191,6 +30191,80 @@
         "description": "**Requires:** authentication only — any signed-in user may call this."
       }
     },
+    "/api/home/summary": {
+      "get": {
+        "description": "What needs the user, what is running, what runs next, what just happened, the week and the machines. Any signed-in user may call it; a block is built only when the caller holds its permission (`runs:read`: `needsYou`, `liveRuns`, `recentRuns`, `week`; `tasks:read`: `upcoming`; `fleet:read`: `fleet`) and is `null` otherwise, never an empty list. It never carries a question's answer, a secret, a transcript, a policy snapshot, step arguments or a viewer URL. The fleet comes from the fabric with a 1.5 s limit: a fabric that is slow or down answers `fleet.stale: true` with the last hosts read instead of failing the request.\n\n**Requires:** authentication only — any signed-in user may call this.",
+        "operationId": "home_summary",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/HomeSummaryResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The Home page in one request",
+        "tags": [
+          "Home"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": []
+        }
+      }
+    },
     "/api/tasks/{id}/runs": {
       "post": {
         "operationId": "runsStart_runTask",
@@ -69024,6 +69098,839 @@
         "required": [
           "token",
           "action"
+        ]
+      },
+      "HomeSummaryResponseDto": {
+        "type": "object",
+        "properties": {
+          "generatedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "timezone": {
+            "type": "string",
+            "description": "The zone the week is bucketed in: the profile time zone, else the `X-Time-Zone` header, else UTC"
+          },
+          "needsYou": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Every pending question, not only the listed ones"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "questionId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "runId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Null for a free-standing question"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "description": "Why it is asked: captcha, code, passkey, login, confirmation or other"
+                        },
+                        "input": {
+                          "type": "string",
+                          "enum": [
+                            "none",
+                            "text",
+                            "secret",
+                            "choice",
+                            "multi_choice",
+                            "number",
+                            "confirm",
+                            "takeover"
+                          ]
+                        },
+                        "prompt": {
+                          "type": "string",
+                          "description": "At most 300 characters"
+                        },
+                        "risk": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "low",
+                                "high"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Of a `confirm` question"
+                        },
+                        "expiresAt": {
+                          "type": "string",
+                          "description": "ISO 8601 timestamp"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "description": "ISO 8601 timestamp"
+                        },
+                        "goal": {
+                          "description": "The goal of the run that asked (at most 300 characters); null for a free-standing question",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "questionId",
+                        "runId",
+                        "kind",
+                        "input",
+                        "prompt",
+                        "risk",
+                        "expiresAt",
+                        "createdAt",
+                        "goal"
+                      ]
+                    },
+                    "description": "At most 3: the ones that expire first"
+                  }
+                },
+                "required": [
+                  "count",
+                  "items"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Questions waiting for the user. Needs `runs:read`; null without it. Never an answer or a secret."
+          },
+          "liveRuns": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "running": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "How many of `count` are running; the others wait for a person or a machine"
+                  },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "taskId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "taskName": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "goal": {
+                          "type": "string",
+                          "description": "At most 300 characters"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "running",
+                            "waiting_human"
+                          ]
+                        },
+                        "activity": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "phase": {
+                                  "type": "string",
+                                  "description": "starting, looking, thinking or acting"
+                                },
+                                "action": {
+                                  "description": "The action's name; its arguments are never here",
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "reason": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "startedAt": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "description": "ISO 8601 timestamp"
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
+                                "note": {
+                                  "description": "Why the run is on a stronger model, while it is",
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "phase",
+                                "action",
+                                "reason",
+                                "startedAt",
+                                "note"
+                              ],
+                              "description": "What a running run is doing right now, without arguments or coordinates"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Only while `running`"
+                        },
+                        "stepCount": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "startedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "description": "ISO 8601 timestamp"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "hostId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "hostName": {
+                          "description": "Null without `fleet:read`, or when the host is not in the fleet list",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "policyName": {
+                          "description": "Null until the run has started",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "currentTier": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "fast",
+                                "standard",
+                                "frontier"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "startTier": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "fast",
+                                "standard",
+                                "frontier"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "The tier the policy starts on: the run has escalated when `currentTier` differs"
+                        },
+                        "budgetPercent": {
+                          "description": "The highest percent used among the run's limited budgets; null when every budget is unlimited or the run has not started",
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "budgetWarnPercent": {
+                          "description": "The percent at which the policy warns; null with `budgetPercent`",
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "taskId",
+                        "taskName",
+                        "goal",
+                        "status",
+                        "activity",
+                        "stepCount",
+                        "startedAt",
+                        "hostId",
+                        "hostName",
+                        "policyName",
+                        "currentTier",
+                        "startTier",
+                        "budgetPercent",
+                        "budgetWarnPercent"
+                      ]
+                    },
+                    "description": "At most 6: running first, then waiting for a person, then queued; newest first within each"
+                  }
+                },
+                "required": [
+                  "count",
+                  "running",
+                  "items"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Runs that are not finished. Needs `runs:read`; null without it."
+          },
+          "upcoming": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "scheduleId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "taskId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "taskName": {
+                          "type": "string"
+                        },
+                        "nextRunAt": {
+                          "type": "string",
+                          "description": "ISO 8601 timestamp"
+                        },
+                        "description": {
+                          "type": "string",
+                          "description": "The schedule in words, e.g. \"Monday to Friday at 09:00\""
+                        },
+                        "timezone": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "scheduleId",
+                        "taskId",
+                        "taskName",
+                        "nextRunAt",
+                        "description",
+                        "timezone"
+                      ]
+                    },
+                    "description": "At most 5 enabled schedules, the next to fire first"
+                  },
+                  "pausedCount": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Tasks whose schedules are all paused (`GET /tasks?filter=paused`)"
+                  },
+                  "failingCount": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Tasks that are failing (`GET /tasks?filter=failing`)"
+                  }
+                },
+                "required": [
+                  "items",
+                  "pausedCount",
+                  "failingCount"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What runs next. Needs `tasks:read`; null without it."
+          },
+          "recentRuns": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "taskId": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "taskName": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "goal": {
+                          "type": "string",
+                          "description": "At most 300 characters"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "succeeded",
+                            "failed",
+                            "cancelled"
+                          ]
+                        },
+                        "trigger": {
+                          "type": "string",
+                          "enum": [
+                            "manual",
+                            "schedule",
+                            "api",
+                            "mcp",
+                            "external"
+                          ]
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "description": "ISO 8601 timestamp"
+                        },
+                        "startedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "description": "ISO 8601 timestamp"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "finishedAt": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "description": "ISO 8601 timestamp"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "stepCount": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "stopReason": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "finished",
+                                "budget_actions",
+                                "budget_model_calls",
+                                "budget_active_time",
+                                "budget_input_tokens",
+                                "budget_output_tokens",
+                                "budget_cost",
+                                "stalled",
+                                "cancelled",
+                                "error",
+                                "no_model"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "costUsd": {
+                          "description": "USD; null for a run that made no model call; a lower bound while `costKnown` is false",
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "costKnown": {
+                          "type": "boolean"
+                        },
+                        "error": {
+                          "description": "The first line of a failed run's error (at most 300 characters), as `GET /runs` returns it; null otherwise",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "taskId",
+                        "taskName",
+                        "goal",
+                        "status",
+                        "trigger",
+                        "createdAt",
+                        "startedAt",
+                        "finishedAt",
+                        "stepCount",
+                        "stopReason",
+                        "costUsd",
+                        "costKnown",
+                        "error"
+                      ]
+                    },
+                    "description": "At most 8 finished runs, the most recently finished first"
+                  }
+                },
+                "required": [
+                  "items"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Needs `runs:read`; null without it."
+          },
+          "week": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "totals": {
+                    "type": "object",
+                    "properties": {
+                      "succeeded": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "failed": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "cancelled": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "successRate": {
+                        "description": "succeeded / (succeeded + failed), 0 to 1; null with neither",
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "costUsd": {
+                        "description": "USD spent by the runs created in the period; null when none spent anything",
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "costKnown": {
+                        "type": "boolean",
+                        "description": "False when one of those runs had a call that could not be priced: show `costUsd` as \"at least\""
+                      },
+                      "budgetStops": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Runs stopped by a budget (`stopReason` `budget_*`)"
+                      },
+                      "stalled": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991,
+                        "description": "Runs stopped because they stalled"
+                      }
+                    },
+                    "required": [
+                      "succeeded",
+                      "failed",
+                      "cancelled",
+                      "successRate",
+                      "costUsd",
+                      "costKnown",
+                      "budgetStops",
+                      "stalled"
+                    ]
+                  },
+                  "series": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "date": {
+                          "type": "string",
+                          "description": "YYYY-MM-DD in `timezone`"
+                        },
+                        "succeeded": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "failed": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "cancelled": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "costUsd": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "date",
+                        "succeeded",
+                        "failed",
+                        "cancelled",
+                        "costUsd"
+                      ]
+                    },
+                    "description": "Seven entries, oldest first, today last; a day without runs is zeros"
+                  }
+                },
+                "required": [
+                  "totals",
+                  "series"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Runs created in the last 7 calendar days. Needs `runs:read`; null without it."
+          },
+          "fleet": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "total": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "online": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "disabled": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Hosts that are draining: they take no new run"
+                  },
+                  "stale": {
+                    "type": "boolean",
+                    "description": "True when the fabric did not answer within 1.5 s: the hosts are the last ones read, and may be out of date"
+                  },
+                  "hosts": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "online": {
+                          "type": "boolean"
+                        },
+                        "draining": {
+                          "type": "boolean"
+                        },
+                        "mode": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "enum": [
+                                "unattended",
+                                "attended",
+                                "container"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "online",
+                        "draining",
+                        "mode"
+                      ]
+                    },
+                    "description": "At most 6: online first, then by name"
+                  }
+                },
+                "required": [
+                  "total",
+                  "online",
+                  "disabled",
+                  "stale",
+                  "hosts"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The machines. Needs `fleet:read`; null without it."
+          },
+          "counts": {
+            "type": "object",
+            "properties": {
+              "tasks": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Null without `tasks:read`"
+              },
+              "runs": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Null without `runs:read`"
+              }
+            },
+            "required": [
+              "tasks",
+              "runs"
+            ]
+          }
+        },
+        "required": [
+          "generatedAt",
+          "timezone",
+          "needsYou",
+          "liveRuns",
+          "upcoming",
+          "recentRuns",
+          "week",
+          "fleet",
+          "counts"
         ]
       },
       "RunTaskDto": {

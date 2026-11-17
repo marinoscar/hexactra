@@ -264,9 +264,10 @@
       "tui": {
         "none": "The TUI is for watching and answering; deleting history is done in the web app"
       },
-      "web": {
-        "none": "The Runs page gains delete, with its confirmation, in #423"
-      }
+      "web": [
+        "/runs",
+        "/runs/:id"
+      ]
     },
     {
       "id": "runs.retention",
@@ -771,6 +772,23 @@
       "web": {
         "none": "It changes the server's containers; the Fleet page can disable the host instead"
       }
+    },
+    {
+      "id": "home.summary",
+      "description": "The Home page in one read: questions waiting, live runs, next firings, recent runs, the week and the machines",
+      "rest": [
+        "GET /api/home/summary"
+      ],
+      "cli": {
+        "none": "A dashboard for a person; the CLI lists each part with runs list, inbox list, schedules list and fleet hosts (client parity is settled in #432)"
+      },
+      "mcp": {
+        "none": "An agent reads each part with its own tool (runs_list, inbox_list, schedules_list, fleet_hosts); the summary is a page for a person"
+      },
+      "tui": {
+        "none": "The TUI opens on its own runs and inbox screens; the summary is the web app's first page"
+      },
+      "web": "/"
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { APP_NAME } from '@app/shared';
-import { Box, CircularProgress, Typography } from '@mui/material';
+import { Box, CircularProgress } from '@mui/material';
 import { Fragment, Suspense, type ComponentType } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { DoctorPage } from '@marinoscar/platform-web/doctor/ui';
@@ -9,7 +9,6 @@ import {
   IdentityWebAdaptersProvider,
   RequireAuth,
   RequirePermission,
-  useAuth,
   useOrgsFeature,
   usePermissions,
 } from '@marinoscar/platform-web/identity/headless';
@@ -37,6 +36,7 @@ import { ALERTS_ENABLED, WEBHOOKS_ENABLED } from './config/userSettingsSections'
 import { FabricConnectionPage } from './pages/FabricConnectionPage';
 import { DesktopPage } from './pages/DesktopPage';
 import { FleetPage } from './pages/FleetPage';
+import { HomePage } from './pages/HomePage';
 import { InboxPage } from './pages/InboxPage';
 import { QuestionPage } from './pages/QuestionPage';
 import { RunDetailPage } from './pages/RunDetailPage';
@@ -171,20 +171,6 @@ function guarded(route: SliceRoute): ReactElement {
   );
 }
 
-function Home() {
-  const { user } = useAuth();
-  return (
-    <Box>
-      <Typography variant="h4" component="h1">
-        Welcome{user?.displayName ? `, ${user.displayName}` : ''}
-      </Typography>
-      <Typography color="text.secondary" sx={{ mt: 1 }}>
-        Start with your notes, or open Settings.
-      </Typography>
-    </Box>
-  );
-}
-
 /** The routes. Every settings page is reachable from a registry card (config/). */
 export function AppRoutes() {
   return (
@@ -201,7 +187,7 @@ export function AppRoutes() {
             API client comes from IdentityWebAdaptersProvider below (no shell here). */}
         <Route path="activate" element={<ActivateDevicePage />} />
         <Route element={shell}>
-          <Route index element={<Home />} />
+          <Route index element={<HomePage />} />
           <Route path="notes" element={<Gate permission="notes:read"><NotesPage /></Gate>} />
           <Route path="tasks" element={<Gate permission="tasks:read"><TasksPage /></Gate>} />
           <Route path="tasks/new" element={<Gate permission="tasks:write"><TaskCreatePage /></Gate>} />

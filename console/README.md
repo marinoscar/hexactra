@@ -15,6 +15,7 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 | Capability | Web | API | CLI / TUI | Permission |
 |---|---|---|---|---|
 | Fabric connection (URL and `hxs_` service token, stored encrypted; Doctor checks `fabric.*`) | Administration → Fabric connection | `GET/PUT/DELETE /api/fabric/connection`, `POST …/test` | `hexactra fabric show\|set URL --token-stdin\|test\|clear --yes` | `fabric_config:read` / `:write` |
+| Home: what needs you, what is running, what runs next, what just happened, the week and the machines, in one request ([Home](#home)) | `/` | `GET /api/home/summary` | none: the CLI and TUI list each part on their own | any signed-in user; each block needs its own (`runs:read`, `tasks:read`, `fleet:read`) |
 | Tasks: saved goals with a profile, an agent policy (budgets and models), optional allowed sites, opt-in confirm-before-purchase ([Create a task](#create-a-task)) | `/tasks`, `/tasks/new`, `/tasks/:id/edit` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
 | Agent policies: named, versioned bundles of model tiers, budgets (any of them unlimited), stall detection and context settings; four built-ins, a default per user, one per task, schedule or run ([Agent policies](#agent-policies)) | Settings → Browser agent → Agent policies; Administration → Browser agent | `/api/agent-policies` | `hexactra policies`; MCP `policies_*` and `policy_*` tools; SDK `hx.policies` | `agent_policies:read` / `:write` |
 | Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel; the list is paged, filtered and searched on the server, with counts per status; finished runs can be deleted, one, many or everything a filter matches ([docs/runs.md](docs/runs.md)) | `/runs`, `/runs/:id` | `/api/runs`, `GET /api/runs/counts`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel`, `DELETE /api/runs/:id`, `POST /api/runs/delete` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` / `runs:delete` |
@@ -308,7 +309,7 @@ Everything above is on the console's pages (`apps/web/src/pages/`, one client fo
 
 ### Watching a run's spend
 
-The run page (`/runs/:id`) shows the run's **policy** (name, version, and whether it came from your default, the task, the schedule or this run), its **tier** (`tier: Standard`, highlighted as `tier: Standard → Frontier` once a stall escalated it) and the **model** that tier uses. Under them, a **budget meter** has one bar per limited budget (used / limit and the percent; a deployment ceiling is marked), turning orange at the policy's `warnAtPercent` and red at 100%; an unlimited budget shows what was used and "∞", and an unpriced cost reads "≥ $x". The meter follows the run's live stream and ticks active time between events. When the run ends, one line says why (for example "Stopped: cost budget reached ($2.00)." with the agent's summary). Escalations, de-escalations and model fallbacks appear in the step timeline as their own rows (↑, ↓, ⇄). The runs list shows each run's cost (a chip on a phone) and a chip for a budget, stall, error or cancel stop; a task card and the task's runs view show its last 30 days: runs, cost, tokens and the average cost of a successful run (`spend30d.succeeded`, `spend30d.avgSuccessCostUsd`). Run responses carry the tier as `tier: { start, max, current, escalations, model }`. Cost-aware alerts: [operations runbook](docs/runbooks/operations.md#the-run-budget-meter-stop-reasons-and-cost-alerts).
+The run page (`/runs/:id`) shows the run's **policy** (name, version, and whether it came from your default, the task, the schedule or this run), its **tier** (`tier: Standard`, highlighted as `tier: Standard → Frontier` once a stall escalated it) and the **model** that tier uses. Under them, a **budget meter** has one bar per limited budget (used / limit and the percent; a deployment ceiling is marked), turning orange at the policy's `warnAtPercent` and red at 100%; an unlimited budget shows what was used and "∞", and an unpriced cost reads "≥ $x". The meter follows the run's live stream and ticks active time between events. When the run ends, one line says why (for example "Stopped: cost budget reached ($2.00)." with the agent's summary). Escalations, de-escalations and model fallbacks appear in the step timeline as their own rows (↑, ↓, ⇄). The runs list shows each run's cost and says a budget, stall or missing-model stop in its status chip ("failed · cost budget", "failed · stalled"); a task card and the task's runs view show its last 30 days: runs, cost, tokens and the average cost of a successful run (`spend30d.succeeded`, `spend30d.avgSuccessCostUsd`). Run responses carry the tier as `tier: { start, max, current, escalations, model }`. Cost-aware alerts: [operations runbook](docs/runbooks/operations.md#the-run-budget-meter-stop-reasons-and-cost-alerts).
 
 ![The run page: policy, tier and model chips over the budget meter](docs/images/run-budget-meter.png)
 
@@ -320,6 +321,28 @@ The same policies are reachable from scripts and agents ([docs/mcp.md](docs/mcp.
 - **MCP:** `policies_list`, `policy_get`, `policy_create`, `policy_update`, `policy_set_default`, `policies_export`, `policies_import`, and `policy_id` on `run_goal`, `task_create`, `task_update`, `task_run` and `schedule_create`. Each tool calls the REST route as the caller, so `agent_policies:read` / `:write` apply: a read-only user is refused the write tools with `403`. Deleting a policy is not an MCP tool.
 - **SDK:** `hx.policies.list|get|create|update|setDefault|export|import`, `hx.tasks.create|update|run` and `hx.runs.start` (each with `policyId`), and the exported `AgentPolicySpec` type.
 
+## Home
+
+`/` is the page to open first. It answers, from one request (`GET /api/home/summary`): is an agent waiting for me, what is running, what will run next, how did the recent runs go, are my machines up. And it starts a run.
+
+| | |
+|---|---|
+| ![Home on a desktop: Needs you, Running now, Quick start, Recent runs, Up next, This week, Machines](docs/images/home-desktop.png) | ![Home on a phone](docs/images/home-phone.png) |
+
+- **Greeting** and one status sentence ("2 agents are running and 1 is waiting for you.", "Nothing is running. Next: Morning report in 3 h.", "All quiet.").
+- **Needs you** (only when a question is pending, always first): up to three questions, the ones that expire first, each with a countdown and an **Answer** link to the Inbox. A confirmation that is not high-risk can be approved or denied in place; a high-risk one, a secret and every other input go to the Inbox.
+- **Running now**: a card per live run with what it is doing, its step and time, its machine, and a budget bar ("62 % of budget": orange from the policy's warning threshold, red at 100 %, absent for an unlimited run). A run on a stronger tier than its policy starts on says so.
+- **Quick start** (with `runs:write`): a goal and **Run** (the default profile and policy), and a chip per task you ran most recently (the task's own policy). "More options" opens the Runs page.
+- **Up next**: the next five firings, with the schedule in words, and how many tasks are paused or failing.
+- **Recent runs**: the eight most recently finished, with the stop reason, the duration and the cost.
+- **This week**: runs, success rate, failed and spend over the last seven days of your profile time zone, a stacked bar per day (the chart is loaded on demand), and how many runs a budget or a stall stopped.
+- **Machines**: how many are online, and each one's state in words.
+
+A new account sees a **Get started** card instead of the dashboard blocks until it has a machine, a task and a run: three steps, ticked from the data, each only if you may do it.
+
+The page reads the summary when it opens, when the window gets the focus, and every 10 seconds while the tab is visible (every 5 while an agent runs or waits for you). When a read fails, the last data stays on screen, dimmed, with when it was read and a Retry.
+
+**`GET /api/home/summary`** needs a sign-in and no permission of its own. A block is built only when the caller holds its permission and is `null` otherwise, never an empty list: `needsYou`, `liveRuns`, `recentRuns` and `week` need `runs:read`; `upcoming` needs `tasks:read`; `fleet` needs `fleet:read`; `counts.tasks` and `counts.runs` are `null` without theirs. Limits: 3 questions, 6 live runs (running first), 5 firings, 8 finished runs, 6 machines; `needsYou.count` and `liveRuns.count` are the real totals. The response never carries a question's answer, a secret, a transcript, a policy snapshot, an action's arguments or a viewer URL: a live run's `activity` is its phase, the action's name and the reason only. `budgetPercent` is the highest percent among the run's limited budgets, from the run's stored budget. The week is bucketed in the profile time zone (else the `X-Time-Zone` header, else UTC). The fleet comes from the fabric with a 1.5 second limit: a fabric that is slow or down answers `fleet.stale: true` with the last hosts read, and never fails the request. It costs six SQL statements whatever the account holds, and records `app.home.summary.duration`.
 ## Tasks
 
 **Tasks** (`/tasks`) lists what your agents do, and when. Each row answers five questions without opening the task: what it does, whether it is scheduled, when it runs next, how the last run went and what it cost in the last 30 days. On a phone each task is a card with the same facts.
@@ -356,6 +379,28 @@ A task is created at `/tasks/new` and changed at `/tasks/:id/edit`. Both are one
 - `/tasks/new?goal=<text>` starts with that goal; `/tasks/new?from=<task id>` starts from a copy of that task, with its schedules paused.
 - On the edit page, **Danger zone** deletes the task (its schedules go with it; its runs are kept).
 
+## Runs: find, filter and delete
+
+`/runs` lists every run, newest first, 50 at a time (**Load more**, or scroll to the end). It stays usable with thousands of runs: the API filters, searches and pages ([docs/runs.md](docs/runs.md)), and the page never loads everything.
+
+![The Runs page: status tabs with counts, filters, and the list](docs/images/runs-list.png)
+
+- **Status tabs** with the number of runs in each: All, Live, Needs you, Succeeded, Failed, Cancelled. Beside them, how many runs match and what they cost ("≥" when a call could not be priced).
+- **Search** looks in the goal. **Filters**: task (or "One-off goals"), trigger, a date range (Today, 7, 30 or 90 days, or two dates, cut in your profile time zone), "Stopped by" (Budget, Stalled, Error, No model; on the All and Failed tabs) and policy. On a phone they are behind the **Filters** button.
+- **Every filter is in the URL** (`?view=failed&q=invoice&trigger=schedule&from=2026-11-01`), so a filtered view can be bookmarked or sent, and survives a reload. Active filters show as chips; **Clear all** removes them.
+- **Each run** shows its status (with the reason a failed run stopped), goal, task, trigger, steps, when it started, how long it took, its cost, and what a running one is doing right now. The list refreshes the live runs every 5 seconds while the tab is visible.
+- **The ⋮ menu of a run:** Open, Run again, Run again with… (another policy), Cancel (a live run) and Delete (a finished run). "Run again" keeps the original policy only when it was chosen for that one run.
+- **New run** (top right) starts a one-off goal: the goal, the browser profile, the machine and the policy.
+
+**Deleting runs** needs the `runs:delete` permission (contributors and organization administrators have it).
+
+1. Tick the runs (on a phone, press **Select** first). The box in the header ticks every loaded run.
+2. To delete more than what is loaded, choose **Select all N finished runs that match**: the delete then goes by the current filter, not by a list.
+3. Press **Delete** in the bar at the bottom and confirm. More than 100 runs asks you to type `delete`.
+
+A run's steps and answers are deleted with it, and its cost and stop reason leave the task's spend and the alerts. This cannot be undone. A run that is queued, running or waiting for you is never deleted: cancel it first. More than 500 runs are deleted in the background; the page says so and refreshes when it is done. One run can also be deleted from its own page (`/runs/:id`, **Delete**).
+
+For code: the list is `RunList` (`apps/web/src/components/RunList.tsx`) over the `useRunList` hook (`useRunList.ts`); `<RunList scope={{ taskId }} />` is the same list fixed to one task.
 ## Schedules
 
 A task runs on a schedule you build in the schedule editor (in the [task form](#create-a-task); a task without a schedule has an **Add schedule** link on the Tasks list). You do not need to know cron: choose how it repeats, and the editor says in words what that means and lists the next five runs before you save.
@@ -434,7 +479,7 @@ scripts/rename.mjs rebrand this app (identity.json plus the few literal targets)
 | `StatusChip` | A run status as colour, icon and words, with a budget or stall stop appended ("failed · cost budget"). `STOP_REASON_LABEL`, `isLive(status)`, `isTerminal(status)`. |
 | `useConfirm()` | `if (await confirm({ title, body, confirmLabel, destructive: true })) ...`. Resolves `false` on Cancel, Escape and a backdrop click. `requireText` makes the user type a word first. `ConfirmProvider` is mounted once in `App.tsx`; a page test wraps the page in one. |
 | `EmptyState`, `ErrorBanner`, `ListSkeleton`, `CardSkeleton` | Nothing to show, a failure (`role="alert"`), and the first load. |
-| `ResponsiveList` | A table at 900 px and up, cards below. It renders the items it is given: paging stays with the API. |
+| `ResponsiveList` | A table at 900 px and up, cards below. It renders the items it is given: paging stays with the API. `selection.disabledReason` disables one item's checkbox with a tooltip; a column marked `grow` takes the spare width instead of the first; `windowAfter={300}` replaces rows far from the viewport with a spacer once the list is longer than that. |
 | `useBreakpoint()` | `{ isPhone, isTablet, isDesktop }` from the theme's breakpoints. |
 | `aboveBottomBar()`, `BOTTOM_BAR_HEIGHT`, `APP_BAR_HEIGHT` | The offset of anything pinned above the phone's bottom bar or under the top bar ([Responsive rules](#responsive-rules)). |
 | `formatDateTime`, `formatRelative`, `<RelativeTime iso />` | Dates in the **profile time zone** (the one `UserTimeZoneSync` stores), never `toLocaleString()`. An empty or invalid date renders `n/a`. |

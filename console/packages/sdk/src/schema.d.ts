@@ -5814,6 +5814,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/home/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The Home page in one request
+         * @description What needs the user, what is running, what runs next, what just happened, the week and the machines. Any signed-in user may call it; a block is built only when the caller holds its permission (`runs:read`: `needsYou`, `liveRuns`, `recentRuns`, `week`; `tasks:read`: `upcoming`; `fleet:read`: `fleet`) and is `null` otherwise, never an empty list. It never carries a question's answer, a secret, a transcript, a policy snapshot, step arguments or a viewer URL. The fleet comes from the fabric with a 1.5 s limit: a fabric that is slow or down answers `fleet.stale: true` with the last hosts read instead of failing the request.
+         *
+         *     **Requires:** authentication only — any signed-in user may call this.
+         */
+        get: operations["home_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/{id}/runs": {
         parameters: {
             query?: never;
@@ -14368,6 +14390,177 @@ export interface components {
             token: string;
             /** @enum {string} */
             action: "cancel" | "approve" | "snooze" | "answer-0" | "answer-1";
+        };
+        HomeSummaryResponseDto: {
+            /** @description ISO 8601 timestamp */
+            generatedAt: string;
+            /** @description The zone the week is bucketed in: the profile time zone, else the `X-Time-Zone` header, else UTC */
+            timezone: string;
+            /** @description Questions waiting for the user. Needs `runs:read`; null without it. Never an answer or a secret. */
+            needsYou: {
+                /** @description Every pending question, not only the listed ones */
+                count: number;
+                /** @description At most 3: the ones that expire first */
+                items: {
+                    /** Format: uuid */
+                    questionId: string;
+                    /** @description Null for a free-standing question */
+                    runId: string | null;
+                    /** @description Why it is asked: captcha, code, passkey, login, confirmation or other */
+                    kind: string;
+                    /** @enum {string} */
+                    input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover";
+                    /** @description At most 300 characters */
+                    prompt: string;
+                    /** @description Of a `confirm` question */
+                    risk: ("low" | "high") | null;
+                    /** @description ISO 8601 timestamp */
+                    expiresAt: string;
+                    /** @description ISO 8601 timestamp */
+                    createdAt: string;
+                    /** @description The goal of the run that asked (at most 300 characters); null for a free-standing question */
+                    goal: string | null;
+                }[];
+            } | null;
+            /** @description Runs that are not finished. Needs `runs:read`; null without it. */
+            liveRuns: {
+                count: number;
+                /** @description How many of `count` are running; the others wait for a person or a machine */
+                running: number;
+                /** @description At most 6: running first, then waiting for a person, then queued; newest first within each */
+                items: {
+                    /** Format: uuid */
+                    id: string;
+                    taskId: string | null;
+                    taskName: string | null;
+                    /** @description At most 300 characters */
+                    goal: string;
+                    /** @enum {string} */
+                    status: "queued" | "running" | "waiting_human";
+                    /** @description Only while `running` */
+                    activity: {
+                        /** @description starting, looking, thinking or acting */
+                        phase: string;
+                        /** @description The action's name; its arguments are never here */
+                        action: string | null;
+                        reason: string | null;
+                        startedAt: string | null;
+                        /** @description Why the run is on a stronger model, while it is */
+                        note: string | null;
+                    } | null;
+                    stepCount: number;
+                    startedAt: string | null;
+                    hostId: string | null;
+                    /** @description Null without `fleet:read`, or when the host is not in the fleet list */
+                    hostName: string | null;
+                    /** @description Null until the run has started */
+                    policyName: string | null;
+                    currentTier: ("fast" | "standard" | "frontier") | null;
+                    /** @description The tier the policy starts on: the run has escalated when `currentTier` differs */
+                    startTier: ("fast" | "standard" | "frontier") | null;
+                    /** @description The highest percent used among the run's limited budgets; null when every budget is unlimited or the run has not started */
+                    budgetPercent: number | null;
+                    /** @description The percent at which the policy warns; null with `budgetPercent` */
+                    budgetWarnPercent: number | null;
+                }[];
+            } | null;
+            /** @description What runs next. Needs `tasks:read`; null without it. */
+            upcoming: {
+                /** @description At most 5 enabled schedules, the next to fire first */
+                items: {
+                    /** Format: uuid */
+                    scheduleId: string;
+                    /** Format: uuid */
+                    taskId: string;
+                    taskName: string;
+                    /** @description ISO 8601 timestamp */
+                    nextRunAt: string;
+                    /** @description The schedule in words, e.g. "Monday to Friday at 09:00" */
+                    description: string;
+                    timezone: string;
+                }[];
+                /** @description Tasks whose schedules are all paused (`GET /tasks?filter=paused`) */
+                pausedCount: number;
+                /** @description Tasks that are failing (`GET /tasks?filter=failing`) */
+                failingCount: number;
+            } | null;
+            /** @description Needs `runs:read`; null without it. */
+            recentRuns: {
+                /** @description At most 8 finished runs, the most recently finished first */
+                items: {
+                    /** Format: uuid */
+                    id: string;
+                    taskId: string | null;
+                    taskName: string | null;
+                    /** @description At most 300 characters */
+                    goal: string;
+                    /** @enum {string} */
+                    status: "succeeded" | "failed" | "cancelled";
+                    /** @enum {string} */
+                    trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+                    /** @description ISO 8601 timestamp */
+                    createdAt: string;
+                    startedAt: string | null;
+                    finishedAt: string | null;
+                    stepCount: number;
+                    stopReason: ("finished" | "budget_actions" | "budget_model_calls" | "budget_active_time" | "budget_input_tokens" | "budget_output_tokens" | "budget_cost" | "stalled" | "cancelled" | "error" | "no_model") | null;
+                    /** @description USD; null for a run that made no model call; a lower bound while `costKnown` is false */
+                    costUsd: number | null;
+                    costKnown: boolean;
+                    /** @description The first line of a failed run's error (at most 300 characters), as `GET /runs` returns it; null otherwise */
+                    error: string | null;
+                }[];
+            } | null;
+            /** @description Runs created in the last 7 calendar days. Needs `runs:read`; null without it. */
+            week: {
+                totals: {
+                    succeeded: number;
+                    failed: number;
+                    cancelled: number;
+                    /** @description succeeded / (succeeded + failed), 0 to 1; null with neither */
+                    successRate: number | null;
+                    /** @description USD spent by the runs created in the period; null when none spent anything */
+                    costUsd: number | null;
+                    /** @description False when one of those runs had a call that could not be priced: show `costUsd` as "at least" */
+                    costKnown: boolean;
+                    /** @description Runs stopped by a budget (`stopReason` `budget_*`) */
+                    budgetStops: number;
+                    /** @description Runs stopped because they stalled */
+                    stalled: number;
+                };
+                /** @description Seven entries, oldest first, today last; a day without runs is zeros */
+                series: {
+                    /** @description YYYY-MM-DD in `timezone` */
+                    date: string;
+                    succeeded: number;
+                    failed: number;
+                    cancelled: number;
+                    costUsd: number | null;
+                }[];
+            } | null;
+            /** @description The machines. Needs `fleet:read`; null without it. */
+            fleet: {
+                total: number;
+                online: number;
+                /** @description Hosts that are draining: they take no new run */
+                disabled: number;
+                /** @description True when the fabric did not answer within 1.5 s: the hosts are the last ones read, and may be out of date */
+                stale: boolean;
+                /** @description At most 6: online first, then by name */
+                hosts: {
+                    id: string;
+                    name: string;
+                    online: boolean;
+                    draining: boolean;
+                    mode: ("unattended" | "attended" | "container") | null;
+                }[];
+            } | null;
+            counts: {
+                /** @description Null without `tasks:read` */
+                tasks: number | null;
+                /** @description Null without `runs:read` */
+                runs: number | null;
+            };
         };
         RunTaskDto: {
             /** @description Run under this agent policy for this run only ("Run with..."), instead of the schedule's, the task's or the user's default. */
@@ -33597,6 +33790,54 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    home_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["HomeSummaryResponseDto"];
+                    };
+                };
+            };
             /** @description Unauthorized - Invalid or missing token */
             401: {
                 headers: {

@@ -218,15 +218,6 @@ export function stopLine(run: StopReasonRun): StopLine | null {
   }
 }
 
-/** The short stop-reason chip of the runs list ("cost budget", "stuck"); null for a run that finished normally or has no reason. */
-export function stopChipLabel(reason: StopReason | null | undefined): string | null {
-  if (!reason || reason === 'finished') return null;
-  const key = STOP_REASON_BUDGET[reason];
-  if (key) return `${BUDGET_LABEL[key].toLowerCase()} budget`;
-  const other: Partial<Record<StopReason, string>> = { stalled: 'stuck', cancelled: 'cancelled', error: 'error', no_model: 'no model' };
-  return other[reason] ?? reason;
-}
-
 /** What a task spent over the last 30 days (`spend30d`). */
 export interface TaskSpend {
   runs: number;

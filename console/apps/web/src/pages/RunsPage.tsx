@@ -1,119 +1,69 @@
-import { useCallback, useEffect, useState } from 'react';
-import ListAltOutlinedIcon from '@mui/icons-material/ListAltOutlined';
-import { Box, Button, Chip, List, ListItemButton, ListItemText, Stack, TextField, Typography } from '@mui/material';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import AddIcon from '@mui/icons-material/Add';
+import { Box, Link, Snackbar, Typography } from '@mui/material';
+import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
+import { NewRunDialog } from '../components/NewRunDialog';
+import { RunList } from '../components/RunList';
 import { TaskSpendLine } from '../components/RunBudgetMeter';
-import { runCost, stopChipLabel, type TaskSpend } from '../components/runBudget';
-import type { Run } from '../types/runs';
-import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, StatusChip, formatDateTime, useProfileTimeZone } from '../ui';
+import type { TaskSpend } from '../components/runBudget';
+import { PageContainer, PageHeader } from '../ui';
 
-/** `/runs`: recent runs. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * `/runs`: every run, filtered, searched and paged by the API (`GET /runs`,
+ * `GET /runs/counts`), with select and bulk delete (`POST /runs/delete`). The
+ * list itself is `RunList`; this page adds the header, "New run" (`POST /runs`)
+ * and, on a task's view (`?taskId=`), that task's spend.
+ */
 export function RunsPage() {
   const { api, viewer } = usePlatformHost();
   const navigate = useNavigate();
+  const location = useLocation();
   const [params] = useSearchParams();
   const taskId = params.get('taskId');
-  const [runs, setRuns] = useState<Run[] | null>(null);
+  const [creating, setCreating] = useState(false);
   /** The task's spend, on its runs view (#408). */
   const [spend, setSpend] = useState<{ name: string; spend30d?: TaskSpend } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [goal, setGoal] = useState('');
-  const [profile, setProfile] = useState('default');
+  /** What another page says on arrival ("Run deleted", from the run page). */
+  const [toast, setToast] = useState<string | null>(() => (location.state as { toast?: string } | null)?.toast ?? null);
   const canRun = viewer.hasPermission('runs:write');
-  useProfileTimeZone();
-
-  const start = async () => {
-    setError(null);
-    try {
-      const r = await api.post<{ id: string }>('/runs', { goal: goal.trim(), profile: profile.trim() || 'default' });
-      navigate(`/runs/${r.id}`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not start the run');
-    }
-  };
-
-  const load = useCallback(async () => {
-    try {
-      setRuns(await api.get<Run[]>(`/runs${taskId ? `?taskId=${encodeURIComponent(taskId)}` : ''}`));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load runs');
-    }
-  }, [api, taskId]);
+  const canReadTasks = viewer.hasPermission('tasks:read');
 
   useEffect(() => {
-    void load();
-    const t = setInterval(() => void load(), 5_000);
-    return () => clearInterval(t);
-  }, [load]);
-
-  useEffect(() => {
-    if (!taskId || !viewer.hasPermission('tasks:read')) return setSpend(null);
+    if (!taskId || !UUID.test(taskId) || !canReadTasks) return setSpend(null);
+    let stale = false;
     api
       .get<{ name: string; spend30d?: TaskSpend }>(`/tasks/${encodeURIComponent(taskId)}`)
-      .then(setSpend)
-      .catch(() => setSpend(null));
-  }, [api, taskId, viewer]);
+      .then((task) => {
+        if (!stale) setSpend(task);
+      })
+      .catch(() => {
+        if (!stale) setSpend(null);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [api, taskId, canReadTasks]);
 
   return (
-    <PageContainer>
-      <PageHeader title="Runs" />
-      <ErrorBanner error={error} />
-      {spend && (
-        <Box sx={{ mb: 1 }}>
-          <Typography variant="subtitle1">{spend.name}</Typography>
+    <PageContainer width="wide">
+      <PageHeader title="Runs" primary={{ key: 'new', label: 'New run', Icon: AddIcon, onClick: () => setCreating(true), hidden: !canRun }} />
+      {spend && taskId && (
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="subtitle1" component="h2">
+            <Link component={RouterLink} to={`/tasks/${taskId}`} underline="hover" color="inherit">
+              {spend.name}
+            </Link>
+          </Typography>
           <TaskSpendLine spend={spend.spend30d} />
         </Box>
       )}
-      {canRun && !taskId && (
-        <Stack
-          component="form"
-          aria-label="Run a goal"
-          direction={{ xs: 'column', sm: 'row' }}
-          spacing={1}
-          sx={{ my: 2 }}
-          onSubmit={(e) => {
-            e.preventDefault();
-            void start();
-          }}
-        >
-          <TextField label="Goal" value={goal} onChange={(e) => setGoal(e.target.value)} fullWidth size="small" helperText="A one-off goal; save it as a task to reuse it." />
-          <TextField label="Profile" value={profile} onChange={(e) => setProfile(e.target.value)} size="small" />
-          <Box>
-            <Button type="submit" variant="contained" disabled={!goal.trim()}>
-              Run
-            </Button>
-          </Box>
-        </Stack>
-      )}
-      {runs === null && !error && <ListSkeleton />}
-      {runs?.length === 0 && !error && <EmptyState Icon={ListAltOutlinedIcon} title="No runs yet" body="Run a goal above, or start one from Tasks." />}
-      <List aria-label="Runs">
-        {(runs ?? []).map((r) => {
-          const cost = runCost(r);
-          const stop = stopChipLabel(r.stopReason);
-          return (
-            <ListItemButton key={r.id} onClick={() => navigate(`/runs/${r.id}`)} data-testid={`run-row-${r.id}`}>
-              <ListItemText
-                primary={r.goal}
-                secondary={`${formatDateTime(r.createdAt)} · ${r.stepCount} steps · ${r.trigger === 'external' ? `driven by ${r.actor ?? 'an external agent'}` : r.trigger}`}
-                sx={{ minWidth: 0, overflowWrap: 'anywhere' }}
-              />
-              {/* The cost: a column from sm up, a chip on a phone (#408). */}
-              <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' }, minWidth: 72, textAlign: 'right', mx: 1, fontVariantNumeric: 'tabular-nums' }} data-testid="run-cost">
-                {cost ?? '—'}
-              </Typography>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={0.5} sx={{ alignItems: { xs: 'flex-end', sm: 'center' }, justifyContent: 'flex-end', ml: 1, minWidth: { sm: 190 }, flexShrink: 0 }}>
-                {cost && <Chip size="small" variant="outlined" label={cost} sx={{ display: { xs: 'inline-flex', sm: 'none' } }} />}
-                {/* #408's stop-reason chip says why; the status chip keeps to the status, so the reason is not said twice. */}
-                {stop && <Chip size="small" variant="outlined" color={r.stopReason === 'error' || r.stopReason === 'no_model' ? 'error' : 'warning'} label={stop} data-testid="run-stop" />}
-                <StatusChip status={r.status} />
-              </Stack>
-            </ListItemButton>
-          );
-        })}
-      </List>
+      <RunList showTaskColumn onNewRun={canRun ? () => setCreating(true) : undefined} />
+      {canRun && <NewRunDialog open={creating} onClose={() => setCreating(false)} onStarted={(id) => navigate(`/runs/${id}`)} />}
+      <Snackbar open={toast !== null} autoHideDuration={6000} onClose={() => setToast(null)} message={toast} sx={{ bottom: { xs: 88, sm: 24 } }} />
     </PageContainer>
   );
 }
