@@ -18,6 +18,16 @@ export interface TaskSpend {
   /** False when any of those runs had a call that could not be priced. */
   costKnown: boolean;
   tokens: number;
+  /** Of those runs, how many succeeded. */
+  succeeded: number;
+  /** The average cost of one successful run (USD); null with no successful run (#408). */
+  avgSuccessCostUsd: number | null;
 }
 
-export const NO_SPEND: TaskSpend = { runs: 0, costUsd: 0, costKnown: true, tokens: 0 };
+export const NO_SPEND: TaskSpend = { runs: 0, costUsd: 0, costKnown: true, tokens: 0, succeeded: 0, avgSuccessCostUsd: null };
+
+/** The average of `totalUsd` over `count` runs, to 6 decimal places; null for no runs. */
+export function averageUsd(totalUsd: number, count: number): number | null {
+  if (count <= 0) return null;
+  return Math.round((totalUsd / count) * 1_000_000) / 1_000_000;
+}

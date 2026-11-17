@@ -3,6 +3,7 @@ import { agentPolicySpecSchema } from './agent-policy.schema';
 import { builtinPolicy } from './builtin-policies';
 import { readEffectiveBudget, runBudgetView, type BudgetRunColumns, type EffectiveBudget, type RunBudgetView } from '../runner/budget';
 import type { ResolvedTiers } from './model-tiers.schema';
+import { runTierView, type RunTierColumns, type RunTierView } from './run-tier-view';
 
 /** Why a policy applied to a run (`runs.policy_source`). */
 export const POLICY_SOURCES = ['run', 'schedule', 'task', 'user_default', 'system_default'] as const;
@@ -66,7 +67,7 @@ export function summarize(snapshot: RunPolicySnapshot | null): RunPolicySummary 
 }
 
 /** The raw policy columns of a run row. */
-interface RunPolicyColumns extends Partial<BudgetRunColumns> {
+interface RunPolicyColumns extends Partial<BudgetRunColumns>, RunTierColumns {
   policyRef?: unknown;
   policyVersion?: unknown;
   policySnapshot?: unknown;
@@ -77,13 +78,14 @@ interface RunPolicyColumns extends Partial<BudgetRunColumns> {
  * A run row as the API returns it: the raw policy columns replaced by
  * `policy: { id, name, version, source, builtin }` (null until the run's first
  * advance has snapshotted it) and `budget: { effective, used, percent, source }`
- * (null until then too, and for a snapshot taken before budgets were enforced).
+ * (null until then too, and for a snapshot taken before budgets were enforced)
+ * and `tier: { start, max, current, escalations, model }` (#408, null until then).
  * `stopReason` is a column and passes through.
  */
-export function runView<R extends RunPolicyColumns>(run: R): Omit<R, 'policyRef' | 'policyVersion' | 'policySnapshot' | 'policySource'> & { policy: RunPolicySummary | null; budget: RunBudgetView | null } {
+export function runView<R extends RunPolicyColumns>(run: R): Omit<R, 'policyRef' | 'policyVersion' | 'policySnapshot' | 'policySource'> & { policy: RunPolicySummary | null; budget: RunBudgetView | null; tier: RunTierView | null } {
   const { policyRef: _r, policyVersion: _v, policySnapshot, policySource: _s, ...rest } = run;
   const snapshot = readSnapshot(policySnapshot);
-  return { ...rest, policy: summarize(snapshot), budget: snapshotBudgetView(snapshot, run) };
+  return { ...rest, policy: summarize(snapshot), budget: snapshotBudgetView(snapshot, run), tier: runTierView(snapshot, run) };
 }
 
 /** The budget view of a run under its snapshot; null without an effective budget or the run's totals. */
