@@ -17,7 +17,7 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 | Fabric connection (URL and `hxs_` service token, stored encrypted; Doctor checks `fabric.*`) | Administration → Fabric connection | `GET/PUT/DELETE /api/fabric/connection`, `POST …/test` | `hexactra fabric show\|set URL --token-stdin\|test\|clear --yes` | `fabric_config:read` / `:write` |
 | Tasks: saved goals with a profile, an agent policy (budgets and models), optional allowed sites, opt-in confirm-before-purchase | `/tasks` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
 | Agent policies: named, versioned bundles of model tiers, budgets (any of them unlimited), stall detection and context settings; four built-ins, a default per user, one per task, schedule or run ([Agent policies](#agent-policies)) | Settings → Browser agent → Agent policies; Administration → Browser agent | `/api/agent-policies` | `hexactra policies`; MCP `policies_*` and `policy_*` tools; SDK `hx.policies` | `agent_policies:read` / `:write` |
-| Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel; the list is paged, filtered and searched on the server, with counts per status ([docs/runs.md](docs/runs.md)) | `/runs`, `/runs/:id` | `/api/runs`, `GET /api/runs/counts`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` |
+| Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel; the list is paged, filtered and searched on the server, with counts per status; finished runs can be deleted, one, many or everything a filter matches ([docs/runs.md](docs/runs.md)) | `/runs`, `/runs/:id` | `/api/runs`, `GET /api/runs/counts`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel`, `DELETE /api/runs/:id`, `POST /api/runs/delete` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` / `runs:delete` |
 | Inbox: what agents wait for (CAPTCHA, code, sign-in, confirmation); answers resume the run | `/inbox` | `GET /api/inbox`, `POST /api/inbox/:runId/respond` | `hexactra inbox list\|answer RUN --done\|--value\|--choice\|--secret-stdin\|--decline`; TUI **Agent ▸ Inbox** | `runs:read` / `runs:write` |
 | Questions: an agent asks its user a typed question (text, choice, multi-choice, number, confirm, none, takeover; a secret only in a browser session) and waits for the typed answer; the person answers on any channel, the first answer wins ([docs/questions.md](docs/questions.md)) | `/inbox`, `/inbox/q/:id` | `/api/questions`, `POST /api/questions/:id/answer\|cancel\|answer-by-token` | `hexactra questions ask\|list\|show\|answer`; TUI **Agent ▸ Inbox** | `runs:read` / `runs:write` |
 | Live run view: steps over SSE, live screenshot, take over | `/runs/:id` | `GET /api/runs/:id/stream\|screenshot\|viewer` | `hexactra runs watch`; TUI **Agent ▸ Runs** | `runs:read` |
@@ -29,6 +29,13 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 | Alerts: a browser host offline (or the fabric unreachable), a schedule failing 3+ runs in a row, a user's runs over their token, cost or budget limits, a user's runs stalling, one expensive run ([Watching a run's spend](#watching-a-runs-spend)); incidents fire, notify the holders of `alerts:read` (and `alerts.alert.*` webhooks) and resolve on their own | Administration → Alerts | `/api/admin/alerts/…` (the platform slice) | — | `alerts:read` / `alerts:write` |
 
 Run it all on a VPS (console, fabric and an optional browser host in one stack): [docs/runbooks/vps-stack.md](docs/runbooks/vps-stack.md). Run the browsers on **nodes** at home, which keep a residential IP and connect outbound over HTTPS: [../docs/nodes.md](../docs/nodes.md).
+
+**Deleting runs** ([docs/runs.md](docs/runs.md#deleting-runs)):
+- `DELETE /api/runs/:id` deletes one run; `POST /api/runs/delete` deletes a list of ids (up to 500) or every finished run that matches a filter. All three need `runs:delete` (contributors and organization admins), which is separate from `runs:write`.
+- Deletion is permanent and covers the run, its steps, its questions and its stored screenshots.
+- Live runs are never deleted: a run that is queued, running or waiting for a person must be cancelled first.
+- A filter that matches more than 500 finished runs is deleted by a queue job (`browser.runs.delete`); the request answers `202` with the job id.
+- Deleting runs also removes their cost and stop-reason history from task spend and from alert counts. The AI usage report keeps its own records and is not affected.
 
 **The goal runner**:
 - It uses the AI slice: feature `browser_agent`, a model with `tools`. Configure a provider at Administration → AI.
@@ -282,6 +289,38 @@ The same policies are reachable from scripts and agents ([docs/mcp.md](docs/mcp.
 - **CLI:** `hexactra policies list|show|export|import|default`, and `--policy <id|name|builtin key>` on `runs start`, `tasks run|create|update` and `schedules create`. `runs list|show` and the terminal UI show each run's policy and cost (and tier, budget use and stop reason when the API reports them).
 - **MCP:** `policies_list`, `policy_get`, `policy_create`, `policy_update`, `policy_set_default`, `policies_export`, `policies_import`, and `policy_id` on `run_goal`, `task_create`, `task_update`, `task_run` and `schedule_create`. Each tool calls the REST route as the caller, so `agent_policies:read` / `:write` apply: a read-only user is refused the write tools with `403`. Deleting a policy is not an MCP tool.
 - **SDK:** `hx.policies.list|get|create|update|setDefault|export|import`, `hx.tasks.create|update|run` and `hx.runs.start` (each with `policyId`), and the exported `AgentPolicySpec` type.
+
+## Tasks and schedules API
+
+What the Tasks pages and the schedule editor read and write. Every route is the signed-in user's own data; another user's task answers `404`. The per-endpoint reference is the OpenAPI document at `/api/docs`.
+
+**The task list, `GET /api/tasks`** (`tasks:read`). With no parameter it returns every task, newest first, as an array (unchanged). All parameters are optional:
+
+| Parameter | Meaning |
+|---|---|
+| `envelope=1` | Return a page, `{ items, nextCursor, total }`, instead of an array. `total` counts the tasks that match the filters, on every page. |
+| `include=summary` | Add a `summary` to each task: its `schedules` (each with a `description` such as "Monday to Friday at 09:00" and its `policyId` override), `scheduleState` (`none`, `active`, `paused`, `partial`), `nextRunAt`, `lastRun`, `liveRunId`, `runCounts` (`total`, and `last7d` by outcome) and `policy` (the policy a run started now would use). Also on `GET /api/tasks/:id?include=summary`. |
+| `q` | Case-insensitive text in the name or the goal (1 to 200 characters). |
+| `filter` | `scheduled` (an enabled schedule), `paused` (schedules, none enabled), `unscheduled`, `failing` (a schedule failed 3 times in a row, or the last run failed), `never_run`. |
+| `policyId` | Tasks whose own policy is this one; `default` is the tasks that follow your default policy. |
+| `sort` | `created_desc` (default), `name_asc`, `last_run_desc`, `next_run_asc` (no next run: last), `spend_desc` (cost of the last 30 days). |
+| `limit`, `cursor` | 1 to 100 (50 with `envelope`). `cursor` is the previous page's `nextCursor`: opaque, do not parse it, and valid only with the same `sort` (`400 INVALID_TASK_CURSOR` otherwise). |
+
+A page costs the same number of database queries whatever its size. `created_desc` and `name_asc` page by keyset; the three computed sorts page by an offset inside the cursor, because their sort key moves whenever a run starts.
+
+**A task with its schedules.** `POST /api/tasks` takes an optional `schedules` list (at most 10; each `{ cron, timezone?, enabled?, concurrency?, policyId? }`). The task and its schedules are created in one transaction. One invalid schedule fails the whole request with `400`, a typed `code` (`INVALID_CRON`, `INVALID_TIMEZONE`, `CRON_TOO_FREQUENT`, `POLICY_REF_INVALID`) and `details.path` naming it, for example `schedules[1].cron`; nothing is created. The response is the task with its `summary`.
+
+`PUT /api/tasks/:id/schedules` replaces the task's schedules in one transaction: an item with an `id` updates that schedule (its last run and failure count are kept, and a field left out is unchanged), an item without creates one, and schedules that are not listed are deleted. An `id` that is not this task's answers `400 SCHEDULE_NOT_IN_TASK`. `POST`, `PATCH` and `DELETE /api/schedules` still work one schedule at a time; a task holds at most 10 (`409 SCHEDULE_LIMIT`).
+
+Deleting a task (`DELETE /api/tasks/:id`) deletes its schedules and keeps its runs, with `taskId` set to `null`.
+
+**Pause and resume.** `POST /api/tasks/:id/schedules/pause` disables every schedule of the task; `…/resume` enables them all, recomputes their next firing and resets their failure count (`tasks:write`; `409 NO_SCHEDULES` for a task without a schedule). This is what "disable a task" means: there is no enabled flag on a task. A run that is live when the task is paused finishes, and the task can still be started by hand, the API or MCP.
+
+**Check a schedule before saving it.** `POST /api/schedules/preview` with `{ cron, timezone?, count? }` (`count` 1 to 10, default 5; `tasks:read`) always answers `200`: `{ valid: true, cron, timezone, description, next, intervalSeconds }` with the next firings as ISO instants, or `{ valid: false, code, message }` with the reason saving would be refused. `description` is English and 24-hour; expressions the schedule builder does not write read "Custom schedule (<expression>)".
+
+**The time zone rule.** A schedule that is created without `timezone` gets the owner's profile time zone (Settings → Profile). When the profile follows the device ("Automatic"), it gets the zone the client sent in the `X-Time-Zone` header, which the web app always sends; with neither, `UTC`. `GET /api/schedules/defaults` returns `{ timezone, source }` (`profile`, `device` or `default`), so a client can show the zone before saving. An explicit `timezone` is still accepted. Changing the profile later does not move existing schedules.
+
+**Statistics.** `GET /api/tasks/:id/stats?days=30` (`runs:read`; 7 to 90 days, today included) returns `totals` (runs, outcomes, `successRate`, `costUsd`, `costKnown`), `avgDurationSeconds`, `p95DurationSeconds`, `avgSteps`, `avgCostPerSuccessUsd`, a `series` with one entry per day (zeros included) and `stopReasons`. Days are bucketed in the viewer's time zone (the same rule as above). `costUsd` is `null` when no run of the period has a cost, and `costKnown` is `false` when a run could not be priced.
 
 ## Layout
 
