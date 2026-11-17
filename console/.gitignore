@@ -8,3 +8,5 @@ coverage/
 .env.*.local
 .env.worker
 .DS_Store
+# The route-by-width audit: screenshots and the saved sign-in (scripts/ui-screens.mjs)
+.ui-screens/

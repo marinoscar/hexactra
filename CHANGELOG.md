@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Responsive pass** (#431).
+  - Phone navigation: the bottom bar is Home, Inbox, Tasks, Runs. Fleet, Settings and Administration are in the user menu. Inbox shows the number of pending questions on the bar, the rail and the tab title.
+  - Fleet: profile actions are icon buttons, or one menu on a phone. The enrollment dialog is full screen on a phone, with a Copy button that confirms.
+  - Desktop viewer: fills the window without page scroll, with Fit and Actual size, a Keyboard button, Full screen where the browser has it and a rotate hint.
+  - Run page: two panes on wide screens while the run is live; one column on a phone with Cancel, Watch and Take over in a bar above the navigation.
+  - `npm run ui:screens` checks every route at five widths in light and dark for horizontal scroll. The README has a "Responsive rules" section.
 - **Schedule editor** (#425).
   - A schedule is built from choices: every N minutes, every N hours, daily at one or more times, weekly on chosen days, monthly on chosen days, or Advanced for a cron expression. The stored value is still a 5-field cron expression.
   - The editor shows the schedule as a sentence and its next runs before saving.
