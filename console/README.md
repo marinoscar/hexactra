@@ -54,7 +54,7 @@ An **agent policy** says which models a run may use and how much it may spend. I
 - **Stall detection:** failures in a row, a repeated action, actions without progress, and what to do (nudge then escalate, escalate, ask a person, fail).
 - **Context:** screenshots kept, prune batch, model calls per chunk and observation size.
 
-Enforcement arrives in steps: today a run honours the policy's **action** and **active-minute** limits (`null` is no limit); a pin on the start tier picks the model; the tier ladder, the other budgets, stall detection and the context settings are stored, validated and snapshotted already, and enforced by the stories that follow (epic #398).
+Enforcement arrives in steps: today a run honours the policy's **action** and **active-minute** limits (`null` is no limit); the **start tier's model, reasoning effort and output cap** come from the model tiers (below); the tier ladder (escalation), the other budgets, stall detection and the context settings are stored, validated and snapshotted already, and enforced by the stories that follow (epic #398).
 
 **Built-in policies** are code (`builtin:economy`, `builtin:balanced`, `builtin:thorough`, `builtin:unlimited`): read-only, never pinning a model. Duplicate one to edit a copy.
 
@@ -82,6 +82,35 @@ A reference to a deleted policy (or someone else's) falls through to the next le
 **The API** (`/api/agent-policies`, permissions `agent_policies:read` / `:write`, granted like `tasks:*`): list (built-ins and your own, each with `isDefault`, `usage` and `hasNoHardStop`), create, read, edit (`If-Match: <version>`, `412` on a stale version; built-ins answer `403`), delete (`409 POLICY_IN_USE` listing the tasks and schedules, or `?reassignTo=<id>`; `409 POLICY_IS_DEFAULT`), duplicate. Tasks and schedules take `policyId`; `null` follows the next level.
 
 **The earlier task fields.** `maxSteps`, `maxMinutes` and `model` on a task still work for one release and are marked deprecated. Sending one (with no `policyId`) saves a derived personal policy named `Task: <task name>`, built from Balanced (`maxActions` = `maxSteps`, `maxActiveMinutes` = `maxMinutes`; a model becomes the `standard` pin and caps `maxTier` at `standard`) and answers with a `Deprecation: true` header. The `agent_policies` migration converted existing tasks the same way. Use `policyId` instead.
+
+### Model tiers
+
+Models are chosen by **tier**, not by name. There are three fixed tiers: **Fast** (cheap and quick), **Standard** (the everyday one) and **Frontier** (the strongest, for a run that is stuck). A tier is a model, a reasoning effort (`none`, `low`, `medium`, `high`; blank is the provider's default), a cap on output tokens and an optional fallback model. A policy only says which tier a run starts on and how high it may climb.
+
+**Where tiers are defined**, once, in two layers (the spec is `console/apps/api/src/policies/model-tiers.schema.ts`):
+
+- the **deployment default**, the `browserAgentTiers` system setting, edited by an administrator (`PATCH /api/system-settings`, `system_settings:write`);
+- **your own override**, `tiers` in your `browserAgent` user setting (`PATCH /api/user-settings`), per tier and per field. A field you leave out uses the deployment's.
+
+**Which model a tier uses**, most specific first:
+
+1. the policy's **pin** for that tier;
+2. your tier;
+3. the deployment's tier;
+4. **fill-down**: a tier with no model borrows the nearest tier that has one (Fast and Frontier borrow Standard first; Standard borrows Frontier, then Fast);
+5. your default model in your AI settings (`ai.defaultModel`).
+
+If none gives a model the run fails at once, before a browser is allocated, with `No model selected`, naming the Model tiers page. The effort, output cap and fallback are the tier's own (your tier, then the deployment's, else unset): they are never borrowed, so Fast keeps the provider's default effort even when it borrows Standard's model. `none` asks the provider for the least reasoning it offers; an effort is not sent to a model that cannot reason. The per-model output caps an admin set in the AI settings still clamp the tier's cap.
+
+**Same model, different effort.** Standard and Frontier may name the same model with a lower and a higher effort (for example Standard = model X at `low`, Frontier = model X at `high`). Escalating then changes only how hard the model thinks, so the provider's prompt cache stays warm, which is cheaper and faster than switching models.
+
+**Checked at the start of a run.** Every resolved model must be one you can call right now (enabled by the administrator, on an enabled provider, with a key) and must support tool calls; otherwise the run fails with a message naming the tier. A model **without image input** is allowed: the run starts with screenshots off (it works from `observe_elements` and `read_text`) instead of finding out from a refused call.
+
+**Fixed for the run.** The resolved tiers (model, provider, effort, cap, fallback and what each can do) are written to the run's policy snapshot (`resolvedTiers`) when it starts. Every model call reads them from there, so editing the tiers while a run is in flight changes nothing for it; the next run picks the change up.
+
+**Reading them.** `GET /api/agent-policies/model-tiers/effective` (`agent_policies:read`; `?policyId=` resolves for another policy) returns the tiers a new run of your default policy would use, with where each value came from (`pin`, `user`, `deployment`, `fill_down`, `ai_default`) and `vision` / `tools` flags.
+
+**Under the hood.** The console binds the platform's `AI_TARGET_RESOLVER` (`console/apps/api/src/platform/ai/browser-agent-target.resolver.ts`). The goal runner always names the tier's provider and model (the `browser_agent` feature); every other feature (`notes-summary`) resolves exactly as the platform does by default.
 
 ### Export and import
 

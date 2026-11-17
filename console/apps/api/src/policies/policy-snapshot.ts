@@ -1,6 +1,7 @@
 import type { AgentPolicySpec, Tier } from './agent-policy.schema';
 import { agentPolicySpecSchema } from './agent-policy.schema';
 import { builtinPolicy } from './builtin-policies';
+import type { ResolvedTiers } from './model-tiers.schema';
 
 /** Why a policy applied to a run (`runs.policy_source`). */
 export const POLICY_SOURCES = ['run', 'schedule', 'task', 'user_default', 'system_default'] as const;
@@ -24,6 +25,12 @@ export interface RunPolicySnapshot {
   spec: AgentPolicySpec;
   /** The resolved tier to model map; null until the tier resolver fills it (E31.5). */
   tiers: Partial<Record<Tier, { provider: string | null; model: string | null }>> | null;
+  /**
+   * The three tiers as resolved at the start of the run (#403): model, provider, effort, output cap,
+   * fallback and capability flags. Every model call reads its model from here, never from the
+   * settings, so editing the tiers mid-run never changes a live run. Absent on a run snapshotted before #403.
+   */
+  resolvedTiers?: ResolvedTiers | null;
   /** ISO time the snapshot was taken. */
   takenAt: string;
 }
