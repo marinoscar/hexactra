@@ -1,5 +1,5 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
-import { AiService, defineTool, type AiDefinedTool, type AiToolLoopResult } from '@marinoscar/platform-api/ai';
+import { AiError, AiService, defineTool, type AiDefinedTool, type AiToolLoopResult } from '@marinoscar/platform-api/ai';
 import { Prisma } from '@prisma/client';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { z } from 'zod';
@@ -9,7 +9,30 @@ import { chooseHost } from './host-choice';
 import { balancedSpec, builtinPolicy, SYSTEM_DEFAULT_POLICY_REF } from '../policies/builtin-policies';
 import { PolicyModelCheck } from '../policies/policy-model-check';
 import { ModelTiersService } from '../policies/model-tiers.service';
-import { tierHasVision, tierProblem, tierRequest } from './tier-request';
+import { fallbackRequest, sameTierRequest, tierHasVision, tierProblem, tierRequest, type TierRequest } from './tier-request';
+import { tierRank, TIERS, type Tier } from '../policies/agent-policy.schema';
+import {
+  clearStallEvidence,
+  DE_ESCALATE_AFTER,
+  decideStall,
+  digest,
+  lastActions,
+  MAX_IDLE_CHUNKS,
+  MAX_STALL_HANDOFFS,
+  newStallState,
+  nudgeText,
+  observeAction,
+  observePage,
+  readStallState,
+  resetStall,
+  stallHandoffPrompt,
+  stallWrapUpInstruction,
+  type ActionObservation,
+  type PageState,
+  type StallResponse,
+  type StallSignal,
+  type StallState,
+} from './stall';
 import { PolicyResolver } from '../policies/policy.resolver';
 import { readSnapshot, type RunPolicySnapshot } from '../policies/policy-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
@@ -41,15 +64,17 @@ import {
 import { actionTarget, runActivity, type ActivityTarget, type RunActivityPhase } from './activity';
 import { ACTION_TIMEOUT_MS, FabricSession, handoffOutcome, type CreatedHandoff } from './fabric-session';
 import { domainAllowed, looksRisky } from './policy';
-import { maxElementsFor, PLATFORM_MAX_CALLS_PER_CHUNK, ScreenshotWindow } from './context-settings';
+import { maxElementsFor, PLATFORM_MAX_CALLS_PER_CHUNK, ScreenshotWindow, shotHash } from './context-settings';
 import { captureScreen, markCenter, roundInput, type Screen, type ScreenMark, type ScreenView } from './vision';
 
 /** Lines of the step log handed back to the model each chunk. */
 const LOG_LINES = 60;
 /** Output cap of the wrap-up call (#404): a summary, not a continuation. */
 const WRAP_UP_MAX_OUTPUT_TOKENS = 1_500;
-/** Rounds in a row without a single recorded step before the run is stopped as stalled. */
-const MAX_IDLE_CHUNKS = 3;
+/** AI error codes that send a chunk to the tier's fallback model (#405). */
+const FALLBACK_CODES: ReadonlySet<string> = new Set(['AI_PROVIDER_UNAVAILABLE', 'AI_RATE_LIMITED', 'AI_MODEL_NOT_REACHABLE']);
+/** What a tier is called in the text a person reads. */
+const TIER_LABEL: Record<Tier, string> = { fast: 'Fast', standard: 'Standard', frontier: 'Frontier' };
 
 /** What the run keeps between chunks and across a handoff (`runs.transcript`). Never secrets. */
 export interface RunMemory {
@@ -69,6 +94,24 @@ export interface RunMemory {
   warned?: BudgetKey[];
   /** Warning lines the next round's input carries (#404). */
   pendingWarnings?: string[];
+  /** The tier the run is on (#405); absent until the first advance. */
+  tier?: Tier;
+  /** Tier escalations so far (#405). */
+  escalations?: number;
+  /** The stall detector's state (#405): digests and normalised selectors only, never typed text or secrets. */
+  stall?: StallState;
+  /** Stalls since the run last escalated (or started): the first is nudged. */
+  stallsHere?: number;
+  /** Times a stall asked a person. */
+  stallHandoffs?: number;
+  /** Successful, progressing actions in a row (for de-escalation). */
+  progressStreak?: number;
+  /** The nudge the next round's input carries. */
+  pendingNudge?: string;
+  /** Why the run is on a stronger tier, while it is (the activity shows it). */
+  tierNote?: string | null;
+  /** `visionOff` was set because the tier's model has no vision (not because a call refused images). */
+  visionOffByTier?: boolean;
 }
 
 /** `continue`: the job is near its runtime limit; the handler queues a new job and the run stays `running`. */
@@ -76,7 +119,7 @@ export type RunOutcome = 'succeeded' | 'failed' | 'cancelled' | 'waiting_human' 
 
 /** Ends a chunk early: the loop is stopped from `onStep`. */
 class StopLoop extends Error {
-  constructor(readonly reason: 'finish' | 'pause' | 'cancel' | 'budget' | 'look' | 'hop' | 'warn') {
+  constructor(readonly reason: 'finish' | 'pause' | 'cancel' | 'budget' | 'look' | 'hop' | 'warn' | 'escalate' | 'stall') {
     super(reason);
   }
 }
@@ -306,8 +349,12 @@ export class GoalRunnerService {
 
     // The policy snapshot, written once at the first advance (resolved apart from the run's own state).
     const snapshot = await this.policySnapshot(db, run, memory);
-    // The tier the run is on. #405 moves it on a stall; until then it is the start tier.
-    const tier = snapshot.spec.models.startTier;
+    // The tier the run is on: the start tier, moved up on a stall and back down after progress (#405). Kept in the memory, so it survives chunks, jobs and handoffs.
+    const startTier = snapshot.spec.models.startTier;
+    let tier: Tier = memory.tier ?? startTier;
+    memory.tier = tier;
+    const stall = (memory.stall = readStallState(memory.stall));
+    if (run.currentTier !== tier) await db.run.updateMany({ where: { id: run.id }, data: { currentTier: tier } });
     // A tier with no usable model fails the run now, before a browser is allocated (#403).
     const tierError = this.modelTiers ? tierProblem(snapshot, tier) : null;
     if (tierError) {
@@ -317,6 +364,7 @@ export class GoalRunnerService {
     // A model without image input starts the run without screenshots, instead of finding out from a refused call.
     if (!memory.visionOff && tierHasVision(snapshot, tier) === false) {
       memory.visionOff = true;
+      memory.visionOffByTier = true;
       memory.log.push('(Screenshots are off: the model of this tier does not accept images. Use observe_elements and read_text.)');
     }
 
@@ -349,6 +397,10 @@ export class GoalRunnerService {
       } else {
         memory.log.push(`The person did not help (handoff ${h.status}${outcome === 'cancelled' ? ', declined' : ''}). Do not retry the same request; finish if you cannot continue.`);
       }
+      // A person helped (or did not): every stall counter starts over (#405).
+      resetStall(stall);
+      memory.stallsHere = 0;
+      memory.progressStreak = 0;
       current = await this.tasks.transition(userId, run.id, 'running', { handoffId: null, transcript: memory as never, activity: runActivity('starting') as never });
     } else if (run.status === 'running') {
       // A continuation of this run in a new job (the last one neared its runtime limit): no status change, so its active time stays continuous.
@@ -399,8 +451,13 @@ export class GoalRunnerService {
       allowedDomains: run.task?.allowedDomains ?? [],
       confirmRisky: run.task?.confirmRiskyActions ?? false,
     };
+    // Routing steps (#405) take a `seq` but are not actions: the sequence runs ahead of `stepCount` by their number.
+    const lastSeq = await this.prisma.runStep.aggregate({ where: { runId: run.id }, _max: { seq: true } });
     const state = {
       stepCount: run.stepCount,
+      seq: Math.max(run.stepCount, lastSeq._max.seq ?? 0),
+      /** The stall that ended the chunk (#405). */
+      stall: null as StallSignal | null,
       stop: null as StopLoop['reason'] | null,
       /** Which budget ended the run (set with `stop = 'budget'`). */
       budgetKey: null as BudgetKey | null,
@@ -418,7 +475,7 @@ export class GoalRunnerService {
     /** What the run page shows as happening now (#379). Best effort: never fails the run. */
     const setActivity = async (phase: RunActivityPhase, opts: Parameters<typeof runActivity>[1] = {}) => {
       try {
-        await db.run.updateMany({ where: { id: run.id, status: 'running' }, data: { activity: runActivity(phase, opts) as never } });
+        await db.run.updateMany({ where: { id: run.id, status: 'running' }, data: { activity: runActivity(phase, { ...opts, ...(memory.tierNote ? { note: memory.tierNote } : {}) }) as never } });
       } catch (e) {
         this.log.debug(`run ${run.id}: could not record its activity: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -448,14 +505,30 @@ export class GoalRunnerService {
       return true;
     };
 
-    const record = async (kind: string, action: string | null, args: Record<string, unknown> | null, ok: boolean, summary: string, started: number, reasoning?: string) => {
+    /** What a recorded action tells the stall detector beyond its arguments (#405). */
+    type StallExtra = Omit<ActionObservation, 'type' | 'args' | 'ok'>;
+    const stallNow = () => snapshot.spec.stall;
+    /** Feed the detector one action; a stall ends the chunk (an escalation is its own stop reason). */
+    const feedStall = (type: string, args: Record<string, unknown>, ok: boolean, extra: StallExtra) => {
+      const verdict = observeAction(stall, stallNow(), { type, args, ok, ...extra });
+      if (extra.secret) return;
+      memory.progressStreak = verdict.progressing ? (memory.progressStreak ?? 0) + 1 : 0;
+      if (verdict.signal && !state.stop && !state.stall) {
+        state.stall = verdict.signal;
+        state.stop = stallResponse() === 'escalate' ? 'escalate' : 'stall';
+      }
+    };
+
+    const record = async (kind: string, action: string | null, args: Record<string, unknown> | null, ok: boolean, summary: string, started: number, reasoning?: string, extra?: StallExtra) => {
       state.stepCount += 1;
+      state.seq += 1;
       tracker.add({ actions: 1 });
       this.tasks.metrics.step(kind, ok);
+      if (action && args && (kind === 'action' || action === 'look')) feedStall(action, args, ok, extra ?? {});
       await this.prisma.runStep.create({
         data: {
           runId: run.id,
-          seq: state.stepCount,
+          seq: state.seq,
           kind,
           action,
           args: args ? (redactActionArgs(action ?? '', args) as never) : undefined,
@@ -504,37 +577,78 @@ export class GoalRunnerService {
       const result = op.result ?? {};
       let summary = 'done';
       let forModel = 'ok';
+      // What the stall detector learns from the result (#405): where the page is, and whether new content came back.
+      let extra: StallExtra = {};
       if (type === 'navigate') {
+        extra = { url: String(result.url ?? ''), title: typeof result.title === 'string' ? result.title : null };
         // The model needs the real URL; the stored step gets it without its query.
         forModel = `at ${String(result.url ?? '')} — ${String(result.title ?? '')}`;
         summary = `at ${redactUrl(String(result.url ?? ''))} — ${trim(String(result.title ?? ''), 200)}`;
       }
       if (type === 'text') {
         const text = String(result.text ?? '');
+        extra = { contentHash: digest(text) };
         summary = `read ${text.length} characters`;
         forModel = trim(text, ctx.observationChars);
       }
       if (type === 'elements') {
         const els = (result.elements as Array<Record<string, unknown>> | undefined) ?? [];
         state.labels.clear();
+        extra = { contentHash: digest(JSON.stringify(els.map((el) => [el.selector, el.text, el.name]))) };
         for (const el of els) state.labels.set(String(el.selector), `${String(el.text ?? '')} ${String(el.aria_label ?? el.name ?? '')}`);
         summary = `${els.length} interactive elements`;
         forModel = trim(JSON.stringify(els.map((el) => ({ selector: el.selector, tag: el.tag, role: el.role, text: el.text, type: el.type, name: el.name }))), ctx.observationChars);
       }
+      if (type === 'scroll') extra = { resultKey: `y${String(result.y ?? '')}` };
       if (type === 'scroll') summary = forModel = `scrolled to ${String(result.y ?? '?')}`;
       if (type === 'evaluate') {
         const value = JSON.stringify(result.value ?? null) ?? 'undefined';
+        extra = { contentHash: digest(value) };
         summary = `returned ${String(result.type ?? typeof result.value)} (${value.length} characters)`;
         forModel = trim(`${String(result.type ?? '')}: ${value}${result.description ? ` (${String(result.description)})` : ''}`, ctx.observationChars);
       }
       if (type === 'tabs') {
         const tabs = (result.tabs as Record<string, unknown>[] | undefined) ?? [];
+        const active = tabs.find((t) => t.active === true);
+        if (active && typeof active.url === 'string') extra = { url: active.url, title: typeof active.title === 'string' ? active.title : null };
         summary = `${tabs.length} tabs`;
         forModel = trim(JSON.stringify(tabs.map((t) => ({ id: t.id, title: t.title, url: t.url, active: t.active }))), ctx.observationChars);
       }
       if (type === 'new_tab') summary = forModel = `opened tab ${String(result.tab_id ?? '?')}`;
-      await record('action', type, action, true, summary, started, reason);
+      await record('action', type, action, true, summary, started, reason, extra);
       return forModel;
+    };
+
+    /**
+     * Open a handoff for a person and pause the run on it: the one path `request_human` and a stall that asks
+     * for help share. Every stall counter starts over (#405). False when no person could be asked.
+     */
+    const askPerson = async (spec: QuestionSpec, started: number): Promise<boolean> => {
+      try {
+        const created = await session.openHandoff(sessionId!, {
+          kind: spec.kind,
+          prompt: spec.prompt,
+          input: spec.input,
+          choices: spec.options ?? [],
+          constraints: spec.constraints,
+          confirmLabel: spec.confirmLabel,
+          denyLabel: spec.denyLabel,
+          risk: spec.risk,
+        });
+        state.handoffId = created.id;
+        state.handoffExpiresAt = created.expiresAt;
+        await this.mirror(userId, run.id, sessionId!, created, spec);
+      } catch (e) {
+        await record('handoff', null, null, false, `could not ask a person: ${e instanceof Error ? e.message : String(e)}`, started);
+        return false;
+      }
+      await record('handoff', null, { kind: spec.kind, input: spec.input }, true, `asked a person (${spec.kind}): ${trim(spec.prompt, 300)}`, started);
+      state.handoffAsk = { prompt: spec.prompt, kind: spec.kind, input: spec.input };
+      state.stop = 'pause';
+      resetStall(stall);
+      memory.stallsHere = 0;
+      memory.progressStreak = 0;
+      return true;
     };
 
     const tools: AiDefinedTool[] = [
@@ -789,27 +903,7 @@ export class GoalRunnerService {
           const parsed = questionSpecSchema.safeParse(requestHumanSpec(args));
           if (!parsed.success) return `Invalid request_human: ${parsed.error.issues.map((i) => `${i.path.join('.') || 'question'}: ${i.message}`).join('; ')}. Fix it and call request_human again.`;
           const spec = parsed.data;
-          try {
-            const created = await session.openHandoff(sessionId!, {
-              kind: spec.kind,
-              prompt: spec.prompt,
-              input: spec.input,
-              choices: spec.options ?? [],
-              constraints: spec.constraints,
-              confirmLabel: spec.confirmLabel,
-              denyLabel: spec.denyLabel,
-              risk: spec.risk,
-            });
-            state.handoffId = created.id;
-            state.handoffExpiresAt = created.expiresAt;
-            await this.mirror(userId, run.id, sessionId!, created, spec);
-          } catch (e) {
-            await record('handoff', null, null, false, `could not ask a person: ${e instanceof Error ? e.message : String(e)}`, started);
-            return 'Could not reach a person right now.';
-          }
-          await record('handoff', null, { kind: spec.kind, input: spec.input }, true, `asked a person (${spec.kind}): ${trim(spec.prompt, 300)}`, started);
-          state.handoffAsk = { prompt: spec.prompt, kind: spec.kind, input: spec.input };
-          state.stop = 'pause';
+          if (!(await askPerson(spec, started))) return 'Could not reach a person right now.';
           return 'Waiting for the person.';
         },
       }),
@@ -828,13 +922,13 @@ export class GoalRunnerService {
             // The fabric types the value itself: the console never sees it.
             op = await session.typeSecret(sessionId!, { handoffId, selector, clear: true, submit });
           } catch {
-            await record('action', 'type', { selector, secret: '' }, false, 'the secret was already used or expired', started);
+            await record('action', 'type', { selector, secret: '' }, false, 'the secret was already used or expired', started, undefined, { secret: true });
             return 'The secret is no longer available; ask the person again if needed.';
           } finally {
             await setActivity('thinking');
           }
           const ok = op.state === 'succeeded';
-          await record('action', 'type', { selector, submit }, ok, ok ? 'typed the secret' : (op.error ?? op.state), started);
+          await record('action', 'type', { selector, submit }, ok, ok ? 'typed the secret' : (op.error ?? op.state), started, undefined, { secret: true });
           return ok ? 'Typed the secret.' : `Failed: ${op.error ?? op.state}`;
         },
       }),
@@ -863,19 +957,121 @@ export class GoalRunnerService {
       tracker.add({ modelCalls: 1, inputTokens: step.response.usage?.inputTokens, outputTokens: step.response.usage?.outputTokens, costUsd: usd ?? 0, costKnown: usd !== null });
     };
 
+    /** The tier a stall would escalate to, or null: none left, the limit is reached, or the next tier is no different. */
+    const nextTier = (): Tier | null => {
+      if ((memory.escalations ?? 0) >= snapshot.spec.stall.maxEscalations) return null;
+      for (let r = tierRank(tier) + 1; r <= tierRank(snapshot.spec.models.maxTier); r += 1) {
+        const t = TIERS[r]!;
+        if (this.modelTiers && tierProblem(snapshot, t)) continue;
+        if (sameTierRequest(snapshot, tier, t)) continue;
+        return t;
+      }
+      return null;
+    };
+    /** What the policy answers to a stall now (no side effects). */
+    const stallResponse = (): StallResponse => {
+      const mode = snapshot.spec.stall.onStall;
+      // An unattended (scheduled) run does not wait for a person unless its policy says to.
+      const canAsk = (memory.stallHandoffs ?? 0) < MAX_STALL_HANDOFFS && (mode === 'ask_human' || run.trigger !== 'schedule');
+      return decideStall({ mode, stallsHere: memory.stallsHere ?? 0, canEscalate: nextTier() !== null, canAsk });
+    };
+
+    /** A routing step (#405): a tier change or a provider fallback. It is not an action: it takes a `seq`, never `stepCount` or the actions budget. */
+    const recordRouting = async (from: string, to: string, reason: string, extra: Record<string, unknown> = {}) => {
+      state.seq += 1;
+      await this.prisma.runStep.create({
+        data: { runId: run.id, seq: state.seq, kind: 'routing', action: null, args: { from, to, reason, ...extra } as never, ok: true, summary: trim(`${from} → ${to}: ${reason}`, 1_900), durationMs: 0 },
+      });
+    };
+
+    /** Move the run to another tier, at a chunk boundary. */
+    const switchTier = async (to: Tier, kind: 'escalate' | 'deescalate', reason: string) => {
+      const from = tier;
+      tier = to;
+      memory.tier = to;
+      if (kind === 'escalate') {
+        memory.escalations = (memory.escalations ?? 0) + 1;
+        memory.tierNote = `Escalated to ${TIER_LABEL[to]} (stuck: ${reason})`;
+        memory.log.push(`Escalated to the ${TIER_LABEL[to]} tier (stuck: ${reason}).`);
+      } else {
+        memory.tierNote = null;
+        memory.log.push(`Back on the ${TIER_LABEL[to]} tier: the run is making progress again.`);
+      }
+      memory.stallsHere = 0;
+      memory.progressStreak = 0;
+      clearStallEvidence(stall);
+      // The new tier's model may not take images (and the old one may not have): follow it.
+      const vision = tierHasVision(snapshot, to);
+      if (vision === false && !memory.visionOff) {
+        memory.visionOff = true;
+        memory.visionOffByTier = true;
+        memory.log.push('(Screenshots are off: the model of this tier does not accept images. Use observe_elements and read_text.)');
+      } else if (vision !== false && memory.visionOff && memory.visionOffByTier) {
+        memory.visionOff = false;
+        memory.visionOffByTier = false;
+      }
+      await recordRouting(from, to, reason, { kind });
+      await db.run.updateMany({ where: { id: run.id }, data: { currentTier: to, escalations: memory.escalations ?? 0 } });
+      this.log.log(`run ${run.id}: ${kind === 'escalate' ? 'escalated' : 'de-escalated'} ${from} -> ${to} (${reason})`);
+    };
+
+    /** The run just asked a person, or is about to wait for one: move it to `waiting_human`. */
+    const pauseForPerson = async (): Promise<RunOutcome> => {
+      await this.tasks.transition(userId, run.id, 'waiting_human', { handoffId: state.handoffId, handoffExpiresAt: state.handoffExpiresAt });
+      await this.notifier?.needsYou(userId, { ...run, handoffId: state.handoffId ?? null }, state.handoffAsk?.prompt ?? 'The agent needs you.', state.handoffAsk?.kind ?? 'other', state.handoffAsk?.input ?? 'none', state.handoffExpiresAt);
+      return 'waiting_human';
+    };
+
+    /**
+     * Answer a stall as the policy says (#405), at a chunk boundary. Null: the run goes on (nudged, or
+     * escalated); otherwise the run's outcome (waiting for a person, or ended as `stalled`).
+     */
+    const respondToStall = async (signal: StallSignal): Promise<RunOutcome | null> => {
+      const response = stallResponse();
+      memory.log.push(`Stalled: ${signal.reason}.`);
+      memory.progressStreak = 0;
+      if (response === 'nudge') {
+        memory.pendingNudge = nudgeText(signal.reason, lastActions(stall));
+        memory.stallsHere = (memory.stallsHere ?? 0) + 1;
+        clearStallEvidence(stall);
+        return null;
+      }
+      if (response === 'escalate') {
+        await switchTier(nextTier()!, 'escalate', signal.reason);
+        return null;
+      }
+      if (response === 'ask') {
+        memory.stallHandoffs = (memory.stallHandoffs ?? 0) + 1;
+        const spec = questionSpecSchema.parse({ kind: 'other', input: 'takeover', prompt: stallHandoffPrompt(signal.reason, lastActions(stall)) });
+        if (await askPerson(spec, Date.now())) {
+          await this.saveMemory(userId, run.id, memory, used.drain());
+          return pauseForPerson();
+        }
+      }
+      return wrapUp(signal);
+    };
+
+    /** After enough progressing actions on an escalated tier, the run returns to its start tier (#405). */
+    const maybeDeEscalate = async () => {
+      if (tier === startTier || (memory.progressStreak ?? 0) < DE_ESCALATE_AFTER) return;
+      await switchTier(startTier, 'deescalate', `${memory.progressStreak} progressing actions in a row`);
+    };
+
     /**
      * A budget is used up: one last call with only `finish` (exempt from the budget, counted in the
      * totals) so the run still returns a partial result. Without a `finish` the run ends on the budget's message.
      * `finish(success: true)` is a success; anything else is a failure with the typed stop reason.
      */
-    const wrapUp = async (key: BudgetKey): Promise<RunOutcome> => {
-      const stopReason: RunStopReason = BUDGET_STOP_REASON[key];
-      const error = BUDGET_ERROR[key];
+    const wrapUp = async (cause: BudgetKey | StallSignal): Promise<RunOutcome> => {
+      // A used-up budget, or a stall nothing could answer (#405): both end the run with a typed reason and a summary.
+      const stopReason: RunStopReason = typeof cause === 'string' ? BUDGET_STOP_REASON[cause] : 'stalled';
+      const error = typeof cause === 'string' ? BUDGET_ERROR[cause] : `The agent stalled: ${cause.reason}`;
+      const instruction = typeof cause === 'string' ? wrapUpInstruction(cause) : stallWrapUpInstruction(cause.reason);
       memory.log.push(`${error}: asking the model to wrap up.`);
       state.stop = null;
       state.finished = null;
       const finishTool = tools.filter((t) => t.tool.name === 'finish');
-      const input = [`Goal: ${goal}`, memory.log.length ? `Progress so far (latest last):\n${memory.log.slice(-LOG_LINES).join('\n')}` : '', wrapUpInstruction(key)].filter(Boolean).join('\n\n');
+      const input = [`Goal: ${goal}`, memory.log.length ? `Progress so far (latest last):\n${memory.log.slice(-LOG_LINES).join('\n')}` : '', instruction].filter(Boolean).join('\n\n');
       await setActivity('thinking');
       try {
         await provider().runTools({
@@ -908,26 +1104,18 @@ export class GoalRunnerService {
       if (spent) return wrapUp(spent);
       noteWarnings();
       if (hopDue()) return 'continue';
+      // A chunk boundary: the only place the model changes, so provider caching holds within a chunk (#405).
+      await maybeDeEscalate();
       memory.chunks += 1;
       state.stop = null;
+      state.stall = null;
       const stepsBefore = state.stepCount;
       const warnings = memory.pendingWarnings ?? [];
       memory.pendingWarnings = [];
-      const input = [
-        `Goal: ${goal}`,
-        `Allowed sites: ${policy.allowedDomains.join(', ') || 'any'}.`,
-        memory.log.length ? `Progress so far (latest last):\n${memory.log.slice(-LOG_LINES).join('\n')}` : 'Nothing has been done yet. Start by navigating or observing the page.',
-        memory.confirmationGranted ? 'The person approved the next irreversible step.' : '',
-        ...warnings,
-        'Continue toward the goal.',
-      ]
-        .filter(Boolean)
-        .join('\n\n');
-      // Volatile status goes last, after the screenshots, so the prefix stays cacheable (#406).
-      const status = `Steps used: ${state.stepCount}${effective.limits.actions !== null ? ` of ${effective.limits.actions}` : ' (no limit)'}.`;
       // What the model sees this round: the screen, as a person would (#366).
       let view: ScreenView | null = null;
       let shown: ScreenView[] = [];
+      let page: PageState | null = null;
       if (!memory.visionOff && shotWindow.enabled) {
         await setActivity('looking');
         const screen: Screen = memory.look ?? 'page';
@@ -938,26 +1126,55 @@ export class GoalRunnerService {
           state.view = view;
           shown = shotWindow.push(view);
           memory.shots = shotWindow.hashes;
+          // The page as the stall detector sees it: a digest of what is on it, never the image (#405).
+          if (screen === 'page') page = { url: view.url, title: view.title, view: view.marks.length ? digest(JSON.stringify(view.marks.map((m) => [m.selector, m.text, m.x, m.y, m.w, m.h]))) : shotHash(view.dataUrl) };
         } catch (e) {
           this.log.debug(`run ${run.id}: no ${screen} screenshot this round: ${e instanceof Error ? e.message : String(e)}`);
           memory.log.push(`(No ${screen} screenshot this round: ${trim(e instanceof Error ? e.message : String(e), 200)})`);
         }
       }
+      // No visible progress over enough actions is judged here, where the new screenshot shows what changed.
+      const boundaryStall = observePage(stall, stallNow(), page);
+      if (boundaryStall) {
+        const out = await respondToStall(boundaryStall);
+        if (out) return out;
+        // The new tier's model may not take images.
+        if (memory.visionOff) {
+          view = null;
+          shown = [];
+        }
+      }
+      const nudge = memory.pendingNudge;
+      memory.pendingNudge = undefined;
+      const buildInput = () =>
+        [
+          `Goal: ${goal}`,
+          `Allowed sites: ${policy.allowedDomains.join(', ') || 'any'}.`,
+          memory.log.length ? `Progress so far (latest last):\n${memory.log.slice(-LOG_LINES).join('\n')}` : 'Nothing has been done yet. Start by navigating or observing the page.',
+          memory.confirmationGranted ? 'The person approved the next irreversible step.' : '',
+          ...warnings,
+          nudge ?? '',
+          'Continue toward the goal.',
+        ]
+          .filter(Boolean)
+          .join('\n\n');
+      // Volatile status goes last, after the screenshots, so the prefix stays cacheable (#406).
+      const status = `Steps used: ${state.stepCount}${effective.limits.actions !== null ? ` of ${effective.limits.actions}` : ' (no limit)'}.`;
       let result: AiToolLoopResult | null = null;
       await setActivity('thinking');
       const tierReq = tierRequest(snapshot, tier);
-      const call = (withImage: boolean) =>
+      const call = (withImage: boolean, req: TierRequest) =>
         provider().runTools({
           // The model, effort and output cap of the run's current tier, from the snapshot (#403).
-          ...(({ modelLabel: _label, ...req }) => req)(tierReq),
+          ...(({ modelLabel: _label, ...r }) => r)(req),
           instructions: INSTRUCTIONS,
-          input: roundInput(input, withImage && shown.length ? shown : null, status),
+          input: roundInput(buildInput(), withImage && shown.length ? shown : null, status),
           tools,
           maxSteps: Math.min(ctx.callsPerChunk, PLATFORM_MAX_CALLS_PER_CHUNK),
           onStep: (step) => {
             countCall(step);
             this.tasks.metrics.inputTokensPerCall(step.response.usage?.inputTokens ?? 0);
-            // A finish, a pause for a person or a look already ends the chunk; otherwise the budget decides.
+            // A finish, a pause for a person, a look or a stall already ends the chunk; otherwise the budget decides.
             if (!state.stop) {
               const key = budgetCheck();
               if (key) stopForBudget(key);
@@ -968,16 +1185,29 @@ export class GoalRunnerService {
             if (state.stop) throw new StopLoop(state.stop);
           },
         });
-      try {
+      const isFallbackError = (e: unknown): e is AiError => e instanceof AiError && FALLBACK_CODES.has(e.code);
+      const attempt = async (req: TierRequest): Promise<AiToolLoopResult> => {
         try {
-          result = await call(view !== null);
+          return await call(view !== null, req);
         } catch (e) {
-          // A provider or model without vision refuses the image: carry on without.
-          if (e instanceof StopLoop || view === null || state.stepCount > stepsBefore) throw e;
+          // A provider or model without vision refuses the image: carry on without. (An unavailable provider is another matter.)
+          if (e instanceof StopLoop || isFallbackError(e) || view === null || state.stepCount > stepsBefore) throw e;
           this.log.warn(`run ${run.id}: the model refused the screenshot, continuing without vision: ${e instanceof Error ? e.message : String(e)}`);
           memory.visionOff = true;
           memory.log.push('(Screenshots are off: this model does not accept images. Use observe_elements and read_text.)');
-          result = await call(false);
+          return call(false, req);
+        }
+      };
+      try {
+        try {
+          result = await attempt(tierReq);
+        } catch (e) {
+          // The provider is down, overloaded or rate-limiting: this chunk once more on the tier's fallback model, then back to the primary (#405).
+          const fallback = isFallbackError(e) && snapshot.spec.models.allowProviderFallback ? fallbackRequest(snapshot, tier) : null;
+          if (!fallback || !isFallbackError(e)) throw e;
+          memory.log.push(`(The ${TIER_LABEL[tier]} model could not be reached (${e.code}): this round runs on its fallback model.)`);
+          await recordRouting(tierReq.modelLabel ?? tier, fallback.modelLabel ?? 'fallback', e.code, { kind: 'fallback', tier });
+          result = await attempt(fallback);
         }
       } catch (e) {
         if (!(e instanceof StopLoop)) {
@@ -992,11 +1222,7 @@ export class GoalRunnerService {
         await this.finish(userId, run.id, sessionId, session, 'cancelled', { error: 'Cancelled by the user', stopReason: 'cancelled' });
         return 'cancelled';
       }
-      if (state.stop === 'pause' && state.handoffId) {
-        await this.tasks.transition(userId, run.id, 'waiting_human', { handoffId: state.handoffId, handoffExpiresAt: state.handoffExpiresAt });
-        await this.notifier?.needsYou(userId, { ...run, handoffId: state.handoffId ?? null }, state.handoffAsk?.prompt ?? 'The agent needs you.', state.handoffAsk?.kind ?? 'other', state.handoffAsk?.input ?? 'none', state.handoffExpiresAt);
-        return 'waiting_human';
-      }
+      if (state.stop === 'pause' && state.handoffId) return pauseForPerson();
       if (state.stop === 'finish' && state.finished) {
         const to = state.finished.success ? 'succeeded' : 'failed';
         await this.finish(userId, run.id, sessionId, session, to, state.finished.success ? { result: state.finished.result, stopReason: 'finished' } : { result: state.finished.result, error: 'The agent could not reach the goal', stopReason: 'finished' });
@@ -1009,11 +1235,21 @@ export class GoalRunnerService {
         await this.finish(userId, run.id, sessionId, session, 'succeeded', { result: trim(result.final.outputText || 'Done.', 7_900), stopReason: 'finished' });
         return 'succeeded';
       }
-      // Rounds that record nothing at all (a model that only talks) cannot go on for ever with no budget to end them.
-      idleChunks = state.stepCount === stepsBefore && !state.stop ? idleChunks + 1 : 0;
-      if (idleChunks >= MAX_IDLE_CHUNKS) {
-        await this.finish(userId, run.id, sessionId, session, 'failed', { error: `The agent made no progress in ${MAX_IDLE_CHUNKS} rounds in a row`, stopReason: 'stalled' });
-        return 'failed';
+      // A stall the detector found during the chunk, or rounds that record nothing at all (a model that only talks):
+      // the policy answers (nudge, escalate, ask a person or end the run), whatever the budget (#405).
+      let stalled: StallSignal | null = state.stall;
+      if (stalled) idleChunks = 0;
+      else {
+        idleChunks = state.stepCount === stepsBefore && !state.stop ? idleChunks + 1 : 0;
+        if (idleChunks >= MAX_IDLE_CHUNKS) {
+          stalled = { kind: 'idle', reason: `no action in ${MAX_IDLE_CHUNKS} rounds in a row` };
+          idleChunks = 0;
+        }
+      }
+      if (stalled) {
+        const out = await respondToStall(stalled);
+        if (out) return out;
+        await this.saveMemory(userId, run.id, memory, used.drain());
       }
       // steps_exhausted, or a budget warning: another chunk.
     }
