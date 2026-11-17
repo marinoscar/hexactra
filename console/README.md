@@ -16,9 +16,9 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 |---|---|---|---|---|
 | Fabric connection (URL and `hxs_` service token, stored encrypted; Doctor checks `fabric.*`) | Administration → Fabric connection | `GET/PUT/DELETE /api/fabric/connection`, `POST …/test` | `hexactra fabric show\|set URL --token-stdin\|test\|clear --yes` | `fabric_config:read` / `:write` |
 | Home: what needs you, what is running, what runs next, what just happened, the week and the machines, in one request ([Home](#home)) | `/` | `GET /api/home/summary` | none: the CLI and TUI list each part on their own | any signed-in user; each block needs its own (`runs:read`, `tasks:read`, `fleet:read`) |
-| Tasks: saved goals with a profile, an agent policy (budgets and models), optional allowed sites, opt-in confirm-before-purchase | `/tasks` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
+| Tasks: saved goals with a profile, an agent policy (budgets and models), optional allowed sites, opt-in confirm-before-purchase ([Create a task](#create-a-task)) | `/tasks`, `/tasks/new`, `/tasks/:id/edit` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
 | Agent policies: named, versioned bundles of model tiers, budgets (any of them unlimited), stall detection and context settings; four built-ins, a default per user, one per task, schedule or run ([Agent policies](#agent-policies)) | Settings → Browser agent → Agent policies; Administration → Browser agent | `/api/agent-policies` | `hexactra policies`; MCP `policies_*` and `policy_*` tools; SDK `hx.policies` | `agent_policies:read` / `:write` |
-| Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel; the list is paged, filtered and searched on the server, with counts per status ([docs/runs.md](docs/runs.md)) | `/runs`, `/runs/:id` | `/api/runs`, `GET /api/runs/counts`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` |
+| Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel; the list is paged, filtered and searched on the server, with counts per status; finished runs can be deleted, one, many or everything a filter matches ([docs/runs.md](docs/runs.md)) | `/runs`, `/runs/:id` | `/api/runs`, `GET /api/runs/counts`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel`, `DELETE /api/runs/:id`, `POST /api/runs/delete` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` / `runs:delete` |
 | Inbox: what agents wait for (CAPTCHA, code, sign-in, confirmation); answers resume the run | `/inbox` | `GET /api/inbox`, `POST /api/inbox/:runId/respond` | `hexactra inbox list\|answer RUN --done\|--value\|--choice\|--secret-stdin\|--decline`; TUI **Agent ▸ Inbox** | `runs:read` / `runs:write` |
 | Questions: an agent asks its user a typed question (text, choice, multi-choice, number, confirm, none, takeover; a secret only in a browser session) and waits for the typed answer; the person answers on any channel, the first answer wins ([docs/questions.md](docs/questions.md)) | `/inbox`, `/inbox/q/:id` | `/api/questions`, `POST /api/questions/:id/answer\|cancel\|answer-by-token` | `hexactra questions ask\|list\|show\|answer`; TUI **Agent ▸ Inbox** | `runs:read` / `runs:write` |
 | Live run view: steps over SSE, live screenshot, take over | `/runs/:id` | `GET /api/runs/:id/stream\|screenshot\|viewer` | `hexactra runs watch`; TUI **Agent ▸ Runs** | `runs:read` |
@@ -30,6 +30,13 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 | Alerts: a browser host offline (or the fabric unreachable), a schedule failing 3+ runs in a row, a user's runs over their token, cost or budget limits, a user's runs stalling, one expensive run ([Watching a run's spend](#watching-a-runs-spend)); incidents fire, notify the holders of `alerts:read` (and `alerts.alert.*` webhooks) and resolve on their own | Administration → Alerts | `/api/admin/alerts/…` (the platform slice) | — | `alerts:read` / `alerts:write` |
 
 Run it all on a VPS (console, fabric and an optional browser host in one stack): [docs/runbooks/vps-stack.md](docs/runbooks/vps-stack.md). Run the browsers on **nodes** at home, which keep a residential IP and connect outbound over HTTPS: [../docs/nodes.md](../docs/nodes.md).
+
+**Deleting runs** ([docs/runs.md](docs/runs.md#deleting-runs)):
+- `DELETE /api/runs/:id` deletes one run; `POST /api/runs/delete` deletes a list of ids (up to 500) or every finished run that matches a filter. All three need `runs:delete` (contributors and organization admins), which is separate from `runs:write`.
+- Deletion is permanent and covers the run, its steps, its questions and its stored screenshots.
+- Live runs are never deleted: a run that is queued, running or waiting for a person must be cancelled first.
+- A filter that matches more than 500 finished runs is deleted by a queue job (`browser.runs.delete`); the request answers `202` with the job id.
+- Deleting runs also removes their cost and stop-reason history from task spend and from alert counts. The AI usage report keeps its own records and is not affected.
 
 **The goal runner**:
 - It uses the AI slice: feature `browser_agent`, a model with `tools`. Configure a provider at Administration → AI.
@@ -256,7 +263,7 @@ Everything above is on the console's pages (`apps/web/src/pages/`, one client fo
 
 **Choose a policy for a task, a schedule or one run**
 
-1. In the task form (**Tasks**), pick **Policy**: *Default (name)*, a built-in, or one of yours. The line under it summarises the choice; **Manage policies** opens the list. The form sends `policyId` only.
+1. In the task form ([Create a task](#create-a-task)), pick **Policy**: *Default (name)*, a built-in, or one of yours. The line under it summarises the choice; **Manage policies** opens the list. The form sends `policyId` only.
 2. A task card shows `policy: <name>` and `model: <the model its start tier uses>`.
 3. When adding a schedule, **Policy override** runs that schedule under another policy (default: the task's).
 4. **Run with…** (the arrow next to **Run now**) starts one run under the policy you pick from the menu, without changing the task.
@@ -306,6 +313,48 @@ A new account sees a **Get started** card instead of the dashboard blocks until 
 The page reads the summary when it opens, when the window gets the focus, and every 10 seconds while the tab is visible (every 5 while an agent runs or waits for you). When a read fails, the last data stays on screen, dimmed, with when it was read and a Retry.
 
 **`GET /api/home/summary`** needs a sign-in and no permission of its own. A block is built only when the caller holds its permission and is `null` otherwise, never an empty list: `needsYou`, `liveRuns`, `recentRuns` and `week` need `runs:read`; `upcoming` needs `tasks:read`; `fleet` needs `fleet:read`; `counts.tasks` and `counts.runs` are `null` without theirs. Limits: 3 questions, 6 live runs (running first), 5 firings, 8 finished runs, 6 machines; `needsYou.count` and `liveRuns.count` are the real totals. The response never carries a question's answer, a secret, a transcript, a policy snapshot, an action's arguments or a viewer URL: a live run's `activity` is its phase, the action's name and the reason only. `budgetPercent` is the highest percent among the run's limited budgets, from the run's stored budget. The week is bucketed in the profile time zone (else the `X-Time-Zone` header, else UTC). The fleet comes from the fabric with a 1.5 second limit: a fabric that is slow or down answers `fleet.stale: true` with the last hosts read, and never fails the request. It costs six SQL statements whatever the account holds, and records `app.home.summary.duration`.
+## Create a task
+
+A task is created at `/tasks/new` and changed at `/tasks/:id/edit`. Both are one form with five sections, read top to bottom, and **Save** stores everything in one step. Both pages need `tasks:write`.
+
+1. **What should the agent do?** A name (up to 200 characters) and the goal (up to 4,000). Say what you want done and what you want back; **Tips** has three reminders.
+2. **Where it runs.**
+   - **Machine**: any available machine, or one you name. For a named machine, the switch decides whether another machine may take the run when that one is unavailable; a warning shows while the machine is offline or disabled.
+   - **Browser profile**: the sign-ins the agent uses. The list holds the chosen machine's profiles (or every profile in the fleet, with how many machines have it). A warning shows when the machine does not have the profile. Without `fleet:read` the profile is typed by name.
+3. **Model and budget** (with `agent_policies:read`). The task's [agent policy](#agent-policies): *Default (name)*, a built-in or one of yours. The line under it shows the model the policy starts on and its limits. The policy controls the models and every limit of a run (actions, cost, time); the form has no step, minute or model field.
+4. **Safety.** Both are off unless you turn them on.
+   - **Allowed sites**: the agent may only visit these sites. Type or paste a site, then Enter, a comma or a space; a pasted address keeps its hostname; `*.example.test` covers every subdomain. Empty allows any site.
+   - **Ask me before purchases and other irreversible steps**: the agent pauses and asks in your Inbox.
+5. **Schedule.** **Add a schedule** opens the [schedule editor](#schedules) in the form (up to 10 per task). Schedules are saved with the task: a new task and its schedules are created together, and on an existing task an added, changed or removed schedule takes effect only when you save. A removed schedule shows "will be removed when you save" with **Undo**.
+
+- **Save and run now** (with `runs:write`) saves, starts a run and opens it.
+- A value the server refuses is shown on its field, and the form scrolls to it.
+- Leaving the page with unsaved changes asks first.
+- `/tasks/new?goal=<text>` starts with that goal; `/tasks/new?from=<task id>` starts from a copy of that task, with its schedules paused.
+- On the edit page, **Danger zone** deletes the task (its schedules go with it; its runs are kept).
+
+## Schedules
+
+A task runs on a schedule you build in the schedule editor (in the [task form](#create-a-task), or Tasks → a task → **Add schedule** or **Edit**). You do not need to know cron: choose how it repeats, and the editor says in words what that means and lists the next five runs before you save.
+
+![The schedule editor: Weekly, Monday to Friday at 09:00, with the next runs](docs/images/schedule-editor.png)
+
+| Repeats | What you choose |
+|---|---|
+| **Minutes** | Every 5, 10, 15, 20 or 30 minutes. |
+| **Hourly** | Every 1, 2, 3, 4, 6, 8 or 12 hours, at a minute of the hour. |
+| **Daily** | One to four times a day. Times in one schedule share the same minute (09:00 and 17:00); for 09:00 and 17:30, add a second schedule. |
+| **Weekly** | The days of the week (with the presets Weekdays, Weekends and Every day) and one time. |
+| **Monthly** | Up to five days of the month and one time. A month without day 29, 30 or 31 is skipped; "last day of the month" is not available. |
+| **Advanced** | Any 5-field cron expression (`minute hour day-of-month month day-of-week`), for what the builder cannot say. |
+
+- **The 5-minute minimum.** A schedule cannot run more often than every 5 minutes; the editor does not offer less, and an Advanced expression that does is refused.
+- **Time zone.** A schedule runs in your profile time zone (Settings → Profile). **Change** picks another zone for that schedule. Changing your profile later does not move the schedules you already have: the editor shows that a schedule's zone differs from your profile, with a button to use your profile's.
+- **If the previous run is still going**, the schedule skips that run (the default) or starts another one anyway.
+- **Policy override.** A schedule's runs use the task's agent policy unless you choose another for that schedule.
+- **Active or Paused.** A paused schedule keeps its settings and does not run.
+
+What is stored is always a 5-field cron expression, so the CLI, the SDK and MCP read and write the same schedules. A schedule the builder cannot show (for example one made with `hexactra schedules create`) opens in Advanced, unchanged.
 
 ## Tasks and schedules API
 
@@ -364,6 +413,7 @@ scripts/rename.mjs rebrand this app (identity.json plus the few literal targets)
 | `EmptyState`, `ErrorBanner`, `ListSkeleton`, `CardSkeleton` | Nothing to show, a failure (`role="alert"`), and the first load. |
 | `ResponsiveList` | A table at 900 px and up, cards below. It renders the items it is given: paging stays with the API. |
 | `useBreakpoint()` | `{ isPhone, isTablet, isDesktop }` from the theme's breakpoints. |
+| `aboveBottomBar()`, `BOTTOM_BAR_HEIGHT`, `APP_BAR_HEIGHT` | The offset of anything pinned above the phone's bottom bar or under the top bar ([Responsive rules](#responsive-rules)). |
 | `formatDateTime`, `formatRelative`, `<RelativeTime iso />` | Dates in the **profile time zone** (the one `UserTimeZoneSync` stores), never `toLocaleString()`. An empty or invalid date renders `n/a`. |
 | `useApiAction()` | `run(key, fn)` with `busy`, `error` and `clearError` around an API call. |
 | `formatCost(usd, known)` | "$4.20", "≥ $4.20" when a call could not be priced, "<$0.01", or `null`. |
@@ -374,6 +424,40 @@ Rules:
 - No `window.confirm` or `window.alert`.
 - Colours come from the theme; a status is never colour only.
 - A test that needs a width mocks it with `mockViewport(390)` from `src/__tests__/matchMedia.ts`; without it the kit reads jsdom as a desktop.
+
+## Responsive rules
+
+Every page works on a phone, a tablet and a desktop. The breakpoints are MUI's and nothing reads the user agent:
+
+| Width | Navigation | Layout |
+|---|---|---|
+| below 600 px (`xs`) | The bottom bar: **Home, Inbox, Tasks, Runs**. Fleet, Settings and Administration are in the user menu (the avatar). | One column. Secondary actions fold into a menu; tap targets are at least 44 px. |
+| 600 to 899 px (`sm`) | The rail, collapsed, with every destination. | One column. |
+| 900 to 1199 px (`md`) | The rail. | One column; a run's live frame is capped at 60% of the window height. |
+| 1200 px and up (`lg`) | The rail, expanded. | A live run is two panes: the browser on the left, status, budget and timeline on the right. |
+
+- **The phone bar is its own table.** The shell's bottom bar draws four tabs and turns the fourth into "More" when more destinations are visible, so `PHONE_NAVIGATION` (`apps/web/src/config/navigation.ts`) gives it exactly four. A new destination goes in `NAVIGATION`; it reaches a phone through the user menu.
+- **The Inbox badge** is the pending-question count from `InboxCountProvider` (`apps/web/src/components/InboxCountProvider.tsx`): the rail, the bottom bar, the user menu and the tab title ("(2) Hexactra Console"). Read it with `useInboxCount()`; do not poll `GET /inbox` a second time.
+- **Anything pinned to the bottom** (a sticky action bar, a floating button) takes its offset from `aboveBottomBar()` in `apps/web/src/ui/bottomBar.ts`, which knows the bar's height and the safe area. No page carries its own number. What sticks under the top bar uses `APP_BAR_HEIGHT` from the same file.
+- **A page that fills the window** (the desktop viewer) calls `useShellMainVariant('full-bleed')` and lets the shell size it. The shell owns the window's height (`100dvh`); a page never sets its own `100vh`.
+- **A table** becomes cards (`ResponsiveList`) or scrolls inside its own container. The page itself never scrolls sideways.
+
+### Checking it: `npm run ui:screens`
+
+`scripts/ui-screens.mjs` opens every route at 360, 390, 768, 1024 and 1440 px, in light and dark, saves a PNG of each under `.ui-screens/` (ignored by git) and fails when a page scrolls sideways (`scrollWidth > innerWidth`), naming the route and the width. It is a local, manual check and **not a CI step**: CI has no stack with data.
+
+```bash
+# Against the dev stack ("Run it"), signed in:
+npm run ui:screens -- --login     # once: sign in in the window that opens; saves .ui-screens/state.json
+npm run ui:screens                # http://localhost:3535; --base <url> to change
+
+# Without a stack, against a build of the web app with a mocked API:
+npm run build --workspace=web
+npm run preview --workspace=web -- --port 4173 &
+npm run ui:screens -- --mock --base http://localhost:4173
+```
+
+The saved sign-in holds your refresh cookie: never commit it. A route that needs an id (a run, a task, a host) takes the first one your account has, and a route with nothing to open is listed as not checked, never as passed (`--strict` makes that a failure). To add a page, append one line to `ROUTES` in the script; the enabled slices' routes are read from `apps/web/src/slices/`.
 
 ## Run it
 

@@ -1,14 +1,13 @@
+import { Alert } from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Box, Card, CardContent, Chip, CircularProgress, Link, Stack, Typography } from '@mui/material';
-import { Link as RouterLink, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
-import { QuestionAnswerForm } from '../components/QuestionAnswerForm';
-import { KIND_LABEL, answerText, askerText, remaining, type AnswerBody, type Question } from '../components/questions';
+import { QuestionCard, type AnswerResult } from '../components/QuestionCard';
+import { isSettledError, type AnswerBody, type Question } from '../components/questions';
+import { useNow } from '../components/RunActivity';
 import { useOpenViewer } from '../components/useOpenViewer';
-import { ErrorBanner, PageContainer, PageHeader } from '../ui';
-
-const STATUS_LABEL: Record<Question['status'], string> = { pending: 'Waiting for you', answered: 'Answered', cancelled: 'Declined', expired: 'Expired' };
+import { CardSkeleton, ErrorBanner, PageContainer, PageHeader } from '../ui';
 
 /**
  * `/inbox/q/:id`: one question, where a notification's link lands. Shows
@@ -22,13 +21,12 @@ export function QuestionPage() {
   const [question, setQuestion] = useState<Question | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
   const openViewer = useOpenViewer(setError);
 
   const load = useCallback(async () => {
     try {
       setQuestion(await api.get<Question>(`/questions/${id}`));
+      setError(null);
     } catch (e) {
       if ((e as { status?: number }).status === 404 || (e as { statusCode?: number }).statusCode === 404) setMissing(true);
       else setError(e instanceof Error ? e.message : 'Could not load the question');
@@ -40,20 +38,15 @@ export function QuestionPage() {
   }, [load]);
 
   const pending = question?.status === 'pending';
+  const now = useNow(pending);
   useEffect(() => {
     if (!pending) return;
-    const tick = setInterval(() => setNow(Date.now()), 1_000);
     // Answered on another device meanwhile? Re-read now and then.
     const poll = setInterval(() => void load(), 5_000);
-    return () => {
-      clearInterval(tick);
-      clearInterval(poll);
-    };
+    return () => clearInterval(poll);
   }, [pending, load]);
 
-  const respond = async (answer: AnswerBody) => {
-    setBusy(true);
-    setError(null);
+  const respond = async (answer: AnswerBody): Promise<AnswerResult> => {
     try {
       setQuestion(
         answer.outcome === 'cancelled'
@@ -61,74 +54,21 @@ export function QuestionPage() {
           : await api.post<Question>(`/questions/${id}/answer`, { ...answer, channel: 'web' }),
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not send the answer');
+      // Either way the question may have moved on: show what it is now.
       await load();
-    } finally {
-      setBusy(false);
+      // Answered elsewhere or expired: the reload shows its final state, not an error.
+      if (isSettledError(e)) return 'gone';
+      throw e;
     }
   };
-
-  const expiredNow = question && pending && new Date(question.expiresAt).getTime() <= now;
 
   return (
     <PageContainer width="narrow">
       <PageHeader variant="h5" title="Question" back={{ to: '/inbox', label: 'Inbox' }} />
       <ErrorBanner error={error} />
       {missing && <Alert severity="info">This question does not exist or is not yours.</Alert>}
-      {!question && !missing && !error && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-          <CircularProgress aria-label="Loading" />
-        </Box>
-      )}
-      {question && (
-        <Card variant="outlined" aria-label={`Question: ${question.prompt}`}>
-          <CardContent>
-            <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 1, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Chip size="small" color={pending ? 'warning' : 'default'} label={KIND_LABEL[question.kind] ?? question.kind} />
-              <Chip size="small" variant="outlined" label={STATUS_LABEL[question.status]} />
-              {question.risk === 'high' && <Chip size="small" color="error" variant="outlined" label="High risk" />}
-              {pending && (
-                <Typography variant="caption" color="text.secondary" aria-label="Time left">
-                  {expiredNow ? 'expired' : `${remaining(question.expiresAt, now)} left`}
-                </Typography>
-              )}
-            </Stack>
-            <Typography variant="h6" component="h2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-              {question.prompt}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, overflowWrap: 'anywhere' }}>
-              Asked by {askerText(question.askedBy)}
-              {question.runId && (
-                <>
-                  {' · '}
-                  <Link component={RouterLink} to={`/runs/${question.runId}`}>
-                    its run
-                  </Link>
-                </>
-              )}
-              {question.pageTitle ? ` · on “${question.pageTitle}”` : ''}
-            </Typography>
-            {pending && !expiredNow ? (
-              canAnswer ? (
-                <QuestionAnswerForm
-                  question={question}
-                  disabled={busy}
-                  onSubmit={respond}
-                  onOpenBrowser={question.viewerUrl ? () => void openViewer(question.viewerUrl!) : undefined}
-                />
-              ) : (
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  You can see this question but not answer it.
-                </Alert>
-              )
-            ) : (
-              <Alert severity={question.status === 'answered' ? 'success' : 'info'} sx={{ mt: 2 }}>
-                {expiredNow ? 'This question expired before anyone answered.' : answerText(question)}
-              </Alert>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {!question && !missing && !error && <CardSkeleton rows={1} />}
+      {question && <QuestionCard variant="page" question={question} now={now} canAnswer={canAnswer} onAnswer={respond} onOpenBrowser={(url) => void openViewer(url)} />}
     </PageContainer>
   );
 }

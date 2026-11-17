@@ -66,6 +66,9 @@ export function budgetSummary(spec: AgentPolicySpec): string {
   return keys.map((k) => budgetPhrase(k, spec.budget[k]!)).join(' · ');
 }
 
+/** What a policy without any budget limit means for a run (the policy editor and the task form show it). */
+export const NO_HARD_STOP_WARNING = 'Nothing will stop this run except finishing, Stop, or stall detection.';
+
 /** True when no budget limit is set (mirrors the API's `hasNoHardStop`, for the editor's unsaved state). */
 export function hasNoHardStop(spec: AgentPolicySpec): boolean {
   return BUDGET_LIMIT_KEYS.every((k) => spec.budget[k] === null);

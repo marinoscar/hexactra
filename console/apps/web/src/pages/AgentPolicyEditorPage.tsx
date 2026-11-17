@@ -26,7 +26,7 @@ import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from
 import { Link as RouterLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { createPolicy, duplicatePolicy, getCeilings, getPolicy, updatePolicy } from '../policies/api';
-import { BUDGET_LABEL, STALL_LABEL, ceilingText, copyName, sourceText, tierRank } from '../policies/format';
+import { BUDGET_LABEL, NO_HARD_STOP_WARNING, STALL_LABEL, ceilingText, copyName, sourceText, tierRank } from '../policies/format';
 import { BUDGET_HELP, CONTEXT_HELP, MODELS_HELP, SECTION_HELP, STALL_HELP, budgetHelp, plain, type FieldHelp } from '../policies/help';
 import { ModelPicker, modelName } from '../policies/ModelPicker';
 import {
@@ -70,7 +70,7 @@ const CONTEXT_FIELD_LABEL: Record<(typeof CONTEXT_NUMBERS)[number], string> = {
   observationChars: 'Observation size (characters)',
 };
 
-const UNLIMITED_WARNING = 'Nothing will stop this run except finishing, Stop, or stall detection.';
+const UNLIMITED_WARNING = NO_HARD_STOP_WARNING;
 
 /** The editor's numeric fields as typed text, keyed `budget.maxActions`, `stall.…`, `context.…`. */
 type NumberDrafts = Record<string, string>;

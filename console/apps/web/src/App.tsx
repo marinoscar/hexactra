@@ -19,18 +19,19 @@ import { SettingsHub, type SettingsHubProps } from '@marinoscar/platform-web/set
 import { FactoryResetPage, OffboardOrganizationButton, UserDangerZonePage, factoryResetSettingsPage } from '@marinoscar/platform-web/user-data/ui';
 import { ShellProviders, type ShellProvider } from '@marinoscar/platform-web/shell/headless';
 import { AboutPage, InstallPrompt } from '@marinoscar/platform-web/host/ui';
-import { ShellAppBar, ShellLayout, ShellUserMenu } from '@marinoscar/platform-web/shell/ui';
+import { ShellAppBar, ShellBottomNav, ShellLayout, ShellUserMenu } from '@marinoscar/platform-web/shell/ui';
 import { UserTimeZoneSync } from '@marinoscar/platform-web/timezone/headless';
 import type { ReactElement } from 'react';
 
 import { api, platformApi } from './api';
 import { ADMIN_SECTIONS } from './config/adminSections';
-import { NAVIGATION } from './config/navigation';
+import { NAVIGATION, PHONE_NAVIGATION } from './config/navigation';
 import { USER_SETTINGS_SECTIONS } from './config/userSettingsSections';
 import { WebhooksPage } from '@marinoscar/platform-web/webhooks/ui';
 import { AlertsPage } from '@marinoscar/platform-web/alerts/ui';
 
 import { BrandLogo, BrandMark } from './components/BrandLogo';
+import { InboxCountProvider } from './components/InboxCountProvider';
 import { ALERTS_ENABLED, WEBHOOKS_ENABLED } from './config/userSettingsSections';
 import { FabricConnectionPage } from './pages/FabricConnectionPage';
 import { DesktopPage } from './pages/DesktopPage';
@@ -40,6 +41,8 @@ import { InboxPage } from './pages/InboxPage';
 import { QuestionPage } from './pages/QuestionPage';
 import { RunDetailPage } from './pages/RunDetailPage';
 import { RunsPage } from './pages/RunsPage';
+import { TaskCreatePage } from './pages/TaskCreatePage';
+import { TaskEditPage } from './pages/TaskEditPage';
 import { TasksPage } from './pages/TasksPage';
 import { NotesPage } from './pages/NotesPage';
 import { AgentPoliciesPage } from './pages/AgentPoliciesPage';
@@ -60,7 +63,7 @@ import {
   sliceUserMenuItems,
 } from './slices/manifest';
 import type { SliceRoute } from './slices/slice';
-import { ConfirmProvider } from './ui';
+import { ConfirmProvider, ToastHost } from './ui';
 
 // The `orgs` feature: the organization cards show only in multi-organization mode.
 declare module '@marinoscar/platform-web/settings/headless' {
@@ -89,9 +92,10 @@ function Gate({ permission, children }: { permission: string; children: ReactEle
  * The providers around the signed-in shell, outermost first: the enabled
  * slices' (the notification inbox, the AI config the host's feature map reads),
  * then the platform host every packaged page reads, then the providers that
- * need the host (the onboarding fetch). Add yours to `src/slices/<id>.tsx`.
+ * need the host (the Inbox count behind the navigation badge, the onboarding
+ * fetch). Add yours to `src/slices/<id>.tsx`.
  */
-const SHELL_PROVIDERS: readonly ShellProvider[] = [...sliceShellProviders, AppPlatformHost, ...sliceHostedProviders];
+const SHELL_PROVIDERS: readonly ShellProvider[] = [...sliceShellProviders, AppPlatformHost, InboxCountProvider, ...sliceHostedProviders];
 
 /** Renders each component of a shell slot (banners, overlays, top-bar actions). */
 function Slot({ components }: { components: readonly ComponentType[] }) {
@@ -109,6 +113,8 @@ function AppShell() {
   return (
     <ShellLayout
       navigation={NAVIGATION}
+      // The phone bar: Home, Inbox, Tasks, Runs; the rest is in the user menu.
+      bottomNav={<ShellBottomNav navigation={PHONE_NAVIGATION} />}
       brand={<BrandLogo label={APP_NAME} />}
       appBar={
         <ShellAppBar
@@ -139,6 +145,8 @@ function AppShell() {
           <Outlet />
         </Suspense>
       </ConfirmProvider>
+      {/* The one snackbar `toast()` fills ("Task created"); it outlives the page that raised it. */}
+      <ToastHost />
     </ShellLayout>
   );
 }
@@ -180,6 +188,10 @@ export function AppRoutes() {
           <Route index element={<HomePage />} />
           <Route path="notes" element={<Gate permission="notes:read"><NotesPage /></Gate>} />
           <Route path="tasks" element={<Gate permission="tasks:read"><TasksPage /></Gate>} />
+          <Route path="tasks/new" element={<Gate permission="tasks:write"><TaskCreatePage /></Gate>} />
+          <Route path="tasks/:id/edit" element={<Gate permission="tasks:write"><TaskEditPage /></Gate>} />
+          {/* Until the task page lands (#428), a task's own address shows the list; #428 replaces this line. */}
+          <Route path="tasks/:id" element={<Navigate to="/tasks" replace />} />
           <Route path="inbox" element={<Gate permission="runs:read"><InboxPage /></Gate>} />
           <Route path="inbox/q/:id" element={<Gate permission="runs:read"><QuestionPage /></Gate>} />
           <Route path="runs" element={<Gate permission="runs:read"><RunsPage /></Gate>} />

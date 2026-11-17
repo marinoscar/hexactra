@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { PlatformHostProvider } from '@marinoscar/platform-web/core';
 import { createTestPlatformHost } from '@marinoscar/platform-web/testing';
@@ -184,12 +184,15 @@ describe('RunDetailPage', () => {
 });
 
 describe('TaskSchedules', () => {
-  it('lists a schedule and adds one', async () => {
+  it('lists a schedule and adds one through the editor', async () => {
     const { TaskSchedules } = await import('../pages/TaskSchedules');
     const host = createTestPlatformHost({
       permissions: ['tasks:read', 'tasks:write'],
       responses: {
-        [`GET /schedules?taskId=${task.id}`]: [{ id: 'sc1', taskId: task.id, cron: '0 9 * * 1-5', timezone: 'Europe/Madrid', enabled: true, concurrency: 'skip', nextRunAt: '2026-11-16T08:00:00Z', lastRunAt: null, consecutiveFailures: 0 }],
+        [`GET /schedules?taskId=${task.id}`]: [
+          { id: 'sc1', taskId: task.id, cron: '0 9 * * 1-5', timezone: 'Europe/Madrid', enabled: true, concurrency: 'skip', nextRunAt: '2026-11-16T08:00:00Z', lastRunAt: null, consecutiveFailures: 0, description: 'Monday to Friday at 09:00' },
+        ],
+        'POST /schedules/preview': { valid: true, cron: '30 7 * * *', timezone: 'UTC', description: 'Every day at 07:30', next: [], intervalSeconds: 86400 },
         'POST /schedules': { id: 'sc2' },
       },
     });
@@ -200,11 +203,14 @@ describe('TaskSchedules', () => {
         </ConfirmProvider>
       </PlatformHostProvider>,
     );
-    expect(await screen.findByText('0 9 * * 1-5 (Europe/Madrid)')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Cron'), { target: { value: '30 7 * * *' } });
+    expect(await screen.findByText(/Monday to Friday at 09:00/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add schedule' }));
-    await screen.findByText('0 9 * * 1-5 (Europe/Madrid)');
-    expect(host.requests.find((r) => r.method === 'POST')?.body).toMatchObject({ taskId: task.id, cron: '30 7 * * *' });
+    const dialog = await screen.findByRole('dialog', { name: 'Add schedule' });
+    fireEvent.change(within(dialog).getByLabelText('Time'), { target: { value: '07:30' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add schedule' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const post = host.requests.find((r) => r.method === 'POST' && r.path === '/schedules');
+    expect(post?.body).toMatchObject({ taskId: task.id, cron: '30 7 * * *', enabled: true, concurrency: 'skip', policyId: null });
   });
 });
 

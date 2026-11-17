@@ -6,7 +6,7 @@ import { configure, fireEvent, render, screen, waitFor, within } from '@testing-
 import { vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { PlatformHostProvider } from '@marinoscar/platform-web/core';
-import { createTestPlatformHost, type TestApiRequest } from '@marinoscar/platform-web/testing';
+import { createTestApiError, createTestPlatformHost, type TestApiRequest } from '@marinoscar/platform-web/testing';
 
 import { TaskSchedules } from '../pages/TaskSchedules';
 import { TasksPage } from '../pages/TasksPage';
@@ -145,33 +145,102 @@ describe('Run with…', () => {
 });
 
 describe('the schedule policy override', () => {
-  it('adds a schedule with another policy and shows it on the schedule', async () => {
-    const catalog = { policies: POLICIES, defaultId: 'builtin:balanced', byId: (id: string | null | undefined) => POLICIES.find((p) => p.id === id) };
+  const catalog = { policies: POLICIES, defaultId: 'builtin:balanced', byId: (id: string | null | undefined) => POLICIES.find((p) => p.id === id) };
+  const SAVED = { id: 'sc1', taskId: TASK.id, cron: '0 9 * * 1-5', timezone: 'Europe/Madrid', enabled: true, concurrency: 'skip', nextRunAt: null, lastRunAt: null, consecutiveFailures: 0, description: 'Monday to Friday at 09:00', policyId: 'builtin:economy' };
+
+  function renderSchedules(taskPolicyId: string | null = null) {
     const host = createTestPlatformHost({
       permissions: ['tasks:read', 'tasks:write'],
       responses: {
-        [`GET /schedules?taskId=${TASK.id}`]: [
-          { id: 'sc1', taskId: TASK.id, cron: '0 9 * * 1-5', timezone: 'Europe/Madrid', enabled: true, concurrency: 'skip', nextRunAt: null, lastRunAt: null, consecutiveFailures: 0, policyId: 'builtin:economy' },
-        ],
+        [`GET /schedules?taskId=${TASK.id}`]: [SAVED],
+        'POST /schedules/preview': (r: TestApiRequest) => ({ valid: true, ...(r.body as object), description: 'A schedule', next: [], intervalSeconds: null }),
         'POST /schedules': { id: 'sc2' },
+        'PATCH /schedules/sc1': SAVED,
       },
     });
     render(
       <PlatformHostProvider host={host}>
         <ConfirmProvider>
           <MemoryRouter>
-            <TaskSchedules taskId={TASK.id} canWrite catalog={catalog} taskPolicyId={null} />
+            <TaskSchedules taskId={TASK.id} canWrite catalog={catalog} taskPolicyId={taskPolicyId} />
           </MemoryRouter>
         </ConfirmProvider>
       </PlatformHostProvider>,
     );
-    expect(await screen.findByText('policy: Economy')).toBeInTheDocument();
-    expect(screen.getByRole('combobox', { name: 'Policy override' })).toHaveTextContent("Task's policy (Balanced)");
-    fireEvent.change(screen.getByLabelText('Cron'), { target: { value: '30 7 * * *' } });
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Policy override' }));
-    fireEvent.click(await screen.findByRole('option', { name: 'Careful shopping' }));
+    return host;
+  }
+  const choose = async (dialog: HTMLElement, option: string | RegExp) => {
+    fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: 'Policy override' }));
+    fireEvent.click(await screen.findByRole('option', { name: option }));
+  };
+  const closed = () => waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+  it('adds a schedule with another policy and shows the override on the schedule', async () => {
+    const host = renderSchedules();
+    // The saved schedule names its override.
+    expect(await screen.findByText(/Monday to Friday at 09:00 · Europe\/Madrid · policy: Economy/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add schedule' }));
-    await waitFor(() => expect(host.requests.some((r) => r.method === 'POST')).toBe(true));
-    expect(host.requests.find((r) => r.method === 'POST')?.body).toMatchObject({ taskId: TASK.id, cron: '30 7 * * *', policyId: OWN_ID });
+    const dialog = await screen.findByRole('dialog', { name: 'Add schedule' });
+    expect(within(dialog).getByRole('combobox', { name: 'Policy override' })).toHaveTextContent("Task's policy (Balanced)");
+    fireEvent.change(within(dialog).getByLabelText('Time'), { target: { value: '07:30' } });
+    await choose(dialog, 'Careful shopping');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add schedule' }));
+    await closed();
+    expect(host.requests.find((r) => r.method === 'POST' && r.path === '/schedules')?.body).toMatchObject({ taskId: TASK.id, cron: '30 7 * * *', policyId: OWN_ID });
+  });
+
+  it("edits a schedule: its expression, and its policy override changed, then cleared (the PATCH body)", async () => {
+    const host = renderSchedules(OWN_ID);
+    const row = await screen.findByRole('group', { name: 'Schedule Monday to Friday at 09:00' });
+    const patches = () => host.requests.filter((r) => r.method === 'PATCH' && r.path === '/schedules/sc1').map((r) => r.body);
+
+    fireEvent.click(within(row).getByRole('button', { name: 'Edit' }));
+    let dialog = await screen.findByRole('dialog', { name: 'Edit schedule' });
+    // The editor opens on the saved schedule: Weekly, its policy, and the task's policy named.
+    expect(within(dialog).getByRole('button', { name: 'Weekly' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(dialog).getByRole('combobox', { name: 'Policy override' })).toHaveTextContent('Economy');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Saturday' }));
+    await choose(dialog, 'Thorough');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save schedule' }));
+    await closed();
+    expect(patches()).toEqual([{ cron: '0 9 * * 1-6', timezone: 'Europe/Madrid', enabled: true, concurrency: 'skip', policyId: 'builtin:thorough' }]);
+    expect(host.requests.some((r) => r.method === 'POST' && r.path === '/schedules')).toBe(false);
+
+    fireEvent.click(within(screen.getByRole('group', { name: 'Schedule Monday to Friday at 09:00' })).getByRole('button', { name: 'Edit' }));
+    dialog = await screen.findByRole('dialog', { name: 'Edit schedule' });
+    await choose(dialog, "Task's policy (Careful shopping)");
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save schedule' }));
+    await closed();
+    expect(patches()[1]).toEqual({ cron: '0 9 * * 1-5', timezone: 'Europe/Madrid', enabled: true, concurrency: 'skip', policyId: null });
+  });
+
+  it('a save the server refuses stays in the dialog with its message; Cancel changes nothing', async () => {
+    const host = createTestPlatformHost({
+      permissions: ['tasks:read', 'tasks:write'],
+      responses: {
+        [`GET /schedules?taskId=${TASK.id}`]: [],
+        'POST /schedules/preview': { valid: true, cron: '0 9 * * *', timezone: 'UTC', description: 'Every day at 09:00', next: [], intervalSeconds: 86400 },
+        'POST /schedules': () => {
+          throw createTestApiError(409, 'A task can have up to 10 schedules');
+        },
+      },
+    });
+    render(
+      <PlatformHostProvider host={host}>
+        <ConfirmProvider>
+          <MemoryRouter>
+            <TaskSchedules taskId={TASK.id} canWrite />
+          </MemoryRouter>
+        </ConfirmProvider>
+      </PlatformHostProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Add schedule' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add schedule' });
+    // Without a catalog there is no policy control.
+    expect(within(dialog).queryByRole('combobox', { name: 'Policy override' })).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add schedule' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('A task can have up to 10 schedules');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await closed();
   });
 });
