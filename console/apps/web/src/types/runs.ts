@@ -60,7 +60,55 @@ export interface Run {
   currentTier?: Tier | null;
   /** The run budget; null on a run that has not started. */
   budget?: RunBudget | null;
+  /** The machine the run asked for; null: any available one (#384). */
+  hostId?: string | null;
+  /** Use another available machine when the chosen one cannot take the run. */
+  hostFallback?: boolean;
   createdAt: string;
+  /** When the run's first step began; null while it is queued. */
+  startedAt?: string | null;
   finishedAt: string | null;
   steps?: RunStep[];
+}
+
+/** What started a run (`RUN_TRIGGERS` in apps/api/src/tasks/runs.schemas.ts). */
+export const RUN_TRIGGERS = ['manual', 'schedule', 'api', 'mcp', 'external'] as const;
+export type RunTrigger = (typeof RUN_TRIGGERS)[number];
+
+/** A run in a list (`GET /api/runs?envelope=1`): the run with its task's name; `budget` only while it is live. */
+export interface RunListItem extends Run {
+  /** The run's task name; null for a run without a task, or whose task was deleted. */
+  taskName?: string | null;
+}
+
+/** One page of `GET /api/runs?envelope=1`. */
+export interface RunPage {
+  items: RunListItem[];
+  /** Pass it as `cursor` to read the next page; null on the last page. */
+  nextCursor: string | null;
+}
+
+/** `GET /api/runs/counts`: the runs that match a filter, per status. */
+export interface RunCounts {
+  total: number;
+  live: number;
+  byStatus: Record<RunStatus, number>;
+  /** The recorded model spend of the matching runs; null when none made a model call. */
+  costUsd: number | null;
+  costKnown: boolean;
+}
+
+/** 200 of `POST /api/runs/delete`. */
+export interface RunsDeleted {
+  deleted: number;
+  costUsd: number | null;
+  skippedLive: string[];
+  notFound: string[];
+}
+
+/** 202 of `POST /api/runs/delete`: a queue job deletes the runs. */
+export interface RunsDeleteQueued {
+  jobId: string;
+  matched: number;
+  costUsd: number | null;
 }

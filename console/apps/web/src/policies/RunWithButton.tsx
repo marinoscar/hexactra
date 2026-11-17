@@ -20,33 +20,32 @@ export interface RunWithButtonProps {
 /** Below `md` (touch widths) each part is a 44 px target. */
 const TOUCH_TARGET = { minHeight: { xs: 44, md: 'auto' } } as const;
 
-/**
- * "Run now" with a split arrow: "Run with..." a policy for this run only. The
- * choice is sent as `policyId` on `POST /api/tasks/:id/runs`. Without any
- * policy to offer it is a plain button.
- */
-export function RunWithButton({ onRun, catalog, taskPolicyId, label = 'Run now', disabled, size }: RunWithButtonProps) {
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
-  const menuId = useId();
-  const usual = taskPolicyId ?? catalog.defaultId;
+export interface RunWithMenuProps {
+  /** The element the menu opens from; null closes it. */
+  anchorEl: HTMLElement | null;
+  onClose: () => void;
+  /** The chosen policy; the menu closes itself first. */
+  onChoose: (policyId: string) => void;
+  catalog: Pick<PolicyCatalog, 'policies' | 'defaultId'>;
+  /** The policy a plain run would use (marked "usual"); the user's default when omitted. */
+  usualId?: string | null;
+  id?: string;
+}
+
+/** The "Run with…" menu: the built-in policies, then the user's own. `RunWithButton` and the runs list's "Run again with…" open it. */
+export function RunWithMenu({ anchorEl, onClose, onChoose, catalog, usualId, id }: RunWithMenuProps) {
+  const usual = usualId ?? catalog.defaultId;
   const builtins = catalog.policies.filter((p) => p.builtin);
   const own = catalog.policies.filter((p) => !p.builtin);
-
-  if (catalog.policies.length === 0) {
-    return (
-      <Button variant="contained" size={size} disabled={disabled} onClick={() => onRun()} sx={TOUCH_TARGET}>
-        {label}
-      </Button>
-    );
-  }
-
-  const choose = (policyId: string) => {
-    setAnchor(null);
-    onRun(policyId);
-  };
-
   const item = (p: (typeof catalog.policies)[number]) => (
-    <MenuItem key={p.id} onClick={() => choose(p.id)} selected={p.id === usual}>
+    <MenuItem
+      key={p.id}
+      selected={p.id === usual}
+      onClick={() => {
+        onClose();
+        onChoose(p.id);
+      }}
+    >
       {p.builtin && (
         <ListItemIcon>
           <LockOutlinedIcon fontSize="small" />
@@ -55,6 +54,31 @@ export function RunWithButton({ onRun, catalog, taskPolicyId, label = 'Run now',
       <ListItemText inset={!p.builtin} primary={p.id === usual ? `${p.name} (usual)` : p.name} secondary={policyLine(p)} />
     </MenuItem>
   );
+  return (
+    <Menu id={id} anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={onClose}>
+      <ListSubheader>Run with…</ListSubheader>
+      {builtins.map(item)}
+      {own.length > 0 && <Divider />}
+      {own.map(item)}
+    </Menu>
+  );
+}
+
+/**
+ * "Run now" with a split arrow: "Run with..." a policy for this run only. The
+ * choice is sent as `policyId` on `POST /api/tasks/:id/runs`. Without any
+ * policy to offer it is a plain button.
+ */
+export function RunWithButton({ onRun, catalog, taskPolicyId, label = 'Run now', disabled, size }: RunWithButtonProps) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const menuId = useId();
+  if (catalog.policies.length === 0) {
+    return (
+      <Button variant="contained" size={size} disabled={disabled} onClick={() => onRun()} sx={TOUCH_TARGET}>
+        {label}
+      </Button>
+    );
+  }
 
   return (
     <>
@@ -74,12 +98,7 @@ export function RunWithButton({ onRun, catalog, taskPolicyId, label = 'Run now',
           <ArrowDropDownIcon />
         </Button>
       </ButtonGroup>
-      <Menu id={menuId} anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)}>
-        <ListSubheader>Run with…</ListSubheader>
-        {builtins.map(item)}
-        {own.length > 0 && <Divider />}
-        {own.map(item)}
-      </Menu>
+      <RunWithMenu id={menuId} anchorEl={anchor} onClose={() => setAnchor(null)} onChoose={(policyId) => onRun(policyId)} catalog={catalog} usualId={taskPolicyId} />
     </>
   );
 }
