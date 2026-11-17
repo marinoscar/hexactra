@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Run budget meter and cost-aware alerts** (#408).
+  - **Run page:** shows the run's policy, tier (highlighted when escalated) and model. A live budget meter has one bar per limited budget, ∞ for an unlimited one, and warning and error colours. It shows "≥" for a cost that is not fully known, and why the run stopped together with the agent's summary.
+  - **Run timeline:** routing steps (↑, ↓ and ⇄) appear in it.
+  - **Runs list and task cards:** the runs list shows cost and stop reason. Task cards show 30-day spend and the average cost of a successful run.
+  - **Alerts:**
+    - `hexactra_run_budget` gains a cost threshold.
+    - New `hexactra_run_stalled`, with a starter rule.
+    - New `hexactra_run_cost`, a per-run cost limit with a starter rule that is created disabled.
 - **Agent policies in the web console** (#407).
   - Settings → Browser agent → Agent policies lists the built-in and personal policies, with their tiers, budgets, usage and version. From there you can create from a template, duplicate, edit, set the default, export, import and delete with reassignment.
   - The full-page policy editor has a "No limit" switch for every budget and warns when nothing would stop a run.
