@@ -24,6 +24,7 @@ import {
   uninstallAgent,
   updateAgent,
   agentStatusInstalled,
+  updateTargets,
   fetchAndActivate,
   type AgentStatus,
 } from './agent.js';
@@ -151,9 +152,9 @@ export const agentCommand: CliCommandRegistration = (program: Command) => {
     .option('--force', 'reinstall even when up to date')
     .action(async (o: { bundle?: string; version?: string; force?: boolean }) => {
       const d = deps();
-      const u = unattendedStatus(d);
-      if (agentStatusInstalled(d)) await updateAgent(d, o);
-      else if (u.installed) await fetchAndActivate(d, o);
+      const t = updateTargets(d);
+      if (t.attended) await updateAgent(d, o);
+      else if (t.unattended) await fetchAndActivate(d, o);
       updateUnattended(d);
     });
 
