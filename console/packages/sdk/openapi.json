@@ -55877,6 +55877,10 @@
               }
             ]
           },
+          "hostFallback": {
+            "type": "boolean",
+            "description": "When the chosen host cannot take a run, run on another available one"
+          },
           "allowedDomains": {
             "type": "array",
             "items": {
@@ -55918,6 +55922,7 @@
           "goal",
           "profile",
           "hostId",
+          "hostFallback",
           "allowedDomains",
           "maxSteps",
           "maxMinutes",
@@ -55956,6 +55961,10 @@
                 "type": "null"
               }
             ]
+          },
+          "hostFallback": {
+            "default": true,
+            "type": "boolean"
           },
           "allowedDomains": {
             "default": [],
@@ -56028,6 +56037,9 @@
                 "type": "null"
               }
             ]
+          },
+          "hostFallback": {
+            "type": "boolean"
           },
           "allowedDomains": {
             "maxItems": 50,
@@ -56128,6 +56140,9 @@
               }
             ]
           },
+          "hostFallback": {
+            "type": "boolean"
+          },
           "sessionId": {
             "anyOf": [
               {
@@ -56225,6 +56240,7 @@
           "goal",
           "profile",
           "hostId",
+          "hostFallback",
           "sessionId",
           "handoffId",
           "actor",
@@ -56302,6 +56318,9 @@
                 "type": "null"
               }
             ]
+          },
+          "hostFallback": {
+            "type": "boolean"
           },
           "sessionId": {
             "anyOf": [
@@ -56496,6 +56515,7 @@
           "goal",
           "profile",
           "hostId",
+          "hostFallback",
           "sessionId",
           "handoffId",
           "actor",
@@ -57629,6 +57649,10 @@
                 "type": "null"
               }
             ]
+          },
+          "hostFallback": {
+            "default": true,
+            "type": "boolean"
           }
         },
         "required": [

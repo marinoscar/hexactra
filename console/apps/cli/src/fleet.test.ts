@@ -142,12 +142,17 @@ describe('hexactra tasks and runs', () => {
     const R = '44444444-4444-4444-8444-444444444444';
     const calls = fakeApi({
       'POST /tasks': { id: T, name: 'Fare', goal: 'Find a fare', profile: 'travel', allowedDomains: [] },
+      'GET /fleet/hosts': hosts,
       'GET /tasks': [{ id: T, name: 'Fare', goal: 'Find a fare', profile: 'travel', allowedDomains: [] }],
       [`POST /tasks/${T}/runs`]: { id: R, status: 'queued', goal: 'Find a fare', stepCount: 0 },
       [`GET /runs/${R}`]: { id: R, status: 'succeeded', goal: 'Find a fare', stepCount: 1, result: '$120', steps: [{ seq: 1, kind: 'action', action: 'navigate', ok: true, summary: 'at https://f.example.test/' }] },
     });
     expect(await runCli('tasks', 'create', 'Fare', 'Find a fare', '--profile', 'travel', '--allow', 'f.example.test')).toContain(`created ${T}`);
-    expect(calls.at(-1)?.body).toMatchObject({ profile: 'travel', allowedDomains: ['f.example.test'], confirmRiskyActions: true });
+    expect(calls.at(-1)?.body).toMatchObject({ profile: 'travel', allowedDomains: ['f.example.test'], confirmRiskyActions: true, hostFallback: true });
+    expect(calls.at(-1)?.body).not.toHaveProperty('hostId');
+    // A machine by name, failing instead of falling back (#384).
+    expect(await runCli('tasks', 'create', 'Fare', 'Find a fare', '--host', 'vps', '--no-host-fallback')).toContain(`created ${T}`);
+    expect(calls.at(-1)?.body).toMatchObject({ hostId: ID, hostFallback: false });
     const runOut = await runCli('tasks', 'run', T.slice(0, 8), '--watch');
     expect(runOut).toContain(`run ${R}`);
     expect(runOut).toContain('1. navigate: at https://f.example.test/');

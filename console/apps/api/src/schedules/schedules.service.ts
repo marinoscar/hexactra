@@ -118,7 +118,7 @@ export class SchedulesService {
         }
       }
       const run = await this.db(s.userId).run.create({
-        data: { userId: s.userId, taskId: s.taskId, goal: s.task.goal, profile: s.task.profile, hostId: s.task.hostId, trigger: 'schedule' },
+        data: { userId: s.userId, taskId: s.taskId, goal: s.task.goal, profile: s.task.profile, hostId: s.task.hostId, hostFallback: s.task.hostFallback, trigger: 'schedule' },
         select: { id: true },
       });
       await this.prisma.taskSchedule.updateMany({ where: { id: s.id }, data: { lastRunAt: now, lastRunId: run.id } });

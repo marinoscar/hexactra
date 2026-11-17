@@ -14,6 +14,7 @@ const taskFields = {
   goal: z.string().trim().min(1).max(4000),
   profile: profileNameSchema,
   hostId: z.uuid().nullable(),
+  hostFallback: z.boolean(),
   allowedDomains: z.array(domain).max(50),
   maxSteps: z.number().int().min(1).max(1000),
   maxMinutes: z.number().int().min(1).max(480),
@@ -25,6 +26,7 @@ export const createTaskSchema = z.object({
   ...taskFields,
   profile: taskFields.profile.default('default'),
   hostId: taskFields.hostId.optional(),
+  hostFallback: taskFields.hostFallback.default(true),
   allowedDomains: taskFields.allowedDomains.default([]),
   // A human emulator with the owner's full authority (#366): room to work,
   // and no confirmation before purchases unless the task opts in.
