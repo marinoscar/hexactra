@@ -6,7 +6,9 @@ import { PlatformHostProvider } from '@marinoscar/platform-web/core';
 import { createTestPlatformHost } from '@marinoscar/platform-web/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { budgetColor, checklistSteps, greeting, recentTasks, statusSentence, timeLeft, upNextWhen, weekRunsLink } from '../components/home/homeText';
+import { InboxCountProvider, useInboxCount } from '../components/InboxCountProvider';
+import { NEW_RUN_LINK, budgetColor, checklistSteps, greeting, recentTasks, statusSentence, timeLeft, upNextWhen, weekRunsLink } from '../components/home/homeText';
+import { NO_FILTERS, filtersFromParams } from '../components/runFilters';
 import { HOME_ONBOARDED_KEY, HOME_POLL_LIVE_MS, HOME_POLL_MS, HomePage } from '../pages/HomePage';
 import type { HomeLiveRun, HomeQuestion, HomeRecentRun, HomeSummary } from '../types/home';
 import { ConfirmProvider } from '../ui';
@@ -150,6 +152,11 @@ function mount(summary: HomeSummary | (() => HomeSummary), opts: { permissions?:
 const reads = (host: { requests: { method: string; path: string }[] }) => host.requests.filter((r) => r.method === 'GET' && r.path === '/home/summary').length;
 const hrefOf = (name: string | RegExp, within_: HTMLElement = document.body) => within(within_).getByRole('link', { name }).getAttribute('href');
 
+/** The navigation badge's number, as the shell reads it. */
+function Badge() {
+  return <div data-testid="badge">{useInboxCount().count}</div>;
+}
+
 let restore: (() => void) | null = null;
 afterEach(() => {
   restore?.();
@@ -201,6 +208,16 @@ describe('the words of the Home page', () => {
     expect([budgetColor(62, 80), budgetColor(62, 60), budgetColor(85, null), budgetColor(100, 80)]).toEqual(['primary', 'warning', 'warning', 'error']);
     expect(weekRunsLink('2026-11-11')).toBe('/runs?view=failed&from=2026-11-11');
     expect(weekRunsLink('2026-11-11', 'budget')).toBe('/runs?view=failed&stopReason=budget&from=2026-11-11');
+  });
+
+  it('links to the Runs page in the words its filters read (#423): nothing is dropped on arrival', () => {
+    const read = (link: string) => filtersFromParams(new URLSearchParams(link.split('?')[1]));
+    expect(read(weekRunsLink('2026-11-11'))).toEqual({ ...NO_FILTERS, view: 'failed', from: '2026-11-11' });
+    expect(read(weekRunsLink('2026-11-11', 'budget'))).toEqual({ ...NO_FILTERS, view: 'failed', from: '2026-11-11', stopReason: ['budget'] });
+    expect(read(weekRunsLink('2026-11-11', 'stalled'))).toEqual({ ...NO_FILTERS, view: 'failed', from: '2026-11-11', stopReason: ['stalled'] });
+    // "More options" opens the New run dialog and is not a filter.
+    expect(NEW_RUN_LINK).toBe('/runs?new=1');
+    expect(read(NEW_RUN_LINK)).toEqual(NO_FILTERS);
   });
 
   it('offers the most recently run tasks once each, four at most', () => {
@@ -322,7 +339,7 @@ describe('HomePage: a busy account', () => {
     const quick = await screen.findByTestId('home-quick-start');
     expect(within(quick).getByText('Run: Morning report')).toBeInTheDocument();
     expect(within(quick).queryByRole('combobox')).toBeNull();
-    expect(hrefOf('More options', quick)).toBe('/runs');
+    expect(hrefOf('More options', quick)).toBe('/runs?new=1');
     fireEvent.click(within(quick).getByText('Run: Fare watch'));
     expect(await screen.findByTestId('where')).toHaveTextContent('/runs/task-run');
     expect(host.requests.find((r) => r.method === 'POST' && r.path === '/tasks/task-2/runs')!.body).toEqual({});
@@ -336,6 +353,9 @@ describe('HomePage: a busy account', () => {
     expect(next).toHaveTextContent('Today 13:00 · in 3 h');
     expect(next).toHaveTextContent('Monday to Friday at 09:00');
     expect(next).toHaveTextContent('Tomorrow 12:00');
+    // A task's name opens the task's page.
+    expect(hrefOf('Morning report', next)).toBe('/tasks/task-1');
+    expect(hrefOf('Fare watch', next)).toBe('/tasks/task-2');
     expect(hrefOf('2 paused', next)).toBe('/tasks?filter=paused');
     expect(hrefOf('1 failing', next)).toBe('/tasks?filter=failing');
 
@@ -414,6 +434,8 @@ describe('HomePage: quiet, new and restricted accounts', () => {
     expect(within(card).getByTestId('home-step-run')).toHaveAttribute('data-done', 'false');
     expect(hrefOf('1. Connect a machine', card)).toBe('/fleet');
     expect(hrefOf('3. Run it', card)).toBe('/tasks');
+    // "Create a task" opens the form, not the list.
+    expect(checklistSteps({ ...fresh, counts: { tasks: 0, runs: 0 } }, () => true).map((s) => s.to)).toEqual(['/fleet', '/tasks/new', '/tasks']);
     for (const id of ['home-quick-start', 'home-up-next', 'home-recent-runs', 'home-week', 'home-running-empty']) expect(screen.queryByTestId(id)).toBeNull();
     // The machines block stays: it says what is missing.
     expect(screen.getByTestId('home-machines')).toHaveTextContent('No machine is connected.');
@@ -605,5 +627,52 @@ describe('HomePage: layout', () => {
     // The phone has no "New run" button in the header: the goal box is the action.
     const header = screen.getByRole('heading', { level: 1 }).parentElement!.parentElement!;
     expect(within(header).getByRole('button', { name: 'New run', hidden: true })).toBeInTheDocument();
+  });
+});
+
+describe('HomePage: the navigation badge', () => {
+  it('re-reads the Inbox count when the summary says another number, and not while they agree (#431)', async () => {
+    let waiting = 1;
+    const summary = () => {
+      const s = quiet();
+      s.needsYou = { count: waiting, items: Array.from({ length: waiting }, (_, i) => question({ questionId: `q-${i + 1}` })) };
+      return s;
+    };
+    const host = createTestPlatformHost({
+      permissions: ALL,
+      responses: { 'GET /home/summary': () => summary(), 'GET /inbox': () => Array.from({ length: waiting }, (_, i) => ({ questionId: `q-${i + 1}` })) },
+    });
+    const inboxReads = () => host.requests.filter((r) => r.method === 'GET' && r.path === '/inbox').length;
+    render(
+      <PlatformHostProvider host={host}>
+        <ConfirmProvider>
+          <MemoryRouter initialEntries={['/']}>
+            <InboxCountProvider>
+              <HomePage />
+              <Badge />
+            </InboxCountProvider>
+          </MemoryRouter>
+        </ConfirmProvider>
+      </PlatformHostProvider>,
+    );
+    expect(await screen.findByTestId('home-needs-you')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('badge')).toHaveTextContent('1'));
+    const settled = inboxReads();
+
+    // A second question arrives: the page's next read sees it, and the badge follows without waiting for its own poll.
+    waiting = 2;
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    await waitFor(() => expect(screen.getByTestId('home-status')).toHaveTextContent('2 agents are waiting for you.'));
+    await waitFor(() => expect(screen.getByTestId('badge')).toHaveTextContent('2'));
+    expect(inboxReads()).toBe(settled + 1);
+
+    // The same number again: no extra read.
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    await waitFor(() => expect(reads(host)).toBeGreaterThanOrEqual(3));
+    expect(inboxReads()).toBe(settled + 1);
   });
 });

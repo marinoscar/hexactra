@@ -64,6 +64,11 @@ function Where() {
   return <div data-testid="where">{`${location.pathname}${location.search}`}</div>;
 }
 
+/** The address's query, beside the page under test. */
+function Search() {
+  return <div data-testid="search">{useLocation().search}</div>;
+}
+
 function renderList(host: ReturnType<typeof createTestPlatformHost>, url = '/runs', element = <RunList showTaskColumn />) {
   return render(
     <PlatformHostProvider host={host}>
@@ -636,13 +641,21 @@ describe('RunsPage: New run', () => {
   const HOME = '33333333-3333-4333-8333-333333333333';
   const hostRow = { id: HOME, name: 'Linux-Mini-PC', version: '0.1.0', online: false, browserConnected: false, onDemand: true, draining: false, viewerUrl: null, mode: 'unattended', desktop: true, profiles: [], lastSeen: '2026-11-17T00:00:00Z' };
   const base = { 'GET /runs': { items: [], nextCursor: null }, 'GET /runs/counts': counts(), 'GET /tasks': [], 'POST /runs': { id: uuid(42) } };
-  const page = (host: ReturnType<typeof createTestPlatformHost>) =>
+  const page = (host: ReturnType<typeof createTestPlatformHost>, at = '/runs') =>
     render(
       <PlatformHostProvider host={host}>
         <ConfirmProvider>
-          <MemoryRouter initialEntries={['/runs']}>
+          <MemoryRouter initialEntries={[at]}>
             <Routes>
-              <Route path="/runs" element={<RunsPage />} />
+              <Route
+                path="/runs"
+                element={
+                  <>
+                    <RunsPage />
+                    <Search />
+                  </>
+                }
+              />
               <Route path="/runs/:id" element={<Where />} />
             </Routes>
           </MemoryRouter>
@@ -699,6 +712,21 @@ describe('RunsPage: New run', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'New run' }));
     dialog = await screen.findByRole('dialog', { name: 'New run' });
     expect(within(dialog).queryByRole('combobox', { name: 'Policy' })).not.toBeInTheDocument();
+  });
+
+  it('`?new=1` arrives with the dialog open (Home\'s "More options"), drops the parameter and keeps the filters', async () => {
+    page(createTestPlatformHost({ permissions: ALL, responses: base }), '/runs?view=failed&new=1');
+    expect(await screen.findByRole('dialog', { name: 'New run' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('search')).toHaveTextContent(/^\?view=failed$/));
+    // The page behind the dialog is on the Failed tab.
+    expect(screen.getByRole('tab', { name: /^Failed/, hidden: true })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('`?new=1` opens nothing without runs:write', async () => {
+    page(createTestPlatformHost({ permissions: ['runs:read'], responses: base }), '/runs?new=1');
+    expect(await screen.findByText('No runs yet')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('search')).toBeEmptyDOMElement());
   });
 
   it('has no "New run" without runs:write', async () => {

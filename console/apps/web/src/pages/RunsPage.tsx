@@ -22,14 +22,22 @@ export function RunsPage() {
   const { api, viewer } = usePlatformHost();
   const navigate = useNavigate();
   const location = useLocation();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const taskId = params.get('taskId');
-  const [creating, setCreating] = useState(false);
+  const canRun = viewer.hasPermission('runs:write');
+  // `?new=1` arrives with the dialog open (Home's "More options"); the parameter is then dropped, so a reload or
+  // the Back button does not open it again.
+  const [creating, setCreating] = useState(() => canRun && params.get('new') === '1');
+  useEffect(() => {
+    if (!params.has('new')) return;
+    const next = new URLSearchParams(params);
+    next.delete('new');
+    setParams(next, { replace: true, state: location.state });
+  }, [params, setParams, location.state]);
   /** The task's spend, on its runs view (#408). */
   const [spend, setSpend] = useState<{ name: string; spend30d?: TaskSpend } | null>(null);
   /** What another page says on arrival ("Run deleted", from the run page). */
   const [toast, setToast] = useState<string | null>(() => (location.state as { toast?: string } | null)?.toast ?? null);
-  const canRun = viewer.hasPermission('runs:write');
   const canReadTasks = viewer.hasPermission('tasks:read');
 
   useEffect(() => {
