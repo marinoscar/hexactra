@@ -2,6 +2,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import { profileNameSchema } from '../fleet/fleet.schemas';
+import { TASK_DEFAULTS } from './task-defaults';
 
 const domain = z
   .string()
@@ -30,8 +31,8 @@ export const createTaskSchema = z.object({
   allowedDomains: taskFields.allowedDomains.default([]),
   // A human emulator with the owner's full authority (#366): room to work,
   // and no confirmation before purchases unless the task opts in.
-  maxSteps: taskFields.maxSteps.default(100),
-  maxMinutes: taskFields.maxMinutes.default(30),
+  maxSteps: taskFields.maxSteps.default(TASK_DEFAULTS.maxSteps),
+  maxMinutes: taskFields.maxMinutes.default(TASK_DEFAULTS.maxMinutes),
   confirmRiskyActions: taskFields.confirmRiskyActions.default(false),
   model: taskFields.model.optional(),
 });

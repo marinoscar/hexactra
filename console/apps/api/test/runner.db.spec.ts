@@ -14,6 +14,8 @@ import { HandoffAnswers } from '../src/browser/handoff-answers';
 import { InboxController } from '../src/browser/inbox.controller';
 import { QuestionEvents } from '../src/questions/question-events';
 import { QuestionsService } from '../src/questions/questions.service';
+import { HexactraAlertsService } from '../src/alerts/hexactra-alerts.service';
+import { GoalRunHandler } from '../src/runner/goal-runner.jobs';
 import { TasksService } from '../src/tasks/tasks.service';
 
 let app: NestFastifyApplication;
@@ -573,5 +575,93 @@ describe('external agents driving a browser through the console', () => {
     await expect(ctl.act(userId, runId, { action: { type: 'tabs' } })).rejects.toThrow(/stopped this session/);
     expect((await db.run.findFirstOrThrow({ where: { id: runId } })).status).toBe('cancelled');
     expect(fabric.ended()).toBe(1);
+  });
+});
+
+describe('the goal runner budgets (#399)', () => {
+  async function setup(email: string, maxMinutes: number) {
+    const userId = await login(email);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const task = await db.task.create({ data: { userId, name: 'Budget', goal: 'Browse', maxMinutes } });
+    const run = await db.run.create({ data: { userId, taskId: task.id, goal: task.goal } });
+    return { userId, prisma, db, run, fabric: fakeFabric() };
+  }
+
+  it('a task made outside the API gets the unified defaults', async () => {
+    const userId = await login(`runner-defaults-${stamp}@example.test`);
+    const task = await app.get(PrismaService).forUser({ userId }).task.create({ data: { userId, name: 'Defaults', goal: 'Browse' } });
+    expect(task).toMatchObject({ maxSteps: 100, maxMinutes: 30 });
+  });
+
+  it('does not count the wait for a person: a run that waited past maxMinutes resumes and finishes', async () => {
+    const { userId, prisma, db, run, fabric } = await setup(`runner-wait-${stamp}@example.test`, 15);
+    const { ai } = scriptedAi([[['request_human', { kind: 'code', prompt: 'Enter the code', input: 'text', choices: null }]], [['finish', { success: true, result: 'Done after the wait' }]]]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai);
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    const waiting = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(waiting.activeSince).toBeNull();
+    // The person answers 20 minutes later: the run started 20 minutes ago by the wall clock.
+    const longAgo = new Date(Date.now() - 20 * 60_000);
+    await db.run.updateMany({ where: { id: run.id }, data: { startedAt: longAgo } });
+    Object.assign([...fabric.handoffs.values()][0]!, { status: 'completed', response: { outcome: 'completed', value: '123', value_withheld: false } });
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({ status: 'succeeded', result: 'Done after the wait', activeSince: null });
+    expect(done.activeMs).toBeLessThan(60_000);
+  });
+
+  it('still stops with "Time budget exhausted" once active time passes maxMinutes, and the alert counts it', async () => {
+    const { userId, prisma, db, run, fabric } = await setup(`runner-time-${stamp}@example.test`, 1);
+    const { ai } = scriptedAi([[['navigate', { url: 'https://example.test/', reason: 'go' }], ['navigate', { url: 'https://example.test/2', reason: 'go' }]]]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai);
+    // Every clock read passes 40 s of active time.
+    let now = Date.now();
+    runner.clock = () => (now += 40_000);
+    expect(await runner.advance(run.id, userId, null)).toBe('failed');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({ status: 'failed', error: 'Time budget exhausted' });
+    const usage = await app.get(HexactraAlertsService, { strict: false }).sources.usage(new Date(Date.now() - 3_600_000));
+    expect(usage.find((u) => u.userId === userId)?.budgetStops).toBe(1);
+  });
+
+  it('hands a long run to a new job near the runtime limit and resumes it without a new browser session', async () => {
+    const { userId, prisma, db, run, fabric } = await setup(`runner-hop-${stamp}@example.test`, 480);
+    const { ai, runTools } = scriptedAi([
+      [['navigate', { url: 'https://example.test/', reason: 'go' }]],
+      [['navigate', { url: 'https://example.test/2', reason: 'go' }]],
+      [['finish', { success: true, result: 'Long run done' }]],
+    ]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai);
+    // The first job's clock jumps 29 minutes during its first model round.
+    let now = Date.now();
+    runner.clock = () => now;
+    runTools.mockImplementationOnce(async (req: { onStep?: (s: unknown) => void }) => {
+      now += 29 * 60_000;
+      req.onStep?.({ step: 1, response: { usage: { inputTokens: 1, outputTokens: 1 } }, calls: [] });
+      return { final: { outputText: '' }, steps: [], stopReason: 'steps_exhausted' };
+    });
+    expect(await runner.advance(run.id, userId, null)).toBe('continue');
+    const mid = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(mid.status).toBe('running');
+    expect(mid.activeSince).not.toBeNull();
+    // The next job (a fresh job clock) carries on from the saved memory and the same session.
+    runner.clock = () => (now += 1_000);
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({ status: 'succeeded', result: 'Long run done' });
+    expect(done.sessionId).toBe(mid.sessionId);
+    const creates = (fabric.client.request as unknown as jest.Mock).mock.calls.filter(([m, p]) => m === 'POST' && p === '/v1/sessions');
+    expect(creates).toHaveLength(1);
+  });
+
+  it('the handler queues the continuation as a new job even though its own job is still active', async () => {
+    const { userId, run } = await setup(`runner-handler-${stamp}@example.test`, 30);
+    const enqueue = jest.fn(async () => undefined);
+    const runner = { advance: jest.fn(async () => 'continue') };
+    const handler = new GoalRunHandler({ register: jest.fn() } as never, runner as never, app.get(PrismaService), { enqueue } as never);
+    await handler.process({ id: 'job-1', orgId: null, payload: { runId: run.id, userId, orgId: null } } as never);
+    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ type: 'browser.goal.run', reason: 'run_continued', subjectId: run.id, skipDedup: true, scheduledFor: expect.any(Date) }));
+    expect(handler.profile.maxRuntimeMs).toBe(30 * 60_000);
   });
 });
