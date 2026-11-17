@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dangerZoneLastViolations } from '@marinoscar/platform-web/user-data/headless';
 
 import { ADMIN_SECTIONS } from '../config/adminSections';
-import { NAVIGATION } from '../config/navigation';
+import { NAVIGATION, PHONE_BAR_KEYS, PHONE_NAVIGATION } from '../config/navigation';
 import { USER_SETTINGS_SECTIONS } from '../config/userSettingsSections';
 import { sliceRoutes } from '../slices/manifest';
 
@@ -63,8 +63,23 @@ describe('shell navigation', () => {
     expect(destination?.permission).toBe('fleet:read');
   });
 
-  it('keep the bottom bar usable (the rest goes to its More sheet)', () => {
-    expect(NAVIGATION.destinations.length).toBeLessThanOrEqual(7);
+  it('pins the phone bottom bar: Home, Inbox, Tasks, Runs, the first four destinations in that order', () => {
+    // The shell draws at most four tabs and replaces the fourth with "More" when
+    // more destinations are visible, so the bar is given exactly these four.
+    expect([...PHONE_BAR_KEYS]).toEqual(['home', 'inbox', 'tasks', 'runs']);
+    expect(NAVIGATION.destinations.slice(0, 4).map((d) => d.key)).toEqual([...PHONE_BAR_KEYS]);
+    expect(PHONE_NAVIGATION.destinations.map((d) => d.label)).toEqual(['Home', 'Inbox', 'Tasks', 'Runs']);
+    // Active state still resolves against every destination's routes.
+    expect(PHONE_NAVIGATION.destinationRoutes).toBe(NAVIGATION.destinationRoutes);
+  });
+
+  it('keeps Fleet, Settings and Administration in the full table the user menu and the rail draw', () => {
+    expect(NAVIGATION.destinations.slice(4).map((d) => d.key)).toEqual(['fleet', 'settings', 'console']);
+  });
+
+  it('mounts the phone bar and the Inbox count in the shell', () => {
+    expect(appSource).toMatch(/bottomNav=\{<ShellBottomNav navigation=\{PHONE_NAVIGATION\} \/>\}/);
+    expect(appSource).toMatch(/AppPlatformHost, InboxCountProvider,/);
   });
 });
 
