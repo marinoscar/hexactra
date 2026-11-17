@@ -8,7 +8,7 @@ import { NewRunDialog } from '../components/NewRunDialog';
 import { RunList } from '../components/RunList';
 import { TaskSpendLine } from '../components/RunBudgetMeter';
 import type { TaskSpend } from '../components/runBudget';
-import { PageContainer, PageHeader } from '../ui';
+import { PageContainer, PageHeader, aboveBottomBar } from '../ui';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -63,7 +63,7 @@ export function RunsPage() {
       )}
       <RunList showTaskColumn onNewRun={canRun ? () => setCreating(true) : undefined} />
       {canRun && <NewRunDialog open={creating} onClose={() => setCreating(false)} onStarted={(id) => navigate(`/runs/${id}`)} />}
-      <Snackbar open={toast !== null} autoHideDuration={6000} onClose={() => setToast(null)} message={toast} sx={{ bottom: { xs: 88, sm: 24 } }} />
+      <Snackbar open={toast !== null} autoHideDuration={6000} onClose={() => setToast(null)} message={toast} sx={{ bottom: aboveBottomBar(24) }} />
     </PageContainer>
   );
 }

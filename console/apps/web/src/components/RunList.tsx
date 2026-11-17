@@ -45,6 +45,7 @@ import {
   formatDateTime,
   isLive,
   useApiAction,
+  aboveBottomBar,
   useBreakpoint,
   useConfirm,
   useProfileTimeZone,
@@ -713,7 +714,7 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
           elevation={6}
           role="region"
           aria-label="Selection"
-          sx={{ position: 'sticky', bottom: { xs: 72, sm: 16 }, zIndex: 3, mt: 2, px: 2, py: 1, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}
+          sx={{ position: 'sticky', bottom: aboveBottomBar(16), zIndex: 3, mt: 2, px: 2, py: 1, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}
         >
           <Typography sx={{ flexGrow: 1, fontVariantNumeric: 'tabular-nums' }}>{n(selectedCount)} selected</Typography>
           <Button color="error" variant="contained" disabled={action.busy !== null} onClick={() => void deleteSelected()} sx={{ minHeight: { xs: 44, md: 'auto' } }}>
@@ -772,7 +773,7 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
         </Box>
       </Drawer>
 
-      <Snackbar open={toast !== null} autoHideDuration={6000} onClose={() => setToast(null)} message={toast} sx={{ bottom: { xs: 88, sm: 24 } }} />
+      <Snackbar open={toast !== null} autoHideDuration={6000} onClose={() => setToast(null)} message={toast} sx={{ bottom: aboveBottomBar(24) }} />
     </Box>
   );
 }

@@ -1,3 +1,6 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { PlatformHostProvider } from '@marinoscar/platform-web/core';
 import { ShellBottomNav, ShellNavigationRail } from '@marinoscar/platform-web/shell/ui';
@@ -121,6 +124,17 @@ describe('bottom bar offset', () => {
     expect(BOTTOM_BAR_HEIGHT).toBe(56);
     expect(aboveBottomBar()).toEqual({ xs: 'calc(56px + env(safe-area-inset-bottom, 0px))', sm: 'calc(0px + env(safe-area-inset-bottom, 0px))' });
     expect(aboveBottomBar(8).xs).toBe('calc(64px + env(safe-area-inset-bottom, 0px))');
+  });
+
+  it('nothing else carries its own offset above the bar: no safe-area arithmetic or numeric `bottom` outside ui/bottomBar.ts', () => {
+    const root = join(__dirname, '..');
+    const sources = (readdirSync(root, { recursive: true }) as string[]).filter((f) => /\.tsx?$/.test(f) && !f.startsWith('__tests__') && f !== join('ui', 'bottomBar.ts'));
+    const offenders = sources.filter((f) => {
+      const text = readFileSync(join(root, f), 'utf8');
+      // A pinned element's `bottom` (a chart's `margin={{ …, bottom: 8 }}` is not one).
+      return /safe-area-inset-bottom/.test(text) || /\bbottom:\s*(\{\s*xs:\s*\d|['"`]calc\()/.test(text);
+    });
+    expect(offenders).toEqual([]);
   });
 });
 

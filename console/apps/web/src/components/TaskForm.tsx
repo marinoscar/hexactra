@@ -53,7 +53,7 @@ import {
   type TaskFormValues,
 } from '../taskForm/values';
 import type { FleetHost } from '../types/fleet';
-import { ErrorBanner, toast, useBreakpoint, useConfirm, useProfileTimeZone } from '../ui';
+import { ErrorBanner, aboveBottomBar, toast, useBreakpoint, useConfirm, useProfileTimeZone } from '../ui';
 
 export interface TaskFormProps {
   mode: 'create' | 'edit';
@@ -588,13 +588,13 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo }: Ta
       </Stack>
 
       {isPhone && (
-        // Fixed above the shell's bottom navigation (56 px); last in the form, so the focus order ends here.
+        // Fixed above the shell's bottom navigation; last in the form, so the focus order ends here.
         <Paper
           square
           elevation={8}
           role="group"
           aria-label="Form actions"
-          sx={{ position: 'fixed', left: 0, right: 0, bottom: 'calc(56px + env(safe-area-inset-bottom))', zIndex: (t) => t.zIndex.appBar - 1, p: 1.5, display: 'flex', gap: 1, alignItems: 'center' }}
+          sx={{ position: 'fixed', left: 0, right: 0, bottom: aboveBottomBar().xs, zIndex: (t) => t.zIndex.appBar - 1, p: 1.5, display: 'flex', gap: 1, alignItems: 'center' }}
         >
           {saveButton}
           <IconButton aria-label="More actions" aria-haspopup="menu" disabled={busy} onClick={(e) => setMenuAnchor(e.currentTarget)} sx={{ width: 44, height: 44, flexShrink: 0 }}>
