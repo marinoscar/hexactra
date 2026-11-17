@@ -280,7 +280,7 @@ describe('task spend', () => {
         </MemoryRouter>
       </PlatformHostProvider>,
     );
-    expect(await screen.findByTestId('task-spend')).toHaveTextContent('Last 30 days: 2 runs · $0.80 · 4000 tokens · $0.40 per successful run');
+    expect(await screen.findByTestId('task-spend')).toHaveTextContent('Last 30 days: 2 runs · $0.80 · 4,000 tokens · $0.40 per successful run');
   });
 });
 

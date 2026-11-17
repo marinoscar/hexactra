@@ -168,7 +168,7 @@ export function RunsPage() {
               <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' }, minWidth: 72, textAlign: 'right', mx: 1, fontVariantNumeric: 'tabular-nums' }} data-testid="run-cost">
                 {cost ?? '—'}
               </Typography>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={0.5} sx={{ alignItems: 'flex-end', ml: 1 }}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={0.5} sx={{ alignItems: { xs: 'flex-end', sm: 'center' }, justifyContent: 'flex-end', ml: 1, minWidth: { sm: 190 } }}>
                 {cost && <Chip size="small" variant="outlined" label={cost} sx={{ display: { xs: 'inline-flex', sm: 'none' } }} />}
                 {stop && <Chip size="small" variant="outlined" color={r.stopReason === 'error' || r.stopReason === 'no_model' ? 'error' : 'warning'} label={stop} data-testid="run-stop" />}
                 <Chip size="small" color={STATUS_COLOR[r.status]} label={statusLabel(r.status)} />

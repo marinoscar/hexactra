@@ -105,7 +105,7 @@ export function formatBudget(key: BudgetKey, n: number, costKnown = true): strin
       return n < 10 ? `${Math.floor(n * 10) / 10} min` : `${Math.floor(n)} min`;
     case 'inputTokens':
     case 'outputTokens':
-      return n >= 10_000 ? compact.format(n) : String(Math.round(n));
+      return n >= 10_000 ? compact.format(n) : Math.round(n).toLocaleString('en');
     default:
       return String(Math.round(n));
   }
