@@ -36,7 +36,8 @@ export interface FleetCommandResult {
 export function hostLine(h: FleetHost): string {
   const flags = [
     h.online ? 'online' : 'offline',
-    h.mode ?? (h.onDemand ? 'launch' : 'attach'),
+    // A user-level agent reports unattended but has no desktop (#412).
+    h.mode === 'unattended' && !h.desktop ? 'browser only' : (h.mode ?? (h.onDemand ? 'launch' : 'attach')),
     ...(h.desktop ? ['desktop'] : []),
     ...(h.draining ? ['disabled'] : []),
   ];

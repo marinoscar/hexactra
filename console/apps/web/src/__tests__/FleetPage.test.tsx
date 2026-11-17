@@ -67,6 +67,17 @@ describe('FleetPage', () => {
     expect(within(card).queryByRole('link', { name: 'Open desktop' })).not.toBeInTheDocument();
   });
 
+  it('labels a user-level agent without a desktop "Browser only", not Unattended (#412)', async () => {
+    const userAgent: FleetHost = { ...hosts[0]!, id: '44444444-4444-4444-8444-444444444444', name: 'Linux-Mini-PC', viewerUrl: null, mode: 'unattended', desktop: false };
+    renderPage(['fleet:read', 'fleet:desktop'], { 'GET /fleet/hosts': [userAgent] });
+    const card = await screen.findByLabelText('Host Linux-Mini-PC');
+    expect(within(card).getByText('Browser only')).toBeInTheDocument();
+    expect(within(card).queryByText('Unattended')).not.toBeInTheDocument();
+    expect(within(card).queryByRole('link', { name: 'Open desktop' })).not.toBeInTheDocument();
+    fireEvent.mouseOver(within(card).getByText('Browser only'));
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('hexactra agent install --mode unattended');
+  });
+
   it('links desktop hosts to the console desktop page for fleet:desktop, never to an external viewer', async () => {
     const node: FleetHost = { ...hosts[0]!, id: '22222222-2222-4222-8222-222222222222', name: 'mini-pc', viewerUrl: null, mode: 'unattended', desktop: true };
     const attended: FleetHost = { ...node, id: '33333333-3333-4333-8333-333333333333', name: 'mini-pc-attended', mode: 'attended', desktop: false };
