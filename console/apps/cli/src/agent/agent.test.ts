@@ -11,7 +11,7 @@ import { deflateRawSync } from 'node:zlib';
 
 import { describe, expect, it } from 'vitest';
 
-import { agentStatus, ensureSandbox, installAgent, uninstallAgent, updateAgent, type AgentDeps, type ExecResult } from './agent.js';
+import { agentStatus, ensureSandbox, installAgent, uninstallAgent, updateAgent, updateTargets, type AgentDeps, type ExecResult } from './agent.js';
 import { readUnattended } from './unattended.js';
 import { BUNDLE_NAME, bundleSource, fetchBundle } from './bundle.js';
 import { needsSetuidSandbox } from './chrome.js';
@@ -247,6 +247,27 @@ describe('install, re-install and uninstall', () => {
     await updateAgent(d, { bundle: makeBundle(home, '0.1.1', '9999999aaaaaaa') });
     expect(readlinkSync(paths.current)).toContain('0.1.1-9999999');
     expect(exec.some((a) => a.join(' ') === 'systemctl --user restart hexactra-agent.service')).toBe(true);
+  });
+});
+
+describe('agent update with nothing recorded (#411)', () => {
+  it('says there is nothing to update instead of exiting silently', () => {
+    const { d } = harness();
+    expect(() => updateTargets({ ...d, exec: () => ({ code: 3, stdout: 'inactive\n', stderr: '' }) })).toThrow(/No agent is installed for this user: nothing to update\. Run `hexactra agent install`/);
+  });
+
+  it('points to adopting an unattended node that runs without its record', () => {
+    const { d } = harness();
+    const exec: string[][] = [];
+    const running: AgentDeps = { ...d, exec: (argv) => (exec.push(argv), { code: 0, stdout: 'active\n', stderr: '' }) };
+    expect(() => updateTargets(running)).toThrow(/unattended node is running here \(hexactra-node-agent\.service\).*\n.*hexactra agent install --mode unattended/s);
+    expect(exec).toEqual([['systemctl', 'is-active', 'hexactra-node-agent.service']]);
+  });
+
+  it('updates the attended agent when it is recorded', async () => {
+    const { d, home } = harness();
+    await installAgent(d, { bundle: makeBundle(home), browser: '/usr/bin/chromium' });
+    expect(updateTargets(d)).toEqual({ attended: true, unattended: false });
   });
 });
 
