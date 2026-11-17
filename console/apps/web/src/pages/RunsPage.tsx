@@ -46,6 +46,8 @@ export interface Run {
   stepCount: number;
   /** What a running run is doing right now (#379). */
   activity?: RunActivity | null;
+  /** The agent policy the run runs under; null until its first step snapshots it (#401). */
+  policy?: { id: string; name: string; version: number; source: string; builtin: boolean } | null;
   createdAt: string;
   finishedAt: string | null;
   steps?: RunStep[];
@@ -244,6 +246,7 @@ export function RunDetailPage() {
       </Stack>
       <Typography color="text.secondary" gutterBottom>
         Profile {run.profile} · {run.stepCount} steps · started {new Date(run.createdAt).toLocaleString()}
+        {run.policy && ` · policy ${run.policy.name} v${run.policy.version}${run.policy.source === 'run' ? ' (this run only)' : ''}`}
       </Typography>
       {run.result && <Alert severity={run.status === 'succeeded' ? 'success' : 'info'} sx={{ my: 2 }}>{run.result}</Alert>}
       {run.error && <Alert severity="error" sx={{ my: 2 }}>{run.error}</Alert>}

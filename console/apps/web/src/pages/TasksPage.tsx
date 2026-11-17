@@ -5,6 +5,11 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import type { FleetHost } from './FleetPage';
 import { TaskSchedules } from './TaskSchedules';
+import { runTaskWith } from '../policies/api';
+import { startModel } from '../policies/format';
+import { PolicySelect } from '../policies/PolicySelect';
+import { RunWithButton } from '../policies/RunWithButton';
+import { usePolicyCatalog, type PolicyCatalog } from '../policies/usePolicyCatalog';
 
 /** The machine's state as the picker shows it (#384). */
 export function machineState(h: FleetHost): string {
@@ -22,10 +27,17 @@ export interface Task {
   hostId: string | null;
   hostFallback: boolean;
   allowedDomains: string[];
-  maxSteps: number;
-  maxMinutes: number;
   confirmRiskyActions: boolean;
-  model: string | null;
+  /** The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default. */
+  policyId: string | null;
+}
+
+/** The policy a task runs under, and the model its start tier uses, as the task chips show them. */
+export function taskPolicyChips(task: Pick<Task, 'policyId'>, catalog: Pick<PolicyCatalog, 'byId' | 'defaultId' | 'effective'>): { policy: string; model: string | null } | null {
+  const policy = catalog.byId(task.policyId ?? catalog.defaultId);
+  if (!policy) return null;
+  const { model } = startModel(policy.spec, catalog.effective);
+  return { policy: task.policyId ? policy.name : `${policy.name} (default)`, model };
 }
 
 function message(e: unknown, fallback: string): string {
@@ -49,6 +61,9 @@ export function TasksPage() {
   const [hostId, setHostId] = useState('');
   const [hostFallback, setHostFallback] = useState(true);
   const [hosts, setHosts] = useState<FleetHost[]>([]);
+  const [policyId, setPolicyId] = useState<string | null>(null);
+  const catalog = usePolicyCatalog();
+  const canPickPolicy = viewer.hasPermission('agent_policies:read');
 
   const reset = () => {
     setEditing(null);
@@ -59,6 +74,7 @@ export function TasksPage() {
     setConfirmRisky(false);
     setHostId('');
     setHostFallback(true);
+    setPolicyId(null);
   };
 
   const edit = (t: Task) => {
@@ -70,6 +86,7 @@ export function TasksPage() {
     setConfirmRisky(t.confirmRiskyActions);
     setHostId(t.hostId ?? '');
     setHostFallback(t.hostFallback);
+    setPolicyId(t.policyId ?? null);
   };
 
   const load = useCallback(async () => {
@@ -106,6 +123,8 @@ export function TasksPage() {
       confirmRiskyActions: confirmRisky,
       hostId: hostId || null,
       hostFallback,
+      // The agent policy replaces the earlier step, minute and model fields, which the form never sends.
+      ...(canPickPolicy ? { policyId } : {}),
     };
     try {
       if (editing) await api.patch(`/tasks/${editing}`, body);
@@ -117,9 +136,9 @@ export function TasksPage() {
     }
   };
 
-  const run = async (task: Task) => {
+  const run = async (task: Task, runPolicyId?: string) => {
     try {
-      const r = await api.post<{ id: string }>(`/tasks/${task.id}/runs`, {});
+      const r = await runTaskWith(api, task.id, runPolicyId);
       navigate(`/runs/${r.id}`);
     } catch (e) {
       setError(message(e, 'Could not start the run'));
@@ -176,6 +195,7 @@ export function TasksPage() {
                   {hostFallback ? 'Runs will use another available machine until it is back.' : 'Runs will fail until it is back.'}
                 </Alert>
               )}
+              {canPickPolicy && <PolicySelect catalog={catalog} value={policyId} onChange={setPolicyId} manageLink />}
               <FormControlLabel control={<Switch checked={confirmRisky} onChange={(e) => setConfirmRisky(e.target.checked)} />} label="Ask me before purchases and other irreversible steps" />
               <Box>
                 <Button type="submit" variant="contained" disabled={!name.trim() || !goal.trim()}>
@@ -192,7 +212,9 @@ export function TasksPage() {
         </Card>
       )}
       <Stack spacing={2} aria-label="Tasks">
-        {tasks.map((t) => (
+        {tasks.map((t) => {
+          const chips = taskPolicyChips(t, catalog);
+          return (
           <Card key={t.id} variant="outlined" aria-label={`Task ${t.name}`}>
             <CardContent>
               <Typography variant="h6" component="h2">
@@ -205,16 +227,13 @@ export function TasksPage() {
                 <Chip size="small" label={`profile: ${t.profile}`} />
                 <Chip size="small" label={`machine: ${hostName(t.hostId) ?? 'any available'}${t.hostId && !t.hostFallback ? ' only' : ''}`} />
                 <Chip size="small" label={t.allowedDomains.length ? t.allowedDomains.join(', ') : 'any site'} />
-                <Chip size="small" variant="outlined" label={`${t.maxSteps} steps · ${t.maxMinutes} min`} />
+                {chips && <Chip size="small" variant="outlined" label={`policy: ${chips.policy}`} />}
+                {chips?.model && <Chip size="small" variant="outlined" label={`model: ${chips.model}`} />}
               </Stack>
-              <TaskSchedules taskId={t.id} canWrite={canWrite} />
+              <TaskSchedules taskId={t.id} canWrite={canWrite} catalog={canPickPolicy ? catalog : undefined} taskPolicyId={t.policyId} />
             </CardContent>
             <CardActions>
-              {canRun && (
-                <Button variant="contained" onClick={() => void run(t)}>
-                  Run now
-                </Button>
-              )}
+              {canRun && <RunWithButton catalog={catalog} taskPolicyId={t.policyId} onRun={(p) => void run(t, p)} />}
               <Button onClick={() => navigate(`/runs?taskId=${t.id}`)}>Runs</Button>
               {canWrite && <Button onClick={() => edit(t)}>Edit</Button>}
               {canWrite && (
@@ -224,7 +243,8 @@ export function TasksPage() {
               )}
             </CardActions>
           </Card>
-        ))}
+          );
+        })}
       </Stack>
     </Container>
   );
