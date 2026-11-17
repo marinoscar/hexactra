@@ -61,6 +61,19 @@ const MODE_LABEL: Record<NonNullable<FleetHost['mode']>, string> = {
   container: 'Container',
 };
 
+/**
+ * The mode chip, and a hint when it can't do what its mode promises (#412).
+ * The user-level agent (`hexactra agent install` without `--mode`) reports
+ * itself as unattended because it launches its own browser, but it has no
+ * desktop to share: it is a browser-only host, without takeover.
+ */
+export function hostModeLabel(h: Pick<FleetHost, 'mode' | 'desktop' | 'onDemand'>): { label: string; hint: string | null } {
+  if (h.mode === 'unattended' && !h.desktop) {
+    return { label: 'Browser only', hint: 'No desktop to share, so no takeover. For a node with its own desktop, install it with `hexactra agent install --mode unattended`.' };
+  }
+  return { label: h.mode ? MODE_LABEL[h.mode] : h.onDemand ? 'Launch mode' : 'Attach mode', hint: null };
+}
+
 const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 
 function message(e: unknown, fallback: string): string {
@@ -143,7 +156,11 @@ export function FleetPage() {
                   {h.name}
                 </Typography>
                 <Chip size="small" color={h.online ? 'success' : 'default'} label={h.online ? 'Online' : 'Offline'} />
-                <Chip size="small" variant="outlined" label={h.mode ? MODE_LABEL[h.mode] : h.onDemand ? 'Launch mode' : 'Attach mode'} />
+                {(() => {
+                  const m = hostModeLabel(h);
+                  const chip = <Chip size="small" variant="outlined" label={m.label} />;
+                  return m.hint ? <Tooltip title={m.hint}>{chip}</Tooltip> : chip;
+                })()}
                 {h.desktop && (
                   <Tooltip title="Can share its desktop">
                     <DesktopWindowsOutlined fontSize="small" color="action" aria-label="Desktop available" />
