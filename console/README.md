@@ -39,6 +39,7 @@ Run it all on a VPS (console, fabric and an optional browser host in one stack):
   - it runs JavaScript in the page;
   - it uses the node's desktop for native dialogs and file pickers.
   A model without vision keeps working from the page's text and elements.
+- Every model call is priced from the admin's `agentPricing` table (USD per million tokens, [Model prices](docs/runbooks/operations.md#model-prices)): a run shows its model calls, tokens and cost (a lower bound, "at least", while a model has no price) and a task its spend over 30 days.
 - New tasks get 100 steps and 30 minutes, and no confirmation before purchases. Two limits are opt-in per task: an allowed-sites list, and "Ask me before purchases".
 
 The CLI's commands use the login from `hexactra login`, or `HEXACTRA_SERVER_URL` and `HEXACTRA_TOKEN`. Install it with one `curl | bash` line; the terminal UI groups its screens into Agent, Worker, Server, Developer and Account; the guide, with screenshots, is [apps/cli/README.md](apps/cli/README.md).
