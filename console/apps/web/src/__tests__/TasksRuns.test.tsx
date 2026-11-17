@@ -25,10 +25,8 @@ const task: Task = {
   hostId: null,
   hostFallback: true,
   allowedDomains: ['flights.example.test'],
-  maxSteps: 40,
-  maxMinutes: 15,
   confirmRiskyActions: true,
-  model: null,
+  policyId: null,
 };
 const run: Run = {
   id: '22222222-2222-4222-8222-222222222222',

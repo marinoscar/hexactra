@@ -83,6 +83,39 @@ A reference to a deleted policy (or someone else's) falls through to the next le
 
 **The earlier task fields.** `maxSteps`, `maxMinutes` and `model` on a task still work for one release and are marked deprecated. Sending one (with no `policyId`) saves a derived personal policy named `Task: <task name>`, built from Balanced (`maxActions` = `maxSteps`, `maxActiveMinutes` = `maxMinutes`; a model becomes the `standard` pin and caps `maxTier` at `standard`) and answers with a `Deprecation: true` header. The `agent_policies` migration converted existing tasks the same way. Use `policyId` instead.
 
+### Using it in the console
+
+Everything above is on the console's pages (`console/apps/web/src/pages/`, one client for every call in `src/policies/api.ts`). Built-ins show a lock; your own policies show their version, and every policy shows its tiers, a budget summary ("60 actions · $2 · 20 min" or "Unlimited") and how many tasks and schedules use it. The editor's help texts are the API's own field descriptions.
+
+**Create a policy**
+
+1. Open **Settings → Browser agent → Agent policies** (`/settings/agent-policies`).
+2. Choose **New policy** and pick the built-in to start from, or **Duplicate** any policy (name the copy; the editor opens on it).
+3. In the editor, fill in **General** (name, description), then **Models**: the start and max tier (Fast | Standard | Frontier), provider fallback, and optional pins per tier. Each tier shows the model it resolves to for you and where that comes from.
+4. Under **Budgets**, set each limit or turn on its **No limit** switch (saved as `null`). With every budget off, the page warns: "Nothing will stop this run except finishing, Stop, or stall detection." Saving is still allowed. When an administrator set a ceiling, it shows under the field ("Capped at 300 actions by your administrator").
+5. Adjust **When the agent is stuck** and, under **Advanced: context**, the context settings; then **Save**. If someone changed the policy meanwhile, the page says so and offers **Reload**.
+
+**Set your default**
+
+1. On **Agent policies**, open a policy's **⋮** menu and choose **Set as default**. The **Default** badge moves to it.
+2. Tasks whose policy is **Default** (and ad-hoc runs) now use it. A default cannot be deleted; deleting a policy that tasks or schedules still use asks which policy they move to.
+
+**Choose a policy for a task, a schedule or one run**
+
+1. In the task form (**Tasks**), pick **Policy**: *Default (name)*, a built-in, or one of yours. The line under it summarises the choice; **Manage policies** opens the list. The form sends `policyId` only.
+2. A task card shows `policy: <name>` and `model: <the model its start tier uses>`.
+3. When adding a schedule, **Policy override** runs that schedule under another policy (default: the task's).
+4. **Run with…** (the arrow next to **Run now**) starts one run under the policy you pick from the menu, without changing the task.
+
+**Export and import**
+
+1. **Export all** downloads every policy as one JSON file; a policy's **⋮ → Export** downloads just that one. Turn off **Include model pins** for a file that works on any deployment.
+2. **Import** opens a file picker. The dialog lists the policies in the file and asks what to do when you already have one with the same name (keep both and rename, skip, or replace yours), then reports what was created, replaced and skipped, with any warnings (for example a pin to a model this deployment does not have, which is dropped).
+
+**Model tiers.** **Settings → Browser agent → Model tiers** (`/settings/agent-model-tiers`, shown while AI is on) has one card per tier: model, reasoning effort, max output tokens and fallback model. Each tier **inherits from the deployment** until you switch that off; "Now:" shows what it resolves to. Same model with low effort for Standard and high effort for Frontier is a good pair: an escalation keeps the provider's prompt cache warm.
+
+**For administrators**, under **Administration → Browser agent**: **Agent model tiers** (`/admin/settings/agent-model-tiers`, the deployment default for every user), **Agent budget ceilings** (`/admin/settings/agent-ceilings`, the most any run may spend, also capping Unlimited policies; **No ceiling** per budget) and **Model prices** (`/admin/settings/agent-pricing`, US dollars per million input, output and cached input tokens per `provider:modelId`). All three read with `system_settings:read` and save with `system_settings:write`.
+
 ### Context settings
 
 Most of a long run's cost is context re-sent on every model call. The policy's `context` block (read from the run's snapshot, never from constants) sets how much each round carries:

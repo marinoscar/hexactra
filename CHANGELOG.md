@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Agent policies in the web console** (#407).
+  - Settings → Browser agent → Agent policies lists the built-in and personal policies, with their tiers, budgets, usage and version. From there you can create from a template, duplicate, edit, set the default, export, import and delete with reassignment.
+  - The full-page policy editor has a "No limit" switch for every budget and warns when nothing would stop a run.
+  - Model tiers page for each user. Admin pages for deployment model tiers, budget ceilings and model prices.
+  - The task form picks a policy, schedules can override it, and "Run with…" runs a task once under another policy. Task cards show the policy and the model.
 - **Agent policies in MCP, the SDK and the CLI** (#409).
   - MCP: new tools `policies_list`, `policy_get`, `policy_create`, `policy_update`, `policy_set_default`, `policies_export` and `policies_import`. `policy_id` is accepted on `run_goal`, `task_create`, `task_update`, `task_run` and `schedule_create`.
   - SDK: typed helpers `hx.policies`, `hx.tasks` and `hx.runs`, plus the `AgentPolicySpec` type.

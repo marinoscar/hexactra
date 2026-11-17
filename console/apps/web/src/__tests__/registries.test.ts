@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { dangerZoneLastViolations } from '@marinoscar/platform-web/user-data/headless';
@@ -64,5 +65,57 @@ describe('shell navigation', () => {
 
   it('keep the bottom bar usable (the rest goes to its More sheet)', () => {
     expect(NAVIGATION.destinations.length).toBeLessThanOrEqual(7);
+  });
+});
+
+// The browser agent's cards (#407): the exact strings the API routes enforce,
+// the AI-dependent ones behind the `ai` feature, appended as their own group
+// so no existing card moves.
+describe('browser agent cards', () => {
+  const group = (sections: typeof ADMIN_SECTIONS) => sections.find((s) => s.label === 'Browser agent');
+  const policiesController = read('../../../api/src/policies/policies.controller.ts');
+  // The platform's system settings routes (GET /api/system-settings) and their permission ids.
+  const settingsPermissions = readFileSync(join(__dirname, '..', '..', '..', '..', 'node_modules', '@marinoscar', 'platform-api', 'dist', 'settings', 'settings.permissions.js'), 'utf8');
+
+  it('the user cards: Agent policies and Model tiers, behind what GET /api/agent-policies enforces', () => {
+    const listRoute = /@Get\(\)\s*\n\s*@ApiDataResponse\([^)]*\)\)?\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(policiesController);
+    expect(listRoute?.[1]).toBe('agent_policies:read');
+    expect(group(USER_SETTINGS_SECTIONS)?.cards.map((c) => [c.path, c.permission, c.feature])).toEqual([
+      ['/settings/agent-policies', listRoute![1], undefined],
+      ['/settings/agent-model-tiers', 'agent_policies:read', 'ai'],
+    ]);
+  });
+
+  it('the admin cards: model tiers (AI), ceilings and prices, behind what GET /api/system-settings enforces', () => {
+    expect(settingsPermissions).toMatch(/SYSTEM_SETTINGS_READ: \{\s*id: 'system_settings:read'/);
+    expect(group(ADMIN_SECTIONS)?.cards.map((c) => [c.title, c.path, c.permission, c.feature])).toEqual([
+      ['Agent model tiers', '/admin/settings/agent-model-tiers', 'system_settings:read', 'ai'],
+      ['Agent budget ceilings', '/admin/settings/agent-ceilings', 'system_settings:read', undefined],
+      ['Model prices', '/admin/settings/agent-pricing', 'system_settings:read', undefined],
+    ]);
+  });
+
+  it('are appended: the existing groups keep their order and cards, the new group comes after them', () => {
+    const adminLabels = ADMIN_SECTIONS.map((s) => s.label);
+    expect(adminLabels.slice(0, 4)).toEqual(['General', 'Access', 'Operations', 'Browser agent']);
+    expect(ADMIN_SECTIONS[0]!.cards[0]!.path).toBe('/admin/settings/fabric');
+    const userLabels = USER_SETTINGS_SECTIONS.map((s) => s.label);
+    const at = userLabels.indexOf('Browser agent');
+    expect(userLabels.slice(0, 3)).toEqual(['Account', 'Security', 'Notes']);
+    expect(at).toBeGreaterThan(userLabels.indexOf('Notes'));
+    if (userLabels.includes('Integrations')) expect(at).toBe(userLabels.indexOf('Integrations') + 1);
+    // No existing group gained one of the new cards.
+    const newPaths = new Set(['/settings/agent-policies', '/settings/agent-model-tiers', '/admin/settings/agent-model-tiers', '/admin/settings/agent-ceilings', '/admin/settings/agent-pricing']);
+    for (const s of [...ADMIN_SECTIONS, ...USER_SETTINGS_SECTIONS].filter((x) => x.label !== 'Browser agent')) {
+      for (const c of s.cards) expect(newPaths.has(c.path!), `${s.label}: ${c.path}`).toBe(false);
+    }
+  });
+
+  it('route each page behind the card\'s permission (writes are gated in the pages)', () => {
+    expect(appSource).toMatch(/path="settings\/agent-policies" element=\{<Gate permission="agent_policies:read">/);
+    expect(appSource).toMatch(/path="settings\/agent-model-tiers" element=\{<Gate permission="agent_policies:read">/);
+    expect(appSource).toMatch(/path="admin\/settings\/agent-model-tiers" element=\{<Gate permission="system_settings:read">/);
+    expect(appSource).toMatch(/path="admin\/settings\/agent-ceilings" element=\{<Gate permission="system_settings:read">/);
+    expect(appSource).toMatch(/path="admin\/settings\/agent-pricing" element=\{<Gate permission="system_settings:read">/);
   });
 });

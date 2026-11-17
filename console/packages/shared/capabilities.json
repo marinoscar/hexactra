@@ -95,9 +95,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the web app or the CLI"
       },
-      "web": {
-        "none": "Arrives with the Agent policies page (E31.9, #407)"
-      }
+      "web": "/settings/agent-policies"
     },
     {
       "id": "policies.write",
@@ -117,9 +115,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the web app or the CLI"
       },
-      "web": {
-        "none": "Arrives with the Agent policies page (E31.9, #407)"
-      }
+      "web": "/settings/agent-policies"
     },
     {
       "id": "policies.delete",
@@ -136,9 +132,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the web app or the CLI"
       },
-      "web": {
-        "none": "Arrives with the Agent policies page (E31.9, #407)"
-      }
+      "web": "/settings/agent-policies"
     },
     {
       "id": "policies.default",
@@ -151,9 +145,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the web app or the CLI"
       },
-      "web": {
-        "none": "Arrives with the Agent policies page (E31.9, #407)"
-      }
+      "web": "/settings/agent-policies"
     },
     {
       "id": "policies.model_tiers",

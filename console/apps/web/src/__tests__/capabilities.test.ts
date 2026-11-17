@@ -14,7 +14,8 @@ const tsx = (dir: string) => readdirSync(join(src, dir)).filter((f) => /\.tsx?$/
 
 const routeSources = [read('App.tsx'), ...tsx('slices')].join('\n');
 const declared = new Set([...routeSources.matchAll(/<Route\s+path="([^"]+)"/g)].map((m) => `/${m[1]}`));
-const calls = [...tsx('pages'), read('live.ts')].join('\n');
+// The pages, the live stream and the agent policy client (src/policies/api.ts holds every policy call).
+const calls = [...tsx('pages'), ...tsx('policies'), read('live.ts')].join('\n');
 
 /** `/api/runs/{id}/cancel` → a pattern for the call `` `/runs/${...}/cancel` `` or `'/runs'`. */
 function callPattern(op: string): RegExp {
