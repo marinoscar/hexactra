@@ -60,8 +60,9 @@ token=$(grep '^HEXACTRA_FABRIC_OPERATOR_TOKEN=' ../../infra/compose/.env 2>/dev/
 for i in $(seq 1 30); do
   dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status 2>/dev/null | grep -q 'online=true' && break
   sleep 2
+# The confirm checks read all of the output (no grep -q): under pipefail a writer cut off by an early-exiting grep fails the pipeline even though it matched.
 done
-dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status | grep -q 'online=true' || fail "browser host not online"
+dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status | grep 'online=true' >/dev/null || fail "browser host not online"
 pass "bundled browser host registered and online"
 
 # The documented way to mint the console's service token (docs/runbooks/vps-stack.md §3).
@@ -136,7 +137,7 @@ for i in $(seq 1 90); do
   dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status 2>/dev/null | grep -q 'ci-cli-host .*online=true' && break
   sleep 1
 done
-dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status | grep -q 'ci-cli-host .*online=true' \
+dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status | grep 'ci-cli-host .*online=true' >/dev/null \
   || { kill "$agent_pid" 2>/dev/null; cat "$agent_tmp/agent.log" >&2; fail "the CLI-installed agent did not come online over /fabric/"; }
 agent_status=$("${cli_env[@]}" node "$console/apps/cli/dist/cli.js" agent status) || fail "hexactra agent status"
 grep -q 'Host:     ci-cli-host' <<<"$agent_status" || fail "hexactra agent status: $agent_status"
@@ -202,6 +203,6 @@ for _ in $(seq 1 60); do
   dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status 2>/dev/null | grep -q 'online=true' && break
   sleep 2
 done
-dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status | grep -q 'online=true' || fail "browser host not online after a backup and restart"
+dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status | grep 'online=true' >/dev/null || fail "browser host not online after a backup and restart"
 pass "the documented fabric backup works and the host comes back online"
 echo "stack smoke: all checks passed"
