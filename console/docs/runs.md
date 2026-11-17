@@ -69,7 +69,7 @@ Deleting is permanent: the run, its steps, its questions and the stored screensh
 
 **A live run is never deleted.** A run that is `queued`, `running` or `waiting_human` must be cancelled first (`POST /api/runs/{id}/cancel`). The status is checked again inside the transaction that deletes.
 
-**Deleting runs also removes their cost and stop-reason history from task spend and from alert counts.** A task's `spend30d` and the run-budget, stalled-runs and expensive-run alerts are computed from run rows, so they drop when the rows go. The AI usage report (**Administration → AI Usage**, `/admin/settings/ai/usage`) is not affected: it reads the AI gateway's own records (`ai_usage_events`), priced by the same table, and never the `runs` table.
+**Deleting runs also removes their cost and stop-reason history from task spend and from alert counts.** A task's `spend30d` and the run-budget, stalled-runs and expensive-run alerts are computed from run rows, so they drop when the rows go. The AI usage report (**Administration → AI Usage**, `/admin/settings/ai/usage`) is not affected: it reads the AI gateway's own records (`ai_usage_events`), never the `runs` table.
 
 | Route | Body | Answer |
 |---|---|---|
