@@ -11,11 +11,46 @@ import { z } from 'zod';
 
 import { McpMetrics, MCP_METRIC_METHODS } from './mcp.metrics';
 import { LIST_CACHE_SCOPE, LIST_TTL_MS, META, SUPPORTED_VERSIONS, clientBucket, negotiateInitialize, type McpRequestContext, type RpcMessage } from './mcp.protocol';
-import { RPC, errorResult, rpcError, rpcResult, type McpContext, type McpToolResult, type RpcId, type RpcResponse } from './mcp.results';
-import { MCP_INSTRUCTIONS, MCP_TOOLS, READ_ONLY_TOOLS } from './mcp.tools';
+import { McpApiError, mapUnknownError } from './mcp.errors';
+import { RPC, errorResult, finalizeResult, limitsFor, rpcError, rpcResult, withDeadline, type McpContext, type McpCredentialKind, type McpLimits, type McpToolResult, type RpcId, type RpcResponse } from './mcp.results';
+import { MCP_INSTRUCTIONS, MCP_TOOLS, toolAnnotations, type McpTool } from './mcp.tools';
 
-/** An error a REST route answered with, shown to the model as a tool error. */
-class ApiCallError extends Error {}
+function header(headers: Record<string, unknown>, name: string): string | undefined {
+  const v = headers[name];
+  return Array.isArray(v) ? String(v[0]) : v === undefined ? undefined : String(v);
+}
+
+/** The credential kind of a request as the tools see it (`oauth` from E33.1 on). */
+export function credentialKindOf(rctx: Pick<McpRequestContext, 'credential'>): McpCredentialKind | undefined {
+  return rctx.credential?.kind as McpCredentialKind | undefined;
+}
+
+/** How to follow work that outlived the deadline of a call. */
+function followUp(tool: string): string {
+  if (tool === 'ask_human' || tool === 'question_status' || tool === 'inbox_answer') return 'Follow it with question_status.';
+  if (tool === 'browser_request_human' || tool === 'browser_handoff_status') return 'Follow it with browser_handoff_status.';
+  if (tool.startsWith('browser_')) return 'Check the page with browser_screenshot before acting again.';
+  return 'Follow it with run_status or runs_list.';
+}
+
+/** The answer of a call that passed its server-side deadline: a normal result, never a hung request. */
+export function stillWorking(tool: McpTool, limits: McpLimits): McpToolResult {
+  const s = Math.round((limits.deadlineMs ?? 0) / 1000);
+  return { content: [{ type: 'text', text: `${tool.name} is still working after ${s} seconds; the work continues on the server. ${followUp(tool.name)}` }] };
+}
+
+/** One tool entry of `tools/list` for a revision: title and outputSchema only where the revision has them. */
+export function toolListEntry(t: McpTool, flags: { toolTitle: boolean; structuredContent: boolean }): Record<string, unknown> {
+  return {
+    name: t.name,
+    ...(flags.toolTitle ? { title: t.title } : {}),
+    description: t.description,
+    inputSchema: z.toJSONSchema(t.input, { io: 'input' }),
+    // `io: 'input'` keeps extra properties allowed: the REST shapes grow, and a client must not reject a newer field.
+    ...(flags.structuredContent && t.output ? { outputSchema: z.toJSONSchema(t.output, { io: 'input' }) } : {}),
+    annotations: toolAnnotations(t),
+  };
+}
 
 /** What the dispatcher answers: the JSON-RPC response and the HTTP status it wants (200 unless said). */
 export interface DispatchOutcome {
@@ -43,7 +78,7 @@ export class McpDispatcher {
   ) {}
 
   /** How tools reach the console: its REST routes, in-process, as the caller. */
-  private toolContext(authorization: string): McpContext {
+  private toolContext(authorization: string, kind: McpCredentialKind | undefined, limits: McpLimits): McpContext {
     const fastify = this.adapter.httpAdapter.getInstance<FastifyInstance>();
     const call = async (method: string, path: string, body?: unknown, extra?: Record<string, string>) =>
       fastify.inject({
@@ -56,15 +91,32 @@ export class McpDispatcher {
       async api<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
         const res = await call(method, path, body, headers);
         if (res.statusCode === 204) return { ok: true } as T;
-        const parsed = res.body ? (JSON.parse(res.body) as { data?: T; message?: string; code?: string }) : {};
-        if (res.statusCode >= 400) throw new ApiCallError(`${res.statusCode} ${parsed.code ?? ''}: ${parsed.message ?? res.statusMessage}`.trim());
+        let parsed: { data?: T; message?: unknown; code?: unknown; details?: unknown } = {};
+        try {
+          parsed = res.body ? JSON.parse(res.body) : {};
+        } catch {
+          parsed = { message: res.statusMessage };
+        }
+        if (res.statusCode >= 400) {
+          const retry = Number(header(res.headers, 'retry-after'));
+          throw new McpApiError(
+            res.statusCode,
+            typeof parsed.code === 'string' ? parsed.code : '',
+            typeof parsed.message === 'string' ? parsed.message : Array.isArray(parsed.message) ? parsed.message.join('; ') : (res.statusMessage ?? ''),
+            parsed.details,
+            header(res.headers, 'x-request-id'),
+            Number.isFinite(retry) && retry > 0 ? Math.ceil(retry) : undefined,
+          );
+        }
         return (parsed.data ?? parsed) as T;
       },
       async bytes(path: string) {
         const res = await call('GET', path);
-        if (res.statusCode >= 400) throw new ApiCallError(`${res.statusCode}: could not fetch ${path}`);
+        if (res.statusCode >= 400) throw new McpApiError(res.statusCode, 'SCREENSHOT_FAILED', 'could not fetch the screenshot', undefined, header(res.headers, 'x-request-id'));
         return { mime: String(res.headers['content-type'] ?? 'application/octet-stream'), data: res.rawPayload };
       },
+      ...(kind ? { credential: { kind } } : {}),
+      limits,
     };
   }
 
@@ -140,36 +192,34 @@ export class McpDispatcher {
         return ok({ supportedVersions: [...SUPPORTED_VERSIONS], capabilities: this.capabilities(), instructions: MCP_INSTRUCTIONS }, true);
       case 'tools/list':
         // Deterministic order: the registry's own order.
-        return ok(
-          {
-            tools: MCP_TOOLS.map((t) => ({
-              name: t.name,
-              description: t.description,
-              inputSchema: z.toJSONSchema(t.input, { io: 'input' }),
-              annotations: READ_ONLY_TOOLS.has(t.name) ? { readOnlyHint: true } : { readOnlyHint: false, destructiveHint: t.name === 'run_cancel' || t.name === 'browser_close', openWorldHint: true },
-            })),
-          },
-          true,
-        );
+        return ok({ tools: MCP_TOOLS.map((t) => toolListEntry(t, flags)) }, true);
       case 'tools/call': {
         const params = (msg.params ?? {}) as { name?: unknown; arguments?: unknown };
         const name = String(params.name ?? '');
         const tool = MCP_TOOLS.find((t) => t.name === name);
         if (!tool) return { status: 200, body: rpcError(id, RPC.INVALID_PARAMS, `Unknown tool ${name}`) };
+        const kind = credentialKindOf(rctx);
+        const limits = limitsFor(kind);
+        const finalize = (r: McpToolResult) => finalizeResult(r, { structured: flags.structuredContent, limits });
         const args = tool.input.safeParse(params.arguments ?? {});
-        if (!args.success) return ok({ ...errorResult(`Invalid arguments: ${args.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`) });
-        let result: McpToolResult;
-        try {
-          result = await tool.call(args.data as Record<string, unknown>, this.toolContext(authorization));
-        } catch (e) {
-          result = errorResult(e instanceof Error ? e.message : String(e));
+        if (!args.success) return ok({ ...finalize(errorResult(`Invalid arguments: ${args.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`)) });
+        const work = tool.call(args.data as Record<string, unknown>, this.toolContext(authorization, kind, limits)).catch((e: unknown) => {
+          if (e instanceof McpApiError) {
+            // The original answer stays in the log (with its request id); the model gets a sentence.
+            this.log.warn(`mcp tool ${tool.name} failed: ${e.status} ${e.code} ${e.message.slice(0, 300)}${e.requestId ? ` request=${e.requestId}` : ''}`);
+          } else {
+            this.log.error(`mcp tool ${tool.name} threw: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}`);
+          }
+          return mapUnknownError(e, tool.name);
+        });
+        const result = await withDeadline(work, limits.deadlineMs, () => stillWorking(tool, limits));
+        // The output schemas are checked by the tests against real REST answers; outside production a
+        // mismatch is logged (never refused: the answer is still useful).
+        if (tool.output && result.structuredContent && !result.isError && process.env.NODE_ENV !== 'production') {
+          const check = tool.output.safeParse(result.structuredContent);
+          if (!check.success) this.log.warn(`mcp tool ${tool.name}: structuredContent does not match its output schema: ${check.error.issues.slice(0, 3).map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
         }
-        // structuredContent is a 2025-06-18 field: older clients get the text blocks only.
-        if (!flags.structuredContent && result.structuredContent !== undefined) {
-          const { structuredContent: _omit, ...rest } = result;
-          result = rest;
-        }
-        return ok({ ...result });
+        return ok({ ...finalize(withoutSchemaBreakingError(tool, result)) });
       }
       case 'resources/list':
         // No resources until the MCP Apps (E33.8); the capability is not advertised.
@@ -207,4 +257,19 @@ export class McpDispatcher {
       _meta: { ...((result._meta as Record<string, unknown> | undefined) ?? {}), [META.serverInfo]: serverInfo() },
     };
   }
+}
+
+/**
+ * An error result of a tool that declares an `outputSchema` carries no
+ * `structuredContent`: a client may validate it against that schema even when
+ * `isError` is true, and `{ code, message }` would not match. The code moves
+ * into the text instead, so the model still sees it.
+ */
+export function withoutSchemaBreakingError(tool: { output?: unknown }, result: McpToolResult): McpToolResult {
+  if (!result.isError || !tool.output || !result.structuredContent) return result;
+  const { structuredContent, ...rest } = result;
+  const code = typeof structuredContent.code === 'string' ? structuredContent.code : undefined;
+  if (!code) return rest;
+  const content = rest.content.map((c, i) => (i === 0 && c.type === 'text' && !c.text.includes(code) ? { ...c, text: `${c.text} [${code}]` } : c));
+  return { ...rest, content };
 }

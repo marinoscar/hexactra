@@ -55,7 +55,8 @@ describe('the console MCP server', () => {
     const create = list.json.result.tools.find((x: { name: string }) => x.name === 'task_create');
     expect(create.inputSchema).toMatchObject({ type: 'object', properties: { name: {}, goal: {} } });
     expect(create.annotations).toMatchObject({ readOnlyHint: false });
-    expect(list.json.result.tools.find((x: { name: string }) => x.name === 'run_status').annotations).toEqual({ readOnlyHint: true });
+    // Every hint is explicit (#462).
+    expect(list.json.result.tools.find((x: { name: string }) => x.name === 'run_status').annotations).toEqual({ title: expect.any(String), readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
     // Every read-only hint names a real tool.
     for (const n of READ_ONLY_TOOLS) expect(names).toContain(n);
 
@@ -82,7 +83,8 @@ describe('the console MCP server', () => {
     const t = await token(`mcp-viewer-${stamp}@example.test`, 'viewer');
     const r = await rpc(t, { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'task_create', arguments: { name: 'x', goal: 'y' } } });
     expect(r.json.result.isError).toBe(true);
-    expect(r.json.result.content[0].text).toMatch(/^403/);
+    // A sentence a model can act on (#462), not the raw REST string.
+    expect(r.json.result.content[0].text).toMatch(/^Your Hexactra account is not allowed to do this\./);
     const ok = await rpc(t, { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'tasks_list', arguments: {} } });
     expect(ok.json.result.isError).toBeFalsy();
   });
@@ -108,7 +110,7 @@ describe('MCP questions (#290)', () => {
     const tools = list.json.result.tools as { name: string; inputSchema: { properties: Record<string, unknown> }; annotations: unknown }[];
     const ask = tools.find((x) => x.name === 'ask_human')!;
     expect(Object.keys(ask.inputSchema.properties)).toEqual(expect.arrayContaining(['prompt', 'input', 'options', 'constraints', 'confirm_label', 'deny_label', 'risk', 'timeout_s', 'wait_s']));
-    expect(tools.find((x) => x.name === 'question_status')!.annotations).toEqual({ readOnlyHint: true });
+    expect(tools.find((x) => x.name === 'question_status')!.annotations).toEqual({ title: expect.any(String), readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
 
     const r = await call(t, 'ask_human', { prompt: 'Which seat?', input: 'choice', options: [{ id: 'w', label: 'Window', description: 'By the window' }, 'Aisle'] });
     expect(r.isError).toBe(false);
@@ -266,7 +268,7 @@ describe('MCP agent policies (#409)', () => {
     expect(updated.body).toMatchObject({ name: `Mcp policy ${stamp} v2`, version: policy.version + 1 });
     const stale = await call(t, 'policy_update', { policy_id: policy.id, name: 'Stale', version: policy.version });
     expect(stale.isError).toBe(true);
-    expect(stale.body).toMatch(/^412/);
+    expect(stale.body).toMatch(/POLICY_VERSION_CONFLICT.*policy_get/);
 
     expect((await call(t, 'policy_set_default', { policy_id: policy.id })).body).toMatchObject({ policyId: policy.id, explicit: true });
     expect(((await call(t, 'policies_list', {})).body as unknown as { id: string; isDefault: boolean }[]).find((p) => p.id === policy.id)!.isDefault).toBe(true);
@@ -296,7 +298,7 @@ describe('MCP agent policies (#409)', () => {
     for (const [name, args] of writes) {
       const r = await call(t, name, args);
       expect([name, r.isError]).toEqual([name, true]);
-      expect(r.body).toMatch(/^403/);
+      expect(r.body).toMatch(/^Your Hexactra account is not allowed to do this\./);
     }
   });
 

@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 
 import { createApp } from '../src/main';
-import { META, SUPPORTED_VERSIONS } from '../src/mcp/mcp.protocol';
+import { MCP_VERSIONS, META, SUPPORTED_VERSIONS, type McpVersion } from '../src/mcp/mcp.protocol';
 
 let app: NestFastifyApplication;
 let t = '';
@@ -90,7 +90,12 @@ describe.each(HANDSHAKE)('handshake revision %s', (version) => {
       const call = await post({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'tasks_list', arguments: {} } }, headers);
       expect(call.status).toBe(200);
       expect(call.json.result.isError).toBeFalsy();
-      expect(Array.isArray(JSON.parse(call.json.result.content[0].text))).toBe(true);
+      // Revisions with structured output (#462): a summary line, then the same JSON; structuredContent wraps the list in items.
+      const structured = MCP_VERSIONS[(headers['mcp-protocol-version'] ?? '2025-03-26') as McpVersion].structuredContent;
+      const text: string = call.json.result.content[0].text;
+      expect(Array.isArray(JSON.parse(structured ? text.slice(text.indexOf('\n') + 1) : text))).toBe(true);
+      if (structured) expect(Array.isArray(call.json.result.structuredContent.items)).toBe(true);
+      else expect(call.json.result.structuredContent).toBeUndefined();
       expect(call.headers['mcp-session-id']).toBeUndefined();
       expect((await post({ jsonrpc: '2.0', id: 4, method: 'ping' }, headers)).json.result).toEqual({});
     }
