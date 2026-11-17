@@ -67,6 +67,35 @@ export class PoliciesService {
     return row ? this.record(row) : null;
   }
 
+  /**
+   * `find` for several references in one read: the policies those references
+   * name for this user, by reference. A reference that names nothing (deleted,
+   * foreign, malformed, or a row whose spec no longer parses) is left out.
+   */
+  async findMany(userId: string, refs: Iterable<string>): Promise<Map<string, PolicyRecord>> {
+    const out = new Map<string, PolicyRecord>();
+    const ids: string[] = [];
+    for (const ref of new Set(refs)) {
+      const kind = parsePolicyRef(ref);
+      if (!kind) continue;
+      if (kind.kind === 'builtin') {
+        const b = builtinPolicy(ref)!;
+        out.set(ref, { id: b.id, name: b.name, description: b.description, version: b.version, builtin: true, spec: cloneSpec(b.spec), createdAt: null, updatedAt: null });
+      } else {
+        ids.push(kind.id);
+      }
+    }
+    if (ids.length === 0) return out;
+    for (const row of await this.db(userId).agentPolicy.findMany({ where: { id: { in: ids } } })) {
+      try {
+        out.set(row.id, this.record(row));
+      } catch {
+        // Logged by `record`; the caller falls through to the next level.
+      }
+    }
+    return out;
+  }
+
   /** Like `find`, but 404 `POLICY_NOT_FOUND`. */
   async require(userId: string, ref: string): Promise<PolicyRecord> {
     const p = await this.find(userId, ref);
