@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { assertTransition, isTerminal, type RunStatus } from './run-status';
@@ -17,6 +17,8 @@ export interface RunPatch {
   transcript?: Prisma.InputJsonValue;
   /** With `waiting_human`: when the fabric handoff expires (schedules the reminders). */
   handoffExpiresAt?: Date | null;
+  /** With `running`: what the runner is doing now (#379). Any other status clears it. */
+  activity?: Prisma.InputJsonValue;
 }
 
 /**
@@ -98,6 +100,8 @@ export class TasksService {
         data: {
           status: to,
           ...fields,
+          // Only a running run is doing something right now (#379).
+          ...(to !== 'running' ? { activity: Prisma.DbNull } : {}),
           // Reminders while it waits for its person (run-reminders.ts).
           ...(to === 'waiting_human' ? startWaiting(now, handoffExpiresAt ?? null) : run.status === 'waiting_human' ? STOP_WAITING : {}),
           ...(to === 'running' && !run.startedAt ? { startedAt: now } : {}),

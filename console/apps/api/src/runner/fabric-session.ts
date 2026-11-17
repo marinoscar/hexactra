@@ -127,6 +127,9 @@ export function handoffBody(req: HandoffRequest): Record<string, unknown> {
 }
 
 /** The fabric calls a run makes, over the console's FabricClient. */
+/** How long the host has to run one action before the console gives up on it. */
+export const ACTION_TIMEOUT_MS = 45_000;
+
 export class FabricSession {
   constructor(
     private readonly fabric: FabricClient,
@@ -147,7 +150,7 @@ export class FabricSession {
    * `waitForTakeover: false` throws at once instead (an external agent
    * decides itself when to retry).
    */
-  async act(sessionId: string, action: Record<string, unknown>, timeoutMs = 45_000, opts: { waitForTakeover?: boolean } = {}): Promise<FabricOperation> {
+  async act(sessionId: string, action: Record<string, unknown>, timeoutMs = ACTION_TIMEOUT_MS, opts: { waitForTakeover?: boolean } = {}): Promise<FabricOperation> {
     const until = Date.now() + TAKEOVER_WAIT_MS;
     for (;;) {
       try {

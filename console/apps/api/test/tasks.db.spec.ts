@@ -110,4 +110,41 @@ describe('the live run view', () => {
     const shot = await app.inject({ method: 'GET', url: `/api/runs/${r.id}/screenshot`, headers: as(alice.token) });
     expect(shot.statusCode).toBe(409);
   });
+
+  it('streams what a running run is doing now, and the activity is cleared once it stops running (#379)', async () => {
+    const alice = await login(`alice4-${run}@example.test`, 'contributor');
+    const prisma = app.get(PrismaService);
+    const tasks = app.get(TasksService);
+    const db = prisma.forUser({ userId: alice.userId });
+    const r = await db.run.create({ data: { userId: alice.userId, goal: 'g' } });
+    const acting = { phase: 'acting', action: 'click_at', args: { x: 612, y: 340 }, reason: 'Enter the member number', startedAt: new Date().toISOString(), timeoutMs: 45_000 };
+    await tasks.transition(alice.userId, r.id, 'running', { activity: acting });
+
+    // The run's own read carries it.
+    const read = await app.inject({ method: 'GET', url: `/api/runs/${r.id}`, headers: as(alice.token) });
+    expect(body<{ activity: unknown }>(read).activity).toEqual(acting);
+
+    // The previous test already listens on a real socket.
+    if (!app.getHttpServer().listening) await app.listen(0, '127.0.0.1');
+    const base = (await app.getUrl()).replace('[::1]', '127.0.0.1');
+    const res = await fetch(`${base}/api/runs/${r.id}/stream`, { headers: as(alice.token) });
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let text = '';
+    const until = async (needle: string) => {
+      while (!text.includes(needle)) {
+        const { value, done } = await reader.read();
+        if (done) throw new Error(`stream ended before ${needle}`);
+        text += decoder.decode(value);
+      }
+    };
+    await until('"phase":"acting"');
+    // A new activity alone (no new step, same status) is a new `run` event.
+    await db.run.updateMany({ where: { id: r.id }, data: { activity: { phase: 'thinking', startedAt: new Date().toISOString() } } });
+    await until('"phase":"thinking"');
+    const done = await tasks.transition(alice.userId, r.id, 'succeeded', { result: 'ok' });
+    expect(done.activity).toBeNull();
+    await until('"activity":null');
+    await reader.cancel();
+  });
 });

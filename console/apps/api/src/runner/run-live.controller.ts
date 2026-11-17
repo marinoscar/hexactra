@@ -59,14 +59,14 @@ export class RunLiveController {
   private async ownRun(userId: string, id: string) {
     const run = await this.prisma.forUser({ userId }).run.findFirst({
       where: { id },
-      select: { id: true, status: true, sessionId: true, hostId: true, stepCount: true, result: true, error: true, handoffId: true, cancelRequested: true },
+      select: { id: true, status: true, sessionId: true, hostId: true, stepCount: true, result: true, error: true, handoffId: true, cancelRequested: true, activity: true },
     });
     if (!run) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
     return run;
   }
 
   /**
-   * `run` events (status changes) and `step` events (each new step), then
+   * `run` events (status changes and what it is doing now, #379) and `step` events (each new step), then
    * the stream ends once the run is final. Reconnecting replays the current
    * state and every step, so a client simply renders what arrives.
    */
@@ -88,7 +88,7 @@ export class RunLiveController {
             observer.next({ type: 'step', id: `step-${s.seq}`, data: s });
             lastSeq = s.seq;
           }
-          const state = JSON.stringify([run.status, run.stepCount, run.result, run.error, run.handoffId, run.cancelRequested]);
+          const state = JSON.stringify([run.status, run.stepCount, run.result, run.error, run.handoffId, run.cancelRequested, run.activity]);
           if (state !== lastState) {
             observer.next({ type: 'run', data: run });
             lastState = state;

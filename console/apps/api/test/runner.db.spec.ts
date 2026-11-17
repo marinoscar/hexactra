@@ -187,6 +187,52 @@ describe('the goal runner', () => {
   });
 });
 
+describe('the goal runner shows what it is doing right now (#379)', () => {
+  it('records the action in progress (redacted) while the host runs it, then clears it when the run stops running', async () => {
+    const userId = await login(`runner-activity-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const tasks = app.get(TasksService);
+    const db = prisma.forUser({ userId });
+    const run = await db.run.create({ data: { userId, goal: 'Sign in' } });
+    const fabric = fakeFabric();
+    const inner = (fabric.client as unknown as { request: jest.Mock }).request;
+    // What the run page would have seen while the host was running each action.
+    const seen: unknown[] = [];
+    const request = jest.fn(async (method: string, path: string, opts: { body?: Record<string, unknown> } = {}) => {
+      if (method === 'POST' && path.endsWith('/actions')) seen.push((await db.run.findFirstOrThrow({ where: { id: run.id } })).activity);
+      return inner(method, path, opts);
+    });
+    const client = { ...fabric.client, request } as unknown as FabricClient;
+    const { ai } = scriptedAi([
+      [
+        ['navigate', { url: 'https://air.example.test/login?token=abc', reason: 'open the sign-in page' }],
+        ['type_text', { selector: '#member', text: SECRET, submit: false }],
+        ['request_human', { kind: 'code', prompt: 'Enter the code', input: 'secret', choices: null }],
+      ],
+    ]);
+    const runner = new GoalRunnerService(prisma, tasks, client, ai);
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+
+    // The round's screenshot is taken while it is looking; then each action is in progress while the host runs it.
+    expect(seen[0]).toMatchObject({ phase: 'looking' });
+    const [nav, typed] = (seen as Record<string, unknown>[]).filter((a) => a?.phase === 'acting');
+    expect(nav).toMatchObject({ phase: 'acting', action: 'navigate', reason: 'open the sign-in page', timeoutMs: 45_000, args: { url: 'https://air.example.test/login (query removed)' } });
+    expect(Date.parse(String(nav!.startedAt))).not.toBeNaN();
+    expect(typed).toMatchObject({ phase: 'acting', action: 'type', args: { selector: '#member', text_length: SECRET.length } });
+    expect(JSON.stringify(seen)).not.toContain(SECRET);
+    expect(JSON.stringify(seen)).not.toContain('token=abc');
+    // Waiting for a person: nothing is in progress.
+    expect((await db.run.findFirstOrThrow({ where: { id: run.id } })).activity).toBeNull();
+
+    await runner.advance(run.id, userId, null);
+    await db.run.updateMany({ where: { id: run.id }, data: { cancelRequested: true } });
+    const code = [...fabric.handoffs.values()][0]!;
+    Object.assign(code, { status: 'completed', response: { outcome: 'completed', value_withheld: true } });
+    expect(await runner.advance(run.id, userId, null)).toBe('cancelled');
+    expect((await db.run.findFirstOrThrow({ where: { id: run.id } })).activity).toBeNull();
+  });
+});
+
 describe('the goal runner picks the machine (#384)', () => {
   const HOME = '22222222-2222-4222-8222-222222222222';
   const offline = { id: HOME, name: 'mini-pc', version: '0', online: false, browser_connected: false, on_demand: true, profiles: ['default'], running_profiles: [], draining: false, last_seen: '2026-11-17T00:00:00Z' };

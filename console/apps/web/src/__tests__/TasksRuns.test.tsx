@@ -148,6 +148,16 @@ describe('RunDetailPage', () => {
     expect(await screen.findByText('2. click: done')).toBeInTheDocument();
     expect(await screen.findByAltText("The run's browser, live")).toHaveAttribute('src', 'blob:shot');
     expect(await screen.findByRole('button', { name: 'Take over on vps' })).toBeInTheDocument();
+    expect(await screen.findByTestId('frame-age')).toHaveTextContent(/Live · updated \d+ s ago/);
+    // While it runs, the page says what it is doing right now (#379).
+    act(() => live.emit!({ type: 'run', data: { status: 'running', activity: { phase: 'acting', action: 'click_at', args: { x: 612, y: 340 }, reason: 'Enter the member number', startedAt: new Date().toISOString(), timeoutMs: 45_000 } } }));
+    const now = await screen.findByRole('status', { name: 'Now' });
+    expect(now).toHaveTextContent('Doing: click_at (612, 340)');
+    expect(now).toHaveTextContent('Enter the member number');
+    expect(now).toHaveTextContent(/\d+ s \/ 45 s/);
+    // Stuck for a minute: the page says so.
+    act(() => live.emit!({ type: 'run', data: { activity: { phase: 'acting', action: 'evaluate', startedAt: new Date(Date.now() - 60_000).toISOString(), timeoutMs: 45_000 } } }));
+    expect(await screen.findByText(/waiting on the browser for 1 min/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel run' }));
     expect(host.requests.map((r) => `${r.method} ${r.path}`)).toContain(`POST /runs/${run.id}/cancel`);
   });

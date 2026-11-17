@@ -79,6 +79,9 @@ model Run {
   error           String?    @db.VarChar(2000)
   cancelRequested Boolean    @default(false) @map("cancel_requested")
   stepCount       Int        @default(0) @map("step_count")
+  /// What the goal runner is doing right now (#379): `{ phase, action?, args?, reason?, startedAt, timeoutMs? }`.
+  /// Redacted like step args; cleared whenever the run leaves `running`.
+  activity        Json?
   inputTokens     Int        @default(0) @map("input_tokens")
   outputTokens    Int        @default(0) @map("output_tokens")
   /// The AI conversation so far, so a run can resume after a handoff.
