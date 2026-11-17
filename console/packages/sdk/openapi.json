@@ -27366,6 +27366,7 @@
         "operationId": "taskSchedules_replace",
         "parameters": [
           {
+<<<<<<< HEAD
             "name": "id",
             "required": true,
             "in": "path",
@@ -27635,10 +27636,90 @@
             "required": true,
             "in": "path",
             "schema": {
+=======
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Run status. Any of: queued, running, waiting_human, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "state",
+            "required": false,
+            "in": "query",
+            "description": "Shorthand for a status group: `live` = queued, running, waiting_human; `finished` = succeeded, failed, cancelled. Not together with `status`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "live",
+                "finished"
+              ]
+            }
+          },
+          {
+            "name": "taskId",
+            "required": false,
+            "in": "query",
+            "description": "A task's id, or `none` for runs without a task (ad-hoc and external runs).",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "none"
+                },
+                {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              ]
+            }
+          },
+          {
+            "name": "trigger",
+            "required": false,
+            "in": "query",
+            "description": "What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Runs created at or after this ISO 8601 date-time (inclusive).",
+            "schema": {
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+>>>>>>> origin/main
               "type": "string"
             }
           },
           {
+<<<<<<< HEAD
             "name": "days",
             "required": false,
             "in": "query",
@@ -27647,13 +27728,111 @@
               "minimum": 7,
               "maximum": 90,
               "default": 30,
+=======
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Runs created before this ISO 8601 date-time (exclusive).",
+            "schema": {
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Case-insensitive substring of the goal (1 to 200 characters).",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "name": "stopReason",
+            "required": false,
+            "in": "query",
+            "description": "Why the run stopped; `budget` is every `budget_*` reason. Any of: finished, budget_actions, budget_model_calls, budget_active_time, budget_input_tokens, budget_output_tokens, budget_cost, stalled, cancelled, error, no_model, budget. Repeat the parameter or separate the values with commas.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "policyId",
+            "required": false,
+            "in": "query",
+            "description": "Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`.",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "envelope",
+            "required": false,
+            "in": "query",
+            "description": "`1` returns `{ items, nextCursor }` instead of an array.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "true"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "The previous page's `nextCursor`. Opaque: do not parse or build it.",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 400,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Rows to return: 1 to 100 with `envelope`, 1 to 200 without. Default 50.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50,
+>>>>>>> origin/main
               "type": "integer"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "By creation time, then id: `desc` is newest first.",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "desc",
+                "asc"
+              ]
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "",
+            "description": "An array of runs: the newest `limit`. With `envelope=1` the data is instead one page, `{ items, nextCursor }` (schema `RunPageResponseDto`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -34858,6 +35037,7 @@
               "POLICY_IMPORT_TOO_LARGE",
               "INVALID_FILTER",
               "INVALID_CURSOR",
+<<<<<<< HEAD
               "INVALID_CRON",
               "INVALID_TIMEZONE",
               "CRON_TOO_FREQUENT",
@@ -34865,6 +35045,8 @@
               "INVALID_TASK_CURSOR",
               "SCHEDULE_LIMIT",
               "NO_SCHEDULES",
+=======
+>>>>>>> origin/main
               "WEBHOOK_NOT_FOUND",
               "WEBHOOK_DELIVERY_NOT_FOUND",
               "WEBHOOK_URL_INVALID",
@@ -63513,6 +63695,7 @@
           }
         }
       },
+<<<<<<< HEAD
       "ReplaceTaskSchedulesDto": {
         "type": "object",
         "properties": {
@@ -64193,6 +64376,8 @@
           "stopReasons"
         ]
       },
+=======
+>>>>>>> origin/main
       "RunListItemResponseDto": {
         "type": "object",
         "properties": {
