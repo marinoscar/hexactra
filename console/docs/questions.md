@@ -48,6 +48,38 @@ A question is delivered on every registered channel and withdrawn from all of th
 - Chat apps (Slack, Teams, Telegram) are post-v1 (#293); they will be added as channels, under the same rules.
 - MCP elicitation (the server asking the client's user directly) is not supported: the console's MCP transport is stateless. An agent asks with `ask_human` and waits with `wait_s` or `question_status`.
 
+## The web form
+
+`/inbox` lists what is waiting and `/inbox/q/:id` shows one question; both render the same card (`apps/web/src/components/QuestionCard.tsx`) around the same form (`QuestionAnswerForm.tsx`).
+
+**The card.** Chips for the kind and "High risk", a countdown ("4 min 05 s left") that ticks once a second on one timer for the whole page and turns to a warning colour under a minute, the prompt, who asked or the run it is for, and the page title (two lines at most, the full text in its tooltip). At zero the form is replaced by "This request expired." without waiting for a refresh. A browser-bound question also shows a small picture of its run's browser (`GET /api/runs/:id/screenshot`, refreshed every 5 s while it is on screen); a tap opens it full screen, and nothing is shown when it cannot be fetched. Every text that a user or a web page wrote wraps anywhere, so one long URL never widens the card.
+
+**The form, per `input`.**
+
+| `input` | Control | Notes |
+|---|---|---|
+| `text` | A text field, or a text area when `multiline` | Label "Your answer", always above the field. The error is on the left of the helper line and the "120 / 500" counter on the right |
+| `number` | A number field with the `unit` at its end | Decimal keypad on a phone; no native spinner |
+| `secret` | A field with a show/hide button | See below |
+| `choice`, `multi_choice` | Full-width rows, at least 44 px tall, the whole row clickable | More than 8 options scroll inside a box; the buttons stay outside it. `multi_choice` says "2 of 3 selected" |
+| `confirm` | The `confirmLabel` and `denyLabel` buttons | `risk: high` (the default) asks "Are you sure?" as a second step |
+| `takeover` | "Open the browser", then "Done" | "Open the browser" is the main button until it has been pressed once |
+| `none` | "Done" ("Approve" for kind `confirmation`) | |
+
+**The buttons.** One row from 600 px up; on a phone a full-width stack in the order main action, Open the browser, Decline. Decline is always last. Declining a browser-bound question asks first ("Decline? The agent will be told you said no."), because its run cannot go on without an answer; a free-standing question declines at once. While an answer is sent, the main button shows progress and the card's controls are disabled.
+
+**The secret field.**
+
+- Its label is "Code" (kind `code`), "Password" (kind `login`) or "Secret", and the sentence "Sent straight to the agent's browser. Never stored or shown again." is helper text under it.
+- The eye button shows or hides the value. It only changes the input's type: what is sent and stored is the same either way.
+- A one-time code starts shown, with `autocomplete="one-time-code"` and a number pad when its `pattern` allows digits only. Every other secret starts hidden, with `autocomplete="new-password"` so the browser does not fill or offer to save it; password-manager hints (`data-1p-ignore`, `data-lpignore`) say the same.
+- A shown value hides again when the answer is sent, when the tab is hidden, and after 30 seconds without a keystroke.
+- The value lives in the form's memory only while it is typed. It is removed before the request is sent, even when the request then fails, and it is never logged, put in a URL or written to browser storage.
+
+**After an answer.** In the Inbox the card says "Sent." or "Declined." for two seconds, then collapses. A failed answer shows its error inside that card and keeps what was typed (never a secret). An answer the API refuses because the question was already answered or had expired (409) shows that final state instead of an error.
+
+**Refreshes.** The Inbox re-reads the list every 5 seconds. Cards keep their place and their state, so a refresh never interrupts typing; a new request appears on top with a brief highlight, and the request a notification links to (`?run=` or `?q=`) stays first.
+
 ## REST
 
 All under `/api`, with `runs:read` to read and `runs:write` to ask or answer, except `answer-by-token`.

@@ -117,7 +117,8 @@ export function AgentPricingPage() {
                   <Box sx={{ flex: 2, minWidth: 0 }}>
                     <ModelPicker label="Model" value={r.key || null} onChange={(v) => setRow(i, { key: v ?? '' })} models={models} disabled={!canWrite} helperText={errs.key ?? ' '} />
                   </Box>
-                  <Stack direction="row" spacing={1.5} sx={{ flex: 3 }}>
+                  {/* On a phone: input and output side by side, then cached and the remove button, so no label is cut. */}
+                  <Box sx={{ flex: 3, minWidth: 0, display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr) minmax(0, 1fr)', sm: 'repeat(3, minmax(0, 1fr)) auto' }, columnGap: 1.5, alignItems: 'start' }}>
                     {(
                       [
                         ['input', 'Input $/M'],
@@ -136,15 +137,15 @@ export function AgentPricingPage() {
                         helperText={errs[field] ?? (field === 'cached' ? 'Optional' : ' ')}
                         onChange={(e) => setRow(i, { [field]: e.target.value })}
                         slotProps={{ htmlInput: { min: 0, step: 0.01, inputMode: 'decimal' } }}
-                        sx={{ flex: 1, minWidth: 0 }}
+                        sx={{ minWidth: 0 }}
                       />
                     ))}
                     {canWrite && (
-                      <IconButton aria-label={`Remove ${r.key || 'row'}`} onClick={() => setRows(rows.filter((_, j) => j !== i))} sx={{ alignSelf: 'flex-start' }}>
+                      <IconButton aria-label={`Remove ${r.key || 'row'}`} onClick={() => setRows(rows.filter((_, j) => j !== i))} sx={{ justifySelf: 'end', width: { xs: 44, sm: 40 }, height: { xs: 44, sm: 40 } }}>
                         <DeleteOutlineIcon />
                       </IconButton>
                     )}
-                  </Stack>
+                  </Box>
                 </Stack>
               </Paper>
             );

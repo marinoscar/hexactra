@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **Responsive pass** (#431).
+  - Phone navigation: the bottom bar is Home, Inbox, Tasks, Runs. Fleet, Settings and Administration are in the user menu. Inbox shows the number of pending questions on the bar, the rail and the tab title.
+  - Fleet: profile actions are icon buttons, or one menu on a phone. The enrollment dialog is full screen on a phone, with a Copy button that confirms.
+  - Desktop viewer: fills the window without page scroll, with Fit and Actual size, a Keyboard button, Full screen where the browser has it and a rotate hint.
+  - Run page: two panes on wide screens while the run is live; one column on a phone with Cancel, Watch and Take over in a bar above the navigation.
+  - `npm run ui:screens` checks every route at five widths in light and dark for horizontal scroll. The README has a "Responsive rules" section.
+- **Schedule editor** (#425).
+  - A schedule is built from choices: every N minutes, every N hours, daily at one or more times, weekly on chosen days, monthly on chosen days, or Advanced for a cron expression. The stored value is still a 5-field cron expression.
+  - The editor shows the schedule as a sentence and its next runs before saving.
+  - The time zone defaults to the profile's. A schedule in another zone shows a hint with a one-click update.
+  - A schedule can now be edited, not only added and deleted. The policy override stays.
+- **Inbox and question form** (#429).
+  - Fixed: labels no longer sit over the text above the field or get cut on a phone; long options wrap inside the card; the number field has no spinner between the value and its unit; the action buttons stack full width on a phone with Decline last.
+  - A secret can be shown while typing. It hides again on submit, when the tab is hidden and after 30 seconds without typing.
+  - Each request shows a live countdown and a thumbnail of the run's browser. An answered card says "Sent." and then leaves the list.
+  - Declining a request that a browser session is waiting on asks first.
 - **Delete runs** (#421).
   - `DELETE /runs/:id` deletes one finished run. `POST /runs/delete` deletes by ids or by a filter and returns how many were deleted, their cost and which were skipped because they are live.
   - A filter that matches more than 500 runs is deleted by a queue job. Deleting every finished run requires the expected count, and the request fails if the match has changed by more than 5%.

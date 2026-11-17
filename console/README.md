@@ -312,6 +312,29 @@ The same policies are reachable from scripts and agents ([docs/mcp.md](docs/mcp.
 A run's steps and answers are deleted with it, and its cost and stop reason leave the task's spend and the alerts. This cannot be undone. A run that is queued, running or waiting for you is never deleted: cancel it first. More than 500 runs are deleted in the background; the page says so and refreshes when it is done. One run can also be deleted from its own page (`/runs/:id`, **Delete**).
 
 For code: the list is `RunList` (`apps/web/src/components/RunList.tsx`) over the `useRunList` hook (`useRunList.ts`); `<RunList scope={{ taskId }} />` is the same list fixed to one task.
+## Schedules
+
+A task runs on a schedule you build in the schedule editor (Tasks → a task → **Add schedule** or **Edit**). You do not need to know cron: choose how it repeats, and the editor says in words what that means and lists the next five runs before you save.
+
+![The schedule editor: Weekly, Monday to Friday at 09:00, with the next runs](docs/images/schedule-editor.png)
+
+| Repeats | What you choose |
+|---|---|
+| **Minutes** | Every 5, 10, 15, 20 or 30 minutes. |
+| **Hourly** | Every 1, 2, 3, 4, 6, 8 or 12 hours, at a minute of the hour. |
+| **Daily** | One to four times a day. Times in one schedule share the same minute (09:00 and 17:00); for 09:00 and 17:30, add a second schedule. |
+| **Weekly** | The days of the week (with the presets Weekdays, Weekends and Every day) and one time. |
+| **Monthly** | Up to five days of the month and one time. A month without day 29, 30 or 31 is skipped; "last day of the month" is not available. |
+| **Advanced** | Any 5-field cron expression (`minute hour day-of-month month day-of-week`), for what the builder cannot say. |
+
+- **The 5-minute minimum.** A schedule cannot run more often than every 5 minutes; the editor does not offer less, and an Advanced expression that does is refused.
+- **Time zone.** A schedule runs in your profile time zone (Settings → Profile). **Change** picks another zone for that schedule. Changing your profile later does not move the schedules you already have: the editor shows that a schedule's zone differs from your profile, with a button to use your profile's.
+- **If the previous run is still going**, the schedule skips that run (the default) or starts another one anyway.
+- **Policy override.** A schedule's runs use the task's agent policy unless you choose another for that schedule.
+- **Active or Paused.** A paused schedule keeps its settings and does not run.
+
+What is stored is always a 5-field cron expression, so the CLI, the SDK and MCP read and write the same schedules. A schedule the builder cannot show (for example one made with `hexactra schedules create`) opens in Advanced, unchanged.
+
 ## Tasks and schedules API
 
 What the Tasks pages and the schedule editor read and write. Every route is the signed-in user's own data; another user's task answers `404`. The per-endpoint reference is the OpenAPI document at `/api/docs`.
@@ -369,6 +392,7 @@ scripts/rename.mjs rebrand this app (identity.json plus the few literal targets)
 | `EmptyState`, `ErrorBanner`, `ListSkeleton`, `CardSkeleton` | Nothing to show, a failure (`role="alert"`), and the first load. |
 | `ResponsiveList` | A table at 900 px and up, cards below. It renders the items it is given: paging stays with the API. `selection.disabledReason` disables one item's checkbox with a tooltip; a column marked `grow` takes the spare width instead of the first; `windowAfter={300}` replaces rows far from the viewport with a spacer once the list is longer than that. |
 | `useBreakpoint()` | `{ isPhone, isTablet, isDesktop }` from the theme's breakpoints. |
+| `aboveBottomBar()`, `BOTTOM_BAR_HEIGHT`, `APP_BAR_HEIGHT` | The offset of anything pinned above the phone's bottom bar or under the top bar ([Responsive rules](#responsive-rules)). |
 | `formatDateTime`, `formatRelative`, `<RelativeTime iso />` | Dates in the **profile time zone** (the one `UserTimeZoneSync` stores), never `toLocaleString()`. An empty or invalid date renders `n/a`. |
 | `useApiAction()` | `run(key, fn)` with `busy`, `error` and `clearError` around an API call. |
 | `formatCost(usd, known)` | "$4.20", "≥ $4.20" when a call could not be priced, "<$0.01", or `null`. |
@@ -379,6 +403,40 @@ Rules:
 - No `window.confirm` or `window.alert`.
 - Colours come from the theme; a status is never colour only.
 - A test that needs a width mocks it with `mockViewport(390)` from `src/__tests__/matchMedia.ts`; without it the kit reads jsdom as a desktop.
+
+## Responsive rules
+
+Every page works on a phone, a tablet and a desktop. The breakpoints are MUI's and nothing reads the user agent:
+
+| Width | Navigation | Layout |
+|---|---|---|
+| below 600 px (`xs`) | The bottom bar: **Home, Inbox, Tasks, Runs**. Fleet, Settings and Administration are in the user menu (the avatar). | One column. Secondary actions fold into a menu; tap targets are at least 44 px. |
+| 600 to 899 px (`sm`) | The rail, collapsed, with every destination. | One column. |
+| 900 to 1199 px (`md`) | The rail. | One column; a run's live frame is capped at 60% of the window height. |
+| 1200 px and up (`lg`) | The rail, expanded. | A live run is two panes: the browser on the left, status, budget and timeline on the right. |
+
+- **The phone bar is its own table.** The shell's bottom bar draws four tabs and turns the fourth into "More" when more destinations are visible, so `PHONE_NAVIGATION` (`apps/web/src/config/navigation.ts`) gives it exactly four. A new destination goes in `NAVIGATION`; it reaches a phone through the user menu.
+- **The Inbox badge** is the pending-question count from `InboxCountProvider` (`apps/web/src/components/InboxCountProvider.tsx`): the rail, the bottom bar, the user menu and the tab title ("(2) Hexactra Console"). Read it with `useInboxCount()`; do not poll `GET /inbox` a second time.
+- **Anything pinned to the bottom** (a sticky action bar, a floating button) takes its offset from `aboveBottomBar()` in `apps/web/src/ui/bottomBar.ts`, which knows the bar's height and the safe area. No page carries its own number. What sticks under the top bar uses `APP_BAR_HEIGHT` from the same file.
+- **A page that fills the window** (the desktop viewer) calls `useShellMainVariant('full-bleed')` and lets the shell size it. The shell owns the window's height (`100dvh`); a page never sets its own `100vh`.
+- **A table** becomes cards (`ResponsiveList`) or scrolls inside its own container. The page itself never scrolls sideways.
+
+### Checking it: `npm run ui:screens`
+
+`scripts/ui-screens.mjs` opens every route at 360, 390, 768, 1024 and 1440 px, in light and dark, saves a PNG of each under `.ui-screens/` (ignored by git) and fails when a page scrolls sideways (`scrollWidth > innerWidth`), naming the route and the width. It is a local, manual check and **not a CI step**: CI has no stack with data.
+
+```bash
+# Against the dev stack ("Run it"), signed in:
+npm run ui:screens -- --login     # once: sign in in the window that opens; saves .ui-screens/state.json
+npm run ui:screens                # http://localhost:3535; --base <url> to change
+
+# Without a stack, against a build of the web app with a mocked API:
+npm run build --workspace=web
+npm run preview --workspace=web -- --port 4173 &
+npm run ui:screens -- --mock --base http://localhost:4173
+```
+
+The saved sign-in holds your refresh cookie: never commit it. A route that needs an id (a run, a task, a host) takes the first one your account has, and a route with nothing to open is listed as not checked, never as passed (`--strict` makes that a failure). To add a page, append one line to `ROUTES` in the script; the enabled slices' routes are read from `apps/web/src/slices/`.
 
 ## Run it
 
