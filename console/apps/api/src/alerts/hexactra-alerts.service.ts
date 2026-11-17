@@ -2,10 +2,11 @@ import { Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy }
 
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { PrismaService } from '../prisma/prisma.service';
+import { RUN_BUDGET_ERROR_LIST } from '../runner/run-budget-errors';
 import { HEXACTRA_ALERT_RULES, setAlertSources, type AlertSources } from './hexactra-alert-kinds';
 
 /** Runs whose error says a budget stopped them (goal-runner.service.ts). */
-const BUDGET_ERRORS = ['Step budget exhausted', 'Time budget exhausted'];
+const BUDGET_ERRORS = [...RUN_BUDGET_ERROR_LIST];
 
 /**
  * Gives the console's alert kinds their data (the fabric's hosts, the

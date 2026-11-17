@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { assertTransition, isTerminal, type RunStatus } from './run-status';
 import type { CreateTaskDto, ListRunsDto, UpdateTaskDto } from './tasks.schemas';
 import { FabricClient } from '../fabric/fabric.client';
+import { activeElapsedMs } from '../runner/active-time';
 import { RunMetrics } from './run-metrics';
 import { STOP_WAITING, startWaiting } from './reminder-schedule';
 import { NO_SPEND, SPEND_WINDOW_DAYS, withCost, type TaskSpend } from './run-cost';
@@ -120,7 +121,7 @@ export class TasksService {
   async transition(userId: string, id: string, to: RunStatus, patch: RunPatch = {}) {
     const db = this.db(userId);
     for (let attempt = 0; attempt < 5; attempt++) {
-      const run = await db.run.findFirst({ where: { id }, select: { status: true, startedAt: true, createdAt: true, trigger: true } });
+      const run = await db.run.findFirst({ where: { id }, select: { status: true, startedAt: true, createdAt: true, trigger: true, activeMs: true, activeSince: true } });
       if (!run) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
       assertTransition(run.status as RunStatus, to);
       const now = new Date();
@@ -136,6 +137,9 @@ export class TasksService {
           // Reminders while it waits for its person (run-reminders.ts).
           ...(to === 'waiting_human' ? startWaiting(now, handoffExpiresAt ?? null) : run.status === 'waiting_human' ? STOP_WAITING : {}),
           ...(to === 'running' && !run.startedAt ? { startedAt: now } : {}),
+          // Active time: open a stretch on entering `running`, settle it on leaving (#399).
+          ...(to === 'running' ? { activeSince: now } : {}),
+          ...(run.status === 'running' && to !== 'running' ? { activeMs: activeElapsedMs(run, now.getTime()), activeSince: null } : {}),
           ...(isTerminal(to) ? { finishedAt: now } : {}),
         },
       });
