@@ -6,8 +6,8 @@ import { consoleApi, consoleWebUrl } from './console-api.js';
 import { desktopUrl, hostLine, type FleetHost } from './fleet.js';
 
 /**
- * Fleet: hosts and their profiles. Up/down selects a host; `d` drains or
- * undrains it, `r` refreshes, Esc returns to the menu. Changes need
+ * Fleet: hosts and their profiles. Up/down selects a host; `d` disables or
+ * enables it, `r` refreshes, Esc returns to the menu. Changes need
  * `fleet:write`; the API says so when it is missing.
  */
 export function FleetScreen({ onDone }: TuiScreenProps): ReactNode {
@@ -49,11 +49,11 @@ export function FleetScreen({ onDone }: TuiScreenProps): ReactNode {
     }
     if (input === 'd') {
       const h = hosts[selected]!;
-      setStatus(`${h.draining ? 'Undraining' : 'Draining'} ${h.name}…`);
+      setStatus(`${h.draining ? 'Enabling' : 'Disabling'} ${h.name}…`);
       void consoleApi()
         .post(`/fleet/hosts/${h.id}/drain`, { enabled: !h.draining })
         .then(() => {
-          setStatus(`${h.name}: ${h.draining ? 'undrained' : 'draining'}`);
+          setStatus(`${h.name}: ${h.draining ? 'enabled' : 'disabled'}`);
           return load();
         })
         .catch((e: unknown) => setStatus(e instanceof Error ? e.message : String(e)));
@@ -75,7 +75,7 @@ export function FleetScreen({ onDone }: TuiScreenProps): ReactNode {
         ))}
       </Box>
       {status && <Text>{status}</Text>}
-      <Text dimColor>↑/↓ select · o desktop link · d drain/undrain · r refresh · esc back</Text>
+      <Text dimColor>↑/↓ select · o desktop link · d disable/enable · r refresh · esc back</Text>
     </Box>
   );
 }
