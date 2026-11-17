@@ -76,7 +76,8 @@ export interface RunPolicyFields {
   costKnown?: boolean;
   modelCalls?: number | null;
   stopReason?: string | null;
-  budget?: { effective?: unknown; used?: unknown; percent?: number | null; source?: unknown } | null;
+  /** #404: `percent` is per budget (`actions`, `modelCalls`, `activeMinutes`, `inputTokens`, `outputTokens`, `cost`); `null` is unlimited. */
+  budget?: { effective?: unknown; used?: unknown; percent?: Record<string, number | null> | null; source?: unknown } | null;
 }
 
 export function costText(r: RunPolicyFields): string | null {
@@ -93,7 +94,8 @@ export function runPolicyLines(r: RunPolicyFields): string[] {
   if (tier) lines.push(tier);
   const cost = costText(r);
   if (cost) lines.push(`cost: ${cost}${r.modelCalls ? `, ${r.modelCalls} model calls` : ''}`);
-  if (r.budget && typeof r.budget.percent === 'number') lines.push(`budget: ${Math.round(r.budget.percent)}% used`);
+  const limited = Object.entries(r.budget?.percent ?? {}).filter((e): e is [string, number] => typeof e[1] === 'number');
+  if (r.budget) lines.push(limited.length ? `budget: ${limited.map(([k, v]) => `${k} ${Math.round(v)}%`).join(', ')}` : 'budget: no limit');
   if (r.stopReason) lines.push(`stopped: ${r.stopReason}`);
   return lines;
 }

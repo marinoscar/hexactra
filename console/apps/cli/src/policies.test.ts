@@ -90,12 +90,13 @@ describe('policy helpers', () => {
     expect(costText({ costUsd: 0.1234, costKnown: true })).toBe('$0.1234');
     expect(costText({ costUsd: 3.5, costKnown: false })).toMatch(/^\$3\.50\+/);
     expect(costText({})).toBeNull();
-    expect(runPolicyLines({ policy: { id: 'builtin:balanced', name: 'Balanced', version: 1 }, currentTier: 'standard', model: 'model-x', costUsd: 0.02, costKnown: true, modelCalls: 4, budget: { percent: 41.6 }, stopReason: 'budget_exhausted' })).toEqual([
+    expect(runPolicyLines({ budget: { percent: { actions: null, cost: null } } })).toEqual(['budget: no limit']);
+    expect(runPolicyLines({ policy: { id: 'builtin:balanced', name: 'Balanced', version: 1 }, currentTier: 'standard', model: 'model-x', costUsd: 0.02, costKnown: true, modelCalls: 4, budget: { percent: { actions: 41.6, modelCalls: null, cost: 12 } }, stopReason: 'budget_cost' })).toEqual([
       'policy: Balanced v1',
       'tier standard, model model-x',
       'cost: $0.0200, 4 model calls',
-      'budget: 42% used',
-      'stopped: budget_exhausted',
+      'budget: actions 42%, cost 12%',
+      'stopped: budget_cost',
     ]);
   });
 });
