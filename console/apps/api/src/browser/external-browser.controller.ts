@@ -103,7 +103,7 @@ export class ExternalBrowserController {
     if (!run) throw new NotFoundException({ code: 'SESSION_NOT_FOUND', message: 'Browser session not found' });
     if (run.cancelRequested && run.status !== 'cancelled') {
       if (run.sessionId) await new FabricSession(this.fabric).end(run.sessionId);
-      await this.tasks.transition(userId, runId, 'cancelled', { error: 'Stopped by the user' });
+      await this.tasks.transition(userId, runId, 'cancelled', { error: 'Stopped by the user', stopReason: 'cancelled' });
       throw new ConflictException({ code: 'SESSION_CANCELLED', message: 'The user stopped this session' });
     }
     if (run.status === 'succeeded' || run.status === 'failed' || run.status === 'cancelled' || !run.sessionId) {
@@ -131,7 +131,7 @@ export class ExternalBrowserController {
     try {
       sessionId = await new FabricSession(this.fabric).create({ profile: body.profile, hostId: body.hostId ?? null, label: `${body.actor}: run ${run.id}` });
     } catch (e) {
-      await this.tasks.transition(userId, run.id, 'failed', { error: e instanceof Error ? e.message : String(e) });
+      await this.tasks.transition(userId, run.id, 'failed', { error: e instanceof Error ? e.message : String(e), stopReason: 'error' });
       if (e instanceof FabricError && e.status === 404) throw new NotFoundException({ code: 'PROFILE_NOT_FOUND', message: e.message });
       throw new ConflictException({ code: 'NO_BROWSER', message: e instanceof Error ? e.message : 'No browser available' });
     }
@@ -294,7 +294,7 @@ export class ExternalBrowserController {
     if (!run) throw new NotFoundException({ code: 'SESSION_NOT_FOUND', message: 'Browser session not found' });
     if (run.sessionId) await new FabricSession(this.fabric).end(run.sessionId);
     if (run.status === 'running' || run.status === 'waiting_human' || run.status === 'queued') {
-      return this.tasks.transition(userId, runId, body.success ? 'succeeded' : 'failed', { result: body.result ?? null, handoffId: null });
+      return this.tasks.transition(userId, runId, body.success ? 'succeeded' : 'failed', { result: body.result ?? null, handoffId: null, stopReason: 'finished' });
     }
     return run;
   }

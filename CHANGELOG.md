@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **The budget engine enforces every run budget** (#404): actions, model calls, active minutes, input tokens, output tokens and cost. `null` means unlimited.
+  - Ceilings: administrators set deployment ceilings in `browserAgentCeilings`, and they clamp every policy. A run's effective budget is fixed in its snapshot.
+  - Warning: a run gets one warning per budget at `warnAtPercent`.
+  - Wrap-up: when a budget is used up, the model makes one final call to report what it achieved, so a stopped run still returns a partial result.
+  - Stop reason: runs carry a typed `stopReason` (`finished`, `budget_*`, `stalled`, `cancelled`, `error`, `no_model`) and a `budget` view (effective, used, percent, source).
+  - Alerts now count budget stops by `stop_reason`. The hidden chunk cap is gone.
 - **Model tiers: Fast, Standard and Frontier** (#403).
   - Where they are set: the `browserAgentTiers` system setting (deployment default) and `tiers` in the user's `browserAgent` setting (per-user override). Each tier is a model, a reasoning effort, an output cap and a fallback model.
   - How a run picks its model: policy pin, then the user's tier, then the deployment's tier, then fill-down, then the user's default AI model. A run resolves its tiers once at start, and every model call uses its tier's model, effort and output cap.

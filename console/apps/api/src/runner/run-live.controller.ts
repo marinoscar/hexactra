@@ -20,6 +20,7 @@ import { Observable } from 'rxjs';
 
 import { FabricClient, FabricError, type FabricHost } from '../fabric/fabric.client';
 import { PrismaService } from '../prisma/prisma.service';
+import { readSnapshot, snapshotBudgetView } from '../policies/policy-snapshot';
 import { withCost } from '../tasks/run-cost';
 import { FabricSession } from './fabric-session';
 
@@ -60,10 +61,16 @@ export class RunLiveController {
   private async ownRun(userId: string, id: string) {
     const run = await this.prisma.forUser({ userId }).run.findFirst({
       where: { id },
-      select: { id: true, status: true, sessionId: true, hostId: true, stepCount: true, result: true, error: true, handoffId: true, cancelRequested: true, activity: true, costUsd: true, costKnown: true, modelCalls: true },
+      select: { id: true, status: true, sessionId: true, hostId: true, stepCount: true, result: true, error: true, handoffId: true, cancelRequested: true, activity: true, costUsd: true, costKnown: true, modelCalls: true, stopReason: true, inputTokens: true, outputTokens: true, activeMs: true, activeSince: true, policySnapshot: true },
     });
     if (!run) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
     return withCost(run);
+  }
+
+  /** What a `run` event carries: the run's live columns and its budget (#404); never the policy snapshot. */
+  private liveView(run: Awaited<ReturnType<RunLiveController['ownRun']>>) {
+    const { policySnapshot, activeSince: _since, ...rest } = run;
+    return { ...rest, budget: snapshotBudgetView(readSnapshot(policySnapshot), run) };
   }
 
   /**
@@ -89,9 +96,9 @@ export class RunLiveController {
             observer.next({ type: 'step', id: `step-${s.seq}`, data: s });
             lastSeq = s.seq;
           }
-          const state = JSON.stringify([run.status, run.stepCount, run.result, run.error, run.handoffId, run.cancelRequested, run.activity, run.costUsd, run.modelCalls]);
+          const state = JSON.stringify([run.status, run.stepCount, run.result, run.error, run.handoffId, run.cancelRequested, run.activity, run.costUsd, run.modelCalls, run.stopReason, run.inputTokens, run.outputTokens]);
           if (state !== lastState) {
-            observer.next({ type: 'run', data: run });
+            observer.next({ type: 'run', data: this.liveView(run) });
             lastState = state;
             sinceBeat = 0;
           } else if ((sinceBeat += POLL_MS) >= HEARTBEAT_MS) {

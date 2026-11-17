@@ -219,7 +219,7 @@ describe('policy resolution', () => {
 
 describe('the run snapshot view', () => {
   it('replaces the raw policy columns with a summary, null before the first advance', () => {
-    expect(runView({ id: 'r', policyRef: 'builtin:balanced', policyVersion: null, policySnapshot: null, policySource: 'run' })).toEqual({ id: 'r', policy: null });
+    expect(runView({ id: 'r', policyRef: 'builtin:balanced', policyVersion: null, policySnapshot: null, policySource: 'run' })).toEqual({ id: 'r', policy: null, budget: null });
     const snap = { schemaVersion: 1, ref: 'builtin:thorough', name: 'Thorough', version: 1, builtin: true, source: 'task', spec: builtinPolicy('builtin:thorough')!.spec, tiers: null, takenAt: '2026-01-01T00:00:00Z' };
     const v = runView({ id: 'r', policyRef: 'builtin:thorough', policyVersion: 1, policySnapshot: snap, policySource: 'task' });
     expect(v.policy).toEqual({ id: 'builtin:thorough', name: 'Thorough', version: 1, source: 'task', builtin: true });

@@ -48,7 +48,7 @@ export class GoalRunHandler implements JobHandler, OnModuleInit {
       const message = e instanceof AiError ? `${e.code}: ${e.message}` : e instanceof Error ? e.message : String(e);
       await this.prisma.forUser({ userId: p.userId }).run.updateMany({
         where: { id: p.runId, status: { in: ['queued', 'running', 'waiting_human'] } },
-        data: { status: 'failed', error: message.slice(0, 1_900), finishedAt: new Date() },
+        data: { status: 'failed', error: message.slice(0, 1_900), stopReason: e instanceof AiError && /^No model selected/.test(e.message) ? 'no_model' : 'error', finishedAt: new Date() },
       });
       if (e instanceof AiError) throw e.toRateLimitError() ?? e;
       throw e;
