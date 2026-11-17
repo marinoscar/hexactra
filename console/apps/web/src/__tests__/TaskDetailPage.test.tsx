@@ -243,6 +243,10 @@ describe('the task page: statistics', () => {
     const chart = await screen.findByTestId('chart');
     const table = screen.getByRole('table', { name: /Runs per day, last 30 days/ });
     expect(chart).toHaveAttribute('aria-describedby', table.id);
+    // The clipping box is a div around the table: a table does not honour `width: 1px` and would widen the page.
+    expect(table.parentElement).toHaveAttribute('data-testid', 'task-stats-table');
+    expect(table.parentElement).toHaveStyle({ position: 'absolute', width: '1px', overflow: 'hidden' });
+    expect(table).not.toHaveStyle({ position: 'absolute' });
     expect(within(table).getAllByRole('row')).toHaveLength(31);
     expect(within(table).getByRole('rowheader', { name: 'Oct 18' })).toBeInTheDocument();
     expect(chart).toHaveAttribute('data-days', '30');
