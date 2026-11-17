@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -12,9 +12,10 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  List,
-  ListItem,
+  ListItemIcon,
   ListItemText,
+  Menu,
+  MenuItem,
   Stack,
   Switch,
   TextField,
@@ -22,15 +23,18 @@ import {
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import CheckIcon from '@mui/icons-material/Check';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlineOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import StopCircleOutlinedIcon from '@mui/icons-material/StopCircleOutlined';
 import DesktopWindowsOutlined from '@mui/icons-material/DesktopWindowsOutlined';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { Link as RouterLink } from 'react-router-dom';
 
-import type { FleetEnrollment, FleetHost } from '../types/fleet';
-import { CardSkeleton, EmptyState, ErrorBanner, PageContainer, PageHeader, formatDateTime, useApiAction, useConfirm, useProfileTimeZone } from '../ui';
+import type { FleetEnrollment, FleetHost, FleetProfile } from '../types/fleet';
+import { CardSkeleton, EmptyState, ErrorBanner, PageContainer, PageHeader, formatDateTime, useApiAction, useBreakpoint, useConfirm, useProfileTimeZone } from '../ui';
 
 /** How each host mode reads in the list (docs/nodes.md). */
 const MODE_LABEL: Record<NonNullable<FleetHost['mode']>, string> = {
@@ -53,6 +57,122 @@ export function hostModeLabel(h: Pick<FleetHost, 'mode' | 'desktop' | 'onDemand'
 }
 
 const PROFILE_NAME = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+/** The rule `PROFILE_NAME` enforces, in words. */
+export const PROFILE_NAME_RULE = 'Lowercase letters, digits, "-" and "_"; starts with a letter or digit; 32 characters at most.';
+/** How long "Copy" reads "Copied". */
+export const COPIED_MS = 2_000;
+
+/** Selects an element's text, so a person can copy it when the Clipboard API is missing. */
+function selectText(el: HTMLElement | null) {
+  const selection = window.getSelection?.();
+  if (!el || !selection) return;
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+interface ProfileRowProps {
+  host: FleetHost;
+  profile: FleetProfile;
+  /** The viewer may change profiles on this host (`fleet:write`, an on-demand host). */
+  canAct: boolean;
+  disabled: boolean;
+  onRestart: () => void;
+  onClose: () => void;
+  onDelete: () => void;
+}
+
+/**
+ * One profile: its name and browser state in a column that shrinks and wraps
+ * (`minWidth: 0`), then its actions in their own column, so the two never
+ * overlap. From `sm` up the actions are icon buttons; on a phone they are one
+ * "More" menu.
+ */
+function ProfileRow({ host, profile, canAct, disabled, onRestart, onClose, onDelete }: ProfileRowProps) {
+  const { isPhone } = useBreakpoint();
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const canDelete = profile.name !== 'default';
+  const choose = (action: () => void) => () => {
+    setAnchor(null);
+    action();
+  };
+  return (
+    <Box component="li" sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5, minHeight: 48, borderTop: 1, borderColor: 'divider' }}>
+      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+        <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+          {profile.name}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {profile.running ? 'Browser running' : 'Browser stopped'}
+        </Typography>
+      </Box>
+      {canAct && !isPhone && (
+        <Stack direction="row" sx={{ flexShrink: 0 }}>
+          <Tooltip title="Restart browser">
+            <span>
+              <IconButton aria-label={`Restart ${profile.name} on ${host.name}`} disabled={disabled} onClick={onRestart}>
+                <RestartAltIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title="Close browser">
+            <span>
+              <IconButton aria-label={`Close ${profile.name} on ${host.name}`} disabled={disabled || !profile.running} onClick={onClose}>
+                <StopCircleOutlinedIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+          {canDelete && (
+            <Tooltip title="Delete profile and its sign-ins">
+              <span>
+                <IconButton aria-label={`Delete ${profile.name} on ${host.name}`} disabled={disabled} onClick={onDelete}>
+                  <DeleteOutlineIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
+          )}
+        </Stack>
+      )}
+      {canAct && isPhone && (
+        <>
+          <IconButton
+            aria-label={`Actions for ${profile.name} on ${host.name}`}
+            aria-haspopup="menu"
+            aria-expanded={anchor ? 'true' : undefined}
+            disabled={disabled}
+            sx={{ flexShrink: 0, width: 44, height: 44 }}
+            onClick={(e) => setAnchor(e.currentTarget)}
+          >
+            <MoreVertIcon />
+          </IconButton>
+          <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)}>
+            <MenuItem sx={{ minHeight: 44 }} onClick={choose(onRestart)}>
+              <ListItemIcon>
+                <RestartAltIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Restart browser</ListItemText>
+            </MenuItem>
+            <MenuItem sx={{ minHeight: 44 }} disabled={!profile.running} onClick={choose(onClose)}>
+              <ListItemIcon>
+                <StopCircleOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>Close browser</ListItemText>
+            </MenuItem>
+            {canDelete && (
+              <MenuItem sx={{ minHeight: 44, color: 'error.main' }} onClick={choose(onDelete)}>
+                <ListItemIcon sx={{ color: 'inherit' }}>
+                  <DeleteOutlineIcon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>Delete profile</ListItemText>
+              </MenuItem>
+            )}
+          </Menu>
+        </>
+      )}
+    </Box>
+  );
+}
 
 function message(e: unknown, fallback: string): string {
   return e instanceof Error ? e.message : fallback;
@@ -71,6 +191,34 @@ export function FleetPage() {
   const [enrollName, setEnrollName] = useState('');
   const [enrollment, setEnrollment] = useState<FleetEnrollment | null>(null);
   const [newProfile, setNewProfile] = useState<Record<string, string>>({});
+  const { isPhone } = useBreakpoint();
+  const commandRef = useRef<HTMLPreElement | null>(null);
+  /** `copied` for 2 s after a copy; `selected` when the Clipboard API is missing and the text was selected instead. */
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'selected'>('idle');
+  const copyTimer = useRef<number | null>(null);
+  useEffect(() => () => void (copyTimer.current !== null && window.clearTimeout(copyTimer.current)), []);
+
+  const closeEnroll = () => {
+    setEnrollOpen(false);
+    setEnrollment(null);
+    setEnrollName('');
+    setCopyState('idle');
+  };
+
+  const copyCommand = async () => {
+    if (!enrollment) return;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('no clipboard');
+      await navigator.clipboard.writeText(enrollment.command);
+      setCopyState('copied');
+      if (copyTimer.current !== null) window.clearTimeout(copyTimer.current);
+      copyTimer.current = window.setTimeout(() => setCopyState('idle'), COPIED_MS);
+    } catch {
+      // No Clipboard API (an insecure origin, an old WebView) or it refused: select the text instead.
+      selectText(commandRef.current);
+      setCopyState('selected');
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -126,13 +274,21 @@ export function FleetPage() {
       <PageHeader title="Fleet" primary={{ key: 'enroll', label: 'Enroll host', Icon: AddIcon, onClick: () => setEnrollOpen(true), hidden: !canWrite }} />
       <ErrorBanner error={error} />
       {hosts === null && !error && <CardSkeleton rows={2} />}
-      {hosts?.length === 0 && <EmptyState Icon={DesktopWindowsOutlined} title="No host is enrolled yet" />}
+      {hosts?.length === 0 && (
+        <EmptyState
+          Icon={DesktopWindowsOutlined}
+          title="No host is enrolled yet"
+          body="A host is a machine that runs the browsers your agents use."
+          action={{ key: 'connect', label: 'Connect a machine', Icon: AddIcon, onClick: () => setEnrollOpen(true), hidden: !canWrite }}
+        />
+      )}
       <Stack spacing={2} aria-label="Hosts">
         {hosts?.map((h) => (
           <Card key={h.id} variant="outlined" aria-label={`Host ${h.name}`}>
             <CardContent>
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
-                <Typography variant="h6" component="h2" sx={{ mr: 1 }}>
+              <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
+                {/* On a phone the name takes its own line and the chips sit under it. */}
+                <Typography variant="h6" component="h2" sx={{ mr: 1, width: { xs: '100%', sm: 'auto' }, minWidth: 0, overflowWrap: 'anywhere' }}>
                   {h.name}
                 </Typography>
                 <Chip size="small" color={h.online ? 'success' : 'default'} label={h.online ? 'Online' : 'Offline'} />
@@ -160,63 +316,35 @@ export function FleetPage() {
                   Open desktop
                 </Button>
               )}
-              <List dense aria-label={`Profiles on ${h.name}`}>
+              <Box component="ul" aria-label={`Profiles on ${h.name}`} sx={{ listStyle: 'none', p: 0, my: 1, borderBottom: 1, borderColor: 'divider' }}>
                 {h.profiles.map((p) => (
-                  <ListItem
+                  <ProfileRow
                     key={p.name}
-                    secondaryAction={
-                      canWrite &&
-                      h.onDemand && (
-                        <Stack direction="row">
-                          <Tooltip title="Restart browser">
-                            <IconButton
-                              aria-label={`Restart ${p.name} on ${h.name}`}
-                              disabled={busy !== null}
-                              onClick={() => void act(`${h.id}/${p.name}`, () => api.post(`/fleet/hosts/${h.id}/profiles/${p.name}/restart`, {}))}
-                            >
-                              <RestartAltIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="Close browser">
-                            <span>
-                              <IconButton
-                                aria-label={`Close ${p.name} on ${h.name}`}
-                                disabled={busy !== null || !p.running}
-                                onClick={() => void act(`${h.id}/${p.name}`, () => api.post(`/fleet/hosts/${h.id}/profiles/${p.name}/close`, {}))}
-                              >
-                                <StopCircleOutlinedIcon />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
-                          {p.name !== 'default' && (
-                            <Tooltip title="Delete profile and its sign-ins">
-                              <IconButton
-                                aria-label={`Delete ${p.name} on ${h.name}`}
-                                disabled={busy !== null}
-                                onClick={() => void deleteProfile(h, p.name)}
-                              >
-                                <DeleteOutlineIcon />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                        </Stack>
-                      )
-                    }
-                  >
-                    <ListItemText primary={p.name} secondary={p.running ? 'Browser running' : 'Browser stopped'} />
-                  </ListItem>
+                    host={h}
+                    profile={p}
+                    canAct={canWrite && h.onDemand}
+                    disabled={busy !== null}
+                    onRestart={() => void act(`${h.id}/${p.name}`, () => api.post(`/fleet/hosts/${h.id}/profiles/${p.name}/restart`, {}))}
+                    onClose={() => void act(`${h.id}/${p.name}`, () => api.post(`/fleet/hosts/${h.id}/profiles/${p.name}/close`, {}))}
+                    onDelete={() => void deleteProfile(h, p.name)}
+                  />
                 ))}
-              </List>
+              </Box>
               {canWrite && h.onDemand && (
-                <Stack direction="row" spacing={1}>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { xs: 'stretch', sm: 'flex-start' }, mt: 2 }}>
                   <TextField
                     size="small"
                     label="New profile"
                     value={newProfile[h.id] ?? ''}
                     onChange={(e) => setNewProfile({ ...newProfile, [h.id]: e.target.value })}
                     error={Boolean(newProfile[h.id]) && !PROFILE_NAME.test(newProfile[h.id] ?? '')}
+                    helperText={PROFILE_NAME_RULE}
+                    slotProps={{ htmlInput: { 'aria-label': `New profile on ${h.name}`, autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false } }}
+                    sx={{ flexGrow: 1, maxWidth: { sm: 420 } }}
                   />
                   <Button
+                    variant="outlined"
+                    sx={{ minHeight: { xs: 44, sm: 40 } }}
                     disabled={busy !== null || !PROFILE_NAME.test(newProfile[h.id] ?? '')}
                     onClick={() =>
                       void act(`${h.id}/new`, async () => {
@@ -259,35 +387,61 @@ export function FleetPage() {
         ))}
       </Stack>
 
-      <Dialog
-        open={enrollOpen}
-        onClose={() => {
-          setEnrollOpen(false);
-          setEnrollment(null);
-          setEnrollName('');
-        }}
-        fullWidth
-      >
-        <DialogTitle>Enroll a host</DialogTitle>
+      <Dialog open={enrollOpen} onClose={closeEnroll} fullWidth fullScreen={isPhone} aria-labelledby="enroll-title">
+        <DialogTitle id="enroll-title">Enroll a host</DialogTitle>
         <DialogContent>
           {!enrollment ? (
             <TextField autoFocus margin="dense" label="Host name (optional)" value={enrollName} onChange={(e) => setEnrollName(e.target.value)} fullWidth />
           ) : (
             <Box>
               <Typography gutterBottom>Run this on the new host. The token works once{enrollment.expiresAt ? ` and expires ${formatDateTime(enrollment.expiresAt)}` : ''}.</Typography>
-              <Box component="pre" aria-label="Agent command" sx={{ p: 1.5, bgcolor: 'action.hover', borderRadius: 1, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+              <Box
+                component="pre"
+                ref={commandRef}
+                tabIndex={0}
+                aria-label="Agent command"
+                sx={{
+                  m: 0,
+                  p: 1.5,
+                  bgcolor: 'action.hover',
+                  borderRadius: 1,
+                  fontFamily: 'monospace',
+                  fontSize: '0.875rem',
+                  whiteSpace: 'pre-wrap',
+                  overflowWrap: 'anywhere',
+                  maxHeight: { xs: '50dvh', sm: 240 },
+                  overflowY: 'auto',
+                  userSelect: 'all',
+                }}
+              >
                 {enrollment.command}
               </Box>
+              <Typography variant="body2" color="text.secondary" role="status" sx={{ mt: 1, minHeight: '1.5em' }}>
+                {copyState === 'copied' && 'Copied to the clipboard.'}
+                {copyState === 'selected' && 'This browser cannot copy for you. The command is selected: copy it from the keyboard or the selection menu.'}
+              </Typography>
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
           {!enrollment ? (
-            <Button variant="contained" onClick={() => void enroll()}>
-              Create token
-            </Button>
+            <>
+              <Button onClick={closeEnroll} sx={{ minHeight: { xs: 44, sm: 'auto' } }}>
+                Cancel
+              </Button>
+              <Button variant="contained" onClick={() => void enroll()} sx={{ minHeight: { xs: 44, sm: 'auto' } }}>
+                Create token
+              </Button>
+            </>
           ) : (
-            <Button onClick={() => void navigator.clipboard?.writeText(enrollment.command)}>Copy</Button>
+            <>
+              <Button startIcon={copyState === 'copied' ? <CheckIcon /> : <ContentCopyIcon />} onClick={() => void copyCommand()} sx={{ minHeight: { xs: 44, sm: 'auto' } }}>
+                {copyState === 'copied' ? 'Copied' : 'Copy'}
+              </Button>
+              <Button variant="contained" onClick={closeEnroll} sx={{ minHeight: { xs: 44, sm: 'auto' } }}>
+                Done
+              </Button>
+            </>
           )}
         </DialogActions>
       </Dialog>

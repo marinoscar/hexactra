@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- **Tasks list page** (#426).
+  - `/tasks` is a paged list: a table on desktop and cards on a phone, with search, filters (scheduled, paused, not scheduled, failing, never run), sort and a policy filter, all kept in the address.
+  - Each task shows its schedule, next run, last run, the last 7 days' outcomes, policy and spend from one request.
+  - The **Scheduled** switch pauses or resumes all of a task's schedules. Run and "Run with…" start a run without leaving the list.
+  - Delete asks first and says how many schedules go with the task. The create and edit form moved to its own pages.
+- **Task create and edit pages** (#427).
+  - `/tasks/new` and `/tasks/:id/edit` are one form: the goal, where it runs (machine and browser profile), the agent policy, safety (allowed sites, ask before purchases) and schedules. Save stores the task and its schedules together.
+  - "Save and run now" saves, starts a run and opens it. A value the server refuses is shown on its field.
+  - `/tasks/new?goal=` starts from a goal and `/tasks/new?from=<task id>` from a copy of a task, with its schedules paused.
+  - Leaving with unsaved changes asks first.
+- **Responsive pass** (#431).
+  - Phone navigation: the bottom bar is Home, Inbox, Tasks, Runs. Fleet, Settings and Administration are in the user menu. Inbox shows the number of pending questions on the bar, the rail and the tab title.
+  - Fleet: profile actions are icon buttons, or one menu on a phone. The enrollment dialog is full screen on a phone, with a Copy button that confirms.
+  - Desktop viewer: fills the window without page scroll, with Fit and Actual size, a Keyboard button, Full screen where the browser has it and a rotate hint.
+  - Run page: two panes on wide screens while the run is live; one column on a phone with Cancel, Watch and Take over in a bar above the navigation.
+  - `npm run ui:screens` checks every route at five widths in light and dark for horizontal scroll. The README has a "Responsive rules" section.
 - **Schedule editor** (#425).
   - A schedule is built from choices: every N minutes, every N hours, daily at one or more times, weekly on chosen days, monthly on chosen days, or Advanced for a cron expression. The stored value is still a 5-field cron expression.
   - The editor shows the schedule as a sentence and its next runs before saving.

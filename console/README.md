@@ -15,7 +15,7 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 | Capability | Web | API | CLI / TUI | Permission |
 |---|---|---|---|---|
 | Fabric connection (URL and `hxs_` service token, stored encrypted; Doctor checks `fabric.*`) | Administration → Fabric connection | `GET/PUT/DELETE /api/fabric/connection`, `POST …/test` | `hexactra fabric show\|set URL --token-stdin\|test\|clear --yes` | `fabric_config:read` / `:write` |
-| Tasks: saved goals with a profile, an agent policy (budgets and models), optional allowed sites, opt-in confirm-before-purchase | `/tasks` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
+| Tasks: saved goals with a profile, an agent policy (budgets and models), optional allowed sites, opt-in confirm-before-purchase ([Create a task](#create-a-task)) | `/tasks`, `/tasks/new`, `/tasks/:id/edit` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
 | Agent policies: named, versioned bundles of model tiers, budgets (any of them unlimited), stall detection and context settings; four built-ins, a default per user, one per task, schedule or run ([Agent policies](#agent-policies)) | Settings → Browser agent → Agent policies; Administration → Browser agent | `/api/agent-policies` | `hexactra policies`; MCP `policies_*` and `policy_*` tools; SDK `hx.policies` | `agent_policies:read` / `:write` |
 | Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel; the list is paged, filtered and searched on the server, with counts per status; finished runs can be deleted, one, many or everything a filter matches ([docs/runs.md](docs/runs.md)) | `/runs`, `/runs/:id` | `/api/runs`, `GET /api/runs/counts`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel`, `DELETE /api/runs/:id`, `POST /api/runs/delete` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` / `runs:delete` |
 | Run history: each user's retention rule (keep N days, the newest N per task), enforced nightly; a deployment limit for administrators ([Run history and retention](#run-history-and-retention)) | Settings → Browser agent → Run history; Administration → Browser agent → Run history limit | `GET /api/runs/retention`, `GET /api/runs/retention/preview`, `POST /api/runs/retention/apply`; the `runs` namespace of `/api/user-settings` and `/api/system-settings` | — | `runs:delete`; `system_settings:read` / `:write` for the limit |
@@ -292,10 +292,10 @@ Everything above is on the console's pages (`apps/web/src/pages/`, one client fo
 
 **Choose a policy for a task, a schedule or one run**
 
-1. In the task form (**Tasks**), pick **Policy**: *Default (name)*, a built-in, or one of yours. The line under it summarises the choice; **Manage policies** opens the list. The form sends `policyId` only.
-2. A task card shows `policy: <name>` and `model: <the model its start tier uses>`.
+1. In the task form ([Create a task](#create-a-task)), pick **Policy**: *Default (name)*, a built-in, or one of yours. The line under it summarises the choice; **Manage policies** opens the list. The form sends `policyId` only.
+2. The Tasks list shows each task's policy ("Balanced (default)" when it follows your default) and the model its start tier uses.
 3. When adding a schedule, **Policy override** runs that schedule under another policy (default: the task's).
-4. **Run with…** (the arrow next to **Run now**) starts one run under the policy you pick from the menu, without changing the task.
+4. **Run with…** (the arrow next to **Run now**, on every row of the Tasks list) starts one run under the policy you pick from the menu, without changing the task. The menu marks the policy the task usually runs under.
 
 **Export and import**
 
@@ -320,9 +320,45 @@ The same policies are reachable from scripts and agents ([docs/mcp.md](docs/mcp.
 - **MCP:** `policies_list`, `policy_get`, `policy_create`, `policy_update`, `policy_set_default`, `policies_export`, `policies_import`, and `policy_id` on `run_goal`, `task_create`, `task_update`, `task_run` and `schedule_create`. Each tool calls the REST route as the caller, so `agent_policies:read` / `:write` apply: a read-only user is refused the write tools with `403`. Deleting a policy is not an MCP tool.
 - **SDK:** `hx.policies.list|get|create|update|setDefault|export|import`, `hx.tasks.create|update|run` and `hx.runs.start` (each with `policyId`), and the exported `AgentPolicySpec` type.
 
+## Tasks
+
+**Tasks** (`/tasks`) lists what your agents do, and when. Each row answers five questions without opening the task: what it does, whether it is scheduled, when it runs next, how the last run went and what it cost in the last 30 days. On a phone each task is a card with the same facts.
+
+| On the row | What it tells you |
+|---|---|
+| **Schedule**, **Next run** | The first schedule in words ("Monday to Friday at 09:00", "+2 more" when there are several) and when the task fires next; "Paused" when its schedules are off, "Not scheduled" when it has none. A schedule that failed three times in a row says so. |
+| **Last run**, **7 days** | The last run's status and time (a link to the run), the live run while one is going, and the last 7 days by outcome ("12 ✓ · 1 ✗"). |
+| **Policy**, **Spend 30 d** | The agent policy and the model it starts on, and the cost of the task's runs in the last 30 days ("≥ $4.20" when a call could not be priced; the tooltip has the number of runs and the average per successful run). The policy shows only to someone who may read agent policies. |
+
+- **Find a task.** Search by name or goal, filter with the chips (Scheduled, Paused, Not scheduled, Failing, Never run), sort by newest, name, last run, next run or spend, and filter by policy once your tasks use more than one. The search, filter and sort are in the address (`/tasks?q=…&filter=…&sort=…&policyId=…`), so a view can be bookmarked or shared. The list loads 50 tasks at a time (**Load more**) and keeps itself current while the page is open.
+- **The Scheduled switch.** Off pauses every schedule of the task; on resumes them. That is all it does: a task that is off **still runs** when you press Run, or when it is started through the API, the CLI or MCP, and a run that is going when you switch it off finishes. "Partly paused" means some of the task's schedules are paused and some are not; switching it on resumes them all. A task without a schedule has an **Add schedule** link instead. The switch needs `tasks:write`; without it you see "Scheduled" or "Paused".
+- **Run now and Run with….** **Run now** starts a run under the task's own policy. The arrow next to it lists the other policies: pick one to use it for that run only, without changing the task. The list stays where it is, so you can start several tasks; "Run started · View" links to the new run. While a task is running the button reads **Run again** and asks before starting a second run. Running needs `runs:write`.
+- **New task** opens the form ([Create a task](#create-a-task)); **Edit** in a task's ⋮ menu opens the same form for that task.
+- **The ⋮ menu.** Open, Edit, Duplicate (a new task that starts as a copy, with its schedules paused), View runs, and Delete. Delete asks first and says what happens: the task's schedules are deleted, and its runs stay in Runs as one-off runs.
+
+## Create a task
+
+A task is created at `/tasks/new` and changed at `/tasks/:id/edit`. Both are one form with five sections, read top to bottom, and **Save** stores everything in one step. Both pages need `tasks:write`.
+
+1. **What should the agent do?** A name (up to 200 characters) and the goal (up to 4,000). Say what you want done and what you want back; **Tips** has three reminders.
+2. **Where it runs.**
+   - **Machine**: any available machine, or one you name. For a named machine, the switch decides whether another machine may take the run when that one is unavailable; a warning shows while the machine is offline or disabled.
+   - **Browser profile**: the sign-ins the agent uses. The list holds the chosen machine's profiles (or every profile in the fleet, with how many machines have it). A warning shows when the machine does not have the profile. Without `fleet:read` the profile is typed by name.
+3. **Model and budget** (with `agent_policies:read`). The task's [agent policy](#agent-policies): *Default (name)*, a built-in or one of yours. The line under it shows the model the policy starts on and its limits. The policy controls the models and every limit of a run (actions, cost, time); the form has no step, minute or model field.
+4. **Safety.** Both are off unless you turn them on.
+   - **Allowed sites**: the agent may only visit these sites. Type or paste a site, then Enter, a comma or a space; a pasted address keeps its hostname; `*.example.test` covers every subdomain. Empty allows any site.
+   - **Ask me before purchases and other irreversible steps**: the agent pauses and asks in your Inbox.
+5. **Schedule.** **Add a schedule** opens the [schedule editor](#schedules) in the form (up to 10 per task). Schedules are saved with the task: a new task and its schedules are created together, and on an existing task an added, changed or removed schedule takes effect only when you save. A removed schedule shows "will be removed when you save" with **Undo**.
+
+- **Save and run now** (with `runs:write`) saves, starts a run and opens it.
+- A value the server refuses is shown on its field, and the form scrolls to it.
+- Leaving the page with unsaved changes asks first.
+- `/tasks/new?goal=<text>` starts with that goal; `/tasks/new?from=<task id>` starts from a copy of that task, with its schedules paused.
+- On the edit page, **Danger zone** deletes the task (its schedules go with it; its runs are kept).
+
 ## Schedules
 
-A task runs on a schedule you build in the schedule editor (Tasks → a task → **Add schedule** or **Edit**). You do not need to know cron: choose how it repeats, and the editor says in words what that means and lists the next five runs before you save.
+A task runs on a schedule you build in the schedule editor (in the [task form](#create-a-task); a task without a schedule has an **Add schedule** link on the Tasks list). You do not need to know cron: choose how it repeats, and the editor says in words what that means and lists the next five runs before you save.
 
 ![The schedule editor: Weekly, Monday to Friday at 09:00, with the next runs](docs/images/schedule-editor.png)
 
@@ -400,6 +436,7 @@ scripts/rename.mjs rebrand this app (identity.json plus the few literal targets)
 | `EmptyState`, `ErrorBanner`, `ListSkeleton`, `CardSkeleton` | Nothing to show, a failure (`role="alert"`), and the first load. |
 | `ResponsiveList` | A table at 900 px and up, cards below. It renders the items it is given: paging stays with the API. |
 | `useBreakpoint()` | `{ isPhone, isTablet, isDesktop }` from the theme's breakpoints. |
+| `aboveBottomBar()`, `BOTTOM_BAR_HEIGHT`, `APP_BAR_HEIGHT` | The offset of anything pinned above the phone's bottom bar or under the top bar ([Responsive rules](#responsive-rules)). |
 | `formatDateTime`, `formatRelative`, `<RelativeTime iso />` | Dates in the **profile time zone** (the one `UserTimeZoneSync` stores), never `toLocaleString()`. An empty or invalid date renders `n/a`. |
 | `useApiAction()` | `run(key, fn)` with `busy`, `error` and `clearError` around an API call. |
 | `formatCost(usd, known)` | "$4.20", "≥ $4.20" when a call could not be priced, "<$0.01", or `null`. |
@@ -410,6 +447,40 @@ Rules:
 - No `window.confirm` or `window.alert`.
 - Colours come from the theme; a status is never colour only.
 - A test that needs a width mocks it with `mockViewport(390)` from `src/__tests__/matchMedia.ts`; without it the kit reads jsdom as a desktop.
+
+## Responsive rules
+
+Every page works on a phone, a tablet and a desktop. The breakpoints are MUI's and nothing reads the user agent:
+
+| Width | Navigation | Layout |
+|---|---|---|
+| below 600 px (`xs`) | The bottom bar: **Home, Inbox, Tasks, Runs**. Fleet, Settings and Administration are in the user menu (the avatar). | One column. Secondary actions fold into a menu; tap targets are at least 44 px. |
+| 600 to 899 px (`sm`) | The rail, collapsed, with every destination. | One column. |
+| 900 to 1199 px (`md`) | The rail. | One column; a run's live frame is capped at 60% of the window height. |
+| 1200 px and up (`lg`) | The rail, expanded. | A live run is two panes: the browser on the left, status, budget and timeline on the right. |
+
+- **The phone bar is its own table.** The shell's bottom bar draws four tabs and turns the fourth into "More" when more destinations are visible, so `PHONE_NAVIGATION` (`apps/web/src/config/navigation.ts`) gives it exactly four. A new destination goes in `NAVIGATION`; it reaches a phone through the user menu.
+- **The Inbox badge** is the pending-question count from `InboxCountProvider` (`apps/web/src/components/InboxCountProvider.tsx`): the rail, the bottom bar, the user menu and the tab title ("(2) Hexactra Console"). Read it with `useInboxCount()`; do not poll `GET /inbox` a second time.
+- **Anything pinned to the bottom** (a sticky action bar, a floating button) takes its offset from `aboveBottomBar()` in `apps/web/src/ui/bottomBar.ts`, which knows the bar's height and the safe area. No page carries its own number. What sticks under the top bar uses `APP_BAR_HEIGHT` from the same file.
+- **A page that fills the window** (the desktop viewer) calls `useShellMainVariant('full-bleed')` and lets the shell size it. The shell owns the window's height (`100dvh`); a page never sets its own `100vh`.
+- **A table** becomes cards (`ResponsiveList`) or scrolls inside its own container. The page itself never scrolls sideways.
+
+### Checking it: `npm run ui:screens`
+
+`scripts/ui-screens.mjs` opens every route at 360, 390, 768, 1024 and 1440 px, in light and dark, saves a PNG of each under `.ui-screens/` (ignored by git) and fails when a page scrolls sideways (`scrollWidth > innerWidth`), naming the route and the width. It is a local, manual check and **not a CI step**: CI has no stack with data.
+
+```bash
+# Against the dev stack ("Run it"), signed in:
+npm run ui:screens -- --login     # once: sign in in the window that opens; saves .ui-screens/state.json
+npm run ui:screens                # http://localhost:3535; --base <url> to change
+
+# Without a stack, against a build of the web app with a mocked API:
+npm run build --workspace=web
+npm run preview --workspace=web -- --port 4173 &
+npm run ui:screens -- --mock --base http://localhost:4173
+```
+
+The saved sign-in holds your refresh cookie: never commit it. A route that needs an id (a run, a task, a host) takes the first one your account has, and a route with nothing to open is listed as not checked, never as passed (`--strict` makes that a failure). To add a page, append one line to `ROUTES` in the script; the enabled slices' routes are read from `apps/web/src/slices/`.
 
 ## Run it
 

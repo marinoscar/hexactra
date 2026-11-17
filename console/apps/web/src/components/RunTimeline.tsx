@@ -49,10 +49,11 @@ function detail(s: RunTimelineStep): string | undefined {
 function RoutingStepRow({ step, label, direction }: { step: RunTimelineStep; label: string; direction: 'up' | 'down' | 'fallback' }) {
   return (
     <ListItem divider sx={{ pl: 2, bgcolor: 'action.hover' }} data-testid={`routing-${step.seq}`}>
-      <ListItemIcon sx={{ minWidth: 32 }}>
+      {/* The row wraps in a narrow pane; the arrow keeps its width and is never clipped. */}
+      <ListItemIcon sx={{ minWidth: 32, flexShrink: 0 }}>
         <SwapVertIcon fontSize="small" color={direction === 'up' ? 'warning' : 'action'} />
       </ListItemIcon>
-      <ListItemText primary={label} secondary={formatStepDuration(step.durationMs) ?? undefined} slotProps={{ primary: { sx: { fontWeight: 500 }, color: direction === 'up' ? 'warning.main' : undefined } }} />
+      <ListItemText primary={label} secondary={formatStepDuration(step.durationMs) ?? undefined} slotProps={{ primary: { sx: { fontWeight: 500, overflowWrap: 'anywhere' }, color: direction === 'up' ? 'warning.main' : undefined } }} sx={{ minWidth: 0 }} />
     </ListItem>
   );
 }
@@ -70,7 +71,8 @@ function StepRow({ step, repeats, nested }: { step: RunTimelineStep; repeats: nu
       <ListItemText
         primary={`${label(step)}${repeats > 1 ? ` (×${repeats} in a row)` : ''}`}
         secondary={detail(step)}
-        slotProps={{ primary: { color: step.ok ? undefined : 'error' }, secondary: { sx: { wordBreak: 'break-word' } } }}
+        slotProps={{ primary: { color: step.ok ? undefined : 'error', sx: { overflowWrap: 'anywhere' } }, secondary: { sx: { overflowWrap: 'anywhere' } } }}
+        sx={{ minWidth: 0 }}
       />
     </ListItem>
   );
@@ -90,6 +92,7 @@ function ObservedRow({ steps }: { steps: RunTimelineStep[] }) {
           primary={`${range}. Observed the page (${steps.length} steps)`}
           secondary={steps.map((s) => s.summary).join(' · ')}
           slotProps={{ primary: { color: 'text.secondary' }, secondary: { noWrap: true } }}
+          sx={{ minWidth: 0 }}
         />
         {open ? <ExpandLessIcon /> : <ExpandMoreIcon />}
       </ListItemButton>
@@ -115,7 +118,7 @@ export function RunTimeline({ steps, live }: { steps: RunTimelineStep[]; live: b
   const rows = groupSteps(steps, order);
   return (
     <Box>
-      <Stack direction="row" sx={{ alignItems: 'center', mb: 1 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', mb: 1, flexWrap: 'wrap', rowGap: 1 }}>
         <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
           Steps
         </Typography>
