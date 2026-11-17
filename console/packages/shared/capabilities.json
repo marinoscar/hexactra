@@ -249,6 +249,26 @@
       "web": "/runs/:id"
     },
     {
+      "id": "runs.delete",
+      "description": "Delete finished runs: one, a list, or everything a filter matches",
+      "rest": [
+        "DELETE /api/runs/{id}",
+        "POST /api/runs/delete"
+      ],
+      "cli": {
+        "none": "Not in the CLI yet: the parity decision is recorded in #432; call the REST route"
+      },
+      "mcp": {
+        "none": "Deliberate: an agent does not erase its own history"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; deleting history is done in the web app"
+      },
+      "web": {
+        "none": "The Runs page gains delete, with its confirmation, in #423"
+      }
+    },
+    {
       "id": "runs.viewer",
       "description": "Watch or take over a run's browser",
       "rest": [
