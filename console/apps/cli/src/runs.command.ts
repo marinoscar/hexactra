@@ -3,6 +3,7 @@ import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 
 import { consoleApi } from './console-api.js';
 import { findHost, type FleetHost } from './fleet.js';
+import { costText, resolvePolicyId, runPolicyLines, type RunPolicyFields } from './policies.js';
 
 /** `--host <name|id>`: "any" lets the fabric choose (#384). */
 async function hostRef(ref: string): Promise<string | null> {
@@ -21,6 +22,7 @@ interface Task {
   goal: string;
   profile: string;
   allowedDomains: string[];
+  policyId?: string | null;
 }
 interface Step {
   seq: number;
@@ -29,7 +31,7 @@ interface Step {
   ok: boolean;
   summary: string;
 }
-interface Run {
+interface Run extends RunPolicyFields {
   id: string;
   status: string;
   goal: string;
@@ -50,7 +52,10 @@ async function show(id: string, watch: boolean, asJson: boolean): Promise<void> 
   for (;;) {
     const r = await consoleApi().get<Run>(`/runs/${id}`);
     if (asJson && !watch) return json(r);
-    if (printed === 0) out(`${r.goal}`);
+    if (printed === 0) {
+      out(`${r.goal}`);
+      for (const l of runPolicyLines(r)) out(`  ${l}`);
+    }
     for (const s of (r.steps ?? []).slice(printed)) out(`  ${s.seq}. ${s.action ?? s.kind}${s.ok ? '' : ' (failed)'}: ${s.summary}`);
     printed = r.steps?.length ?? 0;
     if (r.status !== lastStatus) {
@@ -58,6 +63,7 @@ async function show(id: string, watch: boolean, asJson: boolean): Promise<void> 
       lastStatus = r.status;
     }
     if (!watch || TERMINAL.has(r.status)) {
+      for (const l of runPolicyLines(r)) if (l.startsWith('cost') || l.startsWith('stopped') || l.startsWith('budget')) out(l);
       if (r.result) out(`result: ${r.result}`);
       if (r.error) out(`error: ${r.error}`);
       if (r.status === 'failed') process.exitCode = 1;
@@ -84,11 +90,13 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
     .option('--allow <domains>', 'comma-separated allowed sites')
     .option('--max-steps <n>', 'step budget', (v) => Number.parseInt(v, 10))
     .option('--no-confirm', 'do not ask before purchases and irreversible steps')
+    .option('--policy <policy>', 'agent policy (id, name or builtin key such as balanced); default: yours')
     .option('--host <host>', 'machine that runs it (name, id or id prefix); default: any available')
     .option('--no-host-fallback', 'fail instead of using another machine when it is unavailable')
     .option('--json', 'print JSON')
-    .action(async (name: string, goal: string, o: { profile: string; allow?: string; maxSteps?: number; confirm: boolean; host?: string; hostFallback: boolean; json?: boolean }) => {
+    .action(async (name: string, goal: string, o: { profile: string; allow?: string; maxSteps?: number; confirm: boolean; policy?: string; host?: string; hostFallback: boolean; json?: boolean }) => {
       const t = await consoleApi().post<Task>('/tasks', {
+        ...(o.policy ? { policyId: await resolvePolicyId(o.policy) } : {}),
         name,
         goal,
         profile: o.profile,
@@ -111,12 +119,14 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
     .option('--max-steps <n>', 'step budget', (v) => Number.parseInt(v, 10))
     .option('--confirm', 'ask before purchases and irreversible steps')
     .option('--no-confirm', 'do not ask before purchases and irreversible steps')
+    .option('--policy <policy>', 'agent policy (id, name or builtin key; "default" follows your default policy)')
     .option('--host <host>', 'machine that runs it (name, id or id prefix; "any" for any available)')
     .option('--host-fallback', 'use another available machine when it is unavailable')
     .option('--no-host-fallback', 'fail instead of using another machine when it is unavailable')
     .option('--json', 'print JSON')
-    .action(async (id: string, o: { name?: string; goal?: string; profile?: string; allow?: string; maxSteps?: number; confirm?: boolean; host?: string; hostFallback?: boolean; json?: boolean }) => {
+    .action(async (id: string, o: { name?: string; goal?: string; profile?: string; allow?: string; maxSteps?: number; confirm?: boolean; policy?: string; host?: string; hostFallback?: boolean; json?: boolean }) => {
       const body = {
+        ...(o.policy !== undefined ? { policyId: o.policy === 'default' ? null : await resolvePolicyId(o.policy) } : {}),
         ...(o.name !== undefined ? { name: o.name } : {}),
         ...(o.goal !== undefined ? { goal: o.goal } : {}),
         ...(o.profile !== undefined ? { profile: o.profile } : {}),
@@ -126,7 +136,7 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
         ...(o.host !== undefined ? { hostId: await hostRef(o.host) } : {}),
         ...(o.hostFallback !== undefined ? { hostFallback: o.hostFallback } : {}),
       };
-      if (!Object.keys(body).length) throw new Error('Nothing to change: pass --goal, --name, --profile, --allow, --max-steps, --host, --[no-]host-fallback or --[no-]confirm.');
+      if (!Object.keys(body).length) throw new Error('Nothing to change: pass --goal, --name, --profile, --allow, --max-steps, --policy, --host, --[no-]host-fallback or --[no-]confirm.');
       const t = await consoleApi().patch<Task>(`/tasks/${id}`, body);
       if (o.json) return json(t);
       out(`updated ${t.id}`);
@@ -134,13 +144,14 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
   tasks
     .command('run <task>')
     .description('Run a task (by id or id prefix); --watch follows it to the end')
+    .option('--policy <policy>', 'run under this agent policy for this run only')
     .option('--watch', 'follow the run')
     .option('--json', 'print JSON')
-    .action(async (ref: string, o: { watch?: boolean; json?: boolean }) => {
+    .action(async (ref: string, o: { policy?: string; watch?: boolean; json?: boolean }) => {
       const list = await consoleApi().get<Task[]>('/tasks');
       const matches = list.filter((t) => t.id === ref || t.id.startsWith(ref) || t.name === ref);
       if (matches.length !== 1) throw new Error(matches.length ? `"${ref}" matches several tasks; use the id` : `No task matches "${ref}"`);
-      const r = await consoleApi().post<Run>(`/tasks/${matches[0]!.id}/runs`, {});
+      const r = await consoleApi().post<Run>(`/tasks/${matches[0]!.id}/runs`, o.policy ? { policyId: await resolvePolicyId(o.policy) } : {});
       if (o.json && !o.watch) return json(r);
       out(`run ${r.id}`);
       if (o.watch) await show(r.id, true, false);
@@ -160,7 +171,7 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
     .action(async (o: { status?: string; json?: boolean }) => {
       const list = await consoleApi().get<Run[]>('/runs', { query: { status: o.status } });
       if (o.json) return json(list);
-      for (const r of list) out(`${r.id.slice(0, 8)}  ${label(r.status).padEnd(10)}  ${r.stepCount} steps  ${r.goal.slice(0, 60)}`);
+      for (const r of list) out(`${r.id.slice(0, 8)}  ${label(r.status).padEnd(10)}  ${r.stepCount} steps  ${(r.policy?.name ?? '-').padEnd(12)}  ${(costText(r) ?? '-').padEnd(8)}  ${r.goal.slice(0, 60)}`);
     });
   runs
     .command('start <goal>')
@@ -168,9 +179,10 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
     .option('--profile <profile>', 'browser profile', 'default')
     .option('--host <host>', 'machine to run on (name, id or id prefix); default: any available')
     .option('--no-host-fallback', 'fail instead of using another machine when it is unavailable')
+    .option('--policy <policy>', 'agent policy: id, name or builtin key such as balanced (default: yours)')
     .option('--watch', 'follow the run')
-    .action(async (goal: string, o: { profile: string; host?: string; hostFallback: boolean; watch?: boolean }) => {
-      const r = await consoleApi().post<Run>('/runs', { goal, profile: o.profile, ...(o.host ? { hostId: await hostRef(o.host) } : {}), hostFallback: o.hostFallback });
+    .action(async (goal: string, o: { profile: string; host?: string; hostFallback: boolean; policy?: string; watch?: boolean }) => {
+      const r = await consoleApi().post<Run>('/runs', { goal, profile: o.profile, ...(o.policy ? { policyId: await resolvePolicyId(o.policy) } : {}), ...(o.host ? { hostId: await hostRef(o.host) } : {}), hostFallback: o.hostFallback });
       out(`run ${r.id}`);
       if (o.watch) await show(r.id, true, false);
     });
@@ -205,8 +217,9 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
     .description('e.g. hexactra schedules create <task> "0 9 * * 1-5" --tz Europe/Madrid')
     .option('--tz <zone>', 'IANA time zone', Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC')
     .option('--queue', 'start even while an earlier run is live (default: skip)')
-    .action(async (taskId: string, cron: string, o: { tz: string; queue?: boolean }) => {
-      const s = await consoleApi().post<{ id: string; nextRunAt: string }>('/schedules', { taskId, cron, timezone: o.tz, concurrency: o.queue ? 'queue' : 'skip' });
+    .option('--policy <policy>', "agent policy for the scheduled runs (default: the task's)")
+    .action(async (taskId: string, cron: string, o: { tz: string; queue?: boolean; policy?: string }) => {
+      const s = await consoleApi().post<{ id: string; nextRunAt: string }>('/schedules', { taskId, cron, timezone: o.tz, ...(o.policy ? { policyId: await resolvePolicyId(o.policy) } : {}), concurrency: o.queue ? 'queue' : 'skip' });
       out(`schedule ${s.id}: next ${s.nextRunAt}`);
     });
   for (const [name, enabled] of [['pause', false], ['resume', true]] as const) {
