@@ -221,7 +221,8 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo }: Ta
   useEffect(() => {
     if (!focusField) return;
     const holder = root.current?.querySelector<HTMLElement>(`[data-field="${focusField}"]`);
-    const target = holder?.querySelector<HTMLElement>('input:not([type="hidden"]), textarea, [role="combobox"]') ?? holder;
+    // A schedule panel takes the focus itself: its label and its error are what a screen reader should read.
+    const target = focusField.startsWith('schedule') ? holder : (holder?.querySelector<HTMLElement>('input:not([type="hidden"]), textarea, [role="combobox"]') ?? holder);
     holder?.scrollIntoView?.({ block: 'center' });
     target?.focus({ preventScroll: true });
     setFocusField(null);
@@ -389,7 +390,7 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo }: Ta
               helperText={
                 <Box component="span" sx={{ display: 'flex', gap: 2, justifyContent: 'space-between' }}>
                   <span>{goalError ?? GOAL_HELP}</span>
-                  <Box component="span" sx={{ flexShrink: 0 }} aria-label="Goal length">
+                  <Box component="span" sx={{ flexShrink: 0 }}>
                     {fields.goal.length} / {GOAL_MAX}
                   </Box>
                 </Box>
