@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Box, Button, Stack, Typography } from '@mui/material';
-import { useNavigate, useParams } from 'react-router-dom';
-import { usePlatformHost } from '@marinoscar/platform-web/core';
+import { Alert, Box, Button, Link, Stack, Typography } from '@mui/material';
+import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import { isPlatformApiError, usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { fetchRunScreenshot, subscribeRun } from '../live';
 import { ActionOverlay, frameCaption, RunActivityBar, useNow } from '../components/RunActivity';
 import { RunBudgetMeter, RunHeaderChips, RunStopReason } from '../components/RunBudgetMeter';
 import { runCost } from '../components/runBudget';
+import { runAgain } from '../components/runRow';
 import { RunTimeline } from '../components/RunTimeline';
 import { withStreamedSteps } from '../components/runTimeline';
 import type { Run, RunStep } from '../types/runs';
-import { ErrorBanner, ListSkeleton, PageContainer, PageHeader, StatusChip, formatDateTime, isLive as isLiveStatus, useProfileTimeZone } from '../ui';
+import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, StatusChip, formatDateTime, isLive as isLiveStatus, useConfirm, useProfileTimeZone } from '../ui';
 
 /** Where a person can watch and take over the run's browser. */
 interface RunViewer {
@@ -31,6 +32,11 @@ export function RunDetailPage() {
   const navigate = useNavigate();
   const [run, setRun] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** The run is gone (404): deleted, here or on another device. */
+  const [missing, setMissing] = useState(false);
+  /** A failed Delete or Run again; the page stays as it is. */
+  const [actionError, setActionError] = useState<string | null>(null);
+  const confirm = useConfirm();
   const [shot, setShot] = useState<string | null>(null);
   /** When the shown frame was taken, and whether the latest fetch failed (#379). */
   const [shotAt, setShotAt] = useState<number | null>(null);
@@ -47,9 +53,55 @@ export function RunDetailPage() {
       // A load can finish after the stream delivered newer steps: keep them.
       setRun((prev) => withStreamedSteps(fetched, prev));
     } catch (e) {
+      if (isPlatformApiError(e) && e.status === 404) return setMissing(true);
       setError(e instanceof Error ? e.message : 'Could not load the run');
     }
   }, [api, id]);
+
+  // The task's name, for the link to it (#423).
+  const taskId = run?.taskId ?? null;
+  const [taskName, setTaskName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!taskId || !viewer.hasPermission('tasks:read')) return setTaskName(null);
+    let stale = false;
+    api
+      .get<{ name: string }>(`/tasks/${taskId}`)
+      .then((task) => {
+        if (!stale) setTaskName(task.name);
+      })
+      .catch(() => undefined);
+    return () => {
+      stale = true;
+    };
+  }, [api, taskId, viewer]);
+
+  /** Delete (#423): asks first, then goes back to the list, which says so. */
+  const remove = async () => {
+    const ok = await confirm({
+      title: 'Delete this run?',
+      body: 'Its steps and answers are deleted too. Its cost and stop-reason history is removed from task spend and alerts. This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok || !run) return;
+    try {
+      await api.delete(`/runs/${run.id}`);
+      navigate('/runs', { state: { toast: 'Run deleted' } });
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Could not delete the run');
+    }
+  };
+
+  /** Run again (#423): the same task or goal; the policy only when it was chosen for this run. */
+  const again = async () => {
+    if (!run) return;
+    try {
+      const started = await runAgain(api, run);
+      navigate(`/runs/${started.id}`);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Could not start the run');
+    }
+  };
 
   useEffect(() => {
     void load();
@@ -106,6 +158,14 @@ export function RunDetailPage() {
   }, [api, id, isLive]);
 
   const back = { to: '/runs', label: 'Runs' };
+  if (missing) {
+    return (
+      <PageContainer>
+        <PageHeader title="Run" back={back} />
+        <EmptyState title="This run does not exist any more." body="It may have been deleted." action={{ key: 'runs', label: 'Go to Runs', to: '/runs' }} />
+      </PageContainer>
+    );
+  }
   if (error) {
     return (
       <PageContainer>
@@ -121,12 +181,17 @@ export function RunDetailPage() {
       </PageContainer>
     );
   }
+  const finished = !isLive;
   return (
     <PageContainer>
       <PageHeader
         variant="h5"
         title={run.goal}
-        back={back}
+        back={run.taskId ? { to: `/tasks/${run.taskId}`, label: taskName ?? 'Task' } : back}
+        actions={[
+          { key: 'again', label: 'Run again', onClick: () => void again(), hidden: !finished || run.trigger === 'external' || !viewer.hasPermission('runs:write') },
+          { key: 'delete', label: 'Delete', color: 'error', onClick: () => void remove(), hidden: !finished || !viewer.hasPermission('runs:delete') },
+        ]}
         subtitle={
           <>
             Profile {run.profile} · {run.stepCount} steps{runCost(run) ? ` · ${runCost(run)}` : ''} · started {formatDateTime(run.createdAt)}
@@ -135,6 +200,18 @@ export function RunDetailPage() {
       >
         <StatusChip status={run.status} size="medium" />
       </PageHeader>
+      <ErrorBanner error={actionError} onClose={() => setActionError(null)} />
+      {run.taskId && (
+        <Typography variant="body2" sx={{ mb: 1 }}>
+          <Link component={RouterLink} to={`/tasks/${run.taskId}`} underline="hover">
+            Task{taskName ? `: ${taskName}` : ''}
+          </Link>
+          {' · '}
+          <Link component={RouterLink} to="/runs" underline="hover">
+            All runs
+          </Link>
+        </Typography>
+      )}
       <RunHeaderChips policy={run.policy} tier={run.tier} />
       {/* A typed stop reason (#404) says why in one line; older runs keep the plain result and error. */}
       {!isLive && run.stopReason ? (

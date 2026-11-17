@@ -264,9 +264,10 @@
       "tui": {
         "none": "The TUI is for watching and answering; deleting history is done in the web app"
       },
-      "web": {
-        "none": "The Runs page gains delete, with its confirmation, in #423"
-      }
+      "web": [
+        "/runs",
+        "/runs/:id"
+      ]
     },
     {
       "id": "runs.viewer",

@@ -1,5 +1,6 @@
 // The run page's budget meter, header chips and stop reasons, the runs list's
-// cost and stop chips, routing rows and the task spend line (#408).
+// cost and stop reason (in its status chip since #423), routing rows and the
+// task spend line (#408).
 import { act, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { PlatformHostProvider } from '@marinoscar/platform-web/core';
@@ -17,7 +18,7 @@ vi.mock('../live', () => ({
 
 import { RunBudgetMeter, RunStopReason, TaskSpendLine } from '../components/RunBudgetMeter';
 import { RunTimeline, type RunTimelineStep } from '../components/RunTimeline';
-import { formatUsd, meterRows, meterTone, spendLine, STOP_REASONS, stopChipLabel, stopLine, tierChip, type RunBudget, type StopReason } from '../components/runBudget';
+import { formatUsd, meterRows, meterTone, spendLine, STOP_REASONS, stopLine, tierChip, type RunBudget, type StopReason } from '../components/runBudget';
 import { routingRow } from '../components/runRouting';
 import { RunDetailPage } from '../pages/RunDetailPage';
 import { RunsPage } from '../pages/RunsPage';
@@ -141,11 +142,8 @@ describe('stop reasons', () => {
     expect(stopLine(run)!.title).toBe('Stopped: stuck (no action in 3 rounds in a row).');
   });
 
-  it('says nothing while a run has no stop reason, and labels the list chips', () => {
+  it('says nothing while a run has no stop reason', () => {
     expect(stopLine({ status: 'running', stopReason: null, result: null, error: null })).toBeNull();
-    expect(stopChipLabel('budget_cost')).toBe('cost budget');
-    expect(stopChipLabel('stalled')).toBe('stuck');
-    expect(stopChipLabel('finished')).toBeNull();
   });
 
   it('a budget stop whose wrap-up reported success is a success', () => {
@@ -183,11 +181,13 @@ function renderDetail(run: Run) {
   });
   render(
     <PlatformHostProvider host={host}>
-      <MemoryRouter initialEntries={[`/runs/${run.id}`]}>
-        <Routes>
-          <Route path="/runs/:id" element={<RunDetailPage />} />
-        </Routes>
-      </MemoryRouter>
+      <ConfirmProvider>
+        <MemoryRouter initialEntries={[`/runs/${run.id}`]}>
+          <Routes>
+            <Route path="/runs/:id" element={<RunDetailPage />} />
+          </Routes>
+        </MemoryRouter>
+      </ConfirmProvider>
     </PlatformHostProvider>,
   );
 }
@@ -224,33 +224,44 @@ describe('RunDetailPage', () => {
 });
 
 describe('RunsPage', () => {
-  it('lists each run with its cost and a stop-reason chip, and the task spend on a task view', async () => {
+  it('lists each run with its cost and its stop reason, and the task spend on a task view', async () => {
+    const SECOND = '33333333-3333-4333-8333-333333333333';
+    const THIRD = '44444444-4444-4444-8444-444444444444';
     const runs: Run[] = [
-      { ...baseRun, status: 'failed', stopReason: 'budget_cost', costUsd: 2.01, costKnown: false },
-      { ...baseRun, id: '33333333-3333-4333-8333-333333333333', status: 'succeeded', stopReason: 'finished', costUsd: 0, modelCalls: 0 },
+      { ...baseRun, status: 'failed', stopReason: 'budget_cost', costUsd: 2.01, costKnown: false, budget: null },
+      { ...baseRun, id: SECOND, status: 'succeeded', stopReason: 'finished', costUsd: 0, modelCalls: 0, budget: null },
+      { ...baseRun, id: THIRD, status: 'failed', stopReason: 'stalled', costUsd: 0.4, budget: null },
     ];
     const host = createTestPlatformHost({
       permissions: ['runs:read', 'tasks:read'],
       responses: {
-        [`GET /runs?taskId=${TASK_ID}`]: runs,
+        'GET /runs': { items: runs, nextCursor: null },
+        'GET /runs/counts': { total: 3, live: 0, byStatus: { queued: 0, running: 0, waiting_human: 0, succeeded: 1, failed: 2, cancelled: 0 }, costUsd: 2.41, costKnown: false },
+        'GET /tasks': [],
         [`GET /tasks/${TASK_ID}`]: { name: 'Check fare', spend30d: { runs: 2, costUsd: 2.01, costKnown: false, tokens: 25_000, succeeded: 1, avgSuccessCostUsd: 0 } },
       },
     });
     render(
       <PlatformHostProvider host={host}>
-        <MemoryRouter initialEntries={[`/runs?taskId=${TASK_ID}`]}>
-          <Routes>
-            <Route path="/runs" element={<RunsPage />} />
-          </Routes>
-        </MemoryRouter>
+        <ConfirmProvider>
+          <MemoryRouter initialEntries={[`/runs?taskId=${TASK_ID}`]}>
+            <Routes>
+              <Route path="/runs" element={<RunsPage />} />
+            </Routes>
+          </MemoryRouter>
+        </ConfirmProvider>
       </PlatformHostProvider>,
     );
-    const first = await screen.findByTestId(`run-row-${RUN_ID}`);
+    // The old `?taskId=` link still filters the list.
+    const first = (await screen.findByTestId(`run-row-${RUN_ID}`)).closest('tr')!;
+    expect(host.requests.find((r) => r.path.startsWith('/runs?'))?.path).toContain(`taskId=${TASK_ID}`);
     expect(within(first).getByTestId('run-cost')).toHaveTextContent('≥ $2.01');
-    expect(within(first).getByTestId('run-stop')).toHaveTextContent('cost budget');
-    const second = screen.getByTestId('run-row-33333333-3333-4333-8333-333333333333');
+    // One wording, one place (#423): the status chip says why the run stopped.
+    expect(within(first).getByText('failed · cost budget')).toBeInTheDocument();
+    const second = screen.getByTestId(`run-row-${SECOND}`).closest('tr')!;
     expect(within(second).getByTestId('run-cost')).toHaveTextContent('—');
-    expect(within(second).queryByTestId('run-stop')).toBeNull();
+    expect(within(second).getByText('succeeded')).toBeInTheDocument();
+    expect(within(screen.getByTestId(`run-row-${THIRD}`).closest('tr')!).getByText('failed · stalled')).toBeInTheDocument();
     expect(await screen.findByTestId('task-spend')).toHaveTextContent('Last 30 days: 2 runs · ≥ $2.01 · 25K tokens · ≥ $0.00 per successful run');
   });
 });
