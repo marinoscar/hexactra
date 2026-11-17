@@ -289,7 +289,7 @@ export function AgentPoliciesPage() {
 
       {/* Duplicate: name the copy, then edit it. */}
       <Dialog open={Boolean(duplicating)} onClose={() => setDuplicating(null)} fullWidth maxWidth="xs">
-        <DialogTitle>Duplicate “{duplicating?.policy.name}”</DialogTitle>
+        <DialogTitle sx={{ overflowWrap: 'anywhere' }}>Duplicate “{duplicating?.policy.name}”</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
@@ -311,7 +311,7 @@ export function AgentPoliciesPage() {
 
       {/* In use (409 POLICY_IN_USE): move its tasks and schedules to another policy, then delete. */}
       <Dialog open={Boolean(reassign)} onClose={() => setReassign(null)} fullWidth maxWidth="sm" aria-labelledby="reassign-title">
-        <DialogTitle id="reassign-title">“{reassign?.policy.name}” is in use</DialogTitle>
+        <DialogTitle id="reassign-title" sx={{ overflowWrap: 'anywhere' }}>“{reassign?.policy.name}” is in use</DialogTitle>
         <DialogContent>
           <DialogContentText sx={{ mb: 1 }}>
             {reassign && `It is used by ${reassign.details.tasks.length} ${reassign.details.tasks.length === 1 ? 'task' : 'tasks'} and ${reassign.details.schedules.length} ${reassign.details.schedules.length === 1 ? 'schedule' : 'schedules'}. Choose the policy they use instead, then delete it.`}
@@ -347,11 +347,11 @@ export function AgentPoliciesPage() {
 
       {/* Import: what the file holds and the conflict mode, then what happened. */}
       <Dialog open={Boolean(importing)} onClose={() => setImporting(null)} fullWidth maxWidth="sm" aria-labelledby="import-title">
-        <DialogTitle id="import-title">{importing?.result ? 'Import finished' : `Import ${importing?.fileName ?? ''}`}</DialogTitle>
+        <DialogTitle id="import-title" sx={{ overflowWrap: 'anywhere' }}>{importing?.result ? 'Import finished' : `Import ${importing?.fileName ?? ''}`}</DialogTitle>
         <DialogContent>
           {importing && !importing.result && (
             <>
-              <DialogContentText>
+              <DialogContentText sx={{ overflowWrap: 'anywhere' }}>
                 {importing.file.policies.length} {importing.file.policies.length === 1 ? 'policy' : 'policies'}: {importing.file.policies.map((p) => p.name).join(', ')}
               </DialogContentText>
               <TextField
