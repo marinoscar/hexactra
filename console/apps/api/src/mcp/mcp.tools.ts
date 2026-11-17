@@ -4,18 +4,9 @@ import { agentPolicySpecSchema } from '../policies/agent-policy.schema';
 import { parsePolicyRef } from '../policies/builtin-policies';
 import { RUN_STATUSES, STOP_REASON_FILTERS } from '../tasks/runs.schemas';
 
-/** How a tool reaches the console: its own REST API, as the caller. */
-export interface McpContext {
-  api<T = unknown>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, body?: unknown, headers?: Record<string, string>): Promise<T>;
-  /** Raw bytes of a GET (screenshots). */
-  bytes(path: string): Promise<{ mime: string; data: Buffer }>;
-}
+import { textResult, type McpContext, type McpToolResult } from './mcp.results';
 
-export type McpContent = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
-export interface McpToolResult {
-  content: McpContent[];
-  isError?: boolean;
-}
+export type { McpContent, McpContext, McpToolResult } from './mcp.results';
 
 export interface McpTool {
   name: string;
@@ -24,7 +15,7 @@ export interface McpTool {
   call(args: Record<string, unknown>, ctx: McpContext): Promise<McpToolResult>;
 }
 
-const text = (v: unknown): McpToolResult => ({ content: [{ type: 'text', text: typeof v === 'string' ? v : JSON.stringify(v, null, 2) }] });
+const text = textResult;
 const id = z.string().uuid();
 /** A policy reference: an own policy's UUID or `builtin:<economy|balanced|thorough|unlimited>`. */
 const policyRef = z
