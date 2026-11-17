@@ -163,3 +163,7 @@ The authoritative list, with fields and results, is [remote-control-api.md, Acti
 - User data is redacted before storage
 - All sensitive operations require explicit user approval via HITL
 - Network access is default-deny; only explicitly configured endpoints allowed
+
+## Console API: agent policies
+
+The Hexactra Console (`console/`) adds `/api/agent-policies` (list, create, read, edit with `If-Match`, delete with `?reassignTo`, duplicate, `GET`/`PUT /default`) and a `policyId` on tasks, schedules and run starts. Run responses carry `policy: { id, name, version, source, builtin }`. The per-endpoint reference is the console's generated OpenAPI document at `/api/docs`, and `console/packages/sdk/openapi.json`; the concepts (built-ins, pins, the default, resolution order) are in [console/README.md](../console/README.md#agent-policies).

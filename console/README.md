@@ -16,6 +16,7 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 |---|---|---|---|---|
 | Fabric connection (URL and `hxs_` service token, stored encrypted; Doctor checks `fabric.*`) | Administration → Fabric connection | `GET/PUT/DELETE /api/fabric/connection`, `POST …/test` | `hexactra fabric show\|set URL --token-stdin\|test\|clear --yes` | `fabric_config:read` / `:write` |
 | Tasks: saved goals with a profile, optional allowed sites, step and time budgets, opt-in confirm-before-purchase | `/tasks` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
+| Agent policies: named, versioned bundles of model tiers, budgets (any of them unlimited), stall detection and context settings; four built-ins, a default per user, one per task, schedule or run ([Agent policies](#agent-policies)) | (page arrives with E31.9) | `/api/agent-policies` | (arrives with E31.11) | `agent_policies:read` / `:write` |
 | Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel | `/runs`, `/runs/:id` | `/api/runs`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` |
 | Inbox: what agents wait for (CAPTCHA, code, sign-in, confirmation); answers resume the run | `/inbox` | `GET /api/inbox`, `POST /api/inbox/:runId/respond` | `hexactra inbox list\|answer RUN --done\|--value\|--choice\|--secret-stdin\|--decline`; TUI **Agent ▸ Inbox** | `runs:read` / `runs:write` |
 | Questions: an agent asks its user a typed question (text, choice, multi-choice, number, confirm, none, takeover; a secret only in a browser session) and waits for the typed answer; the person answers on any channel, the first answer wins ([docs/questions.md](docs/questions.md)) | `/inbox`, `/inbox/q/:id` | `/api/questions`, `POST /api/questions/:id/answer\|cancel\|answer-by-token` | `hexactra questions ask\|list\|show\|answer`; TUI **Agent ▸ Inbox** | `runs:read` / `runs:write` |
@@ -39,9 +40,47 @@ Run it all on a VPS (console, fabric and an optional browser host in one stack):
   - it runs JavaScript in the page;
   - it uses the node's desktop for native dialogs and file pickers.
   A model without vision keeps working from the page's text and elements.
-- New tasks get 100 steps and 30 minutes, and no confirmation before purchases. Two limits are opt-in per task: an allowed-sites list, and "Ask me before purchases".
+- A run's limits come from its [agent policy](#agent-policies) (the built-in Balanced by default: 60 actions, 20 active minutes). No confirmation before purchases. Two limits are opt-in per task: an allowed-sites list, and "Ask me before purchases".
 
 The CLI's commands use the login from `hexactra login`, or `HEXACTRA_SERVER_URL` and `HEXACTRA_TOKEN`. Install it with one `curl | bash` line; the terminal UI groups its screens into Agent, Worker, Server, Developer and Account; the guide, with screenshots, is [apps/cli/README.md](apps/cli/README.md).
+
+## Agent policies
+
+An **agent policy** says which models a run may use and how much it may spend. It is a named, versioned, personal bundle (the spec is `console/apps/api/src/policies/agent-policy.schema.ts`, the single source of truth; every field carries its own description):
+
+- **Models:** a start tier and the highest tier (`fast`, `standard`, `frontier`) a run may escalate to, whether the tier's fallback model may be used on a provider error, and optional **model pins**.
+- **Budget:** most browser actions, model calls, active minutes, input and output tokens, and cost in US dollars. **`null` means unlimited**, for any of them, and a warning threshold. Stall detection is always on, even when every budget is unlimited.
+- **Stall detection:** failures in a row, a repeated action, actions without progress, and what to do (nudge then escalate, escalate, ask a person, fail).
+- **Context:** screenshots kept, prune batch, model calls per chunk and observation size.
+
+Enforcement arrives in steps: today a run honours the policy's **action** and **active-minute** limits (`null` is no limit); a pin on the start tier picks the model; the tier ladder, the other budgets, stall detection and the context settings are stored, validated and snapshotted already, and enforced by the stories that follow (epic #398).
+
+**Built-in policies** are code (`builtin:economy`, `builtin:balanced`, `builtin:thorough`, `builtin:unlimited`): read-only, never pinning a model. Duplicate one to edit a copy.
+
+| | Economy | **Balanced** | Thorough | Unlimited |
+|---|---|---|---|---|
+| Tiers (start to max) | fast to standard | standard to frontier | frontier to frontier | standard to frontier |
+| Actions / model calls | 40 / 80 | 60 / 120 | 200 / 400 | no limit |
+| Active minutes / cost | 10 / $0.50 | 20 / $2 | 60 / $10 | no limit |
+| On a stall | nudge, escalate once | nudge, escalate twice | ask a person | nudge, escalate twice |
+
+**Model pins.** A pin names one model for a tier: `provider:modelId`, or a bare model id. Saving a policy refuses (`400 POLICY_PIN_INVALID`) a pin to a model that is not enabled for you, or that lacks tool calls and vision. The check is one function, `PolicyModelCheck`, in the policies module.
+
+**The default.** Each user has one default policy, stored as `browserAgent.defaultPolicyRef` in their user settings (`GET`/`PUT /api/agent-policies/default`); none chosen means `builtin:balanced`. A default cannot be deleted.
+
+**Which policy a run uses**, most specific first:
+
+1. the run's own `policyId` (`POST /api/runs`, `POST /api/tasks/:id/runs`);
+2. the schedule's `policyId`, for a scheduled run;
+3. the task's `policyId`;
+4. the user's default;
+5. `builtin:balanced`.
+
+A reference to a deleted policy (or someone else's) falls through to the next level; the fall-through is logged and noted in the run's first log line, and never fails the run. The policy is **snapshotted onto the run** (`runs.policy_snapshot`, with `policy_ref`, `policy_version` and `policy_source`) at the run's first step and never changed: editing a policy or your default later does not affect a run in flight. Run responses carry `policy: { id, name, version, source, builtin }`.
+
+**The API** (`/api/agent-policies`, permissions `agent_policies:read` / `:write`, granted like `tasks:*`): list (built-ins and your own, each with `isDefault`, `usage` and `hasNoHardStop`), create, read, edit (`If-Match: <version>`, `412` on a stale version; built-ins answer `403`), delete (`409 POLICY_IN_USE` listing the tasks and schedules, or `?reassignTo=<id>`; `409 POLICY_IS_DEFAULT`), duplicate. Tasks and schedules take `policyId`; `null` follows the next level.
+
+**The earlier task fields.** `maxSteps`, `maxMinutes` and `model` on a task still work for one release and are marked deprecated. Sending one (with no `policyId`) saves a derived personal policy named `Task: <task name>`, built from Balanced (`maxActions` = `maxSteps`, `maxActiveMinutes` = `maxMinutes`; a model becomes the `standard` pin and caps `maxTier` at `standard`) and answers with a `Deprecation: true` header. The `agent_policies` migration converted existing tasks the same way. Use `policyId` instead.
 
 ## Layout
 

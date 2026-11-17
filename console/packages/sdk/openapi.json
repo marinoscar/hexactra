@@ -25868,6 +25868,686 @@
         ]
       }
     },
+    "/api/agent-policies": {
+      "get": {
+        "operationId": "policies_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AgentPolicyResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Agent policies"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "agent_policies:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `agent_policies:read`."
+      },
+      "post": {
+        "operationId": "policies_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePolicyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AgentPolicyResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Agent policies"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "agent_policies:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `agent_policies:write`."
+      }
+    },
+    "/api/agent-policies/default": {
+      "get": {
+        "operationId": "policies_getDefault",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DefaultPolicyResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Agent policies"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "agent_policies:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `agent_policies:read`."
+      },
+      "put": {
+        "operationId": "policies_setDefault",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDefaultPolicyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DefaultPolicyResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Agent policies"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "agent_policies:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `agent_policies:write`."
+      }
+    },
+    "/api/agent-policies/{id}": {
+      "get": {
+        "operationId": "policies_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AgentPolicyResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Agent policies"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "agent_policies:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `agent_policies:read`."
+      },
+      "patch": {
+        "operationId": "policies_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "if-match",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "The `version` you edited. 412 `POLICY_VERSION_CONFLICT` when it moved; omit to overwrite. Built-in policies answer 403.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePolicyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AgentPolicyResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Agent policies"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "agent_policies:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `agent_policies:write`."
+      },
+      "delete": {
+        "operationId": "policies_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reassignTo",
+            "required": false,
+            "in": "query",
+            "description": "Move the tasks and schedules that use the policy to this one before deleting it.",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Agent policies"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "agent_policies:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `agent_policies:write`."
+      }
+    },
+    "/api/agent-policies/{id}/duplicate": {
+      "post": {
+        "operationId": "policies_duplicate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DuplicatePolicyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AgentPolicyResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Agent policies"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "agent_policies:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `agent_policies:write`."
+      }
+    },
     "/api/tasks": {
       "get": {
         "operationId": "tasks_list",
@@ -27968,6 +28648,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunTaskDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "",
@@ -32896,6 +33586,15 @@
               "INTERNAL_ERROR",
               "ROLE_NOT_ASSIGNABLE",
               "INVALID_RETURN_URI",
+              "POLICY_PIN_INVALID",
+              "POLICY_REF_INVALID",
+              "POLICY_BUILTIN_READONLY",
+              "POLICY_NOT_FOUND",
+              "POLICY_NAME_TAKEN",
+              "POLICY_IN_USE",
+              "POLICY_IS_DEFAULT",
+              "POLICY_VERSION_CONFLICT",
+              "POLICY_SPEC_INVALID",
               "WEBHOOK_NOT_FOUND",
               "WEBHOOK_DELIVERY_NOT_FOUND",
               "WEBHOOK_URL_INVALID",
@@ -34579,6 +35278,26 @@
               "imageObjectId"
             ]
           },
+          "browserAgent": {
+            "type": "object",
+            "properties": {
+              "defaultPolicyRef": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The user's default agent policy: an own policy's UUID or `builtin:<key>`. `null` means `builtin:balanced`."
+              }
+            },
+            "required": [
+              "defaultPolicyRef"
+            ]
+          },
           "notifications": {
             "type": "object",
             "propertyNames": {
@@ -34691,6 +35410,26 @@
             },
             "required": [
               "imageSource"
+            ]
+          },
+          "browserAgent": {
+            "type": "object",
+            "properties": {
+              "defaultPolicyRef": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The user's default agent policy: an own policy's UUID or `builtin:<key>`. `null` means `builtin:balanced`."
+              }
+            },
+            "required": [
+              "defaultPolicyRef"
             ]
           },
           "notifications": {
@@ -34830,6 +35569,30 @@
                 ]
               }
             }
+          },
+          "browserAgent": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "defaultPolicyRef": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The user's default agent policy: an own policy's UUID or `builtin:<key>`. `null` means `builtin:balanced`."
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "notifications": {
             "anyOf": [
@@ -38162,6 +38925,26 @@
                 "required": [
                   "imageSource",
                   "imageObjectId"
+                ]
+              },
+              "browserAgent": {
+                "type": "object",
+                "properties": {
+                  "defaultPolicyRef": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 64
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The user's default agent policy: an own policy's UUID or `builtin:<key>`. `null` means `builtin:balanced`."
+                  }
+                },
+                "required": [
+                  "defaultPolicyRef"
                 ]
               },
               "notifications": {
@@ -55843,6 +56626,1024 @@
           }
         }
       },
+      "AgentPolicyResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "A UUID, or `builtin:<key>` for a built-in policy."
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "The `If-Match` value for the next edit. Built-ins carry a constant."
+          },
+          "builtin": {
+            "type": "boolean",
+            "description": "Built-in policies are code: read-only, never deleted, only duplicated."
+          },
+          "spec": {
+            "type": "object",
+            "properties": {
+              "schemaVersion": {
+                "type": "number",
+                "const": 1,
+                "description": "Version of this document format."
+              },
+              "models": {
+                "type": "object",
+                "properties": {
+                  "startTier": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The tier a run starts on."
+                  },
+                  "maxTier": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The highest tier a run may escalate to when it stalls. Never below `startTier`."
+                  },
+                  "allowProviderFallback": {
+                    "type": "boolean",
+                    "description": "Use the tier's fallback model when the provider errors or rate-limits."
+                  },
+                  "pins": {
+                    "description": "Optional per-policy model override per tier. Each pin must name an enabled model that supports tools and vision.",
+                    "type": "object",
+                    "properties": {
+                      "fast": {
+                        "description": "Model that replaces the fast tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition.",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "standard": {
+                        "description": "Model that replaces the standard tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition.",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "frontier": {
+                        "description": "Model that replaces the frontier tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition.",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "startTier",
+                  "maxTier",
+                  "allowProviderFallback"
+                ],
+                "description": "Which models a run uses, and how it moves between tiers."
+              },
+              "budget": {
+                "type": "object",
+                "properties": {
+                  "maxActions": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most browser actions a run may take. `null` means unlimited."
+                  },
+                  "maxModelCalls": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most model round trips a run may make. `null` means unlimited."
+                  },
+                  "maxActiveMinutes": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10080
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most active minutes a run may use (time waiting for a person does not count); 7 days at most when set. `null` means unlimited."
+                  },
+                  "maxInputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most input tokens a run may send. `null` means unlimited."
+                  },
+                  "maxOutputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most output tokens a run may receive. `null` means unlimited."
+                  },
+                  "maxCostUsd": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most a run may cost in US dollars. `null` means unlimited."
+                  },
+                  "warnAtPercent": {
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 95,
+                    "description": "Warn the owner when any set budget reaches this percentage."
+                  }
+                },
+                "required": [
+                  "maxActions",
+                  "maxModelCalls",
+                  "maxActiveMinutes",
+                  "maxInputTokens",
+                  "maxOutputTokens",
+                  "maxCostUsd",
+                  "warnAtPercent"
+                ],
+                "description": "What a run may spend. Every limit may be unlimited; stall detection stays on regardless."
+              },
+              "stall": {
+                "type": "object",
+                "properties": {
+                  "maxConsecutiveFailures": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "description": "Failed actions in a row that count as a stall."
+                  },
+                  "maxRepeatedAction": {
+                    "type": "integer",
+                    "minimum": 2,
+                    "maximum": 50,
+                    "description": "The same action repeated this many times counts as a stall."
+                  },
+                  "noProgressActions": {
+                    "type": "integer",
+                    "minimum": 3,
+                    "maximum": 200,
+                    "description": "Actions without visible progress that count as a stall."
+                  },
+                  "onStall": {
+                    "type": "string",
+                    "enum": [
+                      "nudge_then_escalate",
+                      "escalate",
+                      "ask_human",
+                      "fail"
+                    ],
+                    "description": "What to do on a stall: nudge the model then escalate a tier, escalate at once, ask a person, or fail the run."
+                  },
+                  "maxEscalations": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10,
+                    "description": "Most tier escalations per run."
+                  }
+                },
+                "required": [
+                  "maxConsecutiveFailures",
+                  "maxRepeatedAction",
+                  "noProgressActions",
+                  "onStall",
+                  "maxEscalations"
+                ],
+                "description": "Stall and loop detection. Always on."
+              },
+              "context": {
+                "type": "object",
+                "properties": {
+                  "screenshotsKept": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 5,
+                    "description": "Recent screenshots kept in the model context."
+                  },
+                  "pruneBatch": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "description": "How many old tool results are pruned together once the context grows."
+                  },
+                  "callsPerChunk": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "Model calls per chunk; the model tier only changes between chunks."
+                  },
+                  "observationChars": {
+                    "type": "integer",
+                    "minimum": 500,
+                    "maximum": 20000,
+                    "description": "Most characters of one page observation sent to the model."
+                  }
+                },
+                "required": [
+                  "screenshotsKept",
+                  "pruneBatch",
+                  "callsPerChunk",
+                  "observationChars"
+                ],
+                "description": "Context efficiency: how much the model sees each round."
+              }
+            },
+            "required": [
+              "schemaVersion",
+              "models",
+              "budget",
+              "stall",
+              "context"
+            ],
+            "description": "An agent policy: model tiers, budgets, stall detection and context settings."
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "True for the user's default policy."
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "tasks": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "schedules": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "tasks",
+              "schedules"
+            ],
+            "description": "How many of the user's tasks and schedules reference the policy."
+          },
+          "hasNoHardStop": {
+            "type": "boolean",
+            "description": "True when every budget limit is unlimited: the run only ends by finishing, a stop or a stall."
+          },
+          "createdAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "version",
+          "builtin",
+          "spec",
+          "isDefault",
+          "usage",
+          "hasNoHardStop",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "DefaultPolicyResponseDto": {
+        "type": "object",
+        "properties": {
+          "policyId": {
+            "type": "string",
+            "description": "The default policy: its id, or `builtin:balanced` when none was chosen."
+          },
+          "explicit": {
+            "type": "boolean",
+            "description": "False when the user never chose one."
+          }
+        },
+        "required": [
+          "policyId",
+          "explicit"
+        ]
+      },
+      "SetDefaultPolicyDto": {
+        "type": "object",
+        "properties": {
+          "policyId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The new default policy; `null` goes back to `builtin:balanced`."
+          }
+        },
+        "required": [
+          "policyId"
+        ]
+      },
+      "CreatePolicyDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Unique among the user's policies."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the policy is for."
+          },
+          "spec": {
+            "type": "object",
+            "properties": {
+              "schemaVersion": {
+                "type": "number",
+                "const": 1,
+                "description": "Version of this document format."
+              },
+              "models": {
+                "type": "object",
+                "properties": {
+                  "startTier": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The tier a run starts on."
+                  },
+                  "maxTier": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The highest tier a run may escalate to when it stalls. Never below `startTier`."
+                  },
+                  "allowProviderFallback": {
+                    "type": "boolean",
+                    "description": "Use the tier's fallback model when the provider errors or rate-limits."
+                  },
+                  "pins": {
+                    "description": "Optional per-policy model override per tier. Each pin must name an enabled model that supports tools and vision.",
+                    "type": "object",
+                    "properties": {
+                      "fast": {
+                        "description": "Model that replaces the fast tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition.",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "standard": {
+                        "description": "Model that replaces the standard tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition.",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "frontier": {
+                        "description": "Model that replaces the frontier tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition.",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "startTier",
+                  "maxTier",
+                  "allowProviderFallback"
+                ],
+                "description": "Which models a run uses, and how it moves between tiers."
+              },
+              "budget": {
+                "type": "object",
+                "properties": {
+                  "maxActions": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most browser actions a run may take. `null` means unlimited."
+                  },
+                  "maxModelCalls": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most model round trips a run may make. `null` means unlimited."
+                  },
+                  "maxActiveMinutes": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10080
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most active minutes a run may use (time waiting for a person does not count); 7 days at most when set. `null` means unlimited."
+                  },
+                  "maxInputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most input tokens a run may send. `null` means unlimited."
+                  },
+                  "maxOutputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most output tokens a run may receive. `null` means unlimited."
+                  },
+                  "maxCostUsd": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most a run may cost in US dollars. `null` means unlimited."
+                  },
+                  "warnAtPercent": {
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 95,
+                    "description": "Warn the owner when any set budget reaches this percentage."
+                  }
+                },
+                "required": [
+                  "maxActions",
+                  "maxModelCalls",
+                  "maxActiveMinutes",
+                  "maxInputTokens",
+                  "maxOutputTokens",
+                  "maxCostUsd",
+                  "warnAtPercent"
+                ],
+                "description": "What a run may spend. Every limit may be unlimited; stall detection stays on regardless."
+              },
+              "stall": {
+                "type": "object",
+                "properties": {
+                  "maxConsecutiveFailures": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "description": "Failed actions in a row that count as a stall."
+                  },
+                  "maxRepeatedAction": {
+                    "type": "integer",
+                    "minimum": 2,
+                    "maximum": 50,
+                    "description": "The same action repeated this many times counts as a stall."
+                  },
+                  "noProgressActions": {
+                    "type": "integer",
+                    "minimum": 3,
+                    "maximum": 200,
+                    "description": "Actions without visible progress that count as a stall."
+                  },
+                  "onStall": {
+                    "type": "string",
+                    "enum": [
+                      "nudge_then_escalate",
+                      "escalate",
+                      "ask_human",
+                      "fail"
+                    ],
+                    "description": "What to do on a stall: nudge the model then escalate a tier, escalate at once, ask a person, or fail the run."
+                  },
+                  "maxEscalations": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10,
+                    "description": "Most tier escalations per run."
+                  }
+                },
+                "required": [
+                  "maxConsecutiveFailures",
+                  "maxRepeatedAction",
+                  "noProgressActions",
+                  "onStall",
+                  "maxEscalations"
+                ],
+                "description": "Stall and loop detection. Always on."
+              },
+              "context": {
+                "type": "object",
+                "properties": {
+                  "screenshotsKept": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 5,
+                    "description": "Recent screenshots kept in the model context."
+                  },
+                  "pruneBatch": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "description": "How many old tool results are pruned together once the context grows."
+                  },
+                  "callsPerChunk": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "Model calls per chunk; the model tier only changes between chunks."
+                  },
+                  "observationChars": {
+                    "type": "integer",
+                    "minimum": 500,
+                    "maximum": 20000,
+                    "description": "Most characters of one page observation sent to the model."
+                  }
+                },
+                "required": [
+                  "screenshotsKept",
+                  "pruneBatch",
+                  "callsPerChunk",
+                  "observationChars"
+                ],
+                "description": "Context efficiency: how much the model sees each round."
+              }
+            },
+            "required": [
+              "schemaVersion",
+              "models",
+              "budget",
+              "stall",
+              "context"
+            ],
+            "description": "An agent policy: model tiers, budgets, stall detection and context settings."
+          }
+        },
+        "required": [
+          "name",
+          "spec"
+        ]
+      },
+      "UpdatePolicyDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Unique among the user's policies."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the policy is for."
+          },
+          "spec": {
+            "type": "object",
+            "properties": {
+              "schemaVersion": {
+                "type": "number",
+                "const": 1,
+                "description": "Version of this document format."
+              },
+              "models": {
+                "type": "object",
+                "properties": {
+                  "startTier": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The tier a run starts on."
+                  },
+                  "maxTier": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The highest tier a run may escalate to when it stalls. Never below `startTier`."
+                  },
+                  "allowProviderFallback": {
+                    "type": "boolean",
+                    "description": "Use the tier's fallback model when the provider errors or rate-limits."
+                  },
+                  "pins": {
+                    "description": "Optional per-policy model override per tier. Each pin must name an enabled model that supports tools and vision.",
+                    "type": "object",
+                    "properties": {
+                      "fast": {
+                        "description": "Model that replaces the fast tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition.",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "standard": {
+                        "description": "Model that replaces the standard tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition.",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "frontier": {
+                        "description": "Model that replaces the frontier tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition.",
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                "required": [
+                  "startTier",
+                  "maxTier",
+                  "allowProviderFallback"
+                ],
+                "description": "Which models a run uses, and how it moves between tiers."
+              },
+              "budget": {
+                "type": "object",
+                "properties": {
+                  "maxActions": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most browser actions a run may take. `null` means unlimited."
+                  },
+                  "maxModelCalls": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most model round trips a run may make. `null` means unlimited."
+                  },
+                  "maxActiveMinutes": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10080
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most active minutes a run may use (time waiting for a person does not count); 7 days at most when set. `null` means unlimited."
+                  },
+                  "maxInputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000000000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most input tokens a run may send. `null` means unlimited."
+                  },
+                  "maxOutputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100000000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most output tokens a run may receive. `null` means unlimited."
+                  },
+                  "maxCostUsd": {
+                    "anyOf": [
+                      {
+                        "type": "number",
+                        "exclusiveMinimum": 0,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most a run may cost in US dollars. `null` means unlimited."
+                  },
+                  "warnAtPercent": {
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 95,
+                    "description": "Warn the owner when any set budget reaches this percentage."
+                  }
+                },
+                "required": [
+                  "maxActions",
+                  "maxModelCalls",
+                  "maxActiveMinutes",
+                  "maxInputTokens",
+                  "maxOutputTokens",
+                  "maxCostUsd",
+                  "warnAtPercent"
+                ],
+                "description": "What a run may spend. Every limit may be unlimited; stall detection stays on regardless."
+              },
+              "stall": {
+                "type": "object",
+                "properties": {
+                  "maxConsecutiveFailures": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "description": "Failed actions in a row that count as a stall."
+                  },
+                  "maxRepeatedAction": {
+                    "type": "integer",
+                    "minimum": 2,
+                    "maximum": 50,
+                    "description": "The same action repeated this many times counts as a stall."
+                  },
+                  "noProgressActions": {
+                    "type": "integer",
+                    "minimum": 3,
+                    "maximum": 200,
+                    "description": "Actions without visible progress that count as a stall."
+                  },
+                  "onStall": {
+                    "type": "string",
+                    "enum": [
+                      "nudge_then_escalate",
+                      "escalate",
+                      "ask_human",
+                      "fail"
+                    ],
+                    "description": "What to do on a stall: nudge the model then escalate a tier, escalate at once, ask a person, or fail the run."
+                  },
+                  "maxEscalations": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10,
+                    "description": "Most tier escalations per run."
+                  }
+                },
+                "required": [
+                  "maxConsecutiveFailures",
+                  "maxRepeatedAction",
+                  "noProgressActions",
+                  "onStall",
+                  "maxEscalations"
+                ],
+                "description": "Stall and loop detection. Always on."
+              },
+              "context": {
+                "type": "object",
+                "properties": {
+                  "screenshotsKept": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 5,
+                    "description": "Recent screenshots kept in the model context."
+                  },
+                  "pruneBatch": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 50,
+                    "description": "How many old tool results are pruned together once the context grows."
+                  },
+                  "callsPerChunk": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20,
+                    "description": "Model calls per chunk; the model tier only changes between chunks."
+                  },
+                  "observationChars": {
+                    "type": "integer",
+                    "minimum": 500,
+                    "maximum": 20000,
+                    "description": "Most characters of one page observation sent to the model."
+                  }
+                },
+                "required": [
+                  "screenshotsKept",
+                  "pruneBatch",
+                  "callsPerChunk",
+                  "observationChars"
+                ],
+                "description": "Context efficiency: how much the model sees each round."
+              }
+            },
+            "required": [
+              "schemaVersion",
+              "models",
+              "budget",
+              "stall",
+              "context"
+            ],
+            "description": "An agent policy: model tiers, budgets, stall detection and context settings."
+          }
+        }
+      },
+      "DuplicatePolicyDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Unique among the user's policies."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
       "TaskResponseDto": {
         "type": "object",
         "properties": {
@@ -55890,17 +57691,30 @@
           "maxSteps": {
             "type": "integer",
             "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "maximum": 9007199254740991,
+            "deprecated": true,
+            "description": "Deprecated: see `policyId`"
           },
           "maxMinutes": {
             "type": "integer",
             "minimum": -9007199254740991,
-            "maximum": 9007199254740991
+            "maximum": 9007199254740991,
+            "deprecated": true,
+            "description": "Deprecated: see `policyId`"
           },
           "confirmRiskyActions": {
             "type": "boolean"
           },
           "model": {
+            "deprecated": true,
+            "description": "Deprecated: see `policyId`",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "policyId": {
+            "description": "The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default",
             "type": [
               "string",
               "null"
@@ -55928,6 +57742,7 @@
           "maxMinutes",
           "confirmRiskyActions",
           "model",
+          "policyId",
           "createdAt",
           "updatedAt"
         ]
@@ -55979,13 +57794,17 @@
             "default": 100,
             "type": "integer",
             "minimum": 1,
-            "maximum": 1000
+            "maximum": 1000,
+            "deprecated": true,
+            "description": "Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`."
           },
           "maxMinutes": {
             "default": 30,
             "type": "integer",
             "minimum": 1,
-            "maximum": 480
+            "maximum": 480,
+            "deprecated": true,
+            "description": "Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`."
           },
           "confirmRiskyActions": {
             "default": false,
@@ -56001,7 +57820,22 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "deprecated": true,
+            "description": "Deprecated: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`."
+          },
+          "policyId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."
           }
         },
         "required": [
@@ -56052,12 +57886,16 @@
           "maxSteps": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 1000
+            "maximum": 1000,
+            "deprecated": true,
+            "description": "Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`."
           },
           "maxMinutes": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 480
+            "maximum": 480,
+            "deprecated": true,
+            "description": "Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`."
           },
           "confirmRiskyActions": {
             "type": "boolean"
@@ -56072,7 +57910,22 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "deprecated": true,
+            "description": "Deprecated: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`."
+          },
+          "policyId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."
           }
         }
       },
@@ -56278,6 +58131,51 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "policy": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "run",
+                      "schedule",
+                      "task",
+                      "user_default",
+                      "system_default"
+                    ],
+                    "description": "Why this policy applied: the run request, the schedule, the task, the user default or the system default."
+                  },
+                  "builtin": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "version",
+                  "source",
+                  "builtin"
+                ],
+                "description": "The agent policy a run runs under; null until the run has started."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -56325,6 +58223,7 @@
           "activity",
           "inputTokens",
           "outputTokens",
+          "policy",
           "createdAt",
           "startedAt",
           "finishedAt"
@@ -56532,6 +58431,51 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "policy": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "run",
+                      "schedule",
+                      "task",
+                      "user_default",
+                      "system_default"
+                    ],
+                    "description": "Why this policy applied: the run request, the schedule, the task, the user default or the system default."
+                  },
+                  "builtin": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "version",
+                  "source",
+                  "builtin"
+                ],
+                "description": "The agent policy a run runs under; null until the run has started."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -56675,6 +58619,7 @@
           "activity",
           "inputTokens",
           "outputTokens",
+          "policy",
           "createdAt",
           "startedAt",
           "finishedAt",
@@ -57775,6 +59720,16 @@
           "action"
         ]
       },
+      "RunTaskDto": {
+        "type": "object",
+        "properties": {
+          "policyId": {
+            "description": "Run under this agent policy for this run only (\"Run with...\"), instead of the schedule's, the task's or the user's default.",
+            "type": "string",
+            "maxLength": 64
+          }
+        }
+      },
       "StartRunDto": {
         "type": "object",
         "properties": {
@@ -57803,6 +59758,11 @@
           "hostFallback": {
             "default": true,
             "type": "boolean"
+          },
+          "policyId": {
+            "description": "Run under this agent policy instead of the task's or the user's default.",
+            "type": "string",
+            "maxLength": 64
           }
         },
         "required": [
@@ -57882,6 +59842,13 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "policyId": {
+            "description": "Overrides the task's agent policy for scheduled runs; null follows the task",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -57903,6 +59870,7 @@
           "lastRunAt",
           "lastRunId",
           "consecutiveFailures",
+          "policyId",
           "createdAt",
           "updatedAt"
         ]
@@ -57937,6 +59905,19 @@
               "skip",
               "queue"
             ]
+          },
+          "policyId": {
+            "description": "Overrides the task's agent policy for scheduled runs; omit or null to follow the task.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -57965,6 +59946,19 @@
             "enum": [
               "skip",
               "queue"
+            ]
+          },
+          "policyId": {
+            "description": "Overrides the task's agent policy for scheduled runs; null follows the task.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+              },
+              {
+                "type": "null"
+              }
             ]
           }
         }

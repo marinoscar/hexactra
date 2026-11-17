@@ -5073,6 +5073,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `agent_policies:read`. */
+        get: operations["policies_list"];
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        post: operations["policies_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-policies/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `agent_policies:read`. */
+        get: operations["policies_getDefault"];
+        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        put: operations["policies_setDefault"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-policies/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `agent_policies:read`. */
+        get: operations["policies_get"];
+        put?: never;
+        post?: never;
+        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        delete: operations["policies_remove"];
+        options?: never;
+        head?: never;
+        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        patch: operations["policies_update"];
+        trace?: never;
+    };
+    "/api/agent-policies/{id}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        post: operations["policies_duplicate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks": {
         parameters: {
             query?: never;
@@ -6351,6 +6423,15 @@ export interface components {
              * @example INTERNAL_ERROR
              * @example ROLE_NOT_ASSIGNABLE
              * @example INVALID_RETURN_URI
+             * @example POLICY_PIN_INVALID
+             * @example POLICY_REF_INVALID
+             * @example POLICY_BUILTIN_READONLY
+             * @example POLICY_NOT_FOUND
+             * @example POLICY_NAME_TAKEN
+             * @example POLICY_IN_USE
+             * @example POLICY_IS_DEFAULT
+             * @example POLICY_VERSION_CONFLICT
+             * @example POLICY_SPEC_INVALID
              * @example WEBHOOK_NOT_FOUND
              * @example WEBHOOK_DELIVERY_NOT_FOUND
              * @example WEBHOOK_URL_INVALID
@@ -7029,6 +7110,10 @@ export interface components {
                 imageObjectId: string | null;
                 timezone?: string;
             };
+            browserAgent?: {
+                /** @description The user's default agent policy: an own policy's UUID or `builtin:<key>`. `null` means `builtin:balanced`. */
+                defaultPolicyRef: string | null;
+            };
             notifications?: {
                 [key: string]: {
                     [key: string]: boolean;
@@ -7056,6 +7141,10 @@ export interface components {
                 imageSource: "none" | "provider" | "upload";
                 imageObjectId?: string | null;
                 timezone?: string;
+            };
+            browserAgent?: {
+                /** @description The user's default agent policy: an own policy's UUID or `builtin:<key>`. `null` means `builtin:balanced`. */
+                defaultPolicyRef: string | null;
             };
             notifications?: {
                 [key: string]: {
@@ -7088,6 +7177,10 @@ export interface components {
                 imageObjectId?: string | null;
                 timezone?: string | null;
             };
+            browserAgent?: {
+                /** @description The user's default agent policy: an own policy's UUID or `builtin:<key>`. `null` means `builtin:balanced`. */
+                defaultPolicyRef?: string | null;
+            } | null;
             notifications?: {
                 [key: string]: {
                     [key: string]: boolean | null;
@@ -7840,6 +7933,10 @@ export interface components {
                     imageSource: "none" | "provider" | "upload";
                     imageObjectId: string | null;
                     timezone?: string;
+                };
+                browserAgent?: {
+                    /** @description The user's default agent policy: an own policy's UUID or `builtin:<key>`. `null` means `builtin:balanced`. */
+                    defaultPolicyRef: string | null;
                 };
                 notifications?: {
                     [key: string]: {
@@ -11513,6 +11610,281 @@ export interface components {
             /** Format: uri */
             url?: string;
         };
+        AgentPolicyResponseDto: {
+            /** @description A UUID, or `builtin:<key>` for a built-in policy. */
+            id: string;
+            name: string;
+            description: string | null;
+            /** @description The `If-Match` value for the next edit. Built-ins carry a constant. */
+            version: number;
+            /** @description Built-in policies are code: read-only, never deleted, only duplicated. */
+            builtin: boolean;
+            /** @description An agent policy: model tiers, budgets, stall detection and context settings. */
+            spec: {
+                /**
+                 * @description Version of this document format.
+                 * @constant
+                 */
+                schemaVersion: 1;
+                /** @description Which models a run uses, and how it moves between tiers. */
+                models: {
+                    /**
+                     * @description The tier a run starts on.
+                     * @enum {string}
+                     */
+                    startTier: "fast" | "standard" | "frontier";
+                    /**
+                     * @description The highest tier a run may escalate to when it stalls. Never below `startTier`.
+                     * @enum {string}
+                     */
+                    maxTier: "fast" | "standard" | "frontier";
+                    /** @description Use the tier's fallback model when the provider errors or rate-limits. */
+                    allowProviderFallback: boolean;
+                    /** @description Optional per-policy model override per tier. Each pin must name an enabled model that supports tools and vision. */
+                    pins?: {
+                        /** @description Model that replaces the fast tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition. */
+                        fast?: string | null;
+                        /** @description Model that replaces the standard tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition. */
+                        standard?: string | null;
+                        /** @description Model that replaces the frontier tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition. */
+                        frontier?: string | null;
+                    };
+                };
+                /** @description What a run may spend. Every limit may be unlimited; stall detection stays on regardless. */
+                budget: {
+                    /** @description Most browser actions a run may take. `null` means unlimited. */
+                    maxActions: number | null;
+                    /** @description Most model round trips a run may make. `null` means unlimited. */
+                    maxModelCalls: number | null;
+                    /** @description Most active minutes a run may use (time waiting for a person does not count); 7 days at most when set. `null` means unlimited. */
+                    maxActiveMinutes: number | null;
+                    /** @description Most input tokens a run may send. `null` means unlimited. */
+                    maxInputTokens: number | null;
+                    /** @description Most output tokens a run may receive. `null` means unlimited. */
+                    maxOutputTokens: number | null;
+                    /** @description Most a run may cost in US dollars. `null` means unlimited. */
+                    maxCostUsd: number | null;
+                    /** @description Warn the owner when any set budget reaches this percentage. */
+                    warnAtPercent: number;
+                };
+                /** @description Stall and loop detection. Always on. */
+                stall: {
+                    /** @description Failed actions in a row that count as a stall. */
+                    maxConsecutiveFailures: number;
+                    /** @description The same action repeated this many times counts as a stall. */
+                    maxRepeatedAction: number;
+                    /** @description Actions without visible progress that count as a stall. */
+                    noProgressActions: number;
+                    /**
+                     * @description What to do on a stall: nudge the model then escalate a tier, escalate at once, ask a person, or fail the run.
+                     * @enum {string}
+                     */
+                    onStall: "nudge_then_escalate" | "escalate" | "ask_human" | "fail";
+                    /** @description Most tier escalations per run. */
+                    maxEscalations: number;
+                };
+                /** @description Context efficiency: how much the model sees each round. */
+                context: {
+                    /** @description Recent screenshots kept in the model context. */
+                    screenshotsKept: number;
+                    /** @description How many old tool results are pruned together once the context grows. */
+                    pruneBatch: number;
+                    /** @description Model calls per chunk; the model tier only changes between chunks. */
+                    callsPerChunk: number;
+                    /** @description Most characters of one page observation sent to the model. */
+                    observationChars: number;
+                };
+            };
+            /** @description True for the user's default policy. */
+            isDefault: boolean;
+            /** @description How many of the user's tasks and schedules reference the policy. */
+            usage: {
+                tasks: number;
+                schedules: number;
+            };
+            /** @description True when every budget limit is unlimited: the run only ends by finishing, a stop or a stall. */
+            hasNoHardStop: boolean;
+            createdAt: string | null;
+            updatedAt: string | null;
+        };
+        DefaultPolicyResponseDto: {
+            /** @description The default policy: its id, or `builtin:balanced` when none was chosen. */
+            policyId: string;
+            /** @description False when the user never chose one. */
+            explicit: boolean;
+        };
+        SetDefaultPolicyDto: {
+            /** @description The new default policy; `null` goes back to `builtin:balanced`. */
+            policyId: string | null;
+        };
+        CreatePolicyDto: {
+            /** @description Unique among the user's policies. */
+            name: string;
+            /** @description What the policy is for. */
+            description?: string | null;
+            /** @description An agent policy: model tiers, budgets, stall detection and context settings. */
+            spec: {
+                /**
+                 * @description Version of this document format.
+                 * @constant
+                 */
+                schemaVersion: 1;
+                /** @description Which models a run uses, and how it moves between tiers. */
+                models: {
+                    /**
+                     * @description The tier a run starts on.
+                     * @enum {string}
+                     */
+                    startTier: "fast" | "standard" | "frontier";
+                    /**
+                     * @description The highest tier a run may escalate to when it stalls. Never below `startTier`.
+                     * @enum {string}
+                     */
+                    maxTier: "fast" | "standard" | "frontier";
+                    /** @description Use the tier's fallback model when the provider errors or rate-limits. */
+                    allowProviderFallback: boolean;
+                    /** @description Optional per-policy model override per tier. Each pin must name an enabled model that supports tools and vision. */
+                    pins?: {
+                        /** @description Model that replaces the fast tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition. */
+                        fast?: string | null;
+                        /** @description Model that replaces the standard tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition. */
+                        standard?: string | null;
+                        /** @description Model that replaces the frontier tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition. */
+                        frontier?: string | null;
+                    };
+                };
+                /** @description What a run may spend. Every limit may be unlimited; stall detection stays on regardless. */
+                budget: {
+                    /** @description Most browser actions a run may take. `null` means unlimited. */
+                    maxActions: number | null;
+                    /** @description Most model round trips a run may make. `null` means unlimited. */
+                    maxModelCalls: number | null;
+                    /** @description Most active minutes a run may use (time waiting for a person does not count); 7 days at most when set. `null` means unlimited. */
+                    maxActiveMinutes: number | null;
+                    /** @description Most input tokens a run may send. `null` means unlimited. */
+                    maxInputTokens: number | null;
+                    /** @description Most output tokens a run may receive. `null` means unlimited. */
+                    maxOutputTokens: number | null;
+                    /** @description Most a run may cost in US dollars. `null` means unlimited. */
+                    maxCostUsd: number | null;
+                    /** @description Warn the owner when any set budget reaches this percentage. */
+                    warnAtPercent: number;
+                };
+                /** @description Stall and loop detection. Always on. */
+                stall: {
+                    /** @description Failed actions in a row that count as a stall. */
+                    maxConsecutiveFailures: number;
+                    /** @description The same action repeated this many times counts as a stall. */
+                    maxRepeatedAction: number;
+                    /** @description Actions without visible progress that count as a stall. */
+                    noProgressActions: number;
+                    /**
+                     * @description What to do on a stall: nudge the model then escalate a tier, escalate at once, ask a person, or fail the run.
+                     * @enum {string}
+                     */
+                    onStall: "nudge_then_escalate" | "escalate" | "ask_human" | "fail";
+                    /** @description Most tier escalations per run. */
+                    maxEscalations: number;
+                };
+                /** @description Context efficiency: how much the model sees each round. */
+                context: {
+                    /** @description Recent screenshots kept in the model context. */
+                    screenshotsKept: number;
+                    /** @description How many old tool results are pruned together once the context grows. */
+                    pruneBatch: number;
+                    /** @description Model calls per chunk; the model tier only changes between chunks. */
+                    callsPerChunk: number;
+                    /** @description Most characters of one page observation sent to the model. */
+                    observationChars: number;
+                };
+            };
+        };
+        UpdatePolicyDto: {
+            /** @description Unique among the user's policies. */
+            name?: string;
+            /** @description What the policy is for. */
+            description?: string | null;
+            /** @description An agent policy: model tiers, budgets, stall detection and context settings. */
+            spec?: {
+                /**
+                 * @description Version of this document format.
+                 * @constant
+                 */
+                schemaVersion: 1;
+                /** @description Which models a run uses, and how it moves between tiers. */
+                models: {
+                    /**
+                     * @description The tier a run starts on.
+                     * @enum {string}
+                     */
+                    startTier: "fast" | "standard" | "frontier";
+                    /**
+                     * @description The highest tier a run may escalate to when it stalls. Never below `startTier`.
+                     * @enum {string}
+                     */
+                    maxTier: "fast" | "standard" | "frontier";
+                    /** @description Use the tier's fallback model when the provider errors or rate-limits. */
+                    allowProviderFallback: boolean;
+                    /** @description Optional per-policy model override per tier. Each pin must name an enabled model that supports tools and vision. */
+                    pins?: {
+                        /** @description Model that replaces the fast tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition. */
+                        fast?: string | null;
+                        /** @description Model that replaces the standard tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition. */
+                        standard?: string | null;
+                        /** @description Model that replaces the frontier tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition. */
+                        frontier?: string | null;
+                    };
+                };
+                /** @description What a run may spend. Every limit may be unlimited; stall detection stays on regardless. */
+                budget: {
+                    /** @description Most browser actions a run may take. `null` means unlimited. */
+                    maxActions: number | null;
+                    /** @description Most model round trips a run may make. `null` means unlimited. */
+                    maxModelCalls: number | null;
+                    /** @description Most active minutes a run may use (time waiting for a person does not count); 7 days at most when set. `null` means unlimited. */
+                    maxActiveMinutes: number | null;
+                    /** @description Most input tokens a run may send. `null` means unlimited. */
+                    maxInputTokens: number | null;
+                    /** @description Most output tokens a run may receive. `null` means unlimited. */
+                    maxOutputTokens: number | null;
+                    /** @description Most a run may cost in US dollars. `null` means unlimited. */
+                    maxCostUsd: number | null;
+                    /** @description Warn the owner when any set budget reaches this percentage. */
+                    warnAtPercent: number;
+                };
+                /** @description Stall and loop detection. Always on. */
+                stall: {
+                    /** @description Failed actions in a row that count as a stall. */
+                    maxConsecutiveFailures: number;
+                    /** @description The same action repeated this many times counts as a stall. */
+                    maxRepeatedAction: number;
+                    /** @description Actions without visible progress that count as a stall. */
+                    noProgressActions: number;
+                    /**
+                     * @description What to do on a stall: nudge the model then escalate a tier, escalate at once, ask a person, or fail the run.
+                     * @enum {string}
+                     */
+                    onStall: "nudge_then_escalate" | "escalate" | "ask_human" | "fail";
+                    /** @description Most tier escalations per run. */
+                    maxEscalations: number;
+                };
+                /** @description Context efficiency: how much the model sees each round. */
+                context: {
+                    /** @description Recent screenshots kept in the model context. */
+                    screenshotsKept: number;
+                    /** @description How many old tool results are pruned together once the context grows. */
+                    pruneBatch: number;
+                    /** @description Model calls per chunk; the model tier only changes between chunks. */
+                    callsPerChunk: number;
+                    /** @description Most characters of one page observation sent to the model. */
+                    observationChars: number;
+                };
+            };
+        };
+        DuplicatePolicyDto: {
+            /** @description Unique among the user's policies. */
+            name: string;
+        };
         TaskResponseDto: {
             /** Format: uuid */
             id: string;
@@ -11525,10 +11897,24 @@ export interface components {
             /** @description When the chosen host cannot take a run, run on another available one */
             hostFallback: boolean;
             allowedDomains: string[];
+            /**
+             * @deprecated
+             * @description Deprecated: see `policyId`
+             */
             maxSteps: number;
+            /**
+             * @deprecated
+             * @description Deprecated: see `policyId`
+             */
             maxMinutes: number;
             confirmRiskyActions: boolean;
+            /**
+             * @deprecated
+             * @description Deprecated: see `policyId`
+             */
             model: string | null;
+            /** @description The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default */
+            policyId: string | null;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             /** @description ISO 8601 timestamp */
@@ -11544,13 +11930,27 @@ export interface components {
             hostFallback?: boolean;
             /** @default [] */
             allowedDomains?: string[];
-            /** @default 100 */
+            /**
+             * @deprecated
+             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`.
+             * @default 100
+             */
             maxSteps?: number;
-            /** @default 30 */
+            /**
+             * @deprecated
+             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`.
+             * @default 30
+             */
             maxMinutes?: number;
             /** @default false */
             confirmRiskyActions?: boolean;
+            /**
+             * @deprecated
+             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`.
+             */
             model?: string | null;
+            /** @description The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy. */
+            policyId?: string | null;
         };
         UpdateTaskDto: {
             name?: string;
@@ -11559,10 +11959,24 @@ export interface components {
             hostId?: string | null;
             hostFallback?: boolean;
             allowedDomains?: string[];
+            /**
+             * @deprecated
+             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`.
+             */
             maxSteps?: number;
+            /**
+             * @deprecated
+             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`.
+             */
             maxMinutes?: number;
             confirmRiskyActions?: boolean;
+            /**
+             * @deprecated
+             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`.
+             */
             model?: string | null;
+            /** @description The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy. */
+            policyId?: string | null;
         };
         RunResponseDto: {
             /** Format: uuid */
@@ -11611,6 +12025,17 @@ export interface components {
             } | null;
             inputTokens: number;
             outputTokens: number;
+            policy: {
+                id: string;
+                name: string;
+                version: number;
+                /**
+                 * @description Why this policy applied: the run request, the schedule, the task, the user default or the system default.
+                 * @enum {string}
+                 */
+                source: "run" | "schedule" | "task" | "user_default" | "system_default";
+                builtin: boolean;
+            } | null;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -11663,6 +12088,17 @@ export interface components {
             } | null;
             inputTokens: number;
             outputTokens: number;
+            policy: {
+                id: string;
+                name: string;
+                version: number;
+                /**
+                 * @description Why this policy applied: the run request, the schedule, the task, the user default or the system default.
+                 * @enum {string}
+                 */
+                source: "run" | "schedule" | "task" | "user_default" | "system_default";
+                builtin: boolean;
+            } | null;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -11918,6 +12354,10 @@ export interface components {
             /** @enum {string} */
             action: "cancel" | "approve" | "snooze" | "answer-0" | "answer-1";
         };
+        RunTaskDto: {
+            /** @description Run under this agent policy for this run only ("Run with..."), instead of the schedule's, the task's or the user's default. */
+            policyId?: string;
+        };
         StartRunDto: {
             goal: string;
             /** @default default */
@@ -11925,6 +12365,8 @@ export interface components {
             hostId?: string | null;
             /** @default true */
             hostFallback?: boolean;
+            /** @description Run under this agent policy instead of the task's or the user's default. */
+            policyId?: string;
         };
         ScheduleResponseDto: {
             /** Format: uuid */
@@ -11942,6 +12384,8 @@ export interface components {
             lastRunAt: string | null;
             lastRunId: string | null;
             consecutiveFailures: number;
+            /** @description Overrides the task's agent policy for scheduled runs; null follows the task */
+            policyId: string | null;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             /** @description ISO 8601 timestamp */
@@ -11960,6 +12404,8 @@ export interface components {
              * @enum {string}
              */
             concurrency?: "skip" | "queue";
+            /** @description Overrides the task's agent policy for scheduled runs; omit or null to follow the task. */
+            policyId?: string | null;
         };
         UpdateScheduleDto: {
             cron?: string;
@@ -11967,6 +12413,8 @@ export interface components {
             enabled?: boolean;
             /** @enum {string} */
             concurrency?: "skip" | "queue";
+            /** @description Overrides the task's agent policy for scheduled runs; null follows the task. */
+            policyId?: string | null;
         };
         WebhookEventCatalogDto: {
             items: {
@@ -28740,6 +29188,411 @@ export interface operations {
             };
         };
     };
+    policies_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AgentPolicyResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    policies_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePolicyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AgentPolicyResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    policies_getDefault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DefaultPolicyResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    policies_setDefault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetDefaultPolicyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DefaultPolicyResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    policies_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AgentPolicyResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    policies_remove: {
+        parameters: {
+            query?: {
+                /** @description Move the tasks and schedules that use the policy to this one before deleting it. */
+                reassignTo?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    policies_update: {
+        parameters: {
+            query?: never;
+            header: {
+                "if-match": string;
+                /** @description The `version` you edited. 412 `POLICY_VERSION_CONFLICT` when it moved; omit to overwrite. Built-in policies answer 403. */
+                "If-Match"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePolicyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AgentPolicyResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    policies_duplicate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DuplicatePolicyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AgentPolicyResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
     tasks_list: {
         parameters: {
             query?: never;
@@ -29968,7 +30821,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RunTaskDto"];
+            };
+        };
         responses: {
             201: {
                 headers: {
