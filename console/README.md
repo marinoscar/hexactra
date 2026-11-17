@@ -308,6 +308,7 @@ scripts/rename.mjs rebrand this app (identity.json plus the few literal targets)
 | `EmptyState`, `ErrorBanner`, `ListSkeleton`, `CardSkeleton` | Nothing to show, a failure (`role="alert"`), and the first load. |
 | `ResponsiveList` | A table at 900 px and up, cards below. It renders the items it is given: paging stays with the API. |
 | `useBreakpoint()` | `{ isPhone, isTablet, isDesktop }` from the theme's breakpoints. |
+| `aboveBottomBar()`, `BOTTOM_BAR_HEIGHT`, `APP_BAR_HEIGHT` | The offset of anything pinned above the phone's bottom bar or under the top bar ([Responsive rules](#responsive-rules)). |
 | `formatDateTime`, `formatRelative`, `<RelativeTime iso />` | Dates in the **profile time zone** (the one `UserTimeZoneSync` stores), never `toLocaleString()`. An empty or invalid date renders `n/a`. |
 | `useApiAction()` | `run(key, fn)` with `busy`, `error` and `clearError` around an API call. |
 | `formatCost(usd, known)` | "$4.20", "≥ $4.20" when a call could not be priced, "<$0.01", or `null`. |
@@ -318,6 +319,40 @@ Rules:
 - No `window.confirm` or `window.alert`.
 - Colours come from the theme; a status is never colour only.
 - A test that needs a width mocks it with `mockViewport(390)` from `src/__tests__/matchMedia.ts`; without it the kit reads jsdom as a desktop.
+
+## Responsive rules
+
+Every page works on a phone, a tablet and a desktop. The breakpoints are MUI's and nothing reads the user agent:
+
+| Width | Navigation | Layout |
+|---|---|---|
+| below 600 px (`xs`) | The bottom bar: **Home, Inbox, Tasks, Runs**. Fleet, Settings and Administration are in the user menu (the avatar). | One column. Secondary actions fold into a menu; tap targets are at least 44 px. |
+| 600 to 899 px (`sm`) | The rail, collapsed, with every destination. | One column. |
+| 900 to 1199 px (`md`) | The rail. | One column; a run's live frame is capped at 60% of the window height. |
+| 1200 px and up (`lg`) | The rail, expanded. | A live run is two panes: the browser on the left, status, budget and timeline on the right. |
+
+- **The phone bar is its own table.** The shell's bottom bar draws four tabs and turns the fourth into "More" when more destinations are visible, so `PHONE_NAVIGATION` (`apps/web/src/config/navigation.ts`) gives it exactly four. A new destination goes in `NAVIGATION`; it reaches a phone through the user menu.
+- **The Inbox badge** is the pending-question count from `InboxCountProvider` (`apps/web/src/components/InboxCountProvider.tsx`): the rail, the bottom bar, the user menu and the tab title ("(2) Hexactra Console"). Read it with `useInboxCount()`; do not poll `GET /inbox` a second time.
+- **Anything pinned to the bottom** (a sticky action bar, a floating button) takes its offset from `aboveBottomBar()` in `apps/web/src/ui/bottomBar.ts`, which knows the bar's height and the safe area. No page carries its own number. What sticks under the top bar uses `APP_BAR_HEIGHT` from the same file.
+- **A page that fills the window** (the desktop viewer) calls `useShellMainVariant('full-bleed')` and lets the shell size it. The shell owns the window's height (`100dvh`); a page never sets its own `100vh`.
+- **A table** becomes cards (`ResponsiveList`) or scrolls inside its own container. The page itself never scrolls sideways.
+
+### Checking it: `npm run ui:screens`
+
+`scripts/ui-screens.mjs` opens every route at 360, 390, 768, 1024 and 1440 px, in light and dark, saves a PNG of each under `.ui-screens/` (ignored by git) and fails when a page scrolls sideways (`scrollWidth > innerWidth`), naming the route and the width. It is a local, manual check and **not a CI step**: CI has no stack with data.
+
+```bash
+# Against the dev stack ("Run it"), signed in:
+npm run ui:screens -- --login     # once: sign in in the window that opens; saves .ui-screens/state.json
+npm run ui:screens                # http://localhost:3535; --base <url> to change
+
+# Without a stack, against a build of the web app with a mocked API:
+npm run build --workspace=web
+npm run preview --workspace=web -- --port 4173 &
+npm run ui:screens -- --mock --base http://localhost:4173
+```
+
+The saved sign-in holds your refresh cookie: never commit it. A route that needs an id (a run, a task, a host) takes the first one your account has, and a route with nothing to open is listed as not checked, never as passed (`--strict` makes that a failure). To add a page, append one line to `ROUTES` in the script; the enabled slices' routes are read from `apps/web/src/slices/`.
 
 ## Run it
 
