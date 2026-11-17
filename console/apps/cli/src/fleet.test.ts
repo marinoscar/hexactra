@@ -75,6 +75,8 @@ describe('hexactra fleet', () => {
     fakeApi({ 'GET /fleet/hosts': hosts });
     expect(await run('fleet', 'hosts')).toContain('vps  [online, launch]  profiles: default, travel*');
     expect(hostLine({ ...hosts[0]!, mode: 'unattended', desktop: true })).toBe('vps  [online, unattended, desktop]  profiles: default, travel*');
+    // A user-level agent reports unattended but has no desktop (#412).
+    expect(hostLine({ ...hosts[0]!, mode: 'unattended', desktop: false })).toBe('vps  [online, browser only]  profiles: default, travel*');
   });
 
   it('drains, manages profiles and enrolls, naming hosts by name', async () => {
