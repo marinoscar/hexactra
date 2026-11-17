@@ -129,6 +129,10 @@ runPlatformConformance({
           file: 'tasks/task-summary.service.ts',
           why: 'The task list filters and sorts on facts computed from schedules and runs, and the summaries and statistics aggregate runs per task (FILTER, DISTINCT ON, percentile_cont, days in a time zone): one statement each instead of one per task. Every statement binds the caller\'s `user_id`.',
         },
+        {
+          file: 'home/home.service.ts',
+          why: 'The Home summary (#430) reads each block in one statement: a window count beside the limited rows, a task name joined on the same user, three named fields out of `runs.policy_snapshot` (the snapshot never leaves the database), and the week bucketed by day in a time zone. Every statement binds the caller\'s `user_id` (`owner_user_id` for questions) and joins only rows of that user.',
+        },
       ],
       registerIn: 'src/notes/notes.ownership.ts (or your module\'s own *.ownership.ts)',
     },

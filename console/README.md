@@ -15,6 +15,7 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 | Capability | Web | API | CLI / TUI | Permission |
 |---|---|---|---|---|
 | Fabric connection (URL and `hxs_` service token, stored encrypted; Doctor checks `fabric.*`) | Administration → Fabric connection | `GET/PUT/DELETE /api/fabric/connection`, `POST …/test` | `hexactra fabric show\|set URL --token-stdin\|test\|clear --yes` | `fabric_config:read` / `:write` |
+| Home: what needs you, what is running, what runs next, what just happened, the week and the machines, in one request ([Home](#home)) | `/` | `GET /api/home/summary` | none: the CLI and TUI list each part on their own | any signed-in user; each block needs its own (`runs:read`, `tasks:read`, `fleet:read`) |
 | Tasks: saved goals with a profile, an agent policy (budgets and models), optional allowed sites, opt-in confirm-before-purchase ([Create a task](#create-a-task), [A task's page](#a-tasks-page)) | `/tasks`, `/tasks/new`, `/tasks/:id`, `/tasks/:id/edit` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
 | Agent policies: named, versioned bundles of model tiers, budgets (any of them unlimited), stall detection and context settings; four built-ins, a default per user, one per task, schedule or run ([Agent policies](#agent-policies)) | Settings → Browser agent → Agent policies; Administration → Browser agent | `/api/agent-policies` | `hexactra policies`; MCP `policies_*` and `policy_*` tools; SDK `hx.policies` | `agent_policies:read` / `:write` |
 | Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel; the list is paged, filtered and searched on the server, with counts per status; finished runs can be deleted, one, many or everything a filter matches ([docs/runs.md](docs/runs.md)) | `/runs`, `/runs/:id` | `/api/runs`, `GET /api/runs/counts`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel`, `DELETE /api/runs/:id`, `POST /api/runs/delete` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` / `runs:delete` |
@@ -290,6 +291,28 @@ The same policies are reachable from scripts and agents ([docs/mcp.md](docs/mcp.
 - **MCP:** `policies_list`, `policy_get`, `policy_create`, `policy_update`, `policy_set_default`, `policies_export`, `policies_import`, and `policy_id` on `run_goal`, `task_create`, `task_update`, `task_run` and `schedule_create`. Each tool calls the REST route as the caller, so `agent_policies:read` / `:write` apply: a read-only user is refused the write tools with `403`. Deleting a policy is not an MCP tool.
 - **SDK:** `hx.policies.list|get|create|update|setDefault|export|import`, `hx.tasks.create|update|run` and `hx.runs.start` (each with `policyId`), and the exported `AgentPolicySpec` type.
 
+## Home
+
+`/` is the page to open first. It answers, from one request (`GET /api/home/summary`): is an agent waiting for me, what is running, what will run next, how did the recent runs go, are my machines up. And it starts a run.
+
+| | |
+|---|---|
+| ![Home on a desktop: Needs you, Running now, Quick start, Recent runs, Up next, This week, Machines](docs/images/home-desktop.png) | ![Home on a phone](docs/images/home-phone.png) |
+
+- **Greeting** and one status sentence ("2 agents are running and 1 is waiting for you.", "Nothing is running. Next: Morning report in 3 h.", "All quiet.").
+- **Needs you** (only when a question is pending, always first): up to three questions, the ones that expire first, each with a countdown and an **Answer** link to the Inbox. A confirmation that is not high-risk can be approved or denied in place; a high-risk one, a secret and every other input go to the Inbox.
+- **Running now**: a card per live run with what it is doing, its step and time, its machine, and a budget bar ("62 % of budget": orange from the policy's warning threshold, red at 100 %, absent for an unlimited run). A run on a stronger tier than its policy starts on says so.
+- **Quick start** (with `runs:write`): a goal and **Run** (the default profile and policy), and a chip per task you ran most recently (the task's own policy). "More options" opens the Runs page.
+- **Up next**: the next five firings, with the schedule in words, and how many tasks are paused or failing.
+- **Recent runs**: the eight most recently finished, with the stop reason, the duration and the cost.
+- **This week**: runs, success rate, failed and spend over the last seven days of your profile time zone, a stacked bar per day (the chart is loaded on demand), and how many runs a budget or a stall stopped.
+- **Machines**: how many are online, and each one's state in words.
+
+A new account sees a **Get started** card instead of the dashboard blocks until it has a machine, a task and a run: three steps, ticked from the data, each only if you may do it.
+
+The page reads the summary when it opens, when the window gets the focus, and every 10 seconds while the tab is visible (every 5 while an agent runs or waits for you). When a read fails, the last data stays on screen, dimmed, with when it was read and a Retry.
+
+**`GET /api/home/summary`** needs a sign-in and no permission of its own. A block is built only when the caller holds its permission and is `null` otherwise, never an empty list: `needsYou`, `liveRuns`, `recentRuns` and `week` need `runs:read`; `upcoming` needs `tasks:read`; `fleet` needs `fleet:read`; `counts.tasks` and `counts.runs` are `null` without theirs. Limits: 3 questions, 6 live runs (running first), 5 firings, 8 finished runs, 6 machines; `needsYou.count` and `liveRuns.count` are the real totals. The response never carries a question's answer, a secret, a transcript, a policy snapshot, an action's arguments or a viewer URL: a live run's `activity` is its phase, the action's name and the reason only. `budgetPercent` is the highest percent among the run's limited budgets, from the run's stored budget. The week is bucketed in the profile time zone (else the `X-Time-Zone` header, else UTC). The fleet comes from the fabric with a 1.5 second limit: a fabric that is slow or down answers `fleet.stale: true` with the last hosts read, and never fails the request. It costs six SQL statements whatever the account holds, and records `app.home.summary.duration`.
 ## Tasks
 
 **Tasks** (`/tasks`) lists what your agents do, and when. Each row answers five questions without opening the task: what it does, whether it is scheduled, when it runs next, how the last run went and what it cost in the last 30 days. On a phone each task is a card with the same facts.
