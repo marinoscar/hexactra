@@ -88,6 +88,6 @@ export const AI_MODELS = [
 export const POLICY_READS = {
   'GET /agent-policies': POLICIES,
   'GET /agent-policies/default': { policyId: 'builtin:balanced', explicit: false },
-  'GET /agent-policies/model-tiers/effective': EFFECTIVE,
+  'GET /agent-policies/model-tiers/effective': { policy: { id: 'builtin:balanced', name: 'Balanced', startTier: 'standard', maxTier: 'frontier' }, tiers: EFFECTIVE },
   'GET /ai/models': AI_MODELS,
 };

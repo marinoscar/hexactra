@@ -34,7 +34,7 @@ describe('Model tiers (user)', () => {
   it('inherits the deployment by default, shows the effective model, and saves an override', async () => {
     const host = renderPage(<ModelTiersPage scope="user" />, ['agent_policies:read', 'user_settings:write'], {
       'GET /user-settings': { version: 7, theme: 'system', profile: {}, browserAgent: { defaultPolicyRef: null, tiers: { frontier: { model: 'provider-a:model-big', reasoningEffort: 'high' } } } },
-      'GET /agent-policies/model-tiers/effective': EFFECTIVE,
+      'GET /agent-policies/model-tiers/effective': { policy: { id: 'builtin:balanced', name: 'Balanced', startTier: 'standard', maxTier: 'frontier' }, tiers: EFFECTIVE },
       'PATCH /user-settings': (r: TestApiRequest) => ({ version: 8, browserAgent: r.body && (r.body as { browserAgent: object }).browserAgent }),
     });
     const standard = await screen.findByLabelText('Standard tier');
@@ -69,7 +69,7 @@ describe('Model tiers (user)', () => {
   it('offers only models with tool calls and labels those without vision', async () => {
     renderPage(<ModelTiersPage scope="user" />, ['agent_policies:read', 'user_settings:write'], {
       'GET /user-settings': { version: 1, browserAgent: { tiers: { fast: { model: null } } } },
-      'GET /agent-policies/model-tiers/effective': EFFECTIVE,
+      'GET /agent-policies/model-tiers/effective': { policy: { id: 'builtin:balanced', name: 'Balanced', startTier: 'standard', maxTier: 'frontier' }, tiers: EFFECTIVE },
     });
     const fast = await screen.findByLabelText('Fast tier');
     await waitFor(() => expect(within(fast).getByRole('switch', { name: 'Inherit from deployment' })).not.toBeChecked());

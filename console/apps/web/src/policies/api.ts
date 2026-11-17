@@ -96,8 +96,11 @@ export function importPolicies(api: PlatformApiClient, file: unknown, onConflict
 // ---- Model tiers (#403) ----
 
 /** The caller's resolved tiers, with where each value came from. */
-export function getEffectiveTiers(api: PlatformApiClient): Promise<EffectiveTiers> {
-  return api.get<EffectiveTiers>('/agent-policies/model-tiers/effective');
+export async function getEffectiveTiers(api: PlatformApiClient, policyId?: string): Promise<EffectiveTiers> {
+  // The route answers `{ policy, tiers }` (#403): the tiers a run of that policy (default: the user's default) would use.
+  const q = policyId ? `?policyId=${encodeURIComponent(policyId)}` : '';
+  const res = await api.get<{ policy: unknown; tiers: EffectiveTiers }>(`/agent-policies/model-tiers/effective${q}`);
+  return res.tiers;
 }
 
 interface UserSettingsDoc {
