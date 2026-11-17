@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../live', () => ({ subscribeRun: () => () => undefined, fetchRunScreenshot: async () => null }));
 
-import { RunList } from '../components/RunList';
+import { BACKGROUND_POLL_MS, RunList } from '../components/RunList';
 import { NO_FILTERS, apiFilter, deleteFilter, filtersFromParams, filtersToParams, matchesFilters, rangeInstants } from '../components/runFilters';
 import { rowCost, runAgain, runDuration, runMenuActions, triggerWords, type RunMenuAction } from '../components/runRow';
 import { RunDetailPage } from '../pages/RunDetailPage';
@@ -464,6 +464,41 @@ describe('RunList: select and bulk delete', () => {
     await waitFor(() => expect(deletes(host)).toHaveLength(1));
     expect(deletes(host)[0]!.body).toEqual({ filter: { status: ['failed'], q: 'invoice' }, expectedCount: 1240 });
     expect(await screen.findByText('Deleting 1,240 runs in the background…')).toBeInTheDocument();
+  });
+
+  it('a background delete that is done by the first read clears its banner and re-reads the list then, not 30 s later', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let deleted = false;
+      const page = Array.from({ length: 50 }, (_, i) => run(i + 1, { status: 'succeeded' }));
+      const host = createTestPlatformHost({
+        permissions: ALL,
+        responses: {
+          'GET /runs': () => (deleted ? { items: [], nextCursor: null } : { items: page, nextCursor: 'c1' }),
+          'GET /runs/counts': () => (deleted ? counts({ failed: 4 }) : counts({ succeeded: 866, failed: 4 })),
+          'GET /tasks': [],
+          // The job is quick: by the time the page reads the counts again, every run is gone.
+          'POST /runs/delete': () => ((deleted = true), { jobId: uuid(998), matched: 866, costUsd: 1 }),
+        },
+      });
+      renderList(host, '/runs?view=succeeded');
+      await screen.findByText('Goal 1');
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Select all' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Select all 866 finished runs that match' }));
+      fireEvent.click(within(screen.getByRole('region', { name: 'Selection' })).getByRole('button', { name: 'Delete' }));
+      const dialog = await screen.findByRole('dialog');
+      fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'delete' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+      expect(await screen.findByText('Deleting 866 runs in the background…')).toBeInTheDocument();
+      // One read of the counts later (3 s): 870 became 4, so all 866 are gone.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(BACKGROUND_POLL_MS + 50);
+      });
+      await waitFor(() => expect(screen.queryByText('Deleting 866 runs in the background…')).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.queryByText('Goal 1')).not.toBeInTheDocument());
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('keeps the selection and says the list changed on a 409 COUNT_CHANGED', async () => {
