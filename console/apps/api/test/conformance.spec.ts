@@ -118,7 +118,14 @@ runPlatformConformance({
       policies: userOwnedModelRegistry.list(),
       // The raw SQL of every slice's code that is in the tree, enabled or not
       // (the scan reads every file under src/), each argued (`ApiSlice.rawSql`).
-      rawSqlAllowlist: Object.values(ALL_SLICES).flatMap((slice) => slice.rawSql ?? []),
+      rawSqlAllowlist: [
+        ...Object.values(ALL_SLICES).flatMap((slice) => slice.rawSql ?? []),
+        // The app's own raw SQL, each argued.
+        {
+          file: 'tasks/runs.query.ts',
+          why: 'The runs list (#420) reads the policy summary out of `runs.policy_snapshot` in SQL, so the snapshot never leaves the database, and settles a keyset cursor to the microsecond, which a JavaScript date cannot hold. Both statements are bound to `user_id = <the caller>`.',
+        },
+      ],
       registerIn: 'src/notes/notes.ownership.ts (or your module\'s own *.ownership.ts)',
     },
     // Every route reachable from AppModule declares @Auth() or @Public(), and
