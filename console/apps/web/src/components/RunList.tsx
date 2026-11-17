@@ -91,7 +91,7 @@ export interface RunListProps {
   scope?: RunListScope;
   /** Show each run's task name above its goal, as a link to the task. */
   showTaskColumn?: boolean;
-  /** For a list inside another page: 25 rows a page, no counts strip, no Profile and Policy columns. */
+  /** For a list inside another page: 25 rows a page, no counts strip, no Profile and Policy columns; with a `scope`, no Goal column either (the table only: a card keeps the goal). */
   compact?: boolean;
   /** "New run", offered by the empty state when the user has no run at all. */
   onNewRun?: () => void;
@@ -355,21 +355,37 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
     ) : null;
 
   const columns: Column<RunListItem>[] = [
-    { key: 'status', header: 'Status', render: (r) => <StatusChip status={r.status} stopReason={r.stopReason} /> },
     {
-      key: 'goal',
-      header: 'Goal',
-      grow: true,
+      key: 'status',
+      header: 'Status',
       render: (r) => (
-        <Box sx={{ minWidth: 160 }} data-testid={`run-row-${r.id}`}>
-          {taskLine(r)}
-          <Typography variant="body2" sx={clamp(2)}>
-            {r.goal}
-          </Typography>
-          {activityLine(r)}
-        </Box>
+        <>
+          <StatusChip status={r.status} stopReason={r.stopReason} />
+          {/* Without the Goal column, what a running run is doing sits under its status. */}
+          {compact && scoped && <Box sx={{ maxWidth: 200 }}>{activityLine(r)}</Box>}
+        </>
       ),
     },
+    // On a task's page every run has the task's goal, which the page shows:
+    // the column would only push Duration and Cost out of a narrower list.
+    ...(compact && scoped
+      ? []
+      : [
+          {
+            key: 'goal',
+            header: 'Goal',
+            grow: true,
+            render: (r) => (
+              <Box sx={{ minWidth: 160 }} data-testid={`run-row-${r.id}`}>
+                {taskLine(r)}
+                <Typography variant="body2" sx={clamp(2)}>
+                  {r.goal}
+                </Typography>
+                {activityLine(r)}
+              </Box>
+            ),
+          } satisfies Column<RunListItem>,
+        ]),
     { key: 'trigger', header: 'Trigger', render: triggerWords },
     { key: 'steps', header: 'Steps', align: 'right', render: (r) => n(r.stepCount) },
     { key: 'started', header: 'Started', render: (r) => <RelativeTime iso={r.startedAt ?? r.createdAt} /> },

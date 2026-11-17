@@ -15,7 +15,7 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 | Capability | Web | API | CLI / TUI | Permission |
 |---|---|---|---|---|
 | Fabric connection (URL and `hxs_` service token, stored encrypted; Doctor checks `fabric.*`) | Administration → Fabric connection | `GET/PUT/DELETE /api/fabric/connection`, `POST …/test` | `hexactra fabric show\|set URL --token-stdin\|test\|clear --yes` | `fabric_config:read` / `:write` |
-| Tasks: saved goals with a profile, an agent policy (budgets and models), optional allowed sites, opt-in confirm-before-purchase ([Create a task](#create-a-task)) | `/tasks`, `/tasks/new`, `/tasks/:id/edit` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
+| Tasks: saved goals with a profile, an agent policy (budgets and models), optional allowed sites, opt-in confirm-before-purchase ([Create a task](#create-a-task), [A task's page](#a-tasks-page)) | `/tasks`, `/tasks/new`, `/tasks/:id`, `/tasks/:id/edit` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
 | Agent policies: named, versioned bundles of model tiers, budgets (any of them unlimited), stall detection and context settings; four built-ins, a default per user, one per task, schedule or run ([Agent policies](#agent-policies)) | Settings → Browser agent → Agent policies; Administration → Browser agent | `/api/agent-policies` | `hexactra policies`; MCP `policies_*` and `policy_*` tools; SDK `hx.policies` | `agent_policies:read` / `:write` |
 | Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel; the list is paged, filtered and searched on the server, with counts per status; finished runs can be deleted, one, many or everything a filter matches ([docs/runs.md](docs/runs.md)) | `/runs`, `/runs/:id` | `/api/runs`, `GET /api/runs/counts`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel`, `DELETE /api/runs/:id`, `POST /api/runs/delete` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` / `runs:delete` |
 | Inbox: what agents wait for (CAPTCHA, code, sign-in, confirmation); answers resume the run | `/inbox` | `GET /api/inbox`, `POST /api/inbox/:runId/respond` | `hexactra inbox list\|answer RUN --done\|--value\|--choice\|--secret-stdin\|--decline`; TUI **Agent ▸ Inbox** | `runs:read` / `runs:write` |
@@ -304,7 +304,39 @@ The same policies are reachable from scripts and agents ([docs/mcp.md](docs/mcp.
 - **The Scheduled switch.** Off pauses every schedule of the task; on resumes them. That is all it does: a task that is off **still runs** when you press Run, or when it is started through the API, the CLI or MCP, and a run that is going when you switch it off finishes. "Partly paused" means some of the task's schedules are paused and some are not; switching it on resumes them all. A task without a schedule has an **Add schedule** link instead. The switch needs `tasks:write`; without it you see "Scheduled" or "Paused".
 - **Run now and Run with….** **Run now** starts a run under the task's own policy. The arrow next to it lists the other policies: pick one to use it for that run only, without changing the task. The list stays where it is, so you can start several tasks; "Run started · View" links to the new run. While a task is running the button reads **Run again** and asks before starting a second run. Running needs `runs:write`.
 - **New task** opens the form ([Create a task](#create-a-task)); **Edit** in a task's ⋮ menu opens the same form for that task.
-- **The ⋮ menu.** Open, Edit, Duplicate (a new task that starts as a copy, with its schedules paused), View runs, and Delete. Delete asks first and says what happens: the task's schedules are deleted, and its runs stay in Runs as one-off runs.
+- **The ⋮ menu.** Open ([the task's page](#a-tasks-page)), Edit, Duplicate (a new task that starts as a copy, with its schedules paused), View runs (the task's page, at its runs), and Delete. Delete asks first and says what happens: the task's schedules are deleted, and its runs stay in Runs as one-off runs.
+
+## A task's page
+
+`/tasks/:id` is a task's home: open it from the task's name in the list. It shows what the task does, how it is set up, when it runs next, how its runs have gone and what they cost. The page needs `tasks:read`.
+
+![A task's page: the header with Run now, statistics with the runs per day, the run history, and the goal, schedules and configuration](docs/images/task-page.png)
+
+- **The header** says when the task runs next and on which schedule ("Next run in 3 h · Monday to Friday at 09:00"), "Schedule paused", or "Runs only when you start it".
+  - **Run now** starts a run and opens it; the arrow is **Run with…** another policy for that run only. While a run is going it reads **Run again** and asks first. Needs `runs:write`.
+  - The **Scheduled** switch pauses or resumes every schedule of the task, as on the list. **Edit** opens the form; the ⋮ menu has Duplicate and Delete (the page then returns to Tasks).
+- **While a run is live**, a banner says what the agent is doing, with **Watch**; when the run waits for you it reads "Needs you", with **Answer** (your Inbox).
+- **Statistics** (with `runs:read`) for the last 7, 30 or 90 days:
+
+  | Tile | What it shows |
+  |---|---|
+  | **Success rate** | Succeeded runs out of those that succeeded or failed; "n/a" when none did. Cancelled runs are not counted. |
+  | **Runs** | Runs started in the period. |
+  | **Average duration** | Of the finished runs, with the average number of steps; the tooltip has the time 95 % of runs finish within. |
+  | **Spend** | The period's model cost ("≥" when a call could not be priced) and the average per successful run. Absent when no run has a cost. |
+  | **Last run** | Its status and time; "Stopped: cost budget" or "Stopped: stalled" when a budget or a stall ended it. |
+
+  The chart under the tiles has one bar per day, stacked by outcome (succeeded, failed, cancelled). On a phone it shows the last 14 days. The same numbers are in a table for screen readers.
+- **Runs** (`/tasks/:id#runs`) is the [Runs list](#runs-find-filter-and-delete) fixed to this task, with its status tabs, search, filters and delete. **Open in Runs** shows the same runs on the Runs page.
+- **Goal**, with a button to copy it.
+- **Schedules** (`/tasks/:id#schedule`): each schedule in words with its policy override, when it runs next and its last run.
+  - The **Active** switch pauses one schedule; the others keep running.
+  - **Edit** and **Add a schedule** open the [schedule editor](#schedules) and save at once, unlike the task form, which saves schedules with the task.
+  - **Delete** asks first.
+  - A schedule that failed three times in a row carries a warning with a link to its last run. The notification about it opens the page here.
+- **Configuration**: the agent policy ("(default)" when the task follows your default; a link to the policy; its tiers and limits) and the model it starts on (both with `agent_policies:read`), the machine (with a warning while it is offline or disabled), the browser profile, the allowed sites, whether it asks before risky steps, and when the task was created and last edited.
+
+On a phone the page is one column in this order: statistics, runs, goal, schedules, configuration. Goal and Configuration fold, and start folded when the goal is long.
 
 ## Create a task
 

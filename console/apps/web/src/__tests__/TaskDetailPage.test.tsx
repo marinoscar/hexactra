@@ -153,6 +153,10 @@ describe('the task page: overview', () => {
 
     // The run history is the Runs list fixed to this task.
     await waitFor(() => expect(requests(host, 'GET', '/runs?').some((r) => new URLSearchParams(r.path.split('?')[1]).get('taskId') === TASK_ID && r.path.includes('limit=25'))).toBe(true));
+    // Every run of the task has the task's goal: the embedded table has no Goal column, and keeps the cost.
+    await screen.findByRole('columnheader', { name: 'Status' });
+    expect(screen.queryByRole('columnheader', { name: 'Goal' })).toBeNull();
+    expect(screen.getByRole('columnheader', { name: 'Cost' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open in Runs' })).toHaveAttribute('href', `/runs?taskId=${TASK_ID}`);
     expect(requests(host, 'GET', `/tasks/${TASK_ID}?include=summary`)).toHaveLength(1);
     expect(taskPaths.runs(TASK_ID)).toBe(`/tasks/${TASK_ID}#runs`);
@@ -325,6 +329,8 @@ describe('the task page: a live run', () => {
     await loaded();
     const banner = await screen.findByTestId('task-live-banner');
     await waitFor(() => expect(banner).toHaveTextContent('Running now: Thinking about the next step'));
+    // In the embedded list, what the run is doing sits under its status.
+    expect(await screen.findByTestId('run-activity')).toHaveTextContent('Thinking about the next step');
     expect(within(banner).getByRole('link', { name: 'Watch' })).toHaveAttribute('href', `/runs/${RUN_ID}`);
     expect(host.requests.some((r) => r.path === `/runs?envelope=1&taskId=${TASK_ID}&limit=1&state=live`)).toBe(true);
     expect(screen.getByRole('button', { name: 'Run again' })).toBeInTheDocument();

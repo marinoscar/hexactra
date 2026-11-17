@@ -374,8 +374,8 @@ export function TaskDetailPage() {
         <LiveBanner runId={summary.liveRunId} run={liveRun} fallbackStatus={summary.lastRun?.id === summary.liveRunId ? summary.lastRun.status : 'running'} canOpen={canReadRuns} />
       )}
 
-      {/* Two columns from `md` (main 8/12, side 4/12); below it one column, in reading order: statistics, runs, goal, schedules, configuration. */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 2fr) minmax(0, 1fr)' }, gap: 3, alignItems: 'start' }} data-testid="task-columns">
+      {/* Two columns from `md` (the main one, and a 320 px side column: about 8/12 and 4/12 of the page's width, leaving the runs table its columns); below it one column, in reading order: statistics, runs, goal, schedules, configuration. */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) 320px' }, gap: 3, alignItems: 'start' }} data-testid="task-columns">
         {canReadRuns && (
           <Stack spacing={3} sx={{ minWidth: 0 }}>
             <TaskStats taskId={task.id} lastRun={summary.lastRun} lastStopReason={lastRun && lastRun.id === summary.lastRun?.id ? lastRun.stopReason : null} refreshKey={`${summary.lastRun?.id ?? ''}:${summary.lastRun?.status ?? ''}`} />
