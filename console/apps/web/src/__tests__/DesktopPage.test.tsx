@@ -24,7 +24,7 @@ vi.mock('@novnc/novnc/core/rfb.js', () => ({
 }));
 
 import { backoff, DesktopPage } from '../pages/DesktopPage';
-import type { FleetHost } from '../pages/FleetPage';
+import type { FleetHost } from '../types/fleet';
 
 const ID = '22222222-2222-4222-8222-222222222222';
 const host: FleetHost = {

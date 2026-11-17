@@ -1,24 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Box, Button, Chip, Stack, TextField, Typography } from '@mui/material';
+import { Box, Button, Chip, Stack, TextField, Typography } from '@mui/material';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { PolicySelect } from '../policies/PolicySelect';
 import type { PolicyCatalog } from '../policies/usePolicyCatalog';
-
-/** `GET /api/schedules?taskId=`. */
-export interface TaskSchedule {
-  id: string;
-  taskId: string;
-  cron: string;
-  timezone: string;
-  enabled: boolean;
-  concurrency: 'skip' | 'queue';
-  nextRunAt: string | null;
-  lastRunAt: string | null;
-  consecutiveFailures: number;
-  /** Overrides the task's agent policy for scheduled runs; null follows the task. */
-  policyId?: string | null;
-}
+import type { TaskSchedule } from '../types/tasks';
+import { ErrorBanner, RelativeTime, useApiAction, useConfirm } from '../ui';
 
 const browserZone = () => {
   try {
@@ -43,7 +30,8 @@ export function TaskSchedules({ taskId, canWrite, catalog, taskPolicyId }: TaskS
   const [items, setItems] = useState<TaskSchedule[]>([]);
   const [cron, setCron] = useState('');
   const [tz, setTz] = useState(browserZone());
-  const [error, setError] = useState<string | null>(null);
+  const { run, busy, error } = useApiAction();
+  const confirm = useConfirm();
   const [policyId, setPolicyId] = useState<string | null>(null);
   const taskPolicy = catalog?.byId(taskPolicyId ?? catalog.defaultId);
 
@@ -59,39 +47,36 @@ export function TaskSchedules({ taskId, canWrite, catalog, taskPolicyId }: TaskS
     void load();
   }, [load]);
 
-  const act = async (run: () => Promise<unknown>) => {
-    setError(null);
-    try {
-      await run();
+  /** Run a change, then reload. */
+  const act = (key: string, change: () => Promise<unknown>) =>
+    run(key, async () => {
+      await change();
       await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'The change failed');
-    }
+    });
+
+  const remove = async (schedule: TaskSchedule) => {
+    if (await confirm({ title: 'Delete this schedule?', confirmLabel: 'Delete', destructive: true })) await act(schedule.id, () => api.delete(`/schedules/${schedule.id}`));
   };
 
   return (
     <Box sx={{ mt: 2 }} aria-label="Schedules">
       <Typography variant="subtitle2">Schedules</Typography>
-      {error && (
-        <Alert severity="error" sx={{ my: 1 }}>
-          {error}
-        </Alert>
-      )}
+      <ErrorBanner error={error} />
       <Stack spacing={1} sx={{ my: 1 }}>
         {items.map((s) => (
           <Stack key={s.id} direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
             <Chip size="small" label={`${s.cron} (${s.timezone})`} color={s.enabled ? 'primary' : 'default'} />
             {s.policyId && <Chip size="small" variant="outlined" label={`policy: ${catalog?.byId(s.policyId)?.name ?? 'unavailable'}`} />}
             <Typography variant="caption" color="text.secondary">
-              {s.enabled && s.nextRunAt ? `next ${new Date(s.nextRunAt).toLocaleString()}` : 'paused'}
+              {s.enabled && s.nextRunAt ? <RelativeTime iso={s.nextRunAt} prefix="next " /> : 'paused'}
               {s.consecutiveFailures ? ` · ${s.consecutiveFailures} failed in a row` : ''}
             </Typography>
             {canWrite && (
               <>
-                <Button size="small" onClick={() => void act(() => api.patch(`/schedules/${s.id}`, { enabled: !s.enabled }))}>
+                <Button size="small" disabled={busy !== null} onClick={() => void act(s.id, () => api.patch(`/schedules/${s.id}`, { enabled: !s.enabled }))}>
                   {s.enabled ? 'Pause' : 'Resume'}
                 </Button>
-                <Button size="small" color="error" onClick={() => void act(() => api.delete(`/schedules/${s.id}`))}>
+                <Button size="small" color="error" disabled={busy !== null} onClick={() => void remove(s)}>
                   Delete
                 </Button>
               </>
@@ -118,9 +103,9 @@ export function TaskSchedules({ taskId, canWrite, catalog, taskPolicyId }: TaskS
           )}
           <Box>
             <Button
-              disabled={!cron.trim()}
+              disabled={!cron.trim() || busy !== null}
               onClick={() =>
-                void act(async () => {
+                void act('new', async () => {
                   await api.post('/schedules', { taskId, cron: cron.trim(), timezone: tz.trim() || 'UTC', ...(policyId ? { policyId } : {}) });
                   setCron('');
                   setPolicyId(null);

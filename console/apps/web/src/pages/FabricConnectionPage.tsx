@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Alert, Box, Button, Chip, Container, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, Stack, TextField } from '@mui/material';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
+
+import { ErrorBanner, PageContainer, PageHeader } from '../ui';
 import { SecretField } from '@marinoscar/platform-web/credentials/ui';
 
 /** `GET /api/fabric/connection`. */
@@ -76,19 +78,12 @@ export function FabricConnectionPage() {
   };
 
   return (
-    <Container maxWidth="sm" sx={{ py: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Fabric connection
-      </Typography>
-      <Typography color="text.secondary" sx={{ mb: 3 }}>
-        The Hexactra Fabric control plane that runs browsers for this console. Keep it on a private network; only the
-        console needs to reach it.
-      </Typography>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+    <PageContainer width="narrow">
+      <PageHeader
+        title="Fabric connection"
+        subtitle="The Hexactra Fabric control plane that runs browsers for this console. Keep it on a private network; only the console needs to reach it."
+      />
+      <ErrorBanner error={error} />
       {saved && (
         <Alert severity="success" sx={{ mb: 2 }}>
           Saved.
@@ -139,6 +134,6 @@ export function FabricConnectionPage() {
           )}
         </Stack>
       )}
-    </Container>
+    </PageContainer>
   );
 }

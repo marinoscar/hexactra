@@ -15,6 +15,9 @@ import { RunNotifier } from './run-notifier';
 import { RunRemindHandler, RunRemindTask, RunReminders } from './run-reminders';
 import { RunsQueryService } from './runs.query';
 import { TasksService } from './tasks.service';
+import { TaskSchedulesController } from './task-schedules.controller';
+import { TaskSchedulesService } from './task-schedules.service';
+import { TaskSummaryService } from './task-summary.service';
 
 /**
  * Where a deleted run's step screenshots are removed from: the storage slice's
@@ -41,8 +44,8 @@ const artifacts = runArtifactStore();
 @Module({
   imports: [FabricModule, PoliciesModule, ...(artifacts.imports ?? [])],
   // RunsDeleteController first: its `POST delete` is declared before any `:id` route.
-  controllers: [TasksController, RunsDeleteController, RunsController],
-  providers: [TasksService, RunsQueryService, RunDeleteService, RunsDeleteHandler, ...artifacts.providers, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders, RunRemindHandler, RunRemindTask],
-  exports: [TasksService, RunsQueryService, RunDeleteService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders],
+  controllers: [TasksController, TaskSchedulesController, RunsDeleteController, RunsController],
+  providers: [TasksService, RunsQueryService, RunDeleteService, RunsDeleteHandler, ...artifacts.providers, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders, RunRemindHandler, RunRemindTask],
+  exports: [TasksService, RunsQueryService, RunDeleteService, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders],
 })
 export class TasksModule {}

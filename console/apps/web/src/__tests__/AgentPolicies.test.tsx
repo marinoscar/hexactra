@@ -11,6 +11,7 @@ import { AgentPoliciesPage } from '../pages/AgentPoliciesPage';
 import { AgentPolicyEditorPage } from '../pages/AgentPolicyEditorPage';
 import type { AgentPolicy, AgentPolicySpec } from '../policies/types';
 import { BALANCED, OWN, OWN_ID, POLICY_READS, UNLIMITED } from './policyFixtures';
+import { ConfirmProvider } from '../ui';
 
 // Full pages with MUI pickers: slow under a loaded parallel run, never hanging.
 vi.setConfig({ testTimeout: 20_000 });
@@ -22,13 +23,15 @@ const WRITE = ['agent_policies:read', 'agent_policies:write'];
 function renderAt(path: string, host: ReturnType<typeof createTestPlatformHost>) {
   return render(
     <PlatformHostProvider host={host}>
-      <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path="/settings/agent-policies" element={<AgentPoliciesPage />} />
-          <Route path="/settings/agent-policies/new" element={<AgentPolicyEditorPage />} />
-          <Route path="/settings/agent-policies/:id" element={<AgentPolicyEditorPage />} />
-        </Routes>
-      </MemoryRouter>
+      <ConfirmProvider>
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route path="/settings/agent-policies" element={<AgentPoliciesPage />} />
+            <Route path="/settings/agent-policies/new" element={<AgentPolicyEditorPage />} />
+            <Route path="/settings/agent-policies/:id" element={<AgentPolicyEditorPage />} />
+          </Routes>
+        </MemoryRouter>
+      </ConfirmProvider>
     </PlatformHostProvider>,
   );
 }

@@ -290,17 +290,73 @@ The same policies are reachable from scripts and agents ([docs/mcp.md](docs/mcp.
 - **MCP:** `policies_list`, `policy_get`, `policy_create`, `policy_update`, `policy_set_default`, `policies_export`, `policies_import`, and `policy_id` on `run_goal`, `task_create`, `task_update`, `task_run` and `schedule_create`. Each tool calls the REST route as the caller, so `agent_policies:read` / `:write` apply: a read-only user is refused the write tools with `403`. Deleting a policy is not an MCP tool.
 - **SDK:** `hx.policies.list|get|create|update|setDefault|export|import`, `hx.tasks.create|update|run` and `hx.runs.start` (each with `policyId`), and the exported `AgentPolicySpec` type.
 
+## Tasks and schedules API
+
+What the Tasks pages and the schedule editor read and write. Every route is the signed-in user's own data; another user's task answers `404`. The per-endpoint reference is the OpenAPI document at `/api/docs`.
+
+**The task list, `GET /api/tasks`** (`tasks:read`). With no parameter it returns every task, newest first, as an array (unchanged). All parameters are optional:
+
+| Parameter | Meaning |
+|---|---|
+| `envelope=1` | Return a page, `{ items, nextCursor, total }`, instead of an array. `total` counts the tasks that match the filters, on every page. |
+| `include=summary` | Add a `summary` to each task: its `schedules` (each with a `description` such as "Monday to Friday at 09:00" and its `policyId` override), `scheduleState` (`none`, `active`, `paused`, `partial`), `nextRunAt`, `lastRun`, `liveRunId`, `runCounts` (`total`, and `last7d` by outcome) and `policy` (the policy a run started now would use). Also on `GET /api/tasks/:id?include=summary`. |
+| `q` | Case-insensitive text in the name or the goal (1 to 200 characters). |
+| `filter` | `scheduled` (an enabled schedule), `paused` (schedules, none enabled), `unscheduled`, `failing` (a schedule failed 3 times in a row, or the last run failed), `never_run`. |
+| `policyId` | Tasks whose own policy is this one; `default` is the tasks that follow your default policy. |
+| `sort` | `created_desc` (default), `name_asc`, `last_run_desc`, `next_run_asc` (no next run: last), `spend_desc` (cost of the last 30 days). |
+| `limit`, `cursor` | 1 to 100 (50 with `envelope`). `cursor` is the previous page's `nextCursor`: opaque, do not parse it, and valid only with the same `sort` (`400 INVALID_TASK_CURSOR` otherwise). |
+
+A page costs the same number of database queries whatever its size. `created_desc` and `name_asc` page by keyset; the three computed sorts page by an offset inside the cursor, because their sort key moves whenever a run starts.
+
+**A task with its schedules.** `POST /api/tasks` takes an optional `schedules` list (at most 10; each `{ cron, timezone?, enabled?, concurrency?, policyId? }`). The task and its schedules are created in one transaction. One invalid schedule fails the whole request with `400`, a typed `code` (`INVALID_CRON`, `INVALID_TIMEZONE`, `CRON_TOO_FREQUENT`, `POLICY_REF_INVALID`) and `details.path` naming it, for example `schedules[1].cron`; nothing is created. The response is the task with its `summary`.
+
+`PUT /api/tasks/:id/schedules` replaces the task's schedules in one transaction: an item with an `id` updates that schedule (its last run and failure count are kept, and a field left out is unchanged), an item without creates one, and schedules that are not listed are deleted. An `id` that is not this task's answers `400 SCHEDULE_NOT_IN_TASK`. `POST`, `PATCH` and `DELETE /api/schedules` still work one schedule at a time; a task holds at most 10 (`409 SCHEDULE_LIMIT`).
+
+Deleting a task (`DELETE /api/tasks/:id`) deletes its schedules and keeps its runs, with `taskId` set to `null`.
+
+**Pause and resume.** `POST /api/tasks/:id/schedules/pause` disables every schedule of the task; `…/resume` enables them all, recomputes their next firing and resets their failure count (`tasks:write`; `409 NO_SCHEDULES` for a task without a schedule). This is what "disable a task" means: there is no enabled flag on a task. A run that is live when the task is paused finishes, and the task can still be started by hand, the API or MCP.
+
+**Check a schedule before saving it.** `POST /api/schedules/preview` with `{ cron, timezone?, count? }` (`count` 1 to 10, default 5; `tasks:read`) always answers `200`: `{ valid: true, cron, timezone, description, next, intervalSeconds }` with the next firings as ISO instants, or `{ valid: false, code, message }` with the reason saving would be refused. `description` is English and 24-hour; expressions the schedule builder does not write read "Custom schedule (<expression>)".
+
+**The time zone rule.** A schedule that is created without `timezone` gets the owner's profile time zone (Settings → Profile). When the profile follows the device ("Automatic"), it gets the zone the client sent in the `X-Time-Zone` header, which the web app always sends; with neither, `UTC`. `GET /api/schedules/defaults` returns `{ timezone, source }` (`profile`, `device` or `default`), so a client can show the zone before saving. An explicit `timezone` is still accepted. Changing the profile later does not move existing schedules.
+
+**Statistics.** `GET /api/tasks/:id/stats?days=30` (`runs:read`; 7 to 90 days, today included) returns `totals` (runs, outcomes, `successRate`, `costUsd`, `costKnown`), `avgDurationSeconds`, `p95DurationSeconds`, `avgSteps`, `avgCostPerSuccessUsd`, a `series` with one entry per day (zeros included) and `stopReasons`. Days are bucketed in the viewer's time zone (the same rule as above). `costUsd` is `null` when no run of the period has a cost, and `costKnown` is `false` when a run could not be priced.
+
 ## Layout
 
 ```
 apps/api/          NestJS API: src/platform/ binds the packages (slices/ + one folder per optional slice), src/notes/ is the sample feature
   prisma/          fragments/ (your models), schema/ (GENERATED), migrations/, platform.lock, seed.ts
-apps/web/          React app: App.tsx (routes, the packaged shell), slices/ (one file per optional slice), config/ (the two settings registries, the navigation), theme.ts, pages/
+apps/web/          React app: App.tsx (routes, the packaged shell), slices/ (one file per optional slice), config/ (the two settings registries, the navigation), theme.ts, pages/, ui/ (the UI kit), types/ (the API shapes pages share)
 apps/cli/          the CLI: createCli() with this app's identity
 packages/shared/   identity.json: the ONE identity source (name, repository, CLI name, colours); slices.json: the ONE slice manifest
 infra/             platform fragments GENERATED by platform-infra sync, plus your app.* overlays
 scripts/rename.mjs rebrand this app (identity.json plus the few literal targets)
 ```
+
+## UI kit
+
+`apps/web/src/ui/` is the console's own set of building blocks (it never goes into a platform package). **Pages compose the kit; a new destructive action uses `useConfirm()`.** Import from `../ui`:
+
+| Export | Use it for |
+|---|---|
+| `PageContainer` | The frame of every page: `width="narrow"` (forms, the inbox), `"default"` or `"wide"` (lists, dashboards). |
+| `PageHeader` | The title (`h1`), an optional `back` link, `actions` and the `primary` action. Below 600 px the secondary actions collapse into one "More" menu and the primary stays visible. |
+| `StatusChip` | A run status as colour, icon and words, with a budget or stall stop appended ("failed · cost budget"). `STOP_REASON_LABEL`, `isLive(status)`, `isTerminal(status)`. |
+| `useConfirm()` | `if (await confirm({ title, body, confirmLabel, destructive: true })) ...`. Resolves `false` on Cancel, Escape and a backdrop click. `requireText` makes the user type a word first. `ConfirmProvider` is mounted once in `App.tsx`; a page test wraps the page in one. |
+| `EmptyState`, `ErrorBanner`, `ListSkeleton`, `CardSkeleton` | Nothing to show, a failure (`role="alert"`), and the first load. |
+| `ResponsiveList` | A table at 900 px and up, cards below. It renders the items it is given: paging stays with the API. |
+| `useBreakpoint()` | `{ isPhone, isTablet, isDesktop }` from the theme's breakpoints. |
+| `formatDateTime`, `formatRelative`, `<RelativeTime iso />` | Dates in the **profile time zone** (the one `UserTimeZoneSync` stores), never `toLocaleString()`. An empty or invalid date renders `n/a`. |
+| `useApiAction()` | `run(key, fn)` with `busy`, `error` and `clearError` around an API call. |
+| `formatCost(usd, known)` | "$4.20", "≥ $4.20" when a call could not be priced, "<$0.01", or `null`. |
+
+Rules:
+
+- A page imports shared shapes from `apps/web/src/types/` (`runs.ts`, `tasks.ts`, `fleet.ts`), never from another page.
+- No `window.confirm` or `window.alert`.
+- Colours come from the theme; a status is never colour only.
+- A test that needs a width mocks it with `mockViewport(390)` from `src/__tests__/matchMedia.ts`; without it the kit reads jsdom as a desktop.
 
 ## Run it
 
