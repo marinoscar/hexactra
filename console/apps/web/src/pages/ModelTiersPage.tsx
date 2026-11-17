@@ -175,6 +175,7 @@ export function ModelTiersPage({ scope }: { scope: 'user' | 'deployment' }) {
                     </Box>
                     {scope === 'user' && (
                       <FormControlLabel
+                        sx={{ flexShrink: 0 }}
                         control={<Switch checked={d.inherit} disabled={!canWrite} onChange={(e) => update(t, { inherit: e.target.checked })} />}
                         label="Inherit from deployment"
                       />

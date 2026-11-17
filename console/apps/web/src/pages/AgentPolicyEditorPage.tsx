@@ -123,7 +123,7 @@ function buildSpec(base: AgentPolicySpec, nums: NumberDrafts, unlimited: Record<
 function Section({ title, help, children, id }: { title: string; help?: string; children: ReactNode; id: string }) {
   return (
     <Paper variant="outlined" component="section" aria-labelledby={id} sx={{ p: { xs: 2, sm: 3 } }}>
-      <Typography variant="h6" component="h2" id={id} sx={{ fontSize: '1.1rem' }}>
+      <Typography variant="h6" component="h2" id={id} sx={{ fontSize: '1.1rem', mb: help ? 0 : 2 }}>
         {title}
       </Typography>
       {help && (
