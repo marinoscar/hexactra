@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Home dashboard** (#430).
+  - Home shows what needs you (pending questions, with Approve and Deny for a simple confirmation), what is running now, what runs next, what just finished, the week's outcomes and cost, and the machines.
+  - It is one request, `GET /api/home/summary`. A block the viewer lacks the permission for is left out.
+  - A new account sees a get-started checklist instead.
 - **Runs page** (#423).
   - `/runs` shows status tabs with counts, the number of runs and their cost, search and filters (task, trigger, dates, stop reason, policy), all kept in the address. Rows load 50 at a time; live rows refresh on their own.
   - Runs can be selected and deleted together, or "everything that matches" the filter can be deleted after typing a confirmation. A large delete runs in the background and the page says so.
