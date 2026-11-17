@@ -26,3 +26,4 @@ export { RelativeTime, type RelativeTimeProps } from './RelativeTime';
 export { useApiAction, type ApiAction } from './useApiAction';
 export { formatCost } from './formatCost';
 export { ToastHost, dismissToast, toast, type ToastMessage } from './toast';
+export { APP_BAR_HEIGHT, BOTTOM_BAR_HEIGHT, SAFE_AREA_BOTTOM, aboveBottomBar } from './bottomBar';

@@ -1,12 +1,13 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PlatformHostProvider } from '@marinoscar/platform-web/core';
 import { createTestPlatformHost } from '@marinoscar/platform-web/testing';
 import { MemoryRouter } from 'react-router-dom';
-import { vi } from 'vitest';
+import { afterEach, vi } from 'vitest';
 
-import { FleetPage } from '../pages/FleetPage';
+import { COPIED_MS, FleetPage, PROFILE_NAME_RULE } from '../pages/FleetPage';
 import type { FleetEnrollment, FleetHost } from '../types/fleet';
 import { ConfirmProvider } from '../ui';
+import { mockViewport } from './matchMedia';
 
 const ID = '11111111-1111-4111-8111-111111111111';
 const hosts: FleetHost[] = [
@@ -107,5 +108,89 @@ describe('FleetPage', () => {
     expect(host.requests.find((r) => r.path === `/fleet/hosts/${ID}/drain`)?.body).toEqual({ enabled: true });
     expect(calls).toContain(`POST /fleet/hosts/${ID}/profiles/travel/restart`);
     expect(calls).toContain('POST /fleet/enrollments');
+  });
+
+  it('explains the profile name rule and offers "Connect a machine" when no host is enrolled', async () => {
+    renderPage(['fleet:read', 'fleet:write']);
+    expect(await screen.findByText(PROFILE_NAME_RULE)).toBeInTheDocument();
+    renderPage(['fleet:read', 'fleet:write'], { 'GET /fleet/hosts': [] });
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect a machine' }));
+    expect(await screen.findByRole('dialog', { name: 'Enroll a host' })).toBeInTheDocument();
+  });
+});
+
+describe('FleetPage on a phone', () => {
+  let restore: () => void;
+  beforeEach(() => {
+    restore = mockViewport(360);
+  });
+  afterEach(() => restore());
+
+  it('puts the profile actions in one menu per profile', async () => {
+    const host = renderPage(['fleet:read', 'fleet:write'], { [`POST /fleet/hosts/${ID}/profiles/travel/close`]: { state: 'succeeded' } });
+    await screen.findByLabelText('Host vps');
+    // No row of icon buttons to sit on top of the name.
+    expect(screen.queryByRole('button', { name: 'Restart travel on vps' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for travel on vps' }));
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Restart browser', 'Close browser', 'Delete profile']);
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Close browser' }));
+    await waitFor(() => expect(host.requests.map((r) => `${r.method} ${r.path}`)).toContain(`POST /fleet/hosts/${ID}/profiles/travel/close`));
+  });
+
+  it('never offers to delete the default profile, and cannot close a stopped browser', async () => {
+    renderPage(['fleet:read', 'fleet:write']);
+    fireEvent.click(await screen.findByRole('button', { name: 'Actions for default on vps' }));
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).queryByRole('menuitem', { name: 'Delete profile' })).not.toBeInTheDocument();
+    expect(within(menu).getByRole('menuitem', { name: 'Close browser' })).toHaveAttribute('aria-disabled', 'true');
+  });
+});
+
+describe('the enrollment dialog', () => {
+  const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  afterEach(() => {
+    vi.useRealTimers();
+    if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
+    else delete (navigator as { clipboard?: unknown }).clipboard;
+  });
+
+  async function openCommand() {
+    renderPage(['fleet:read', 'fleet:write'], { 'POST /fleet/enrollments': enrollment });
+    fireEvent.click(await screen.findByRole('button', { name: 'Enroll host' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Create token' }));
+    await screen.findByLabelText('Agent command');
+  }
+
+  it('"Copy" writes the command and reads "Copied" for two seconds', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    await openCommand();
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    });
+    expect(writeText).toHaveBeenCalledWith(enrollment.command);
+    expect(screen.getByRole('button', { name: 'Copied' })).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(COPIED_MS);
+    });
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
+  });
+
+  it('selects the command when the Clipboard API is missing', async () => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined });
+    await openCommand();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    });
+    expect(window.getSelection()?.toString()).toBe(enrollment.command);
+    expect(screen.getByText(/The command is selected/)).toBeInTheDocument();
+  });
+
+  it('"Done" closes it', async () => {
+    await openCommand();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 });

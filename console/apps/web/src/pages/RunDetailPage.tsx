@@ -1,5 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Alert, Box, Button, Link, Stack, Typography } from '@mui/material';
+import { useCallback, useEffect, useState, type ElementType } from 'react';
+import { Alert, Box, Button, Collapse, IconButton, Link, Paper, Stack, Typography, useMediaQuery } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
+import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import PanToolOutlinedIcon from '@mui/icons-material/PanToolOutlined';
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { isPlatformApiError, usePlatformHost } from '@marinoscar/platform-web/core';
 
@@ -11,7 +18,7 @@ import { runAgain } from '../components/runRow';
 import { RunTimeline } from '../components/RunTimeline';
 import { withStreamedSteps } from '../components/runTimeline';
 import type { Run, RunStep } from '../types/runs';
-import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, StatusChip, formatDateTime, isLive as isLiveStatus, useConfirm, useProfileTimeZone } from '../ui';
+import { APP_BAR_HEIGHT, EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, StatusChip, aboveBottomBar, formatDateTime, isLive as isLiveStatus, useBreakpoint, useConfirm, useProfileTimeZone } from '../ui';
 
 /** Where a person can watch and take over the run's browser. */
 interface RunViewer {
@@ -21,8 +28,39 @@ interface RunViewer {
   desktop: boolean;
 }
 
+/** The space the two panes leave to the top bar and the page's own padding, in pixels. */
+const PANE_OFFSET = APP_BAR_HEIGHT + 32;
+
+/** `calc(100dvh - px)` with the `100vh` fallback, as an `sx` fragment for `prop`. */
+function viewportMinus(prop: 'maxHeight', px: number) {
+  return { [prop]: `calc(100vh - ${px}px)`, '@supports (height: 100dvh)': { [prop]: `calc(100dvh - ${px}px)` } };
+}
+
+/** One action of the phone's sticky bar: an icon over a short label, the full label as its accessible name. */
+function BarAction({ label, short, Icon, color, disabled, onClick }: { label: string; short: string; Icon: ElementType; color?: 'error' | 'primary'; disabled?: boolean; onClick: () => void }) {
+  return (
+    <Button
+      aria-label={label}
+      color={color ?? 'primary'}
+      disabled={disabled}
+      onClick={onClick}
+      sx={{ flex: '1 1 0', minWidth: 0, minHeight: 52, flexDirection: 'column', gap: 0.25, px: 0.5, fontSize: '0.75rem', lineHeight: 1.2, textTransform: 'none' }}
+    >
+      <Icon fontSize="small" />
+      {short}
+    </Button>
+  );
+}
+
 /**
- * `/runs/:id`: one run, live. Steps and status arrive over the run's event
+ * `/runs/:id`: one run, live. The layout follows the window (#431): two panes
+ * from `lg` up while the run is live (the browser's frame on the left, sticky;
+ * the status, budget and timeline on the right, the timeline scrolling under
+ * the budget meter), one column below that, and below `md` a sticky bar keeps
+ * Cancel, Watch and Take over in reach. A finished run has no frame: its
+ * result takes that place and the timeline the full width.
+ *
+ * Steps and status arrive over the run's event
  * stream, with what it is doing right now (#379); while the run is live, the browser's screenshot refreshes every
  * 2 s and the viewer link lets a person take over.
  */
@@ -46,6 +84,8 @@ export function RunDetailPage() {
   const [watch, setWatch] = useState(true);
   const [where, setWhere] = useState<RunViewer | null>(null);
   useProfileTimeZone();
+  const isWide = useMediaQuery(useTheme().breakpoints.up('lg'));
+  const compact = !useBreakpoint().isDesktop;
 
   const load = useCallback(async () => {
     try {
@@ -182,24 +222,35 @@ export function RunDetailPage() {
     );
   }
   const finished = !isLive;
-  return (
-    <PageContainer>
-      <PageHeader
-        variant="h5"
-        title={run.goal}
-        back={run.taskId ? { to: `/tasks/${run.taskId}`, label: taskName ?? 'Task' } : back}
-        actions={[
-          { key: 'again', label: 'Run again', onClick: () => void again(), hidden: !finished || run.trigger === 'external' || !viewer.hasPermission('runs:write') },
-          { key: 'delete', label: 'Delete', color: 'error', onClick: () => void remove(), hidden: !finished || !viewer.hasPermission('runs:delete') },
-        ]}
-        subtitle={
-          <>
-            Profile {run.profile} · {run.stepCount} steps{runCost(run) ? ` · ${runCost(run)}` : ''} · started {formatDateTime(run.createdAt)}
-          </>
-        }
-      >
-        <StatusChip status={run.status} size="medium" />
-      </PageHeader>
+  const canCancel = viewer.hasPermission('runs:write');
+  const cancel = () => void api.post(`/runs/${run.id}/cancel`, {}).then(load);
+  const takeOverHost = where?.desktop && where.hostId && viewer.hasPermission('fleet:desktop') ? where.hostId : null;
+  const takeOver = () => navigate(`/fleet/hosts/${takeOverHost}/desktop`);
+  const takeOverLabel = `Take over${where?.hostName ? ` on ${where.hostName}` : ''}`;
+  // Two panes need a live frame; a finished run is one column at every width.
+  const twoPane = isWide && isLive;
+
+  const header = (
+    <PageHeader
+      variant="h5"
+      title={run.goal}
+      back={run.taskId ? { to: `/tasks/${run.taskId}`, label: taskName ?? 'Task' } : back}
+      actions={[
+        { key: 'again', label: 'Run again', onClick: () => void again(), hidden: !finished || run.trigger === 'external' || !viewer.hasPermission('runs:write') },
+        { key: 'delete', label: 'Delete', color: 'error', onClick: () => void remove(), hidden: !finished || !viewer.hasPermission('runs:delete') },
+      ]}
+      subtitle={
+        <>
+          Profile {run.profile} · {run.stepCount} steps{runCost(run) ? ` · ${runCost(run)}` : ''} · started {formatDateTime(run.createdAt)}
+        </>
+      }
+    >
+      <StatusChip status={run.status} size="medium" />
+    </PageHeader>
+  );
+  // The action error and the way back to the task sit under the header in every layout.
+  const chips = (
+    <>
       <ErrorBanner error={actionError} onClose={() => setActionError(null)} />
       {run.taskId && (
         <Typography variant="body2" sx={{ mb: 1 }}>
@@ -213,60 +264,163 @@ export function RunDetailPage() {
         </Typography>
       )}
       <RunHeaderChips policy={run.policy} tier={run.tier} />
-      {/* A typed stop reason (#404) says why in one line; older runs keep the plain result and error. */}
-      {!isLive && run.stopReason ? (
-        <RunStopReason run={run} />
-      ) : (
-        <>
-          {run.result && <Alert severity={run.status === 'succeeded' ? 'success' : 'info'} sx={{ my: 2 }}>{run.result}</Alert>}
-          {run.error && <Alert severity="error" sx={{ my: 2 }}>{run.error}</Alert>}
-        </>
+    </>
+  );
+  // A typed stop reason (#404) says why in one line; older runs keep the plain result and error.
+  const outcome =
+    !isLive && run.stopReason ? (
+      <RunStopReason run={run} />
+    ) : (
+      <>
+        {run.result && <Alert severity={run.status === 'succeeded' ? 'success' : 'info'} sx={{ my: 2 }}>{run.result}</Alert>}
+        {run.error && <Alert severity="error" sx={{ my: 2 }}>{run.error}</Alert>}
+      </>
+    );
+  const waiting = run.status === 'waiting_human' && <Alert severity="warning" sx={{ my: 2 }}>The agent is waiting for you. Answer its request in the Inbox.</Alert>;
+  // Below `md` these live in the sticky bar at the bottom instead.
+  const actions = isLive && !compact && (
+    <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
+      {canCancel && (
+        <Button color="error" variant="outlined" disabled={run.cancelRequested} onClick={cancel}>
+          {run.cancelRequested ? 'Cancelling…' : 'Cancel run'}
+        </Button>
       )}
-      {run.status === 'waiting_human' && <Alert severity="warning" sx={{ my: 2 }}>The agent is waiting for you. Answer its request in the Inbox.</Alert>}
-      {isLive && (
-        <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
-          {viewer.hasPermission('runs:write') && (
-            <Button color="error" variant="outlined" disabled={run.cancelRequested} onClick={() => void api.post(`/runs/${run.id}/cancel`, {}).then(load)}>
-              {run.cancelRequested ? 'Cancelling…' : 'Cancel run'}
-            </Button>
-          )}
-          <Button variant="outlined" onClick={() => setWatch((w) => !w)}>
-            {watch ? 'Stop watching' : 'Watch the browser'}
-          </Button>
-          {where?.desktop && where.hostId && viewer.hasPermission('fleet:desktop') && (
-            <Button variant="outlined" onClick={() => navigate(`/fleet/hosts/${where.hostId}/desktop`)}>
-              Take over{where.hostName ? ` on ${where.hostName}` : ''}
-            </Button>
-          )}
-        </Stack>
+      <Button variant="outlined" onClick={() => setWatch((w) => !w)}>
+        {watch ? 'Stop watching' : 'Watch the browser'}
+      </Button>
+      {takeOverHost && (
+        <Button variant="outlined" onClick={takeOver}>
+          {takeOverLabel}
+        </Button>
       )}
-      {run.budget && <RunBudgetMeter budget={run.budget} ticking={run.status === 'running'} now={now} />}
-      {run.status === 'running' && run.activity && <RunActivityBar activity={run.activity} now={now} />}
-      {isLive && watch && (shot || shotFailing) && (
-        <Box sx={{ mb: 2 }}>
-          {shot && (
-            <Box sx={{ position: 'relative' }}>
-              <Box
-                component="img"
-                src={shot}
-                alt="The run's browser, live"
-                onLoad={(e: React.SyntheticEvent<HTMLImageElement>) => setShotSize({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
-                sx={{ display: 'block', width: '100%', borderRadius: 1, border: 1, borderColor: 'divider' }}
-              />
-              {run.status === 'running' && run.activity?.phase === 'acting' && <ActionOverlay activity={run.activity} natural={shotSize} />}
-            </Box>
-          )}
-          {(() => {
-            const caption = frameCaption(shotAt, shotFailing, now);
-            return (
-              <Typography variant="caption" color={caption.stale ? 'warning.main' : 'text.secondary'} data-testid="frame-age">
-                {caption.text}
-              </Typography>
-            );
-          })()}
+    </Stack>
+  );
+  // A phone shows the budget closest to its limit and expands to the rest; the narrower right pane takes two bars a row.
+  const meter = run.budget && <RunBudgetMeter budget={run.budget} ticking={run.status === 'running'} now={now} collapsible={compact} maxColumns={twoPane ? 2 : 3} />;
+  const activity = run.status === 'running' && run.activity && <RunActivityBar activity={run.activity} now={now} />;
+  const caption = frameCaption(shotAt, shotFailing, now);
+  const frameBody = (shot || shotFailing) && (
+    <Box sx={{ mb: 2 }}>
+      {shot && (
+        // The wrapper is exactly the image's rendered box at every pane width, so the
+        // overlay's percentages (of the frame's own pixels, #381) land on the same spot.
+        <Box data-testid="frame" sx={{ position: 'relative', display: 'inline-block', maxWidth: '100%', verticalAlign: 'top', lineHeight: 0 }}>
+          <Box
+            component="img"
+            src={shot}
+            alt="The run's browser, live"
+            onLoad={(e: React.SyntheticEvent<HTMLImageElement>) => setShotSize({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
+            sx={{
+              display: 'block',
+              boxSizing: 'border-box',
+              width: 'auto',
+              height: 'auto',
+              maxWidth: '100%',
+              // The frame never pushes the steps off the window: capped to the pane on a wide screen, to 60% of the window's height below.
+              ...(twoPane ? viewportMinus('maxHeight', PANE_OFFSET + 96) : { maxHeight: '60vh' }),
+              borderRadius: 1,
+              border: 1,
+              borderColor: 'divider',
+            }}
+          />
+          {run.status === 'running' && run.activity?.phase === 'acting' && <ActionOverlay activity={run.activity} natural={shotSize} />}
         </Box>
       )}
-      <RunTimeline steps={run.steps ?? []} live={isLive} />
+      <Typography variant="caption" component="p" color={caption.stale ? 'warning.main' : 'text.secondary'} data-testid="frame-age">
+        {caption.text}
+      </Typography>
+    </Box>
+  );
+  const frame =
+    isLive &&
+    (compact ? (
+      // Collapsible on a phone or tablet, open while watching: closing it also stops fetching frames.
+      <Box sx={{ mb: 1 }}>
+        <Stack direction="row" sx={{ alignItems: 'center' }}>
+          <Typography variant="subtitle2" component="h2" sx={{ flexGrow: 1 }}>
+            Browser
+          </Typography>
+          <IconButton aria-label={watch ? 'Hide the browser' : 'Show the browser'} aria-expanded={watch} onClick={() => setWatch((w) => !w)} sx={{ width: 44, height: 44 }}>
+            {watch ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+          </IconButton>
+        </Stack>
+        <Collapse in={watch} unmountOnExit>
+          {frameBody || (
+            <Typography variant="caption" component="p" color="text.secondary" sx={{ mb: 2 }}>
+              {caption.text}
+            </Typography>
+          )}
+        </Collapse>
+      </Box>
+    ) : (
+      watch && frameBody
+    ));
+  const timeline = <RunTimeline steps={run.steps ?? []} live={isLive} />;
+
+  if (twoPane) {
+    return (
+      <PageContainer width="wide">
+        {header}
+        <Box data-testid="run-panes" sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 7fr) minmax(0, 5fr)', columnGap: 3, alignItems: 'start' }}>
+          {/* Left: the browser, in view while the right pane scrolls. */}
+          <Box data-testid="run-frame-pane" sx={{ position: 'sticky', top: PANE_OFFSET - 16, minWidth: 0 }}>
+            {actions}
+            {frame}
+          </Box>
+          {/* Right: what the run is doing and what it costs stay put; only the timeline scrolls under them. */}
+          <Box
+            data-testid="run-side-pane"
+            sx={{ position: 'sticky', top: PANE_OFFSET - 16, display: 'flex', flexDirection: 'column', minWidth: 0, overflowY: 'auto', ...viewportMinus('maxHeight', PANE_OFFSET) }}
+          >
+            <Box sx={{ flexShrink: 0 }}>
+              {chips}
+              {waiting}
+              {activity}
+              {meter}
+              {outcome}
+            </Box>
+            <Box data-testid="run-timeline-scroll" tabIndex={0} role="region" aria-label="Timeline" sx={{ flex: '1 1 auto', minHeight: 240, overflowY: 'auto' }}>
+              {timeline}
+            </Box>
+          </Box>
+        </Box>
+      </PageContainer>
+    );
+  }
+
+  return (
+    <PageContainer width="wide">
+      {header}
+      {chips}
+      {outcome}
+      {waiting}
+      {compact ? (
+        <>
+          {activity}
+          {meter}
+        </>
+      ) : (
+        <>
+          {actions}
+          {meter}
+          {activity}
+        </>
+      )}
+      {frame}
+      {timeline}
+      {isLive && compact && (
+        <Paper
+          elevation={6}
+          role="toolbar"
+          aria-label="Run actions"
+          // Sticks above the phone's bottom bar (and the safe area) while the page scrolls; it is the page's last element, so at the end it rests in place.
+          sx={{ position: 'sticky', bottom: aboveBottomBar(8), zIndex: 'speedDial', mt: 2, p: 0.5, display: 'flex', gap: 0.5, borderRadius: 2 }}
+        >
+          {canCancel && <BarAction label={run.cancelRequested ? 'Cancelling…' : 'Cancel run'} short={run.cancelRequested ? 'Cancelling…' : 'Cancel'} Icon={CancelOutlinedIcon} color="error" disabled={run.cancelRequested} onClick={cancel} />}
+          <BarAction label={watch ? 'Stop watching' : 'Watch the browser'} short={watch ? 'Stop watching' : 'Watch'} Icon={watch ? VisibilityOffOutlinedIcon : VisibilityOutlinedIcon} onClick={() => setWatch((w) => !w)} />
+          {takeOverHost && <BarAction label={takeOverLabel} short="Take over" Icon={PanToolOutlinedIcon} onClick={takeOver} />}
+        </Paper>
+      )}
     </PageContainer>
   );
 }

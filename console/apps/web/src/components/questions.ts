@@ -59,6 +59,22 @@ export interface Question extends AskedQuestion {
   answeredAt: string | null;
 }
 
+/** `GET /api/inbox`: one pending question. */
+export interface InboxItem extends AskedQuestion {
+  questionId: string;
+  /** Null for a free-standing question (no browser run). */
+  runId: string | null;
+  goal: string;
+  handoffId: string | null;
+  askedBy: string;
+  prompt: string;
+  /** Option ids (older clients); `options` carries the labels. */
+  choices: string[];
+  pageTitle: string | null;
+  createdAt: string;
+  expiresAt: string;
+}
+
 /** An answer, as `POST /api/questions/:id/answer` takes it. */
 export interface AnswerBody {
   outcome: 'completed' | 'cancelled';
@@ -102,6 +118,24 @@ export function answerText(q: Pick<Question, 'status' | 'response' | 'input' | '
     return `Answered${via}: ${r.value}`;
   }
   return `Done${via}.`;
+}
+
+/** The label of a secret field, by why it is asked: short, so it fits a phone on one line. */
+export function secretLabel(kind: string): 'Code' | 'Password' | 'Secret' {
+  if (kind === 'code') return 'Code';
+  if (kind === 'login') return 'Password';
+  return 'Secret';
+}
+
+/** Whether a `pattern` constraint only lets digits through (`\d{6}`, `[0-9]+`), so a phone can show its number pad. */
+export function digitsOnly(pattern: string | undefined): boolean {
+  return pattern !== undefined && /^\^?(?:\\d|\[0-9\])(?:\{\d+(?:,\d*)?\}|[+*])?\$?$/.test(pattern.trim());
+}
+
+/** Whether the API refused an answer because the question is already settled (answered elsewhere, expired). */
+export function isSettledError(e: unknown): boolean {
+  const status = (e as { status?: number; statusCode?: number } | null)?.status ?? (e as { statusCode?: number } | null)?.statusCode;
+  return status === 409 || status === 410;
 }
 
 /** "4 min 05 s" until `iso` (or "expired"). */
