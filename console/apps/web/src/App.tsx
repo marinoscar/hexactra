@@ -40,6 +40,8 @@ import { InboxPage } from './pages/InboxPage';
 import { QuestionPage } from './pages/QuestionPage';
 import { RunDetailPage } from './pages/RunDetailPage';
 import { RunsPage } from './pages/RunsPage';
+import { TaskCreatePage } from './pages/TaskCreatePage';
+import { TaskEditPage } from './pages/TaskEditPage';
 import { TasksPage } from './pages/TasksPage';
 import { NotesPage } from './pages/NotesPage';
 import { AgentPoliciesPage } from './pages/AgentPoliciesPage';
@@ -60,7 +62,7 @@ import {
   sliceUserMenuItems,
 } from './slices/manifest';
 import type { SliceRoute } from './slices/slice';
-import { ConfirmProvider } from './ui';
+import { ConfirmProvider, ToastHost } from './ui';
 
 // The `orgs` feature: the organization cards show only in multi-organization mode.
 declare module '@marinoscar/platform-web/settings/headless' {
@@ -139,6 +141,8 @@ function AppShell() {
           <Outlet />
         </Suspense>
       </ConfirmProvider>
+      {/* The one snackbar `toast()` fills ("Task created"); it outlives the page that raised it. */}
+      <ToastHost />
     </ShellLayout>
   );
 }
@@ -194,6 +198,10 @@ export function AppRoutes() {
           <Route index element={<Home />} />
           <Route path="notes" element={<Gate permission="notes:read"><NotesPage /></Gate>} />
           <Route path="tasks" element={<Gate permission="tasks:read"><TasksPage /></Gate>} />
+          <Route path="tasks/new" element={<Gate permission="tasks:write"><TaskCreatePage /></Gate>} />
+          <Route path="tasks/:id/edit" element={<Gate permission="tasks:write"><TaskEditPage /></Gate>} />
+          {/* Until the task page lands (#428), a task's own address shows the list; #428 replaces this line. */}
+          <Route path="tasks/:id" element={<Navigate to="/tasks" replace />} />
           <Route path="inbox" element={<Gate permission="runs:read"><InboxPage /></Gate>} />
           <Route path="inbox/q/:id" element={<Gate permission="runs:read"><QuestionPage /></Gate>} />
           <Route path="runs" element={<Gate permission="runs:read"><RunsPage /></Gate>} />
