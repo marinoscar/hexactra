@@ -10,6 +10,7 @@ Hexactra is a Cargo + pnpm monorepo with a large amount of scaffolding. **Most v
 - `crates/` — Rust workspace (control plane, host agent, worker, native host, CLI, MCP, core types, telemetry, providers, AEF connector, fleet scheduling).
 - `apps/chrome-extension` (MV3 extension, standalone side-panel AI works), `apps/dashboard`, `packages/sdk`, `packages/contracts`.
 - `console/` — the Hexactra Console (epic #217): an EnterpriseAppBase starter app (NestJS + React + Prisma, Node 24, npm, separate from the pnpm workspace). Inside `console/`, its own `AGENTS.md` applies: never edit `@marinoscar/platform-*`; platform gaps go upstream as EnterpriseAppBase seam requests. CI: `.github/workflows/console.yml`.
+- `console/apps/web/src/ui/` — the console's page kit (`PageContainer`, `PageHeader`, `ResponsiveList`, `StatusChip`, `useConfirm`, `aboveBottomBar`, the time and cost formatters; console README, "UI kit"). New console pages compose the kit and are verified at 360/390/768/1024/1440 px (`npm run ui:screens`, console README, "Responsive rules").
 - `api/openapi.yaml`, `api/*.json` — contracts (CI checks they parse).
 - `scripts/link-github-subissues.mjs` — idempotent script linking epics to sub-issues (`epicChildren` map); refuses any repo but `marinoscar/hexactra`.
 
