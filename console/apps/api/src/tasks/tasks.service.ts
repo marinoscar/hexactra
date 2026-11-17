@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { assertTransition, isTerminal, type RunStatus } from './run-status';
-import type { CreateTaskDto, ListRunsDto, UpdateTaskDto } from './tasks.schemas';
+import type { CreateTaskDto, UpdateTaskDto } from './tasks.schemas';
 import { FabricClient } from '../fabric/fabric.client';
 import { activeElapsedMs } from '../runner/active-time';
 import { RunMetrics } from './run-metrics';
@@ -124,16 +124,6 @@ export class TasksService {
   async deleteTask(userId: string, id: string): Promise<void> {
     const { count } = await this.db(userId).task.deleteMany({ where: { id } });
     if (count === 0) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
-  }
-
-  async listRuns(userId: string, q: ListRunsDto) {
-    const runs = await this.db(userId).run.findMany({
-      where: { ...(q.taskId ? { taskId: q.taskId } : {}), ...(q.status ? { status: q.status } : {}) },
-      orderBy: { createdAt: 'desc' },
-      take: q.limit,
-      omit: { transcript: true },
-    });
-    return runs.map(withCost);
   }
 
   async getRun(userId: string, id: string) {

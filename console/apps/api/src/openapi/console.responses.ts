@@ -104,6 +104,37 @@ export const runResponseSchema = z.object({
 });
 export class RunResponseDto extends createZodDto(runResponseSchema) {}
 
+/** A run in a list (`GET /runs`): the run, with its task's name and a budget only while it is live. */
+export const runListItemResponseSchema = runResponseSchema.extend({
+  taskName: z.string().nullable().describe("The run's task name; null for a run without a task (ad-hoc, external) or whose task was deleted"),
+  budget: runBudgetSchema.nullable().describe('The run budget while the run is live (queued, running, waiting_human); null on a finished run in a list (read it from `GET /runs/{id}`).'),
+});
+export class RunListItemResponseDto extends createZodDto(runListItemResponseSchema) {}
+
+/** `GET /runs?envelope=1`: one page of runs. */
+export const runPageResponseSchema = z.object({
+  items: z.array(runListItemResponseSchema),
+  nextCursor: z.string().nullable().describe('Pass it as `cursor` to read the next page; null on the last page. Opaque: do not parse or build it.'),
+});
+export class RunPageResponseDto extends createZodDto(runPageResponseSchema) {}
+
+/** `GET /runs/counts`. */
+export const runCountsResponseSchema = z.object({
+  total: z.number().int().describe('Runs that match the filter'),
+  live: z.number().int().describe('Of those: queued + running + waiting_human'),
+  byStatus: z.object({
+    queued: z.number().int(),
+    running: z.number().int(),
+    waiting_human: z.number().int(),
+    succeeded: z.number().int(),
+    failed: z.number().int(),
+    cancelled: z.number().int(),
+  }),
+  costUsd: z.number().nullable().describe('USD spent by the matching runs; null when none of them made a model call. A lower bound while costKnown is false'),
+  costKnown: z.boolean().describe('False when a matching run had a call that could not be priced'),
+});
+export class RunCountsResponseDto extends createZodDto(runCountsResponseSchema) {}
+
 export const runStepResponseSchema = z.object({
   id: z.uuid(),
   runId: z.uuid(),
