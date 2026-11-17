@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { FabricModule } from '../fabric/fabric.module';
+import { PoliciesModule } from '../policies/policies.module';
 
 import { RunsController, TasksController } from './tasks.controller';
 import { ActionTokenStore } from './action-token-store';
@@ -12,7 +13,7 @@ import { TasksService } from './tasks.service';
 
 /** Browser tasks and their runs (the goal runner lives in src/runner/). */
 @Module({
-  imports: [FabricModule],
+  imports: [FabricModule, PoliciesModule],
   controllers: [TasksController, RunsController],
   providers: [TasksService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders, RunRemindHandler, RunRemindTask],
   exports: [TasksService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders],

@@ -5,6 +5,8 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+import { policySummarySchema } from '../policies/policies.schemas';
+
 const iso = z.string().describe('ISO 8601 timestamp');
 const runStatus = z.enum(['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled']);
 
@@ -17,10 +19,11 @@ export const taskResponseSchema = z.object({
   hostId: z.uuid().nullable(),
   hostFallback: z.boolean().describe('When the chosen host cannot take a run, run on another available one'),
   allowedDomains: z.array(z.string()),
-  maxSteps: z.number().int(),
-  maxMinutes: z.number().int(),
+  maxSteps: z.number().int().meta({ deprecated: true }).describe('Deprecated: see `policyId`'),
+  maxMinutes: z.number().int().meta({ deprecated: true }).describe('Deprecated: see `policyId`'),
   confirmRiskyActions: z.boolean(),
-  model: z.string().nullable(),
+  model: z.string().nullable().meta({ deprecated: true }).describe('Deprecated: see `policyId`'),
+  policyId: z.string().nullable().describe("The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default"),
   createdAt: iso,
   updatedAt: iso,
 });
@@ -61,6 +64,7 @@ export const runResponseSchema = z.object({
   activity: runActivitySchema.nullable(),
   inputTokens: z.number().int(),
   outputTokens: z.number().int(),
+  policy: policySummarySchema.nullable(),
   createdAt: iso,
   startedAt: iso.nullable(),
   finishedAt: iso.nullable(),
@@ -166,6 +170,7 @@ export const scheduleResponseSchema = z.object({
   lastRunAt: iso.nullable(),
   lastRunId: z.uuid().nullable(),
   consecutiveFailures: z.number().int(),
+  policyId: z.string().nullable().describe("Overrides the task's agent policy for scheduled runs; null follows the task"),
   createdAt: iso,
   updatedAt: iso,
 });

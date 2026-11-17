@@ -6,6 +6,8 @@ import { assertTransition, isTerminal, type RunStatus } from './run-status';
 import type { CreateTaskDto, ListRunsDto, UpdateTaskDto } from './tasks.schemas';
 import { FabricClient } from '../fabric/fabric.client';
 import { RunMetrics } from './run-metrics';
+import { PoliciesService } from '../policies/policies.service';
+import { isDefaultLimits } from '../policies/legacy-task-policy';
 import { STOP_WAITING, startWaiting } from './reminder-schedule';
 
 /** Fields a status change may set. */
@@ -32,6 +34,7 @@ export class TasksService {
     private readonly prisma: PrismaService,
     @Optional() readonly metrics: RunMetrics = new RunMetrics(),
     @Optional() private readonly fabric?: FabricClient,
+    @Optional() private readonly policies?: PoliciesService,
   ) {}
 
   private db(userId: string) {
@@ -48,12 +51,38 @@ export class TasksService {
     return t;
   }
 
-  createTask(userId: string, input: CreateTaskDto) {
-    return this.db(userId).task.create({ data: { ...input, userId, hostId: input.hostId ?? null, model: input.model ?? null } });
+  /**
+   * Create a task. `policyId` names its agent policy (null follows the user's
+   * default). The deprecated `maxSteps` / `maxMinutes` / `model` still work: when
+   * no `policyId` is given and they are not the defaults they map to a derived
+   * personal policy named "Task: <name>" (#401).
+   */
+  async createTask(userId: string, input: CreateTaskDto) {
+    const { policyId, ...fields } = input;
+    await this.policies?.assertAssignable(userId, policyId);
+    const limits = { maxSteps: fields.maxSteps, maxMinutes: fields.maxMinutes, model: fields.model ?? null };
+    const policyRef = policyId !== undefined ? policyId : this.policies && !isDefaultLimits(limits) ? await this.policies.ensureLegacyPolicy(userId, fields.name, limits) : null;
+    return this.db(userId).task.create({ data: { ...fields, userId, hostId: fields.hostId ?? null, model: fields.model ?? null, policyRef } });
   }
 
+  /** Update a task. A legacy limit in the patch re-derives the task's policy unless `policyId` is also given. */
   async updateTask(userId: string, id: string, patch: UpdateTaskDto) {
-    const { count } = await this.db(userId).task.updateMany({ where: { id }, data: patch });
+    const { policyId, ...fields } = patch;
+    await this.policies?.assertAssignable(userId, policyId);
+    const data: Prisma.TaskUpdateManyMutationInput = { ...fields };
+    if (policyId !== undefined) {
+      data.policyRef = policyId;
+    } else if (this.policies && (fields.maxSteps !== undefined || fields.maxMinutes !== undefined || fields.model !== undefined)) {
+      const task = await this.getTask(userId, id);
+      const limits = {
+        maxSteps: fields.maxSteps ?? task.maxSteps,
+        maxMinutes: fields.maxMinutes ?? task.maxMinutes,
+        model: fields.model !== undefined ? fields.model : task.model,
+      };
+      // Back at the defaults with no pinned model: follow the user's default again.
+      data.policyRef = isDefaultLimits(limits) ? null : await this.policies.ensureLegacyPolicy(userId, fields.name ?? task.name, limits);
+    }
+    const { count } = await this.db(userId).task.updateMany({ where: { id }, data });
     if (count === 0) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
     return this.getTask(userId, id);
   }

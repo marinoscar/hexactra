@@ -49,6 +49,10 @@ model Task {
   confirmRiskyActions Boolean @default(true) @map("confirm_risky_actions")
   /// AI model id; null uses the user's default.
   model          String?  @db.VarChar(200)
+  /// An own policy's UUID or `builtin:<key>`; null follows the user's default (#401).
+  /// Text, not a foreign key: built-ins are not rows (validated in the service).
+  /// `max_steps`, `max_minutes` and `model` above are deprecated: readable for one release.
+  policyRef      String?  @map("policy_ref") @db.VarChar(64)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -108,6 +112,15 @@ model Run {
   reminderCount    Int       @default(0) @map("reminder_count")
   /// "Remind me in 15 min" from a notification.
   snoozedUntil     DateTime? @map("snoozed_until") @db.Timestamptz
+
+  /// Agent policy (#401). Before the first advance: the run or schedule override, when
+  /// there is one. From the first advance: the policy the run runs under.
+  policyRef        String?       @map("policy_ref") @db.VarChar(64)
+  policyVersion    Int?          @map("policy_version")
+  /// RunPolicySnapshot (src/policies/policy-snapshot.ts), written once at the first advance.
+  policySnapshot   Json?         @map("policy_snapshot")
+  /// Why that policy applied.
+  policySource     PolicySource? @map("policy_source")
 
   user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   task  Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)

@@ -18,6 +18,7 @@ import { alertsMounted } from './platform/alerts/alerts.enabled';
 import { QuestionsModule } from './questions/questions.module';
 import { RunnerModule } from './runner/runner.module';
 import { SchedulesModule } from './schedules/schedules.module';
+import { PoliciesModule } from './policies/policies.module';
 import { TasksModule } from './tasks/tasks.module';
 import { NotesModule } from './notes/notes.module';
 import { PLATFORM_MODULES } from './platform/platform';
@@ -40,6 +41,7 @@ import { PrismaModule } from './prisma/prisma.service';
     NotesModule,
     FabricModule,
     FleetModule,
+    PoliciesModule,
     TasksModule,
     QuestionsModule,
     BrowserModule,

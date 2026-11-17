@@ -4,6 +4,7 @@
 // src/platform/user-data/user-data.manifest.ts) and the Doctor check passes.
 
 import { Test } from '@nestjs/testing';
+import { userOwnedModelRegistry } from '@marinoscar/platform-api/core';
 import { UserDataPlanService, UserDataRegistriesDoctorCheck } from '@marinoscar/platform-api/user-data';
 
 import { AppModule } from '../src/app.module';
@@ -14,6 +15,15 @@ describe('the user-data slice in this app', () => {
     const plan = moduleRef.get(UserDataPlanService).user();
 
     expect(plan.steps.map((step) => step.model)).toContain('Note');
+    await moduleRef.close();
+  });
+
+  it('purges the user\'s agent policies and includes them in the data export', async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    const plan = moduleRef.get(UserDataPlanService).user();
+
+    expect(plan.steps.map((step) => step.model)).toContain('AgentPolicy');
+    expect(userOwnedModelRegistry.get('AgentPolicy')).toMatchObject({ ownerField: 'userId', purge: 'delete', export: 'include' });
     await moduleRef.close();
   });
 
