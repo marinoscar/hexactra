@@ -20,6 +20,7 @@ import {
   chromeArgs,
   detectGpu,
   displayUnit,
+  installedDisplay,
   freeDisplay,
   installSteps,
   readUnattended,
@@ -369,3 +370,49 @@ describe('the desktop tools the agent drives the whole screen with (#373)', () =
     expect((await agentDoctor(h.d)).find((c) => c.name === 'desktop-input')).toMatchObject({ ok: false, detail: expect.stringContaining('hexactra agent update') });
   });
 });
+
+describe('reinstalling a node that lost its record (#413)', () => {
+  const unitFor = (h: ReturnType<typeof harness>, c: UnattendedConfig) => {
+    mkdirSync(h.layout.unitDir, { recursive: true });
+    writeFileSync(join(h.layout.unitDir, UNITS.display), displayUnit(c, h.layout));
+    writeFileSync(join(h.layout.unitDir, UNITS.session), sessionUnit(c, h.layout));
+  };
+
+  it('reads the display of the installed desktop unit', () => {
+    const h = harness();
+    expect(installedDisplay(h.layout)).toBeNull();
+    unitFor(h, { ...config, display: 92 });
+    expect(installedDisplay(h.layout)).toBe(92);
+  });
+
+  it('keeps the display its own running desktop holds instead of moving the agent to a free one', async () => {
+    const h = harness({ userExists: true });
+    // The node runs on :90 (its own X server holds X90), but unattended.json is gone.
+    unitFor(h, config);
+    writeFileSync(join(h.layout.x11Dir, 'X90'), '');
+    const s = await installUnattended(h.d, { bundle: makeBundle(join(h.root, 'b')), layout: h.layout });
+    expect(s.display).toBe(90);
+  });
+
+  it('restarts the desktop and its session when their units change, and only the agent otherwise', () => {
+    const h = harness();
+    const stage = () => mkdtempSync(join(tmpdir(), 'hx-stage-'));
+    const last = (c: UnattendedConfig) => installSteps(c, { bundleDir: '/b', bundleId: 'x', credential: null, stage: stage(), userExists: true }, h.layout).at(-1)!.argv;
+    // First install: enable --now starts everything; nothing to restart but the agent.
+    expect(last(config)).toEqual(['systemctl', 'restart', UNITS.agent]);
+    unitFor(h, config);
+    expect(last(config)).toEqual(['systemctl', 'restart', UNITS.agent]);
+    // A different display (or resolution) only takes effect with a restarted desktop.
+    expect(last({ ...config, display: 91 })).toEqual(['systemctl', 'restart', UNITS.display, UNITS.session, UNITS.agent]);
+    expect(last({ ...config, resolution: '2560x1440' })).toEqual(['systemctl', 'restart', UNITS.display, UNITS.session, UNITS.agent]);
+  });
+
+  it('doctor flags an agent display that is not running', async () => {
+    const h = harness();
+    await installUnattended(h.d, { bundle: makeBundle(join(h.root, 'b')), layout: h.layout });
+    expect((await agentDoctor(h.d, h.layout)).find((c) => c.name === 'display')).toMatchObject({ ok: false, detail: expect.stringContaining('hexactra agent restart --mode unattended') });
+    writeFileSync(join(h.layout.x11Dir, 'X90'), '');
+    expect((await agentDoctor(h.d, h.layout)).find((c) => c.name === 'display')).toMatchObject({ ok: true, detail: ':90' });
+  });
+});
+

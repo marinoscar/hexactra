@@ -15,6 +15,7 @@ import {
   UNITS,
   detectGpu,
   freeDisplay,
+  installedDisplay,
   installSteps,
   readUnattended,
   runPrivileged,
@@ -464,7 +465,7 @@ export interface DoctorCheck {
  * Every check `hexactra agent doctor` runs, in the order to fix them:
  * system, browser, policy, native host, agent, service, Fleet.
  */
-export async function agentDoctor(d: AgentDeps): Promise<DoctorCheck[]> {
+export async function agentDoctor(d: AgentDeps, layout: NodeLayout = DEFAULT_LAYOUT): Promise<DoctorCheck[]> {
   const st = await agentStatus(d);
   const s = st.state;
   const google = s?.browserKind === 'google-chrome';
@@ -498,6 +499,9 @@ export async function agentDoctor(d: AgentDeps): Promise<DoctorCheck[]> {
   const u = unattendedStatus(d);
   if (u.state) {
     for (const [unit, st] of Object.entries(u.units)) add(unit.replace('.service', ''), st === 'active', st === 'active' ? 'active' : `${st}: run \`hexactra agent logs --mode unattended\``);
+    // The agent's browsers need the X display its unit names (#413).
+    const shown = existsSync(join(layout.x11Dir, `X${u.state.display}`));
+    add('display', shown, shown ? `:${u.state.display}` : `:${u.state.display} is not running, so browsers cannot start: run \`hexactra agent restart --mode unattended\``);
     checks.push({
       name: 'graphics',
       ok: true,
@@ -555,7 +559,7 @@ export async function installUnattended(d: AgentDeps, o: UnattendedOptions): Pro
     }
     const gpu = detectGpu(layout);
     d.log(gpu ? `Graphics: ${gpu.driver} at ${gpu.renderNode}; Chrome will render with it` : 'Graphics: no Intel or AMD GPU found; Chrome renders in software, which sites can detect more easily');
-    const display = prev?.display ?? freeDisplay(layout);
+    const display = prev?.display ?? installedDisplay(layout) ?? freeDisplay(layout);
     const config = { name, agentUrl, display, maxBrowsers: o.maxBrowsers ?? prev?.maxBrowsers ?? 2, gpu, resolution };
     const userExists = d.exec(['id', '-u', NODE_USER]).code === 0;
     const bundleId = basename(bundle.dir);
@@ -610,7 +614,10 @@ export function updateUnattended(d: AgentDeps, interactive = true, layout: NodeL
   // Packages added since the node was installed (the desktop tools, #373).
   const packages = aptInstallStep(missingPackages(d, APT_PACKAGES), 'packages added since this node was installed');
   const changed = bundleId !== s.bundle;
-  if (!changed && packages.length === 0) return;
+  if (!changed && packages.length === 0) {
+    d.log(`Unattended node already up to date (${bundleId})`);
+    return;
+  }
   const target = `${layout.opt}/agent/${bundleId}`;
   runPrivileged(
     d,
@@ -654,6 +661,25 @@ export async function uninstallUnattended(d: AgentDeps, o: { keepHost?: boolean;
 /** An attended (user service) agent is installed here. */
 export function agentStatusInstalled(d: AgentDeps): boolean {
   return readState(d.paths) !== null;
+}
+
+/**
+ * What `hexactra agent update` updates on this machine (#411). Throws, with
+ * what to do, when this user has no agent record: the command must never
+ * exit silently having done nothing.
+ */
+export function updateTargets(d: AgentDeps): { attended: boolean; unattended: boolean } {
+  const attended = agentStatusInstalled(d);
+  const unattended = readUnattended(d.paths.agentDir) !== null;
+  if (attended || unattended) return { attended, unattended };
+  // A node can run without its record (one lost before #377).
+  if (d.exec(['systemctl', 'is-active', UNITS.agent]).stdout.trim() === 'active') {
+    throw new Error(
+      `An unattended node is running here (${UNITS.agent}), but this user has no record of it, so it cannot be updated.\n` +
+        'Run `hexactra agent install --mode unattended` to adopt it (its profiles are kept), then `hexactra agent update`.',
+    );
+  }
+  throw new Error('No agent is installed for this user: nothing to update. Run `hexactra agent install` (or `hexactra agent install --mode unattended`).');
 }
 
 /** Downloads, verifies and activates a bundle (for an unattended-only machine's update). */
