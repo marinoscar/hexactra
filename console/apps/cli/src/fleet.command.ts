@@ -65,10 +65,17 @@ export const fleetCommand: CliCommandRegistration = (program: Command) => {
       out('revoked');
     });
 
-  for (const [name, enabled] of [['drain', true], ['undrain', false]] as const) {
+  // disable/enable (#385); drain/undrain are the older names of the same switch.
+  const toggles = [
+    ['disable', true, 'Disable a host: it takes no new runs (runs in progress finish)'],
+    ['enable', false, 'Enable a disabled host again'],
+    ['drain', true, 'Same as disable'],
+    ['undrain', false, 'Same as enable'],
+  ] as const;
+  for (const [name, enabled, description] of toggles) {
     fleet
       .command(`${name} <host>`)
-      .description(enabled ? 'Stop placing new sessions on a host' : 'Place new sessions on a drained host again')
+      .description(description)
       .option('--json', 'print JSON')
       .action(async (ref: string, o: { json?: boolean }) => {
         done(await consoleApi().post<FleetCommandResult>(`/fleet/hosts/${await hostId(ref)}/drain`, { enabled }), Boolean(o.json));

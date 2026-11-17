@@ -86,7 +86,10 @@ describe('hexactra fleet', () => {
       'POST /fleet/enrollments': { enrollmentToken: 'hxe_x', expiresAt: null, command: 'hexactra-agent daemon --url http://f:8787 --enrollment-token hxe_x' },
     });
     expect(await run('fleet', 'drain', 'vps')).toContain('drain: succeeded');
+    expect(await run('fleet', 'disable', 'vps')).toContain('drain: succeeded');
     expect(calls.at(-1)).toMatchObject({ method: 'POST', body: { enabled: true } });
+    expect(await run('fleet', 'enable', 'vps')).toContain('drain: succeeded');
+    expect(calls.at(-1)).toMatchObject({ method: 'POST', body: { enabled: false } });
     expect(await run('fleet', 'profile', 'create', 'vps', 'work')).toContain('create_profile work: succeeded');
     expect(await run('fleet', 'profile', 'restart', ID.slice(0, 8), 'travel')).toContain('restart_browser travel: succeeded');
     expect(await run('fleet', 'enroll', '--name', 'home')).toContain('--enrollment-token hxe_x');
@@ -102,12 +105,12 @@ describe('hexactra fleet', () => {
 });
 
 describe('FleetScreen', () => {
-  it('shows the hosts and drains the selected one with d', async () => {
+  it('shows the hosts and disables the selected one with d', async () => {
     const calls = fakeApi({ 'GET /fleet/hosts': hosts, [`POST /fleet/hosts/${ID}/drain`]: { kind: 'drain', state: 'succeeded' } });
     const screen = await renderTuiScreen(FleetScreen, { columns: 100 });
     await screen.waitForFrame((f) => stripAnsi(f).includes('profiles: default, travel*'));
     await screen.press('d');
-    await screen.waitForFrame((f) => stripAnsi(f).includes('vps: draining'));
+    await screen.waitForFrame((f) => stripAnsi(f).includes('vps: disabled'));
     expect(calls.some((c) => c.method === 'POST' && c.path === `/fleet/hosts/${ID}/drain`)).toBe(true);
     screen.unmount();
   });
