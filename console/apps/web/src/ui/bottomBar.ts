@@ -25,3 +25,10 @@ export function aboveBottomBar(gap = 0): { xs: string; sm: string } {
     sm: `calc(${gap}px + ${SAFE_AREA_BOTTOM})`,
   };
 }
+
+/**
+ * The height of the shell's top bar from `sm` up (a sticky MUI `Toolbar`: 64 px;
+ * 56 px on a phone). What sticks under it, or fills the rest of the window,
+ * subtracts this.
+ */
+export const APP_BAR_HEIGHT = 64;
