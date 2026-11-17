@@ -5441,6 +5441,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The caller's run retention rule
+         * @description The saved rule, or the defaults (keep 90 days) while none was saved, with the deployment ceiling and the floor. Save it with `PATCH /api/user-settings` (`{ "runs": { "keepDays": 30 } }`).
+         *
+         *     **Requires:** authentication, plus permission `runs:delete`.
+         */
+        get: operations["runRetention_settings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/retention/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What a retention rule would delete now
+         * @description Counts the caller's finished runs the given limits would delete, with the same query the nightly job uses, and deletes nothing. An empty or absent limit means none. The deployment ceiling is applied; live runs, runs younger than the floor and runs with a pending question are never counted.
+         *
+         *     **Requires:** authentication, plus permission `runs:delete`.
+         */
+        get: operations["runRetention_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/retention/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply the caller's saved retention rule now
+         * @description Enqueues the `browser.runs.retention.apply` job for the caller's runs only, instead of waiting for the nightly pass. Permanent. Sent again while the job is pending, it answers the same job.
+         *
+         *     **Requires:** authentication, plus permission `runs:delete`.
+         */
+        post: operations["runRetention_apply"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs": {
         parameters: {
             query?: never;
@@ -7470,6 +7536,16 @@ export interface components {
                     };
                 };
             };
+            runs?: {
+                /** @description Finished runs older than this many days are deleted. `null`: no age limit. */
+                keepDays: number | null;
+                /** @description Only the newest N finished runs of each task are kept (runs without a task are one group). `null`: no limit. */
+                keepPerTask: number | null;
+                /** @description The age limit of failed runs, to keep failures longer. `null`: the same as `keepDays`. */
+                keepFailedDays: number | null;
+                /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
+                noticeSentAt?: string | null;
+            };
             notifications?: {
                 [key: string]: {
                     [key: string]: boolean;
@@ -7534,6 +7610,16 @@ export interface components {
                         fallbackModel?: string | null;
                     };
                 };
+            };
+            runs?: {
+                /** @description Finished runs older than this many days are deleted. `null`: no age limit. */
+                keepDays: number | null;
+                /** @description Only the newest N finished runs of each task are kept (runs without a task are one group). `null`: no limit. */
+                keepPerTask: number | null;
+                /** @description The age limit of failed runs, to keep failures longer. `null`: the same as `keepDays`. */
+                keepFailedDays: number | null;
+                /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
+                noticeSentAt?: string | null;
             };
             notifications?: {
                 [key: string]: {
@@ -7602,6 +7688,16 @@ export interface components {
                     };
                 } | null;
             } | null;
+            runs?: {
+                /** @description Finished runs older than this many days are deleted. `null`: no age limit. */
+                keepDays?: number | null;
+                /** @description Only the newest N finished runs of each task are kept (runs without a task are one group). `null`: no limit. */
+                keepPerTask?: number | null;
+                /** @description The age limit of failed runs, to keep failures longer. `null`: the same as `keepDays`. */
+                keepFailedDays?: number | null;
+                /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
+                noticeSentAt?: string | null;
+            } | null;
             notifications?: {
                 [key: string]: {
                     [key: string]: boolean | null;
@@ -7624,6 +7720,10 @@ export interface components {
             security: {
                 jwtAccessTtlMinutes: number;
                 refreshTtlDays: number;
+            };
+            runs: {
+                /** @description The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling. */
+                maxKeepDays: number | null;
             };
             notes: {
                 archiveAfterDays: number;
@@ -7823,6 +7923,10 @@ export interface components {
             version: number;
         };
         UpdateSystemSettingsDto: {
+            runs?: {
+                /** @description The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling. */
+                maxKeepDays: number | null;
+            };
             notes?: {
                 archiveAfterDays: number;
             };
@@ -8028,6 +8132,10 @@ export interface components {
             };
         };
         PatchSystemSettingsDto: {
+            runs?: {
+                /** @description The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling. */
+                maxKeepDays?: number | null;
+            };
             notes?: {
                 archiveAfterDays?: number;
             };
@@ -8564,6 +8672,16 @@ export interface components {
                             fallbackModel?: string | null;
                         };
                     };
+                };
+                runs?: {
+                    /** @description Finished runs older than this many days are deleted. `null`: no age limit. */
+                    keepDays: number | null;
+                    /** @description Only the newest N finished runs of each task are kept (runs without a task are one group). `null`: no limit. */
+                    keepPerTask: number | null;
+                    /** @description The age limit of failed runs, to keep failures longer. `null`: the same as `keepDays`. */
+                    keepFailedDays: number | null;
+                    /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
+                    noticeSentAt?: string | null;
                 };
                 notifications?: {
                     [key: string]: {
@@ -13447,6 +13565,43 @@ export interface components {
             };
             /** @description With `filter`: the number of runs the caller expects to delete (the count it showed). When the real count differs by more than 5 %, nothing is deleted and the answer is 409 `COUNT_CHANGED`. */
             expectedCount?: number;
+        };
+        RetentionSettingsResponseDto: {
+            /** @description Finished runs older than this many days are deleted. `null`: no age limit. */
+            keepDays: number | null;
+            /** @description Only the newest N finished runs of each task are kept (runs without a task are one group). `null`: no limit. */
+            keepPerTask: number | null;
+            /** @description The age limit of failed runs, to keep failures longer. `null`: the same as `keepDays`. */
+            keepFailedDays: number | null;
+            /** @description False while the user never saved a rule: the defaults apply */
+            saved: boolean;
+            /** @description The deployment's ceiling in days; null: none */
+            maxKeepDays: number | null;
+            /** @description Runs that finished less than this many hours ago are never deleted by retention */
+            floorHours: number;
+        };
+        RetentionPreviewResponseDto: {
+            /** @description Finished runs the rule would delete now (the nightly job deletes at most 20,000 per night) */
+            wouldDelete: number;
+            /** @description All of the caller's finished runs */
+            finished: number;
+            /** @description When the oldest run that would be kept finished; null when none would be kept */
+            oldestKept: string | null;
+            /** @description The recorded model spend (USD) of the runs that would be deleted; null when none of them made a model call */
+            costUsd: number | null;
+            /** @description The deployment's ceiling in days, applied to the limits given; null: none */
+            maxKeepDays: number | null;
+            /** @description True when the ceiling shortened a limit given */
+            capped: boolean;
+            /** @description Runs that finished less than this many hours ago are never deleted by retention */
+            floorHours: number;
+        };
+        RetentionApplyResponseDto: {
+            /**
+             * Format: uuid
+             * @description The `browser.runs.retention` job that applies the caller's saved rule to the caller's runs
+             */
+            jobId: string;
         };
         RunListItemResponseDto: {
             /** Format: uuid */
@@ -32296,6 +32451,157 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runRetention_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RetentionSettingsResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runRetention_preview: {
+        parameters: {
+            query: {
+                /** @description Days finished runs are kept; empty or absent: no age limit */
+                keepDays: number | null;
+                /** @description Newest finished runs kept per task; empty or absent: no limit */
+                keepPerTask: number | null;
+                /** @description Days failed runs are kept; empty or absent: the same as `keepDays` */
+                keepFailedDays: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RetentionPreviewResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runRetention_apply: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RetentionApplyResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {
