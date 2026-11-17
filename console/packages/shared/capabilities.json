@@ -411,11 +411,13 @@
     },
     {
       "id": "fleet.drain",
-      "description": "Drain or undrain a host",
+      "description": "Disable or enable a host (drain or undrain): a disabled host takes no new runs",
       "rest": [
         "POST /api/fleet/hosts/{id}/drain"
       ],
       "cli": [
+        "fleet disable",
+        "fleet enable",
         "fleet drain",
         "fleet undrain"
       ],

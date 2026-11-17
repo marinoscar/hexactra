@@ -8,6 +8,7 @@ import {
   CardContent,
   Chip,
   Container,
+  FormControlLabel,
   Dialog,
   DialogActions,
   DialogContent,
@@ -17,6 +18,7 @@ import {
   ListItem,
   ListItemText,
   Stack,
+  Switch,
   TextField,
   Tooltip,
   Typography,
@@ -147,7 +149,11 @@ export function FleetPage() {
                     <DesktopWindowsOutlined fontSize="small" color="action" aria-label="Desktop available" />
                   </Tooltip>
                 )}
-                {h.draining && <Chip size="small" color="warning" label="Draining" />}
+                {h.draining && (
+                  <Tooltip title="Takes no new runs; runs in progress finish">
+                    <Chip size="small" color="warning" label="Disabled" />
+                  </Tooltip>
+                )}
                 <Typography variant="caption" color="text.secondary">
                   v{h.version}
                 </Typography>
@@ -233,12 +239,20 @@ export function FleetPage() {
             </CardContent>
             {canWrite && (
               <CardActions>
-                <Button
-                  disabled={busy !== null}
-                  onClick={() => void act(h.id, () => api.post(`/fleet/hosts/${h.id}/drain`, { enabled: !h.draining }))}
-                >
-                  {h.draining ? 'Undrain' : 'Drain'}
-                </Button>
+                <Tooltip title={h.draining ? 'Disabled: takes no new runs' : 'Enabled: takes new runs'}>
+                  <FormControlLabel
+                    sx={{ ml: 0.5 }}
+                    control={
+                      <Switch
+                        checked={!h.draining}
+                        disabled={busy !== null}
+                        slotProps={{ input: { 'aria-label': `Enabled: ${h.name}` } }}
+                        onChange={() => void act(h.id, () => api.post(`/fleet/hosts/${h.id}/drain`, { enabled: !h.draining }))}
+                      />
+                    }
+                    label="Enabled"
+                  />
+                </Tooltip>
                 <Button
                   color="error"
                   disabled={busy !== null}
