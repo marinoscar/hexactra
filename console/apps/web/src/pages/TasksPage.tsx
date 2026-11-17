@@ -1,82 +1,86 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Alert, Box, Button, Card, CardActions, CardContent, Chip, FormControlLabel, MenuItem, Stack, Switch, TextField, Typography } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import AddIcon from '@mui/icons-material/Add';
+import ClearIcon from '@mui/icons-material/Clear';
+import SearchIcon from '@mui/icons-material/Search';
+import SortIcon from '@mui/icons-material/Sort';
+import { Alert, Box, Button, Card, CardActionArea, Chip, Fab, IconButton, InputAdornment, Menu, MenuItem, Snackbar, Stack, TextField, Typography } from '@mui/material';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
-import { TaskSchedules } from './TaskSchedules';
-import { TaskSpendLine } from '../components/RunBudgetMeter';
-import { runTaskWith } from '../policies/api';
-import { taskPolicyChips } from '../policies/format';
-import { PolicySelect } from '../policies/PolicySelect';
-import { RunWithButton } from '../policies/RunWithButton';
+import {
+  ScheduledControl,
+  TaskCard,
+  TaskGoalExcerpt,
+  TaskLastRun,
+  TaskMachineCell,
+  TaskName,
+  TaskNextRun,
+  TaskOutcomeStrip,
+  TaskOverflowMenu,
+  TaskPolicyCell,
+  TaskRunButton,
+  TaskScheduleCell,
+  TaskSpendCell,
+} from '../components/TaskListItems';
+import { EXAMPLE_GOALS, TASK_FILTERS, TASK_SORTS, isFiltered, parseTaskListQuery, taskListSearchParams, taskPaths, type TaskListQuery } from '../components/taskList';
+import { TaskActionError, useTaskActions } from '../components/useTaskActions';
+import { useTaskList } from '../components/useTaskList';
 import { usePolicyCatalog } from '../policies/usePolicyCatalog';
-import { machineState, type FleetHost } from '../types/fleet';
-import type { Task } from '../types/tasks';
-import { CardSkeleton, ErrorBanner, PageContainer, PageHeader, useConfirm } from '../ui';
+import type { FleetHost } from '../types/fleet';
+import type { TaskListSort, TaskScheduleState, TaskWithSummary } from '../types/tasks';
+import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, ResponsiveList, useBreakpoint, type Column } from '../ui';
 
-function message(e: unknown, fallback: string): string {
-  return e instanceof Error ? e.message : fallback;
-}
+/** How long typing rests before the search is sent. */
+export const SEARCH_DEBOUNCE_MS = 300;
 
-/** `/tasks`: saved browser goals; run one now. */
+const ANY_POLICY = '__any__';
+
+/** `/tasks`: every task at a glance (schedule, next run, last run, spend), with run, pause and open. */
 export function TasksPage() {
   const { api, viewer } = usePlatformHost();
-  const navigate = useNavigate();
+  const { isPhone } = useBreakpoint();
   const canWrite = viewer.hasPermission('tasks:write');
   const canRun = viewer.hasPermission('runs:write');
-  const [tasks, setTasks] = useState<Task[] | null>(null);
-  const confirm = useConfirm();
-  const [error, setError] = useState<string | null>(null);
-  const [name, setName] = useState('');
-  const [goal, setGoal] = useState('');
-  const [profile, setProfile] = useState('default');
-  const [domains, setDomains] = useState('');
-  const [confirmRisky, setConfirmRisky] = useState(false);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [hostId, setHostId] = useState('');
-  const [hostFallback, setHostFallback] = useState(true);
-  const [hosts, setHosts] = useState<FleetHost[]>([]);
-  const [policyId, setPolicyId] = useState<string | null>(null);
+  const canReadRuns = viewer.hasPermission('runs:read');
+  const canReadPolicies = viewer.hasPermission('agent_policies:read');
+  // Until the task page exists (#428) a task opens in the edit form, which needs `tasks:write`.
+  const canOpen = canWrite || taskPaths.detail('x') !== taskPaths.edit('x');
+
+  const [params, setParams] = useSearchParams();
+  const query = useMemo(() => parseTaskListQuery(params), [params]);
+  const setQuery = useCallback((change: Partial<TaskListQuery>) => setParams((prev) => taskListSearchParams({ ...parseTaskListQuery(prev), ...change }), { replace: true }), [setParams]);
+
+  const list = useTaskList(query);
+  const actions = useTaskActions();
+  // One catalog for the page (it loads nothing without `agent_policies:read`); a failed load hides the policy parts.
   const catalog = usePolicyCatalog();
-  const canPickPolicy = viewer.hasPermission('agent_policies:read');
+  const policiesShown = canReadPolicies && !catalog.error;
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; runId?: string } | null>(null);
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [sortAnchor, setSortAnchor] = useState<HTMLElement | null>(null);
 
-  const reset = () => {
-    setEditing(null);
-    setName('');
-    setGoal('');
-    setProfile('default');
-    setDomains('');
-    setConfirmRisky(false);
-    setHostId('');
-    setHostFallback(true);
-    setPolicyId(null);
-  };
-
-  const edit = (t: Task) => {
-    setEditing(t.id);
-    setName(t.name);
-    setGoal(t.goal);
-    setProfile(t.profile);
-    setDomains(t.allowedDomains.join(', '));
-    setConfirmRisky(t.confirmRiskyActions);
-    setHostId(t.hostId ?? '');
-    setHostFallback(t.hostFallback);
-    setPolicyId(t.policyId ?? null);
-  };
-
-  const load = useCallback(async () => {
-    try {
-      setTasks(await api.get<Task[]>('/tasks'));
-    } catch (e) {
-      setError(message(e, 'Could not load tasks'));
-    }
-  }, [api]);
-
+  // Search: typed text, sent 300 ms after the last key.
+  const [text, setText] = useState(query.q);
+  const sent = useRef(query.q);
   useEffect(() => {
-    void load();
-  }, [load]);
+    // The URL changed elsewhere ("Clear filters", back): the field follows it.
+    if (query.q !== sent.current) {
+      sent.current = query.q;
+      setText(query.q);
+    }
+  }, [query.q]);
+  useEffect(() => {
+    if (text.trim() === sent.current) return;
+    const timer = setTimeout(() => {
+      sent.current = text.trim();
+      setQuery({ q: text });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [text, setQuery]);
 
-  // The machines to choose from; without fleet:read the picker offers "Any available machine" only.
+  // Machine names; without `fleet:read` a pinned machine shows the start of its id.
+  const [hosts, setHosts] = useState<FleetHost[]>([]);
   useEffect(() => {
     if (!viewer.hasPermission('fleet:read')) return;
     api
@@ -84,157 +88,333 @@ export function TasksPage() {
       .then(setHosts)
       .catch(() => setHosts([]));
   }, [api, viewer]);
+  const hostName = useCallback((id: string) => hosts.find((h) => h.id === id)?.name ?? id.slice(0, 8), [hosts]);
 
-  const hostName = (id: string | null) => (id ? (hosts.find((h) => h.id === id)?.name ?? id.slice(0, 8)) : null);
+  /** A failed action: its message (which names the task) shows, and a task that is gone leaves the list. */
+  const failed = useCallback(
+    (e: unknown, task: TaskWithSummary) => {
+      setError(e instanceof Error ? e.message : `The change to “${task.name}” failed`);
+      if (e instanceof TaskActionError && e.gone) list.remove(task.id);
+    },
+    [list],
+  );
 
-  const create = async (event: FormEvent) => {
-    event.preventDefault();
+  const setScheduled = async (task: TaskWithSummary, on: boolean) => {
     setError(null);
-    const body = {
-      name: name.trim(),
-      goal: goal.trim(),
-      profile: profile.trim() || 'default',
-      allowedDomains: domains.split(/[\s,]+/).map((d) => d.trim()).filter(Boolean),
-      confirmRiskyActions: confirmRisky,
-      hostId: hostId || null,
-      hostFallback,
-      // The agent policy replaces the earlier step, minute and model fields, which the form never sends.
-      ...(canPickPolicy ? { policyId } : {}),
-    };
+    // Optimistic: the switch moves now and goes back if the request fails.
+    const scheduleState: TaskScheduleState = on ? 'active' : 'paused';
+    list.patch(task.id, (t) => ({ ...t, summary: { ...t.summary, scheduleState, nextRunAt: on ? t.summary.nextRunAt : null } }));
+    setBusy((b) => ({ ...b, [task.id]: true }));
     try {
-      if (editing) await api.patch(`/tasks/${editing}`, body);
-      else await api.post('/tasks', body);
-      reset();
-      await load();
+      const { skipped, ...changed } = await actions.setScheduled(task, on);
+      list.replace(changed);
+      if (skipped.length > 0) setError(`${skipped.length} schedule${skipped.length === 1 ? '' : 's'} of “${task.name}” stayed paused: the expression is no longer valid. Edit the task to fix it.`);
     } catch (e) {
-      setError(message(e, editing ? 'Could not save the task' : 'Could not create the task'));
+      list.patch(task.id, () => task);
+      failed(e, task);
+    } finally {
+      setBusy((b) => ({ ...b, [task.id]: false }));
     }
   };
 
-  const run = async (task: Task, runPolicyId?: string) => {
+  const run = async (task: TaskWithSummary, policyId?: string) => {
+    if (task.summary.liveRunId && !(await actions.confirmRunAgain(task))) return;
+    setError(null);
+    setBusy((b) => ({ ...b, [task.id]: true }));
     try {
-      const r = await runTaskWith(api, task.id, runPolicyId);
-      navigate(`/runs/${r.id}`);
+      const started = await actions.run(task, policyId);
+      // The row shows the run at once; its 5 s refresh takes over from here. The page stays, so several tasks can be started.
+      list.patch(task.id, (t) => ({
+        ...t,
+        summary: { ...t.summary, liveRunId: started.id, lastRun: { id: started.id, status: 'queued', trigger: 'manual', createdAt: new Date().toISOString(), finishedAt: null } },
+      }));
+      setNotice({ text: 'Run started', runId: started.id });
     } catch (e) {
-      setError(message(e, 'Could not start the run'));
+      failed(e, task);
+    } finally {
+      setBusy((b) => ({ ...b, [task.id]: false }));
     }
   };
 
-  /** Delete asks first: the task's schedules go with it. */
-  const remove = async (task: Task) => {
-    const ok = await confirm({
-      title: `Delete task “${task.name}”?`,
-      body: 'Its schedules are deleted. Its runs are kept.',
-      confirmLabel: 'Delete',
-      destructive: true,
-    });
-    if (!ok) return;
+  const remove = async (task: TaskWithSummary) => {
+    setError(null);
     try {
-      await api.delete(`/tasks/${task.id}`);
-      await load();
+      if (!(await actions.remove(task))) return;
+      list.remove(task.id);
+      setNotice({ text: 'Task deleted' });
     } catch (e) {
-      setError(message(e, 'Could not delete the task'));
+      failed(e, task);
     }
   };
+
+  const scheduled = (task: TaskWithSummary, showLabel: boolean) => (
+    <ScheduledControl task={task} canWrite={canWrite} disabled={busy[task.id]} onChange={(on) => void setScheduled(task, on)} showLabel={showLabel} />
+  );
+  const rowActions = (task: TaskWithSummary) => (
+    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'flex-end' }}>
+      {canRun && <TaskRunButton task={task} catalog={policiesShown ? catalog : { policies: [], defaultId: null }} disabled={busy[task.id]} onRun={(policyId) => void run(task, policyId)} />}
+      <TaskOverflowMenu task={task} canWrite={canWrite} canReadRuns={canReadRuns} onDelete={() => void remove(task)} />
+    </Stack>
+  );
+
+  const columns: Column<TaskWithSummary>[] = [
+    {
+      key: 'task',
+      header: 'Task',
+      render: (t) => (
+        <Box sx={{ minWidth: 160 }}>
+          <TaskName task={t} canOpen={canOpen} />
+          <TaskGoalExcerpt goal={t.goal} />
+        </Box>
+      ),
+    },
+    { key: 'schedule', header: 'Schedule', render: (t) => <Box sx={{ minWidth: 150, maxWidth: 220 }}><TaskScheduleCell task={t} catalog={policiesShown ? catalog : undefined} /></Box> },
+    { key: 'next', header: 'Next run', render: (t) => <TaskNextRun task={t} /> },
+    { key: 'last', header: 'Last run', render: (t) => <TaskLastRun task={t} canReadRuns={canReadRuns} /> },
+    { key: 'week', header: '7 days', hideBelow: 'lg', render: (t) => <TaskOutcomeStrip task={t} /> },
+    ...(policiesShown ? [{ key: 'policy', header: 'Policy', hideBelow: 'lg', render: (t) => <TaskPolicyCell task={t} catalog={catalog} /> } satisfies Column<TaskWithSummary>] : []),
+    { key: 'spend', header: 'Spend 30 d', hideBelow: 'lg', align: 'right', render: (t) => <TaskSpendCell task={t} /> },
+    { key: 'machine', header: 'Machine', hideBelow: 'xl', render: (t) => <TaskMachineCell task={t} hostName={hostName} /> },
+    { key: 'scheduled', header: 'Scheduled', render: (t) => scheduled(t, false) },
+    { key: 'actions', header: <Box component="span" sx={visuallyHidden}>Actions</Box>, align: 'right', render: rowActions },
+  ];
+
+  // The Policy filter: once the tasks on screen use more than one policy (or one is chosen), and from then on.
+  const policyFilterSeen = useRef(false);
+  const policiesInUse = new Set((list.items ?? []).map((t) => t.summary.policy?.id).filter(Boolean)).size;
+  if (policiesShown && catalog.policies.length > 0 && (policiesInUse > 1 || query.policyId !== null)) policyFilterSeen.current = true;
+  const showPolicyFilter = policiesShown && catalog.policies.length > 0 && policyFilterSeen.current;
+
+  const items = list.items;
+  const filtered = isFiltered(query);
+  const sortLabel = TASK_SORTS.find((s) => s.value === query.sort)?.label ?? 'Newest';
+  const noTasks = items !== null && items.length === 0 && !list.loading && !list.error;
 
   return (
-    <PageContainer>
-      <PageHeader title="Tasks" />
-      <ErrorBanner error={error} />
-      {canWrite && (
-        <Card variant="outlined" sx={{ mb: 3 }}>
-          <CardContent component="form" onSubmit={create} aria-label={editing ? 'Edit task' : 'New task'}>
-            <Stack spacing={2}>
-              <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} required />
-              <TextField label="Goal" value={goal} onChange={(e) => setGoal(e.target.value)} multiline minRows={2} required helperText="What the agent should achieve, in plain words." />
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField label="Profile" value={profile} onChange={(e) => setProfile(e.target.value)} helperText="The browser profile (its sign-ins)." />
-                <TextField label="Allowed sites" value={domains} onChange={(e) => setDomains(e.target.value)} helperText="e.g. shop.example.test, *.example.test; empty allows any." fullWidth />
-              </Stack>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
-                <TextField
-                  select
-                  label="Machine"
-                  value={hostId}
-                  onChange={(e) => setHostId(e.target.value)}
-                  helperText="Which computer runs it; any available one by default (home machines first)."
-                  sx={{ minWidth: 260 }}
-                >
-                  <MenuItem value="">Any available machine</MenuItem>
-                  {hosts.map((h) => (
-                    <MenuItem key={h.id} value={h.id}>
-                      {h.name} ({machineState(h)})
+    <PageContainer width="wide">
+      <PageHeader
+        title="Tasks"
+        subtitle="What your agents do, and when."
+        // On a phone the primary action is the floating button below.
+        primary={{ key: 'new', label: 'New task', Icon: AddIcon, to: taskPaths.create, hidden: !canWrite || isPhone }}
+      />
+      <ErrorBanner error={error} onClose={() => setError(null)} />
+      <ErrorBanner error={list.error} onRetry={list.reload} />
+
+      {/* The toolbar; hidden only when there is nothing to search (no task at all). */}
+      {!(noTasks && !filtered) && (
+        <Stack spacing={1.5} sx={{ mb: 2 }} role="search" aria-label="Find tasks">
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <TextField
+              size="small"
+              fullWidth
+              placeholder="Search tasks"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              sx={{ maxWidth: { sm: 360 } }}
+              slotProps={{
+                htmlInput: { 'aria-label': 'Search tasks' },
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: text ? (
+                    <InputAdornment position="end">
+                      <IconButton
+                        aria-label="Clear search"
+                        edge="end"
+                        size="small"
+                        sx={{ width: { xs: 44, md: 32 }, height: { xs: 44, md: 32 }, mr: { xs: -1.5, md: -0.5 } }}
+                        onClick={() => {
+                          sent.current = '';
+                          setText('');
+                          setQuery({ q: '' });
+                        }}
+                      >
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : undefined,
+                },
+              }}
+            />
+            <Box sx={{ flexGrow: 1, display: { xs: 'none', sm: 'block' } }} />
+            {showPolicyFilter && !isPhone && policyFilter(query.policyId, (policyId) => setQuery({ policyId }), catalog.policies)}
+            {isPhone ? (
+              <>
+                <IconButton aria-label={`Sort: ${sortLabel}`} aria-haspopup="menu" sx={{ width: 44, height: 44, flexShrink: 0 }} onClick={(e) => setSortAnchor(e.currentTarget)}>
+                  <SortIcon />
+                </IconButton>
+                <Menu anchorEl={sortAnchor} open={Boolean(sortAnchor)} onClose={() => setSortAnchor(null)}>
+                  {TASK_SORTS.map((s) => (
+                    <MenuItem
+                      key={s.value}
+                      selected={s.value === query.sort}
+                      sx={{ minHeight: 44 }}
+                      onClick={() => {
+                        setSortAnchor(null);
+                        setQuery({ sort: s.value });
+                      }}
+                    >
+                      {s.label}
                     </MenuItem>
                   ))}
-                  {hostId && !hosts.some((h) => h.id === hostId) && <MenuItem value={hostId}>{hostId.slice(0, 8)}</MenuItem>}
-                </TextField>
-                {hostId && (
-                  <FormControlLabel
-                    control={<Switch checked={hostFallback} onChange={(e) => setHostFallback(e.target.checked)} />}
-                    label="If it is unavailable, use another available machine"
-                  />
-                )}
-              </Stack>
-              {hostId && hosts.some((h) => h.id === hostId && machineState(h) !== 'online') && (
-                <Alert severity="warning">
-                  {hostName(hostId)} is {machineState(hosts.find((h) => h.id === hostId)!)} right now.{' '}
-                  {hostFallback ? 'Runs will use another available machine until it is back.' : 'Runs will fail until it is back.'}
-                </Alert>
-              )}
-              {canPickPolicy && <PolicySelect catalog={catalog} value={policyId} onChange={setPolicyId} manageLink />}
-              <FormControlLabel control={<Switch checked={confirmRisky} onChange={(e) => setConfirmRisky(e.target.checked)} />} label="Ask me before purchases and other irreversible steps" />
-              <Box>
-                <Button type="submit" variant="contained" disabled={!name.trim() || !goal.trim()}>
-                  {editing ? 'Save task' : 'Create task'}
-                </Button>
-                {editing && (
-                  <Button sx={{ ml: 1 }} onClick={reset}>
-                    Cancel
+                </Menu>
+              </>
+            ) : (
+              <TextField select size="small" label="Sort" value={query.sort} onChange={(e) => setQuery({ sort: e.target.value as TaskListSort })} sx={{ minWidth: 140, flexShrink: 0 }}>
+                {TASK_SORTS.map((s) => (
+                  <MenuItem key={s.value} value={s.value}>
+                    {s.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+          </Stack>
+          {showPolicyFilter && isPhone && policyFilter(query.policyId, (policyId) => setQuery({ policyId }), catalog.policies)}
+          {/* One row; on a phone it scrolls sideways inside itself, never the page. */}
+          <Stack direction="row" spacing={1} role="group" aria-label="Filter" sx={{ overflowX: 'auto', flexWrap: { xs: 'nowrap', sm: 'wrap' }, rowGap: 1, pb: { xs: 0.5, sm: 0 }, mx: { xs: -0.5, sm: 0 }, px: { xs: 0.5, sm: 0 } }}>
+            {TASK_FILTERS.map((f) => {
+              const selected = query.filter === f.value;
+              return (
+                <Chip
+                  key={f.label}
+                  label={f.label}
+                  clickable
+                  color={selected ? 'primary' : 'default'}
+                  variant={selected ? 'filled' : 'outlined'}
+                  aria-pressed={selected}
+                  onClick={() => setQuery({ filter: f.value })}
+                  sx={{ flexShrink: 0, height: { xs: 36, md: 32 } }}
+                />
+              );
+            })}
+          </Stack>
+        </Stack>
+      )}
+
+      {items === null && !list.error && <ListSkeleton rows={6} />}
+
+      {noTasks && !filtered && (
+        <Box>
+          <EmptyState
+            title="Create your first task"
+            body="A task is a goal your agent can run on demand or on a schedule."
+            action={{ key: 'new', label: 'New task', Icon: AddIcon, to: taskPaths.create, hidden: !canWrite }}
+          />
+          {canWrite && (
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} component="ul" aria-label="Example tasks" sx={{ listStyle: 'none', p: 0, m: 0 }}>
+              {EXAMPLE_GOALS.map((goal) => (
+                <Card key={goal} variant="outlined" component="li" sx={{ flex: 1, minWidth: 0 }}>
+                  <CardActionArea component={RouterLink} to={taskPaths.createFromGoal(goal)} sx={{ p: 2, minHeight: 64, height: '100%' }}>
+                    <Typography variant="caption" color="text.secondary" component="div">
+                      Example
+                    </Typography>
+                    <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                      {goal}
+                    </Typography>
+                  </CardActionArea>
+                </Card>
+              ))}
+            </Stack>
+          )}
+        </Box>
+      )}
+
+      {noTasks && filtered && (
+        <EmptyState
+          title="No tasks match"
+          body="Try another search or filter."
+          action={{
+            key: 'clear',
+            label: 'Clear filters',
+            onClick: () => {
+              sent.current = '';
+              setText('');
+              setQuery({ q: '', filter: null, policyId: null });
+            },
+          }}
+        />
+      )}
+
+      {items !== null && items.length > 0 && (
+        // Tighter cells than the kit's default, so the columns fit beside the navigation rail.
+        <Box sx={{ opacity: list.loading ? 0.6 : 1, transition: 'opacity 120ms', pb: { xs: 9, sm: 0 }, '& .MuiTableCell-root': { px: 1 } }} aria-busy={list.loading}>
+          <ResponsiveList
+            aria-label="Tasks"
+            items={items}
+            columns={columns}
+            getKey={(t) => t.id}
+            getLabel={(t) => t.name}
+            renderCard={(t) => (
+              <TaskCard task={t} catalog={policiesShown ? catalog : undefined} canOpen={canOpen} canReadRuns={canReadRuns} scheduled={scheduled(t, true)} actions={rowActions(t)} />
+            )}
+            footer={
+              <Stack direction="row" spacing={2} sx={{ mt: 2, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', rowGap: 1 }}>
+                <Typography variant="body2" color="text.secondary" role="status">
+                  {items.length === list.total ? `${list.total} ${list.total === 1 ? 'task' : 'tasks'}` : `${items.length} of ${list.total} tasks`}
+                </Typography>
+                {list.hasMore && (
+                  <Button variant="outlined" onClick={list.loadMore} disabled={list.loadingMore} sx={{ minHeight: { xs: 44, md: 'auto' } }}>
+                    {list.loadingMore ? 'Loading…' : 'Load more'}
                   </Button>
                 )}
-              </Box>
-            </Stack>
-          </CardContent>
-        </Card>
-      )}
-      {tasks === null && !error && <CardSkeleton />}
-      <Stack spacing={2} aria-label="Tasks">
-        {(tasks ?? []).map((t) => {
-          const chips = taskPolicyChips(t, catalog);
-          return (
-          <Card key={t.id} variant="outlined" aria-label={`Task ${t.name}`}>
-            <CardContent>
-              <Typography variant="h6" component="h2">
-                {t.name}
-              </Typography>
-              <Typography color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
-                {t.goal}
-              </Typography>
-              <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap', rowGap: 1 }}>
-                <Chip size="small" label={`profile: ${t.profile}`} />
-                <Chip size="small" label={`machine: ${hostName(t.hostId) ?? 'any available'}${t.hostId && !t.hostFallback ? ' only' : ''}`} />
-                <Chip size="small" label={t.allowedDomains.length ? t.allowedDomains.join(', ') : 'any site'} />
-                {chips && <Chip size="small" variant="outlined" label={`policy: ${chips.policy}`} />}
-                {chips?.model && <Chip size="small" variant="outlined" label={`model: ${chips.model}`} />}
               </Stack>
-              {/* Spend (#408) */}
-              <TaskSpendLine spend={t.spend30d} />
-              <TaskSchedules taskId={t.id} canWrite={canWrite} catalog={canPickPolicy ? catalog : undefined} taskPolicyId={t.policyId} />
-            </CardContent>
-            <CardActions>
-              {canRun && <RunWithButton catalog={catalog} taskPolicyId={t.policyId} onRun={(p) => void run(t, p)} />}
-              <Button onClick={() => navigate(`/runs?taskId=${t.id}`)}>Runs</Button>
-              {canWrite && <Button onClick={() => edit(t)}>Edit</Button>}
-              {canWrite && (
-                <Button color="error" onClick={() => void remove(t)}>
-                  Delete
-                </Button>
-              )}
-            </CardActions>
-          </Card>
-          );
-        })}
-      </Stack>
+            }
+          />
+        </Box>
+      )}
+
+      {isPhone && canWrite && (
+        <Fab
+          color="primary"
+          aria-label="New task"
+          component={RouterLink}
+          to={taskPaths.create}
+          // Above the phone's bottom navigation (56 px).
+          sx={{ position: 'fixed', right: 16, bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))', zIndex: 'speedDial' }}
+        >
+          <AddIcon />
+        </Fab>
+      )}
+
+      <Snackbar open={notice !== null} autoHideDuration={6000} onClose={(_e, reason) => reason !== 'clickaway' && setNotice(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} sx={{ bottom: { xs: 144, sm: 24 } }}>
+        <Alert
+          severity="success"
+          variant="filled"
+          role="status"
+          onClose={() => setNotice(null)}
+          action={
+            notice?.runId ? (
+              <Button color="inherit" size="small" component={RouterLink} to={taskPaths.run(notice.runId)}>
+                View
+              </Button>
+            ) : undefined
+          }
+        >
+          {notice?.text}
+        </Alert>
+      </Snackbar>
     </PageContainer>
+  );
+}
+
+const visuallyHidden = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' } as const;
+
+/** The Policy filter: every policy, the default, or one policy (`policyId` on the request). */
+function policyFilter(value: string | null, onChange: (policyId: string | null) => void, policies: ReadonlyArray<{ id: string; name: string }>) {
+  return (
+    <TextField select size="small" label="Policy" value={value ?? ANY_POLICY} onChange={(e) => onChange(e.target.value === ANY_POLICY ? null : e.target.value)} sx={{ minWidth: 170, flexShrink: 0 }}>
+      <MenuItem value={ANY_POLICY}>Any policy</MenuItem>
+      <MenuItem value="default">Default</MenuItem>
+      {policies.map((p) => (
+        <MenuItem key={p.id} value={p.id}>
+          {p.name}
+        </MenuItem>
+      ))}
+      {value && value !== 'default' && !policies.some((p) => p.id === value) && <MenuItem value={value}>Unavailable policy</MenuItem>}
+    </TextField>
   );
 }

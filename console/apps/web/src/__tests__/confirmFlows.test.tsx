@@ -13,6 +13,7 @@ import { TasksPage } from '../pages/TasksPage';
 import type { FleetHost } from '../types/fleet';
 import type { Task, TaskSchedule } from '../types/tasks';
 import { ConfirmProvider } from '../ui';
+import { page, scheduledRow } from './taskFixtures';
 
 const TASK: Task = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -77,17 +78,19 @@ async function cancelThenConfirm(open: () => void, confirmLabel: string, deletes
 describe('destructive actions ask first', () => {
   it('deleting a task', async () => {
     const { deletes } = mount(<TasksPage />, ['tasks:read', 'tasks:write'], {
-      'GET /tasks': [TASK],
-      [`GET /schedules?taskId=${TASK.id}`]: [],
+      'GET /tasks': page([scheduledRow()]),
       [`DELETE /tasks/${TASK.id}`]: {},
     });
-    const card = await screen.findByLabelText('Task Check fare');
+    await screen.findByText('Check fare');
     await cancelThenConfirm(
-      () => fireEvent.click(within(card).getByRole('button', { name: 'Delete' })),
+      () => {
+        fireEvent.click(screen.getByRole('button', { name: 'More actions: Check fare' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+      },
       'Delete',
       deletes,
       `/tasks/${TASK.id}`,
-      /Delete task “Check fare”\?.*Its schedules are deleted\. Its runs are kept\./,
+      /Delete “Check fare”\?.*Its schedule is deleted\. It has no runs\./,
     );
   });
 
