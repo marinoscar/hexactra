@@ -12,7 +12,7 @@ const idList = z
   .min(1)
   .max(8000)
   .default('all')
-  .describe('`all`, or a comma-separated list of policy ids (UUIDs of your own policies, or `builtin:<key>`). Built-ins can be exported as a starting template.');
+  .describe('`all` (the default: the built-in policies, then your own), or a comma-separated list of policy ids (UUIDs of your own policies, or `builtin:<key>`). Built-ins can be exported as a starting template.');
 
 const flag = z
   .enum(['true', 'false'])

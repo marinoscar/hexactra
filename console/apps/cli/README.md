@@ -199,7 +199,7 @@ An **agent policy** sets what a run may spend (actions, model calls, active minu
 ```bash
 hexactra policies list                              # id, name, tiers (start -> highest), budget, flags
 hexactra policies show balanced                     # one policy in full; --json for the spec
-hexactra policies export -o policies.json           # your own policies as a portable file
+hexactra policies export -o policies.json           # the built-ins and your own policies as a portable file
 hexactra policies export --ids "Fare lookups,thorough" --no-pins   # chosen ones, without model pins
 hexactra policies import policies.json --on-conflict rename        # rename (default), skip or replace
 hexactra policies default                           # show the default policy
