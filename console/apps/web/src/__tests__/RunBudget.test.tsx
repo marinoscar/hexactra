@@ -132,6 +132,11 @@ describe('stop reasons', () => {
     expect(alert).toHaveTextContent("The agent's summary: Compared 3 of 5 fares; 2 remain.");
   });
 
+  it('reads the stall reason the runner records (#405) without repeating "stalled"', () => {
+    const run = { status: 'failed', stopReason: 'stalled' as const, result: null, error: 'The agent stalled: no action in 3 rounds in a row', budget: budget() };
+    expect(stopLine(run)!.title).toBe('Stopped: stuck (no action in 3 rounds in a row).');
+  });
+
   it('says nothing while a run has no stop reason, and labels the list chips', () => {
     expect(stopLine({ status: 'running', stopReason: null, result: null, error: null })).toBeNull();
     expect(stopChipLabel('budget_cost')).toBe('cost budget');
