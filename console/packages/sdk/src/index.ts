@@ -19,6 +19,12 @@ export type Schema<K extends keyof components['schemas']> = components['schemas'
 export type AgentPolicySpec = Schema<'AgentPolicyResponseDto'>['spec'];
 /** An agent policy as the API returns it. */
 export type AgentPolicy = Schema<'AgentPolicyResponseDto'>;
+/** A page of tasks: what `GET /api/tasks?envelope=1` returns in `data` (the document types that route as the plain array). */
+export type TaskPage = Schema<'TaskPageResponseDto'>;
+/** A task with its `summary` (`include=summary`; also what creating a task returns). */
+export type TaskWithSummary = Schema<'TaskWithSummaryResponseDto'>;
+/** A task's run statistics (`GET /api/tasks/{id}/stats`). */
+export type TaskStats = Schema<'TaskStatsResponseDto'>;
 /** The portable file `policies.export` returns and `policies.import` takes. */
 export type AgentPolicyFile = Schema<'PolicyFileDto'>;
 /** What to do on a name clash when importing. */
