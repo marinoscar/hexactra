@@ -5258,10 +5258,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description **Requires:** authentication, plus permission `tasks:read`. */
+        /**
+         * The user's tasks
+         * @description With no parameter: every task, newest first, as an array. `envelope=1` returns a page `{ items, nextCursor, total }`; `include=summary` adds schedule and run facts to each task; `q`, `filter`, `policyId` and `sort` narrow and order the list. `created_desc` and `name_asc` page by keyset; the other sorts page by an offset inside the cursor. The cursor is opaque and belongs to one `sort`.
+         *
+         *     **Requires:** authentication, plus permission `tasks:read`.
+         */
         get: operations["tasks_list"];
         put?: never;
-        /** @description **Requires:** authentication, plus permission `tasks:write`. */
+        /**
+         * Create a task, with its schedules
+         * @description Optional `schedules` (at most 10) are created with the task in one transaction. One invalid schedule fails the whole request with 400, a typed `code` and `details.path` naming it (`schedules[1].cron`, `schedules[0].policyId`); nothing is created. A schedule without `timezone` gets the profile time zone (`GET /schedules/defaults`). The response is the task with its `summary`.
+         *
+         *     **Requires:** authentication, plus permission `tasks:write`.
+         */
         post: operations["tasks_create"];
         delete?: never;
         options?: never;
@@ -5276,16 +5286,159 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description **Requires:** authentication, plus permission `tasks:read`. */
+        /**
+         * One task
+         * @description `include=summary` adds the same `summary` object the list returns.
+         *
+         *     **Requires:** authentication, plus permission `tasks:read`.
+         */
         get: operations["tasks_get"];
         put?: never;
         post?: never;
-        /** @description **Requires:** authentication, plus permission `tasks:write`. */
+        /**
+         * Delete a task
+         * @description Its schedules are deleted with it. Its runs are kept, with `taskId` set to null (they stay in the runs list as one-off runs).
+         *
+         *     **Requires:** authentication, plus permission `tasks:write`.
+         */
         delete: operations["tasks_remove"];
         options?: never;
         head?: never;
         /** @description **Requires:** authentication, plus permission `tasks:write`. */
         patch: operations["tasks_update"];
+        trace?: never;
+    };
+    "/api/tasks/{id}/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace a task's schedules
+         * @description One transaction: an item with an `id` updates that schedule (its `lastRunAt`, `lastRunId` and `consecutiveFailures` are kept; a field left out is unchanged), an item without creates one, and the task's schedules that are not listed are deleted. `nextRunAt` is recomputed for each. An invalid item fails the whole request with 400, a typed `code` and `details.path` (`schedules[1].cron`); an `id` that is not this task's is 400 `SCHEDULE_NOT_IN_TASK`. The response is the task with its `summary`.
+         *
+         *     **Requires:** authentication, plus permission `tasks:write`.
+         */
+        put: operations["taskSchedules_replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{id}/schedules/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause every schedule of a task
+         * @description Sets `enabled = false` and `nextRunAt = null` on all of the task's schedules. A run that is live keeps going until it finishes, and the task can still be started by hand, the API or MCP. 409 `NO_SCHEDULES` when the task has no schedule.
+         *
+         *     **Requires:** authentication, plus permission `tasks:write`.
+         */
+        post: operations["taskSchedules_pause"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{id}/schedules/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume every schedule of a task
+         * @description Sets `enabled = true`, a fresh `nextRunAt` and `consecutiveFailures = 0` on all of the task's schedules, in one transaction. 409 `NO_SCHEDULES` when the task has no schedule.
+         *
+         *     **Requires:** authentication, plus permission `tasks:write`.
+         */
+        post: operations["taskSchedules_resume"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tasks/{id}/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A task's run statistics
+         * @description Outcomes, durations, steps, cost and stop reasons of the task's runs created in the last `days` calendar days (today included), with one `series` entry per day. Days are bucketed in the viewer's time zone: the profile time zone, else the `X-Time-Zone` header, else UTC.
+         *
+         *     **Requires:** authentication, plus permission `runs:read`.
+         */
+        get: operations["taskSchedules_stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete runs: a list of ids, or every finished run that matches a filter
+         * @description Permanent. Send exactly one of `ids` or `filter`. Live runs (queued, running, waiting_human) are never deleted: with `ids` they are listed in `skippedLive`, with `filter` they are not matched. A filter that matches more than 500 finished runs answers 202 and a queue job deletes them. Deleting runs also removes their cost and stop-reason history from task spend and from alert counts.
+         *
+         *     **Requires:** authentication, plus permission `runs:delete`.
+         */
+        post: operations["runsDelete_deleteMany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `runs:read`. */
+        get: operations["runs_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete one finished run
+         * @description Permanent: the run, its steps and its questions. 409 `RUN_LIVE` while the run is queued, running or waiting for a person: cancel it first.
+         *
+         *     **Requires:** authentication, plus permission `runs:delete`.
+         */
+        delete: operations["runsDelete_deleteOne"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/runs": {
@@ -5306,7 +5459,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/runs/{id}": {
+    "/api/runs/counts": {
         parameters: {
             query?: never;
             header?: never;
@@ -5314,7 +5467,7 @@ export interface paths {
             cookie?: never;
         };
         /** @description **Requires:** authentication, plus permission `runs:read`. */
-        get: operations["runs_get"];
+        get: operations["runs_counts"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5673,8 +5826,57 @@ export interface paths {
         /** @description **Requires:** authentication, plus permission `tasks:read`. */
         get: operations["schedules_list"];
         put?: never;
-        /** @description **Requires:** authentication, plus permission `tasks:write`. */
+        /**
+         * Add a schedule to a task
+         * @description Without `timezone` the schedule gets the profile time zone (`GET /schedules/defaults`). 409 `SCHEDULE_LIMIT` when the task already has 10 schedules.
+         *
+         *     **Requires:** authentication, plus permission `tasks:write`.
+         */
         post: operations["schedules_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/schedules/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What a new schedule gets by default
+         * @description The time zone a schedule is given when its request names none: the user's profile time zone; for a profile that follows the device, the `X-Time-Zone` request header; else UTC. Changing the profile later does not move existing schedules.
+         *
+         *     **Requires:** authentication, plus permission `tasks:read`.
+         */
+        get: operations["schedules_defaults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/schedules/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check a schedule before saving it
+         * @description Always 200. A usable expression answers `valid: true` with what it means in words and its next firings (ISO instants; format them in the zone you show). Anything else answers `valid: false` with the `code` and `message` saving it would be refused with. Nothing is stored.
+         *
+         *     **Requires:** authentication, plus permission `tasks:read`.
+         */
+        post: operations["schedules_preview"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6541,6 +6743,18 @@ export interface components {
              * @example POLICY_IMPORT_INVALID
              * @example POLICY_IMPORT_UNSUPPORTED_VERSION
              * @example POLICY_IMPORT_TOO_LARGE
+             * @example INVALID_FILTER
+             * @example INVALID_CURSOR
+             * @example RUN_NOT_FOUND
+             * @example RUN_LIVE
+             * @example COUNT_CHANGED
+             * @example INVALID_CRON
+             * @example INVALID_TIMEZONE
+             * @example CRON_TOO_FREQUENT
+             * @example SCHEDULE_NOT_IN_TASK
+             * @example INVALID_TASK_CURSOR
+             * @example SCHEDULE_LIMIT
+             * @example NO_SCHEDULES
              * @example WEBHOOK_NOT_FOUND
              * @example WEBHOOK_DELIVERY_NOT_FOUND
              * @example WEBHOOK_URL_INVALID
@@ -12539,6 +12753,393 @@ export interface components {
             /** @description Unique among the user's policies. */
             name: string;
         };
+        TaskDetailResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userId: string;
+            name: string;
+            goal: string;
+            profile: string;
+            hostId: string | null;
+            /** @description When the chosen host cannot take a run, run on another available one */
+            hostFallback: boolean;
+            allowedDomains: string[];
+            /**
+             * @deprecated
+             * @description Deprecated: see `policyId`
+             */
+            maxSteps: number;
+            /**
+             * @deprecated
+             * @description Deprecated: see `policyId`
+             */
+            maxMinutes: number;
+            confirmRiskyActions: boolean;
+            /**
+             * @deprecated
+             * @description Deprecated: see `policyId`
+             */
+            model: string | null;
+            /** @description The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default */
+            policyId: string | null;
+            /** @description What the task's runs spent in the last 30 days */
+            spend30d: {
+                /** @description Runs created in the last 30 days */
+                runs: number;
+                /** @description USD spent on model calls by those runs; a lower bound while costKnown is false */
+                costUsd: number;
+                /** @description False when a call of those runs could not be priced (its model has no price) */
+                costKnown: boolean;
+                /** @description Input plus output tokens */
+                tokens: number;
+                /** @description Of those runs, how many succeeded */
+                succeeded: number;
+                /** @description The average cost of one successful run (USD; a lower bound while costKnown is false); null with no successful run */
+                avgSuccessCostUsd: number | null;
+            };
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            /** @description ISO 8601 timestamp */
+            updatedAt: string;
+            /** @description Schedule and run facts of the task, present with `include=summary` */
+            summary?: {
+                /** @description Oldest first */
+                schedules: {
+                    /** Format: uuid */
+                    id: string;
+                    cron: string;
+                    timezone: string;
+                    enabled: boolean;
+                    /** @enum {string} */
+                    concurrency: "skip" | "queue";
+                    nextRunAt: string | null;
+                    lastRunAt: string | null;
+                    /** @description Failed scheduled runs in a row; 3 or more is "failing" */
+                    consecutiveFailures: number;
+                    /** @description The expression in words (English, 24-hour), e.g. "Monday to Friday at 09:00"; "Custom schedule (<expr>)" for one the builder does not write */
+                    description: string;
+                    /** @description Overrides the task's agent policy for this schedule's runs; null follows the task */
+                    policyId: string | null;
+                }[];
+                /**
+                 * @description `none`: no schedule. `active`: all enabled. `paused`: none enabled. `partial`: some enabled, some not.
+                 * @enum {string}
+                 */
+                scheduleState: "none" | "active" | "paused" | "partial";
+                /** @description The earliest next firing among the enabled schedules */
+                nextRunAt: string | null;
+                /** @description The newest run of the task */
+                lastRun: {
+                    /** Format: uuid */
+                    id: string;
+                    /** @enum {string} */
+                    status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+                    /** @enum {string} */
+                    trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+                    /** @description ISO 8601 timestamp */
+                    createdAt: string;
+                    finishedAt: string | null;
+                } | null;
+                /** @description The newest run that is queued, running or waiting for a person */
+                liveRunId: string | null;
+                runCounts: {
+                    /** @description Runs of the task that still exist */
+                    total: number;
+                    /** @description Runs created in the last 7 days, by outcome */
+                    last7d: {
+                        succeeded: number;
+                        failed: number;
+                        cancelled: number;
+                    };
+                };
+                /** @description The agent policy a run started now would use: the task's, else the user's default, else `builtin:balanced` (a deleted policy falls through). Null only when it could not be resolved. */
+                policy: {
+                    /** @description A UUID, or `builtin:<key>` */
+                    id: string;
+                    name: string;
+                    builtin: boolean;
+                    /** @description True when it is the policy the user's default resolves to */
+                    isDefault: boolean;
+                } | null;
+            };
+        };
+        TaskPageResponseDto: {
+            items: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                userId: string;
+                name: string;
+                goal: string;
+                profile: string;
+                hostId: string | null;
+                /** @description When the chosen host cannot take a run, run on another available one */
+                hostFallback: boolean;
+                allowedDomains: string[];
+                /**
+                 * @deprecated
+                 * @description Deprecated: see `policyId`
+                 */
+                maxSteps: number;
+                /**
+                 * @deprecated
+                 * @description Deprecated: see `policyId`
+                 */
+                maxMinutes: number;
+                confirmRiskyActions: boolean;
+                /**
+                 * @deprecated
+                 * @description Deprecated: see `policyId`
+                 */
+                model: string | null;
+                /** @description The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default */
+                policyId: string | null;
+                /** @description What the task's runs spent in the last 30 days */
+                spend30d: {
+                    /** @description Runs created in the last 30 days */
+                    runs: number;
+                    /** @description USD spent on model calls by those runs; a lower bound while costKnown is false */
+                    costUsd: number;
+                    /** @description False when a call of those runs could not be priced (its model has no price) */
+                    costKnown: boolean;
+                    /** @description Input plus output tokens */
+                    tokens: number;
+                    /** @description Of those runs, how many succeeded */
+                    succeeded: number;
+                    /** @description The average cost of one successful run (USD; a lower bound while costKnown is false); null with no successful run */
+                    avgSuccessCostUsd: number | null;
+                };
+                /** @description ISO 8601 timestamp */
+                createdAt: string;
+                /** @description ISO 8601 timestamp */
+                updatedAt: string;
+                /** @description Schedule and run facts of the task, present with `include=summary` */
+                summary?: {
+                    /** @description Oldest first */
+                    schedules: {
+                        /** Format: uuid */
+                        id: string;
+                        cron: string;
+                        timezone: string;
+                        enabled: boolean;
+                        /** @enum {string} */
+                        concurrency: "skip" | "queue";
+                        nextRunAt: string | null;
+                        lastRunAt: string | null;
+                        /** @description Failed scheduled runs in a row; 3 or more is "failing" */
+                        consecutiveFailures: number;
+                        /** @description The expression in words (English, 24-hour), e.g. "Monday to Friday at 09:00"; "Custom schedule (<expr>)" for one the builder does not write */
+                        description: string;
+                        /** @description Overrides the task's agent policy for this schedule's runs; null follows the task */
+                        policyId: string | null;
+                    }[];
+                    /**
+                     * @description `none`: no schedule. `active`: all enabled. `paused`: none enabled. `partial`: some enabled, some not.
+                     * @enum {string}
+                     */
+                    scheduleState: "none" | "active" | "paused" | "partial";
+                    /** @description The earliest next firing among the enabled schedules */
+                    nextRunAt: string | null;
+                    /** @description The newest run of the task */
+                    lastRun: {
+                        /** Format: uuid */
+                        id: string;
+                        /** @enum {string} */
+                        status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+                        /** @enum {string} */
+                        trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+                        /** @description ISO 8601 timestamp */
+                        createdAt: string;
+                        finishedAt: string | null;
+                    } | null;
+                    /** @description The newest run that is queued, running or waiting for a person */
+                    liveRunId: string | null;
+                    runCounts: {
+                        /** @description Runs of the task that still exist */
+                        total: number;
+                        /** @description Runs created in the last 7 days, by outcome */
+                        last7d: {
+                            succeeded: number;
+                            failed: number;
+                            cancelled: number;
+                        };
+                    };
+                    /** @description The agent policy a run started now would use: the task's, else the user's default, else `builtin:balanced` (a deleted policy falls through). Null only when it could not be resolved. */
+                    policy: {
+                        /** @description A UUID, or `builtin:<key>` */
+                        id: string;
+                        name: string;
+                        builtin: boolean;
+                        /** @description True when it is the policy the user's default resolves to */
+                        isDefault: boolean;
+                    } | null;
+                };
+            }[];
+            /** @description Pass as `cursor` for the next page; null on the last page. Opaque. */
+            nextCursor: string | null;
+            /** @description Tasks that match `q`, `filter` and `policyId`, on every page */
+            total: number;
+        };
+        TaskWithSummaryResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userId: string;
+            name: string;
+            goal: string;
+            profile: string;
+            hostId: string | null;
+            /** @description When the chosen host cannot take a run, run on another available one */
+            hostFallback: boolean;
+            allowedDomains: string[];
+            /**
+             * @deprecated
+             * @description Deprecated: see `policyId`
+             */
+            maxSteps: number;
+            /**
+             * @deprecated
+             * @description Deprecated: see `policyId`
+             */
+            maxMinutes: number;
+            confirmRiskyActions: boolean;
+            /**
+             * @deprecated
+             * @description Deprecated: see `policyId`
+             */
+            model: string | null;
+            /** @description The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default */
+            policyId: string | null;
+            /** @description What the task's runs spent in the last 30 days */
+            spend30d: {
+                /** @description Runs created in the last 30 days */
+                runs: number;
+                /** @description USD spent on model calls by those runs; a lower bound while costKnown is false */
+                costUsd: number;
+                /** @description False when a call of those runs could not be priced (its model has no price) */
+                costKnown: boolean;
+                /** @description Input plus output tokens */
+                tokens: number;
+                /** @description Of those runs, how many succeeded */
+                succeeded: number;
+                /** @description The average cost of one successful run (USD; a lower bound while costKnown is false); null with no successful run */
+                avgSuccessCostUsd: number | null;
+            };
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            /** @description ISO 8601 timestamp */
+            updatedAt: string;
+            /** @description Schedule and run facts of the task, present with `include=summary` */
+            summary: {
+                /** @description Oldest first */
+                schedules: {
+                    /** Format: uuid */
+                    id: string;
+                    cron: string;
+                    timezone: string;
+                    enabled: boolean;
+                    /** @enum {string} */
+                    concurrency: "skip" | "queue";
+                    nextRunAt: string | null;
+                    lastRunAt: string | null;
+                    /** @description Failed scheduled runs in a row; 3 or more is "failing" */
+                    consecutiveFailures: number;
+                    /** @description The expression in words (English, 24-hour), e.g. "Monday to Friday at 09:00"; "Custom schedule (<expr>)" for one the builder does not write */
+                    description: string;
+                    /** @description Overrides the task's agent policy for this schedule's runs; null follows the task */
+                    policyId: string | null;
+                }[];
+                /**
+                 * @description `none`: no schedule. `active`: all enabled. `paused`: none enabled. `partial`: some enabled, some not.
+                 * @enum {string}
+                 */
+                scheduleState: "none" | "active" | "paused" | "partial";
+                /** @description The earliest next firing among the enabled schedules */
+                nextRunAt: string | null;
+                /** @description The newest run of the task */
+                lastRun: {
+                    /** Format: uuid */
+                    id: string;
+                    /** @enum {string} */
+                    status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+                    /** @enum {string} */
+                    trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+                    /** @description ISO 8601 timestamp */
+                    createdAt: string;
+                    finishedAt: string | null;
+                } | null;
+                /** @description The newest run that is queued, running or waiting for a person */
+                liveRunId: string | null;
+                runCounts: {
+                    /** @description Runs of the task that still exist */
+                    total: number;
+                    /** @description Runs created in the last 7 days, by outcome */
+                    last7d: {
+                        succeeded: number;
+                        failed: number;
+                        cancelled: number;
+                    };
+                };
+                /** @description The agent policy a run started now would use: the task's, else the user's default, else `builtin:balanced` (a deleted policy falls through). Null only when it could not be resolved. */
+                policy: {
+                    /** @description A UUID, or `builtin:<key>` */
+                    id: string;
+                    name: string;
+                    builtin: boolean;
+                    /** @description True when it is the policy the user's default resolves to */
+                    isDefault: boolean;
+                } | null;
+            };
+        };
+        CreateTaskDto: {
+            name: string;
+            goal: string;
+            /** @default default */
+            profile?: string;
+            hostId?: string | null;
+            /** @default true */
+            hostFallback?: boolean;
+            /** @default [] */
+            allowedDomains?: string[];
+            /**
+             * @deprecated
+             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`.
+             * @default 100
+             */
+            maxSteps?: number;
+            /**
+             * @deprecated
+             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`.
+             * @default 30
+             */
+            maxMinutes?: number;
+            /** @default false */
+            confirmRiskyActions?: boolean;
+            /**
+             * @deprecated
+             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`.
+             */
+            model?: string | null;
+            /** @description The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy. */
+            policyId?: string | null;
+            /** @description Schedules created with the task, in the same transaction: one invalid schedule and nothing is created. */
+            schedules?: {
+                /** @description A 5-field cron expression that fires at most every 5 minutes, e.g. `0 9 * * 1-5`. */
+                cron: string;
+                /** @description An IANA time zone. Omitted: the owner's profile time zone (see `GET /schedules/defaults`); on an existing schedule, the zone it has. */
+                timezone?: string;
+                /** @description Omitted: `true` for a new schedule, unchanged for an existing one. */
+                enabled?: boolean;
+                /**
+                 * @description `skip` (default) skips a firing while an earlier run of the task is live; `queue` starts it anyway.
+                 * @enum {string}
+                 */
+                concurrency?: "skip" | "queue";
+                /** @description Overrides the task's agent policy for this schedule's runs; `null` follows the task. Omitted on an existing schedule: unchanged. */
+                policyId?: string | null;
+            }[];
+        };
         TaskResponseDto: {
             /** Format: uuid */
             id: string;
@@ -12589,38 +13190,6 @@ export interface components {
             /** @description ISO 8601 timestamp */
             updatedAt: string;
         };
-        CreateTaskDto: {
-            name: string;
-            goal: string;
-            /** @default default */
-            profile?: string;
-            hostId?: string | null;
-            /** @default true */
-            hostFallback?: boolean;
-            /** @default [] */
-            allowedDomains?: string[];
-            /**
-             * @deprecated
-             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`.
-             * @default 100
-             */
-            maxSteps?: number;
-            /**
-             * @deprecated
-             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`.
-             * @default 30
-             */
-            maxMinutes?: number;
-            /** @default false */
-            confirmRiskyActions?: boolean;
-            /**
-             * @deprecated
-             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`.
-             */
-            model?: string | null;
-            /** @description The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy. */
-            policyId?: string | null;
-        };
         UpdateTaskDto: {
             name?: string;
             goal?: string;
@@ -12647,7 +13216,239 @@ export interface components {
             /** @description The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy. */
             policyId?: string | null;
         };
-        RunResponseDto: {
+        ReplaceTaskSchedulesDto: {
+            schedules: {
+                /** @description A 5-field cron expression that fires at most every 5 minutes, e.g. `0 9 * * 1-5`. */
+                cron: string;
+                /** @description An IANA time zone. Omitted: the owner's profile time zone (see `GET /schedules/defaults`); on an existing schedule, the zone it has. */
+                timezone?: string;
+                /** @description Omitted: `true` for a new schedule, unchanged for an existing one. */
+                enabled?: boolean;
+                /**
+                 * @description `skip` (default) skips a firing while an earlier run of the task is live; `queue` starts it anyway.
+                 * @enum {string}
+                 */
+                concurrency?: "skip" | "queue";
+                /** @description Overrides the task's agent policy for this schedule's runs; `null` follows the task. Omitted on an existing schedule: unchanged. */
+                policyId?: string | null;
+                /**
+                 * Format: uuid
+                 * @description An existing schedule of this task to update. Omitted: a new schedule. This task's schedules that are not listed are deleted.
+                 */
+                id?: string;
+            }[];
+        };
+        TaskSchedulesChangedResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userId: string;
+            name: string;
+            goal: string;
+            profile: string;
+            hostId: string | null;
+            /** @description When the chosen host cannot take a run, run on another available one */
+            hostFallback: boolean;
+            allowedDomains: string[];
+            /**
+             * @deprecated
+             * @description Deprecated: see `policyId`
+             */
+            maxSteps: number;
+            /**
+             * @deprecated
+             * @description Deprecated: see `policyId`
+             */
+            maxMinutes: number;
+            confirmRiskyActions: boolean;
+            /**
+             * @deprecated
+             * @description Deprecated: see `policyId`
+             */
+            model: string | null;
+            /** @description The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default */
+            policyId: string | null;
+            /** @description What the task's runs spent in the last 30 days */
+            spend30d: {
+                /** @description Runs created in the last 30 days */
+                runs: number;
+                /** @description USD spent on model calls by those runs; a lower bound while costKnown is false */
+                costUsd: number;
+                /** @description False when a call of those runs could not be priced (its model has no price) */
+                costKnown: boolean;
+                /** @description Input plus output tokens */
+                tokens: number;
+                /** @description Of those runs, how many succeeded */
+                succeeded: number;
+                /** @description The average cost of one successful run (USD; a lower bound while costKnown is false); null with no successful run */
+                avgSuccessCostUsd: number | null;
+            };
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            /** @description ISO 8601 timestamp */
+            updatedAt: string;
+            /** @description Schedule and run facts of the task, present with `include=summary` */
+            summary: {
+                /** @description Oldest first */
+                schedules: {
+                    /** Format: uuid */
+                    id: string;
+                    cron: string;
+                    timezone: string;
+                    enabled: boolean;
+                    /** @enum {string} */
+                    concurrency: "skip" | "queue";
+                    nextRunAt: string | null;
+                    lastRunAt: string | null;
+                    /** @description Failed scheduled runs in a row; 3 or more is "failing" */
+                    consecutiveFailures: number;
+                    /** @description The expression in words (English, 24-hour), e.g. "Monday to Friday at 09:00"; "Custom schedule (<expr>)" for one the builder does not write */
+                    description: string;
+                    /** @description Overrides the task's agent policy for this schedule's runs; null follows the task */
+                    policyId: string | null;
+                }[];
+                /**
+                 * @description `none`: no schedule. `active`: all enabled. `paused`: none enabled. `partial`: some enabled, some not.
+                 * @enum {string}
+                 */
+                scheduleState: "none" | "active" | "paused" | "partial";
+                /** @description The earliest next firing among the enabled schedules */
+                nextRunAt: string | null;
+                /** @description The newest run of the task */
+                lastRun: {
+                    /** Format: uuid */
+                    id: string;
+                    /** @enum {string} */
+                    status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+                    /** @enum {string} */
+                    trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+                    /** @description ISO 8601 timestamp */
+                    createdAt: string;
+                    finishedAt: string | null;
+                } | null;
+                /** @description The newest run that is queued, running or waiting for a person */
+                liveRunId: string | null;
+                runCounts: {
+                    /** @description Runs of the task that still exist */
+                    total: number;
+                    /** @description Runs created in the last 7 days, by outcome */
+                    last7d: {
+                        succeeded: number;
+                        failed: number;
+                        cancelled: number;
+                    };
+                };
+                /** @description The agent policy a run started now would use: the task's, else the user's default, else `builtin:balanced` (a deleted policy falls through). Null only when it could not be resolved. */
+                policy: {
+                    /** @description A UUID, or `builtin:<key>` */
+                    id: string;
+                    name: string;
+                    builtin: boolean;
+                    /** @description True when it is the policy the user's default resolves to */
+                    isDefault: boolean;
+                } | null;
+            };
+            /** @description Resume only: schedules left as they were because their stored expression is no longer valid. Normally empty. */
+            skipped: string[];
+        };
+        TaskStatsResponseDto: {
+            days: number;
+            /** @description The zone the days are bucketed in */
+            timezone: string;
+            totals: {
+                /** @description Runs created in the period, live ones included */
+                runs: number;
+                succeeded: number;
+                failed: number;
+                cancelled: number;
+                /** @description succeeded / (succeeded + failed), 0 to 1; null when no run succeeded or failed */
+                successRate: number | null;
+                /** @description USD spent by the runs of the period; null when none of them has a cost */
+                costUsd: number | null;
+                /** @description False when a run of the period had a call that could not be priced: `costUsd` is then "at least" */
+                costKnown: boolean;
+            };
+            /** @description Mean of finishedAt - startedAt over the finished runs that started */
+            avgDurationSeconds: number | null;
+            p95DurationSeconds: number | null;
+            /** @description Mean step count of the finished runs */
+            avgSteps: number | null;
+            /** @description Mean cost of the succeeded runs that have a cost */
+            avgCostPerSuccessUsd: number | null;
+            /** @description One entry per calendar day, oldest first, zeros included */
+            series: {
+                /** @description YYYY-MM-DD */
+                date: string;
+                succeeded: number;
+                failed: number;
+                cancelled: number;
+                costUsd: number | null;
+            }[];
+            /** @description Finished runs of the period by why they stopped, most frequent first */
+            stopReasons: {
+                /** @description `unknown`: a run from before stop reasons were recorded */
+                reason: ("finished" | "budget_actions" | "budget_model_calls" | "budget_active_time" | "budget_input_tokens" | "budget_output_tokens" | "budget_cost" | "stalled" | "cancelled" | "error" | "no_model") | "unknown";
+                count: number;
+            }[];
+        };
+        RunsDeleteQueuedResponseDto: {
+            /**
+             * Format: uuid
+             * @description The `browser.runs.delete` job that deletes the runs
+             */
+            jobId: string;
+            /** @description Finished runs that matched when the request was made; runs created later are never deleted by the job */
+            matched: number;
+            /** @description The recorded model spend (USD) of the matched runs; null when none of them made a model call */
+            costUsd: number | null;
+        };
+        RunsDeletedResponseDto: {
+            /** @description Runs deleted, with their steps and questions */
+            deleted: number;
+            /** @description The recorded model spend (USD) of the deleted runs; null when none of them made a model call */
+            costUsd: number | null;
+            /** @description Runs left alone because they are queued, running or waiting for a person: cancel them first */
+            skippedLive: string[];
+            /** @description With `ids`: ids that are not the caller's runs (missing, already deleted, or another user's). Always empty with `filter` */
+            notFound: string[];
+        };
+        DeleteRunsDto: {
+            /** @description The runs to delete: 1 to 500 unique ids. Not together with `filter`. */
+            ids?: string[];
+            /** @description Delete every FINISHED run (succeeded, failed, cancelled) that matches: the same filter as `GET /runs`. A live status in it is ignored, never deleted. Not together with `ids`. `{}` means all finished runs and needs `expectedCount`. */
+            filter?: {
+                /** @description Run status. Any of: queued, running, waiting_human, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas. */
+                status?: string | string[];
+                /**
+                 * @description Shorthand for a status group: `live` = queued, running, waiting_human; `finished` = succeeded, failed, cancelled. Not together with `status`.
+                 * @enum {string}
+                 */
+                state?: "live" | "finished";
+                /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
+                taskId?: "none" | string;
+                /** @description What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas. */
+                trigger?: string | string[];
+                /**
+                 * Format: date-time
+                 * @description Runs created at or after this ISO 8601 date-time (inclusive).
+                 */
+                from?: string;
+                /**
+                 * Format: date-time
+                 * @description Runs created before this ISO 8601 date-time (exclusive).
+                 */
+                to?: string;
+                /** @description Case-insensitive substring of the goal (1 to 200 characters). */
+                q?: string;
+                /** @description Why the run stopped; `budget` is every `budget_*` reason. Any of: finished, budget_actions, budget_model_calls, budget_active_time, budget_input_tokens, budget_output_tokens, budget_cost, stalled, cancelled, error, no_model, budget. Repeat the parameter or separate the values with commas. */
+                stopReason?: string | string[];
+                /** @description Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`. */
+                policyId?: string;
+            };
+            /** @description With `filter`: the number of runs the caller expects to delete (the count it showed). When the real count differs by more than 5 %, nothing is deleted and the answer is 409 `COUNT_CHANGED`. */
+            expectedCount?: number;
+        };
+        RunListItemResponseDto: {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -12709,6 +13510,7 @@ export interface components {
             } | null;
             /** @description Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field. */
             stopReason: ("finished" | "budget_actions" | "budget_model_calls" | "budget_active_time" | "budget_input_tokens" | "budget_output_tokens" | "budget_cost" | "stalled" | "cancelled" | "error" | "no_model") | null;
+            /** @description The run budget while the run is live (queued, running, waiting_human); null on a finished run in a list (read it from `GET /runs/{id}`). */
             budget: {
                 /** @description The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD. */
                 effective: {
@@ -12768,6 +13570,155 @@ export interface components {
             createdAt: string;
             startedAt: string | null;
             finishedAt: string | null;
+            /** @description The run's task name; null for a run without a task (ad-hoc, external) or whose task was deleted */
+            taskName: string | null;
+        };
+        RunPageResponseDto: {
+            items: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                userId: string;
+                taskId: string | null;
+                /** @enum {string} */
+                status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+                /** @enum {string} */
+                trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+                goal: string;
+                profile: string;
+                hostId: string | null;
+                hostFallback: boolean;
+                sessionId: string | null;
+                handoffId: string | null;
+                /** @description Who drove an external run */
+                actor: string | null;
+                result: string | null;
+                error: string | null;
+                cancelRequested: boolean;
+                stepCount: number;
+                activity: {
+                    /** @enum {string} */
+                    phase: "starting" | "looking" | "thinking" | "acting";
+                    /** @description The fabric action being run (acting only) */
+                    action?: string;
+                    /** @description Redacted like step args */
+                    args?: {
+                        [key: string]: unknown;
+                    };
+                    /** @description Why the model chose the action */
+                    reason?: string;
+                    /** @description ISO 8601 timestamp */
+                    startedAt: string;
+                    /** @description How long the host has before the action times out */
+                    timeoutMs?: number;
+                    /** @description Where on the page it acts, in page screenshot (CSS viewport) pixels: a point, or a box with w and h */
+                    target?: {
+                        x: number;
+                        y: number;
+                        w?: number;
+                        h?: number;
+                    };
+                    /** @description Why the run is on a stronger model, while it is (for example "Escalated to Frontier (stuck: repeated click on #submit)") */
+                    note?: string;
+                } | null;
+                inputTokens: number;
+                outputTokens: number;
+                policy: {
+                    id: string;
+                    name: string;
+                    version: number;
+                    /**
+                     * @description Why this policy applied: the run request, the schedule, the task, the user default or the system default.
+                     * @enum {string}
+                     */
+                    source: "run" | "schedule" | "task" | "user_default" | "system_default";
+                    builtin: boolean;
+                } | null;
+                /** @description Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field. */
+                stopReason: ("finished" | "budget_actions" | "budget_model_calls" | "budget_active_time" | "budget_input_tokens" | "budget_output_tokens" | "budget_cost" | "stalled" | "cancelled" | "error" | "no_model") | null;
+                /** @description The run budget while the run is live (queued, running, waiting_human); null on a finished run in a list (read it from `GET /runs/{id}`). */
+                budget: {
+                    /** @description The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD. */
+                    effective: {
+                        [key: string]: number | null;
+                    } & {
+                        warnAtPercent: number;
+                    };
+                    /** @description What the run has used so far, in the same units (active time includes the stretch in progress). */
+                    used: {
+                        [key: string]: number;
+                    };
+                    /** @description Percent of each limit used, one decimal; `null` for an unlimited budget. */
+                    percent: {
+                        [key: string]: number | null;
+                    };
+                    /** @description Where each limit came from: the `policy`, or the deployment `ceiling` that clamped it. `null` when unlimited. */
+                    source: {
+                        [key: string]: ("policy" | "ceiling") | null;
+                    };
+                    /** @description False when a call could not be priced: `used.cost` is then "at least". */
+                    costKnown: boolean;
+                } | null;
+                tier: {
+                    /**
+                     * @description The tier the policy starts runs on
+                     * @enum {string}
+                     */
+                    start: "fast" | "standard" | "frontier";
+                    /**
+                     * @description The highest tier the run may escalate to
+                     * @enum {string}
+                     */
+                    max: "fast" | "standard" | "frontier";
+                    /**
+                     * @description The tier the run is on now: the start tier until a stall escalates it
+                     * @enum {string}
+                     */
+                    current: "fast" | "standard" | "frontier";
+                    /** @description How many times the run escalated */
+                    escalations: number;
+                    /** @description The current tier's model, as `provider:modelId`; null when none was resolved */
+                    model: string | null;
+                } | null;
+                /** @description The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts. */
+                currentTier: ("fast" | "standard" | "frontier") | null;
+                /** @description How many times the run moved to a stronger tier because it stalled */
+                escalations: number;
+                /** @description Input tokens the provider served from its cache (part of inputTokens) */
+                cachedInputTokens: number;
+                /** @description Model calls (provider round trips) made so far */
+                modelCalls: number;
+                /** @description USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false */
+                costUsd: number;
+                /** @description False once a call could not be priced because its model has no price: show costUsd as "at least" */
+                costKnown: boolean;
+                /** @description ISO 8601 timestamp */
+                createdAt: string;
+                startedAt: string | null;
+                finishedAt: string | null;
+                /** @description The run's task name; null for a run without a task (ad-hoc, external) or whose task was deleted */
+                taskName: string | null;
+            }[];
+            /** @description Pass it as `cursor` to read the next page; null on the last page. Opaque: do not parse or build it. */
+            nextCursor: string | null;
+        };
+        RunCountsResponseDto: {
+            /** @description Runs that match the filter */
+            total: number;
+            /** @description Of those: queued + running + waiting_human */
+            live: number;
+            byStatus: {
+                queued: number;
+                running: number;
+                waiting_human: number;
+                succeeded: number;
+                failed: number;
+                cancelled: number;
+            };
+            /** @description USD spent by the matching runs; null when none of them made a model call. A lower bound while costKnown is false */
+            costUsd: number | null;
+            /** @description False when a matching run had a call that could not be priced */
+            costKnown: boolean;
         };
         RunDetailResponseDto: {
             /** Format: uuid */
@@ -12911,6 +13862,128 @@ export interface components {
                 /** @description ISO 8601 timestamp */
                 createdAt: string;
             }[];
+        };
+        RunResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userId: string;
+            taskId: string | null;
+            /** @enum {string} */
+            status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+            /** @enum {string} */
+            trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+            goal: string;
+            profile: string;
+            hostId: string | null;
+            hostFallback: boolean;
+            sessionId: string | null;
+            handoffId: string | null;
+            /** @description Who drove an external run */
+            actor: string | null;
+            result: string | null;
+            error: string | null;
+            cancelRequested: boolean;
+            stepCount: number;
+            activity: {
+                /** @enum {string} */
+                phase: "starting" | "looking" | "thinking" | "acting";
+                /** @description The fabric action being run (acting only) */
+                action?: string;
+                /** @description Redacted like step args */
+                args?: {
+                    [key: string]: unknown;
+                };
+                /** @description Why the model chose the action */
+                reason?: string;
+                /** @description ISO 8601 timestamp */
+                startedAt: string;
+                /** @description How long the host has before the action times out */
+                timeoutMs?: number;
+                /** @description Where on the page it acts, in page screenshot (CSS viewport) pixels: a point, or a box with w and h */
+                target?: {
+                    x: number;
+                    y: number;
+                    w?: number;
+                    h?: number;
+                };
+                /** @description Why the run is on a stronger model, while it is (for example "Escalated to Frontier (stuck: repeated click on #submit)") */
+                note?: string;
+            } | null;
+            inputTokens: number;
+            outputTokens: number;
+            policy: {
+                id: string;
+                name: string;
+                version: number;
+                /**
+                 * @description Why this policy applied: the run request, the schedule, the task, the user default or the system default.
+                 * @enum {string}
+                 */
+                source: "run" | "schedule" | "task" | "user_default" | "system_default";
+                builtin: boolean;
+            } | null;
+            /** @description Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field. */
+            stopReason: ("finished" | "budget_actions" | "budget_model_calls" | "budget_active_time" | "budget_input_tokens" | "budget_output_tokens" | "budget_cost" | "stalled" | "cancelled" | "error" | "no_model") | null;
+            budget: {
+                /** @description The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD. */
+                effective: {
+                    [key: string]: number | null;
+                } & {
+                    warnAtPercent: number;
+                };
+                /** @description What the run has used so far, in the same units (active time includes the stretch in progress). */
+                used: {
+                    [key: string]: number;
+                };
+                /** @description Percent of each limit used, one decimal; `null` for an unlimited budget. */
+                percent: {
+                    [key: string]: number | null;
+                };
+                /** @description Where each limit came from: the `policy`, or the deployment `ceiling` that clamped it. `null` when unlimited. */
+                source: {
+                    [key: string]: ("policy" | "ceiling") | null;
+                };
+                /** @description False when a call could not be priced: `used.cost` is then "at least". */
+                costKnown: boolean;
+            } | null;
+            tier: {
+                /**
+                 * @description The tier the policy starts runs on
+                 * @enum {string}
+                 */
+                start: "fast" | "standard" | "frontier";
+                /**
+                 * @description The highest tier the run may escalate to
+                 * @enum {string}
+                 */
+                max: "fast" | "standard" | "frontier";
+                /**
+                 * @description The tier the run is on now: the start tier until a stall escalates it
+                 * @enum {string}
+                 */
+                current: "fast" | "standard" | "frontier";
+                /** @description How many times the run escalated */
+                escalations: number;
+                /** @description The current tier's model, as `provider:modelId`; null when none was resolved */
+                model: string | null;
+            } | null;
+            /** @description The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts. */
+            currentTier: ("fast" | "standard" | "frontier") | null;
+            /** @description How many times the run moved to a stronger tier because it stalled */
+            escalations: number;
+            /** @description Input tokens the provider served from its cache (part of inputTokens) */
+            cachedInputTokens: number;
+            /** @description Model calls (provider round trips) made so far */
+            modelCalls: number;
+            /** @description USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false */
+            costUsd: number;
+            /** @description False once a call could not be priced because its model has no price: show costUsd as "at least" */
+            costKnown: boolean;
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            startedAt: string | null;
+            finishedAt: string | null;
         };
         QuestionResponseDto: {
             /** Format: uuid */
@@ -13173,16 +14246,56 @@ export interface components {
             consecutiveFailures: number;
             /** @description Overrides the task's agent policy for scheduled runs; null follows the task */
             policyId: string | null;
+            /** @description The expression in words (English, 24-hour), e.g. "Monday to Friday at 09:00" */
+            description: string;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             /** @description ISO 8601 timestamp */
             updatedAt: string;
         };
+        ScheduleDefaultsResponseDto: {
+            /** @description The zone a schedule gets when its request names none */
+            timezone: string;
+            /**
+             * @description `profile`: the user's profile time zone. `device`: the profile follows the device and the request carried `X-Time-Zone`. `default`: neither, so UTC.
+             * @enum {string}
+             */
+            source: "profile" | "device" | "default";
+        };
+        SchedulePreviewResponseDto: {
+            /** @description True: `cron`, `timezone`, `description`, `next` and `intervalSeconds` are present. False: `code` and `message` are. */
+            valid: boolean;
+            cron?: string;
+            /** @description The zone the firings were computed in: the one sent, or the default */
+            timezone?: string;
+            /** @description The expression in words (English, 24-hour), e.g. "Monday to Friday at 09:00" */
+            description?: string;
+            /** @description The next `count` firings, ascending */
+            next?: string[];
+            /** @description Seconds between firings when the next ones are evenly spaced; null for an uneven schedule (week days, days of the month, a daylight-saving change) */
+            intervalSeconds?: number | null;
+            /**
+             * @description Why the schedule would be refused
+             * @enum {string}
+             */
+            code?: "INVALID_CRON" | "INVALID_TIMEZONE" | "CRON_TOO_FREQUENT";
+            message?: string;
+        };
+        PreviewScheduleDto: {
+            cron: string;
+            /** @description Omitted: the owner's profile time zone. */
+            timezone?: string;
+            /**
+             * @description How many firings to return.
+             * @default 5
+             */
+            count?: number;
+        };
         CreateScheduleDto: {
             /** Format: uuid */
             taskId: string;
             cron: string;
-            /** @default UTC */
+            /** @description An IANA time zone. Omitted: the owner's profile time zone (see `GET /schedules/defaults`). */
             timezone?: string;
             /** @default true */
             enabled?: boolean;
@@ -30543,20 +31656,38 @@ export interface operations {
     };
     tasks_list: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `1` returns `{ items, nextCursor, total }` instead of an array. */
+                envelope?: "1" | "true";
+                /** @description `summary` adds a `summary` object to each task: its schedules, next run, last run, live run, run counts and the policy that applies. */
+                include?: "summary";
+                /** @description Case-insensitive substring of the name or the goal. */
+                q?: string;
+                /** @description `scheduled`: at least one enabled schedule. `paused`: has schedules, none enabled. `unscheduled`: no schedule. `failing`: a schedule failed 3 times in a row, or the last run failed. `never_run`: no run. */
+                filter?: "scheduled" | "paused" | "unscheduled" | "failing" | "never_run";
+                /** @description Tasks whose own policy is this one (a UUID or `builtin:<key>`); `default` is the tasks that follow the user's default policy. */
+                policyId?: "default" | string;
+                /** @description `created_desc` (default), `name_asc`, `last_run_desc`, `next_run_asc` (tasks with no next run last), `spend_desc` (cost of the last 30 days). */
+                sort?: "created_desc" | "name_asc" | "last_run_desc" | "next_run_asc" | "spend_desc";
+                /** @description Page size, 1 to 100. Default 50 with `envelope`; without `envelope` and without `limit` every task is returned, as before. */
+                limit?: number;
+                /** @description The `nextCursor` of the previous page (with the same `sort`). Opaque: do not parse it. */
+                cursor?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
+            /** @description An array of tasks. With `envelope=1`, `data` is a `TaskPageResponseDto` instead: `{ items, nextCursor, total }`. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["TaskResponseDto"][];
+                        data: components["schemas"]["TaskDetailResponseDto"][];
                     };
                 };
             };
@@ -30608,7 +31739,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["TaskResponseDto"];
+                        data: components["schemas"]["TaskWithSummaryResponseDto"];
                     };
                 };
             };
@@ -30643,7 +31774,10 @@ export interface operations {
     };
     tasks_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `summary` adds a `summary` object to each task: its schedules, next run, last run, live run, run counts and the policy that applies. */
+                include?: "summary";
+            };
             header?: never;
             path: {
                 id: string;
@@ -30658,7 +31792,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["TaskResponseDto"];
+                        data: components["schemas"]["TaskDetailResponseDto"];
                     };
                 };
             };
@@ -30785,15 +31919,67 @@ export interface operations {
             };
         };
     };
-    runs_list: {
+    taskSchedules_replace: {
         parameters: {
-            query?: {
-                taskId?: string;
-                status?: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
-                limit?: number;
-            };
+            query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceTaskSchedulesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TaskWithSummaryResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskSchedules_pause: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -30804,7 +31990,368 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["RunResponseDto"][];
+                        data: components["schemas"]["TaskSchedulesChangedResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskSchedules_resume: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TaskSchedulesChangedResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    taskSchedules_stats: {
+        parameters: {
+            query?: {
+                /** @description How many calendar days back, today included (7 to 90). */
+                days?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TaskStatsResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runsDelete_deleteMany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteRunsDto"];
+            };
+        };
+        responses: {
+            /** @description The runs were deleted in the request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunsDeletedResponseDto"];
+                    };
+                };
+            };
+            /** @description More than 500 finished runs matched the filter: the `browser.runs.delete` job deletes them. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunsDeleteQueuedResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `COUNT_CHANGED`: the matching count is more than 5 % away from `expectedCount`; `details.matched` is the real count. Nothing was deleted. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunDetailResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runsDelete_deleteOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `RUN_NOT_FOUND`: no such run, or it is another user's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `RUN_LIVE`: the run is live. Cancel it first. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runs_list: {
+        parameters: {
+            query?: {
+                /** @description Run status. Any of: queued, running, waiting_human, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas. */
+                status?: string | string[];
+                /** @description Shorthand for a status group: `live` = queued, running, waiting_human; `finished` = succeeded, failed, cancelled. Not together with `status`. */
+                state?: "live" | "finished";
+                /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
+                taskId?: "none" | string;
+                /** @description What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas. */
+                trigger?: string | string[];
+                /** @description Runs created at or after this ISO 8601 date-time (inclusive). */
+                from?: string;
+                /** @description Runs created before this ISO 8601 date-time (exclusive). */
+                to?: string;
+                /** @description Case-insensitive substring of the goal (1 to 200 characters). */
+                q?: string;
+                /** @description Why the run stopped; `budget` is every `budget_*` reason. Any of: finished, budget_actions, budget_model_calls, budget_active_time, budget_input_tokens, budget_output_tokens, budget_cost, stalled, cancelled, error, no_model, budget. Repeat the parameter or separate the values with commas. */
+                stopReason?: string | string[];
+                /** @description Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`. */
+                policyId?: string;
+                /** @description `1` returns `{ items, nextCursor }` instead of an array. */
+                envelope?: "1" | "true";
+                /** @description The previous page's `nextCursor`. Opaque: do not parse or build it. */
+                cursor?: string;
+                /** @description Rows to return: 1 to 100 with `envelope`, 1 to 200 without. Default 50. */
+                limit?: number;
+                /** @description By creation time, then id: `desc` is newest first. */
+                order?: "desc" | "asc";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description An array of runs: the newest `limit`. With `envelope=1` the data is instead one page, `{ items, nextCursor }` (schema `RunPageResponseDto`). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunListItemResponseDto"][];
                     };
                 };
             };
@@ -30889,13 +32436,26 @@ export interface operations {
             };
         };
     };
-    runs_get: {
+    runs_counts: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
+            query?: {
+                /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
+                taskId?: "none" | string;
+                /** @description What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas. */
+                trigger?: string | string[];
+                /** @description Runs created at or after this ISO 8601 date-time (inclusive). */
+                from?: string;
+                /** @description Runs created before this ISO 8601 date-time (exclusive). */
+                to?: string;
+                /** @description Case-insensitive substring of the goal (1 to 200 characters). */
+                q?: string;
+                /** @description Why the run stopped; `budget` is every `budget_*` reason. Any of: finished, budget_actions, budget_model_calls, budget_active_time, budget_input_tokens, budget_output_tokens, budget_cost, stalled, cancelled, error, no_model, budget. Repeat the parameter or separate the values with commas. */
+                stopReason?: string | string[];
+                /** @description Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`. */
+                policyId?: string;
             };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -30906,7 +32466,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["RunDetailResponseDto"];
+                        data: components["schemas"]["RunCountsResponseDto"];
                     };
                 };
             };
@@ -31936,8 +33496,9 @@ export interface operations {
     };
     schedules_list: {
         parameters: {
-            query: {
-                taskId: string;
+            query?: {
+                /** @description Only the schedules of this task. */
+                taskId?: string;
             };
             header?: never;
             path?: never;
@@ -32004,6 +33565,106 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["ScheduleResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    schedules_defaults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ScheduleDefaultsResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    schedules_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreviewScheduleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SchedulePreviewResponseDto"];
                     };
                 };
             };

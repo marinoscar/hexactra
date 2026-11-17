@@ -8,6 +8,9 @@ import { registerAppMetrics, type AppMetricDef } from '@marinoscar/platform-api/
 
 const TRIGGERS = ['manual', 'schedule', 'api', 'mcp', 'external'] as const;
 const STATUSES = ['succeeded', 'failed', 'cancelled'] as const;
+/** How deleted runs were chosen (#421); `retention` is the nightly rule (#422). */
+export const RUN_DELETE_MODES = ['single', 'ids', 'filter', 'retention'] as const;
+export type RunDeleteMode = (typeof RUN_DELETE_MODES)[number];
 const STEP_KINDS = ['action', 'handoff', 'finish', 'error', 'note'] as const;
 
 /** Names are permanent once dashboards read them. */
@@ -65,6 +68,14 @@ export const RUN_METRICS: readonly AppMetricDef[] = [
     description: 'Input tokens of one model call of the goal runner: how much context each round re-sends (context settings of the agent policy).',
     buckets: [500, 1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000],
   },
+  {
+    key: 'runsDeleted',
+    name: 'app.runs.deleted',
+    kind: 'counter',
+    unit: '{run}',
+    description: 'Runs deleted from the history, by how they were chosen: one run, a list of ids, a filter, or the retention rule.',
+    attributes: { mode: { kind: 'enum', values: RUN_DELETE_MODES } },
+  },
 ];
 registerAppMetrics(RUN_METRICS);
 
@@ -102,6 +113,11 @@ export class RunMetrics {
   /** The input size of one model call; never a run, task or user id as a label. */
   inputTokensPerCall(tokens: number): void {
     if (tokens > 0) this.metrics?.record('runInputTokensPerCall', tokens);
+  }
+
+  /** Runs deleted from the history; never a run, task or user id as a label. */
+  deleted(mode: RunDeleteMode, n: number): void {
+    if (n > 0) this.metrics?.add('runsDeleted', n, { mode });
   }
 
   /** The spend of a finished run; never a run, task or user id as a label. */

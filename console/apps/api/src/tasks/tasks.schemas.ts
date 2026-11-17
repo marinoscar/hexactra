@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { profileNameSchema } from '../fleet/fleet.schemas';
 import { policyRefSchema } from '../policies/policies.schemas';
 import { TASK_DEFAULTS } from './task-defaults';
+import { taskSchedulesField } from './task-list.schemas';
 
 const domain = z
   .string()
@@ -40,6 +41,7 @@ export const createTaskSchema = z.object({
   confirmRiskyActions: taskFields.confirmRiskyActions.default(false),
   model: taskFields.model.optional(),
   policyId: taskFields.policyId.optional(),
+  schedules: taskSchedulesField.optional(),
 });
 export class CreateTaskDto extends createZodDto(createTaskSchema) {}
 
@@ -48,9 +50,5 @@ export class CreateTaskDto extends createZodDto(createTaskSchema) {}
 export const updateTaskSchema = z.object(taskFields).partial().refine((p) => Object.keys(p).length > 0, { message: 'Nothing to update' });
 export class UpdateTaskDto extends createZodDto(updateTaskSchema) {}
 
-export const listRunsSchema = z.object({
-  taskId: z.uuid().optional(),
-  status: z.enum(['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled']).optional(),
-  limit: z.coerce.number().int().min(1).max(200).default(50),
-});
-export class ListRunsDto extends createZodDto(listRunsSchema) {}
+// The runs list, its shared filter (`runFilterSchema`) and the counts query live in runs.schemas.ts (#420).
+export { ListRunsDto, RunCountsQueryDto, listRunsSchema, runCountsQuerySchema, runFilterSchema, type RunFilter } from './runs.schemas';

@@ -10,6 +10,7 @@ import { goalExcerpt, HEXACTRA_ALERT_KINDS, HEXACTRA_ALERT_RULES, setAlertSource
 import { HexactraAlertsService } from '../src/alerts/hexactra-alerts.service';
 import { createApp } from '../src/main';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { RunDeleteService } from '../src/tasks/run-delete.service';
 
 let app: NestFastifyApplication;
 let prisma: PrismaService;
@@ -232,5 +233,25 @@ describe('console alert sources, from real run rows (#408)', () => {
 
     const expensive = (await service.sources.expensiveRuns(10, since)).filter((r) => r.userId === owner.id);
     expect(expensive).toEqual([expect.objectContaining({ taskName: null, goal: 'One-off', costUsd: 11.5, costKnown: false })]);
+  });
+
+  it('a deleted budget-stopped run no longer counts: its stop, its tokens and its cost leave the window (#421)', async () => {
+    const owner = await prisma.user.create({ data: { email: `alerts-del-${stamp}@example.test`, displayName: 'Person B' } });
+    const db = prisma.forUser({ userId: owner.id });
+    const stopped = { userId: owner.id, goal: 'Compare fares', status: 'failed' as const, inputTokens: 900, outputTokens: 100, modelCalls: 4 };
+    const first = await db.run.create({ data: { ...stopped, stopReason: 'budget_cost', costUsd: 3 } });
+    await db.run.create({ data: { ...stopped, stopReason: 'budget_actions', costUsd: 1 } });
+    const live = await db.run.create({ data: { ...stopped, status: 'running', costUsd: 0.5 } });
+    const since = new Date(Date.now() - 3_600_000);
+    const usage = async () => (await service.sources.usage(since)).find((u) => u.userId === owner.id);
+    expect(await usage()).toMatchObject({ runs: 3, budgetStops: 2, tokens: 3000, costUsd: 4.5 });
+
+    const runs = app.get(RunDeleteService, { strict: false });
+    await runs.deleteOne(owner.id, first.id);
+    expect(await usage()).toMatchObject({ runs: 2, budgetStops: 1, tokens: 2000, costUsd: 1.5 });
+    // Every finished run of the user: the live one stays, and is all that still counts.
+    expect(await runs.deleteMatching(owner.id, {})).toMatchObject({ deleted: 1, costUsd: 1 });
+    expect(await usage()).toMatchObject({ runs: 1, budgetStops: 0, tokens: 1000, costUsd: 0.5 });
+    await expect(runs.deleteOne(owner.id, live.id)).rejects.toMatchObject({ response: { code: 'RUN_LIVE' } });
   });
 });

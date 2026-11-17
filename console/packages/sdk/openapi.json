@@ -26839,11 +26839,120 @@
     },
     "/api/tasks": {
       "get": {
+        "description": "With no parameter: every task, newest first, as an array. `envelope=1` returns a page `{ items, nextCursor, total }`; `include=summary` adds schedule and run facts to each task; `q`, `filter`, `policyId` and `sort` narrow and order the list. `created_desc` and `name_asc` page by keyset; the other sorts page by an offset inside the cursor. The cursor is opaque and belongs to one `sort`.\n\n**Requires:** authentication, plus permission `tasks:read`.",
         "operationId": "tasks_list",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "envelope",
+            "required": false,
+            "in": "query",
+            "description": "`1` returns `{ items, nextCursor, total }` instead of an array.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "true"
+              ]
+            }
+          },
+          {
+            "name": "include",
+            "required": false,
+            "in": "query",
+            "description": "`summary` adds a `summary` object to each task: its schedules, next run, last run, live run, run counts and the policy that applies.",
+            "schema": {
+              "type": "string",
+              "const": "summary"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Case-insensitive substring of the name or the goal.",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "name": "filter",
+            "required": false,
+            "in": "query",
+            "description": "`scheduled`: at least one enabled schedule. `paused`: has schedules, none enabled. `unscheduled`: no schedule. `failing`: a schedule failed 3 times in a row, or the last run failed. `never_run`: no run.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "scheduled",
+                "paused",
+                "unscheduled",
+                "failing",
+                "never_run"
+              ]
+            }
+          },
+          {
+            "name": "policyId",
+            "required": false,
+            "in": "query",
+            "description": "Tasks whose own policy is this one (a UUID or `builtin:<key>`); `default` is the tasks that follow the user's default policy.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "default"
+                },
+                {
+                  "type": "string",
+                  "maxLength": 64,
+                  "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+                }
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "`created_desc` (default), `name_asc`, `last_run_desc`, `next_run_asc` (tasks with no next run last), `spend_desc` (cost of the last 30 days).",
+            "schema": {
+              "default": "created_desc",
+              "type": "string",
+              "enum": [
+                "created_desc",
+                "name_asc",
+                "last_run_desc",
+                "next_run_asc",
+                "spend_desc"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Page size, 1 to 100. Default 50 with `envelope`; without `envelope` and without `limit` every task is returned, as before.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "The `nextCursor` of the previous page (with the same `sort`). Opaque: do not parse it.",
+            "schema": {
+              "maxLength": 600,
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "",
+            "description": "An array of tasks. With `envelope=1`, `data` is a `TaskPageResponseDto` instead: `{ items, nextCursor, total }`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -26855,7 +26964,7 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/TaskResponseDto"
+                        "$ref": "#/components/schemas/TaskDetailResponseDto"
                       }
                     }
                   }
@@ -26902,6 +27011,7 @@
             "PAT-auth": []
           }
         ],
+        "summary": "The user's tasks",
         "tags": [
           "Tasks"
         ],
@@ -26911,10 +27021,10 @@
           "permissions": [
             "tasks:read"
           ]
-        },
-        "description": "**Requires:** authentication, plus permission `tasks:read`."
+        }
       },
       "post": {
+        "description": "Optional `schedules` (at most 10) are created with the task in one transaction. One invalid schedule fails the whole request with 400, a typed `code` and `details.path` naming it (`schedules[1].cron`, `schedules[0].policyId`); nothing is created. A schedule without `timezone` gets the profile time zone (`GET /schedules/defaults`). The response is the task with its `summary`.\n\n**Requires:** authentication, plus permission `tasks:write`.",
         "operationId": "tasks_create",
         "parameters": [],
         "requestBody": {
@@ -26939,7 +27049,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/TaskResponseDto"
+                      "$ref": "#/components/schemas/TaskWithSummaryResponseDto"
                     }
                   }
                 }
@@ -26985,6 +27095,7 @@
             "PAT-auth": []
           }
         ],
+        "summary": "Create a task, with its schedules",
         "tags": [
           "Tasks"
         ],
@@ -26994,12 +27105,12 @@
           "permissions": [
             "tasks:write"
           ]
-        },
-        "description": "**Requires:** authentication, plus permission `tasks:write`."
+        }
       }
     },
     "/api/tasks/{id}": {
       "get": {
+        "description": "`include=summary` adds the same `summary` object the list returns.\n\n**Requires:** authentication, plus permission `tasks:read`.",
         "operationId": "tasks_get",
         "parameters": [
           {
@@ -27008,6 +27119,16 @@
             "in": "path",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "include",
+            "required": false,
+            "in": "query",
+            "description": "`summary` adds a `summary` object to each task: its schedules, next run, last run, live run, run counts and the policy that applies.",
+            "schema": {
+              "type": "string",
+              "const": "summary"
             }
           }
         ],
@@ -27023,7 +27144,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/TaskResponseDto"
+                      "$ref": "#/components/schemas/TaskDetailResponseDto"
                     }
                   }
                 }
@@ -27069,6 +27190,7 @@
             "PAT-auth": []
           }
         ],
+        "summary": "One task",
         "tags": [
           "Tasks"
         ],
@@ -27078,8 +27200,7 @@
           "permissions": [
             "tasks:read"
           ]
-        },
-        "description": "**Requires:** authentication, plus permission `tasks:read`."
+        }
       },
       "patch": {
         "operationId": "tasks_update",
@@ -27174,6 +27295,7 @@
         "description": "**Requires:** authentication, plus permission `tasks:write`."
       },
       "delete": {
+        "description": "Its schedules are deleted with it. Its runs are kept, with `taskId` set to null (they stay in the runs list as one-off runs).\n\n**Requires:** authentication, plus permission `tasks:write`.",
         "operationId": "tasks_remove",
         "parameters": [
           {
@@ -27225,6 +27347,7 @@
             "PAT-auth": []
           }
         ],
+        "summary": "Delete a task",
         "tags": [
           "Tasks"
         ],
@@ -27234,48 +27357,296 @@
           "permissions": [
             "tasks:write"
           ]
-        },
-        "description": "**Requires:** authentication, plus permission `tasks:write`."
+        }
       }
     },
-    "/api/runs": {
-      "get": {
-        "operationId": "runs_list",
+    "/api/tasks/{id}/schedules": {
+      "put": {
+        "description": "One transaction: an item with an `id` updates that schedule (its `lastRunAt`, `lastRunId` and `consecutiveFailures` are kept; a field left out is unchanged), an item without creates one, and the task's schedules that are not listed are deleted. `nextRunAt` is recomputed for each. An invalid item fails the whole request with 400, a typed `code` and `details.path` (`schedules[1].cron`); an `id` that is not this task's is 400 `SCHEDULE_NOT_IN_TASK`. The response is the task with its `summary`.\n\n**Requires:** authentication, plus permission `tasks:write`.",
+        "operationId": "taskSchedules_replace",
         "parameters": [
           {
-            "name": "taskId",
-            "required": false,
-            "in": "query",
+            "name": "id",
+            "required": true,
+            "in": "path",
             "schema": {
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceTaskSchedulesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskWithSummaryResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Replace a task's schedules",
+        "tags": [
+          "Tasks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:write"
+          ]
+        }
+      }
+    },
+    "/api/tasks/{id}/schedules/pause": {
+      "post": {
+        "description": "Sets `enabled = false` and `nextRunAt = null` on all of the task's schedules. A run that is live keeps going until it finishes, and the task can still be started by hand, the API or MCP. 409 `NO_SCHEDULES` when the task has no schedule.\n\n**Requires:** authentication, plus permission `tasks:write`.",
+        "operationId": "taskSchedules_pause",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskSchedulesChangedResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Pause every schedule of a task",
+        "tags": [
+          "Tasks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:write"
+          ]
+        }
+      }
+    },
+    "/api/tasks/{id}/schedules/resume": {
+      "post": {
+        "description": "Sets `enabled = true`, a fresh `nextRunAt` and `consecutiveFailures = 0` on all of the task's schedules, in one transaction. 409 `NO_SCHEDULES` when the task has no schedule.\n\n**Requires:** authentication, plus permission `tasks:write`.",
+        "operationId": "taskSchedules_resume",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TaskSchedulesChangedResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Resume every schedule of a task",
+        "tags": [
+          "Tasks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:write"
+          ]
+        }
+      }
+    },
+    "/api/tasks/{id}/stats": {
+      "get": {
+        "description": "Outcomes, durations, steps, cost and stop reasons of the task's runs created in the last `days` calendar days (today included), with one `series` entry per day. Days are bucketed in the viewer's time zone: the profile time zone, else the `X-Time-Zone` header, else UTC.\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "operationId": "taskSchedules_stats",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
               "type": "string"
             }
           },
           {
-            "name": "status",
+            "name": "days",
             "required": false,
             "in": "query",
+            "description": "How many calendar days back, today included (7 to 90).",
             "schema": {
-              "type": "string",
-              "enum": [
-                "queued",
-                "running",
-                "waiting_human",
-                "succeeded",
-                "failed",
-                "cancelled"
-              ]
-            }
-          },
-          {
-            "name": "limit",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "minimum": 1,
-              "maximum": 200,
-              "default": 50,
+              "minimum": 7,
+              "maximum": 90,
+              "default": 30,
               "type": "integer"
             }
           }
@@ -27292,9 +27663,531 @@
                   ],
                   "properties": {
                     "data": {
+                      "$ref": "#/components/schemas/TaskStatsResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "A task's run statistics",
+        "tags": [
+          "Tasks"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        }
+      }
+    },
+    "/api/runs/delete": {
+      "post": {
+        "description": "Permanent. Send exactly one of `ids` or `filter`. Live runs (queued, running, waiting_human) are never deleted: with `ids` they are listed in `skippedLive`, with `filter` they are not matched. A filter that matches more than 500 finished runs answers 202 and a queue job deletes them. Deleting runs also removes their cost and stop-reason history from task spend and from alert counts.\n\n**Requires:** authentication, plus permission `runs:delete`.",
+        "operationId": "runsDelete_deleteMany",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteRunsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The runs were deleted in the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunsDeletedResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "More than 500 finished runs matched the filter: the `browser.runs.delete` job deletes them.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunsDeleteQueuedResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`COUNT_CHANGED`: the matching count is more than 5 % away from `expectedCount`; `details.matched` is the real count. Nothing was deleted."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Delete runs: a list of ids, or every finished run that matches a filter",
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:delete"
+          ]
+        }
+      }
+    },
+    "/api/runs/{id}": {
+      "delete": {
+        "description": "Permanent: the run, its steps and its questions. 409 `RUN_LIVE` while the run is queued, running or waiting for a person: cancel it first.\n\n**Requires:** authentication, plus permission `runs:delete`.",
+        "operationId": "runsDelete_deleteOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`RUN_NOT_FOUND`: no such run, or it is another user's."
+          },
+          "409": {
+            "description": "`RUN_LIVE`: the run is live. Cancel it first."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Delete one finished run",
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:delete"
+          ]
+        }
+      },
+      "get": {
+        "operationId": "runs_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunDetailResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:read`."
+      }
+    },
+    "/api/runs": {
+      "get": {
+        "operationId": "runs_list",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Run status. Any of: queued, running, waiting_human, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "state",
+            "required": false,
+            "in": "query",
+            "description": "Shorthand for a status group: `live` = queued, running, waiting_human; `finished` = succeeded, failed, cancelled. Not together with `status`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "live",
+                "finished"
+              ]
+            }
+          },
+          {
+            "name": "taskId",
+            "required": false,
+            "in": "query",
+            "description": "A task's id, or `none` for runs without a task (ad-hoc and external runs).",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "none"
+                },
+                {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              ]
+            }
+          },
+          {
+            "name": "trigger",
+            "required": false,
+            "in": "query",
+            "description": "What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Runs created at or after this ISO 8601 date-time (inclusive).",
+            "schema": {
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Runs created before this ISO 8601 date-time (exclusive).",
+            "schema": {
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Case-insensitive substring of the goal (1 to 200 characters).",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "name": "stopReason",
+            "required": false,
+            "in": "query",
+            "description": "Why the run stopped; `budget` is every `budget_*` reason. Any of: finished, budget_actions, budget_model_calls, budget_active_time, budget_input_tokens, budget_output_tokens, budget_cost, stalled, cancelled, error, no_model, budget. Repeat the parameter or separate the values with commas.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "policyId",
+            "required": false,
+            "in": "query",
+            "description": "Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`.",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "envelope",
+            "required": false,
+            "in": "query",
+            "description": "`1` returns `{ items, nextCursor }` instead of an array.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1",
+                "true"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "The previous page's `nextCursor`. Opaque: do not parse or build it.",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 400,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Rows to return: 1 to 100 with `envelope`, 1 to 200 without. Default 50.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "description": "By creation time, then id: `desc` is newest first.",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "desc",
+                "asc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "An array of runs: the newest `limit`. With `envelope=1` the data is instead one page, `{ items, nextCursor }` (schema `RunPageResponseDto`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/RunResponseDto"
+                        "$ref": "#/components/schemas/RunListItemResponseDto"
                       }
                     }
                   }
@@ -27437,15 +28330,106 @@
         "description": "**Requires:** authentication, plus permission `runs:write`."
       }
     },
-    "/api/runs/{id}": {
+    "/api/runs/counts": {
       "get": {
-        "operationId": "runs_get",
+        "operationId": "runs_counts",
         "parameters": [
           {
-            "name": "id",
-            "required": true,
-            "in": "path",
+            "name": "taskId",
+            "required": false,
+            "in": "query",
+            "description": "A task's id, or `none` for runs without a task (ad-hoc and external runs).",
             "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "const": "none"
+                },
+                {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              ]
+            }
+          },
+          {
+            "name": "trigger",
+            "required": false,
+            "in": "query",
+            "description": "What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Runs created at or after this ISO 8601 date-time (inclusive).",
+            "schema": {
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Runs created before this ISO 8601 date-time (exclusive).",
+            "schema": {
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Case-insensitive substring of the goal (1 to 200 characters).",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "name": "stopReason",
+            "required": false,
+            "in": "query",
+            "description": "Why the run stopped; `budget` is every `budget_*` reason. Any of: finished, budget_actions, budget_model_calls, budget_active_time, budget_input_tokens, budget_output_tokens, budget_cost, stalled, cancelled, error, no_model, budget. Repeat the parameter or separate the values with commas.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "policyId",
+            "required": false,
+            "in": "query",
+            "description": "Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`.",
+            "schema": {
+              "maxLength": 64,
               "type": "string"
             }
           }
@@ -27462,7 +28446,7 @@
                   ],
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/RunDetailResponseDto"
+                      "$ref": "#/components/schemas/RunCountsResponseDto"
                     }
                   }
                 }
@@ -29222,9 +30206,12 @@
         "parameters": [
           {
             "name": "taskId",
-            "required": true,
+            "required": false,
             "in": "query",
+            "description": "Only the schedules of this task.",
             "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
             }
           }
@@ -29303,6 +30290,7 @@
         "description": "**Requires:** authentication, plus permission `tasks:read`."
       },
       "post": {
+        "description": "Without `timezone` the schedule gets the profile time zone (`GET /schedules/defaults`). 409 `SCHEDULE_LIMIT` when the task already has 10 schedules.\n\n**Requires:** authentication, plus permission `tasks:write`.",
         "operationId": "schedules_create",
         "parameters": [],
         "requestBody": {
@@ -29373,6 +30361,7 @@
             "PAT-auth": []
           }
         ],
+        "summary": "Add a schedule to a task",
         "tags": [
           "Schedules"
         ],
@@ -29382,8 +30371,169 @@
           "permissions": [
             "tasks:write"
           ]
+        }
+      }
+    },
+    "/api/schedules/defaults": {
+      "get": {
+        "description": "The time zone a schedule is given when its request names none: the user's profile time zone; for a profile that follows the device, the `X-Time-Zone` request header; else UTC. Changing the profile later does not move existing schedules.\n\n**Requires:** authentication, plus permission `tasks:read`.",
+        "operationId": "schedules_defaults",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ScheduleDefaultsResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
         },
-        "description": "**Requires:** authentication, plus permission `tasks:write`."
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "What a new schedule gets by default",
+        "tags": [
+          "Schedules"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:read"
+          ]
+        }
+      }
+    },
+    "/api/schedules/preview": {
+      "post": {
+        "description": "Always 200. A usable expression answers `valid: true` with what it means in words and its next firings (ISO instants; format them in the zone you show). Anything else answers `valid: false` with the `code` and `message` saving it would be refused with. Nothing is stored.\n\n**Requires:** authentication, plus permission `tasks:read`.",
+        "operationId": "schedules_preview",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewScheduleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SchedulePreviewResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Check a schedule before saving it",
+        "tags": [
+          "Schedules"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "tasks:read"
+          ]
+        }
       }
     },
     "/api/schedules/{id}": {
@@ -33887,6 +35037,18 @@
               "POLICY_IMPORT_INVALID",
               "POLICY_IMPORT_UNSUPPORTED_VERSION",
               "POLICY_IMPORT_TOO_LARGE",
+              "INVALID_FILTER",
+              "INVALID_CURSOR",
+              "RUN_NOT_FOUND",
+              "RUN_LIVE",
+              "COUNT_CHANGED",
+              "INVALID_CRON",
+              "INVALID_TIMEZONE",
+              "CRON_TOO_FREQUENT",
+              "SCHEDULE_NOT_IN_TASK",
+              "INVALID_TASK_CURSOR",
+              "SCHEDULE_LIMIT",
+              "NO_SCHEDULES",
               "WEBHOOK_NOT_FOUND",
               "WEBHOOK_DELIVERY_NOT_FOUND",
               "WEBHOOK_URL_INVALID",
@@ -60874,6 +62036,1430 @@
           "name"
         ]
       },
+      "TaskDetailResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "goal": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "hostId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hostFallback": {
+            "type": "boolean",
+            "description": "When the chosen host cannot take a run, run on another available one"
+          },
+          "allowedDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxSteps": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "deprecated": true,
+            "description": "Deprecated: see `policyId`"
+          },
+          "maxMinutes": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "deprecated": true,
+            "description": "Deprecated: see `policyId`"
+          },
+          "confirmRiskyActions": {
+            "type": "boolean"
+          },
+          "model": {
+            "deprecated": true,
+            "description": "Deprecated: see `policyId`",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "policyId": {
+            "description": "The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "spend30d": {
+            "type": "object",
+            "properties": {
+              "runs": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Runs created in the last 30 days"
+              },
+              "costUsd": {
+                "type": "number",
+                "description": "USD spent on model calls by those runs; a lower bound while costKnown is false"
+              },
+              "costKnown": {
+                "type": "boolean",
+                "description": "False when a call of those runs could not be priced (its model has no price)"
+              },
+              "tokens": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Input plus output tokens"
+              },
+              "succeeded": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Of those runs, how many succeeded"
+              },
+              "avgSuccessCostUsd": {
+                "description": "The average cost of one successful run (USD; a lower bound while costKnown is false); null with no successful run",
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "runs",
+              "costUsd",
+              "costKnown",
+              "tokens",
+              "succeeded",
+              "avgSuccessCostUsd"
+            ],
+            "description": "What the task's runs spent in the last 30 days"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "schedules": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "cron": {
+                      "type": "string"
+                    },
+                    "timezone": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "concurrency": {
+                      "type": "string",
+                      "enum": [
+                        "skip",
+                        "queue"
+                      ]
+                    },
+                    "nextRunAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "ISO 8601 timestamp"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lastRunAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "ISO 8601 timestamp"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "consecutiveFailures": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Failed scheduled runs in a row; 3 or more is \"failing\""
+                    },
+                    "description": {
+                      "type": "string",
+                      "description": "The expression in words (English, 24-hour), e.g. \"Monday to Friday at 09:00\"; \"Custom schedule (<expr>)\" for one the builder does not write"
+                    },
+                    "policyId": {
+                      "description": "Overrides the task's agent policy for this schedule's runs; null follows the task",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "cron",
+                    "timezone",
+                    "enabled",
+                    "concurrency",
+                    "nextRunAt",
+                    "lastRunAt",
+                    "consecutiveFailures",
+                    "description",
+                    "policyId"
+                  ]
+                },
+                "description": "Oldest first"
+              },
+              "scheduleState": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "active",
+                  "paused",
+                  "partial"
+                ],
+                "description": "`none`: no schedule. `active`: all enabled. `paused`: none enabled. `partial`: some enabled, some not."
+              },
+              "nextRunAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "description": "ISO 8601 timestamp"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The earliest next firing among the enabled schedules"
+              },
+              "lastRun": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "queued",
+                          "running",
+                          "waiting_human",
+                          "succeeded",
+                          "failed",
+                          "cancelled"
+                        ]
+                      },
+                      "trigger": {
+                        "type": "string",
+                        "enum": [
+                          "manual",
+                          "schedule",
+                          "api",
+                          "mcp",
+                          "external"
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "description": "ISO 8601 timestamp"
+                      },
+                      "finishedAt": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "description": "ISO 8601 timestamp"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "status",
+                      "trigger",
+                      "createdAt",
+                      "finishedAt"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The newest run of the task"
+              },
+              "liveRunId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The newest run that is queued, running or waiting for a person"
+              },
+              "runCounts": {
+                "type": "object",
+                "properties": {
+                  "total": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Runs of the task that still exist"
+                  },
+                  "last7d": {
+                    "type": "object",
+                    "properties": {
+                      "succeeded": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "failed": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "cancelled": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "succeeded",
+                      "failed",
+                      "cancelled"
+                    ],
+                    "description": "Runs created in the last 7 days, by outcome"
+                  }
+                },
+                "required": [
+                  "total",
+                  "last7d"
+                ]
+              },
+              "policy": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "A UUID, or `builtin:<key>`"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "builtin": {
+                        "type": "boolean"
+                      },
+                      "isDefault": {
+                        "type": "boolean",
+                        "description": "True when it is the policy the user's default resolves to"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "builtin",
+                      "isDefault"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The agent policy a run started now would use: the task's, else the user's default, else `builtin:balanced` (a deleted policy falls through). Null only when it could not be resolved."
+              }
+            },
+            "required": [
+              "schedules",
+              "scheduleState",
+              "nextRunAt",
+              "lastRun",
+              "liveRunId",
+              "runCounts",
+              "policy"
+            ],
+            "description": "Schedule and run facts of the task, present with `include=summary`"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "name",
+          "goal",
+          "profile",
+          "hostId",
+          "hostFallback",
+          "allowedDomains",
+          "maxSteps",
+          "maxMinutes",
+          "confirmRiskyActions",
+          "model",
+          "policyId",
+          "spend30d",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "TaskPageResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "userId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "goal": {
+                  "type": "string"
+                },
+                "profile": {
+                  "type": "string"
+                },
+                "hostId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "hostFallback": {
+                  "type": "boolean",
+                  "description": "When the chosen host cannot take a run, run on another available one"
+                },
+                "allowedDomains": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "maxSteps": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "deprecated": true,
+                  "description": "Deprecated: see `policyId`"
+                },
+                "maxMinutes": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "deprecated": true,
+                  "description": "Deprecated: see `policyId`"
+                },
+                "confirmRiskyActions": {
+                  "type": "boolean"
+                },
+                "model": {
+                  "deprecated": true,
+                  "description": "Deprecated: see `policyId`",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "policyId": {
+                  "description": "The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "spend30d": {
+                  "type": "object",
+                  "properties": {
+                    "runs": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Runs created in the last 30 days"
+                    },
+                    "costUsd": {
+                      "type": "number",
+                      "description": "USD spent on model calls by those runs; a lower bound while costKnown is false"
+                    },
+                    "costKnown": {
+                      "type": "boolean",
+                      "description": "False when a call of those runs could not be priced (its model has no price)"
+                    },
+                    "tokens": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Input plus output tokens"
+                    },
+                    "succeeded": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Of those runs, how many succeeded"
+                    },
+                    "avgSuccessCostUsd": {
+                      "description": "The average cost of one successful run (USD; a lower bound while costKnown is false); null with no successful run",
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "runs",
+                    "costUsd",
+                    "costKnown",
+                    "tokens",
+                    "succeeded",
+                    "avgSuccessCostUsd"
+                  ],
+                  "description": "What the task's runs spent in the last 30 days"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "ISO 8601 timestamp"
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "description": "ISO 8601 timestamp"
+                },
+                "summary": {
+                  "type": "object",
+                  "properties": {
+                    "schedules": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "cron": {
+                            "type": "string"
+                          },
+                          "timezone": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "concurrency": {
+                            "type": "string",
+                            "enum": [
+                              "skip",
+                              "queue"
+                            ]
+                          },
+                          "nextRunAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "description": "ISO 8601 timestamp"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "lastRunAt": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "description": "ISO 8601 timestamp"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "consecutiveFailures": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991,
+                            "description": "Failed scheduled runs in a row; 3 or more is \"failing\""
+                          },
+                          "description": {
+                            "type": "string",
+                            "description": "The expression in words (English, 24-hour), e.g. \"Monday to Friday at 09:00\"; \"Custom schedule (<expr>)\" for one the builder does not write"
+                          },
+                          "policyId": {
+                            "description": "Overrides the task's agent policy for this schedule's runs; null follows the task",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "cron",
+                          "timezone",
+                          "enabled",
+                          "concurrency",
+                          "nextRunAt",
+                          "lastRunAt",
+                          "consecutiveFailures",
+                          "description",
+                          "policyId"
+                        ]
+                      },
+                      "description": "Oldest first"
+                    },
+                    "scheduleState": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "active",
+                        "paused",
+                        "partial"
+                      ],
+                      "description": "`none`: no schedule. `active`: all enabled. `paused`: none enabled. `partial`: some enabled, some not."
+                    },
+                    "nextRunAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "ISO 8601 timestamp"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "The earliest next firing among the enabled schedules"
+                    },
+                    "lastRun": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "queued",
+                                "running",
+                                "waiting_human",
+                                "succeeded",
+                                "failed",
+                                "cancelled"
+                              ]
+                            },
+                            "trigger": {
+                              "type": "string",
+                              "enum": [
+                                "manual",
+                                "schedule",
+                                "api",
+                                "mcp",
+                                "external"
+                              ]
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "description": "ISO 8601 timestamp"
+                            },
+                            "finishedAt": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "description": "ISO 8601 timestamp"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "status",
+                            "trigger",
+                            "createdAt",
+                            "finishedAt"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "The newest run of the task"
+                    },
+                    "liveRunId": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "The newest run that is queued, running or waiting for a person"
+                    },
+                    "runCounts": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "Runs of the task that still exist"
+                        },
+                        "last7d": {
+                          "type": "object",
+                          "properties": {
+                            "succeeded": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "failed": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "cancelled": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "succeeded",
+                            "failed",
+                            "cancelled"
+                          ],
+                          "description": "Runs created in the last 7 days, by outcome"
+                        }
+                      },
+                      "required": [
+                        "total",
+                        "last7d"
+                      ]
+                    },
+                    "policy": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "description": "A UUID, or `builtin:<key>`"
+                            },
+                            "name": {
+                              "type": "string"
+                            },
+                            "builtin": {
+                              "type": "boolean"
+                            },
+                            "isDefault": {
+                              "type": "boolean",
+                              "description": "True when it is the policy the user's default resolves to"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name",
+                            "builtin",
+                            "isDefault"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "The agent policy a run started now would use: the task's, else the user's default, else `builtin:balanced` (a deleted policy falls through). Null only when it could not be resolved."
+                    }
+                  },
+                  "required": [
+                    "schedules",
+                    "scheduleState",
+                    "nextRunAt",
+                    "lastRun",
+                    "liveRunId",
+                    "runCounts",
+                    "policy"
+                  ],
+                  "description": "Schedule and run facts of the task, present with `include=summary`"
+                }
+              },
+              "required": [
+                "id",
+                "userId",
+                "name",
+                "goal",
+                "profile",
+                "hostId",
+                "hostFallback",
+                "allowedDomains",
+                "maxSteps",
+                "maxMinutes",
+                "confirmRiskyActions",
+                "model",
+                "policyId",
+                "spend30d",
+                "createdAt",
+                "updatedAt"
+              ]
+            }
+          },
+          "nextCursor": {
+            "description": "Pass as `cursor` for the next page; null on the last page. Opaque.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Tasks that match `q`, `filter` and `policyId`, on every page"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "total"
+        ]
+      },
+      "TaskWithSummaryResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "goal": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "hostId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hostFallback": {
+            "type": "boolean",
+            "description": "When the chosen host cannot take a run, run on another available one"
+          },
+          "allowedDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxSteps": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "deprecated": true,
+            "description": "Deprecated: see `policyId`"
+          },
+          "maxMinutes": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "deprecated": true,
+            "description": "Deprecated: see `policyId`"
+          },
+          "confirmRiskyActions": {
+            "type": "boolean"
+          },
+          "model": {
+            "deprecated": true,
+            "description": "Deprecated: see `policyId`",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "policyId": {
+            "description": "The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "spend30d": {
+            "type": "object",
+            "properties": {
+              "runs": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Runs created in the last 30 days"
+              },
+              "costUsd": {
+                "type": "number",
+                "description": "USD spent on model calls by those runs; a lower bound while costKnown is false"
+              },
+              "costKnown": {
+                "type": "boolean",
+                "description": "False when a call of those runs could not be priced (its model has no price)"
+              },
+              "tokens": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Input plus output tokens"
+              },
+              "succeeded": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Of those runs, how many succeeded"
+              },
+              "avgSuccessCostUsd": {
+                "description": "The average cost of one successful run (USD; a lower bound while costKnown is false); null with no successful run",
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "runs",
+              "costUsd",
+              "costKnown",
+              "tokens",
+              "succeeded",
+              "avgSuccessCostUsd"
+            ],
+            "description": "What the task's runs spent in the last 30 days"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "schedules": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "cron": {
+                      "type": "string"
+                    },
+                    "timezone": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "concurrency": {
+                      "type": "string",
+                      "enum": [
+                        "skip",
+                        "queue"
+                      ]
+                    },
+                    "nextRunAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "ISO 8601 timestamp"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lastRunAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "ISO 8601 timestamp"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "consecutiveFailures": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Failed scheduled runs in a row; 3 or more is \"failing\""
+                    },
+                    "description": {
+                      "type": "string",
+                      "description": "The expression in words (English, 24-hour), e.g. \"Monday to Friday at 09:00\"; \"Custom schedule (<expr>)\" for one the builder does not write"
+                    },
+                    "policyId": {
+                      "description": "Overrides the task's agent policy for this schedule's runs; null follows the task",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "cron",
+                    "timezone",
+                    "enabled",
+                    "concurrency",
+                    "nextRunAt",
+                    "lastRunAt",
+                    "consecutiveFailures",
+                    "description",
+                    "policyId"
+                  ]
+                },
+                "description": "Oldest first"
+              },
+              "scheduleState": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "active",
+                  "paused",
+                  "partial"
+                ],
+                "description": "`none`: no schedule. `active`: all enabled. `paused`: none enabled. `partial`: some enabled, some not."
+              },
+              "nextRunAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "description": "ISO 8601 timestamp"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The earliest next firing among the enabled schedules"
+              },
+              "lastRun": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "queued",
+                          "running",
+                          "waiting_human",
+                          "succeeded",
+                          "failed",
+                          "cancelled"
+                        ]
+                      },
+                      "trigger": {
+                        "type": "string",
+                        "enum": [
+                          "manual",
+                          "schedule",
+                          "api",
+                          "mcp",
+                          "external"
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "description": "ISO 8601 timestamp"
+                      },
+                      "finishedAt": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "description": "ISO 8601 timestamp"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "status",
+                      "trigger",
+                      "createdAt",
+                      "finishedAt"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The newest run of the task"
+              },
+              "liveRunId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The newest run that is queued, running or waiting for a person"
+              },
+              "runCounts": {
+                "type": "object",
+                "properties": {
+                  "total": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Runs of the task that still exist"
+                  },
+                  "last7d": {
+                    "type": "object",
+                    "properties": {
+                      "succeeded": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "failed": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "cancelled": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "succeeded",
+                      "failed",
+                      "cancelled"
+                    ],
+                    "description": "Runs created in the last 7 days, by outcome"
+                  }
+                },
+                "required": [
+                  "total",
+                  "last7d"
+                ]
+              },
+              "policy": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "A UUID, or `builtin:<key>`"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "builtin": {
+                        "type": "boolean"
+                      },
+                      "isDefault": {
+                        "type": "boolean",
+                        "description": "True when it is the policy the user's default resolves to"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "builtin",
+                      "isDefault"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The agent policy a run started now would use: the task's, else the user's default, else `builtin:balanced` (a deleted policy falls through). Null only when it could not be resolved."
+              }
+            },
+            "required": [
+              "schedules",
+              "scheduleState",
+              "nextRunAt",
+              "lastRun",
+              "liveRunId",
+              "runCounts",
+              "policy"
+            ],
+            "description": "Schedule and run facts of the task, present with `include=summary`"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "name",
+          "goal",
+          "profile",
+          "hostId",
+          "hostFallback",
+          "allowedDomains",
+          "maxSteps",
+          "maxMinutes",
+          "confirmRiskyActions",
+          "model",
+          "policyId",
+          "spend30d",
+          "createdAt",
+          "updatedAt",
+          "summary"
+        ]
+      },
+      "CreateTaskDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "goal": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "profile": {
+            "default": "default",
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"
+          },
+          "hostId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hostFallback": {
+            "default": true,
+            "type": "boolean"
+          },
+          "allowedDomains": {
+            "default": [],
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
+            }
+          },
+          "maxSteps": {
+            "default": 100,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000,
+            "deprecated": true,
+            "description": "Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`."
+          },
+          "maxMinutes": {
+            "default": 30,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 480,
+            "deprecated": true,
+            "description": "Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`."
+          },
+          "confirmRiskyActions": {
+            "default": false,
+            "type": "boolean"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "deprecated": true,
+            "description": "Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`."
+          },
+          "policyId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."
+          },
+          "schedules": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "cron": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "description": "A 5-field cron expression that fires at most every 5 minutes, e.g. `0 9 * * 1-5`."
+                },
+                "timezone": {
+                  "description": "An IANA time zone. Omitted: the owner's profile time zone (see `GET /schedules/defaults`); on an existing schedule, the zone it has.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "enabled": {
+                  "description": "Omitted: `true` for a new schedule, unchanged for an existing one.",
+                  "type": "boolean"
+                },
+                "concurrency": {
+                  "description": "`skip` (default) skips a firing while an earlier run of the task is live; `queue` starts it anyway.",
+                  "type": "string",
+                  "enum": [
+                    "skip",
+                    "queue"
+                  ]
+                },
+                "policyId": {
+                  "description": "Overrides the task's agent policy for this schedule's runs; `null` follows the task. Omitted on an existing schedule: unchanged.",
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 64,
+                      "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "cron"
+              ]
+            },
+            "description": "Schedules created with the task, in the same transaction: one invalid schedule and nothing is created."
+          }
+        },
+        "required": [
+          "name",
+          "goal"
+        ]
+      },
       "TaskResponseDto": {
         "type": "object",
         "properties": {
@@ -61025,102 +63611,6 @@
           "updatedAt"
         ]
       },
-      "CreateTaskDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 200
-          },
-          "goal": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 4000
-          },
-          "profile": {
-            "default": "default",
-            "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9_-]{0,31}$"
-          },
-          "hostId": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "hostFallback": {
-            "default": true,
-            "type": "boolean"
-          },
-          "allowedDomains": {
-            "default": [],
-            "maxItems": 50,
-            "type": "array",
-            "items": {
-              "type": "string",
-              "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
-            }
-          },
-          "maxSteps": {
-            "default": 100,
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 1000,
-            "deprecated": true,
-            "description": "Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`."
-          },
-          "maxMinutes": {
-            "default": 30,
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 480,
-            "deprecated": true,
-            "description": "Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`."
-          },
-          "confirmRiskyActions": {
-            "default": false,
-            "type": "boolean"
-          },
-          "model": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 200
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "deprecated": true,
-            "description": "Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`."
-          },
-          "policyId": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 64,
-                "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."
-          }
-        },
-        "required": [
-          "name",
-          "goal"
-        ]
-      },
       "UpdateTaskDto": {
         "type": "object",
         "properties": {
@@ -61207,7 +63697,874 @@
           }
         }
       },
-      "RunResponseDto": {
+      "ReplaceTaskSchedulesDto": {
+        "type": "object",
+        "properties": {
+          "schedules": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "cron": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100,
+                  "description": "A 5-field cron expression that fires at most every 5 minutes, e.g. `0 9 * * 1-5`."
+                },
+                "timezone": {
+                  "description": "An IANA time zone. Omitted: the owner's profile time zone (see `GET /schedules/defaults`); on an existing schedule, the zone it has.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                },
+                "enabled": {
+                  "description": "Omitted: `true` for a new schedule, unchanged for an existing one.",
+                  "type": "boolean"
+                },
+                "concurrency": {
+                  "description": "`skip` (default) skips a firing while an earlier run of the task is live; `queue` starts it anyway.",
+                  "type": "string",
+                  "enum": [
+                    "skip",
+                    "queue"
+                  ]
+                },
+                "policyId": {
+                  "description": "Overrides the task's agent policy for this schedule's runs; `null` follows the task. Omitted on an existing schedule: unchanged.",
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 64,
+                      "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "id": {
+                  "description": "An existing schedule of this task to update. Omitted: a new schedule. This task's schedules that are not listed are deleted.",
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                }
+              },
+              "required": [
+                "cron"
+              ]
+            }
+          }
+        },
+        "required": [
+          "schedules"
+        ]
+      },
+      "TaskSchedulesChangedResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "goal": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "hostId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hostFallback": {
+            "type": "boolean",
+            "description": "When the chosen host cannot take a run, run on another available one"
+          },
+          "allowedDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "maxSteps": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "deprecated": true,
+            "description": "Deprecated: see `policyId`"
+          },
+          "maxMinutes": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "deprecated": true,
+            "description": "Deprecated: see `policyId`"
+          },
+          "confirmRiskyActions": {
+            "type": "boolean"
+          },
+          "model": {
+            "deprecated": true,
+            "description": "Deprecated: see `policyId`",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "policyId": {
+            "description": "The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "spend30d": {
+            "type": "object",
+            "properties": {
+              "runs": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Runs created in the last 30 days"
+              },
+              "costUsd": {
+                "type": "number",
+                "description": "USD spent on model calls by those runs; a lower bound while costKnown is false"
+              },
+              "costKnown": {
+                "type": "boolean",
+                "description": "False when a call of those runs could not be priced (its model has no price)"
+              },
+              "tokens": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Input plus output tokens"
+              },
+              "succeeded": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Of those runs, how many succeeded"
+              },
+              "avgSuccessCostUsd": {
+                "description": "The average cost of one successful run (USD; a lower bound while costKnown is false); null with no successful run",
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "runs",
+              "costUsd",
+              "costKnown",
+              "tokens",
+              "succeeded",
+              "avgSuccessCostUsd"
+            ],
+            "description": "What the task's runs spent in the last 30 days"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "schedules": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "cron": {
+                      "type": "string"
+                    },
+                    "timezone": {
+                      "type": "string"
+                    },
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "concurrency": {
+                      "type": "string",
+                      "enum": [
+                        "skip",
+                        "queue"
+                      ]
+                    },
+                    "nextRunAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "ISO 8601 timestamp"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lastRunAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "description": "ISO 8601 timestamp"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "consecutiveFailures": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Failed scheduled runs in a row; 3 or more is \"failing\""
+                    },
+                    "description": {
+                      "type": "string",
+                      "description": "The expression in words (English, 24-hour), e.g. \"Monday to Friday at 09:00\"; \"Custom schedule (<expr>)\" for one the builder does not write"
+                    },
+                    "policyId": {
+                      "description": "Overrides the task's agent policy for this schedule's runs; null follows the task",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "cron",
+                    "timezone",
+                    "enabled",
+                    "concurrency",
+                    "nextRunAt",
+                    "lastRunAt",
+                    "consecutiveFailures",
+                    "description",
+                    "policyId"
+                  ]
+                },
+                "description": "Oldest first"
+              },
+              "scheduleState": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "active",
+                  "paused",
+                  "partial"
+                ],
+                "description": "`none`: no schedule. `active`: all enabled. `paused`: none enabled. `partial`: some enabled, some not."
+              },
+              "nextRunAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "description": "ISO 8601 timestamp"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The earliest next firing among the enabled schedules"
+              },
+              "lastRun": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "queued",
+                          "running",
+                          "waiting_human",
+                          "succeeded",
+                          "failed",
+                          "cancelled"
+                        ]
+                      },
+                      "trigger": {
+                        "type": "string",
+                        "enum": [
+                          "manual",
+                          "schedule",
+                          "api",
+                          "mcp",
+                          "external"
+                        ]
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "description": "ISO 8601 timestamp"
+                      },
+                      "finishedAt": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "description": "ISO 8601 timestamp"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "status",
+                      "trigger",
+                      "createdAt",
+                      "finishedAt"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The newest run of the task"
+              },
+              "liveRunId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The newest run that is queued, running or waiting for a person"
+              },
+              "runCounts": {
+                "type": "object",
+                "properties": {
+                  "total": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Runs of the task that still exist"
+                  },
+                  "last7d": {
+                    "type": "object",
+                    "properties": {
+                      "succeeded": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "failed": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "cancelled": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "required": [
+                      "succeeded",
+                      "failed",
+                      "cancelled"
+                    ],
+                    "description": "Runs created in the last 7 days, by outcome"
+                  }
+                },
+                "required": [
+                  "total",
+                  "last7d"
+                ]
+              },
+              "policy": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "A UUID, or `builtin:<key>`"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "builtin": {
+                        "type": "boolean"
+                      },
+                      "isDefault": {
+                        "type": "boolean",
+                        "description": "True when it is the policy the user's default resolves to"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "builtin",
+                      "isDefault"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The agent policy a run started now would use: the task's, else the user's default, else `builtin:balanced` (a deleted policy falls through). Null only when it could not be resolved."
+              }
+            },
+            "required": [
+              "schedules",
+              "scheduleState",
+              "nextRunAt",
+              "lastRun",
+              "liveRunId",
+              "runCounts",
+              "policy"
+            ],
+            "description": "Schedule and run facts of the task, present with `include=summary`"
+          },
+          "skipped": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "description": "Resume only: schedules left as they were because their stored expression is no longer valid. Normally empty."
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "name",
+          "goal",
+          "profile",
+          "hostId",
+          "hostFallback",
+          "allowedDomains",
+          "maxSteps",
+          "maxMinutes",
+          "confirmRiskyActions",
+          "model",
+          "policyId",
+          "spend30d",
+          "createdAt",
+          "updatedAt",
+          "summary",
+          "skipped"
+        ]
+      },
+      "TaskStatsResponseDto": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "timezone": {
+            "type": "string",
+            "description": "The zone the days are bucketed in"
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "runs": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Runs created in the period, live ones included"
+              },
+              "succeeded": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "cancelled": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "successRate": {
+                "description": "succeeded / (succeeded + failed), 0 to 1; null when no run succeeded or failed",
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "costUsd": {
+                "description": "USD spent by the runs of the period; null when none of them has a cost",
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "costKnown": {
+                "type": "boolean",
+                "description": "False when a run of the period had a call that could not be priced: `costUsd` is then \"at least\""
+              }
+            },
+            "required": [
+              "runs",
+              "succeeded",
+              "failed",
+              "cancelled",
+              "successRate",
+              "costUsd",
+              "costKnown"
+            ]
+          },
+          "avgDurationSeconds": {
+            "description": "Mean of finishedAt - startedAt over the finished runs that started",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "p95DurationSeconds": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "avgSteps": {
+            "description": "Mean step count of the finished runs",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "avgCostPerSuccessUsd": {
+            "description": "Mean cost of the succeeded runs that have a cost",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "description": "YYYY-MM-DD"
+                },
+                "succeeded": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "failed": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "cancelled": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "costUsd": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "date",
+                "succeeded",
+                "failed",
+                "cancelled",
+                "costUsd"
+              ]
+            },
+            "description": "One entry per calendar day, oldest first, zeros included"
+          },
+          "stopReasons": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "finished",
+                        "budget_actions",
+                        "budget_model_calls",
+                        "budget_active_time",
+                        "budget_input_tokens",
+                        "budget_output_tokens",
+                        "budget_cost",
+                        "stalled",
+                        "cancelled",
+                        "error",
+                        "no_model"
+                      ]
+                    },
+                    {
+                      "type": "string",
+                      "const": "unknown"
+                    }
+                  ],
+                  "description": "`unknown`: a run from before stop reasons were recorded"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "reason",
+                "count"
+              ]
+            },
+            "description": "Finished runs of the period by why they stopped, most frequent first"
+          }
+        },
+        "required": [
+          "days",
+          "timezone",
+          "totals",
+          "avgDurationSeconds",
+          "p95DurationSeconds",
+          "avgSteps",
+          "avgCostPerSuccessUsd",
+          "series",
+          "stopReasons"
+        ]
+      },
+      "RunsDeleteQueuedResponseDto": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "The `browser.runs.delete` job that deletes the runs"
+          },
+          "matched": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Finished runs that matched when the request was made; runs created later are never deleted by the job"
+          },
+          "costUsd": {
+            "description": "The recorded model spend (USD) of the matched runs; null when none of them made a model call",
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "jobId",
+          "matched",
+          "costUsd"
+        ]
+      },
+      "RunsDeletedResponseDto": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Runs deleted, with their steps and questions"
+          },
+          "costUsd": {
+            "description": "The recorded model spend (USD) of the deleted runs; null when none of them made a model call",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "skippedLive": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "description": "Runs left alone because they are queued, running or waiting for a person: cancel them first"
+          },
+          "notFound": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "description": "With `ids`: ids that are not the caller's runs (missing, already deleted, or another user's). Always empty with `filter`"
+          }
+        },
+        "required": [
+          "deleted",
+          "costUsd",
+          "skippedLive",
+          "notFound"
+        ]
+      },
+      "DeleteRunsDto": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "description": "The runs to delete: 1 to 500 unique ids. Not together with `filter`.",
+            "minItems": 1,
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "filter": {
+            "description": "Delete every FINISHED run (succeeded, failed, cancelled) that matches: the same filter as `GET /runs`. A live status in it is ignored, never deleted. Not together with `ids`. `{}` means all finished runs and needs `expectedCount`.",
+            "type": "object",
+            "properties": {
+              "status": {
+                "description": "Run status. Any of: queued, running, waiting_human, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "state": {
+                "description": "Shorthand for a status group: `live` = queued, running, waiting_human; `finished` = succeeded, failed, cancelled. Not together with `status`.",
+                "type": "string",
+                "enum": [
+                  "live",
+                  "finished"
+                ]
+              },
+              "taskId": {
+                "description": "A task's id, or `none` for runs without a task (ad-hoc and external runs).",
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "none"
+                  },
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                ]
+              },
+              "trigger": {
+                "description": "What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "from": {
+                "description": "Runs created at or after this ISO 8601 date-time (inclusive).",
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "to": {
+                "description": "Runs created before this ISO 8601 date-time (exclusive).",
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "q": {
+                "description": "Case-insensitive substring of the goal (1 to 200 characters).",
+                "type": "string",
+                "maxLength": 200
+              },
+              "stopReason": {
+                "description": "Why the run stopped; `budget` is every `budget_*` reason. Any of: finished, budget_actions, budget_model_calls, budget_active_time, budget_input_tokens, budget_output_tokens, budget_cost, stalled, cancelled, error, no_model, budget. Repeat the parameter or separate the values with commas.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "policyId": {
+                "description": "Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`.",
+                "type": "string",
+                "maxLength": 64
+              }
+            },
+            "additionalProperties": false
+          },
+          "expectedCount": {
+            "description": "With `filter`: the number of runs the caller expects to delete (the count it showed). When the real count differs by more than 5 %, nothing is deleted and the answer is 409 `COUNT_CHANGED`.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "additionalProperties": false
+      },
+      "RunListItemResponseDto": {
         "type": "object",
         "properties": {
           "id": {
@@ -61642,7 +64999,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "The run budget while the run is live (queued, running, waiting_human); null on a finished run in a list (read it from `GET /runs/{id}`)."
           },
           "tier": {
             "anyOf": [
@@ -61771,6 +65129,13 @@
                 "type": "null"
               }
             ]
+          },
+          "taskName": {
+            "description": "The run's task name; null for a run without a task (ad-hoc, external) or whose task was deleted",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -61805,7 +65170,715 @@
           "costKnown",
           "createdAt",
           "startedAt",
-          "finishedAt"
+          "finishedAt",
+          "taskName"
+        ]
+      },
+      "RunPageResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "userId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "taskId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "queued",
+                    "running",
+                    "waiting_human",
+                    "succeeded",
+                    "failed",
+                    "cancelled"
+                  ]
+                },
+                "trigger": {
+                  "type": "string",
+                  "enum": [
+                    "manual",
+                    "schedule",
+                    "api",
+                    "mcp",
+                    "external"
+                  ]
+                },
+                "goal": {
+                  "type": "string"
+                },
+                "profile": {
+                  "type": "string"
+                },
+                "hostId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "hostFallback": {
+                  "type": "boolean"
+                },
+                "sessionId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "handoffId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "actor": {
+                  "description": "Who drove an external run",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "result": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "cancelRequested": {
+                  "type": "boolean"
+                },
+                "stepCount": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "activity": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "phase": {
+                          "type": "string",
+                          "enum": [
+                            "starting",
+                            "looking",
+                            "thinking",
+                            "acting"
+                          ]
+                        },
+                        "action": {
+                          "description": "The fabric action being run (acting only)",
+                          "type": "string"
+                        },
+                        "args": {
+                          "description": "Redacted like step args",
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {}
+                        },
+                        "reason": {
+                          "description": "Why the model chose the action",
+                          "type": "string"
+                        },
+                        "startedAt": {
+                          "type": "string",
+                          "description": "ISO 8601 timestamp"
+                        },
+                        "timeoutMs": {
+                          "description": "How long the host has before the action times out",
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "target": {
+                          "description": "Where on the page it acts, in page screenshot (CSS viewport) pixels: a point, or a box with w and h",
+                          "type": "object",
+                          "properties": {
+                            "x": {
+                              "type": "number"
+                            },
+                            "y": {
+                              "type": "number"
+                            },
+                            "w": {
+                              "type": "number"
+                            },
+                            "h": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "x",
+                            "y"
+                          ]
+                        },
+                        "note": {
+                          "description": "Why the run is on a stronger model, while it is (for example \"Escalated to Frontier (stuck: repeated click on #submit)\")",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "phase",
+                        "startedAt"
+                      ],
+                      "description": "What a running run is doing right now; null when it is not running"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "inputTokens": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "outputTokens": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "policy": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "source": {
+                          "type": "string",
+                          "enum": [
+                            "run",
+                            "schedule",
+                            "task",
+                            "user_default",
+                            "system_default"
+                          ],
+                          "description": "Why this policy applied: the run request, the schedule, the task, the user default or the system default."
+                        },
+                        "builtin": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "version",
+                        "source",
+                        "builtin"
+                      ],
+                      "description": "The agent policy a run runs under; null until the run has started."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "stopReason": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "finished",
+                        "budget_actions",
+                        "budget_model_calls",
+                        "budget_active_time",
+                        "budget_input_tokens",
+                        "budget_output_tokens",
+                        "budget_cost",
+                        "stalled",
+                        "cancelled",
+                        "error",
+                        "no_model"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field."
+                },
+                "budget": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "effective": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "propertyNames": {
+                                "type": "string",
+                                "enum": [
+                                  "actions",
+                                  "modelCalls",
+                                  "activeMinutes",
+                                  "inputTokens",
+                                  "outputTokens",
+                                  "cost"
+                                ]
+                              },
+                              "additionalProperties": {
+                                "type": [
+                                  "number",
+                                  "null"
+                                ]
+                              },
+                              "required": [
+                                "actions",
+                                "modelCalls",
+                                "activeMinutes",
+                                "inputTokens",
+                                "outputTokens",
+                                "cost"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "warnAtPercent": {
+                                  "type": "integer",
+                                  "minimum": -9007199254740991,
+                                  "maximum": 9007199254740991
+                                }
+                              },
+                              "required": [
+                                "warnAtPercent"
+                              ]
+                            }
+                          ],
+                          "description": "The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD."
+                        },
+                        "used": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string",
+                            "enum": [
+                              "actions",
+                              "modelCalls",
+                              "activeMinutes",
+                              "inputTokens",
+                              "outputTokens",
+                              "cost"
+                            ]
+                          },
+                          "additionalProperties": {
+                            "type": "number"
+                          },
+                          "required": [
+                            "actions",
+                            "modelCalls",
+                            "activeMinutes",
+                            "inputTokens",
+                            "outputTokens",
+                            "cost"
+                          ],
+                          "description": "What the run has used so far, in the same units (active time includes the stretch in progress)."
+                        },
+                        "percent": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string",
+                            "enum": [
+                              "actions",
+                              "modelCalls",
+                              "activeMinutes",
+                              "inputTokens",
+                              "outputTokens",
+                              "cost"
+                            ]
+                          },
+                          "additionalProperties": {
+                            "type": [
+                              "number",
+                              "null"
+                            ]
+                          },
+                          "required": [
+                            "actions",
+                            "modelCalls",
+                            "activeMinutes",
+                            "inputTokens",
+                            "outputTokens",
+                            "cost"
+                          ],
+                          "description": "Percent of each limit used, one decimal; `null` for an unlimited budget."
+                        },
+                        "source": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string",
+                            "enum": [
+                              "actions",
+                              "modelCalls",
+                              "activeMinutes",
+                              "inputTokens",
+                              "outputTokens",
+                              "cost"
+                            ]
+                          },
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "policy",
+                                  "ceiling"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "required": [
+                            "actions",
+                            "modelCalls",
+                            "activeMinutes",
+                            "inputTokens",
+                            "outputTokens",
+                            "cost"
+                          ],
+                          "description": "Where each limit came from: the `policy`, or the deployment `ceiling` that clamped it. `null` when unlimited."
+                        },
+                        "costKnown": {
+                          "type": "boolean",
+                          "description": "False when a call could not be priced: `used.cost` is then \"at least\"."
+                        }
+                      },
+                      "required": [
+                        "effective",
+                        "used",
+                        "percent",
+                        "source",
+                        "costKnown"
+                      ],
+                      "description": "The run budget: `null` on a run that has not started or that was snapshotted before budgets were enforced."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The run budget while the run is live (queued, running, waiting_human); null on a finished run in a list (read it from `GET /runs/{id}`)."
+                },
+                "tier": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "start": {
+                          "type": "string",
+                          "enum": [
+                            "fast",
+                            "standard",
+                            "frontier"
+                          ],
+                          "description": "The tier the policy starts runs on"
+                        },
+                        "max": {
+                          "type": "string",
+                          "enum": [
+                            "fast",
+                            "standard",
+                            "frontier"
+                          ],
+                          "description": "The highest tier the run may escalate to"
+                        },
+                        "current": {
+                          "type": "string",
+                          "enum": [
+                            "fast",
+                            "standard",
+                            "frontier"
+                          ],
+                          "description": "The tier the run is on now: the start tier until a stall escalates it"
+                        },
+                        "escalations": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "How many times the run escalated"
+                        },
+                        "model": {
+                          "description": "The current tier's model, as `provider:modelId`; null when none was resolved",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "start",
+                        "max",
+                        "current",
+                        "escalations",
+                        "model"
+                      ],
+                      "description": "The run's model tier, from its policy snapshot: null until the run has started."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "currentTier": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "fast",
+                        "standard",
+                        "frontier"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts."
+                },
+                "escalations": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "How many times the run moved to a stronger tier because it stalled"
+                },
+                "cachedInputTokens": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Input tokens the provider served from its cache (part of inputTokens)"
+                },
+                "modelCalls": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Model calls (provider round trips) made so far"
+                },
+                "costUsd": {
+                  "type": "number",
+                  "description": "USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false"
+                },
+                "costKnown": {
+                  "type": "boolean",
+                  "description": "False once a call could not be priced because its model has no price: show costUsd as \"at least\""
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "ISO 8601 timestamp"
+                },
+                "startedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "finishedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "taskName": {
+                  "description": "The run's task name; null for a run without a task (ad-hoc, external) or whose task was deleted",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "userId",
+                "taskId",
+                "status",
+                "trigger",
+                "goal",
+                "profile",
+                "hostId",
+                "hostFallback",
+                "sessionId",
+                "handoffId",
+                "actor",
+                "result",
+                "error",
+                "cancelRequested",
+                "stepCount",
+                "activity",
+                "inputTokens",
+                "outputTokens",
+                "policy",
+                "stopReason",
+                "budget",
+                "tier",
+                "currentTier",
+                "escalations",
+                "cachedInputTokens",
+                "modelCalls",
+                "costUsd",
+                "costKnown",
+                "createdAt",
+                "startedAt",
+                "finishedAt",
+                "taskName"
+              ]
+            }
+          },
+          "nextCursor": {
+            "description": "Pass it as `cursor` to read the next page; null on the last page. Opaque: do not parse or build it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "RunCountsResponseDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Runs that match the filter"
+          },
+          "live": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Of those: queued + running + waiting_human"
+          },
+          "byStatus": {
+            "type": "object",
+            "properties": {
+              "queued": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "running": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "waiting_human": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "succeeded": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "cancelled": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "queued",
+              "running",
+              "waiting_human",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "costUsd": {
+            "description": "USD spent by the matching runs; null when none of them made a model call. A lower bound while costKnown is false",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "costKnown": {
+            "type": "boolean",
+            "description": "False when a matching run had a call that could not be priced"
+          }
+        },
+        "required": [
+          "total",
+          "live",
+          "byStatus",
+          "costUsd",
+          "costKnown"
         ]
       },
       "RunDetailResponseDto": {
@@ -62504,6 +66577,607 @@
           "startedAt",
           "finishedAt",
           "steps"
+        ]
+      },
+      "RunResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "userId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "taskId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "waiting_human",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "trigger": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "schedule",
+              "api",
+              "mcp",
+              "external"
+            ]
+          },
+          "goal": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "string"
+          },
+          "hostId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hostFallback": {
+            "type": "boolean"
+          },
+          "sessionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "handoffId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "actor": {
+            "description": "Who drove an external run",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "result": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cancelRequested": {
+            "type": "boolean"
+          },
+          "stepCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "activity": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "phase": {
+                    "type": "string",
+                    "enum": [
+                      "starting",
+                      "looking",
+                      "thinking",
+                      "acting"
+                    ]
+                  },
+                  "action": {
+                    "description": "The fabric action being run (acting only)",
+                    "type": "string"
+                  },
+                  "args": {
+                    "description": "Redacted like step args",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  },
+                  "reason": {
+                    "description": "Why the model chose the action",
+                    "type": "string"
+                  },
+                  "startedAt": {
+                    "type": "string",
+                    "description": "ISO 8601 timestamp"
+                  },
+                  "timeoutMs": {
+                    "description": "How long the host has before the action times out",
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "target": {
+                    "description": "Where on the page it acts, in page screenshot (CSS viewport) pixels: a point, or a box with w and h",
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      },
+                      "w": {
+                        "type": "number"
+                      },
+                      "h": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ]
+                  },
+                  "note": {
+                    "description": "Why the run is on a stronger model, while it is (for example \"Escalated to Frontier (stuck: repeated click on #submit)\")",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "phase",
+                  "startedAt"
+                ],
+                "description": "What a running run is doing right now; null when it is not running"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inputTokens": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "outputTokens": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "policy": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "run",
+                      "schedule",
+                      "task",
+                      "user_default",
+                      "system_default"
+                    ],
+                    "description": "Why this policy applied: the run request, the schedule, the task, the user default or the system default."
+                  },
+                  "builtin": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "version",
+                  "source",
+                  "builtin"
+                ],
+                "description": "The agent policy a run runs under; null until the run has started."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stopReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "finished",
+                  "budget_actions",
+                  "budget_model_calls",
+                  "budget_active_time",
+                  "budget_input_tokens",
+                  "budget_output_tokens",
+                  "budget_cost",
+                  "stalled",
+                  "cancelled",
+                  "error",
+                  "no_model"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field."
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "effective": {
+                    "allOf": [
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string",
+                          "enum": [
+                            "actions",
+                            "modelCalls",
+                            "activeMinutes",
+                            "inputTokens",
+                            "outputTokens",
+                            "cost"
+                          ]
+                        },
+                        "additionalProperties": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "required": [
+                          "actions",
+                          "modelCalls",
+                          "activeMinutes",
+                          "inputTokens",
+                          "outputTokens",
+                          "cost"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "warnAtPercent": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "warnAtPercent"
+                        ]
+                      }
+                    ],
+                    "description": "The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD."
+                  },
+                  "used": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "enum": [
+                        "actions",
+                        "modelCalls",
+                        "activeMinutes",
+                        "inputTokens",
+                        "outputTokens",
+                        "cost"
+                      ]
+                    },
+                    "additionalProperties": {
+                      "type": "number"
+                    },
+                    "required": [
+                      "actions",
+                      "modelCalls",
+                      "activeMinutes",
+                      "inputTokens",
+                      "outputTokens",
+                      "cost"
+                    ],
+                    "description": "What the run has used so far, in the same units (active time includes the stretch in progress)."
+                  },
+                  "percent": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "enum": [
+                        "actions",
+                        "modelCalls",
+                        "activeMinutes",
+                        "inputTokens",
+                        "outputTokens",
+                        "cost"
+                      ]
+                    },
+                    "additionalProperties": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "required": [
+                      "actions",
+                      "modelCalls",
+                      "activeMinutes",
+                      "inputTokens",
+                      "outputTokens",
+                      "cost"
+                    ],
+                    "description": "Percent of each limit used, one decimal; `null` for an unlimited budget."
+                  },
+                  "source": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "enum": [
+                        "actions",
+                        "modelCalls",
+                        "activeMinutes",
+                        "inputTokens",
+                        "outputTokens",
+                        "cost"
+                      ]
+                    },
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "policy",
+                            "ceiling"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "required": [
+                      "actions",
+                      "modelCalls",
+                      "activeMinutes",
+                      "inputTokens",
+                      "outputTokens",
+                      "cost"
+                    ],
+                    "description": "Where each limit came from: the `policy`, or the deployment `ceiling` that clamped it. `null` when unlimited."
+                  },
+                  "costKnown": {
+                    "type": "boolean",
+                    "description": "False when a call could not be priced: `used.cost` is then \"at least\"."
+                  }
+                },
+                "required": [
+                  "effective",
+                  "used",
+                  "percent",
+                  "source",
+                  "costKnown"
+                ],
+                "description": "The run budget: `null` on a run that has not started or that was snapshotted before budgets were enforced."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The tier the policy starts runs on"
+                  },
+                  "max": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The highest tier the run may escalate to"
+                  },
+                  "current": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The tier the run is on now: the start tier until a stall escalates it"
+                  },
+                  "escalations": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "How many times the run escalated"
+                  },
+                  "model": {
+                    "description": "The current tier's model, as `provider:modelId`; null when none was resolved",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "start",
+                  "max",
+                  "current",
+                  "escalations",
+                  "model"
+                ],
+                "description": "The run's model tier, from its policy snapshot: null until the run has started."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currentTier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "fast",
+                  "standard",
+                  "frontier"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts."
+          },
+          "escalations": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "How many times the run moved to a stronger tier because it stalled"
+          },
+          "cachedInputTokens": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Input tokens the provider served from its cache (part of inputTokens)"
+          },
+          "modelCalls": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Model calls (provider round trips) made so far"
+          },
+          "costUsd": {
+            "type": "number",
+            "description": "USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false"
+          },
+          "costKnown": {
+            "type": "boolean",
+            "description": "False once a call could not be priced because its model has no price: show costUsd as \"at least\""
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "startedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finishedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "taskId",
+          "status",
+          "trigger",
+          "goal",
+          "profile",
+          "hostId",
+          "hostFallback",
+          "sessionId",
+          "handoffId",
+          "actor",
+          "result",
+          "error",
+          "cancelRequested",
+          "stepCount",
+          "activity",
+          "inputTokens",
+          "outputTokens",
+          "policy",
+          "stopReason",
+          "budget",
+          "tier",
+          "currentTier",
+          "escalations",
+          "cachedInputTokens",
+          "modelCalls",
+          "costUsd",
+          "costKnown",
+          "createdAt",
+          "startedAt",
+          "finishedAt"
         ]
       },
       "QuestionResponseDto": {
@@ -63729,6 +68403,10 @@
               "null"
             ]
           },
+          "description": {
+            "type": "string",
+            "description": "The expression in words (English, 24-hour), e.g. \"Monday to Friday at 09:00\""
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -63751,8 +68429,112 @@
           "lastRunId",
           "consecutiveFailures",
           "policyId",
+          "description",
           "createdAt",
           "updatedAt"
+        ]
+      },
+      "ScheduleDefaultsResponseDto": {
+        "type": "object",
+        "properties": {
+          "timezone": {
+            "type": "string",
+            "description": "The zone a schedule gets when its request names none"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "profile",
+              "device",
+              "default"
+            ],
+            "description": "`profile`: the user's profile time zone. `device`: the profile follows the device and the request carried `X-Time-Zone`. `default`: neither, so UTC."
+          }
+        },
+        "required": [
+          "timezone",
+          "source"
+        ]
+      },
+      "SchedulePreviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "description": "True: `cron`, `timezone`, `description`, `next` and `intervalSeconds` are present. False: `code` and `message` are."
+          },
+          "cron": {
+            "type": "string"
+          },
+          "timezone": {
+            "description": "The zone the firings were computed in: the one sent, or the default",
+            "type": "string"
+          },
+          "description": {
+            "description": "The expression in words (English, 24-hour), e.g. \"Monday to Friday at 09:00\"",
+            "type": "string"
+          },
+          "next": {
+            "description": "The next `count` firings, ascending",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "ISO 8601 timestamp"
+            }
+          },
+          "intervalSeconds": {
+            "description": "Seconds between firings when the next ones are evenly spaced; null for an uneven schedule (week days, days of the month, a daylight-saving change)",
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "code": {
+            "description": "Why the schedule would be refused",
+            "type": "string",
+            "enum": [
+              "INVALID_CRON",
+              "INVALID_TIMEZONE",
+              "CRON_TOO_FREQUENT"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "valid"
+        ]
+      },
+      "PreviewScheduleDto": {
+        "type": "object",
+        "properties": {
+          "cron": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "timezone": {
+            "description": "Omitted: the owner's profile time zone.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "count": {
+            "default": 5,
+            "description": "How many firings to return.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10
+          }
+        },
+        "required": [
+          "cron"
         ]
       },
       "CreateScheduleDto": {
@@ -63769,7 +68551,7 @@
             "maxLength": 100
           },
           "timezone": {
-            "default": "UTC",
+            "description": "An IANA time zone. Omitted: the owner's profile time zone (see `GET /schedules/defaults`).",
             "type": "string",
             "minLength": 1,
             "maxLength": 64

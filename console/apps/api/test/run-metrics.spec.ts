@@ -41,6 +41,8 @@ describe('run metrics', () => {
     m.inputTokensPerCall(8200);
     m.inputTokensPerCall(0);
     m.finished('failed', 'schedule', 42.5);
+    m.deleted('filter', 120);
+    m.deleted('ids', 0);
     expect(calls).toEqual([
       ['add', 'runsStarted', 1, { trigger: 'schedule' }],
       ['add', 'runHandoffs', 1, undefined],
@@ -51,6 +53,7 @@ describe('run metrics', () => {
       ['record', 'runInputTokensPerCall', 8200, undefined],
       ['add', 'runsFinished', 1, { status: 'failed', trigger: 'schedule' }],
       ['record', 'runDuration', 42.5, { status: 'failed' }],
+      ['add', 'runsDeleted', 120, { mode: 'filter' }],
     ]);
     // Every label is a declared enum: no user, task, goal or URL ever becomes a metric label.
     for (const [, key, , attrs] of calls) {

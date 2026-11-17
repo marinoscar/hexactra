@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { assertTransition, isTerminal, type RunStatus } from './run-status';
-import type { CreateTaskDto, ListRunsDto, UpdateTaskDto } from './tasks.schemas';
+import type { CreateTaskDto, UpdateTaskDto } from './tasks.schemas';
 import { FabricClient } from '../fabric/fabric.client';
 import { activeElapsedMs } from '../runner/active-time';
 import { RunMetrics } from './run-metrics';
@@ -12,6 +12,8 @@ import type { RunStopReason } from '../runner/budget';
 import { isDefaultLimits } from '../policies/legacy-task-policy';
 import { STOP_WAITING, startWaiting } from './reminder-schedule';
 import { averageUsd, NO_SPEND, SPEND_WINDOW_DAYS, withCost, type TaskSpend } from './run-cost';
+import type { RequestWithHeaders } from '@marinoscar/platform-api/core';
+import { TaskSchedulesService } from './task-schedules.service';
 
 /** Fields a status change may set. */
 export interface RunPatch {
@@ -40,6 +42,7 @@ export class TasksService {
     @Optional() readonly metrics: RunMetrics = new RunMetrics(),
     @Optional() private readonly fabric?: FabricClient,
     @Optional() private readonly policies?: PoliciesService,
+    @Optional() private readonly taskSchedules?: TaskSchedulesService,
   ) {}
 
   private db(userId: string) {
@@ -94,13 +97,25 @@ export class TasksService {
    * default). The deprecated `maxSteps` / `maxMinutes` / `model` still work: when
    * no `policyId` is given and they are not the defaults they map to a derived
    * personal policy named "Task: <name>" (#401).
+   *
+   * `schedules` are created with the task in one transaction (#424): they are
+   * all checked first, so one invalid schedule fails the request with its place
+   * in the list (`details.path`, e.g. `schedules[1].cron`) and nothing is created.
+   * `request` supplies the device time zone for a schedule that names none.
    */
-  async createTask(userId: string, input: CreateTaskDto) {
-    const { policyId, ...fields } = input;
+  async createTask(userId: string, input: CreateTaskDto, request?: RequestWithHeaders) {
+    const { policyId, schedules, ...fields } = input;
     await this.policies?.assertAssignable(userId, policyId);
+    const prepared = schedules?.length && this.taskSchedules ? await this.taskSchedules.prepare(userId, schedules, { request }) : [];
     const limits = { maxSteps: fields.maxSteps, maxMinutes: fields.maxMinutes, model: fields.model ?? null };
     const policyRef = policyId !== undefined ? policyId : this.policies && !isDefaultLimits(limits) ? await this.policies.ensureLegacyPolicy(userId, fields.name, limits) : null;
-    const t = await this.db(userId).task.create({ data: { ...fields, userId, hostId: fields.hostId ?? null, model: fields.model ?? null, policyRef } });
+    const data = { ...fields, userId, hostId: fields.hostId ?? null, model: fields.model ?? null, policyRef };
+    if (prepared.length === 0) return { ...(await this.db(userId).task.create({ data })), spend30d: NO_SPEND };
+    const t = await this.prisma.$transaction(async (tx) => {
+      const task = await tx.task.create({ data });
+      await tx.taskSchedule.createMany({ data: this.taskSchedules!.rows(userId, task.id, prepared) });
+      return task;
+    });
     return { ...t, spend30d: NO_SPEND };
   }
 
@@ -129,16 +144,6 @@ export class TasksService {
   async deleteTask(userId: string, id: string): Promise<void> {
     const { count } = await this.db(userId).task.deleteMany({ where: { id } });
     if (count === 0) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
-  }
-
-  async listRuns(userId: string, q: ListRunsDto) {
-    const runs = await this.db(userId).run.findMany({
-      where: { ...(q.taskId ? { taskId: q.taskId } : {}), ...(q.status ? { status: q.status } : {}) },
-      orderBy: { createdAt: 'desc' },
-      take: q.limit,
-      omit: { transcript: true },
-    });
-    return runs.map(withCost);
   }
 
   async getRun(userId: string, id: string) {
