@@ -5,6 +5,7 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { fetchRunScreenshot, subscribeRun } from '../live';
 import { frameCaption, RunActivityBar, useNow, type RunActivity } from '../components/RunActivity';
+import { RunTimeline } from '../components/RunTimeline';
 
 /** `fetched`, plus any step of `prev` (received over the stream) it does not have yet. */
 export function withStreamedSteps(fetched: Run, prev: Run | null): Run {
@@ -27,6 +28,7 @@ export interface RunStep {
   ok: boolean;
   summary: string;
   reasoning: string | null;
+  durationMs?: number | null;
   createdAt: string;
 }
 
@@ -275,18 +277,7 @@ export function RunDetailPage() {
           })()}
         </Box>
       )}
-      <Paper variant="outlined">
-        <List aria-label="Steps" dense>
-          {(run.steps ?? []).map((s) => (
-            <ListItemText
-              key={s.id}
-              sx={{ px: 2, py: 1, borderBottom: 1, borderColor: 'divider' }}
-              primary={`${s.seq}. ${s.action ?? s.kind}${s.ok ? '' : ' (failed)'}: ${s.summary}`}
-              secondary={s.reasoning ?? (s.args ? JSON.stringify(s.args) : undefined)}
-            />
-          ))}
-        </List>
-      </Paper>
+      <RunTimeline steps={run.steps ?? []} live={isLive} />
     </Container>
   );
 }
