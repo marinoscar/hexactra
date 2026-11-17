@@ -18,7 +18,7 @@ export const IDS = {
 };
 
 const PERMISSIONS = [
-  'tasks:read', 'tasks:write', 'runs:read', 'runs:write', 'fleet:read', 'fleet:write', 'fleet:desktop', 'notes:read', 'notes:write',
+  'tasks:read', 'tasks:write', 'runs:read', 'runs:write', 'runs:delete', 'fleet:read', 'fleet:write', 'fleet:desktop', 'notes:read', 'notes:write',
   'agent_policies:read', 'agent_policies:write', 'system_settings:read', 'system_settings:write', 'fabric_config:read', 'fabric_config:write',
   'users:read', 'allowlist:read', 'jobs:read', 'webhooks:read', 'system_webhooks:read', 'alerts:read', 'ai:use', 'ai_config:read', 'storage_config:read',
   'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
@@ -141,7 +141,104 @@ const taskStats = {
   stopReasons: [{ reason: 'finished', count: 23 }, { reason: 'budget_cost', count: 2 }, { reason: 'cancelled', count: 1 }],
 };
 
-/** `"<METHOD> <path>"` to the response `data`. A function gets the request URL. */
+// ---- The pages of E32 (#432): the task list and form, the runs list, Home and Run history ----
+
+const SECOND_TASK = '11111111-1111-4111-8111-111111111112';
+const THIRD_TASK = '11111111-1111-4111-8111-111111111113';
+/** The rows of `/tasks`: scheduled and failing, paused with its own policy, never scheduled and never run. */
+const taskRows = [
+  task(IDS.task, 'Check fare', { createdAt: iso(-40 * 86_400_000), updatedAt: iso(-3 * 86_400_000), summary: taskSummary }),
+  task(SECOND_TASK, 'Weekly groceries order with a long task name that wraps on a phone', {
+    hostId: null, hostFallback: true, allowedDomains: [], policyId: IDS.policy, createdAt: iso(-20 * 86_400_000), updatedAt: iso(-86_400_000),
+    spend30d: { runs: 4, succeeded: 4, costUsd: 0.9, costKnown: false, inputTokens: 400_000, outputTokens: 12_000 },
+    summary: {
+      schedules: [taskSchedule('33333333-3333-4333-8333-333333333341', 'Every Saturday at 08:00', { cron: '0 8 * * 6', enabled: false, nextRunAt: null })],
+      scheduleState: 'paused', nextRunAt: null,
+      lastRun: { id: '33333333-3333-4333-8333-333333333333', status: 'succeeded', trigger: 'manual', createdAt: iso(-2 * 86_400_000), finishedAt: iso(-2 * 86_400_000 + 300_000) },
+      liveRunId: null, runCounts: { total: 4, last7d: { succeeded: 1, failed: 0, cancelled: 0 } },
+      policy: { id: IDS.policy, name: 'Careful shopping with a rather long policy name', builtin: false, isDefault: false },
+    },
+  }),
+  task(THIRD_TASK, 'Read the morning report', {
+    allowedDomains: [], confirmRiskyActions: false, createdAt: iso(-3_600_000), updatedAt: iso(-3_600_000), spend30d: { runs: 0, succeeded: 0, costUsd: null, costKnown: true, inputTokens: 0, outputTokens: 0 },
+    summary: { schedules: [], scheduleState: 'none', nextRunAt: null, lastRun: null, liveRunId: IDS.liveRun, runCounts: { total: 0, last7d: { succeeded: 0, failed: 0, cancelled: 0 } }, policy: { id: 'builtin:balanced', name: 'Balanced', builtin: true, isDefault: true } },
+  }),
+];
+/** `GET /tasks`: a page with `envelope`, the plain array without (the runs page's task filter, the pickers). */
+const tasksList = (url) => (url.searchParams.has('envelope') ? { items: taskRows, nextCursor: null, total: taskRows.length } : taskRows.map(({ summary: _summary, ...rest }) => rest));
+
+/** The rows of `/runs`: one of each status, a budget stop, a stall, an unpriced run and a one-off run with a long goal. */
+const listRun = (n, status, extra = {}) => {
+  const { steps: _steps, activity: _activity, ...row } = run(`3333334${n}-3333-4333-8333-333333333333`, status, {
+    taskName: 'Check fare', budget: undefined, startedAt: iso(-(n + 1) * 3_600_000), createdAt: iso(-(n + 1) * 3_600_000), finishedAt: iso(-(n + 1) * 3_600_000 + 240_000), ...extra,
+  });
+  return row;
+};
+const runRows = [
+  { ...runs[0], taskName: 'Check fare', startedAt: iso(-600_000) },
+  { ...runs[1], taskName: 'Check fare', startedAt: iso(-900_000), costUsd: 0.4 },
+  listRun(1, 'succeeded', { stopReason: 'finished', result: 'Held the 9:00 fare.', costUsd: 0.31, trigger: 'schedule' }),
+  listRun(2, 'failed', { stopReason: 'budget_cost', costUsd: 2.01, trigger: 'schedule', policy: { id: IDS.policy, name: 'Careful shopping with a rather long policy name', version: 3, source: 'task', builtin: false } }),
+  listRun(3, 'failed', { stopReason: 'stalled', costUsd: 0.74, costKnown: false, trigger: 'mcp' }),
+  listRun(4, 'cancelled', { stopReason: 'cancelled', costUsd: null, trigger: 'api' }),
+  listRun(5, 'succeeded', {
+    taskId: null, taskName: null, stopReason: 'finished', costUsd: 0.12,
+    goal: 'Open the supplier portal at https://portal.example.test/orders/2026/11/overview?tab=open&sort=due, export the open orders as a spreadsheet and say how many are due this week',
+  }),
+];
+const LIVE = new Set(['queued', 'running', 'waiting_human']);
+/** `GET /runs`: a page with `envelope` (the live subset for `state=live`), the plain array without (what the audit's older pages read). */
+const runsList = (url) => {
+  if (!url.searchParams.has('envelope')) return runs;
+  const state = url.searchParams.get('state');
+  const taskId = url.searchParams.get('taskId');
+  const items = runRows.filter((r) => (state === 'live' ? LIVE.has(r.status) : state === 'finished' ? !LIVE.has(r.status) : true) && (!taskId || r.taskId === taskId));
+  return { items, nextCursor: null };
+};
+const runCounts = { total: 5_012, live: 2, byStatus: { queued: 0, running: 1, waiting_human: 1, succeeded: 4_180, failed: 702, cancelled: 128 }, costUsd: 1_284.37, costKnown: false };
+
+const weekDays = Array.from({ length: 7 }, (_, i) => ({ date: iso(-(6 - i) * 86_400_000).slice(0, 10), succeeded: 3 + ((i * 5) % 4), failed: i % 3 === 0 ? 2 : 0, cancelled: i === 4 ? 1 : 0, costUsd: 0.6 + i * 0.2 }));
+/** `GET /home/summary`: every block with data (a question, two live runs, firings, finished runs, a week, machines). */
+const homeSummary = {
+  generatedAt: iso(0), timezone: 'Etc/UTC',
+  needsYou: {
+    count: 2,
+    items: [
+      { questionId: question.questionId, runId: question.runId, kind: 'code', input: 'secret', prompt: question.prompt, risk: null, expiresAt: iso(600_000), createdAt: iso(-60_000), goal: question.goal },
+      { questionId: confirmation.questionId, runId: null, kind: 'confirmation', input: 'confirm', prompt: confirmation.prompt, risk: 'high', expiresAt: iso(1_800_000), createdAt: iso(-30_000), goal: null },
+    ],
+  },
+  liveRuns: {
+    count: 2, running: 1,
+    items: [
+      { id: IDS.liveRun, taskId: IDS.task, taskName: 'Check fare', goal: liveRun.goal, status: 'running', activity: { phase: 'acting', action: 'click_at', reason: 'Choose the cheapest fare in the list', startedAt: iso(-4_000), note: null }, stepCount: 25, startedAt: iso(-600_000), hostId: IDS.host, hostName: 'mini-pc', policyName: 'Balanced', currentTier: 'frontier', startTier: 'standard', budgetPercent: 85.5, budgetWarnPercent: 80 },
+      { id: runs[1].id, taskId: null, taskName: null, goal: runRows[6].goal, status: 'waiting_human', activity: null, stepCount: 9, startedAt: iso(-900_000), hostId: IDS.host, hostName: 'mini-pc', policyName: 'Careful shopping with a rather long policy name', currentTier: 'standard', startTier: 'standard', budgetPercent: null, budgetWarnPercent: null },
+    ],
+  },
+  upcoming: {
+    items: [
+      { scheduleId: 'up-1', taskId: IDS.task, taskName: 'Check fare', nextRunAt: iso(5 * 3_600_000), description: 'Monday to Friday at 09:00', timezone: 'Etc/UTC' },
+      { scheduleId: 'up-2', taskId: SECOND_TASK, taskName: taskRows[1].name, nextRunAt: iso(29 * 3_600_000), description: 'Every Saturday at 08:00', timezone: 'Europe/Madrid' },
+    ],
+    pausedCount: 1, failingCount: 1,
+  },
+  recentRuns: {
+    items: runRows.filter((r) => !LIVE.has(r.status)).map((r) => ({ id: r.id, taskId: r.taskId, taskName: r.taskName, goal: r.goal, status: r.status, trigger: r.trigger, createdAt: r.createdAt, startedAt: r.startedAt, finishedAt: r.finishedAt, stepCount: r.stepCount, stopReason: r.stopReason, costUsd: r.costUsd, costKnown: r.costKnown, error: r.status === 'failed' ? 'Cost budget exhausted' : null })),
+  },
+  week: { totals: { succeeded: 31, failed: 6, cancelled: 1, successRate: 0.84, costUsd: 8.4, costKnown: false, budgetStops: 3, stalled: 1 }, series: weekDays },
+  fleet: { total: 2, online: 1, disabled: 1, stale: false, hosts: hosts.map((h) => ({ id: h.id, name: h.name, online: h.online, draining: h.draining, mode: h.mode })) },
+  counts: { tasks: taskRows.length, runs: runCounts.total },
+};
+
+/** `POST /schedules/preview`: words and five firings for what the editor sends; a refusal for an every-minute expression. */
+const schedulePreview = (_url, body) => {
+  const cron = body?.cron ?? '0 9 * * 1-5';
+  if (/^\*(\/[1-4])? /.test(cron)) return { valid: false, code: 'CRON_TOO_FREQUENT', message: 'A schedule may run at most every 5 minutes.' };
+  const description = { '0 9 * * 1-5': 'Monday to Friday at 09:00', '0 8 * * 6': 'Every Saturday at 08:00', '30 7 1 * *': 'On day 1 of every month at 07:30', '0 9 * * *': 'Every day at 09:00' }[cron] ?? `Custom schedule (${cron})`;
+  return { valid: true, cron, timezone: body?.timezone ?? 'Etc/UTC', description, next: Array.from({ length: body?.count ?? 5 }, (_, i) => iso((i + 1) * 86_400_000)), intervalSeconds: 86_400 };
+};
+
+/** `"<METHOD> <path>"` to the response `data`. A function gets the request URL and its JSON body. */
 export const RESPONSES = {
   'POST /auth/refresh': { accessToken: 'ui-screens-token', expiresIn: 900 },
   'GET /auth/providers': { providers: [{ name: 'google', enabled: true }] },
@@ -153,12 +250,19 @@ export const RESPONSES = {
     browserAgentTiers: tiers,
     browserAgentCeilings: { ...limits, maxActiveMinutes: 60, maxCostUsd: 10 },
   },
-  'GET /tasks': [task(IDS.task, 'Check fare'), task('11111111-1111-4111-8111-111111111112', 'Weekly groceries order with a long task name that wraps', { hostId: null, hostFallback: true, allowedDomains: [], policyId: IDS.policy })],
+  'GET /tasks': tasksList,
   // The task page (#428) reads the task with its summary, and its statistics.
-  [`GET /tasks/${IDS.task}`]: task(IDS.task, 'Check fare', { createdAt: iso(-40 * 86_400_000), updatedAt: iso(-3 * 86_400_000), summary: taskSummary }),
+  [`GET /tasks/${IDS.task}`]: taskRows[0],
+  // The schedule editor (the form, the task page), Home, the runs list's counts and Run history (#432).
+  'POST /schedules/preview': schedulePreview,
+  'GET /schedules/defaults': { timezone: 'Etc/UTC', source: 'profile' },
+  'GET /home/summary': homeSummary,
+  'GET /runs/counts': runCounts,
+  'GET /runs/retention': { keepDays: 90, keepPerTask: 200, keepFailedDays: null, saved: true, maxKeepDays: 365, floorHours: 24 },
+  'GET /runs/retention/preview': { wouldDelete: 1_840, finished: 5_010, oldestKept: iso(-89 * 86_400_000), costUsd: 412.5, maxKeepDays: 365, capped: false, floorHours: 24 },
   [`GET /tasks/${IDS.task}/stats`]: taskStats,
-  'GET /schedules': [{ id: 'schedule-1', taskId: IDS.task, cron: '0 9 * * 1-5', timezone: 'Etc/UTC', enabled: true, concurrency: 'skip', nextRunAt: iso(5 * 3_600_000), lastRunAt: null, consecutiveFailures: 0, policyId: null }],
-  'GET /runs': runs,
+  'GET /schedules': (url) => (url.searchParams.get('taskId') === SECOND_TASK ? taskRows[1] : taskRows[0]).summary.schedules.map((sc) => ({ ...sc, taskId: url.searchParams.get('taskId') ?? IDS.task })),
+  'GET /runs': runsList,
   [`GET /runs/${IDS.liveRun}`]: liveRun,
   [`GET /runs/${IDS.liveRun}/viewer`]: { hostId: IDS.host, hostName: 'mini-pc', desktop: true },
   [`GET /runs/${IDS.finishedRun}`]: finishedRun,
