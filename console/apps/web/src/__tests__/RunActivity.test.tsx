@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import { activityElapsed, describeActivity, formatDuration, frameCaption, RunActivityBar, stallMessage, type RunActivity } from '../components/RunActivity';
+import { ActionOverlay, activityElapsed, describeActivity, formatDuration, frameCaption, overlayBox, RunActivityBar, stallMessage, type RunActivity } from '../components/RunActivity';
 
 const at = Date.parse('2026-11-16T18:13:00.000Z');
 const acting: RunActivity = {
@@ -61,5 +61,28 @@ describe('run activity (#379)', () => {
   it('shows the stall banner past the threshold', () => {
     render(<RunActivityBar activity={acting} now={at + 24_000} />);
     expect(screen.getByRole('alert')).toHaveTextContent('waiting on the browser for 47 s');
+  });
+});
+
+describe('where the agent acts (#381)', () => {
+  const frame = { width: 1280, height: 720 };
+
+  it('places a point and a box in percent of the frame, so it scales with the image', () => {
+    expect(overlayBox({ x: 640, y: 360 }, frame)).toEqual({ left: '50.000%', top: '50.000%' });
+    expect(overlayBox({ x: 0, y: 72, w: 320, h: 72 }, frame)).toEqual({ left: '0.000%', top: '10.000%', width: '25.000%', height: '10.000%' });
+    // A box running off the frame is clipped to it.
+    expect(overlayBox({ x: 1200, y: 700, w: 400, h: 100 }, frame)).toEqual({ left: '93.750%', top: '97.222%', width: '6.250%', height: '2.778%' });
+  });
+
+  it('places nothing without a target, before the frame loads, or off the frame', () => {
+    expect(overlayBox(undefined, frame)).toBeNull();
+    expect(overlayBox({ x: 1, y: 1 }, null)).toBeNull();
+    expect(overlayBox({ x: 2000, y: 10 }, frame)).toBeNull();
+  });
+
+  it('draws the marker at the scaled position', () => {
+    render(<ActionOverlay activity={{ ...acting, target: { x: 640, y: 180 } }} natural={frame} />);
+    const marker = screen.getByRole('img', { name: 'The agent acts here: click_at' });
+    expect(marker).toHaveStyle({ position: 'absolute', left: '50.000%', top: '25.000%' });
   });
 });

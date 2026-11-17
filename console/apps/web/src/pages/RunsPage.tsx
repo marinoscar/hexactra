@@ -4,7 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { fetchRunScreenshot, subscribeRun } from '../live';
-import { frameCaption, RunActivityBar, useNow, type RunActivity } from '../components/RunActivity';
+import { ActionOverlay, frameCaption, RunActivityBar, useNow, type RunActivity } from '../components/RunActivity';
 import { RunTimeline } from '../components/RunTimeline';
 
 /** `fetched`, plus any step of `prev` (received over the stream) it does not have yet. */
@@ -162,6 +162,8 @@ export function RunDetailPage() {
   /** When the shown frame was taken, and whether the latest fetch failed (#379). */
   const [shotAt, setShotAt] = useState<number | null>(null);
   const [shotFailing, setShotFailing] = useState(false);
+  /** The frame's pixel size, to place where the agent acts on it (#381). */
+  const [shotSize, setShotSize] = useState<{ width: number; height: number } | null>(null);
   const [watch, setWatch] = useState(true);
   const [where, setWhere] = useState<RunViewer | null>(null);
 
@@ -266,7 +268,18 @@ export function RunDetailPage() {
       {run.status === 'running' && run.activity && <RunActivityBar activity={run.activity} now={now} />}
       {isLive && watch && (shot || shotFailing) && (
         <Box sx={{ mb: 2 }}>
-          {shot && <Box component="img" src={shot} alt="The run's browser, live" sx={{ display: 'block', width: '100%', borderRadius: 1, border: 1, borderColor: 'divider' }} />}
+          {shot && (
+            <Box sx={{ position: 'relative' }}>
+              <Box
+                component="img"
+                src={shot}
+                alt="The run's browser, live"
+                onLoad={(e: React.SyntheticEvent<HTMLImageElement>) => setShotSize({ width: e.currentTarget.naturalWidth, height: e.currentTarget.naturalHeight })}
+                sx={{ display: 'block', width: '100%', borderRadius: 1, border: 1, borderColor: 'divider' }}
+              />
+              {run.status === 'running' && run.activity?.phase === 'acting' && <ActionOverlay activity={run.activity} natural={shotSize} />}
+            </Box>
+          )}
           {(() => {
             const caption = frameCaption(shotAt, shotFailing, now);
             return (

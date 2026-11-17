@@ -11,7 +11,7 @@ import { redactActionArgs, redactUrl } from '../tasks/redact';
 import { RunNotifier } from '../tasks/run-notifier';
 import { TasksService } from '../tasks/tasks.service';
 import { BROWSER_AGENT_FEATURE_ID } from './browser-agent.feature';
-import { runActivity, type RunActivityPhase } from './activity';
+import { actionTarget, runActivity, type ActivityTarget, type RunActivityPhase } from './activity';
 import { ACTION_TIMEOUT_MS, FabricSession, handoffOutcome, type CreatedHandoff } from './fabric-session';
 import { domainAllowed, looksRisky } from './policy';
 import { captureScreen, markCenter, roundInput, type Screen, type ScreenMark, type ScreenView } from './vision';
@@ -279,14 +279,14 @@ export class GoalRunnerService {
     };
 
     /** Run one fabric action under the policy, record it, and return what the model sees. */
-    const act = async (action: Record<string, unknown>, reason?: string): Promise<string> => {
+    const act = async (action: Record<string, unknown>, reason?: string, target?: ActivityTarget): Promise<string> => {
       const started = Date.now();
       const type = String(action.type);
       if (state.stepCount >= policy.maxSteps) {
         state.stop = 'budget';
         return 'Step budget exhausted.';
       }
-      await setActivity('acting', { action, reason, timeoutMs: ACTION_TIMEOUT_MS });
+      await setActivity('acting', { action, reason, timeoutMs: ACTION_TIMEOUT_MS, target: target ?? actionTarget(action, state.marks.values()) });
       try {
         return await runAction(action, type, started, reason);
       } finally {
@@ -443,7 +443,7 @@ export class GoalRunnerService {
             return 'Refused: this looks like a purchase, payment or irreversible submission. Call request_human with kind "confirmation" describing exactly what will happen, then try again.';
           }
           const { x, y } = markCenter(mark);
-          const out = await act({ type: 'click_at', x, y, ...(double ? { click_count: 2 } : {}) }, reason);
+          const out = await act({ type: 'click_at', x, y, ...(double ? { click_count: 2 } : {}) }, reason, { x: mark.x, y: mark.y, w: mark.w, h: mark.h });
           if (looksRisky(mark.selector, mark.text, reason)) memory.confirmationGranted = false;
           return out;
         },
@@ -630,7 +630,7 @@ export class GoalRunnerService {
           const handoffId = memory.secretHandoffId;
           memory.secretHandoffId = null;
           let op;
-          await setActivity('acting', { action: { type: 'type', selector, secret: '', submit } });
+          await setActivity('acting', { action: { type: 'type', selector, secret: '', submit }, target: actionTarget({ selector }, state.marks.values()) });
           try {
             // The fabric types the value itself: the console never sees it.
             op = await session.typeSecret(sessionId!, { handoffId, selector, clear: true, submit });
