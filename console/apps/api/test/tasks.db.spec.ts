@@ -85,7 +85,7 @@ describe('the live run view', () => {
     const alice = await login(`alice3-${run}@example.test`, 'contributor');
     const bob = await login(`bob3-${run}@example.test`, 'contributor');
     const prisma = app.get(PrismaService);
-    const r = await prisma.forUser({ userId: alice.userId }).run.create({ data: { userId: alice.userId, goal: 'g', status: 'succeeded', stepCount: 2, result: 'done' } });
+    const r = await prisma.forUser({ userId: alice.userId }).run.create({ data: { userId: alice.userId, goal: 'g', status: 'succeeded', stepCount: 2, result: 'done', modelCalls: 4, costUsd: '0.123456', costKnown: false } });
     await prisma.runStep.createMany({
       data: [
         { runId: r.id, seq: 1, kind: 'action', action: 'navigate', summary: 'at https://example.test/' },
@@ -102,6 +102,10 @@ describe('the live run view', () => {
     const events = body.match(/^event: (\w+)/gm)?.map((l) => l.slice(7));
     expect(events).toEqual(['step', 'step', 'run']);
     expect(body).toContain('"result":"done"');
+    // The live view carries the spend as numbers (#400).
+    expect(body).toContain('"modelCalls":4');
+    expect(body).toContain('"costUsd":0.123456');
+    expect(body).toContain('"costKnown":false');
 
     const theirs = await fetch(`${base}/api/runs/${r.id}/stream`, { headers: as(bob.token) });
     expect(theirs.status).not.toBe(200);

@@ -20,6 +20,7 @@ import { Observable } from 'rxjs';
 
 import { FabricClient, FabricError, type FabricHost } from '../fabric/fabric.client';
 import { PrismaService } from '../prisma/prisma.service';
+import { withCost } from '../tasks/run-cost';
 import { FabricSession } from './fabric-session';
 
 const POLL_MS = 1_000;
@@ -59,10 +60,10 @@ export class RunLiveController {
   private async ownRun(userId: string, id: string) {
     const run = await this.prisma.forUser({ userId }).run.findFirst({
       where: { id },
-      select: { id: true, status: true, sessionId: true, hostId: true, stepCount: true, result: true, error: true, handoffId: true, cancelRequested: true, activity: true },
+      select: { id: true, status: true, sessionId: true, hostId: true, stepCount: true, result: true, error: true, handoffId: true, cancelRequested: true, activity: true, costUsd: true, costKnown: true, modelCalls: true },
     });
     if (!run) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
-    return run;
+    return withCost(run);
   }
 
   /**
@@ -88,7 +89,7 @@ export class RunLiveController {
             observer.next({ type: 'step', id: `step-${s.seq}`, data: s });
             lastSeq = s.seq;
           }
-          const state = JSON.stringify([run.status, run.stepCount, run.result, run.error, run.handoffId, run.cancelRequested, run.activity]);
+          const state = JSON.stringify([run.status, run.stepCount, run.result, run.error, run.handoffId, run.cancelRequested, run.activity, run.costUsd, run.modelCalls]);
           if (state !== lastState) {
             observer.next({ type: 'run', data: run });
             lastState = state;

@@ -8,6 +8,7 @@ import { FabricClient } from '../fabric/fabric.client';
 import { activeElapsedMs } from '../runner/active-time';
 import { RunMetrics } from './run-metrics';
 import { STOP_WAITING, startWaiting } from './reminder-schedule';
+import { NO_SPEND, SPEND_WINDOW_DAYS, withCost, type TaskSpend } from './run-cost';
 
 /** Fields a status change may set. */
 export interface RunPatch {
@@ -39,18 +40,47 @@ export class TasksService {
     return this.prisma.forUser({ userId });
   }
 
-  listTasks(userId: string) {
-    return this.db(userId).task.findMany({ orderBy: { createdAt: 'desc' } });
+  /** What each task spent in the last 30 days (runs created in the window), by task id. */
+  async spendByTask(userId: string, taskIds: string[]): Promise<Map<string, TaskSpend>> {
+    const out = new Map<string, TaskSpend>();
+    if (taskIds.length === 0) return out;
+    const db = this.db(userId);
+    const where = { taskId: { in: taskIds }, createdAt: { gte: new Date(Date.now() - SPEND_WINDOW_DAYS * 86_400_000) } };
+    const [sums, unknown] = await Promise.all([
+      db.run.groupBy({ by: ['taskId'], where, _count: { _all: true }, _sum: { costUsd: true, inputTokens: true, outputTokens: true } }),
+      db.run.groupBy({ by: ['taskId'], where: { ...where, costKnown: false }, _count: { _all: true } }),
+    ]);
+    const unpriced = new Set(unknown.map((g) => g.taskId));
+    for (const g of sums) {
+      if (!g.taskId) continue;
+      out.set(g.taskId, {
+        runs: g._count._all,
+        costUsd: Number(g._sum.costUsd ?? 0),
+        costKnown: !unpriced.has(g.taskId),
+        tokens: (g._sum.inputTokens ?? 0) + (g._sum.outputTokens ?? 0),
+      });
+    }
+    return out;
+  }
+
+  private async withSpend<T extends { id: string }>(userId: string, tasks: T[]): Promise<(T & { spend30d: TaskSpend })[]> {
+    const spend = await this.spendByTask(userId, tasks.map((t) => t.id));
+    return tasks.map((t) => ({ ...t, spend30d: spend.get(t.id) ?? NO_SPEND }));
+  }
+
+  async listTasks(userId: string) {
+    return this.withSpend(userId, await this.db(userId).task.findMany({ orderBy: { createdAt: 'desc' } }));
   }
 
   async getTask(userId: string, id: string) {
     const t = await this.db(userId).task.findFirst({ where: { id } });
     if (!t) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
-    return t;
+    return (await this.withSpend(userId, [t]))[0]!;
   }
 
-  createTask(userId: string, input: CreateTaskDto) {
-    return this.db(userId).task.create({ data: { ...input, userId, hostId: input.hostId ?? null, model: input.model ?? null } });
+  async createTask(userId: string, input: CreateTaskDto) {
+    const t = await this.db(userId).task.create({ data: { ...input, userId, hostId: input.hostId ?? null, model: input.model ?? null } });
+    return { ...t, spend30d: NO_SPEND };
   }
 
   async updateTask(userId: string, id: string, patch: UpdateTaskDto) {
@@ -64,13 +94,14 @@ export class TasksService {
     if (count === 0) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
   }
 
-  listRuns(userId: string, q: ListRunsDto) {
-    return this.db(userId).run.findMany({
+  async listRuns(userId: string, q: ListRunsDto) {
+    const runs = await this.db(userId).run.findMany({
       where: { ...(q.taskId ? { taskId: q.taskId } : {}), ...(q.status ? { status: q.status } : {}) },
       orderBy: { createdAt: 'desc' },
       take: q.limit,
       omit: { transcript: true },
     });
+    return runs.map(withCost);
   }
 
   async getRun(userId: string, id: string) {
@@ -80,7 +111,7 @@ export class TasksService {
       include: { steps: { orderBy: { seq: 'asc' } } },
     });
     if (!r) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
-    return r;
+    return withCost(r);
   }
 
   /**
@@ -117,8 +148,12 @@ export class TasksService {
         if (isTerminal(to)) await this.prisma.question.updateMany({ where: { runId: id, status: 'pending' }, data: { status: 'cancelled' } });
         if (to === 'running' && !run.startedAt) this.metrics.started(run.trigger);
         if (to === 'waiting_human') this.metrics.handoff();
-        if (isTerminal(to)) this.metrics.finished(to, run.trigger, (now.getTime() - (run.startedAt ?? run.createdAt).getTime()) / 1000);
-        return db.run.findFirstOrThrow({ where: { id }, omit: { transcript: true } });
+        const saved = await db.run.findFirstOrThrow({ where: { id }, omit: { transcript: true } });
+        if (isTerminal(to)) {
+          this.metrics.finished(to, run.trigger, (now.getTime() - (run.startedAt ?? run.createdAt).getTime()) / 1000);
+          if (saved.modelCalls > 0 && saved.costKnown) this.metrics.cost(to, Number(saved.costUsd));
+        }
+        return withCost(saved);
       }
     }
     throw new ConflictException({ code: 'RUN_BUSY', message: 'The run changed while it was being updated; try again' });
