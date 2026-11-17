@@ -15,6 +15,8 @@ import {
   type StallAction,
   type Tier,
 } from './types';
+import type { PolicyCatalog } from './usePolicyCatalog';
+import type { Task } from '../types/tasks';
 
 export const BUDGET_LABEL: Record<BudgetLimitKey, string> = {
   maxActions: 'Browser actions',
@@ -114,6 +116,14 @@ export function startModel(spec: AgentPolicySpec, effective: EffectiveTiers | nu
   if (pin) return { model: pin, source: 'pin' };
   const e: EffectiveTier | undefined = effective?.[tier];
   return { model: e?.model ?? null, source: e?.modelSource ?? null };
+}
+
+/** The policy a task runs under, and the model its start tier uses, as the task chips show them. */
+export function taskPolicyChips(task: Pick<Task, 'policyId'>, catalog: Pick<PolicyCatalog, 'byId' | 'defaultId' | 'effective'>): { policy: string; model: string | null } | null {
+  const policy = catalog.byId(task.policyId ?? catalog.defaultId);
+  if (!policy) return null;
+  const { model } = startModel(policy.spec, catalog.effective);
+  return { policy: task.policyId ? policy.name : `${policy.name} (default)`, model };
 }
 
 /** The value a run actually gets: `min(policy, ceiling)`; null only when both are unlimited. */

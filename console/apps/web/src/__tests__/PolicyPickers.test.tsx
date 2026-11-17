@@ -9,7 +9,9 @@ import { PlatformHostProvider } from '@marinoscar/platform-web/core';
 import { createTestPlatformHost, type TestApiRequest } from '@marinoscar/platform-web/testing';
 
 import { TaskSchedules } from '../pages/TaskSchedules';
-import { TasksPage, type Task } from '../pages/TasksPage';
+import { TasksPage } from '../pages/TasksPage';
+import type { Task } from '../types/tasks';
+import { ConfirmProvider } from '../ui';
 import { OWN_ID, POLICIES, POLICY_READS } from './policyFixtures';
 
 const TASK: Task = {
@@ -45,12 +47,14 @@ function renderTasks(responses: Record<string, unknown>, permissions = PERMS) {
   });
   render(
     <PlatformHostProvider host={host}>
-      <MemoryRouter initialEntries={['/tasks']}>
-        <Routes>
-          <Route path="/tasks" element={<TasksPage />} />
-          <Route path="/runs/:id" element={<div>run page</div>} />
-        </Routes>
-      </MemoryRouter>
+      <ConfirmProvider>
+        <MemoryRouter initialEntries={['/tasks']}>
+          <Routes>
+            <Route path="/tasks" element={<TasksPage />} />
+            <Route path="/runs/:id" element={<div>run page</div>} />
+          </Routes>
+        </MemoryRouter>
+      </ConfirmProvider>
     </PlatformHostProvider>,
   );
   return host;
@@ -154,9 +158,11 @@ describe('the schedule policy override', () => {
     });
     render(
       <PlatformHostProvider host={host}>
-        <MemoryRouter>
-          <TaskSchedules taskId={TASK.id} canWrite catalog={catalog} taskPolicyId={null} />
-        </MemoryRouter>
+        <ConfirmProvider>
+          <MemoryRouter>
+            <TaskSchedules taskId={TASK.id} canWrite catalog={catalog} taskPolicyId={null} />
+          </MemoryRouter>
+        </ConfirmProvider>
       </PlatformHostProvider>,
     );
     expect(await screen.findByText('policy: Economy')).toBeInTheDocument();

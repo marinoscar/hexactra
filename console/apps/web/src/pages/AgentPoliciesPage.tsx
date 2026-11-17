@@ -15,7 +15,6 @@ import {
   CardContent,
   Chip,
   CircularProgress,
-  Container,
   Dialog,
   DialogActions,
   DialogContent,
@@ -41,6 +40,7 @@ import { deletePolicy, duplicatePolicy, exportPolicies, importPolicies, saveFile
 import { budgetSummary, copyName, tierRange, usageText } from '../policies/format';
 import { CONFLICT_MODES, type AgentPolicy, type ConflictMode, type ImportResult, type PolicyFile, type PolicyInUseDetails } from '../policies/types';
 import { errorText, usePolicyCatalog } from '../policies/usePolicyCatalog';
+import { ErrorBanner, PageContainer, PageHeader, useConfirm } from '../ui';
 
 const CONFLICT_LABEL: Record<ConflictMode, string> = {
   rename: 'Keep both: rename the imported one ("Name (2)")',
@@ -61,7 +61,7 @@ export function AgentPoliciesPage() {
   const [templateAnchor, setTemplateAnchor] = useState<HTMLElement | null>(null);
   const [rowMenu, setRowMenu] = useState<{ anchor: HTMLElement; policy: AgentPolicy } | null>(null);
   const [duplicating, setDuplicating] = useState<{ policy: AgentPolicy; name: string } | null>(null);
-  const [deleting, setDeleting] = useState<AgentPolicy | null>(null);
+  const confirm = useConfirm();
   const [reassign, setReassign] = useState<{ policy: AgentPolicy; details: PolicyInUseDetails; to: string } | null>(null);
   const [importing, setImporting] = useState<{ file: PolicyFile; fileName: string; onConflict: ConflictMode; result: ImportResult | null; error: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -101,17 +101,26 @@ export function AgentPoliciesPage() {
         if (isPlatformApiError(e) && e.status === 409 && e.code === 'POLICY_IN_USE') {
           const details = (e.details ?? { tasks: [], schedules: [] }) as PolicyInUseDetails;
           const to = catalog.defaultId && catalog.defaultId !== policy.id ? catalog.defaultId : (policies.find((p) => p.id !== policy.id)?.id ?? '');
-          setDeleting(null);
           setReassign({ policy, details: { tasks: details.tasks ?? [], schedules: details.schedules ?? [] }, to });
           return;
         }
         throw e;
       }
-      setDeleting(null);
       setReassign(null);
       setNotice(`Deleted "${policy.name}".`);
       await catalog.reload();
     }, 'Could not delete the policy');
+
+  /** Delete asks first; a policy in use then offers to move its tasks and schedules (the reassign dialog). */
+  const askDelete = async (policy: AgentPolicy) => {
+    const ok = await confirm({
+      title: `Delete “${policy.name}”?`,
+      body: 'Runs that already used it keep their own copy. This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (ok) await doDelete(policy);
+  };
 
   const doSetDefault = (policy: AgentPolicy) =>
     act(async () => {
@@ -155,13 +164,11 @@ export function AgentPoliciesPage() {
   const builtins = policies.filter((p) => p.builtin);
 
   return (
-    <Container maxWidth="md" sx={{ py: { xs: 2, sm: 4 } }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Agent policies
-      </Typography>
-      <Typography color="text.secondary" sx={{ mb: 2 }}>
-        A policy says which models a run uses and how much it may spend. Choose one per task, per schedule, or for a single run with “Run with…”.
-      </Typography>
+    <PageContainer>
+      <PageHeader
+        title="Agent policies"
+        subtitle="A policy says which models a run uses and how much it may spend. Choose one per task, per schedule, or for a single run with “Run with…”."
+      />
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mb: 2, alignItems: { sm: 'center' }, flexWrap: 'wrap', rowGap: 1 }} aria-label="Policy actions">
         {canWrite && (
@@ -191,16 +198,8 @@ export function AgentPoliciesPage() {
         ))}
       </Menu>
 
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-      {catalog.error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {catalog.error}
-        </Alert>
-      )}
+      <ErrorBanner error={error} onClose={() => setError(null)} />
+      <ErrorBanner error={catalog.error} />
       {notice && (
         <Alert severity="success" sx={{ mb: 2 }} onClose={() => setNotice(null)}>
           {notice}
@@ -280,7 +279,7 @@ export function AgentPoliciesPage() {
             onClick={() => {
               const p = rowMenu!.policy;
               setRowMenu(null);
-              setDeleting(p);
+              void askDelete(p);
             }}
           >
             Delete
@@ -306,20 +305,6 @@ export function AgentPoliciesPage() {
           <Button onClick={() => setDuplicating(null)}>Cancel</Button>
           <Button variant="contained" disabled={busy || !duplicating?.name.trim()} onClick={() => void doDuplicate()}>
             Duplicate and edit
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Delete: confirm. */}
-      <Dialog open={Boolean(deleting)} onClose={() => setDeleting(null)} fullWidth maxWidth="xs">
-        <DialogTitle>Delete “{deleting?.name}”?</DialogTitle>
-        <DialogContent>
-          <DialogContentText>Runs that already used it keep their own copy. This cannot be undone.</DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleting(null)}>Cancel</Button>
-          <Button color="error" variant="contained" disabled={busy} onClick={() => deleting && void doDelete(deleting)}>
-            Delete
           </Button>
         </DialogActions>
       </Dialog>
@@ -407,7 +392,7 @@ export function AgentPoliciesPage() {
           )}
         </DialogActions>
       </Dialog>
-    </Container>
+    </PageContainer>
   );
 }
 

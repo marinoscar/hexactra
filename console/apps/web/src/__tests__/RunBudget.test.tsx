@@ -19,8 +19,12 @@ import { RunBudgetMeter, RunStopReason, TaskSpendLine } from '../components/RunB
 import { RunTimeline, type RunTimelineStep } from '../components/RunTimeline';
 import { formatUsd, meterRows, meterTone, spendLine, STOP_REASONS, stopChipLabel, stopLine, tierChip, type RunBudget, type StopReason } from '../components/runBudget';
 import { routingRow } from '../components/runRouting';
-import { RunDetailPage, RunsPage, type Run } from '../pages/RunsPage';
-import { TasksPage, type Task } from '../pages/TasksPage';
+import { RunDetailPage } from '../pages/RunDetailPage';
+import { RunsPage } from '../pages/RunsPage';
+import { TasksPage } from '../pages/TasksPage';
+import type { Run } from '../types/runs';
+import type { Task } from '../types/tasks';
+import { ConfirmProvider } from '../ui';
 
 const RUN_ID = '22222222-2222-4222-8222-222222222222';
 const TASK_ID = '11111111-1111-4111-8111-111111111111';
@@ -276,11 +280,13 @@ describe('task spend', () => {
     const host = createTestPlatformHost({ permissions: ['tasks:read'], responses: { 'GET /tasks': [task], [`GET /schedules?taskId=${TASK_ID}`]: [] } });
     render(
       <PlatformHostProvider host={host}>
-        <MemoryRouter initialEntries={['/tasks']}>
-          <Routes>
-            <Route path="/tasks" element={<TasksPage />} />
-          </Routes>
-        </MemoryRouter>
+        <ConfirmProvider>
+          <MemoryRouter initialEntries={['/tasks']}>
+            <Routes>
+              <Route path="/tasks" element={<TasksPage />} />
+            </Routes>
+          </MemoryRouter>
+        </ConfirmProvider>
       </PlatformHostProvider>,
     );
     expect(await screen.findByTestId('task-spend')).toHaveTextContent('Last 30 days: 2 runs · $0.80 · 4,000 tokens · $0.40 per successful run');

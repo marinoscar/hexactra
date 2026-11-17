@@ -16,11 +16,13 @@
  */
 import { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
-import { Alert, Box, Card, CardContent, Container, IconButton, Link, Skeleton, Snackbar, Stack, Tooltip, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, IconButton, Link, Skeleton, Snackbar, Stack, Tooltip, Typography } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { getInstalledAppVersion, isRunningInTwa, useAndroidRelease, type InstalledAppVersion, type PublicRelease } from '@marinoscar/platform-web/android-app/headless';
 import { DownloadApkButton } from '@marinoscar/platform-web/android-app/ui';
+
+import { PageContainer, PageHeader } from '../ui';
 
 /** Mirrors the `Android app` card in `slices/android-app.tsx`, word for word. */
 export const ANDROID_DOWNLOAD_PATH = '/settings/android-app';
@@ -188,17 +190,10 @@ export function AndroidAppDownloadPage({ appName, storagePrefix, navigate }: And
   }
 
   return (
-    <Container maxWidth="md">
-      <Box sx={{ py: { xs: 2, sm: 4 } }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          {ANDROID_DOWNLOAD_TITLE}
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          {ANDROID_DOWNLOAD_DESCRIPTION}
-        </Typography>
-        {body}
-      </Box>
-    </Container>
+    <PageContainer>
+      <PageHeader title={ANDROID_DOWNLOAD_TITLE} subtitle={ANDROID_DOWNLOAD_DESCRIPTION} />
+      {body}
+    </PageContainer>
   );
 }
 
