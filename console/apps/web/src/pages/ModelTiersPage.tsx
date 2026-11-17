@@ -5,7 +5,6 @@ import {
   Card,
   CardContent,
   CircularProgress,
-  Container,
   FormControlLabel,
   MenuItem,
   Stack,
@@ -22,6 +21,7 @@ import { sourceText } from '../policies/format';
 import { ModelPicker, modelName } from '../policies/ModelPicker';
 import { TIERS, TIER_EFFORTS, TIER_LABEL, type EffectiveTiers, type ModelTiers, type ModelTiersOverride, type Tier, type TierDef, type TierEffort } from '../policies/types';
 import { errorText } from '../policies/usePolicyCatalog';
+import { PageContainer, PageHeader } from '../ui';
 
 const EMPTY: TierDef = { model: null, reasoningEffort: null, maxOutputTokens: null, fallbackModel: null };
 
@@ -132,15 +132,15 @@ export function ModelTiersPage({ scope }: { scope: 'user' | 'deployment' }) {
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: { xs: 2, sm: 4 } }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        {scope === 'user' ? 'Model tiers' : 'Agent model tiers'}
-      </Typography>
-      <Typography color="text.secondary" sx={{ mb: 1 }}>
-        {scope === 'user'
-          ? 'Which model each tier uses for your runs. A tier you do not override follows the deployment default; a policy can still pin its own model.'
-          : 'The deployment default for every user. A tier left empty borrows the nearest tier that is set (Fast and Frontier borrow Standard; Standard borrows Frontier, then Fast), then the AI default model.'}
-      </Typography>
+    <PageContainer>
+      <PageHeader
+        title={scope === 'user' ? 'Model tiers' : 'Agent model tiers'}
+        subtitle={
+          scope === 'user'
+            ? 'Which model each tier uses for your runs. A tier you do not override follows the deployment default; a policy can still pin its own model.'
+            : 'The deployment default for every user. A tier left empty borrows the nearest tier that is set (Fast and Frontier borrow Standard; Standard borrows Frontier, then Fast), then the AI default model.'
+        }
+      />
       <Alert severity="info" sx={{ mb: 2 }}>
         Tip: use the same model for Standard and Frontier with a different reasoning effort (low, then high). An escalation then keeps the provider&apos;s prompt cache warm.
       </Alert>
@@ -240,6 +240,6 @@ export function ModelTiersPage({ scope }: { scope: 'user' | 'deployment' }) {
           )}
         </Stack>
       )}
-    </Container>
+    </PageContainer>
   );
 }

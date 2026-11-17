@@ -1,4 +1,3 @@
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import {
@@ -10,7 +9,6 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Container,
   FormControlLabel,
   Link,
   MenuItem,
@@ -44,6 +42,7 @@ import {
   type Tier,
 } from '../policies/types';
 import { errorText, usePolicyCatalog } from '../policies/usePolicyCatalog';
+import { ErrorBanner, PageContainer, PageHeader } from '../ui';
 
 /** The text of a "No limit" switch turned off when the field was never set. */
 const SUGGESTED: Record<BudgetLimitKey, string> = {
@@ -283,12 +282,10 @@ export function AgentPolicyEditorPage() {
 
   if (loadError) {
     return (
-      <Container maxWidth="md" sx={{ py: 4 }}>
-        <Alert severity="error">{loadError}</Alert>
-        <Button component={RouterLink} to="/settings/agent-policies" startIcon={<ArrowBackIcon />} sx={{ mt: 2 }}>
-          Agent policies
-        </Button>
-      </Container>
+      <PageContainer>
+        <PageHeader title="Agent policy" back={{ to: '/settings/agent-policies', label: 'Agent policies' }} />
+        <ErrorBanner error={loadError} />
+      </PageContainer>
     );
   }
   if (!base || !built) {
@@ -309,18 +306,16 @@ export function AgentPolicyEditorPage() {
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: { xs: 2, sm: 4 } }}>
-      <Button component={RouterLink} to="/settings/agent-policies" startIcon={<ArrowBackIcon />} size="small" sx={{ mb: 1 }}>
-        Agent policies
-      </Button>
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
-        {policy?.builtin && <LockOutlinedIcon color="action" titleAccess="Built-in (read-only)" />}
-        <Typography variant="h4" component="h1" sx={{ wordBreak: 'break-word' }}>
-          {policy ? policy.name : 'New policy'}
-        </Typography>
-        {policy && <Chip size="small" variant="outlined" label={`v${policy.version}`} />}
-        {policy?.isDefault && <Chip size="small" color="primary" label="Default" />}
-      </Stack>
+    <PageContainer>
+      <PageHeader title={policy ? policy.name : 'New policy'} back={{ to: '/settings/agent-policies', label: 'Agent policies' }}>
+        {policy && (
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
+            {policy.builtin && <LockOutlinedIcon color="action" titleAccess="Built-in (read-only)" />}
+            <Chip size="small" variant="outlined" label={`v${policy.version}`} />
+            {policy.isDefault && <Chip size="small" color="primary" label="Default" />}
+          </Stack>
+        )}
+      </PageHeader>
 
       {policy?.builtin && (
         <Alert
@@ -535,6 +530,6 @@ export function AgentPolicyEditorPage() {
           </Stack>
         )}
       </Stack>
-    </Container>
+    </PageContainer>
   );
 }

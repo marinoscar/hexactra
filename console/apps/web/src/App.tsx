@@ -38,7 +38,8 @@ import { DesktopPage } from './pages/DesktopPage';
 import { FleetPage } from './pages/FleetPage';
 import { InboxPage } from './pages/InboxPage';
 import { QuestionPage } from './pages/QuestionPage';
-import { RunDetailPage, RunsPage } from './pages/RunsPage';
+import { RunDetailPage } from './pages/RunDetailPage';
+import { RunsPage } from './pages/RunsPage';
 import { TasksPage } from './pages/TasksPage';
 import { NotesPage } from './pages/NotesPage';
 import { AgentPoliciesPage } from './pages/AgentPoliciesPage';
@@ -59,6 +60,7 @@ import {
   sliceUserMenuItems,
 } from './slices/manifest';
 import type { SliceRoute } from './slices/slice';
+import { ConfirmProvider } from './ui';
 
 // The `orgs` feature: the organization cards show only in multi-organization mode.
 declare module '@marinoscar/platform-web/settings/headless' {
@@ -131,9 +133,12 @@ function AppShell() {
       }
     >
       {/* Slice pages are lazy: the shell stays mounted while one loads. */}
-      <Suspense fallback={spinner}>
-        <Outlet />
-      </Suspense>
+      {/* The one confirmation dialog every page's `useConfirm()` opens. */}
+      <ConfirmProvider>
+        <Suspense fallback={spinner}>
+          <Outlet />
+        </Suspense>
+      </ConfirmProvider>
     </ShellLayout>
   );
 }
