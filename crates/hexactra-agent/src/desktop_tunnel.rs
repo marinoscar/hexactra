@@ -133,7 +133,8 @@ impl OnDemandVnc {
                 cmd.args(["-auth", &auth]);
             }
             st.child = Some(
-                cmd.spawn()
+                spawn_retrying_busy(&mut cmd)
+                    .await
                     .map_err(|e| format!("starting {}: {e}", self.binary.display()))?,
             );
         }
@@ -393,6 +394,28 @@ where
     (up, down)
 }
 
+/// Linux's "Text file busy": `execve` of a file some process holds open for writing.
+const ETXTBSY: i32 = 26;
+
+/// Spawn `cmd`, retrying briefly while the binary is busy (ETXTBSY). That is
+/// transient: a package upgrade still writing the binary, or another thread
+/// forking while it held the file open for writing (#390). Any other error
+/// fails at once.
+async fn spawn_retrying_busy(
+    cmd: &mut tokio::process::Command,
+) -> std::io::Result<tokio::process::Child> {
+    let mut attempt = 0u64;
+    loop {
+        match cmd.spawn() {
+            Err(e) if e.raw_os_error() == Some(ETXTBSY) && attempt < 5 => {
+                attempt += 1;
+                tokio::time::sleep(Duration::from_millis(20 * attempt)).await;
+            }
+            r => return r,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -586,5 +609,36 @@ mod tests {
         assert!(b
             .host_leg_url(h, t)
             .starts_with("ws://fabric-control:8787/v1/hosts/"));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn spawn_waits_out_a_busy_binary() {
+        use std::io::Write;
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let bin = dir.path().join("busy");
+        let mut f = std::fs::File::create(&bin).unwrap();
+        f.write_all(b"#!/bin/sh\nexit 0\n").unwrap();
+        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // Still open for writing: execve says ETXTBSY until it is closed.
+        let mut cmd = tokio::process::Command::new(&bin);
+        assert_eq!(cmd.spawn().unwrap_err().raw_os_error(), Some(ETXTBSY));
+        let release = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(30)).await;
+            drop(f);
+        });
+        let mut child = spawn_retrying_busy(&mut cmd).await.unwrap();
+        assert!(child.wait().await.unwrap().success());
+        release.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn spawn_fails_at_once_for_other_errors() {
+        let started = std::time::Instant::now();
+        let mut cmd = tokio::process::Command::new("/nonexistent/x11vnc");
+        let e = spawn_retrying_busy(&mut cmd).await.unwrap_err();
+        assert_eq!(e.kind(), std::io::ErrorKind::NotFound);
+        assert!(started.elapsed() < Duration::from_millis(15));
     }
 }

@@ -11522,6 +11522,8 @@ export interface components {
             goal: string;
             profile: string;
             hostId: string | null;
+            /** @description When the chosen host cannot take a run, run on another available one */
+            hostFallback: boolean;
             allowedDomains: string[];
             maxSteps: number;
             maxMinutes: number;
@@ -11538,6 +11540,8 @@ export interface components {
             /** @default default */
             profile?: string;
             hostId?: string | null;
+            /** @default true */
+            hostFallback?: boolean;
             /** @default [] */
             allowedDomains?: string[];
             /** @default 100 */
@@ -11553,6 +11557,7 @@ export interface components {
             goal?: string;
             profile?: string;
             hostId?: string | null;
+            hostFallback?: boolean;
             allowedDomains?: string[];
             maxSteps?: number;
             maxMinutes?: number;
@@ -11572,6 +11577,7 @@ export interface components {
             goal: string;
             profile: string;
             hostId: string | null;
+            hostFallback: boolean;
             sessionId: string | null;
             handoffId: string | null;
             /** @description Who drove an external run */
@@ -11616,6 +11622,7 @@ export interface components {
             goal: string;
             profile: string;
             hostId: string | null;
+            hostFallback: boolean;
             sessionId: string | null;
             handoffId: string | null;
             /** @description Who drove an external run */
@@ -11902,6 +11909,8 @@ export interface components {
             /** @default default */
             profile?: string;
             hostId?: string | null;
+            /** @default true */
+            hostFallback?: boolean;
         };
         ScheduleResponseDto: {
             /** Format: uuid */

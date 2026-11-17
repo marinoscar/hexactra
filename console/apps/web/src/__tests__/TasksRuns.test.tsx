@@ -23,6 +23,7 @@ const task: Task = {
   goal: 'Find the cheapest fare',
   profile: 'travel',
   hostId: null,
+  hostFallback: true,
   allowedDomains: ['flights.example.test'],
   maxSteps: 40,
   maxMinutes: 15,
@@ -65,6 +66,42 @@ describe('TasksPage', () => {
     expect(screen.getByText('flights.example.test')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Run now' }));
     expect(await screen.findByText('run page')).toBeInTheDocument();
+  });
+
+  it('picks the machine, shows its state and saves the fallback choice (#384)', async () => {
+    const HOME = '33333333-3333-4333-8333-333333333333';
+    const base = { version: '0.1.0', browserConnected: false, onDemand: true, viewerUrl: null, desktop: true, profiles: [], lastSeen: '2026-11-17T00:00:00Z' };
+    const host = createTestPlatformHost({
+      permissions: ['tasks:read', 'tasks:write', 'runs:write', 'fleet:read'],
+      responses: {
+        'GET /tasks': [],
+        'GET /fleet/hosts': [
+          { ...base, id: HOME, name: 'Linux-Mini-PC', online: false, draining: false, mode: 'unattended' },
+          { ...base, id: '44444444-4444-4444-8444-444444444444', name: 'local', online: true, draining: true, mode: 'container' },
+        ],
+        'POST /tasks': { ...task, id: '55555555-5555-4555-8555-555555555555' },
+      },
+    });
+    render(
+      <PlatformHostProvider host={host}>
+        <MemoryRouter>
+          <TasksPage />
+        </MemoryRouter>
+      </PlatformHostProvider>,
+    );
+    fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: 'Miles' } });
+    fireEvent.change(screen.getByLabelText(/^Goal/), { target: { value: 'Check my miles' } });
+    // No machine chosen: no fallback switch.
+    expect(screen.queryByLabelText('If it is unavailable, use another available machine')).not.toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Machine' }));
+    expect(await screen.findByRole('option', { name: 'local (disabled)' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('option', { name: 'Linux-Mini-PC (offline)' }));
+    expect(await screen.findByText(/Linux-Mini-PC is offline right now/)).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('If it is unavailable, use another available machine'));
+    expect(screen.getByText(/Runs will fail until it is back/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
+    await waitFor(() => expect(host.requests.some((r) => r.method === 'POST' && r.path === '/tasks')).toBe(true));
+    expect(host.requests.find((r) => r.method === 'POST' && r.path === '/tasks')?.body).toMatchObject({ hostId: HOME, hostFallback: false });
   });
 
   it('hides creating and running from a reader', async () => {
