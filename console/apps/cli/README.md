@@ -186,11 +186,19 @@ hexactra runs list --status running
 hexactra runs show <run-id>
 hexactra runs watch <run-id>
 hexactra runs cancel <run-id>
+hexactra runs delete <run-id>              # a finished run; asks first (--yes for a script)
+hexactra runs delete --older-than 90       # every finished run older than 90 days; shows the count, then asks
+hexactra tasks pause <task-id>             # pause every schedule of the task
+hexactra tasks resume <task-id>
 ```
 
 `tasks run` and `runs show|watch|cancel` take an id or an id prefix. `--json` prints JSON for scripts.
 
 `runs list`, `runs show` and the Runs screen of the terminal UI show each run's policy and cost, and the tier, budget use and stop reason when the console reports them.
+
+- **Deleting runs is permanent.** `runs delete` removes the run with its steps and answers, and its cost leaves the task's spend. A run that is queued, running or waiting for you is refused: cancel it first. Without `--yes` the command asks on the terminal; when there is no terminal (a pipe, a CI job) it deletes nothing and says to pass `--yes`. It needs the `runs:delete` permission. The standing rule (keep N days) is set in the web app: Settings → Run history.
+- **A paused task still runs when you start it.** `tasks pause` only stops its schedules; `tasks run` keeps working.
+- **The Runs screen** of the terminal UI shows the 30 most recent runs; `m` loads the next 30.
 
 ### Agent policies
 

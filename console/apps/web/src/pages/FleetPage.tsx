@@ -49,7 +49,7 @@ const MODE_LABEL: Record<NonNullable<FleetHost['mode']>, string> = {
  * itself as unattended because it launches its own browser, but it has no
  * desktop to share: it is a browser-only host, without takeover.
  */
-export function hostModeLabel(h: Pick<FleetHost, 'mode' | 'desktop' | 'onDemand'>): { label: string; hint: string | null } {
+function hostModeLabel(h: Pick<FleetHost, 'mode' | 'desktop' | 'onDemand'>): { label: string; hint: string | null } {
   if (h.mode === 'unattended' && !h.desktop) {
     return { label: 'Browser only', hint: 'No desktop to share, so no takeover. For a node with its own desktop, install it with `hexactra agent install --mode unattended`.' };
   }

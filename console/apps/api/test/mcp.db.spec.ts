@@ -325,3 +325,108 @@ describe('MCP agent policies (#409)', () => {
     expect(schedule.policyId).toBe(policy.id);
   });
 });
+
+describe('MCP tasks, schedules and the paged run list (#432)', () => {
+  it('announces the new tools: schedule_preview reads, task_pause and task_resume act, and no tool deletes runs', async () => {
+    const t = await token(`mcp-e32-list-${stamp}@example.test`, 'contributor');
+    const list = await rpc(t, { jsonrpc: '2.0', id: 1, method: 'tools/list' });
+    const tools = list.json.result.tools as { name: string; annotations: { readOnlyHint: boolean }; inputSchema: { properties: Record<string, unknown> } }[];
+    const tool = (n: string) => tools.find((x) => x.name === n)!;
+    expect(tool('schedule_preview').annotations.readOnlyHint).toBe(true);
+    expect(READ_ONLY_TOOLS.has('schedule_preview')).toBe(true);
+    for (const n of ['task_pause', 'task_resume']) expect(tool(n).annotations.readOnlyHint).toBe(false);
+    expect(Object.keys(tool('task_create').inputSchema.properties)).toContain('schedules');
+    expect(Object.keys(tool('runs_list').inputSchema.properties)).toEqual(expect.arrayContaining(['status', 'task_id', 'stop_reason', 'limit', 'cursor']));
+    // An agent must not erase its own history: deleting runs is not an MCP tool, under any name.
+    expect(tools.map((x) => x.name).filter((n) => /delete|retention|purge/.test(n))).toEqual([]);
+  });
+
+  it('schedule_preview says what an expression means, or why it would be refused, and saves nothing', async () => {
+    const t = await token(`mcp-e32-preview-${stamp}@example.test`, 'contributor');
+    const ok = (await call(t, 'schedule_preview', { cron: '0 9 * * 1-5', timezone: 'Europe/Madrid', count: 3 })).body as unknown as { valid: boolean; description: string; timezone: string; next: string[] };
+    expect(ok).toMatchObject({ valid: true, description: 'Monday to Friday at 09:00', timezone: 'Europe/Madrid' });
+    expect(ok.next).toHaveLength(3);
+    expect((await call(t, 'schedule_preview', { cron: '* * * * *' })).body).toMatchObject({ valid: false, code: 'CRON_TOO_FREQUENT' });
+    expect((await call(t, 'schedule_preview', { cron: '0 9 * * 1-5', timezone: 'Mars/Olympus' })).body).toMatchObject({ valid: false, code: 'INVALID_TIMEZONE' });
+    expect((await call(t, 'schedules_list', {})).body).toEqual([]);
+  });
+
+  it('task_create saves a task with its schedules in one step, and one bad schedule saves nothing', async () => {
+    const t = await token(`mcp-e32-create-${stamp}@example.test`, 'contributor');
+    const made = (
+      await call(t, 'task_create', {
+        name: `Scheduled ${stamp}`,
+        goal: 'Read the morning report',
+        schedules: [
+          { cron: '0 9 * * 1-5', timezone: 'Europe/Madrid', policy_id: 'builtin:economy' },
+          { cron: '30 17 * * *', enabled: false },
+        ],
+      })
+    ).body as unknown as { id: string; summary: { scheduleState: string; schedules: { cron: string; timezone: string; enabled: boolean; policyId: string | null }[] } };
+    expect(made.summary.scheduleState).toBe('partial');
+    expect(made.summary.schedules.map((sc) => [sc.cron, sc.enabled, sc.policyId])).toEqual(
+      expect.arrayContaining([
+        ['0 9 * * 1-5', true, 'builtin:economy'],
+        ['30 17 * * *', false, null],
+      ]),
+    );
+    expect(made.summary.schedules.find((sc) => sc.cron === '0 9 * * 1-5')!.timezone).toBe('Europe/Madrid');
+
+    const before = ((await call(t, 'tasks_list', {})).body as unknown as unknown[]).length;
+    const refused = await call(t, 'task_create', { name: `Refused ${stamp}`, goal: 'g', schedules: [{ cron: '0 9 * * 1-5' }, { cron: '* * * * *' }] });
+    expect(refused.isError).toBe(true);
+    expect(String(refused.body)).toMatch(/CRON_TOO_FREQUENT|every 5 minutes/i);
+    expect(((await call(t, 'tasks_list', {})).body as unknown as unknown[]).length).toBe(before);
+  });
+
+  it('task_pause and task_resume switch every schedule of the task; a viewer may not', async () => {
+    const t = await token(`mcp-e32-pause-${stamp}@example.test`, 'contributor');
+    const task = (await call(t, 'task_create', { name: `Pausable ${stamp}`, goal: 'g', schedules: [{ cron: '0 9 * * 1-5' }, { cron: '0 18 * * *' }] })).body as unknown as { id: string };
+    const paused = (await call(t, 'task_pause', { task_id: task.id })).body as unknown as { summary: { scheduleState: string; nextRunAt: string | null } };
+    expect(paused.summary).toMatchObject({ scheduleState: 'paused', nextRunAt: null });
+    const resumed = (await call(t, 'task_resume', { task_id: task.id })).body as unknown as { summary: { scheduleState: string; nextRunAt: string | null } };
+    expect(resumed.summary.scheduleState).toBe('active');
+    expect(resumed.summary.nextRunAt).not.toBeNull();
+
+    const bare = (await call(t, 'task_create', { name: `Unscheduled ${stamp}`, goal: 'g' })).body as unknown as { id: string };
+    const none = await call(t, 'task_pause', { task_id: bare.id });
+    expect(none.isError).toBe(true);
+    expect(String(none.body)).toMatch(/NO_SCHEDULES|no schedule/i);
+
+    const viewer = await token(`mcp-e32-viewer-${stamp}@example.test`, 'viewer');
+    const denied = await call(viewer, 'task_pause', { task_id: task.id });
+    expect(denied.isError).toBe(true);
+  });
+
+  it('runs_list keeps its list form, filters by task and stop reason, and pages with limit and cursor', async () => {
+    const t = await token(`mcp-e32-runs-${stamp}@example.test`, 'contributor');
+    const prisma = app.get(PrismaService);
+    const task = (await call(t, 'task_create', { name: `Paged ${stamp}`, goal: 'g' })).body as unknown as { id: string };
+    const ids: string[] = [];
+    for (let i = 0; i < 3; i += 1) ids.push(((await call(t, 'task_run', { task_id: task.id })).body as unknown as { id: string }).id);
+    const adHoc = ((await call(t, 'run_goal', { goal: 'One-off' })).body as unknown as { id: string }).id;
+    await prisma.run.update({ where: { id: ids[0] }, data: { status: 'failed', stopReason: 'budget_cost', finishedAt: new Date() } });
+
+    // No argument: the list it always returned.
+    const all = (await call(t, 'runs_list', {})).body as unknown as { id: string }[];
+    expect(Array.isArray(all)).toBe(true);
+    expect(all.map((r) => r.id)).toEqual(expect.arrayContaining([...ids, adHoc]));
+
+    const ofTask = (await call(t, 'runs_list', { task_id: task.id })).body as unknown as { id: string }[];
+    expect(ofTask.map((r) => r.id).sort()).toEqual([...ids].sort());
+    expect(((await call(t, 'runs_list', { task_id: 'none' })).body as unknown as { id: string }[]).map((r) => r.id)).toEqual([adHoc]);
+    expect(((await call(t, 'runs_list', { stop_reason: 'budget' })).body as unknown as { id: string }[]).map((r) => r.id)).toEqual([ids[0]]);
+    expect(((await call(t, 'runs_list', { status: 'failed', stop_reason: 'stalled' })).body as unknown as unknown[])).toEqual([]);
+
+    // limit or cursor: a page.
+    const first = (await call(t, 'runs_list', { task_id: task.id, limit: 2 })).body as unknown as { items: { id: string }[]; nextCursor: string | null };
+    expect(first.items).toHaveLength(2);
+    expect(first.nextCursor).toEqual(expect.any(String));
+    const second = (await call(t, 'runs_list', { task_id: task.id, limit: 2, cursor: first.nextCursor })).body as unknown as { items: { id: string }[]; nextCursor: string | null };
+    expect(second.items).toHaveLength(1);
+    expect(second.nextCursor).toBeNull();
+    expect([...first.items, ...second.items].map((r) => r.id).sort()).toEqual([...ids].sort());
+    const bad = await call(t, 'runs_list', { cursor: 'not-a-cursor' });
+    expect(bad.isError).toBe(true);
+  });
+});

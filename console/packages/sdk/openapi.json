@@ -28070,7 +28070,7 @@
         "parameters": [
           {
             "name": "keepDays",
-            "required": true,
+            "required": false,
             "in": "query",
             "description": "Days finished runs are kept; empty or absent: no age limit",
             "schema": {
@@ -28088,7 +28088,7 @@
           },
           {
             "name": "keepPerTask",
-            "required": true,
+            "required": false,
             "in": "query",
             "description": "Newest finished runs kept per task; empty or absent: no limit",
             "schema": {
@@ -28106,7 +28106,7 @@
           },
           {
             "name": "keepFailedDays",
-            "required": true,
+            "required": false,
             "in": "query",
             "description": "Days failed runs are kept; empty or absent: the same as `keepDays`",
             "schema": {

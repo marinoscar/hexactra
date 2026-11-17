@@ -3,7 +3,7 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { useCallback, useEffect, useId, useState } from 'react';
 
 import { RETENTION_MAX_DAYS, RETENTION_MAX_PER_TASK, SPEND_WINDOW_DAYS, type RetentionLimits, type RetentionPreview, type RetentionSettings } from '../types/retention';
-import { CardSkeleton, ErrorBanner, PageContainer, PageHeader, formatCost, formatDateTime, useApiAction, useConfirm } from '../ui';
+import { CardSkeleton, ErrorBanner, PageContainer, PageHeader, aboveBottomBar, formatCost, formatDateTime, useApiAction, useConfirm } from '../ui';
 
 /** How long after the last keystroke the preview is asked for. */
 export const PREVIEW_DEBOUNCE_MS = 400;
@@ -321,7 +321,7 @@ export function RunHistorySettingsPage() {
           sx={{
             flexWrap: 'wrap',
             position: { xs: 'sticky', sm: 'static' },
-            bottom: { xs: 56 },
+            bottom: { xs: aboveBottomBar().xs },
             zIndex: 1,
             bgcolor: 'background.paper',
             // A footer bar across the card on a phone, so what scrolls under it is cut at a line.

@@ -177,6 +177,9 @@ export interface StopReasonRun {
   budget?: RunBudget | null;
 }
 
+/** How a stall stop reads everywhere: the run page's line, the status chip (`STOP_REASON_LABEL.stalled`) and the task page. */
+export const STALLED_LABEL = 'stalled';
+
 export interface StopLine {
   severity: 'success' | 'info' | 'warning' | 'error';
   /** "Stopped: cost budget reached ($2.00)." */
@@ -205,9 +208,10 @@ export function stopLine(run: StopReasonRun): StopLine | null {
         ? { severity: 'success', title: 'Finished: the agent completed the goal.', summary, detail: null }
         : { severity: 'info', title: 'Finished: the agent ended the run without completing the goal.', summary, detail: null };
     case 'stalled':
-      // #405 records the stall as "The agent stalled: <reason>"; the title already says stuck.
+      // #405 records the stall as "The agent stalled: <reason>"; the title already says so.
+      // The word is the kit's (`STOP_REASON_LABEL.stalled`), so the run page, the runs list's chip and the task page agree.
       const why = run.error?.replace(/^The agent stalled:\s*/i, '');
-      return { severity: 'warning', title: `Stopped: stuck${why ? ` (${why})` : ''}.`, summary, detail: null };
+      return { severity: 'warning', title: `Stopped: ${STALLED_LABEL}${why ? ` (${why})` : ''}.`, summary, detail: null };
     case 'cancelled':
       return { severity: 'info', title: 'Stopped: cancelled.', summary, detail: null };
     case 'no_model':

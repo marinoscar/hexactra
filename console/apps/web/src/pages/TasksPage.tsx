@@ -29,12 +29,14 @@ import { useTaskList } from '../components/useTaskList';
 import { usePolicyCatalog } from '../policies/usePolicyCatalog';
 import type { FleetHost } from '../types/fleet';
 import type { TaskListSort, TaskScheduleState, TaskWithSummary } from '../types/tasks';
-import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, ResponsiveList, useBreakpoint, type Column } from '../ui';
+import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, ResponsiveList, aboveBottomBar, useBreakpoint, type Column } from '../ui';
 
 /** How long typing rests before the search is sent. */
 export const SEARCH_DEBOUNCE_MS = 300;
 
 const ANY_POLICY = '__any__';
+/** What a notice clears on a phone: the "New task" button (56 px) and the 16 px on either side of it. */
+const FAB_CLEARANCE = 16 + 56 + 16;
 
 /** `/tasks`: every task at a glance (schedule, next run, last run, spend), with run, pause and open. */
 export function TasksPage() {
@@ -380,14 +382,14 @@ export function TasksPage() {
           aria-label="New task"
           component={RouterLink}
           to={taskPaths.create}
-          // Above the phone's bottom navigation (56 px).
-          sx={{ position: 'fixed', right: 16, bottom: 'calc(72px + env(safe-area-inset-bottom, 0px))', zIndex: 'speedDial' }}
+          // Above the phone's bottom navigation.
+          sx={{ position: 'fixed', right: 16, bottom: aboveBottomBar(16).xs, zIndex: 'speedDial' }}
         >
           <AddIcon />
         </Fab>
       )}
 
-      <Snackbar open={notice !== null} autoHideDuration={6000} onClose={(_e, reason) => reason !== 'clickaway' && setNotice(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} sx={{ bottom: { xs: 144, sm: 24 } }}>
+      <Snackbar open={notice !== null} autoHideDuration={6000} onClose={(_e, reason) => reason !== 'clickaway' && setNotice(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} sx={{ bottom: { xs: aboveBottomBar(FAB_CLEARANCE).xs, sm: aboveBottomBar(24).sm } }}>
         <Alert
           severity="success"
           variant="filled"

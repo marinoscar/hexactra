@@ -45,6 +45,7 @@ import {
   formatDateTime,
   isLive,
   useApiAction,
+  aboveBottomBar,
   useBreakpoint,
   useConfirm,
   useProfileTimeZone,
@@ -194,10 +195,13 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
   const selectedCount = allMatching ? matching : selected.size;
 
   // ---- A delete that runs in the background (202) ----
-  const [background, setBackground] = useState<{ matched: number } | null>(null);
+  // `before` is the list's total when the delete was accepted: a job that finishes before the first read
+  // (a few hundred runs take under a second) is then seen as done on that read, not after 30 s without a change.
+  const [background, setBackground] = useState<{ matched: number; before: number | null } | null>(null);
   useEffect(() => {
     if (!background) return;
-    let last: number | null = null;
+    const { before, matched } = background;
+    let last: number | null = before;
     let dropped = false;
     let polls = 0;
     const timer = setInterval(() => {
@@ -206,7 +210,8 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
         const total = c?.total ?? last;
         if (last !== null && total !== null && total < last) dropped = true;
         // Done when the number stopped changing after it went down (or it never moved for 30 s).
-        const settled = total !== null && total === last && (dropped || polls >= 10);
+        const allGone = before !== null && total !== null && before - total >= matched;
+        const settled = allGone || (total !== null && total === last && (dropped || polls >= 10));
         last = total;
         if (settled || polls >= 100) {
           clearInterval(timer);
@@ -260,7 +265,7 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
           if (allMatching) {
             const res = await api.post<RunsDeleted | RunsDeleteQueued>('/runs/delete', { filter: deleteFilter(filters, scope ?? {}, timeZone), expectedCount: count });
             if (isQueued(res)) {
-              setBackground({ matched: res.matched });
+              setBackground({ matched: res.matched, before: counts?.total ?? null });
               return true;
             }
             reload();
@@ -713,7 +718,7 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
           elevation={6}
           role="region"
           aria-label="Selection"
-          sx={{ position: 'sticky', bottom: { xs: 72, sm: 16 }, zIndex: 3, mt: 2, px: 2, py: 1, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}
+          sx={{ position: 'sticky', bottom: aboveBottomBar(16), zIndex: 3, mt: 2, px: 2, py: 1, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}
         >
           <Typography sx={{ flexGrow: 1, fontVariantNumeric: 'tabular-nums' }}>{n(selectedCount)} selected</Typography>
           <Button color="error" variant="contained" disabled={action.busy !== null} onClick={() => void deleteSelected()} sx={{ minHeight: { xs: 44, md: 'auto' } }}>
@@ -772,7 +777,7 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
         </Box>
       </Drawer>
 
-      <Snackbar open={toast !== null} autoHideDuration={6000} onClose={() => setToast(null)} message={toast} sx={{ bottom: { xs: 88, sm: 24 } }} />
+      <Snackbar open={toast !== null} autoHideDuration={6000} onClose={() => setToast(null)} message={toast} sx={{ bottom: aboveBottomBar(24) }} />
     </Box>
   );
 }

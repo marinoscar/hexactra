@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../live', () => ({ subscribeRun: () => () => undefined, fetchRunScreenshot: async () => null }));
 
-import { RunList } from '../components/RunList';
+import { BACKGROUND_POLL_MS, RunList } from '../components/RunList';
 import { NO_FILTERS, apiFilter, deleteFilter, filtersFromParams, filtersToParams, matchesFilters, rangeInstants } from '../components/runFilters';
 import { rowCost, runAgain, runDuration, runMenuActions, triggerWords, type RunMenuAction } from '../components/runRow';
 import { RunDetailPage } from '../pages/RunDetailPage';
@@ -62,6 +62,11 @@ const listRequests = (host: { requests: Request[] }) => host.requests.filter((r)
 function Where() {
   const location = useLocation();
   return <div data-testid="where">{`${location.pathname}${location.search}`}</div>;
+}
+
+/** The address's query, beside the page under test. */
+function Search() {
+  return <div data-testid="search">{useLocation().search}</div>;
 }
 
 function renderList(host: ReturnType<typeof createTestPlatformHost>, url = '/runs', element = <RunList showTaskColumn />) {
@@ -461,6 +466,41 @@ describe('RunList: select and bulk delete', () => {
     expect(await screen.findByText('Deleting 1,240 runs in the background…')).toBeInTheDocument();
   });
 
+  it('a background delete that is done by the first read clears its banner and re-reads the list then, not 30 s later', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let deleted = false;
+      const page = Array.from({ length: 50 }, (_, i) => run(i + 1, { status: 'succeeded' }));
+      const host = createTestPlatformHost({
+        permissions: ALL,
+        responses: {
+          'GET /runs': () => (deleted ? { items: [], nextCursor: null } : { items: page, nextCursor: 'c1' }),
+          'GET /runs/counts': () => (deleted ? counts({ failed: 4 }) : counts({ succeeded: 866, failed: 4 })),
+          'GET /tasks': [],
+          // The job is quick: by the time the page reads the counts again, every run is gone.
+          'POST /runs/delete': () => ((deleted = true), { jobId: uuid(998), matched: 866, costUsd: 1 }),
+        },
+      });
+      renderList(host, '/runs?view=succeeded');
+      await screen.findByText('Goal 1');
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Select all' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Select all 866 finished runs that match' }));
+      fireEvent.click(within(screen.getByRole('region', { name: 'Selection' })).getByRole('button', { name: 'Delete' }));
+      const dialog = await screen.findByRole('dialog');
+      fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'delete' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+      expect(await screen.findByText('Deleting 866 runs in the background…')).toBeInTheDocument();
+      // One read of the counts later (3 s): 870 became 4, so all 866 are gone.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(BACKGROUND_POLL_MS + 50);
+      });
+      await waitFor(() => expect(screen.queryByText('Deleting 866 runs in the background…')).not.toBeInTheDocument());
+      await waitFor(() => expect(screen.queryByText('Goal 1')).not.toBeInTheDocument());
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('keeps the selection and says the list changed on a 409 COUNT_CHANGED', async () => {
     const page = Array.from({ length: 3 }, (_, i) => run(i + 1));
     const host = createTestPlatformHost({
@@ -636,13 +676,21 @@ describe('RunsPage: New run', () => {
   const HOME = '33333333-3333-4333-8333-333333333333';
   const hostRow = { id: HOME, name: 'Linux-Mini-PC', version: '0.1.0', online: false, browserConnected: false, onDemand: true, draining: false, viewerUrl: null, mode: 'unattended', desktop: true, profiles: [], lastSeen: '2026-11-17T00:00:00Z' };
   const base = { 'GET /runs': { items: [], nextCursor: null }, 'GET /runs/counts': counts(), 'GET /tasks': [], 'POST /runs': { id: uuid(42) } };
-  const page = (host: ReturnType<typeof createTestPlatformHost>) =>
+  const page = (host: ReturnType<typeof createTestPlatformHost>, at = '/runs') =>
     render(
       <PlatformHostProvider host={host}>
         <ConfirmProvider>
-          <MemoryRouter initialEntries={['/runs']}>
+          <MemoryRouter initialEntries={[at]}>
             <Routes>
-              <Route path="/runs" element={<RunsPage />} />
+              <Route
+                path="/runs"
+                element={
+                  <>
+                    <RunsPage />
+                    <Search />
+                  </>
+                }
+              />
               <Route path="/runs/:id" element={<Where />} />
             </Routes>
           </MemoryRouter>
@@ -699,6 +747,21 @@ describe('RunsPage: New run', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'New run' }));
     dialog = await screen.findByRole('dialog', { name: 'New run' });
     expect(within(dialog).queryByRole('combobox', { name: 'Policy' })).not.toBeInTheDocument();
+  });
+
+  it('`?new=1` arrives with the dialog open (Home\'s "More options"), drops the parameter and keeps the filters', async () => {
+    page(createTestPlatformHost({ permissions: ALL, responses: base }), '/runs?view=failed&new=1');
+    expect(await screen.findByRole('dialog', { name: 'New run' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('search')).toHaveTextContent(/^\?view=failed$/));
+    // The page behind the dialog is on the Failed tab.
+    expect(screen.getByRole('tab', { name: /^Failed/, hidden: true })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('`?new=1` opens nothing without runs:write', async () => {
+    page(createTestPlatformHost({ permissions: ['runs:read'], responses: base }), '/runs?new=1');
+    expect(await screen.findByText('No runs yet')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('search')).toBeEmptyDOMElement());
   });
 
   it('has no "New run" without runs:write', async () => {

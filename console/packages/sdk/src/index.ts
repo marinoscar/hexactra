@@ -25,6 +25,14 @@ export type TaskPage = Schema<'TaskPageResponseDto'>;
 export type TaskWithSummary = Schema<'TaskWithSummaryResponseDto'>;
 /** A task's run statistics (`GET /api/tasks/{id}/stats`). */
 export type TaskStats = Schema<'TaskStatsResponseDto'>;
+/** A page of runs: what `GET /api/runs?envelope=1` returns in `data`. */
+export type RunPage = Schema<'RunPageResponseDto'>;
+/** Which runs: the filter of `GET /api/runs`, `GET /api/runs/counts` and a delete by filter. */
+export type RunFilter = NonNullable<Schema<'DeleteRunsDto'>['filter']>;
+/** What deleting runs answers: the runs deleted now, or (more than 500 matches) the queue job that deletes them. */
+export type RunsDeleted = Schema<'RunsDeletedResponseDto'> | Schema<'RunsDeleteQueuedResponseDto'>;
+/** What a schedule means and when it fires next, or why it would be refused (`POST /api/schedules/preview`). */
+export type SchedulePreview = Schema<'SchedulePreviewResponseDto'>;
 /** The portable file `policies.export` returns and `policies.import` takes. */
 export type AgentPolicyFile = Schema<'PolicyFileDto'>;
 /** What to do on a name clash when importing. */
@@ -63,8 +71,10 @@ export interface ConsoleClient {
   policies: PoliciesClient;
   /** Tasks, with the `policyId` option. */
   tasks: TasksClient;
-  /** Ad-hoc runs, with the `policyId` option. */
+  /** Runs: start one, read a page, delete finished ones. */
   runs: RunsClient;
+  /** Schedules: check an expression before saving it. */
+  schedules: SchedulesClient;
 }
 
 /** A policy reference: an own policy's UUID, or `builtin:economy|balanced|thorough|unlimited`. */
@@ -85,15 +95,34 @@ export interface PoliciesClient {
 }
 
 export interface TasksClient {
-  create(body: Schema<'CreateTaskDto'>): Promise<Schema<'TaskResponseDto'>>;
+  /** `schedules` (at most 10) creates the task with its schedules in one transaction; one invalid schedule creates nothing. */
+  create(body: Schema<'CreateTaskDto'>): Promise<TaskWithSummary>;
   update(id: string, body: Schema<'UpdateTaskDto'>): Promise<Schema<'TaskResponseDto'>>;
   /** Run a task now; `policyId` runs it under another policy for this run only. */
   run(id: string, options?: { policyId?: PolicyRef }): Promise<Schema<'RunResponseDto'>>;
+  /** Pause every schedule of the task ("disable" it): it still runs when started by hand, the API or MCP. 409 `NO_SCHEDULES` without one. */
+  pauseSchedules(id: string): Promise<Schema<'TaskSchedulesChangedResponseDto'>>;
+  /** Resume every schedule of the task; `skipped` lists the schedules that could not be resumed. */
+  resumeSchedules(id: string): Promise<Schema<'TaskSchedulesChangedResponseDto'>>;
 }
 
 export interface RunsClient {
   /** Run an ad-hoc goal; `policyId` picks the agent policy (default: yours). */
   start(body: { goal: string; profile?: string; hostId?: string | null; hostFallback?: boolean; policyId?: PolicyRef }): Promise<Schema<'RunResponseDto'>>;
+  /** One page of runs, newest first (`envelope=1`): pass `nextCursor` back as `cursor`; `null` is the end. */
+  list(query?: RunFilter & { cursor?: string; limit?: number; order?: 'desc' | 'asc' }): Promise<RunPage>;
+  /** Delete one finished run, permanently. 409 `RUN_LIVE` for a queued, running or waiting run: cancel it first. Needs `runs:delete`. */
+  delete(id: string): Promise<void>;
+  /**
+   * Delete many finished runs, permanently: `{ ids }` (1 to 500), or `{ filter, expectedCount }` for every finished run a
+   * filter matches. More than 500 matches answer with a `jobId`: a queue job deletes them. Needs `runs:delete`.
+   */
+  deleteMany(body: { ids: string[] } | { filter: RunFilter; expectedCount?: number }): Promise<RunsDeleted>;
+}
+
+export interface SchedulesClient {
+  /** Always resolves: `{ valid: true, description, next, … }` or `{ valid: false, code, message }`. Saves nothing. */
+  preview(body: { cron: string; timezone?: string; count?: number }): Promise<SchedulePreview>;
 }
 
 export function createConsoleClient(options: ConsoleClientOptions): ConsoleClient {
@@ -137,9 +166,20 @@ export function createConsoleClient(options: ConsoleClientOptions): ConsoleClien
     create: (body) => data(api.POST('/api/tasks', { body })) as never,
     update: (id, body) => data(api.PATCH('/api/tasks/{id}', { params: { path: { id } }, body })) as never,
     run: (id, o) => data(api.POST('/api/tasks/{id}/runs', { params: { path: { id } }, body: o?.policyId ? { policyId: o.policyId } : {} } as never)) as never,
+    pauseSchedules: (id) => data(api.POST('/api/tasks/{id}/schedules/pause', { params: { path: { id } } })) as never,
+    resumeSchedules: (id) => data(api.POST('/api/tasks/{id}/schedules/resume', { params: { path: { id } } })) as never,
   };
   const runs: RunsClient = {
     start: (body) => data(api.POST('/api/runs', { body } as never)) as never,
+    // The document types this route as the plain array; with `envelope` it answers a page.
+    list: (query) => data(api.GET('/api/runs', { params: { query: { ...query, envelope: '1' } } } as never)) as never,
+    delete: async (id) => {
+      await data(api.DELETE('/api/runs/{id}', { params: { path: { id } } }));
+    },
+    deleteMany: (body) => data(api.POST('/api/runs/delete', { body })) as never,
   };
-  return { api, data, policies, tasks, runs };
+  const schedules: SchedulesClient = {
+    preview: (body) => data(api.POST('/api/schedules/preview', { body })) as never,
+  };
+  return { api, data, policies, tasks, runs, schedules };
 }

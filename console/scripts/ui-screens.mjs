@@ -97,6 +97,7 @@ export const ROUTES = [
   ['admin-agent-ceilings', '/admin/settings/agent-ceilings'],
   ['admin-agent-pricing', '/admin/settings/agent-pricing'],
   ['admin-factory-reset', '/admin/settings/factory-reset'],
+  ['admin-run-history', '/admin/settings/run-history'],
   // Outside the shell.
   ['activate', '/activate'],
   ['login', '/login', { signedOut: true }],
@@ -247,7 +248,11 @@ async function main() {
     const key = `${request.method()} ${path}`;
     if (/^GET \/runs\/[^/]+\/screenshot$/.test(key)) return route.fulfill({ contentType: 'image/png', body: frame });
     if (/\/stream$/.test(path) || request.headers().accept?.includes('text/event-stream')) return route.abort();
-    if (key in fixtures.RESPONSES) return route.fulfill({ json: { data: fixtures.RESPONSES[key] } });
+    if (key in fixtures.RESPONSES) {
+      // A function answers by the request (its query, its JSON body): a list that is an array or a page, a preview of what was sent.
+      const answer = fixtures.RESPONSES[key];
+      return route.fulfill({ json: { data: typeof answer === 'function' ? answer(url, request.postDataJSON?.() ?? null) : answer } });
+    }
     unmocked.add(key);
     return route.fulfill({ status: 404, json: { message: 'Not mocked (ui-screens)' } });
   };

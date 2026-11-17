@@ -4,6 +4,7 @@ import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 import { consoleApi } from './console-api.js';
 import { findHost, type FleetHost } from './fleet.js';
 import { costText, resolvePolicyId, runPolicyLines, type RunPolicyFields } from './policies.js';
+import { countOlderThan, deleteOlderThan, parseDays, runsWord } from './runs.js';
 
 /** `--host <name|id>`: "any" lets the fabric choose (#384). */
 async function hostRef(ref: string): Promise<string | null> {
@@ -43,6 +44,22 @@ interface Run extends RunPolicyFields {
 }
 
 const label = (s: string) => (s === 'waiting_human' ? 'needs you' : s);
+
+/**
+ * Ask before something that cannot be undone. `--yes` answers for a script; without it the question
+ * needs a terminal, so a pipe or a CI job fails instead of deleting unasked.
+ */
+async function confirmed(question: string, yes: boolean | undefined): Promise<boolean> {
+  if (yes) return true;
+  if (!process.stdin.isTTY) throw new Error(`${question} This cannot be undone: pass --yes.`);
+  const { createInterface } = await import('node:readline/promises');
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  try {
+    return /^y(es)?$/i.test((await rl.question(`${question} This cannot be undone. [y/N] `)).trim());
+  } finally {
+    rl.close();
+  }
+}
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled']);
 
 /** Print new steps of a run until it ends (or `--watch` is off). */
@@ -162,6 +179,18 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
       await consoleApi().delete(`/tasks/${id}`);
       out('deleted');
     });
+  for (const [name, done] of [['pause', 'paused'], ['resume', 'resumed']] as const) {
+    tasks
+      .command(`${name} <id>`)
+      .description(name === 'pause' ? 'Pause every schedule of a task (it still runs when started by hand, the API or MCP)' : 'Resume every schedule of a task')
+      .option('--json', 'print JSON')
+      .action(async (id: string, o: { json?: boolean }) => {
+        const t = await consoleApi().post<Task & { summary?: { schedules: unknown[]; nextRunAt: string | null } }>(`/tasks/${id}/schedules/${name}`, {});
+        if (o.json) return json(t);
+        const n = t.summary?.schedules.length ?? 0;
+        out(`${done} ${n} schedule${n === 1 ? '' : 's'}${name === 'resume' && t.summary?.nextRunAt ? `: next ${t.summary.nextRunAt}` : ''}`);
+      });
+  }
 
   const runs = program.command('runs').description('Runs of browser goals');
   runs
@@ -195,6 +224,27 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
     .command('watch <id>')
     .description('Follow a run until it ends')
     .action(async (id: string) => show(id, true, false));
+  runs
+    .command('delete [id]')
+    .description('Delete a finished run, or every finished run older than a number of days (--older-than). There is no undelete.')
+    .option('--older-than <days>', 'delete the finished runs created more than this many days ago', parseDays)
+    .option('--yes', 'do not ask')
+    .action(async (id: string | undefined, o: { olderThan?: number; yes?: boolean }) => {
+      const api = consoleApi();
+      if ((id === undefined) === (o.olderThan === undefined)) throw new Error('Pass a run id, or --older-than <days> (not both).');
+      if (id !== undefined) {
+        const r = await api.get<Run>(`/runs/${id}`);
+        if (!TERMINAL.has(r.status)) throw new Error(`Run ${r.id} is ${label(r.status)}: cancel it first (hexactra runs cancel ${r.id}).`);
+        if (!(await confirmed(`Delete run ${r.id.slice(0, 8)} (${r.goal.slice(0, 60)})?`, o.yes))) return out('nothing deleted');
+        await api.delete(`/runs/${r.id}`);
+        return out('deleted');
+      }
+      const { filter, matched, costUsd } = await countOlderThan(api, o.olderThan!);
+      if (matched === 0) return out(`No finished run is older than ${o.olderThan} days.`);
+      const cost = costUsd === null ? '' : ` ($${costUsd.toFixed(2)} of recorded cost)`;
+      if (!(await confirmed(`Delete ${runsWord(matched)} older than ${o.olderThan} days${cost}?`, o.yes))) return out('nothing deleted');
+      out(await deleteOlderThan(api, filter, matched));
+    });
   runs
     .command('cancel <id>')
     .action(async (id: string) => {

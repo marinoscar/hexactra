@@ -4,6 +4,7 @@ import { zonedDateKey } from '@marinoscar/platform-web/timezone/headless';
 import type { HomeActivity, HomeLiveRun, HomeRecentRun, HomeSummary } from '../../types/home';
 import { formatDateTime, formatRelative } from '../../ui';
 import { describeActivity, type RunActivity } from '../RunActivity';
+import { taskPaths } from '../taskList';
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -124,7 +125,13 @@ export function successRate(rate: number | null): string {
   return rate === null ? 'n/a' : `${Math.round(rate * 100)} %`;
 }
 
-/** The Runs page, on the week's failed runs: `/runs?view=failed&from=<first day>` (and `&stopReason=`). */
+/** The Runs page with its "New run" dialog open (`RunsPage` reads `new=1` and drops it). */
+export const NEW_RUN_LINK = '/runs?new=1';
+
+/**
+ * The Runs page, on the week's failed runs: `/runs?view=failed&from=<first day>` (and `&stopReason=`).
+ * The parameters are the runs list's own (`filtersFromParams` in components/runFilters.ts).
+ */
 export function weekRunsLink(from: string, stopReason?: 'budget' | 'stalled'): string {
   const params = new URLSearchParams({ view: 'failed' });
   if (stopReason) params.set('stopReason', stopReason);
@@ -152,8 +159,8 @@ export function checklistSteps(s: HomeSummary, can: (permission: string) => bool
   const steps: ChecklistStep[] = [];
   // A stale fleet with no host is "unknown", not "none": it never brings the checklist back.
   if (s.fleet) steps.push({ key: 'machine', label: 'Connect a machine', to: '/fleet', done: s.fleet.total > 0 || s.fleet.stale });
-  if (s.counts.tasks !== null && can('tasks:write')) steps.push({ key: 'task', label: 'Create a task', to: '/tasks', done: s.counts.tasks > 0 });
-  if (s.counts.runs !== null && can('runs:write')) steps.push({ key: 'run', label: 'Run it', to: '/tasks', done: s.counts.runs > 0 });
+  if (s.counts.tasks !== null && can('tasks:write')) steps.push({ key: 'task', label: 'Create a task', to: taskPaths.create, done: s.counts.tasks > 0 });
+  if (s.counts.runs !== null && can('runs:write')) steps.push({ key: 'run', label: 'Run it', to: taskPaths.list, done: s.counts.runs > 0 });
   return steps;
 }
 

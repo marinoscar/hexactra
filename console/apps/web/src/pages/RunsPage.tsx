@@ -8,7 +8,7 @@ import { NewRunDialog } from '../components/NewRunDialog';
 import { RunList } from '../components/RunList';
 import { TaskSpendLine } from '../components/RunBudgetMeter';
 import type { TaskSpend } from '../components/runBudget';
-import { PageContainer, PageHeader } from '../ui';
+import { PageContainer, PageHeader, aboveBottomBar } from '../ui';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -22,14 +22,22 @@ export function RunsPage() {
   const { api, viewer } = usePlatformHost();
   const navigate = useNavigate();
   const location = useLocation();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const taskId = params.get('taskId');
-  const [creating, setCreating] = useState(false);
+  const canRun = viewer.hasPermission('runs:write');
+  // `?new=1` arrives with the dialog open (Home's "More options"); the parameter is then dropped, so a reload or
+  // the Back button does not open it again.
+  const [creating, setCreating] = useState(() => canRun && params.get('new') === '1');
+  useEffect(() => {
+    if (!params.has('new')) return;
+    const next = new URLSearchParams(params);
+    next.delete('new');
+    setParams(next, { replace: true, state: location.state });
+  }, [params, setParams, location.state]);
   /** The task's spend, on its runs view (#408). */
   const [spend, setSpend] = useState<{ name: string; spend30d?: TaskSpend } | null>(null);
   /** What another page says on arrival ("Run deleted", from the run page). */
   const [toast, setToast] = useState<string | null>(() => (location.state as { toast?: string } | null)?.toast ?? null);
-  const canRun = viewer.hasPermission('runs:write');
   const canReadTasks = viewer.hasPermission('tasks:read');
 
   useEffect(() => {
@@ -63,7 +71,7 @@ export function RunsPage() {
       )}
       <RunList showTaskColumn onNewRun={canRun ? () => setCreating(true) : undefined} />
       {canRun && <NewRunDialog open={creating} onClose={() => setCreating(false)} onStarted={(id) => navigate(`/runs/${id}`)} />}
-      <Snackbar open={toast !== null} autoHideDuration={6000} onClose={() => setToast(null)} message={toast} sx={{ bottom: { xs: 88, sm: 24 } }} />
+      <Snackbar open={toast !== null} autoHideDuration={6000} onClose={() => setToast(null)} message={toast} sx={{ bottom: aboveBottomBar(24) }} />
     </PageContainer>
   );
 }

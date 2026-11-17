@@ -170,7 +170,7 @@ describe('RunsScreen', () => {
     const { RunsScreen } = await import('./runs.screen.js');
     const R = '55555555-5555-4555-8555-555555555555';
     const calls = fakeApi({
-      'GET /runs': [{ id: R, status: 'running', goal: 'Find a fare', stepCount: 2 }],
+      'GET /runs': { items: [{ id: R, status: 'running', goal: 'Find a fare', stepCount: 2 }], nextCursor: null },
       [`GET /runs/${R}`]: { id: R, status: 'running', goal: 'Find a fare', stepCount: 2, steps: [{ seq: 1, kind: 'action', action: 'navigate', ok: true, summary: 'at https://f.example.test/' }] },
       [`POST /runs/${R}/cancel`]: { id: R, status: 'running', cancelRequested: true },
     });

@@ -1,6 +1,8 @@
 import { Alert, Snackbar } from '@mui/material';
 import { useSyncExternalStore } from 'react';
 
+import { aboveBottomBar } from './bottomBar';
+
 export interface ToastMessage {
   id: number;
   message: string;
@@ -47,7 +49,7 @@ export function ToastHost() {
         if (reason !== 'clickaway') dismissToast();
       }}
       anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      sx={{ bottom: { xs: 'calc(72px + env(safe-area-inset-bottom))', sm: 24 } }}
+      sx={{ bottom: aboveBottomBar(24) }}
     >
       {value ? (
         <Alert severity={value.severity} variant="filled" role="status" onClose={dismissToast} sx={{ width: '100%' }}>

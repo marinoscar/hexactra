@@ -143,6 +143,6 @@ Creates five tasks ("Seed task 1" to "Seed task 5", reused on the next call) and
 
 `GET /api/runs` is documented with its array answer, so code typed against the earlier contract keeps compiling. The page shape is the `RunPageResponseDto` schema (`components['schemas']['RunPageResponseDto']` in `@hexactra/console-sdk`): cast the data to it when you send `envelope=1`. The counts are `RunCountsResponseDto`.
 
-`POST /api/runs/delete` documents both answers: `RunsDeletedResponseDto` (200) and `RunsDeleteQueuedResponseDto` (202); its body is `DeleteRunsDto`. The CLI and the SDK's helper methods do not wrap the delete routes yet (call them through `hx.api`).
+`POST /api/runs/delete` documents both answers: `RunsDeletedResponseDto` (200) and `RunsDeleteQueuedResponseDto` (202); its body is `DeleteRunsDto`. The SDK wraps them as `hx.runs.delete(id)` and `hx.runs.deleteMany(...)`, and a page of runs as `hx.runs.list(...)`; the CLI has `hexactra runs delete <id>` and `runs delete --older-than <days>`. An MCP tool that deletes runs does not exist, on purpose ([api-tasks-runs.md](api-tasks-runs.md#client-parity)).
 
 The retention routes answer `RetentionSettingsResponseDto`, `RetentionPreviewResponseDto` and `RetentionApplyResponseDto`. `RunRetentionService` (`apps/api/src/tasks/run-retention.service.ts`, exported by `TasksModule`) holds the one query that decides which runs a rule deletes; `preview` and `apply` both use it.

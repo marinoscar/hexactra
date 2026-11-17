@@ -188,7 +188,7 @@ describe('hexactra runs with a policy', () => {
 
   it('the Runs screen shows the policy, tier and cost columns, and the detail lines', async () => {
     const r = { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', status: 'running', goal: 'Find a fare', stepCount: 2, steps: [], policy: { id: 'builtin:economy', name: 'Economy', version: 1 }, currentTier: 'fast', costUsd: 0.0123, costKnown: true, modelCalls: 2 };
-    fakeApi({ 'GET /runs': [r], [`GET /runs/${r.id}`]: r });
+    fakeApi({ 'GET /runs': { items: [r], nextCursor: null }, [`GET /runs/${r.id}`]: r });
     const screen = await renderTuiScreen(RunsScreen, {});
     await vi.waitFor(() => expect(stripAnsi(screen.lastFrame() ?? '')).toMatch(/Economy +fast +\$0\.0123 +Find a fare/));
     screen.stdin.write('\r');

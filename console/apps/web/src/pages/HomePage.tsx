@@ -9,9 +9,10 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { useOptionalAuth } from '@marinoscar/platform-web/identity/headless';
 
+import { useInboxCount } from '../components/InboxCountProvider';
 import { useNow } from '../components/RunActivity';
 import { BlockSkeleton, GetStartedBlock, MachinesBlock, NeedsYouBlock, RecentRunsBlock, RunningNowBlock, ThisWeekBlock, UpNextBlock } from '../components/home/blocks';
-import { checklistSteps, firstName, greeting, needsChecklist, recentTasks, statusSentence } from '../components/home/homeText';
+import { NEW_RUN_LINK, checklistSteps, firstName, greeting, needsChecklist, recentTasks, statusSentence } from '../components/home/homeText';
 import { runTaskWith } from '../policies/api';
 import type { HomeQuestion, HomeSummary } from '../types/home';
 import { ErrorBanner, PageContainer, RelativeTime, useApiAction, useProfileTimeZone } from '../ui';
@@ -38,7 +39,7 @@ function readOnboarded(): boolean {
  * becomes visible, and on an interval while the tab is visible: 5 s while
  * something is live, 10 s otherwise. A failed read keeps the last good data.
  */
-export function useHomeSummary() {
+function useHomeSummary() {
   const { api } = usePlatformHost();
   const [summary, setSummary] = useState<HomeSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -124,7 +125,7 @@ function QuickStart({ tasks, inputRef }: { tasks: { id: string; name: string }[]
           {tasks.map((t) => (
             <Chip key={t.id} label={`Run: ${t.name}`} variant="outlined" disabled={busy !== null} onClick={() => void runTask(t.id)} sx={{ maxWidth: '100%', minHeight: { xs: 36, sm: 32 } }} />
           ))}
-          <Link component={RouterLink} to="/runs" underline="hover" variant="body2" sx={{ ml: tasks.length > 0 ? 'auto' : 0, minHeight: { xs: 44, sm: 'auto' }, display: 'inline-flex', alignItems: 'center' }}>
+          <Link component={RouterLink} to={NEW_RUN_LINK} underline="hover" variant="body2" sx={{ ml: tasks.length > 0 ? 'auto' : 0, minHeight: { xs: 44, sm: 'auto' }, display: 'inline-flex', alignItems: 'center' }}>
             More options
           </Link>
         </Stack>
@@ -150,6 +151,15 @@ export function HomePage() {
   const [onboarded, setOnboarded] = useState(readOnboarded);
 
   const hasLive = (summary?.liveRuns?.count ?? 0) > 0;
+  // The navigation badge and this page count the same questions. The page's number comes with its summary (one
+  // request); when it differs from the badge's, the badge re-reads at once instead of waiting for its own poll.
+  const inbox = useInboxCount();
+  const pending = summary?.needsYou?.count;
+  const badge = useRef(inbox);
+  badge.current = inbox;
+  useEffect(() => {
+    if (pending !== undefined && pending !== badge.current.count) badge.current.refresh();
+  }, [pending]);
   const hasQuestions = (summary?.needsYou?.count ?? 0) > 0;
   // Only the countdown and the live cards move: a tick every second while there is one, every half minute otherwise.
   const now = useNow(true, hasLive || hasQuestions ? 1_000 : 30_000);

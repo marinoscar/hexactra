@@ -57,16 +57,18 @@ pass "fabric unpublished, reachable from the API on the private network"
 
 token=$(grep '^HEXACTRA_FABRIC_OPERATOR_TOKEN=' ../../infra/compose/.env 2>/dev/null | cut -d= -f2- || true)
 [ -n "$token" ] || token=$(grep '^HEXACTRA_FABRIC_OPERATOR_TOKEN=' .env | cut -d= -f2-)
+# No pipeline here ends in `grep -q`: it exits at the first match, the writer can then die on a closed pipe, and
+# under pipefail the pipeline fails although it matched (a check with `&& fail` would then pass by mistake).
+# Each grep reads all of its input and discards it; grep on a file or a here-string keeps -q.
 for i in $(seq 1 30); do
-  dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status 2>/dev/null | grep -q 'online=true' && break
+  dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status 2>/dev/null | grep 'online=true' >/dev/null && break
   sleep 2
-# The confirm checks read all of the output (no grep -q): under pipefail a writer cut off by an early-exiting grep fails the pipeline even though it matched.
 done
 dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status | grep 'online=true' >/dev/null || fail "browser host not online"
 pass "bundled browser host registered and online"
 
 # The documented way to mint the console's service token (docs/runbooks/vps-stack.md §3).
-dc exec -T fabric-control hexactra-fabric --url http://127.0.0.1:8787 admin service-token-create console | grep -q 'hxs_' \
+dc exec -T fabric-control hexactra-fabric --url http://127.0.0.1:8787 admin service-token-create console | grep 'hxs_' >/dev/null \
   || fail "the documented service-token command does not print an hxs_ token"
 pass "the fabric admin CLI mints a service token"
 
@@ -75,16 +77,16 @@ pass "the fabric admin CLI mints a service token"
 connect_out=$(dc exec -T fabric-control hexactra-fabric --url http://127.0.0.1:8787 admin service-token-create console 2>/dev/null \
   | dc exec -T api node dist/fabric/fabric-connect.cli.js set --url http://fabric-control:8787) \
   || fail "the deploy's fabric-connect pipe: $connect_out"
-echo "$connect_out" | grep -q '"state":"connected"' || fail "the console did not connect to the bundled fabric: $connect_out"
-! echo "$connect_out" | grep -q 'hxs_' || fail "the fabric-connect output shows the token"
-dc exec -T api node dist/fabric/fabric-connect.cli.js status | grep -q '"state":"connected"' || fail "fabric-connect status after connecting"
+echo "$connect_out" | grep '"state":"connected"' >/dev/null || fail "the console did not connect to the bundled fabric: $connect_out"
+! echo "$connect_out" | grep 'hxs_' >/dev/null || fail "the fabric-connect output shows the token"
+dc exec -T api node dist/fabric/fabric-connect.cli.js status | grep '"state":"connected"' >/dev/null || fail "fabric-connect status after connecting"
 pass "the deploy's fabric-connect step connects the console to the bundled fabric"
 
 # Browser hosts reach the fabric over the console's own HTTPS vhost at /fabric/
 # (infra/nginx/app.d/locations/fabric-agents.conf): only the host protocol is
 # published; the client, admin and operator APIs stay private.
 fabric_pub="$base/fabric"
-curl -fsS "$fabric_pub/v1/health" | grep -q '"status"' || fail "/fabric/v1/health through nginx"
+curl -fsS "$fabric_pub/v1/health" | grep '"status"' >/dev/null || fail "/fabric/v1/health through nginx"
 for private in "GET /v1/hosts" "GET /v1/sessions" "GET /v1/events" "POST /v1/admin/hosts/enrollments" "GET /v1/admin/service-tokens"; do
   set -- $private
   [ "$(curl -s -o /dev/null -w '%{http_code}' -X "$1" "$fabric_pub$2")" = 404 ] || fail "$1 /fabric$2 must not be published"
@@ -134,7 +136,7 @@ grep -q 'Checksum verified' "$agent_tmp/install.log" || fail "hexactra agent ins
 agent_pid=$!
 # The agent starts its browser before it registers (up to 60 s), so wait longer than that.
 for i in $(seq 1 90); do
-  dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status 2>/dev/null | grep -q 'ci-cli-host .*online=true' && break
+  dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status 2>/dev/null | grep 'ci-cli-host .*online=true' >/dev/null && break
   sleep 1
 done
 dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status | grep 'ci-cli-host .*online=true' >/dev/null \
@@ -184,7 +186,7 @@ rfb=$(dc exec -T -e T="$token" api node -e '
 pass "the bundled host's desktop answers RFB 003.008 through the fabric tunnel"
 
 # Without the profile the bundled host is not part of the stack (#343).
-COMPOSE_PROFILES=none docker compose --env-file .env "${files[@]}" config --services | grep -qx fabric-host \
+COMPOSE_PROFILES=none docker compose --env-file .env "${files[@]}" config --services | grep -x fabric-host >/dev/null \
   && fail "fabric-host runs without COMPOSE_PROFILES=bundled-host"
 pass "the bundled host is opt-in (COMPOSE_PROFILES)"
 # Back up the fabric's state the way docs/runbooks/operations.md says (stop,
@@ -197,10 +199,10 @@ for svc in fabric-control fabric-host; do
     tar czf "/backup/$svc.tgz" -C /data . || fail "back up $svc"
 done
 dc start fabric-control fabric-host >/dev/null || fail "start the fabric after the backup"
-tar tzf "$backups/fabric-control.tgz" | grep -q 'control.db$' || fail "the control-plane backup has no control.db"
+tar tzf "$backups/fabric-control.tgz" | grep 'control.db$' >/dev/null || fail "the control-plane backup has no control.db"
 [ -s "$backups/fabric-host.tgz" ] || fail "the browser-host backup is empty"
 for _ in $(seq 1 60); do
-  dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status 2>/dev/null | grep -q 'online=true' && break
+  dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status 2>/dev/null | grep 'online=true' >/dev/null && break
   sleep 2
 done
 dc exec -T -e HEXACTRA_API_TOKEN="$token" fabric-control hexactra-fabric --url http://127.0.0.1:8787 status | grep 'online=true' >/dev/null || fail "browser host not online after a backup and restart"

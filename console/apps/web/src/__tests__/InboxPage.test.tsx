@@ -167,15 +167,23 @@ describe('InboxPage', () => {
   it('opens a notification deep link with its request first, marked and scrolled into view once', async () => {
     const scroll = vi.fn();
     Element.prototype.scrollIntoView = scroll;
-    const host = createTestPlatformHost({ permissions: ['runs:read'], responses: { 'GET /inbox': [code, confirm] } });
-    renderInbox(host, '/inbox?run=r2');
-    const cards = await screen.findAllByLabelText(/^Request: /);
-    expect(cards[0]).toHaveAttribute('aria-label', 'Request: Book the 9:00 flight for $120?');
-    expect(cards[0]).toHaveAttribute('aria-current', 'true');
-    expect(cards[1]).not.toHaveAttribute('aria-current');
-    expect(scroll).toHaveBeenCalledTimes(1);
-    expect(scroll.mock.contexts[0]).toBe(cards[0]);
-    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    try {
+      const host = createTestPlatformHost({ permissions: ['runs:read'], responses: { 'GET /inbox': [code, confirm] } });
+      renderInbox(host, '/inbox?run=r2');
+      const cards = await screen.findAllByLabelText(/^Request: /);
+      expect(cards[0]).toHaveAttribute('aria-label', 'Request: Book the 9:00 flight for $120?');
+      expect(cards[0]).toHaveAttribute('aria-current', 'true');
+      expect(cards[1]).not.toHaveAttribute('aria-current');
+      // The card scrolls in an effect, which React may run after the cards are already in the document:
+      // wait for it instead of asserting in the same tick.
+      await waitFor(() => expect(scroll).toHaveBeenCalledTimes(1));
+      expect(scroll.mock.contexts[0]).toBe(cards[0]);
+      // Once: a later render does not pull the page back.
+      await act(async () => undefined);
+      expect(scroll).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
   });
 
   it('says when the linked request is gone', async () => {

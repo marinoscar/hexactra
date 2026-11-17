@@ -20,7 +20,10 @@ import { taskPaths } from './taskList';
 import type { TaskStats as TaskStatsData, TaskSummary } from '../types/tasks';
 import { RelativeTime, StatusChip, useBreakpoint } from '../ui';
 
-/** Off screen, still read by assistive technology. */
+/**
+ * Off screen, still read by assistive technology. On a block box, never on the `<table>` itself: a table ignores
+ * `width` and `overflow`, keeps the width of its content and can then stick out of the page (1 px at 390 px).
+ */
 const visuallyHidden = { border: 0, clip: 'rect(0 0 0 0)', height: '1px', margin: '-1px', overflow: 'hidden', padding: 0, position: 'absolute', whiteSpace: 'nowrap', width: '1px' } as const;
 
 // The chart library is loaded only when a task page shows statistics.
@@ -199,28 +202,30 @@ export function TaskStats({ taskId, lastRun, lastStopReason, refreshKey }: TaskS
           </Suspense>
         )}
         {/* The chart as text: one row per day of the period. */}
-        <Box component="table" id={tableId} sx={visuallyHidden}>
-          <caption>
-            Runs per day, {period} ({shown.timezone})
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">Day</th>
-              <th scope="col">Succeeded</th>
-              <th scope="col">Failed</th>
-              <th scope="col">Cancelled</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.series.map((d) => (
-              <tr key={d.date}>
-                <th scope="row">{dayLabel(d.date)}</th>
-                <td>{d.succeeded}</td>
-                <td>{d.failed}</td>
-                <td>{d.cancelled}</td>
+        <Box sx={visuallyHidden} data-testid="task-stats-table">
+          <table id={tableId}>
+            <caption>
+              Runs per day, {period} ({shown.timezone})
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Day</th>
+                <th scope="col">Succeeded</th>
+                <th scope="col">Failed</th>
+                <th scope="col">Cancelled</th>
               </tr>
-            ))}
-          </tbody>
+            </thead>
+            <tbody>
+              {shown.series.map((d) => (
+                <tr key={d.date}>
+                  <th scope="row">{dayLabel(d.date)}</th>
+                  <td>{d.succeeded}</td>
+                  <td>{d.failed}</td>
+                  <td>{d.cancelled}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </Box>
       </Box>
     </Box>

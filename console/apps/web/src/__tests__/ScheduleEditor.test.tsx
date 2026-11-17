@@ -97,7 +97,7 @@ describe('ScheduleEditor: the builder', () => {
     expect(runs[0]!.textContent).toMatch(/\(.+\)$/);
     expect(runs[1]!.textContent).not.toMatch(/\(/);
     expect(previews().at(-1)).toEqual({ cron: '0 9 * * 1-5', timezone: PROFILE, count: 5 });
-    expect(onValidity).toHaveBeenLastCalledWith(true);
+    await waitFor(() => expect(onValidity).toHaveBeenLastCalledWith(true));
   });
 
   it('toggling a day off and on changes the expression; no day at all is an error shown at once and never emitted', async () => {
@@ -215,13 +215,13 @@ describe('ScheduleEditor: Advanced', () => {
   it('echoes the five fields, and an expression the server refuses shows its message and is not valid', async () => {
     const { onValidity, last } = mount(draft({ cron: '0 9 1 1 *' }));
     await within(summary()).findByText(/Runs on 0 9 1 1 \*/);
-    expect(onValidity).toHaveBeenLastCalledWith(true);
+    await waitFor(() => expect(onValidity).toHaveBeenLastCalledWith(true));
     expect([0, 1, 2, 3, 4].map((i) => screen.getByTestId(`cron-field-${i}`).textContent)).toEqual(['0', '9', '1', '1', '*']);
 
     fireEvent.change(screen.getByLabelText('Cron expression'), { target: { value: 'nope 9 * * *' } });
     expect(screen.getByTestId('cron-field-0')).toHaveTextContent('nope');
     expect(await within(summary()).findByText('The cron expression is not valid: unknown alias nope')).toBeInTheDocument();
-    expect(onValidity).toHaveBeenLastCalledWith(false);
+    await waitFor(() => expect(onValidity).toHaveBeenLastCalledWith(false));
     expect(screen.getByLabelText('Cron expression')).toBeInvalid();
 
     // Four fields: a local message, at once, and the draft keeps the last five-field text.
@@ -232,7 +232,7 @@ describe('ScheduleEditor: Advanced', () => {
 
     fireEvent.change(screen.getByLabelText('Cron expression'), { target: { value: '0 9 * * 1-5' } });
     expect(await within(summary()).findByText(/Monday to Friday at 09:00/)).toBeInTheDocument();
-    expect(onValidity).toHaveBeenLastCalledWith(true);
+    await waitFor(() => expect(onValidity).toHaveBeenLastCalledWith(true));
     expect(last()?.cron).toBe('0 9 * * 1-5');
   });
 
@@ -252,7 +252,7 @@ describe('ScheduleEditor: Advanced', () => {
       },
     });
     expect(await within(summary()).findByText(/Could not check this schedule/)).toBeInTheDocument();
-    expect(onValidity).toHaveBeenLastCalledWith(true);
+    await waitFor(() => expect(onValidity).toHaveBeenLastCalledWith(true));
   });
 
   it('Advanced → a builder mode: an expression the builder reads moves over; one it cannot asks first', async () => {
@@ -309,7 +309,7 @@ describe('ScheduleEditor: time zone, overlap, policy, active', () => {
   it('a zone the server refuses is not valid', async () => {
     const { onValidity } = mount(draft({ timezone: 'Mars/Olympus' }));
     expect(await within(summary()).findByText('Unknown time zone')).toBeInTheDocument();
-    expect(onValidity).toHaveBeenLastCalledWith(false);
+    await waitFor(() => expect(onValidity).toHaveBeenLastCalledWith(false));
   });
 
   it('the overlap choice sends skip or queue', () => {

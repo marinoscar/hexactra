@@ -28,7 +28,7 @@ Hermes Agent, OpenClaw and Pi: ready-made, CI-tested recipes in [agent-framework
 
 | Group | Tools |
 |---|---|
-| Delegate to Hexactra's agent | `run_goal`, `run_status`, `runs_list`, `run_cancel`, `tasks_list`, `task_create`, `task_update`, `task_run`, `schedule_create`, `schedules_list` |
+| Delegate to Hexactra's agent | `run_goal`, `run_status`, `runs_list`, `run_cancel`, `tasks_list`, `task_create`, `task_update`, `task_run`, `task_pause`, `task_resume`, `schedule_create`, `schedule_preview`, `schedules_list` |
 | Agent policies (budgets and model tiers) | `policies_list`, `policy_get`, `policies_export` (read); `policy_create`, `policy_update`, `policy_set_default`, `policies_import` (write) |
 | Ask the user a question | `ask_human` (no browser: text, choice, multi_choice, number, confirm, none, takeover; `wait_s` ≤ 300 waits for the answer), `question_status` |
 | Relay a person's answers | `inbox_list`, `inbox_answer` (by `question_id` or `run_id`): only answers the user actually gave |
@@ -65,6 +65,21 @@ Example (`run_goal` under the thorough built-in):
 
 ```json
 { "name": "run_goal", "arguments": { "goal": "Find the cheapest fare to Lisbon", "policy_id": "builtin:thorough" } }
+```
+
+## Tasks, schedules and the run list
+
+- **Create a task with its schedules.** `task_create` takes an optional `schedules` list (at most 10), each `{ cron, timezone?, enabled?, policy_id? }`. The task and its schedules are saved together; one schedule the console refuses saves nothing, and the error names it (`schedules[1].cron`).
+- **Check a schedule first.** `schedule_preview { cron, timezone?, count? }` is read-only and always answers: `{ valid: true, description, next, … }` with the schedule in words ("Monday to Friday at 09:00") and its next firings, or `{ valid: false, code, message }` (`INVALID_CRON`, `INVALID_TIMEZONE`, `CRON_TOO_FREQUENT`: a schedule runs at most every 5 minutes). Without `timezone` it uses the user's profile time zone, as `schedule_create` does.
+- **Pause and resume a task.** `task_pause { task_id }` disables every schedule of the task and `task_resume` enables them again. A paused task still runs when it is started (`task_run`, the web app, the API), and a run that is going finishes. A task without a schedule answers `NO_SCHEDULES`.
+- **Page through runs.** `runs_list` takes `status`, `task_id` (`"none"` for runs without a task) and `stop_reason` (`budget` is every budget stop). With `limit` (1 to 100) or `cursor` it answers one page, `{ items, nextCursor }`: pass `nextCursor` back as `cursor` with the same filters; `null` is the end. With neither it answers the plain list of the most recent runs, as before.
+- **What is not a tool, on purpose.** Deleting runs and the retention rule (an agent does not erase its own history), deleting a task or a schedule, and replacing a task's schedules in one call. The full table, with the CLI and the SDK: [api-tasks-runs.md](api-tasks-runs.md#client-parity).
+
+Example (a task that runs on weekdays, checked first):
+
+```json
+{ "name": "schedule_preview", "arguments": { "cron": "0 9 * * 1-5" } }
+{ "name": "task_create", "arguments": { "name": "Morning report", "goal": "Read me the headline numbers", "schedules": [{ "cron": "0 9 * * 1-5", "policy_id": "builtin:economy" }] } }
 ```
 
 ## Asking the user

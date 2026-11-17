@@ -32706,13 +32706,13 @@ export interface operations {
     };
     runRetention_preview: {
         parameters: {
-            query: {
+            query?: {
                 /** @description Days finished runs are kept; empty or absent: no age limit */
-                keepDays: number | null;
+                keepDays?: number | null;
                 /** @description Newest finished runs kept per task; empty or absent: no limit */
-                keepPerTask: number | null;
+                keepPerTask?: number | null;
                 /** @description Days failed runs are kept; empty or absent: the same as `keepDays` */
-                keepFailedDays: number | null;
+                keepFailedDays?: number | null;
             };
             header?: never;
             path?: never;

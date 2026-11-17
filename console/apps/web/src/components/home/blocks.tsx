@@ -11,6 +11,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import type { HomeFleet, HomeLiveRun, HomeQuestion, HomeRecentRun, HomeSummary, HomeWeek } from '../../types/home';
 import { RelativeTime, StatusChip, formatCost } from '../../ui';
 import { KIND_LABEL } from '../questions';
+import { taskPaths } from '../taskList';
 import { budgetColor, escalated, liveLine, progressLine, runDuration, successRate, timeLeft, upNextWhen, weekRunsLink, type ChecklistStep } from './homeText';
 
 const HomeWeekChart = lazy(() => import('./HomeWeekChart'));
@@ -219,21 +220,21 @@ export function UpNextBlock({ upcoming, now, timeZone }: { upcoming: NonNullable
   const notes: ReactNode[] = [];
   if (upcoming.pausedCount > 0) {
     notes.push(
-      <Link key="paused" component={RouterLink} to="/tasks?filter=paused" underline="hover">
+      <Link key="paused" component={RouterLink} to={`${taskPaths.list}?filter=paused`} underline="hover">
         {upcoming.pausedCount} paused
       </Link>,
     );
   }
   if (upcoming.failingCount > 0) {
     notes.push(
-      <Link key="failing" component={RouterLink} to="/tasks?filter=failing" underline="hover" color="error">
+      <Link key="failing" component={RouterLink} to={`${taskPaths.list}?filter=failing`} underline="hover" color="error">
         {upcoming.failingCount} failing
       </Link>,
     );
   }
   const footer = (
     <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-      <BlockLink to="/tasks">{upcoming.items.length === 0 ? 'Schedule a task' : 'All tasks'}</BlockLink>
+      <BlockLink to={taskPaths.list}>{upcoming.items.length === 0 ? 'Schedule a task' : 'All tasks'}</BlockLink>
       {notes.length > 0 && (
         <Typography variant="body2" sx={TABULAR} data-testid="home-upnext-notes">
           {notes.flatMap((n, i) => (i === 0 ? [n] : [' · ', n]))}
@@ -250,7 +251,7 @@ export function UpNextBlock({ upcoming, now, timeZone }: { upcoming: NonNullable
           {upcoming.items.map((u) => (
             <Box component="li" key={u.scheduleId} sx={{ minWidth: 0 }}>
               <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline', justifyContent: 'space-between' }}>
-                <Link component={RouterLink} to="/tasks" underline="hover" color="text.primary" sx={{ ...ONE_LINE, fontWeight: 500 }}>
+                <Link component={RouterLink} to={taskPaths.detail(u.taskId)} underline="hover" color="text.primary" sx={{ ...ONE_LINE, fontWeight: 500 }}>
                   {u.taskName}
                 </Link>
                 <Typography variant="body2" sx={{ whiteSpace: 'nowrap', ...TABULAR }}>

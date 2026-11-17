@@ -27,7 +27,7 @@
     },
     {
       "id": "tasks.create",
-      "description": "Save a task (goal, profile, allowed sites, budgets)",
+      "description": "Save a task (goal, profile, allowed sites, agent policy), with its schedules in the same step",
       "rest": [
         "POST /api/tasks"
       ],
@@ -81,6 +81,7 @@
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
       "web": [
+        "/",
         "/tasks",
         "/tasks/:id"
       ]
@@ -216,7 +217,10 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
-      "web": "/runs"
+      "web": [
+        "/",
+        "/runs"
+      ]
     },
     {
       "id": "runs.list",
@@ -264,9 +268,7 @@
         "DELETE /api/runs/{id}",
         "POST /api/runs/delete"
       ],
-      "cli": {
-        "none": "Not in the CLI yet: the parity decision is recorded in #432; call the REST route"
-      },
+      "cli": "runs delete",
       "mcp": {
         "none": "Deliberate: an agent does not erase its own history"
       },
@@ -287,7 +289,7 @@
         "POST /api/runs/retention/apply"
       ],
       "cli": {
-        "none": "Not in the CLI yet: the parity decision is recorded in #432; call the REST routes"
+        "none": "The standing rule is a setting with a preview, in the web app; `runs delete --older-than <days>` is the one-off form in the CLI"
       },
       "mcp": {
         "none": "Deliberate: an agent does not erase its own history"
@@ -403,7 +405,10 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
-      "web": "/tasks/:id"
+      "web": [
+        "/tasks",
+        "/tasks/:id"
+      ]
     },
     {
       "id": "schedules.create",
@@ -416,11 +421,15 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
-      "web": "/tasks/:id"
+      "web": [
+        "/tasks/new",
+        "/tasks/:id",
+        "/tasks/:id/edit"
+      ]
     },
     {
       "id": "schedules.update",
-      "description": "Pause, resume or change a schedule",
+      "description": "Pause, resume or change a schedule; pause or resume every schedule of a task",
       "rest": [
         "PATCH /api/schedules/{id}",
         "PUT /api/tasks/{id}/schedules",
@@ -429,17 +438,21 @@
       ],
       "cli": [
         "schedules pause",
-        "schedules resume"
+        "schedules resume",
+        "tasks pause",
+        "tasks resume"
       ],
-      "mcp": {
-        "none": "Pausing a person's schedule is left to the person"
-      },
+      "mcp": [
+        "task_pause",
+        "task_resume"
+      ],
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
       "web": [
         "/tasks",
-        "/tasks/:id"
+        "/tasks/:id",
+        "/tasks/:id/edit"
       ]
     },
     {
@@ -455,7 +468,10 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
-      "web": "/tasks/:id"
+      "web": [
+        "/tasks/:id",
+        "/tasks/:id/edit"
+      ]
     },
     {
       "id": "schedules.preview",
@@ -465,15 +481,17 @@
         "GET /api/schedules/defaults"
       ],
       "cli": {
-        "none": "`schedules create` reports the same errors when it saves; the preview serves the web schedule editor"
+        "none": "`schedules create` reports the same errors when it saves; the preview serves the web schedule editor and the schedule_preview MCP tool"
       },
-      "mcp": {
-        "none": "schedule_create reports the same errors when it saves, and uses the profile time zone when none is given"
-      },
+      "mcp": "schedule_preview",
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
-      "web": "/tasks"
+      "web": [
+        "/tasks/new",
+        "/tasks/:id",
+        "/tasks/:id/edit"
+      ]
     },
     {
       "id": "tasks.stats",
@@ -482,7 +500,7 @@
         "GET /api/tasks/{id}/stats"
       ],
       "cli": {
-        "none": "A chart on the task page; the CLI lists the runs themselves (client parity is settled in #432)"
+        "none": "A chart on the task page; the CLI lists the runs themselves (`runs list`)"
       },
       "mcp": {
         "none": "An agent reads the runs themselves with runs_list; the statistics are a chart for a person"
@@ -784,10 +802,10 @@
         "GET /api/home/summary"
       ],
       "cli": {
-        "none": "A dashboard for a person; the CLI lists each part with runs list, inbox list, schedules list and fleet hosts (client parity is settled in #432)"
+        "none": "A dashboard for a person; the CLI lists each part with runs list, inbox list, schedules list and fleet hosts"
       },
       "mcp": {
-        "none": "An agent reads each part with its own tool (runs_list, inbox_list, schedules_list, fleet_hosts); the summary is a page for a person"
+        "none": "An agent reads each part with its own tool (runs_list, inbox_list, schedules_list, hosts_list); the summary is a page for a person"
       },
       "tui": {
         "none": "The TUI opens on its own runs and inbox screens; the summary is the web app's first page"

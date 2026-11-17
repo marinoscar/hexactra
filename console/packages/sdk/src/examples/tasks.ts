@@ -20,8 +20,30 @@ async function main() {
   );
   const tasks = await hx.data(hx.api.GET('/api/tasks'));
   const runs = await hx.data(hx.api.GET('/api/runs', { params: { query: {} } }));
+
+  // The typed helpers (#432): a task with its schedules in one call, a schedule checked before it is saved,
+  // pause and resume, a page of runs, and deleting finished runs.
+  const preview = await hx.schedules.preview({ cron: '0 9 * * 1-5', timezone: 'Europe/Madrid' });
+  const refused = await hx.schedules.preview({ cron: '* * * * *' });
+  const scheduled = await hx.tasks.create({ name: 'Morning report', goal: 'Read the morning report', schedules: [{ cron: '0 9 * * 1-5', timezone: 'Europe/Madrid' }] });
+  const paused = await hx.tasks.pauseSchedules(scheduled.id);
+  const resumed = await hx.tasks.resumeSchedules(scheduled.id);
+  const page = await hx.runs.list({ taskId: scheduled.id, limit: 10 });
+  // Nothing has run, so nothing matches: the call shape is what the example shows.
+  const deleted = await hx.runs.deleteMany({ filter: { taskId: scheduled.id, state: 'finished' }, expectedCount: 0 });
   process.stdout.write(
-    `${JSON.stringify({ taskId: task.id, listed: tasks.length, updatedGoal: updated.goal, profileKept: updated.profile, runs: runs.length })}\n`,
+    `${JSON.stringify({
+      taskId: task.id,
+      listed: tasks.length,
+      updatedGoal: updated.goal,
+      profileKept: updated.profile,
+      runs: runs.length,
+      preview: preview.valid ? preview.description : null,
+      refused: refused.valid ? null : refused.code,
+      scheduleState: [scheduled.summary.scheduleState, paused.summary.scheduleState, resumed.summary.scheduleState],
+      page: { items: page.items.length, nextCursor: page.nextCursor },
+      deleted: 'deleted' in deleted ? deleted.deleted : null,
+    })}\n`,
   );
 }
 
