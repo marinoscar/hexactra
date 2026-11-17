@@ -3,6 +3,7 @@ import { Box, Text, useInput } from 'ink';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { consoleApi } from './console-api.js';
+import { costText, runPolicyLines, type RunPolicyFields } from './policies.js';
 
 interface Step {
   seq: number;
@@ -11,7 +12,7 @@ interface Step {
   ok: boolean;
   summary: string;
 }
-interface Run {
+export interface Run extends RunPolicyFields {
   id: string;
   status: string;
   goal: string;
@@ -88,6 +89,11 @@ export function RunsScreen({ onDone }: TuiScreenProps): ReactNode {
           {open.goal}
         </Text>
         <Text>[{label(open.status)}] {open.stepCount} steps</Text>
+        {runPolicyLines(open).map((l) => (
+          <Text key={l} dimColor wrap="truncate">
+            {l}
+          </Text>
+        ))}
         <Box flexDirection="column">
           {(open.steps ?? []).slice(-15).map((s) => (
             <Text key={s.seq} wrap="truncate" dimColor={!s.ok}>
@@ -112,7 +118,7 @@ export function RunsScreen({ onDone }: TuiScreenProps): ReactNode {
         {runs?.map((r, i) => (
           <Text key={r.id} inverse={i === selected} wrap="truncate">
             {i === selected ? '› ' : '  '}
-            {label(r.status).padEnd(10)} {String(r.stepCount).padStart(3)} steps  {r.goal}
+            {label(r.status).padEnd(10)} {String(r.stepCount).padStart(3)} steps  {(r.policy?.name ?? '-').slice(0, 12).padEnd(12)} {(r.currentTier ?? '').padEnd(8)} {(costText(r) ?? '-').padEnd(8)}  {r.goal}
           </Text>
         ))}
       </Box>

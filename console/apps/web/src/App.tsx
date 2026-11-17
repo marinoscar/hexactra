@@ -41,6 +41,11 @@ import { QuestionPage } from './pages/QuestionPage';
 import { RunDetailPage, RunsPage } from './pages/RunsPage';
 import { TasksPage } from './pages/TasksPage';
 import { NotesPage } from './pages/NotesPage';
+import { AgentPoliciesPage } from './pages/AgentPoliciesPage';
+import { AgentPolicyEditorPage } from './pages/AgentPolicyEditorPage';
+import { ModelTiersPage } from './pages/ModelTiersPage';
+import { AgentCeilingsPage } from './pages/AgentCeilingsPage';
+import { AgentPricingPage } from './pages/AgentPricingPage';
 import { AppPlatformHost } from './platformHost';
 import {
   beforeLogout,
@@ -213,6 +218,14 @@ export function AppRoutes() {
           {WEBHOOKS_ENABLED && <Route path="settings/webhooks" element={<Gate permission="webhooks:read"><WebhooksPage scope="user" /></Gate>} />}
           {WEBHOOKS_ENABLED && <Route path="admin/settings/webhooks" element={<Gate permission="system_webhooks:read"><WebhooksPage scope="system" /></Gate>} />}
           {ALERTS_ENABLED && <Route path="admin/settings/alerts" element={<Gate permission="alerts:read"><AlertsPage /></Gate>} />}
+          {/* Agent policies (#407): the user's policies and model tiers; the deployment's tiers, ceilings and prices. */}
+          <Route path="settings/agent-policies" element={<Gate permission="agent_policies:read"><AgentPoliciesPage /></Gate>} />
+          <Route path="settings/agent-policies/new" element={<Gate permission="agent_policies:write"><AgentPolicyEditorPage /></Gate>} />
+          <Route path="settings/agent-policies/:id" element={<Gate permission="agent_policies:read"><AgentPolicyEditorPage /></Gate>} />
+          <Route path="settings/agent-model-tiers" element={<Gate permission="agent_policies:read"><ModelTiersPage scope="user" /></Gate>} />
+          <Route path="admin/settings/agent-model-tiers" element={<Gate permission="system_settings:read"><ModelTiersPage scope="deployment" /></Gate>} />
+          <Route path="admin/settings/agent-ceilings" element={<Gate permission="system_settings:read"><AgentCeilingsPage /></Gate>} />
+          <Route path="admin/settings/agent-pricing" element={<Gate permission="system_settings:read"><AgentPricingPage /></Gate>} />
           <Route path="settings/danger-zone" element={<UserDangerZonePage />} />
           <Route path="admin/settings/factory-reset" element={<Gate permission={factoryResetSettingsPage.card.permission!}><FactoryResetPage /></Gate>} />
           {/* The enabled optional slices' pages (packages/shared/slices.json; src/slices/). */}

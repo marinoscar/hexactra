@@ -264,10 +264,8 @@ describe('task spend', () => {
       hostId: null,
       hostFallback: true,
       allowedDomains: [],
-      maxSteps: 100,
-      maxMinutes: 30,
       confirmRiskyActions: true,
-      model: null,
+      policyId: null,
       spend30d: { runs: 2, costUsd: 0.8, costKnown: true, tokens: 4000, succeeded: 2, avgSuccessCostUsd: 0.4 },
     };
     const host = createTestPlatformHost({ permissions: ['tasks:read'], responses: { 'GET /tasks': [task], [`GET /schedules?taskId=${TASK_ID}`]: [] } });

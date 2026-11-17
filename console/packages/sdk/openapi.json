@@ -60961,28 +60961,13 @@
                 "minimum": -9007199254740991,
                 "maximum": 9007199254740991,
                 "description": "Input plus output tokens"
-              },
-              "succeeded": {
-                "type": "integer",
-                "minimum": -9007199254740991,
-                "maximum": 9007199254740991,
-                "description": "Of those runs, how many succeeded"
-              },
-              "avgSuccessCostUsd": {
-                "description": "The average cost of one successful run (USD; a lower bound while costKnown is false); null with no successful run",
-                "type": [
-                  "number",
-                  "null"
-                ]
               }
             },
             "required": [
               "runs",
               "costUsd",
               "costKnown",
-              "tokens",
-              "succeeded",
-              "avgSuccessCostUsd"
+              "tokens"
             ],
             "description": "What the task's runs spent in the last 30 days"
           },
@@ -61375,6 +61360,10 @@
                       "x",
                       "y"
                     ]
+                  },
+                  "note": {
+                    "description": "Why the run is on a stronger model, while it is (for example \"Escalated to Frontier (stuck: repeated click on #submit)\")",
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -61629,65 +61618,27 @@
               }
             ]
           },
-          "tier": {
+          "currentTier": {
             "anyOf": [
               {
-                "type": "object",
-                "properties": {
-                  "start": {
-                    "type": "string",
-                    "enum": [
-                      "fast",
-                      "standard",
-                      "frontier"
-                    ],
-                    "description": "The tier the policy starts runs on"
-                  },
-                  "max": {
-                    "type": "string",
-                    "enum": [
-                      "fast",
-                      "standard",
-                      "frontier"
-                    ],
-                    "description": "The highest tier the run may escalate to"
-                  },
-                  "current": {
-                    "type": "string",
-                    "enum": [
-                      "fast",
-                      "standard",
-                      "frontier"
-                    ],
-                    "description": "The tier the run is on now: the start tier until a stall escalates it"
-                  },
-                  "escalations": {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991,
-                    "description": "How many times the run escalated"
-                  },
-                  "model": {
-                    "description": "The current tier's model, as `provider:modelId`; null when none was resolved",
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "start",
-                  "max",
-                  "current",
-                  "escalations",
-                  "model"
-                ],
-                "description": "The run's model tier, from its policy snapshot: null until the run has started."
+                "type": "string",
+                "enum": [
+                  "fast",
+                  "standard",
+                  "frontier"
+                ]
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts."
+          },
+          "escalations": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "How many times the run moved to a stronger tier because it stalled"
           },
           "cachedInputTokens": {
             "type": "integer",
@@ -61759,7 +61710,8 @@
           "policy",
           "stopReason",
           "budget",
-          "tier",
+          "currentTier",
+          "escalations",
           "cachedInputTokens",
           "modelCalls",
           "costUsd",
@@ -61948,6 +61900,10 @@
                       "x",
                       "y"
                     ]
+                  },
+                  "note": {
+                    "description": "Why the run is on a stronger model, while it is (for example \"Escalated to Frontier (stuck: repeated click on #submit)\")",
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -62202,65 +62158,27 @@
               }
             ]
           },
-          "tier": {
+          "currentTier": {
             "anyOf": [
               {
-                "type": "object",
-                "properties": {
-                  "start": {
-                    "type": "string",
-                    "enum": [
-                      "fast",
-                      "standard",
-                      "frontier"
-                    ],
-                    "description": "The tier the policy starts runs on"
-                  },
-                  "max": {
-                    "type": "string",
-                    "enum": [
-                      "fast",
-                      "standard",
-                      "frontier"
-                    ],
-                    "description": "The highest tier the run may escalate to"
-                  },
-                  "current": {
-                    "type": "string",
-                    "enum": [
-                      "fast",
-                      "standard",
-                      "frontier"
-                    ],
-                    "description": "The tier the run is on now: the start tier until a stall escalates it"
-                  },
-                  "escalations": {
-                    "type": "integer",
-                    "minimum": -9007199254740991,
-                    "maximum": 9007199254740991,
-                    "description": "How many times the run escalated"
-                  },
-                  "model": {
-                    "description": "The current tier's model, as `provider:modelId`; null when none was resolved",
-                    "type": [
-                      "string",
-                      "null"
-                    ]
-                  }
-                },
-                "required": [
-                  "start",
-                  "max",
-                  "current",
-                  "escalations",
-                  "model"
-                ],
-                "description": "The run's model tier, from its policy snapshot: null until the run has started."
+                "type": "string",
+                "enum": [
+                  "fast",
+                  "standard",
+                  "frontier"
+                ]
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts."
+          },
+          "escalations": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "How many times the run moved to a stronger tier because it stalled"
           },
           "cachedInputTokens": {
             "type": "integer",
@@ -62330,7 +62248,7 @@
                 },
                 "kind": {
                   "type": "string",
-                  "description": "action | handoff | finish | error | note"
+                  "description": "action | handoff | finish | error | note | routing (a tier change or provider fallback, with `args` { from, to, reason }; not an action)"
                 },
                 "action": {
                   "type": [
@@ -62428,7 +62346,8 @@
           "policy",
           "stopReason",
           "budget",
-          "tier",
+          "currentTier",
+          "escalations",
           "cachedInputTokens",
           "modelCalls",
           "costUsd",

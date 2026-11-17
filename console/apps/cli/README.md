@@ -180,6 +180,7 @@ hexactra tasks run <task-id> --watch
 
 # Or run a one-off goal
 hexactra runs start "Find the cheapest flight to Lisbon next Friday" --watch
+hexactra runs start "Find a fare" --policy builtin:economy   # run under an agent policy
 
 hexactra runs list --status running
 hexactra runs show <run-id>
@@ -188,6 +189,25 @@ hexactra runs cancel <run-id>
 ```
 
 `tasks run` and `runs show|watch|cancel` take an id or an id prefix. `--json` prints JSON for scripts.
+
+`runs list`, `runs show` and the Runs screen of the terminal UI show each run's policy and cost, and the tier, budget use and stop reason when the console reports them.
+
+### Agent policies
+
+An **agent policy** sets what a run may spend (actions, model calls, active minutes, tokens, cost; `unlimited` is a limit left empty) and which model tiers it uses. Four built-ins exist (`economy`, `balanced`, `thorough`, `unlimited`); you can add your own in the web app or by importing a file.
+
+```bash
+hexactra policies list                              # id, name, tiers (start -> highest), budget, flags
+hexactra policies show balanced                     # one policy in full; --json for the spec
+hexactra policies export -o policies.json           # your own policies as a portable file
+hexactra policies export --ids "Fare lookups,thorough" --no-pins   # chosen ones, without model pins
+hexactra policies import policies.json --on-conflict rename        # rename (default), skip or replace
+hexactra policies default                           # show the default policy
+hexactra policies default economy                   # choose it
+hexactra policies default --reset                   # back to builtin:balanced
+```
+
+A policy is named by its id, an id prefix, its name or (for a built-in) its key, with or without `builtin:`. Pass one with `--policy` to `runs start`, `tasks run` (this run only), `tasks create`, `tasks update` (`--policy default` follows your default) and `schedules create`. Without it a run uses the schedule's, the task's, then your default policy. `policies export` writes to stdout without `-o`, so it pipes into `policies import -` on another console.
 
 ### The inbox: answer what agents wait for
 

@@ -36,18 +36,18 @@ export class McpController {
 
   private ctx(authorization: string): McpContext {
     const fastify = this.adapter.httpAdapter.getInstance<FastifyInstance>();
-    const call = async (method: string, path: string, body?: unknown) => {
+    const call = async (method: string, path: string, body?: unknown, extra?: Record<string, string>) => {
       const res = await fastify.inject({
         method: method as 'GET',
         url: `/api${path}`,
-        headers: { authorization, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
+        headers: { authorization, ...extra, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
         ...(body !== undefined ? { payload: JSON.stringify(body) } : {}),
       });
       return res;
     };
     return {
-      async api<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
-        const res = await call(method, path, body);
+      async api<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', path: string, body?: unknown, headers?: Record<string, string>): Promise<T> {
+        const res = await call(method, path, body, headers);
         if (res.statusCode === 204) return { ok: true } as T;
         const parsed = res.body ? (JSON.parse(res.body) as { data?: T; message?: string; code?: string }) : {};
         if (res.statusCode >= 400) throw new ApiCallError(`${res.statusCode} ${parsed.code ?? ''}: ${parsed.message ?? res.statusMessage}`.trim());

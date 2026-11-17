@@ -119,6 +119,8 @@ Hexactra is a personal human emulator (VISION §27). The agent works on the owne
 - every step is visible live and can be stopped;
 - for tasks that visit sites you do not trust, set **allowed sites** and turn on **confirmation**.
 
+**Loops and runaway runs.** Budgets can all be set to unlimited (the built-in Unlimited policy), so budgets are not the only guard. Stall detection is always on: a run that fails repeatedly, repeats the same action, makes no visible progress or does nothing is nudged, moved to a stronger model, handed to a person or ended as `stalled`, whatever its budget (see the console README, "Stall detection and escalation"). The detector keeps only digests, normalised selectors and query-less URLs, never typed text, secrets or images. Under an unlimited budget the safety net is therefore stall detection plus **Stop**, which always works and ends a run at its next step. A page that deliberately keeps changing can defeat the no-progress signal; the repeated-action and failure signals and Stop still apply.
+
 ## Security Best Practices
 
 ### Network Security

@@ -200,7 +200,9 @@ export function stopLine(run: StopReasonRun): StopLine | null {
         ? { severity: 'success', title: 'Finished: the agent completed the goal.', summary, detail: null }
         : { severity: 'info', title: 'Finished: the agent ended the run without completing the goal.', summary, detail: null };
     case 'stalled':
-      return { severity: 'warning', title: `Stopped: stuck${run.error ? ` (${run.error})` : ''}.`, summary, detail: null };
+      // #405 records the stall as "The agent stalled: <reason>"; the title already says stuck.
+      const why = run.error?.replace(/^The agent stalled:\s*/i, '');
+      return { severity: 'warning', title: `Stopped: stuck${why ? ` (${why})` : ''}.`, summary, detail: null };
     case 'cancelled':
       return { severity: 'info', title: 'Stopped: cancelled.', summary, detail: null };
     case 'no_model':

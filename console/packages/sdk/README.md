@@ -12,6 +12,20 @@ const run = await hx.data(hx.api.POST('/api/tasks/{id}/runs', { params: { path: 
 const inbox = await hx.data(hx.api.GET('/api/inbox')); // what the agent is waiting for
 ```
 
+- **`hx.policies`, `hx.tasks`, `hx.runs`** are typed helpers over the same routes, for agent policies (the budgets and model tiers a run follows) and the `policyId` option:
+  ```ts
+  import type { AgentPolicySpec } from '@hexactra/console-sdk';
+
+  const economy = await hx.policies.get('builtin:economy');
+  const spec: AgentPolicySpec = { ...economy.spec, budget: { ...economy.spec.budget, maxCostUsd: 1.5 } }; // null = unlimited
+  const policy = await hx.policies.create({ name: 'Cheap fares', spec });
+  await hx.policies.update(policy.id, spec, policy.version);          // version: refused with 412 if it moved
+  const file = await hx.policies.export({ ids: [policy.id], includePins: false });
+  await hx.policies.import(file, { onConflict: 'rename' });           // or 'skip' | 'replace'
+  await hx.policies.setDefault(policy.id);                             // null: back to builtin:balanced
+  await hx.runs.start({ goal: 'Find a fare', policyId: policy.id });
+  await hx.tasks.run(taskId, { policyId: 'builtin:thorough' });        // this run only
+  ```
 - **`hx.api`** is an [openapi-fetch](https://openapi-ts.dev/openapi-fetch/) client over the whole API, including the platform's routes (personal access tokens, notifications, …).
 - **`hx.data(call)`** unwraps the console's `{ data }` envelope. On an error status it throws `ConsoleApiError`, with `status`, a stable `code` and the prose `message`.
 - **Tokens.** Use a personal access token of a dedicated user (see `../../docs/mcp.md#connect`). The SDK sends the token as a bearer header and never logs it.
@@ -22,7 +36,7 @@ const inbox = await hx.data(hx.api.GET('/api/inbox')); // what the agent is wait
 HEXACTRA_CONSOLE_URL=https://console.example.test HEXACTRA_TOKEN=pat_… node dist/examples/tasks.js
 ```
 
-The example (`src/examples/tasks.ts`) saves a task, changes its goal, then lists tasks and runs. CI runs it against a live console: `apps/api/test/sdk.db.spec.ts`.
+The example (`src/examples/tasks.ts`) saves a task, changes its goal, then lists tasks and runs. `src/examples/policies.ts` creates, edits, exports and imports a policy, then runs a goal and a task under it. CI runs both against a live console: `apps/api/test/sdk.db.spec.ts`.
 
 ## Regenerating
 

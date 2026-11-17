@@ -1,4 +1,6 @@
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
+import RuleOutlinedIcon from '@mui/icons-material/RuleOutlined';
+import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/ui';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { DANGER_ZONE_GROUP_LABEL } from '@marinoscar/platform-web/user-data/headless';
@@ -11,6 +13,8 @@ import { isSliceEnabled, sliceUserCards } from '../slices/manifest';
 export const WEBHOOKS_ENABLED = isSliceEnabled('credentials') && isSliceEnabled('notifications');
 /** Alerts are mounted with the notifications and email slices (apps/api/src/platform/alerts/alerts.enabled.ts). */
 export const ALERTS_ENABLED = isSliceEnabled('notifications') && isSliceEnabled('email');
+/** The settings group of the browser agent's cards, in both hubs. */
+export const BROWSER_AGENT_GROUP = 'Browser agent';
 import { composeSections } from '../slices/sections';
 
 /**
@@ -36,6 +40,29 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
   },
   // `Danger Zone` stays LAST (docs/specs/settings-ui.md): add new groups above it.
   ...(WEBHOOKS_ENABLED ? [{ label: 'Integrations', cards: [...webhooksUserSettingsSections.integrations] }] : []),
+  // The browser agent (epic #398). `agent_policies:read` is what `GET /api/agent-policies`
+  // and `GET /api/agent-policies/model-tiers/effective` enforce; writes are gated in the pages.
+  // APPEND further browser-agent cards (Run history, #422) to this group.
+  {
+    label: BROWSER_AGENT_GROUP,
+    cards: [
+      {
+        title: 'Agent policies',
+        description: 'Which models a run uses and how much it may spend: create, duplicate, export and import policies, and choose your default.',
+        Icon: RuleOutlinedIcon,
+        path: '/settings/agent-policies',
+        permission: 'agent_policies:read',
+      },
+      {
+        title: 'Model tiers',
+        description: 'Choose the model, reasoning effort and fallback of the Fast, Standard and Frontier tiers for your runs.',
+        Icon: LayersOutlinedIcon,
+        path: '/settings/agent-model-tiers',
+        permission: 'agent_policies:read',
+        feature: 'ai',
+      },
+    ],
+  },
   { label: DANGER_ZONE_GROUP_LABEL, cards: [{ ...dangerZoneSettingsPage.card, Icon: dangerZoneSettingsPage.Icon }] },
 ];
 

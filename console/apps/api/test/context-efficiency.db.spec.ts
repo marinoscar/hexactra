@@ -168,7 +168,7 @@ describe('the context knobs reach the model request (#406)', () => {
     for (const kept of [0, 1, 2]) {
       const { userId, prisma, db, run } = await newRun(`kept${kept}`, withContext({ screenshotsKept: kept, callsPerChunk: 2, pruneBatch: 10 }));
       const fabric = pageFabric();
-      const m = chunkModel([...Array.from({ length: 7 }, (): Call => ['scroll', { dy: 1 }]), ['finish', { success: true, result: 'ok' }]]);
+      const m = chunkModel([...Array.from({ length: 7 }, (_, i): Call => ['scroll', { dy: i + 1 }]), ['finish', { success: true, result: 'ok' }]]);
       await new GoalRunnerService(prisma, app.get(TasksService), fabric.client, m.ai).advance(run.id, userId, null);
       counts[kept] = m.requests.map((r) => textOf(r.input).images.length);
       expect(fabric.actions.filter((a) => a.type === 'screenshot')).toHaveLength(kept === 0 ? 0 : m.requests.length);
