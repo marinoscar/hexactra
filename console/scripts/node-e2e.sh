@@ -49,6 +49,9 @@ if [ -n "${EXTENSION_CRX_KEY:-}" ]; then
     || fail "pack the extension"
   rm -f "$work/crx.pem"
   (cd "$work/ext" && python3 -m http.server 8099 --bind 127.0.0.1 >/dev/null 2>&1 &)
+  # Take the baseline only once the server listens, or its port looks like the node's.
+  for _ in $(seq 1 30); do curl -fsS http://127.0.0.1:8099/updates.xml >/dev/null 2>&1 && break; sleep 0.2; done
+  curl -fsS http://127.0.0.1:8099/updates.xml >/dev/null || fail "the extension server did not start"
   update_args=(--extension-update-url http://127.0.0.1:8099/updates.xml)
   before=$(listeners)
 fi
