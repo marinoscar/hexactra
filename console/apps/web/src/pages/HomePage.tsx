@@ -39,7 +39,7 @@ function readOnboarded(): boolean {
  * becomes visible, and on an interval while the tab is visible: 5 s while
  * something is live, 10 s otherwise. A failed read keeps the last good data.
  */
-export function useHomeSummary() {
+function useHomeSummary() {
   const { api } = usePlatformHost();
   const [summary, setSummary] = useState<HomeSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
