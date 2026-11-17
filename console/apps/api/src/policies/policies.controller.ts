@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Patch, Post, Put, Query, Res } from '@nestjs/common';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
-import { ApiHeader, ApiTags } from '@nestjs/swagger';
+import { ApiHeader, ApiOkResponse, ApiProduces, ApiTags } from '@nestjs/swagger';
+import type { FastifyReply } from 'fastify';
 
 import {
   AgentPolicyResponseDto,
@@ -13,6 +14,8 @@ import {
   UpdatePolicyDto,
 } from './policies.schemas';
 import { PoliciesService } from './policies.service';
+import { ExportPoliciesQueryDto, ImportPoliciesDto, ImportPoliciesResponseDto, PolicyFileDto } from './policy-transfer.schemas';
+import { PolicyTransferService } from './policy-transfer.service';
 
 /** `If-Match: 4`, `"4"` or `W/"4"`; anything else is treated as absent. */
 export function parseIfMatch(header: string | undefined): number | undefined {
@@ -24,7 +27,10 @@ export function parseIfMatch(header: string | undefined): number | undefined {
 @ApiTags('Agent policies')
 @Controller('agent-policies')
 export class PoliciesController {
-  constructor(private readonly policies: PoliciesService) {}
+  constructor(
+    private readonly policies: PoliciesService,
+    private readonly transfer: PolicyTransferService,
+  ) {}
 
   @Get()
   @ApiDataResponse(AgentPolicyResponseDto, { isArray: true })
@@ -46,6 +52,27 @@ export class PoliciesController {
   @Auth({ permissions: ['agent_policies:write'] })
   setDefault(@CurrentUser('id') userId: string, @Body() body: SetDefaultPolicyDto) {
     return this.policies.setDefault(userId, body.policyId);
+  }
+
+  // `export` and `import` are declared before every `:id` route (Fastify prefers a static path anyway).
+  @Get('export')
+  @ApiOkResponse({ type: PolicyFileDto, description: 'The policies as a portable JSON file (not wrapped in the `data` envelope), sent as an attachment `agent-policies-<yyyymmdd>.json`.' })
+  @ApiProduces('application/json')
+  @Auth({ permissions: ['agent_policies:read'] })
+  async export(@CurrentUser('id') userId: string, @Query() q: ExportPoliciesQueryDto, @Res() reply: FastifyReply): Promise<void> {
+    const { file, filename } = await this.transfer.export(userId, q.ids, q.includePins);
+    await reply
+      .header('content-disposition', `attachment; filename="${filename}"`)
+      .header('cache-control', 'no-store')
+      .type('application/json; charset=utf-8')
+      .send(JSON.stringify(file, null, 2));
+  }
+
+  @Post('import')
+  @ApiDataResponse(ImportPoliciesResponseDto)
+  @Auth({ permissions: ['agent_policies:write'] })
+  import(@CurrentUser('id') userId: string, @Body() body: ImportPoliciesDto) {
+    return this.transfer.import(userId, body.file, body.onConflict);
   }
 
   @Post()
