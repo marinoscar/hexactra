@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Documentation for agent run policies** (#410). These documents now describe policies as the way to control a run:
+  - VISION §25–§27, plus the root and console READMEs;
+  - the operations and capacity runbooks, including a "run that seems to burn tokens" checklist;
+  - the API reference, including the `hexactra.agent-policies` v1 file format and the run fields;
+  - the security guide, the MCP and agent-framework guides, and `console/AGENTS.md`.
+
+  The policy routes now have OpenAPI summaries.
 - **Run budget meter and cost-aware alerts** (#408).
   - **Run page:** shows the run's policy, tier (highlighted when escalated) and model. A live budget meter has one bar per limited budget, ∞ for an unlimited one, and warning and error colours. It shows "≥" for a cost that is not fully known, and why the run stopped together with the agent's summary.
   - **Run timeline:** routing steps (↑, ↓ and ⇄) appear in it.
