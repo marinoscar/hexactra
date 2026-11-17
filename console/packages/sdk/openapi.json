@@ -68110,6 +68110,12 @@
                     "minimum": -9007199254740991,
                     "maximum": 9007199254740991
                   },
+                  "running": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "How many of `count` are running; the others wait for a person or a machine"
+                  },
                   "items": {
                     "type": "array",
                     "items": {
@@ -68317,6 +68323,7 @@
                 },
                 "required": [
                   "count",
+                  "running",
                   "items"
                 ]
               },

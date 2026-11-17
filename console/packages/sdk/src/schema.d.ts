@@ -14182,6 +14182,8 @@ export interface components {
             /** @description Runs that are not finished. Needs `runs:read`; null without it. */
             liveRuns: {
                 count: number;
+                /** @description How many of `count` are running; the others wait for a person or a machine */
+                running: number;
                 /** @description At most 6: running first, then waiting for a person, then queued; newest first within each */
                 items: {
                     /** Format: uuid */
