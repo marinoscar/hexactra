@@ -18,6 +18,7 @@ import { HexactraAlertsService } from '../src/alerts/hexactra-alerts.service';
 import { GoalRunHandler } from '../src/runner/goal-runner.jobs';
 import { TasksService } from '../src/tasks/tasks.service';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
+import { PolicyModelCheck, PolicyResolver } from '../src/policies';
 
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
@@ -697,12 +698,14 @@ describe('the goal runner budgets (#399)', () => {
 
   it('hands a long run to a new job near the runtime limit and resumes it without a new browser session', async () => {
     const { userId, prisma, db, run, fabric } = await setup(`runner-hop-${stamp}@example.test`, 480);
+    // No time budget (#401): this test is about the job hop, not the active-time limit.
+    await db.task.updateMany({ where: { id: run.taskId! }, data: { policyRef: 'builtin:unlimited' } });
     const { ai, runTools } = scriptedAi([
       [['navigate', { url: 'https://example.test/', reason: 'go' }]],
       [['navigate', { url: 'https://example.test/2', reason: 'go' }]],
       [['finish', { success: true, result: 'Long run done' }]],
     ]);
-    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai, undefined, undefined, undefined, app.get(PolicyResolver), app.get(PolicyModelCheck));
     // The first job's clock jumps 29 minutes during its first model round.
     let now = Date.now();
     runner.clock = () => now;

@@ -20,11 +20,11 @@ describe('task defaults (#399)', () => {
     expect(t.maxMinutes).toBe(TASK_DEFAULTS.maxMinutes);
   });
 
-  it('the runner falls back to TASK_DEFAULTS (no literal budget numbers left in it)', () => {
+  it('the runner takes its limits from the policy snapshot (no literal budget numbers left in it, #401)', () => {
     const src = readFileSync(join(__dirname, '../src/runner/goal-runner.service.ts'), 'utf8');
-    expect(src).toContain('?? TASK_DEFAULTS.maxSteps');
-    expect(src).toContain('?? TASK_DEFAULTS.maxMinutes');
-    expect(src).not.toMatch(/maxSteps \?\? \d|maxMinutes \?\? \d/);
+    expect(src).toContain('budget.maxActions ??');
+    expect(src).toContain('budget.maxActiveMinutes');
+    expect(src).not.toMatch(/maxSteps \?\? \d|maxMinutes \?\? \d|maxActions \?\? \d/);
   });
 
   it('the budget error texts the alerts match are the ones the runner writes', () => {

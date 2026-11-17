@@ -2,6 +2,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import { profileNameSchema } from '../fleet/fleet.schemas';
+import { policyRefSchema } from '../policies/policies.schemas';
 import { TASK_DEFAULTS } from './task-defaults';
 
 const domain = z
@@ -17,10 +18,13 @@ const taskFields = {
   hostId: z.uuid().nullable(),
   hostFallback: z.boolean(),
   allowedDomains: z.array(domain).max(50),
-  maxSteps: z.number().int().min(1).max(1000),
-  maxMinutes: z.number().int().min(1).max(480),
+  // Deprecated by agent policies (#401): still accepted for one release. They map to a
+  // derived personal policy named "Task: <name>" and the response carries a `Deprecation` header.
+  maxSteps: z.number().int().min(1).max(1000).meta({ deprecated: true }).describe('Deprecated: use an agent policy (`policyId`). Maps to the policy\'s `budget.maxActions`.'),
+  maxMinutes: z.number().int().min(1).max(480).meta({ deprecated: true }).describe('Deprecated: use an agent policy (`policyId`). Maps to the policy\'s `budget.maxActiveMinutes`.'),
   confirmRiskyActions: z.boolean(),
-  model: z.string().trim().min(1).max(200).nullable(),
+  model: z.string().trim().min(1).max(200).nullable().meta({ deprecated: true }).describe('Deprecated: use an agent policy (`policyId`). Maps to the policy\'s `models.pins.standard`.'),
+  policyId: policyRefSchema.nullable().describe("The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."),
 };
 
 export const createTaskSchema = z.object({
@@ -35,6 +39,7 @@ export const createTaskSchema = z.object({
   maxMinutes: taskFields.maxMinutes.default(TASK_DEFAULTS.maxMinutes),
   confirmRiskyActions: taskFields.confirmRiskyActions.default(false),
   model: taskFields.model.optional(),
+  policyId: taskFields.policyId.optional(),
 });
 export class CreateTaskDto extends createZodDto(createTaskSchema) {}
 

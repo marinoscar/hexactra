@@ -3,6 +3,8 @@ import { JobsService } from '@marinoscar/platform-api/jobs';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+import { PoliciesService } from '../policies/policies.service';
+import { policyRefSchema } from '../policies/policies.schemas';
 import { PrismaService } from '../prisma/prisma.service';
 import { enqueueGoalRun } from '../runner/goal-runner.jobs';
 import { nextFiring, tooFrequent, validTimezone } from './cron';
@@ -13,6 +15,7 @@ export const createScheduleSchema = z.object({
   timezone: z.string().trim().min(1).max(64).default('UTC'),
   enabled: z.boolean().default(true),
   concurrency: z.enum(['skip', 'queue']).default('skip'),
+  policyId: policyRefSchema.nullable().optional().describe("Overrides the task's agent policy for scheduled runs; omit or null to follow the task."),
 });
 export class CreateScheduleDto extends createZodDto(createScheduleSchema) {}
 // No defaults here: zod 4 applies `.default()` inside `.partial()`, which
@@ -22,8 +25,15 @@ export const updateScheduleSchema = z.object({
   timezone: z.string().trim().min(1).max(64).optional(),
   enabled: z.boolean().optional(),
   concurrency: z.enum(['skip', 'queue']).optional(),
+  policyId: policyRefSchema.nullable().optional().describe("Overrides the task's agent policy for scheduled runs; null follows the task."),
 });
 export class UpdateScheduleDto extends createZodDto(updateScheduleSchema) {}
+
+/** A schedule row as the API returns it: the policy reference is `policyId`. */
+export function scheduleView<T extends { policyRef: string | null }>(schedule: T): Omit<T, 'policyRef'> & { policyId: string | null } {
+  const { policyRef, ...rest } = schedule;
+  return { ...rest, policyId: policyRef };
+}
 
 /** Failed runs in a row after which the owner is told the schedule is failing. */
 export const FAILING_AFTER = 3;
@@ -35,6 +45,7 @@ export class SchedulesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jobs: JobsService,
+    private readonly policies: PoliciesService,
   ) {}
 
   private db(userId: string) {
@@ -49,15 +60,17 @@ export class SchedulesService {
     return next;
   }
 
-  list(userId: string, taskId?: string) {
-    return this.db(userId).taskSchedule.findMany({ where: taskId ? { taskId } : {}, orderBy: { createdAt: 'asc' } });
+  async list(userId: string, taskId?: string) {
+    return (await this.db(userId).taskSchedule.findMany({ where: taskId ? { taskId } : {}, orderBy: { createdAt: 'asc' } })).map(scheduleView);
   }
 
   async create(userId: string, input: CreateScheduleDto) {
     const task = await this.db(userId).task.findFirst({ where: { id: input.taskId }, select: { id: true } });
     if (!task) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
     const next = this.check(input.cron, input.timezone);
-    return this.db(userId).taskSchedule.create({ data: { ...input, userId, nextRunAt: input.enabled ? next : null } });
+    const { policyId, ...fields } = input;
+    await this.policies.assertAssignable(userId, policyId);
+    return scheduleView(await this.db(userId).taskSchedule.create({ data: { ...fields, userId, policyRef: policyId ?? null, nextRunAt: input.enabled ? next : null } }));
   }
 
   async update(userId: string, id: string, patch: UpdateScheduleDto) {
@@ -68,8 +81,13 @@ export class SchedulesService {
     const timezone = patch.timezone ?? s.timezone;
     const enabled = patch.enabled ?? s.enabled;
     const next = this.check(cron, timezone);
-    await db.taskSchedule.updateMany({ where: { id }, data: { ...patch, nextRunAt: enabled ? next : null, ...(patch.enabled ? { consecutiveFailures: 0 } : {}) } });
-    return db.taskSchedule.findFirstOrThrow({ where: { id } });
+    const { policyId, ...fields } = patch;
+    await this.policies.assertAssignable(userId, policyId);
+    await db.taskSchedule.updateMany({
+      where: { id },
+      data: { ...fields, ...(policyId !== undefined ? { policyRef: policyId } : {}), nextRunAt: enabled ? next : null, ...(patch.enabled ? { consecutiveFailures: 0 } : {}) },
+    });
+    return scheduleView(await db.taskSchedule.findFirstOrThrow({ where: { id } }));
   }
 
   async remove(userId: string, id: string): Promise<void> {
@@ -118,7 +136,7 @@ export class SchedulesService {
         }
       }
       const run = await this.db(s.userId).run.create({
-        data: { userId: s.userId, taskId: s.taskId, goal: s.task.goal, profile: s.task.profile, hostId: s.task.hostId, hostFallback: s.task.hostFallback, trigger: 'schedule' },
+        data: { userId: s.userId, taskId: s.taskId, goal: s.task.goal, profile: s.task.profile, hostId: s.task.hostId, hostFallback: s.task.hostFallback, trigger: 'schedule', ...(s.policyRef ? { policyRef: s.policyRef, policySource: 'schedule' as const } : {}) },
         select: { id: true },
       });
       await this.prisma.taskSchedule.updateMany({ where: { id: s.id }, data: { lastRunAt: now, lastRunId: run.id } });

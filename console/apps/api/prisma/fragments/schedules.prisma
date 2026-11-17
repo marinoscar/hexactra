@@ -24,6 +24,8 @@ model TaskSchedule {
   lastRunId           String?             @map("last_run_id") @db.Uuid
   /// Failed runs in a row (reset by a success); drives the "failing" notice.
   consecutiveFailures Int                 @default(0) @map("consecutive_failures")
+  /// Overrides the task's agent policy for scheduled runs (#401); null follows the task.
+  policyRef           String?             @map("policy_ref") @db.VarChar(64)
   createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz
 

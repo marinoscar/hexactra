@@ -1,10 +1,15 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { AiService, defineTool, type AiDefinedTool, type AiToolLoopResult } from '@marinoscar/platform-api/ai';
+import { Prisma } from '@prisma/client';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { z } from 'zod';
 
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { chooseHost } from './host-choice';
+import { balancedSpec, builtinPolicy, SYSTEM_DEFAULT_POLICY_REF } from '../policies/builtin-policies';
+import { PolicyModelCheck } from '../policies/policy-model-check';
+import { PolicyResolver } from '../policies/policy.resolver';
+import { readSnapshot, type RunPolicySnapshot } from '../policies/policy-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
 import { questionSpecSchema, type QuestionConstraints, type QuestionInputType, type QuestionOption, type QuestionResponse, type QuestionSpec } from '../questions/questions.contract';
 import { QuestionsService } from '../questions/questions.service';
@@ -17,7 +22,6 @@ import { RunUsage, type PriceTable, type UsageDelta } from './cost';
 import { activeElapsedMs } from './active-time';
 import { GOAL_RUN_HOP_MARGIN_MS, GOAL_RUN_MAX_RUNTIME_MS } from './goal-run.enqueue';
 import { RUN_BUDGET_ERRORS } from './run-budget-errors';
-import { TASK_DEFAULTS } from '../tasks/task-defaults';
 import { actionTarget, runActivity, type ActivityTarget, type RunActivityPhase } from './activity';
 import { ACTION_TIMEOUT_MS, FabricSession, handoffOutcome, type CreatedHandoff } from './fabric-session';
 import { domainAllowed, looksRisky } from './policy';
@@ -162,6 +166,8 @@ export class GoalRunnerService {
     @Optional() private readonly notifier?: RunNotifier,
     @Optional() private readonly questions?: QuestionsService,
     @Optional() private readonly systemSettings?: SystemSettingsService,
+    @Optional() private readonly policies?: PolicyResolver,
+    @Optional() private readonly modelCheck?: PolicyModelCheck,
   ) {}
 
   /** The admin's price table; empty when unreadable (calls are then unpriced, never free). */
@@ -175,6 +181,55 @@ export class GoalRunnerService {
   }
   /** The wall clock; tests replace it to pass time without waiting. */
   clock: () => number = Date.now;
+
+  /**
+   * The agent policy the run runs under (#401), snapshotted onto the run at its
+   * FIRST advance and never again: a later edit of the policy or of the user's
+   * settings does not change a live run. Fall-through notes (a level that named
+   * a deleted or foreign policy) go to the run's first log line.
+   */
+  private async policySnapshot(db: ReturnType<PrismaService['forUser']>, run: { id: string; userId: string; taskId: string | null; policyRef: string | null; policySource: RunPolicySnapshot['source'] | null; policySnapshot: Prisma.JsonValue | null; task: { policyRef: string | null } | null }, memory: RunMemory): Promise<RunPolicySnapshot> {
+    const stored = readSnapshot(run.policySnapshot);
+    if (stored) return stored;
+    let snapshot: RunPolicySnapshot;
+    let notes: string[] = [];
+    if (this.policies) {
+      const resolved = await this.policies.forRun({
+        userId: run.userId,
+        taskId: run.taskId,
+        policyRef: run.policyRef,
+        policySource: run.policySource,
+        taskPolicyRef: run.task ? run.task.policyRef : null,
+      });
+      snapshot = this.policies.snapshot(resolved);
+      notes = resolved.notes;
+    } else {
+      // Without a resolver (a runner built by hand): the system default.
+      const b = builtinPolicy(SYSTEM_DEFAULT_POLICY_REF)!;
+      snapshot = { schemaVersion: 1, ref: b.id, name: b.name, version: b.version, builtin: true, source: 'system_default', spec: balancedSpec(), tiers: null, takenAt: new Date().toISOString() };
+    }
+    // Compare-and-set: only the first writer's snapshot stands (a retried job re-reads it).
+    const { count } = await db.run.updateMany({
+      where: { id: run.id, policySnapshot: { equals: Prisma.DbNull } },
+      data: { policyRef: snapshot.ref, policyVersion: snapshot.version, policySource: snapshot.source, policySnapshot: snapshot as never },
+    });
+    if (count === 0) {
+      const fresh = await db.run.findFirst({ where: { id: run.id }, select: { policySnapshot: true } });
+      const winner = readSnapshot(fresh?.policySnapshot);
+      if (winner) return winner;
+    }
+    for (const n of notes) memory.log.push(n);
+    return snapshot;
+  }
+
+  /** The model a pin names for the run's start tier (legacy parity until the tier resolver, #403): `{ provider?, model? }`. */
+  private async pinnedModel(userId: string, snapshot: RunPolicySnapshot): Promise<{ provider?: string; model?: string }> {
+    const pin = snapshot.spec.models.pins?.[snapshot.spec.models.startTier] ?? null;
+    if (!pin) return {};
+    const resolved = await this.modelCheck?.resolvePin(userId, pin).catch(() => null);
+    return resolved ? { provider: resolved.provider, model: resolved.modelId } : { model: pin };
+  }
+
 
   /**
    * Advance a run: start it, resume it after a handoff, or finish it.
@@ -195,6 +250,9 @@ export class GoalRunnerService {
       await this.finish(userId, run.id, run.sessionId, session, 'cancelled', { error: 'Cancelled by the user' });
       return 'cancelled';
     }
+
+    // The policy snapshot, written once at the first advance (resolved apart from the run's own state).
+    const snapshot = await this.policySnapshot(db, run, memory);
 
     // Resume after a handoff: fold the person's answer into the memory.
     if (run.status === 'waiting_human') {
@@ -255,13 +313,17 @@ export class GoalRunnerService {
       await db.run.updateMany({ where: { id: run.id }, data: { sessionId } });
     }
 
+    // The limits come from the run's policy snapshot; `null` means no limit.
+    const budget = snapshot.spec.budget;
+    const pinned = await this.pinnedModel(userId, snapshot);
     const policy = {
       allowedDomains: run.task?.allowedDomains ?? [],
-      maxSteps: run.task?.maxSteps ?? TASK_DEFAULTS.maxSteps,
-      /** The time budget counts active time only, never the wait for a person (#399). */
-      maxActiveMs: (run.task?.maxMinutes ?? TASK_DEFAULTS.maxMinutes) * 60_000,
+      maxSteps: budget.maxActions ?? Number.POSITIVE_INFINITY,
+      /** The time budget counts active time only, never the wait for a person (#399); null is no limit. */
+      maxActiveMs: budget.maxActiveMinutes === null ? Number.POSITIVE_INFINITY : budget.maxActiveMinutes * 60_000,
       confirmRisky: run.task?.confirmRiskyActions ?? false,
-      model: run.task?.model ?? undefined,
+      model: pinned.model,
+      provider: pinned.provider,
     };
     const state = {
       stepCount: run.stepCount,
@@ -707,7 +769,7 @@ export class GoalRunnerService {
       const stepsBefore = state.stepCount;
       const input = [
         `Goal: ${goal}`,
-        `Allowed sites: ${policy.allowedDomains.join(', ') || 'any'}. Steps used: ${state.stepCount} of ${policy.maxSteps}.`,
+        `Allowed sites: ${policy.allowedDomains.join(', ') || 'any'}. Steps used: ${state.stepCount}${Number.isFinite(policy.maxSteps) ? ` of ${policy.maxSteps}` : ' (no limit)'}.`,
         memory.log.length ? `Progress so far (latest last):\n${memory.log.slice(-LOG_LINES).join('\n')}` : 'Nothing has been done yet. Start by navigating or observing the page.',
         memory.confirmationGranted ? 'The person approved the next irreversible step.' : '',
         'Continue toward the goal.',
@@ -734,6 +796,7 @@ export class GoalRunnerService {
       const call = (withImage: boolean) =>
         this.ai.forUser(userId, { feature: BROWSER_AGENT_FEATURE_ID, ...(orgId ? { orgId } : {}) }).runTools({
           ...(policy.model ? { model: policy.model } : {}),
+          ...(policy.provider ? { provider: policy.provider } : {}),
           instructions: INSTRUCTIONS,
           input: roundInput(input, withImage ? view : null),
           tools,

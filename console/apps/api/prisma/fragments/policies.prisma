@@ -1,0 +1,39 @@
+// Agent policies (#401): named, versioned, personal bundles of model-tier
+// choice, budgets, stall detection and context settings. `spec` is validated
+// by `agentPolicySpecSchema` (src/policies/agent-policy.schema.ts) on every
+// write and read. Built-in policies are code, not rows (`builtin:<key>`).
+// Registered in the user-owned data registry (src/policies/policies.ownership.ts).
+
+/// Why a policy applied to a run.
+enum PolicySource {
+  run
+  schedule
+  task
+  user_default
+  system_default
+
+  @@map("policy_source")
+}
+
+// @extensible
+model AgentPolicy {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  name        String   @db.VarChar(100)
+  description String?  @db.VarChar(500)
+  /// Bumped on every edit; the `If-Match` value.
+  version     Int      @default(1)
+  /// agentPolicySpecSchema.
+  spec        Json
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@map("agent_policies")
+}
+
+extend model User {
+  agentPolicies AgentPolicy[]
+}
