@@ -15,6 +15,7 @@ import {
   UNITS,
   detectGpu,
   freeDisplay,
+  installedDisplay,
   installSteps,
   readUnattended,
   runPrivileged,
@@ -464,7 +465,7 @@ export interface DoctorCheck {
  * Every check `hexactra agent doctor` runs, in the order to fix them:
  * system, browser, policy, native host, agent, service, Fleet.
  */
-export async function agentDoctor(d: AgentDeps): Promise<DoctorCheck[]> {
+export async function agentDoctor(d: AgentDeps, layout: NodeLayout = DEFAULT_LAYOUT): Promise<DoctorCheck[]> {
   const st = await agentStatus(d);
   const s = st.state;
   const google = s?.browserKind === 'google-chrome';
@@ -498,6 +499,9 @@ export async function agentDoctor(d: AgentDeps): Promise<DoctorCheck[]> {
   const u = unattendedStatus(d);
   if (u.state) {
     for (const [unit, st] of Object.entries(u.units)) add(unit.replace('.service', ''), st === 'active', st === 'active' ? 'active' : `${st}: run \`hexactra agent logs --mode unattended\``);
+    // The agent's browsers need the X display its unit names (#413).
+    const shown = existsSync(join(layout.x11Dir, `X${u.state.display}`));
+    add('display', shown, shown ? `:${u.state.display}` : `:${u.state.display} is not running, so browsers cannot start: run \`hexactra agent restart --mode unattended\``);
     checks.push({
       name: 'graphics',
       ok: true,
@@ -555,7 +559,7 @@ export async function installUnattended(d: AgentDeps, o: UnattendedOptions): Pro
     }
     const gpu = detectGpu(layout);
     d.log(gpu ? `Graphics: ${gpu.driver} at ${gpu.renderNode}; Chrome will render with it` : 'Graphics: no Intel or AMD GPU found; Chrome renders in software, which sites can detect more easily');
-    const display = prev?.display ?? freeDisplay(layout);
+    const display = prev?.display ?? installedDisplay(layout) ?? freeDisplay(layout);
     const config = { name, agentUrl, display, maxBrowsers: o.maxBrowsers ?? prev?.maxBrowsers ?? 2, gpu, resolution };
     const userExists = d.exec(['id', '-u', NODE_USER]).code === 0;
     const bundleId = basename(bundle.dir);
