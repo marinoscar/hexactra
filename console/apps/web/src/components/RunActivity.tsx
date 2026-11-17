@@ -11,6 +11,8 @@ export interface RunActivity {
   timeoutMs?: number;
   /** Where on the page it acts, in page screenshot pixels: a point, or a box (#381). */
   target?: { x: number; y: number; w?: number; h?: number };
+  /** Why the run is on a stronger model, while it is (#405). */
+  note?: string;
 }
 
 /** Percent placement of a target on an image of `natural` size; null when it cannot be placed. */
@@ -160,6 +162,11 @@ export function RunActivityBar({ activity, now }: { activity: RunActivity; now: 
         {activity.reason && (
           <Typography variant="body2" color="text.secondary">
             {activity.reason}
+          </Typography>
+        )}
+        {activity.note && (
+          <Typography variant="body2" color="warning.main" data-testid="activity-note">
+            {activity.note}
           </Typography>
         )}
         <LinearProgress

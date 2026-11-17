@@ -43,3 +43,26 @@ export function tierProblem(snapshot: RunPolicySnapshot, tier: Tier): string | n
   const t = snapshot.resolvedTiers?.[tier];
   return t && !t.usable ? t.problem : null;
 }
+
+/**
+ * The request for `tier`'s fallback model (#405), or null when the tier has none. The fallback keeps the tier's
+ * output cap but not its reasoning effort: the fallback model may not support one.
+ */
+export function fallbackRequest(snapshot: RunPolicySnapshot, tier: Tier): TierRequest | null {
+  const t = snapshot.resolvedTiers?.[tier];
+  if (!t?.fallbackModel) return null;
+  const prefix = t.fallbackProvider ? `${t.fallbackProvider}:` : null;
+  return {
+    ...(prefix && t.fallbackModel.startsWith(prefix) ? { provider: t.fallbackProvider!, model: t.fallbackModel.slice(prefix.length) } : { model: t.fallbackModel }),
+    ...(t.maxOutputTokens ? { maxOutputTokens: t.maxOutputTokens } : {}),
+    modelLabel: t.fallbackModel,
+  };
+}
+
+/** Whether moving from tier `a` to `b` changes nothing the model call sees (a tier that borrowed the other's model). */
+export function sameTierRequest(snapshot: RunPolicySnapshot, a: Tier, b: Tier): boolean {
+  const x = snapshot.resolvedTiers?.[a];
+  const y = snapshot.resolvedTiers?.[b];
+  if (!x || !y) return false;
+  return x.model === y.model && x.reasoningEffort === y.reasoningEffort && x.maxOutputTokens === y.maxOutputTokens;
+}

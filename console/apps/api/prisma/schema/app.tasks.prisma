@@ -155,6 +155,10 @@ model Run {
   policySource     PolicySource? @map("policy_source")
   /// Why the run stopped (#404); null while it is running, and on runs from before this column.
   stopReason       RunStopReason? @map("stop_reason")
+  /// The model tier the run is on now (#405): fast, standard or frontier; null until its first advance.
+  currentTier      String?       @map("current_tier") @db.VarChar(16)
+  /// Tier escalations so far (#405).
+  escalations      Int           @default(0)
 
   user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   task  Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
@@ -174,7 +178,7 @@ model RunStep {
   id            String   @id @default(uuid()) @db.Uuid
   runId         String   @map("run_id") @db.Uuid
   seq           Int
-  /// action | handoff | finish | error | note
+  /// action | handoff | finish | error | note | routing (a tier change or a provider fallback; not an action, #405)
   kind          String   @db.VarChar(20)
   /// The fabric action type (navigate, click, …) for kind=action.
   action        String?  @db.VarChar(40)

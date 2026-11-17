@@ -16,7 +16,7 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 |---|---|---|---|---|
 | Fabric connection (URL and `hxs_` service token, stored encrypted; Doctor checks `fabric.*`) | Administration → Fabric connection | `GET/PUT/DELETE /api/fabric/connection`, `POST …/test` | `hexactra fabric show\|set URL --token-stdin\|test\|clear --yes` | `fabric_config:read` / `:write` |
 | Tasks: saved goals with a profile, optional allowed sites, step and time budgets, opt-in confirm-before-purchase | `/tasks` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
-| Agent policies: named, versioned bundles of model tiers, budgets (any of them unlimited), stall detection and context settings; four built-ins, a default per user, one per task, schedule or run ([Agent policies](#agent-policies)) | (page arrives with E31.9) | `/api/agent-policies` | (arrives with E31.11) | `agent_policies:read` / `:write` |
+| Agent policies: named, versioned bundles of model tiers, budgets (any of them unlimited), stall detection and context settings; four built-ins, a default per user, one per task, schedule or run ([Agent policies](#agent-policies)) | (page arrives with E31.9) | `/api/agent-policies` | `hexactra policies`; MCP `policies_*` and `policy_*` tools; SDK `hx.policies` | `agent_policies:read` / `:write` |
 | Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel | `/runs`, `/runs/:id` | `/api/runs`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` |
 | Inbox: what agents wait for (CAPTCHA, code, sign-in, confirmation); answers resume the run | `/inbox` | `GET /api/inbox`, `POST /api/inbox/:runId/respond` | `hexactra inbox list\|answer RUN --done\|--value\|--choice\|--secret-stdin\|--decline`; TUI **Agent ▸ Inbox** | `runs:read` / `runs:write` |
 | Questions: an agent asks its user a typed question (text, choice, multi-choice, number, confirm, none, takeover; a secret only in a browser session) and waits for the typed answer; the person answers on any channel, the first answer wins ([docs/questions.md](docs/questions.md)) | `/inbox`, `/inbox/q/:id` | `/api/questions`, `POST /api/questions/:id/answer\|cancel\|answer-by-token` | `hexactra questions ask\|list\|show\|answer`; TUI **Agent ▸ Inbox** | `runs:read` / `runs:write` |
@@ -54,7 +54,7 @@ An **agent policy** says which models a run may use and how much it may spend. I
 - **Stall detection:** failures in a row, a repeated action, actions without progress, and what to do (nudge then escalate, escalate, ask a person, fail).
 - **Context:** screenshots kept, prune batch, model calls per chunk and observation size.
 
-Enforcement arrives in steps: today a run enforces **every budget** (see Budgets below), takes the **start tier's model, reasoning effort and output cap** from the model tiers, and applies the **context settings**; moving between tiers (escalation) and stall detection are stored, validated and snapshotted already, and enforced by the story that follows (epic #398).
+Everything in a policy is enforced: **every budget** (see Budgets below), the **model tiers** (the start tier's model, reasoning effort and output cap, and escalation to a stronger tier when the run stalls), **stall detection** and the **context settings**.
 
 **Built-in policies** are code (`builtin:economy`, `builtin:balanced`, `builtin:thorough`, `builtin:unlimited`): read-only, never pinning a model. Duplicate one to edit a copy.
 
@@ -155,7 +155,39 @@ A run is held to six budgets: **actions**, **model calls**, **active minutes** (
 - **Wrap-up.** When a budget is used up the run makes one last model call with only the `finish` tool (one step, a capped output), exempt from the exhausted budget and counted in the run's totals, so a stopped run still returns a partial result: `finish(success: true)` ends the run `succeeded`; anything else ends it `failed` with the model's summary as `result` and the budget message (for example `Step budget exhausted`) as `error`. If the model calls no `finish`, the run ends with the budget message alone.
 - **`stopReason`.** Every finished run carries a typed `stopReason` (`runs.stop_reason`): `finished`, `budget_actions`, `budget_model_calls`, `budget_active_time`, `budget_input_tokens`, `budget_output_tokens`, `budget_cost`, `stalled`, `cancelled`, `error` or `no_model`. A wrap-up that succeeds keeps the budget reason, so the run page can say what forced the stop. Runs from before the column have `null`.
 - **API.** Run responses (and the `run` events of `GET /api/runs/:id/stream`) carry `stopReason` and `budget: { effective, used, percent, source, costKnown }`: the limits, what the run used (active time in minutes, cost in USD), the percent of each limit (`null` when unlimited), and the source of each limit. `budget` is `null` until the run's first step.
-- **No-progress guard.** Until stall detection ships (epic #398), a run whose rounds record nothing three times in a row ends `failed` with `stopReason: stalled`, so an Unlimited run cannot spin without ever acting.
+- **Stalls.** Stall detection is always on, so a run with no budget still ends when it loops (see Stall detection and escalation below). A run whose rounds record no action three times in a row counts as stalled too.
+
+### Stall detection and escalation
+
+Stall detection is **always on**, including under the Unlimited policy. The detector is `console/apps/api/src/runner/stall.ts` (pure, unit tested); the runner feeds it every recorded action and the page as measured at the start of every chunk. Its state lives in the run's memory, so it survives chunks, jobs and handoffs, and holds only short digests, normalised selectors and URLs without a query: never typed text (only its length), never a secret value, never an image. Typing a handoff secret is not fed to it at all.
+
+**Signals** (thresholds are the policy's `stall` block):
+
+| Signal | Fires when |
+|---|---|
+| Failures in a row | `maxConsecutiveFailures` failed actions in a row. |
+| Repeated action | The same action fingerprint occurs `maxRepeatedAction` times in the last 10 actions. A fingerprint is a hash of the action type, its arguments (redacted first: typed text is its length, URLs lose their query, positions are rounded to 10 pixels), whether it succeeded, the page URL, what it returned (the scroll position, a digest of read content) and a digest of the page. |
+| No progress | `noProgressActions` actions with no change of URL, page title or page view (a digest of the numbered elements on the screenshot, or of the screenshot itself when it has none; computed in the console, never sent to the model), and no successful `read_text`, `observe_elements` or `run_javascript` that returned content not seen recently. Observations alone are never progress. The page is only measured when a screenshot is taken, so this signal is judged at chunk boundaries. Without screenshots (vision off) a new successful change of the page counts as progress. |
+| No action | Three rounds in a row that record no action at all (a model that only talks). |
+
+A `request_human` or any handoff resets every counter.
+
+**Responses** (`stall.onStall`):
+
+| Mode | What happens |
+|---|---|
+| `nudge_then_escalate` | The first stall at a tier adds a nudge to the next round: `You appear stuck: <reason> (last actions: ...). Do not repeat the same action. Try a different approach (another selector, position, keyboard, run_javascript, or a different page), or call finish if the goal is impossible.` The next stall escalates one tier. When there is nothing left to escalate to, the run asks a person, or fails as `stalled` when it runs unattended (a scheduled run) or has already asked three times. |
+| `escalate` | Escalates at once; with no escalation left the run fails as `stalled`. |
+| `ask_human` | Opens a `takeover` handoff (kind `other`) whose prompt gives the reason and the last 5 actions, through the same path as `request_human`, and waits (`waiting_human`). |
+| `fail` | Ends the run as `stalled`, after the same one-call `finish` wrap-up a used-up budget gets. |
+
+**Escalation.** The run moves to the next tier above its current one, up to `models.maxTier`, at most `stall.maxEscalations` times per run; a tier whose model, effort and output cap are the same as the current one is skipped, as is one that is not usable. The model only ever changes between chunks (the chunk that stalled ends first), so provider caching holds inside a chunk. The tier, the escalation count, the stall counters and the fingerprint window are kept in the run's memory; `runs.current_tier` and `runs.escalations` (and `currentTier`, `escalations` on run responses and the live stream) show them. If the new tier's model has no vision, screenshots turn off for the run.
+
+**De-escalation.** After 5 successful actions in a row that were not repeats, on an escalated tier, the run returns to its start tier at the next chunk boundary. A single hard step does not move the whole run onto the strongest model. Escalations are still counted against `maxEscalations`.
+
+**Provider fallback.** When the policy has `allowProviderFallback` and the tier has a fallback model, a chunk whose model call fails with `AI_PROVIDER_UNAVAILABLE` (down, overloaded, a 5xx), `AI_RATE_LIMITED` or `AI_MODEL_NOT_REACHABLE` is retried once on the fallback model, and the next chunk goes back to the primary. A fallback is not an escalation. Without a fallback the error stands as before: a rate limit defers the job, other errors fail the run.
+
+**Visibility.** Every escalation, de-escalation and fallback writes a run step of kind `routing` with `args: { from, to, reason, kind }`. A routing step is not an action: it counts toward neither `stepCount` nor the actions budget. While the run is on an escalated tier its activity carries a `note` (for example `Escalated to Frontier (stuck: repeated click on #submit)`) that the run page shows, and the run log the model reads says so too.
 
 ### Model tiers
 
@@ -217,6 +249,14 @@ A policy is personal, so a JSON file is how it is shared with a colleague or mov
   ]
 }
 ```
+
+### CLI, SDK and MCP
+
+The same policies are reachable from scripts and agents ([docs/mcp.md](docs/mcp.md#agent-policies), [apps/cli/README.md](apps/cli/README.md#agent-policies), [packages/sdk/README.md](packages/sdk/README.md)).
+
+- **CLI:** `hexactra policies list|show|export|import|default`, and `--policy <id|name|builtin key>` on `runs start`, `tasks run|create|update` and `schedules create`. `runs list|show` and the terminal UI show each run's policy and cost (and tier, budget use and stop reason when the API reports them).
+- **MCP:** `policies_list`, `policy_get`, `policy_create`, `policy_update`, `policy_set_default`, `policies_export`, `policies_import`, and `policy_id` on `run_goal`, `task_create`, `task_update`, `task_run` and `schedule_create`. Each tool calls the REST route as the caller, so `agent_policies:read` / `:write` apply: a read-only user is refused the write tools with `403`. Deleting a policy is not an MCP tool.
+- **SDK:** `hx.policies.list|get|create|update|setDefault|export|import`, `hx.tasks.create|update|run` and `hx.runs.start` (each with `policyId`), and the exported `AgentPolicySpec` type.
 
 ## Layout
 
