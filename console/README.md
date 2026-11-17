@@ -83,6 +83,38 @@ A reference to a deleted policy (or someone else's) falls through to the next le
 
 **The earlier task fields.** `maxSteps`, `maxMinutes` and `model` on a task still work for one release and are marked deprecated. Sending one (with no `policyId`) saves a derived personal policy named `Task: <task name>`, built from Balanced (`maxActions` = `maxSteps`, `maxActiveMinutes` = `maxMinutes`; a model becomes the `standard` pin and caps `maxTier` at `standard`) and answers with a `Deprecation: true` header. The `agent_policies` migration converted existing tasks the same way. Use `policyId` instead.
 
+### Export and import
+
+A policy is personal, so a JSON file is how it is shared with a colleague or moved to another deployment.
+
+- **Export:** `GET /api/agent-policies/export?ids=<id>,<id>|all&includePins=true|false` (permission `agent_policies:read`) answers a JSON attachment `agent-policies-<yyyymmdd>.json`, not wrapped in the `data` envelope. `ids` defaults to `all` (the built-ins, then your own); built-ins can be exported as a starting template. `includePins=false` strips every model pin, so the file only relies on tiers and works on any deployment.
+- **Import:** `POST /api/agent-policies/import` with `{ "file": <the JSON>, "onConflict": "rename" | "skip" | "replace" }` (permission `agent_policies:write`). On a name you already use: `rename` (the default) adds ` (2)`, ` (3)`; `skip` leaves yours and lists the entry under `skipped`; `replace` overwrites yours in place, keeps its id and the tasks that use it, and bumps its version (a run in flight keeps its own snapshot).
+- **Atomic:** the whole file is written in one transaction. Any invalid policy rejects the file with `400 POLICY_IMPORT_INVALID`, whose `details.errors` lists every invalid entry (`index`, `name`, Zod `issues`); nothing is created. A newer `formatVersion` or `spec.schemaVersion` than the deployment reads is `400 POLICY_IMPORT_UNSUPPORTED_VERSION`. Limits: 100 policies and 256 KB (`413 POLICY_IMPORT_TOO_LARGE`).
+- **Pins:** a pin to a model that is unknown, disabled or without tools and vision on this deployment is dropped (that tier falls back to your tier definition) and listed under `warnings` with code `PIN_DROPPED`; the policy is still created.
+- **Ceilings:** a budget above the deployment's ceilings is stored as written and listed under `warnings` with code `EXCEEDS_CEILING`; it is clamped when a run uses it, so an import never weakens a ceiling.
+- **What the file holds:** names, descriptions and specs only. No ids, user, version, timestamps, task usage or secret. The response is `{ created, replaced, skipped, warnings, errors }` (`errors` is always empty on success).
+
+```json
+{
+  "kind": "hexactra.agent-policies",
+  "formatVersion": 1,
+  "exportedAt": "2026-11-17T12:00:00.000Z",
+  "policies": [
+    {
+      "name": "Careful shopping",
+      "description": "Frontier from the start, ask a person when stuck",
+      "spec": {
+        "schemaVersion": 1,
+        "models": { "startTier": "frontier", "maxTier": "frontier", "allowProviderFallback": false },
+        "budget": { "maxActions": 200, "maxModelCalls": 400, "maxActiveMinutes": 60, "maxInputTokens": null, "maxOutputTokens": null, "maxCostUsd": 10, "warnAtPercent": 80 },
+        "stall": { "maxConsecutiveFailures": 4, "maxRepeatedAction": 3, "noProgressActions": 10, "onStall": "ask_human", "maxEscalations": 0 },
+        "context": { "screenshotsKept": 3, "pruneBatch": 10, "callsPerChunk": 8, "observationChars": 6000 }
+      }
+    }
+  ]
+}
+```
+
 ## Layout
 
 ```
