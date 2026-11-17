@@ -157,6 +157,25 @@
       }
     },
     {
+      "id": "policies.model_tiers",
+      "description": "Read the model tiers (Fast, Standard, Frontier) a run would use, with where each value came from",
+      "rest": [
+        "GET /api/agent-policies/model-tiers/effective"
+      ],
+      "cli": {
+        "none": "Arrives with the policy CLI commands (E31.11, #409)"
+      },
+      "mcp": {
+        "none": "Arrives with the policy MCP tools (E31.11, #409)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the web app or the CLI"
+      },
+      "web": {
+        "none": "Arrives with the Model tiers card (E31.9, #407)"
+      }
+    },
+    {
       "id": "runs.start",
       "description": "Run a one-off goal",
       "rest": [

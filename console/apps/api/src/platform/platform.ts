@@ -15,6 +15,7 @@
 // first in PLATFORM_MODULES, so before `SettingsModule.forRoot()` too.)
 import '../notes/notes.settings';
 import '../policies/policies.settings';
+import '../policies/model-tiers.settings';
 import '../runner/agent-pricing.settings';
 import './storage.settings';
 // Everything the enabled slices add to the registries (settings namespaces,

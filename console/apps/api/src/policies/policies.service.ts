@@ -87,8 +87,10 @@ export class PoliciesService {
   /** The user's chosen default reference (read without creating a settings row); null when none was chosen. */
   async readDefaultRef(userId: string): Promise<string | null> {
     const row = await this.prisma.userSettings.findUnique({ where: { userId }, select: { value: true } });
-    const parsed = browserAgentSettingsSchema.safeParse((row?.value as { browserAgent?: unknown } | null | undefined)?.browserAgent);
-    return parsed.success ? parsed.data.defaultPolicyRef : null;
+    // Only the reference is read, so an invalid `tiers` block never loses the user's default policy.
+    const raw = (row?.value as { browserAgent?: { defaultPolicyRef?: unknown } } | null | undefined)?.browserAgent;
+    const parsed = browserAgentSettingsSchema.shape.defaultPolicyRef.safeParse(raw?.defaultPolicyRef ?? null);
+    return parsed.success ? parsed.data : null;
   }
 
   private async usage(userId: string): Promise<{ tasks: Map<string, number>; schedules: Map<string, number> }> {
@@ -256,7 +258,7 @@ export class PoliciesService {
   /** Choose the default policy (`null`: back to Balanced). 404 for a policy that is not the user's. */
   async setDefault(userId: string, ref: string | null): Promise<{ policyId: string; explicit: boolean }> {
     if (ref !== null) await this.require(userId, ref);
-    await this.settings.patchSettings(userId, { browserAgent: ref === null ? null : { defaultPolicyRef: ref } } as never);
+    await this.settings.patchSettings(userId, { browserAgent: { defaultPolicyRef: ref } } as never);
     return this.getDefault(userId);
   }
 

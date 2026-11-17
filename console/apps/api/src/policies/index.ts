@@ -8,3 +8,6 @@ export { PolicyResolver, type PolicyResolveInput, type ResolvedPolicy } from './
 export { PolicyModelCheck, matchPin, type PinProblem, type ResolvedPin } from './policy-model-check';
 export { POLICY_SOURCES, readSnapshot, runView, summarize, type PolicySource, type RunPolicySnapshot, type RunPolicySummary } from './policy-snapshot';
 export { legacyTaskSpec, isDefaultLimits, type LegacyTaskLimits } from './legacy-task-policy';
+export * from './model-tiers.schema';
+export { FILL_DOWN_ORDER, MODEL_TIERS_PAGE, noModelMessage, selectTiers, type TierSelection } from './model-tiers';
+export { ModelTiersService, place, type EffectiveTiers } from './model-tiers.service';

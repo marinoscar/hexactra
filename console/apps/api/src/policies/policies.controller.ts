@@ -9,9 +9,12 @@ import {
   DefaultPolicyResponseDto,
   DeletePolicyQueryDto,
   DuplicatePolicyDto,
+  EffectiveTiersQueryDto,
+  EffectiveTiersResponseDto,
   SetDefaultPolicyDto,
   UpdatePolicyDto,
 } from './policies.schemas';
+import { ModelTiersService } from './model-tiers.service';
 import { PoliciesService } from './policies.service';
 
 /** `If-Match: 4`, `"4"` or `W/"4"`; anything else is treated as absent. */
@@ -24,7 +27,10 @@ export function parseIfMatch(header: string | undefined): number | undefined {
 @ApiTags('Agent policies')
 @Controller('agent-policies')
 export class PoliciesController {
-  constructor(private readonly policies: PoliciesService) {}
+  constructor(
+    private readonly policies: PoliciesService,
+    private readonly modelTiers: ModelTiersService,
+  ) {}
 
   @Get()
   @ApiDataResponse(AgentPolicyResponseDto, { isArray: true })
@@ -46,6 +52,14 @@ export class PoliciesController {
   @Auth({ permissions: ['agent_policies:write'] })
   setDefault(@CurrentUser('id') userId: string, @Body() body: SetDefaultPolicyDto) {
     return this.policies.setDefault(userId, body.policyId);
+  }
+
+  // Declared before `:id`, which would otherwise take "model-tiers".
+  @Get('model-tiers/effective')
+  @ApiDataResponse(EffectiveTiersResponseDto)
+  @Auth({ permissions: ['agent_policies:read'] })
+  effectiveTiers(@CurrentUser('id') userId: string, @Query() q: EffectiveTiersQueryDto) {
+    return this.modelTiers.effective(userId, q.policyId);
   }
 
   @Post()

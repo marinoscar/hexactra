@@ -26187,6 +26187,92 @@
         "description": "**Requires:** authentication, plus permission `agent_policies:write`."
       }
     },
+    "/api/agent-policies/model-tiers/effective": {
+      "get": {
+        "operationId": "policies_effectiveTiers",
+        "parameters": [
+          {
+            "name": "policyId",
+            "required": false,
+            "in": "query",
+            "description": "Resolve the tiers for this policy's pins instead of the user's default policy.",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EffectiveTiersResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Agent policies"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "agent_policies:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `agent_policies:read`."
+      }
+    },
     "/api/agent-policies/{id}": {
       "get": {
         "operationId": "policies_get",
@@ -35292,6 +35378,195 @@
                   }
                 ],
                 "description": "The user's default agent policy: an own policy's UUID or `builtin:<key>`. `null` means `builtin:balanced`."
+              },
+              "tiers": {
+                "description": "The user's own model tiers: per tier, any of model, reasoning effort, output cap and fallback model. A field left out uses the deployment default (#403).",
+                "type": "object",
+                "properties": {
+                  "fast": {
+                    "type": "object",
+                    "properties": {
+                      "model": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                      },
+                      "reasoningEffort": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "none",
+                              "low",
+                              "medium",
+                              "high"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                      },
+                      "maxOutputTokens": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 256,
+                            "maximum": 64000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                      },
+                      "fallbackModel": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                      }
+                    }
+                  },
+                  "standard": {
+                    "type": "object",
+                    "properties": {
+                      "model": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                      },
+                      "reasoningEffort": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "none",
+                              "low",
+                              "medium",
+                              "high"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                      },
+                      "maxOutputTokens": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 256,
+                            "maximum": 64000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                      },
+                      "fallbackModel": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                      }
+                    }
+                  },
+                  "frontier": {
+                    "type": "object",
+                    "properties": {
+                      "model": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                      },
+                      "reasoningEffort": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "none",
+                              "low",
+                              "medium",
+                              "high"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                      },
+                      "maxOutputTokens": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 256,
+                            "maximum": 64000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                      },
+                      "fallbackModel": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                      }
+                    }
+                  }
+                }
               }
             },
             "required": [
@@ -35426,6 +35701,195 @@
                   }
                 ],
                 "description": "The user's default agent policy: an own policy's UUID or `builtin:<key>`. `null` means `builtin:balanced`."
+              },
+              "tiers": {
+                "description": "The user's own model tiers: per tier, any of model, reasoning effort, output cap and fallback model. A field left out uses the deployment default (#403).",
+                "type": "object",
+                "properties": {
+                  "fast": {
+                    "type": "object",
+                    "properties": {
+                      "model": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                      },
+                      "reasoningEffort": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "none",
+                              "low",
+                              "medium",
+                              "high"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                      },
+                      "maxOutputTokens": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 256,
+                            "maximum": 64000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                      },
+                      "fallbackModel": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                      }
+                    }
+                  },
+                  "standard": {
+                    "type": "object",
+                    "properties": {
+                      "model": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                      },
+                      "reasoningEffort": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "none",
+                              "low",
+                              "medium",
+                              "high"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                      },
+                      "maxOutputTokens": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 256,
+                            "maximum": 64000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                      },
+                      "fallbackModel": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                      }
+                    }
+                  },
+                  "frontier": {
+                    "type": "object",
+                    "properties": {
+                      "model": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                      },
+                      "reasoningEffort": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "none",
+                              "low",
+                              "medium",
+                              "high"
+                            ]
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                      },
+                      "maxOutputTokens": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 256,
+                            "maximum": 64000
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                      },
+                      "fallbackModel": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                      }
+                    }
+                  }
+                }
               }
             },
             "required": [
@@ -35586,6 +36050,201 @@
                       }
                     ],
                     "description": "The user's default agent policy: an own policy's UUID or `builtin:<key>`. `null` means `builtin:balanced`."
+                  },
+                  "tiers": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "fast": {
+                            "type": "object",
+                            "properties": {
+                              "model": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                              },
+                              "reasoningEffort": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "low",
+                                      "medium",
+                                      "high"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                              },
+                              "maxOutputTokens": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": 256,
+                                    "maximum": 64000
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                              },
+                              "fallbackModel": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                              }
+                            }
+                          },
+                          "standard": {
+                            "type": "object",
+                            "properties": {
+                              "model": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                              },
+                              "reasoningEffort": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "low",
+                                      "medium",
+                                      "high"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                              },
+                              "maxOutputTokens": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": 256,
+                                    "maximum": 64000
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                              },
+                              "fallbackModel": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                              }
+                            }
+                          },
+                          "frontier": {
+                            "type": "object",
+                            "properties": {
+                              "model": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                              },
+                              "reasoningEffort": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "enum": [
+                                      "none",
+                                      "low",
+                                      "medium",
+                                      "high"
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                              },
+                              "maxOutputTokens": {
+                                "anyOf": [
+                                  {
+                                    "type": "integer",
+                                    "minimum": 256,
+                                    "maximum": 64000
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                              },
+                              "fallbackModel": {
+                                "anyOf": [
+                                  {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 200
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ],
+                                "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               },
@@ -35766,6 +36425,218 @@
             "required": [
               "archiveAfterDays"
             ]
+          },
+          "browserAgentTiers": {
+            "type": "object",
+            "properties": {
+              "fast": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                  },
+                  "reasoningEffort": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "low",
+                          "medium",
+                          "high"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                  },
+                  "maxOutputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 256,
+                        "maximum": 64000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                  },
+                  "fallbackModel": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                  }
+                },
+                "required": [
+                  "model",
+                  "reasoningEffort",
+                  "maxOutputTokens",
+                  "fallbackModel"
+                ]
+              },
+              "standard": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                  },
+                  "reasoningEffort": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "low",
+                          "medium",
+                          "high"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                  },
+                  "maxOutputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 256,
+                        "maximum": 64000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                  },
+                  "fallbackModel": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                  }
+                },
+                "required": [
+                  "model",
+                  "reasoningEffort",
+                  "maxOutputTokens",
+                  "fallbackModel"
+                ]
+              },
+              "frontier": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                  },
+                  "reasoningEffort": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "low",
+                          "medium",
+                          "high"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                  },
+                  "maxOutputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 256,
+                        "maximum": 64000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                  },
+                  "fallbackModel": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                  }
+                },
+                "required": [
+                  "model",
+                  "reasoningEffort",
+                  "maxOutputTokens",
+                  "fallbackModel"
+                ]
+              }
+            },
+            "required": [
+              "fast",
+              "standard",
+              "frontier"
+            ],
+            "description": "The three model tiers: Fast (cheap, quick), Standard (everyday) and Frontier (the strongest, used when a run is stuck)."
           },
           "agentPricing": {
             "type": "object",
@@ -36349,6 +37220,7 @@
         "required": [
           "security",
           "notes",
+          "browserAgentTiers",
           "agentPricing",
           "storage",
           "notifications",
@@ -36377,6 +37249,218 @@
             "required": [
               "archiveAfterDays"
             ]
+          },
+          "browserAgentTiers": {
+            "type": "object",
+            "properties": {
+              "fast": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                  },
+                  "reasoningEffort": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "low",
+                          "medium",
+                          "high"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                  },
+                  "maxOutputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 256,
+                        "maximum": 64000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                  },
+                  "fallbackModel": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                  }
+                },
+                "required": [
+                  "model",
+                  "reasoningEffort",
+                  "maxOutputTokens",
+                  "fallbackModel"
+                ]
+              },
+              "standard": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                  },
+                  "reasoningEffort": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "low",
+                          "medium",
+                          "high"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                  },
+                  "maxOutputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 256,
+                        "maximum": 64000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                  },
+                  "fallbackModel": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                  }
+                },
+                "required": [
+                  "model",
+                  "reasoningEffort",
+                  "maxOutputTokens",
+                  "fallbackModel"
+                ]
+              },
+              "frontier": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                  },
+                  "reasoningEffort": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "low",
+                          "medium",
+                          "high"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                  },
+                  "maxOutputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 256,
+                        "maximum": 64000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                  },
+                  "fallbackModel": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                  }
+                },
+                "required": [
+                  "model",
+                  "reasoningEffort",
+                  "maxOutputTokens",
+                  "fallbackModel"
+                ]
+              }
+            },
+            "required": [
+              "fast",
+              "standard",
+              "frontier"
+            ],
+            "description": "The three model tiers: Fast (cheap, quick), Standard (everyday) and Frontier (the strongest, used when a run is stuck)."
           },
           "agentPricing": {
             "type": "object",
@@ -37070,6 +38154,194 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 3650
+              }
+            }
+          },
+          "browserAgentTiers": {
+            "type": "object",
+            "properties": {
+              "fast": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                  },
+                  "reasoningEffort": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "low",
+                          "medium",
+                          "high"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                  },
+                  "maxOutputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 256,
+                        "maximum": 64000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                  },
+                  "fallbackModel": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                  }
+                }
+              },
+              "standard": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                  },
+                  "reasoningEffort": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "low",
+                          "medium",
+                          "high"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                  },
+                  "maxOutputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 256,
+                        "maximum": 64000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                  },
+                  "fallbackModel": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                  }
+                }
+              },
+              "frontier": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                  },
+                  "reasoningEffort": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "low",
+                          "medium",
+                          "high"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                  },
+                  "maxOutputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 256,
+                        "maximum": 64000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                  },
+                  "fallbackModel": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                  }
+                }
               }
             }
           },
@@ -39073,6 +40345,195 @@
                       }
                     ],
                     "description": "The user's default agent policy: an own policy's UUID or `builtin:<key>`. `null` means `builtin:balanced`."
+                  },
+                  "tiers": {
+                    "description": "The user's own model tiers: per tier, any of model, reasoning effort, output cap and fallback model. A field left out uses the deployment default (#403).",
+                    "type": "object",
+                    "properties": {
+                      "fast": {
+                        "type": "object",
+                        "properties": {
+                          "model": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                          },
+                          "reasoningEffort": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "none",
+                                  "low",
+                                  "medium",
+                                  "high"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                          },
+                          "maxOutputTokens": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 256,
+                                "maximum": 64000
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                          },
+                          "fallbackModel": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                          }
+                        }
+                      },
+                      "standard": {
+                        "type": "object",
+                        "properties": {
+                          "model": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                          },
+                          "reasoningEffort": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "none",
+                                  "low",
+                                  "medium",
+                                  "high"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                          },
+                          "maxOutputTokens": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 256,
+                                "maximum": 64000
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                          },
+                          "fallbackModel": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                          }
+                        }
+                      },
+                      "frontier": {
+                        "type": "object",
+                        "properties": {
+                          "model": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "`provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier."
+                          },
+                          "reasoningEffort": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "enum": [
+                                  "none",
+                                  "low",
+                                  "medium",
+                                  "high"
+                                ]
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "How hard the model thinks on this tier. `null` uses the provider's default."
+                          },
+                          "maxOutputTokens": {
+                            "anyOf": [
+                              {
+                                "type": "integer",
+                                "minimum": 256,
+                                "maximum": 64000
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply."
+                          },
+                          "fallbackModel": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ],
+                            "description": "Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none."
+                          }
+                        }
+                      }
+                    }
                   }
                 },
                 "required": [
@@ -57160,6 +58621,639 @@
         },
         "required": [
           "policyId"
+        ]
+      },
+      "EffectiveTiersResponseDto": {
+        "type": "object",
+        "properties": {
+          "policy": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "startTier": {
+                "type": "string",
+                "enum": [
+                  "fast",
+                  "standard",
+                  "frontier"
+                ]
+              },
+              "maxTier": {
+                "type": "string",
+                "enum": [
+                  "fast",
+                  "standard",
+                  "frontier"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTier",
+              "maxTier"
+            ],
+            "description": "The policy whose pins were applied: the default one unless `policyId` was given."
+          },
+          "tiers": {
+            "type": "object",
+            "properties": {
+              "fast": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "description": "The model the tier uses, as `provider:modelId` when the catalogue knows it. `null` when none is selected.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "provider": {
+                    "description": "The provider id the call goes to; `null` when the catalogue could not place the model.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "modelId": {
+                    "description": "The provider's own id of the model; `null` when the catalogue could not place it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "modelSource": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "pin",
+                          "user",
+                          "deployment",
+                          "fill_down",
+                          "ai_default"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Where the model came from: the policy pin, the user, the deployment, another tier (fill-down) or the platform default model."
+                  },
+                  "borrowedFrom": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "fast",
+                          "standard",
+                          "frontier"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "For `fill_down`: the tier the model was borrowed from."
+                  },
+                  "reasoningEffort": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "low",
+                          "medium",
+                          "high"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "effortSource": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "user",
+                          "deployment"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maxOutputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maxOutputTokensSource": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "user",
+                          "deployment"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "fallbackModel": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "fallbackProvider": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "fallbackSource": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "user",
+                          "deployment"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "vision": {
+                    "description": "Whether the model accepts images. `false` starts the run without screenshots. `null` when unknown.",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "tools": {
+                    "description": "Whether the model supports tool calls, which the browser agent needs. `null` when unknown.",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "reasoning": {
+                    "description": "Whether the model supports a reasoning effort. When `false` the configured effort is not sent. `null` when unknown.",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "usable": {
+                    "type": "boolean",
+                    "description": "False when the model is not an enabled model the user can call, or lacks tool calls."
+                  },
+                  "problem": {
+                    "description": "Why the tier is not usable.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "model",
+                  "provider",
+                  "modelId",
+                  "modelSource",
+                  "borrowedFrom",
+                  "reasoningEffort",
+                  "effortSource",
+                  "maxOutputTokens",
+                  "maxOutputTokensSource",
+                  "fallbackModel",
+                  "fallbackProvider",
+                  "fallbackSource",
+                  "vision",
+                  "tools",
+                  "reasoning",
+                  "usable",
+                  "problem"
+                ]
+              },
+              "standard": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "description": "The model the tier uses, as `provider:modelId` when the catalogue knows it. `null` when none is selected.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "provider": {
+                    "description": "The provider id the call goes to; `null` when the catalogue could not place the model.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "modelId": {
+                    "description": "The provider's own id of the model; `null` when the catalogue could not place it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "modelSource": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "pin",
+                          "user",
+                          "deployment",
+                          "fill_down",
+                          "ai_default"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Where the model came from: the policy pin, the user, the deployment, another tier (fill-down) or the platform default model."
+                  },
+                  "borrowedFrom": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "fast",
+                          "standard",
+                          "frontier"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "For `fill_down`: the tier the model was borrowed from."
+                  },
+                  "reasoningEffort": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "low",
+                          "medium",
+                          "high"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "effortSource": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "user",
+                          "deployment"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maxOutputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maxOutputTokensSource": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "user",
+                          "deployment"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "fallbackModel": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "fallbackProvider": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "fallbackSource": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "user",
+                          "deployment"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "vision": {
+                    "description": "Whether the model accepts images. `false` starts the run without screenshots. `null` when unknown.",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "tools": {
+                    "description": "Whether the model supports tool calls, which the browser agent needs. `null` when unknown.",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "reasoning": {
+                    "description": "Whether the model supports a reasoning effort. When `false` the configured effort is not sent. `null` when unknown.",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "usable": {
+                    "type": "boolean",
+                    "description": "False when the model is not an enabled model the user can call, or lacks tool calls."
+                  },
+                  "problem": {
+                    "description": "Why the tier is not usable.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "model",
+                  "provider",
+                  "modelId",
+                  "modelSource",
+                  "borrowedFrom",
+                  "reasoningEffort",
+                  "effortSource",
+                  "maxOutputTokens",
+                  "maxOutputTokensSource",
+                  "fallbackModel",
+                  "fallbackProvider",
+                  "fallbackSource",
+                  "vision",
+                  "tools",
+                  "reasoning",
+                  "usable",
+                  "problem"
+                ]
+              },
+              "frontier": {
+                "type": "object",
+                "properties": {
+                  "model": {
+                    "description": "The model the tier uses, as `provider:modelId` when the catalogue knows it. `null` when none is selected.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "provider": {
+                    "description": "The provider id the call goes to; `null` when the catalogue could not place the model.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "modelId": {
+                    "description": "The provider's own id of the model; `null` when the catalogue could not place it.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "modelSource": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "pin",
+                          "user",
+                          "deployment",
+                          "fill_down",
+                          "ai_default"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Where the model came from: the policy pin, the user, the deployment, another tier (fill-down) or the platform default model."
+                  },
+                  "borrowedFrom": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "fast",
+                          "standard",
+                          "frontier"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "For `fill_down`: the tier the model was borrowed from."
+                  },
+                  "reasoningEffort": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "none",
+                          "low",
+                          "medium",
+                          "high"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "effortSource": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "user",
+                          "deployment"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maxOutputTokens": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "maxOutputTokensSource": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "user",
+                          "deployment"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "fallbackModel": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "fallbackProvider": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "fallbackSource": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "user",
+                          "deployment"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "vision": {
+                    "description": "Whether the model accepts images. `false` starts the run without screenshots. `null` when unknown.",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "tools": {
+                    "description": "Whether the model supports tool calls, which the browser agent needs. `null` when unknown.",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "reasoning": {
+                    "description": "Whether the model supports a reasoning effort. When `false` the configured effort is not sent. `null` when unknown.",
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  },
+                  "usable": {
+                    "type": "boolean",
+                    "description": "False when the model is not an enabled model the user can call, or lacks tool calls."
+                  },
+                  "problem": {
+                    "description": "Why the tier is not usable.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "model",
+                  "provider",
+                  "modelId",
+                  "modelSource",
+                  "borrowedFrom",
+                  "reasoningEffort",
+                  "effortSource",
+                  "maxOutputTokens",
+                  "maxOutputTokensSource",
+                  "fallbackModel",
+                  "fallbackProvider",
+                  "fallbackSource",
+                  "vision",
+                  "tools",
+                  "reasoning",
+                  "usable",
+                  "problem"
+                ]
+              }
+            },
+            "required": [
+              "fast",
+              "standard",
+              "frontier"
+            ],
+            "description": "Per tier: the model and where it came from (pin, user, deployment, fill-down or the platform default), effort, output cap, fallback and capability flags."
+          }
+        },
+        "required": [
+          "policy",
+          "tiers"
         ]
       },
       "CreatePolicyDto": {

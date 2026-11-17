@@ -8,6 +8,8 @@ import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { chooseHost } from './host-choice';
 import { balancedSpec, builtinPolicy, SYSTEM_DEFAULT_POLICY_REF } from '../policies/builtin-policies';
 import { PolicyModelCheck } from '../policies/policy-model-check';
+import { ModelTiersService } from '../policies/model-tiers.service';
+import { tierHasVision, tierProblem, tierRequest } from './tier-request';
 import { PolicyResolver } from '../policies/policy.resolver';
 import { readSnapshot, type RunPolicySnapshot } from '../policies/policy-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
@@ -168,6 +170,7 @@ export class GoalRunnerService {
     @Optional() private readonly systemSettings?: SystemSettingsService,
     @Optional() private readonly policies?: PolicyResolver,
     @Optional() private readonly modelCheck?: PolicyModelCheck,
+    @Optional() private readonly modelTiers?: ModelTiersService,
   ) {}
 
   /** The admin's price table; empty when unreadable (calls are then unpriced, never free). */
@@ -190,7 +193,15 @@ export class GoalRunnerService {
    */
   private async policySnapshot(db: ReturnType<PrismaService['forUser']>, run: { id: string; userId: string; taskId: string | null; policyRef: string | null; policySource: RunPolicySnapshot['source'] | null; policySnapshot: Prisma.JsonValue | null; task: { policyRef: string | null } | null }, memory: RunMemory): Promise<RunPolicySnapshot> {
     const stored = readSnapshot(run.policySnapshot);
-    if (stored) return stored;
+    if (stored) {
+      // A run snapshotted before the model tiers (#403) gets them once, now; after that they never change.
+      if (stored.resolvedTiers === undefined && this.modelTiers) {
+        const withTiers = await this.withTiers(run.userId, stored);
+        await db.run.updateMany({ where: { id: run.id }, data: { policySnapshot: withTiers as never } });
+        return withTiers;
+      }
+      return stored;
+    }
     let snapshot: RunPolicySnapshot;
     let notes: string[] = [];
     if (this.policies) {
@@ -203,10 +214,12 @@ export class GoalRunnerService {
       });
       snapshot = this.policies.snapshot(resolved);
       notes = resolved.notes;
+      snapshot = await this.withTiers(run.userId, snapshot);
     } else {
       // Without a resolver (a runner built by hand): the system default.
       const b = builtinPolicy(SYSTEM_DEFAULT_POLICY_REF)!;
       snapshot = { schemaVersion: 1, ref: b.id, name: b.name, version: b.version, builtin: true, source: 'system_default', spec: balancedSpec(), tiers: null, takenAt: new Date().toISOString() };
+      snapshot = await this.withTiers(run.userId, snapshot);
     }
     // Compare-and-set: only the first writer's snapshot stands (a retried job re-reads it).
     const { count } = await db.run.updateMany({
@@ -222,12 +235,18 @@ export class GoalRunnerService {
     return snapshot;
   }
 
-  /** The model a pin names for the run's start tier (legacy parity until the tier resolver, #403): `{ provider?, model? }`. */
-  private async pinnedModel(userId: string, snapshot: RunPolicySnapshot): Promise<{ provider?: string; model?: string }> {
-    const pin = snapshot.spec.models.pins?.[snapshot.spec.models.startTier] ?? null;
-    if (!pin) return {};
-    const resolved = await this.modelCheck?.resolvePin(userId, pin).catch(() => null);
-    return resolved ? { provider: resolved.provider, model: resolved.modelId } : { model: pin };
+  /** The snapshot with its three model tiers resolved (#403): the models of the run are fixed here, once. */
+  private async withTiers(userId: string, snapshot: RunPolicySnapshot): Promise<RunPolicySnapshot> {
+    if (!this.modelTiers) return snapshot;
+    try {
+      const resolvedTiers = await this.modelTiers.resolve(userId, snapshot.spec);
+      const tiers = Object.fromEntries(Object.entries(resolvedTiers).map(([t, r]) => [t, { provider: r.provider, model: r.modelId ?? r.model }]));
+      return { ...snapshot, resolvedTiers, tiers };
+    } catch (e) {
+      // Without resolved tiers the platform's target resolver picks the model, as before.
+      this.log.warn(`run: the model tiers could not be resolved: ${e instanceof Error ? e.message : String(e)}`);
+      return snapshot;
+    }
   }
 
 
@@ -253,6 +272,19 @@ export class GoalRunnerService {
 
     // The policy snapshot, written once at the first advance (resolved apart from the run's own state).
     const snapshot = await this.policySnapshot(db, run, memory);
+    // The tier the run is on. #405 moves it on a stall; until then it is the start tier.
+    const tier = snapshot.spec.models.startTier;
+    // A tier with no usable model fails the run now, before a browser is allocated (#403).
+    const tierError = this.modelTiers ? tierProblem(snapshot, tier) : null;
+    if (tierError) {
+      await this.finish(userId, run.id, run.sessionId, session, 'failed', { error: tierError });
+      return 'failed';
+    }
+    // A model without image input starts the run without screenshots, instead of finding out from a refused call.
+    if (!memory.visionOff && tierHasVision(snapshot, tier) === false) {
+      memory.visionOff = true;
+      memory.log.push('(Screenshots are off: the model of this tier does not accept images. Use observe_elements and read_text.)');
+    }
 
     // Resume after a handoff: fold the person's answer into the memory.
     if (run.status === 'waiting_human') {
@@ -315,15 +347,12 @@ export class GoalRunnerService {
 
     // The limits come from the run's policy snapshot; `null` means no limit.
     const budget = snapshot.spec.budget;
-    const pinned = await this.pinnedModel(userId, snapshot);
     const policy = {
       allowedDomains: run.task?.allowedDomains ?? [],
       maxSteps: budget.maxActions ?? Number.POSITIVE_INFINITY,
       /** The time budget counts active time only, never the wait for a person (#399); null is no limit. */
       maxActiveMs: budget.maxActiveMinutes === null ? Number.POSITIVE_INFINITY : budget.maxActiveMinutes * 60_000,
       confirmRisky: run.task?.confirmRiskyActions ?? false,
-      model: pinned.model,
-      provider: pinned.provider,
     };
     const state = {
       stepCount: run.stepCount,
@@ -793,16 +822,17 @@ export class GoalRunnerService {
       }
       let result: AiToolLoopResult | null = null;
       await setActivity('thinking');
+      const tierReq = tierRequest(snapshot, tier);
       const call = (withImage: boolean) =>
         this.ai.forUser(userId, { feature: BROWSER_AGENT_FEATURE_ID, ...(orgId ? { orgId } : {}) }).runTools({
-          ...(policy.model ? { model: policy.model } : {}),
-          ...(policy.provider ? { provider: policy.provider } : {}),
+          // The model, effort and output cap of the run's current tier, from the snapshot (#403).
+          ...(({ modelLabel: _label, ...req }) => req)(tierReq),
           instructions: INSTRUCTIONS,
           input: roundInput(input, withImage ? view : null),
           tools,
           maxSteps: CHUNK_STEPS,
           onStep: (step) => {
-            used.add(step.response.provider, step.response.model || policy.model, step.response.usage, prices);
+            used.add(step.response.provider, step.response.model || tierReq.modelLabel || undefined, step.response.usage, prices);
             if (timeUp()) {
               state.stop = 'budget';
               state.budgetError = RUN_BUDGET_ERRORS.time;
