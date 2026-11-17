@@ -6,7 +6,7 @@ import '../schedules/schedules.errors';
 import { PolicyResolver } from '../policies/policy.resolver';
 import { PrismaService } from '../prisma/prisma.service';
 import { describeCron } from '../schedules/cron-describe';
-import { NO_SPEND, SPEND_WINDOW_DAYS, type TaskSpend } from './run-cost';
+import { averageUsd, NO_SPEND, SPEND_WINDOW_DAYS, type TaskSpend } from './run-cost';
 import { FAILING_AFTER, type ListTasksDto, type TaskSort } from './task-list.schemas';
 
 const DAY_MS = 86_400_000;
@@ -215,7 +215,7 @@ export class TaskSummaryService {
   private async runFacts(userId: string, ids: string[]) {
     const now = Date.now();
     const rows = await this.prisma.$queryRaw<
-      { taskId: string; total: number; succeeded7: number; failed7: number; cancelled7: number; runs30: number; cost30: unknown; unknown30: number; tokens30: unknown }[]
+      { taskId: string; total: number; succeeded7: number; failed7: number; cancelled7: number; runs30: number; cost30: unknown; unknown30: number; tokens30: unknown; succeeded30: number; successCost30: unknown }[]
     >(Prisma.sql`
       SELECT r.task_id::text AS "taskId",
              count(*)::int AS total,
@@ -225,7 +225,9 @@ export class TaskSummaryService {
              (count(*) FILTER (WHERE r.created_at >= ${new Date(now - SPEND_WINDOW_DAYS * DAY_MS)}))::int AS runs30,
              (sum(r.cost_usd) FILTER (WHERE r.created_at >= ${new Date(now - SPEND_WINDOW_DAYS * DAY_MS)}))::float8 AS cost30,
              (count(*) FILTER (WHERE r.created_at >= ${new Date(now - SPEND_WINDOW_DAYS * DAY_MS)} AND NOT r.cost_known))::int AS unknown30,
-             (sum(r.input_tokens::bigint + r.output_tokens::bigint) FILTER (WHERE r.created_at >= ${new Date(now - SPEND_WINDOW_DAYS * DAY_MS)}))::float8 AS tokens30
+             (sum(r.input_tokens::bigint + r.output_tokens::bigint) FILTER (WHERE r.created_at >= ${new Date(now - SPEND_WINDOW_DAYS * DAY_MS)}))::float8 AS tokens30,
+             (count(*) FILTER (WHERE r.created_at >= ${new Date(now - SPEND_WINDOW_DAYS * DAY_MS)} AND r.status = 'succeeded'))::int AS succeeded30,
+             (sum(r.cost_usd) FILTER (WHERE r.created_at >= ${new Date(now - SPEND_WINDOW_DAYS * DAY_MS)} AND r.status = 'succeeded'))::float8 AS "successCost30"
       FROM runs r
       WHERE r.user_id = ${userId}::uuid AND r.task_id = ANY(${ids}::uuid[])
       GROUP BY r.task_id`);
@@ -253,9 +255,17 @@ export class TaskSummaryService {
     return out;
   }
 
-  private spendOf(facts: { runs30: number; cost30: unknown; unknown30: number; tokens30: unknown } | undefined): TaskSpend {
+  private spendOf(facts: { runs30: number; cost30: unknown; unknown30: number; tokens30: unknown; succeeded30: number; successCost30: unknown } | undefined): TaskSpend {
     if (!facts || facts.runs30 === 0) return NO_SPEND;
-    return { runs: facts.runs30, costUsd: num(facts.cost30), costKnown: facts.unknown30 === 0, tokens: num(facts.tokens30) };
+    // The same figures as `TasksService.spendByTask` (#400, #408), from the one aggregate.
+    return {
+      runs: facts.runs30,
+      costUsd: num(facts.cost30),
+      costKnown: facts.unknown30 === 0,
+      tokens: num(facts.tokens30),
+      succeeded: facts.succeeded30,
+      avgSuccessCostUsd: averageUsd(num(facts.successCost30), facts.succeeded30),
+    };
   }
 
   /** The tasks with `spend30d` only (a page asked for without `include=summary`). */

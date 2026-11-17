@@ -213,7 +213,8 @@
       "id": "runs.list",
       "description": "List recent runs",
       "rest": [
-        "GET /api/runs"
+        "GET /api/runs",
+        "GET /api/runs/counts"
       ],
       "cli": "runs list",
       "mcp": "runs_list",

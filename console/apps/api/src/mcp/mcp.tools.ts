@@ -165,7 +165,7 @@ export const MCP_TOOLS: McpTool[] = [
     name: 'run_status',
     description:
       'A run: status (queued, running, waiting_human = needs the person, succeeded, failed, cancelled), result, and its latest steps. ' +
-      'Also the agent policy it runs under (`policy`), its cost (`costUsd`, `costKnown`, `modelCalls`) and, when the console reports them, the current tier, model, budget use (`budget`: used, limit, percent) and why it stopped (`stopReason`).',
+      'Also the agent policy it runs under (`policy`), its tier (`tier`, `currentTier`, `escalations`), its cost (`costUsd`, `costKnown`, `modelCalls`), its budget use (`budget`: the effective limits, what it used and the percent of each) and why it stopped (`stopReason`).',
     input: z.object({ run_id: id, steps: z.number().int().min(0).max(50).default(10) }),
     async call(a, ctx) {
       const r = await ctx.api<{ steps?: unknown[] } & Record<string, unknown>>('GET', `/runs/${String(a.run_id)}`);
@@ -173,7 +173,7 @@ export const MCP_TOOLS: McpTool[] = [
       return text({ ...r, steps });
     },
   },
-  { name: 'runs_list', description: 'Recent runs, each with its agent policy, cost and (when reported) budget use and stop reason.', input: z.object({ status: z.enum(['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled']).optional() }), call: async (a, ctx) => text(await ctx.api('GET', `/runs${a.status ? `?status=${String(a.status)}` : ''}`)) },
+  { name: 'runs_list', description: 'Recent runs, each with its agent policy, tier, cost, budget use and stop reason.', input: z.object({ status: z.enum(['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled']).optional() }), call: async (a, ctx) => text(await ctx.api('GET', `/runs${a.status ? `?status=${String(a.status)}` : ''}`)) },
   { name: 'run_cancel', description: 'Stop a run (after its current step).', input: z.object({ run_id: id }), call: async (a, ctx) => text(await ctx.api('POST', `/runs/${String(a.run_id)}/cancel`, {})) },
   { name: 'tasks_list', description: 'Saved tasks (reusable goals with a profile, allowed sites and an agent policy that sets budgets and models).', input: z.object({}), call: async (_a, ctx) => text(await ctx.api('GET', '/tasks')) },
   {
@@ -333,7 +333,7 @@ export const MCP_TOOLS: McpTool[] = [
   {
     name: 'policies_export',
     description:
-      'Export agent policies as the portable JSON file the console imports (no ids, users or secrets). ids: "all" (default; the user\'s own policies) or a comma-separated list of policy ids (built-ins allowed, as templates). include_pins false strips model pins so the file works on any deployment. Hand the result to policies_import.',
+      'Export agent policies as the portable JSON file the console imports (no ids, users or secrets). ids: "all" (default; the built-ins and the user\'s own policies) or a comma-separated list of policy ids (built-ins allowed, as templates). include_pins false strips model pins so the file works on any deployment. Hand the result to policies_import.',
     input: z.object({ ids: z.string().max(8000).default('all'), include_pins: z.boolean().default(true) }),
     call: async (a, ctx) => text(await ctx.api('GET', `/agent-policies/export?ids=${encodeURIComponent(String(a.ids))}&includePins=${String(a.include_pins)}`)),
   },

@@ -5080,10 +5080,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description **Requires:** authentication, plus permission `agent_policies:read`. */
+        /**
+         * List agent policies
+         * @description The four built-in policies (`builtin:economy`, `builtin:balanced`, `builtin:thorough`, `builtin:unlimited`) and your own, each with its spec, version, whether it is your default (`isDefault`), the tasks and schedules that use it (`usage`) and whether it has no hard stop (`hasNoHardStop`: every budget is `null`, so only finishing, Stop or stall detection ends a run).
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:read`.
+         */
         get: operations["policies_list"];
         put?: never;
-        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        /**
+         * Create a policy
+         * @description Creates a personal policy from a full spec. Names are unique among your policies. A budget of `null` is unlimited. A model pin must name a model enabled for you with tool calls and vision (`400 POLICY_PIN_INVALID`).
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:write`.
+         */
         post: operations["policies_create"];
         delete?: never;
         options?: never;
@@ -5098,9 +5108,19 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description **Requires:** authentication, plus permission `agent_policies:read`. */
+        /**
+         * Get your default policy
+         * @description The policy a run uses when nothing more specific names one. `explicit` is false while you have not chosen one: the default is then `builtin:balanced`.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:read`.
+         */
         get: operations["policies_getDefault"];
-        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        /**
+         * Set your default policy
+         * @description Body `{ policyId }`: an own policy's id or `builtin:<key>`; `null` goes back to `builtin:balanced`. Runs already started keep the policy they started with.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:write`.
+         */
         put: operations["policies_setDefault"];
         post?: never;
         delete?: never;
@@ -5116,7 +5136,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description **Requires:** authentication, plus permission `agent_policies:read`. */
+        /**
+         * Read the model each tier resolves to
+         * @description The Fast, Standard and Frontier models a new run of your default policy would use (`policyId` resolves for another policy), with where each value came from (`pin`, `user`, `deployment`, `fill_down` or `ai_default`) and whether the model supports tools and images.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:read`.
+         */
         get: operations["policies_effectiveTiers"];
         put?: never;
         post?: never;
@@ -5133,7 +5158,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description **Requires:** authentication, plus permission `agent_policies:read`. */
+        /**
+         * Export policies as a JSON file
+         * @description Returns a `hexactra.agent-policies` file (`formatVersion` 1) of your policies and, with `ids=all` (the default), the built-ins too. The file holds names, descriptions and specs only: no ids, user, version, usage or secret. `includePins=false` strips model pins, so the file works on any deployment.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:read`.
+         */
         get: operations["policies_export"];
         put?: never;
         post?: never;
@@ -5152,7 +5182,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        /**
+         * Import policies from a JSON file
+         * @description Creates the policies of a file made by the export route, in one transaction: an invalid entry rejects the whole file (`400 POLICY_IMPORT_INVALID`, listing every error). `onConflict` decides what happens when you already have a policy of that name: `rename` (default), `skip` or `replace`. Pins to models this deployment cannot use are dropped and budgets above the deployment ceilings are flagged, both as `warnings`. At most 100 policies and 256 KB.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:write`.
+         */
         post: operations["policies_import"];
         delete?: never;
         options?: never;
@@ -5167,15 +5202,30 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description **Requires:** authentication, plus permission `agent_policies:read`. */
+        /**
+         * Get one policy
+         * @description `id` is an own policy's UUID or `builtin:<key>`.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:read`.
+         */
         get: operations["policies_get"];
         put?: never;
         post?: never;
-        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        /**
+         * Delete a policy
+         * @description Refused with `409 POLICY_IN_USE` (listing the tasks and schedules that use it) unless `reassignTo` names the policy they move to, and with `409 POLICY_IS_DEFAULT` for your default. Built-ins cannot be deleted.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:write`.
+         */
         delete: operations["policies_remove"];
         options?: never;
         head?: never;
-        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        /**
+         * Edit a policy
+         * @description Changes the name, the description or the whole spec of your own policy and bumps its `version`. Send `If-Match: <version>` to refuse the edit when the policy moved meanwhile (`412 POLICY_VERSION_CONFLICT`). Built-in policies are read-only (`403`). Runs already started keep their own snapshot.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:write`.
+         */
         patch: operations["policies_update"];
         trace?: never;
     };
@@ -5188,7 +5238,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        /**
+         * Duplicate a policy
+         * @description Copies any policy, built-in or your own, under the given name. Use it to start from a built-in.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:write`.
+         */
         post: operations["policies_duplicate"];
         delete?: never;
         options?: never;
@@ -5353,6 +5408,23 @@ export interface paths {
         put?: never;
         /** @description **Requires:** authentication, plus permission `runs:write`. */
         post: operations["runsStart_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `runs:read`. */
+        get: operations["runs_counts"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6643,6 +6715,8 @@ export interface components {
              * @example POLICY_IMPORT_INVALID
              * @example POLICY_IMPORT_UNSUPPORTED_VERSION
              * @example POLICY_IMPORT_TOO_LARGE
+             * @example INVALID_FILTER
+             * @example INVALID_CURSOR
              * @example INVALID_CRON
              * @example INVALID_TIMEZONE
              * @example CRON_TOO_FREQUENT
@@ -12688,6 +12762,10 @@ export interface components {
                 costKnown: boolean;
                 /** @description Input plus output tokens */
                 tokens: number;
+                /** @description Of those runs, how many succeeded */
+                succeeded: number;
+                /** @description The average cost of one successful run (USD; a lower bound while costKnown is false); null with no successful run */
+                avgSuccessCostUsd: number | null;
             };
             /** @description ISO 8601 timestamp */
             createdAt: string;
@@ -12796,6 +12874,10 @@ export interface components {
                     costKnown: boolean;
                     /** @description Input plus output tokens */
                     tokens: number;
+                    /** @description Of those runs, how many succeeded */
+                    succeeded: number;
+                    /** @description The average cost of one successful run (USD; a lower bound while costKnown is false); null with no successful run */
+                    avgSuccessCostUsd: number | null;
                 };
                 /** @description ISO 8601 timestamp */
                 createdAt: string;
@@ -12908,6 +12990,10 @@ export interface components {
                 costKnown: boolean;
                 /** @description Input plus output tokens */
                 tokens: number;
+                /** @description Of those runs, how many succeeded */
+                succeeded: number;
+                /** @description The average cost of one successful run (USD; a lower bound while costKnown is false); null with no successful run */
+                avgSuccessCostUsd: number | null;
             };
             /** @description ISO 8601 timestamp */
             createdAt: string;
@@ -12987,13 +13073,13 @@ export interface components {
             allowedDomains?: string[];
             /**
              * @deprecated
-             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`.
+             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`.
              * @default 100
              */
             maxSteps?: number;
             /**
              * @deprecated
-             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`.
+             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`.
              * @default 30
              */
             maxMinutes?: number;
@@ -13001,7 +13087,7 @@ export interface components {
             confirmRiskyActions?: boolean;
             /**
              * @deprecated
-             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`.
+             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`.
              */
             model?: string | null;
             /** @description The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy. */
@@ -13063,6 +13149,10 @@ export interface components {
                 costKnown: boolean;
                 /** @description Input plus output tokens */
                 tokens: number;
+                /** @description Of those runs, how many succeeded */
+                succeeded: number;
+                /** @description The average cost of one successful run (USD; a lower bound while costKnown is false); null with no successful run */
+                avgSuccessCostUsd: number | null;
             };
             /** @description ISO 8601 timestamp */
             createdAt: string;
@@ -13078,18 +13168,18 @@ export interface components {
             allowedDomains?: string[];
             /**
              * @deprecated
-             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`.
+             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`.
              */
             maxSteps?: number;
             /**
              * @deprecated
-             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`.
+             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`.
              */
             maxMinutes?: number;
             confirmRiskyActions?: boolean;
             /**
              * @deprecated
-             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`.
+             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`.
              */
             model?: string | null;
             /** @description The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy. */
@@ -13157,6 +13247,10 @@ export interface components {
                 costKnown: boolean;
                 /** @description Input plus output tokens */
                 tokens: number;
+                /** @description Of those runs, how many succeeded */
+                succeeded: number;
+                /** @description The average cost of one successful run (USD; a lower bound while costKnown is false); null with no successful run */
+                avgSuccessCostUsd: number | null;
             };
             /** @description ISO 8601 timestamp */
             createdAt: string;
@@ -13266,7 +13360,7 @@ export interface components {
                 count: number;
             }[];
         };
-        RunResponseDto: {
+        RunListItemResponseDto: {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -13328,6 +13422,7 @@ export interface components {
             } | null;
             /** @description Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field. */
             stopReason: ("finished" | "budget_actions" | "budget_model_calls" | "budget_active_time" | "budget_input_tokens" | "budget_output_tokens" | "budget_cost" | "stalled" | "cancelled" | "error" | "no_model") | null;
+            /** @description The run budget while the run is live (queued, running, waiting_human); null on a finished run in a list (read it from `GET /runs/{id}`). */
             budget: {
                 /** @description The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD. */
                 effective: {
@@ -13350,6 +13445,27 @@ export interface components {
                 /** @description False when a call could not be priced: `used.cost` is then "at least". */
                 costKnown: boolean;
             } | null;
+            tier: {
+                /**
+                 * @description The tier the policy starts runs on
+                 * @enum {string}
+                 */
+                start: "fast" | "standard" | "frontier";
+                /**
+                 * @description The highest tier the run may escalate to
+                 * @enum {string}
+                 */
+                max: "fast" | "standard" | "frontier";
+                /**
+                 * @description The tier the run is on now: the start tier until a stall escalates it
+                 * @enum {string}
+                 */
+                current: "fast" | "standard" | "frontier";
+                /** @description How many times the run escalated */
+                escalations: number;
+                /** @description The current tier's model, as `provider:modelId`; null when none was resolved */
+                model: string | null;
+            } | null;
             /** @description The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts. */
             currentTier: ("fast" | "standard" | "frontier") | null;
             /** @description How many times the run moved to a stronger tier because it stalled */
@@ -13366,6 +13482,155 @@ export interface components {
             createdAt: string;
             startedAt: string | null;
             finishedAt: string | null;
+            /** @description The run's task name; null for a run without a task (ad-hoc, external) or whose task was deleted */
+            taskName: string | null;
+        };
+        RunPageResponseDto: {
+            items: {
+                /** Format: uuid */
+                id: string;
+                /** Format: uuid */
+                userId: string;
+                taskId: string | null;
+                /** @enum {string} */
+                status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+                /** @enum {string} */
+                trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+                goal: string;
+                profile: string;
+                hostId: string | null;
+                hostFallback: boolean;
+                sessionId: string | null;
+                handoffId: string | null;
+                /** @description Who drove an external run */
+                actor: string | null;
+                result: string | null;
+                error: string | null;
+                cancelRequested: boolean;
+                stepCount: number;
+                activity: {
+                    /** @enum {string} */
+                    phase: "starting" | "looking" | "thinking" | "acting";
+                    /** @description The fabric action being run (acting only) */
+                    action?: string;
+                    /** @description Redacted like step args */
+                    args?: {
+                        [key: string]: unknown;
+                    };
+                    /** @description Why the model chose the action */
+                    reason?: string;
+                    /** @description ISO 8601 timestamp */
+                    startedAt: string;
+                    /** @description How long the host has before the action times out */
+                    timeoutMs?: number;
+                    /** @description Where on the page it acts, in page screenshot (CSS viewport) pixels: a point, or a box with w and h */
+                    target?: {
+                        x: number;
+                        y: number;
+                        w?: number;
+                        h?: number;
+                    };
+                    /** @description Why the run is on a stronger model, while it is (for example "Escalated to Frontier (stuck: repeated click on #submit)") */
+                    note?: string;
+                } | null;
+                inputTokens: number;
+                outputTokens: number;
+                policy: {
+                    id: string;
+                    name: string;
+                    version: number;
+                    /**
+                     * @description Why this policy applied: the run request, the schedule, the task, the user default or the system default.
+                     * @enum {string}
+                     */
+                    source: "run" | "schedule" | "task" | "user_default" | "system_default";
+                    builtin: boolean;
+                } | null;
+                /** @description Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field. */
+                stopReason: ("finished" | "budget_actions" | "budget_model_calls" | "budget_active_time" | "budget_input_tokens" | "budget_output_tokens" | "budget_cost" | "stalled" | "cancelled" | "error" | "no_model") | null;
+                /** @description The run budget while the run is live (queued, running, waiting_human); null on a finished run in a list (read it from `GET /runs/{id}`). */
+                budget: {
+                    /** @description The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD. */
+                    effective: {
+                        [key: string]: number | null;
+                    } & {
+                        warnAtPercent: number;
+                    };
+                    /** @description What the run has used so far, in the same units (active time includes the stretch in progress). */
+                    used: {
+                        [key: string]: number;
+                    };
+                    /** @description Percent of each limit used, one decimal; `null` for an unlimited budget. */
+                    percent: {
+                        [key: string]: number | null;
+                    };
+                    /** @description Where each limit came from: the `policy`, or the deployment `ceiling` that clamped it. `null` when unlimited. */
+                    source: {
+                        [key: string]: ("policy" | "ceiling") | null;
+                    };
+                    /** @description False when a call could not be priced: `used.cost` is then "at least". */
+                    costKnown: boolean;
+                } | null;
+                tier: {
+                    /**
+                     * @description The tier the policy starts runs on
+                     * @enum {string}
+                     */
+                    start: "fast" | "standard" | "frontier";
+                    /**
+                     * @description The highest tier the run may escalate to
+                     * @enum {string}
+                     */
+                    max: "fast" | "standard" | "frontier";
+                    /**
+                     * @description The tier the run is on now: the start tier until a stall escalates it
+                     * @enum {string}
+                     */
+                    current: "fast" | "standard" | "frontier";
+                    /** @description How many times the run escalated */
+                    escalations: number;
+                    /** @description The current tier's model, as `provider:modelId`; null when none was resolved */
+                    model: string | null;
+                } | null;
+                /** @description The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts. */
+                currentTier: ("fast" | "standard" | "frontier") | null;
+                /** @description How many times the run moved to a stronger tier because it stalled */
+                escalations: number;
+                /** @description Input tokens the provider served from its cache (part of inputTokens) */
+                cachedInputTokens: number;
+                /** @description Model calls (provider round trips) made so far */
+                modelCalls: number;
+                /** @description USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false */
+                costUsd: number;
+                /** @description False once a call could not be priced because its model has no price: show costUsd as "at least" */
+                costKnown: boolean;
+                /** @description ISO 8601 timestamp */
+                createdAt: string;
+                startedAt: string | null;
+                finishedAt: string | null;
+                /** @description The run's task name; null for a run without a task (ad-hoc, external) or whose task was deleted */
+                taskName: string | null;
+            }[];
+            /** @description Pass it as `cursor` to read the next page; null on the last page. Opaque: do not parse or build it. */
+            nextCursor: string | null;
+        };
+        RunCountsResponseDto: {
+            /** @description Runs that match the filter */
+            total: number;
+            /** @description Of those: queued + running + waiting_human */
+            live: number;
+            byStatus: {
+                queued: number;
+                running: number;
+                waiting_human: number;
+                succeeded: number;
+                failed: number;
+                cancelled: number;
+            };
+            /** @description USD spent by the matching runs; null when none of them made a model call. A lower bound while costKnown is false */
+            costUsd: number | null;
+            /** @description False when a matching run had a call that could not be priced */
+            costKnown: boolean;
         };
         RunDetailResponseDto: {
             /** Format: uuid */
@@ -13451,6 +13716,27 @@ export interface components {
                 /** @description False when a call could not be priced: `used.cost` is then "at least". */
                 costKnown: boolean;
             } | null;
+            tier: {
+                /**
+                 * @description The tier the policy starts runs on
+                 * @enum {string}
+                 */
+                start: "fast" | "standard" | "frontier";
+                /**
+                 * @description The highest tier the run may escalate to
+                 * @enum {string}
+                 */
+                max: "fast" | "standard" | "frontier";
+                /**
+                 * @description The tier the run is on now: the start tier until a stall escalates it
+                 * @enum {string}
+                 */
+                current: "fast" | "standard" | "frontier";
+                /** @description How many times the run escalated */
+                escalations: number;
+                /** @description The current tier's model, as `provider:modelId`; null when none was resolved */
+                model: string | null;
+            } | null;
             /** @description The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts. */
             currentTier: ("fast" | "standard" | "frontier") | null;
             /** @description How many times the run moved to a stronger tier because it stalled */
@@ -13488,6 +13774,128 @@ export interface components {
                 /** @description ISO 8601 timestamp */
                 createdAt: string;
             }[];
+        };
+        RunResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            userId: string;
+            taskId: string | null;
+            /** @enum {string} */
+            status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+            /** @enum {string} */
+            trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+            goal: string;
+            profile: string;
+            hostId: string | null;
+            hostFallback: boolean;
+            sessionId: string | null;
+            handoffId: string | null;
+            /** @description Who drove an external run */
+            actor: string | null;
+            result: string | null;
+            error: string | null;
+            cancelRequested: boolean;
+            stepCount: number;
+            activity: {
+                /** @enum {string} */
+                phase: "starting" | "looking" | "thinking" | "acting";
+                /** @description The fabric action being run (acting only) */
+                action?: string;
+                /** @description Redacted like step args */
+                args?: {
+                    [key: string]: unknown;
+                };
+                /** @description Why the model chose the action */
+                reason?: string;
+                /** @description ISO 8601 timestamp */
+                startedAt: string;
+                /** @description How long the host has before the action times out */
+                timeoutMs?: number;
+                /** @description Where on the page it acts, in page screenshot (CSS viewport) pixels: a point, or a box with w and h */
+                target?: {
+                    x: number;
+                    y: number;
+                    w?: number;
+                    h?: number;
+                };
+                /** @description Why the run is on a stronger model, while it is (for example "Escalated to Frontier (stuck: repeated click on #submit)") */
+                note?: string;
+            } | null;
+            inputTokens: number;
+            outputTokens: number;
+            policy: {
+                id: string;
+                name: string;
+                version: number;
+                /**
+                 * @description Why this policy applied: the run request, the schedule, the task, the user default or the system default.
+                 * @enum {string}
+                 */
+                source: "run" | "schedule" | "task" | "user_default" | "system_default";
+                builtin: boolean;
+            } | null;
+            /** @description Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field. */
+            stopReason: ("finished" | "budget_actions" | "budget_model_calls" | "budget_active_time" | "budget_input_tokens" | "budget_output_tokens" | "budget_cost" | "stalled" | "cancelled" | "error" | "no_model") | null;
+            budget: {
+                /** @description The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD. */
+                effective: {
+                    [key: string]: number | null;
+                } & {
+                    warnAtPercent: number;
+                };
+                /** @description What the run has used so far, in the same units (active time includes the stretch in progress). */
+                used: {
+                    [key: string]: number;
+                };
+                /** @description Percent of each limit used, one decimal; `null` for an unlimited budget. */
+                percent: {
+                    [key: string]: number | null;
+                };
+                /** @description Where each limit came from: the `policy`, or the deployment `ceiling` that clamped it. `null` when unlimited. */
+                source: {
+                    [key: string]: ("policy" | "ceiling") | null;
+                };
+                /** @description False when a call could not be priced: `used.cost` is then "at least". */
+                costKnown: boolean;
+            } | null;
+            tier: {
+                /**
+                 * @description The tier the policy starts runs on
+                 * @enum {string}
+                 */
+                start: "fast" | "standard" | "frontier";
+                /**
+                 * @description The highest tier the run may escalate to
+                 * @enum {string}
+                 */
+                max: "fast" | "standard" | "frontier";
+                /**
+                 * @description The tier the run is on now: the start tier until a stall escalates it
+                 * @enum {string}
+                 */
+                current: "fast" | "standard" | "frontier";
+                /** @description How many times the run escalated */
+                escalations: number;
+                /** @description The current tier's model, as `provider:modelId`; null when none was resolved */
+                model: string | null;
+            } | null;
+            /** @description The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts. */
+            currentTier: ("fast" | "standard" | "frontier") | null;
+            /** @description How many times the run moved to a stronger tier because it stalled */
+            escalations: number;
+            /** @description Input tokens the provider served from its cache (part of inputTokens) */
+            cachedInputTokens: number;
+            /** @description Model calls (provider round trips) made so far */
+            modelCalls: number;
+            /** @description USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false */
+            costUsd: number;
+            /** @description False once a call could not be priced because its model has no price: show costUsd as "at least" */
+            costKnown: boolean;
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            startedAt: string | null;
+            finishedAt: string | null;
         };
         QuestionResponseDto: {
             /** Format: uuid */
@@ -30846,7 +31254,7 @@ export interface operations {
     policies_export: {
         parameters: {
             query?: {
-                /** @description `all`, or a comma-separated list of policy ids (UUIDs of your own policies, or `builtin:<key>`). Built-ins can be exported as a starting template. */
+                /** @description `all` (the default: the built-in policies, then your own), or a comma-separated list of policy ids (UUIDs of your own policies, or `builtin:<key>`). Built-ins can be exported as a starting template. */
                 ids?: string;
                 /** @description Keep model pins (the default). `false` strips them, so the file works on any deployment. */
                 includePins?: "true" | "false";
@@ -31633,9 +32041,32 @@ export interface operations {
     runs_list: {
         parameters: {
             query?: {
-                taskId?: string;
-                status?: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+                /** @description Run status. Any of: queued, running, waiting_human, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas. */
+                status?: string | string[];
+                /** @description Shorthand for a status group: `live` = queued, running, waiting_human; `finished` = succeeded, failed, cancelled. Not together with `status`. */
+                state?: "live" | "finished";
+                /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
+                taskId?: "none" | string;
+                /** @description What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas. */
+                trigger?: string | string[];
+                /** @description Runs created at or after this ISO 8601 date-time (inclusive). */
+                from?: string;
+                /** @description Runs created before this ISO 8601 date-time (exclusive). */
+                to?: string;
+                /** @description Case-insensitive substring of the goal (1 to 200 characters). */
+                q?: string;
+                /** @description Why the run stopped; `budget` is every `budget_*` reason. Any of: finished, budget_actions, budget_model_calls, budget_active_time, budget_input_tokens, budget_output_tokens, budget_cost, stalled, cancelled, error, no_model, budget. Repeat the parameter or separate the values with commas. */
+                stopReason?: string | string[];
+                /** @description Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`. */
+                policyId?: string;
+                /** @description `1` returns `{ items, nextCursor }` instead of an array. */
+                envelope?: "1" | "true";
+                /** @description The previous page's `nextCursor`. Opaque: do not parse or build it. */
+                cursor?: string;
+                /** @description Rows to return: 1 to 100 with `envelope`, 1 to 200 without. Default 50. */
                 limit?: number;
+                /** @description By creation time, then id: `desc` is newest first. */
+                order?: "desc" | "asc";
             };
             header?: never;
             path?: never;
@@ -31643,13 +32074,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description An array of runs: the newest `limit`. With `envelope=1` the data is instead one page, `{ items, nextCursor }` (schema `RunPageResponseDto`). */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["RunResponseDto"][];
+                        data: components["schemas"]["RunListItemResponseDto"][];
                     };
                 };
             };
@@ -31702,6 +32134,69 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["RunResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runs_counts: {
+        parameters: {
+            query?: {
+                /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
+                taskId?: "none" | string;
+                /** @description What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas. */
+                trigger?: string | string[];
+                /** @description Runs created at or after this ISO 8601 date-time (inclusive). */
+                from?: string;
+                /** @description Runs created before this ISO 8601 date-time (exclusive). */
+                to?: string;
+                /** @description Case-insensitive substring of the goal (1 to 200 characters). */
+                q?: string;
+                /** @description Why the run stopped; `budget` is every `budget_*` reason. Any of: finished, budget_actions, budget_model_calls, budget_active_time, budget_input_tokens, budget_output_tokens, budget_cost, stalled, cancelled, error, no_model, budget. Repeat the parameter or separate the values with commas. */
+                stopReason?: string | string[];
+                /** @description Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`. */
+                policyId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunCountsResponseDto"];
                     };
                 };
             };

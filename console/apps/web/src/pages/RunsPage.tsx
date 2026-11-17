@@ -6,6 +6,8 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { fetchRunScreenshot, subscribeRun } from '../live';
 import { ActionOverlay, frameCaption, RunActivityBar, useNow, type RunActivity } from '../components/RunActivity';
 import { RunTimeline } from '../components/RunTimeline';
+import { RunBudgetMeter, RunHeaderChips, RunStopReason, TaskSpendLine } from '../components/RunBudgetMeter';
+import { formatUsd, stopChipLabel, type RunBudget, type RunPolicy, type RunTier, type StopReason, type TaskSpend } from '../components/runBudget';
 
 /** `fetched`, plus any step of `prev` (received over the stream) it does not have yet. */
 export function withStreamedSteps(fetched: Run, prev: Run | null): Run {
@@ -46,12 +48,22 @@ export interface Run {
   stepCount: number;
   /** What a running run is doing right now (#379). */
   activity?: RunActivity | null;
-  /** The agent policy the run runs under; null until its first step snapshots it (#401). */
-  policy?: { id: string; name: string; version: number; source: string; builtin: boolean } | null;
   createdAt: string;
   finishedAt: string | null;
   steps?: RunStep[];
+  /** Spend (#400): USD, a lower bound while `costKnown` is false. */
+  costUsd?: number;
+  costKnown?: boolean;
+  modelCalls?: number;
+  /** The policy, the budget and why it stopped (#401, #404), and its model tier (#408). */
+  policy?: RunPolicy | null;
+  budget?: RunBudget | null;
+  stopReason?: StopReason | null;
+  tier?: RunTier | null;
 }
+
+/** The run's cost, or null before it made a model call. */
+const runCost = (r: Run) => (typeof r.costUsd === 'number' && (r.modelCalls ?? 0) > 0 ? formatUsd(r.costUsd, r.costKnown ?? true) : null);
 
 const STATUS_COLOR: Record<RunStatus, 'default' | 'info' | 'warning' | 'success' | 'error'> = {
   queued: 'default',
@@ -72,6 +84,8 @@ export function RunsPage() {
   const [params] = useSearchParams();
   const taskId = params.get('taskId');
   const [runs, setRuns] = useState<Run[]>([]);
+  /** The task's spend, on its runs view (#408). */
+  const [spend, setSpend] = useState<{ name: string; spend30d?: TaskSpend } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [goal, setGoal] = useState('');
   const [profile, setProfile] = useState('default');
@@ -101,12 +115,26 @@ export function RunsPage() {
     return () => clearInterval(t);
   }, [load]);
 
+  useEffect(() => {
+    if (!taskId || !viewer.hasPermission('tasks:read')) return setSpend(null);
+    api
+      .get<{ name: string; spend30d?: TaskSpend }>(`/tasks/${encodeURIComponent(taskId)}`)
+      .then(setSpend)
+      .catch(() => setSpend(null));
+  }, [api, taskId, viewer]);
+
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
       <Typography variant="h4" component="h1" gutterBottom>
         Runs
       </Typography>
       {error && <Alert severity="error">{error}</Alert>}
+      {spend && (
+        <Box sx={{ mb: 1 }}>
+          <Typography variant="subtitle1">{spend.name}</Typography>
+          <TaskSpendLine spend={spend.spend30d} />
+        </Box>
+      )}
       {canRun && !taskId && (
         <Stack
           component="form"
@@ -130,12 +158,24 @@ export function RunsPage() {
       )}
       {runs.length === 0 && !error && <Alert severity="info">No runs yet. Run a goal above, or start one from Tasks.</Alert>}
       <List aria-label="Runs">
-        {runs.map((r) => (
-          <ListItemButton key={r.id} onClick={() => navigate(`/runs/${r.id}`)}>
-            <ListItemText primary={r.goal} secondary={`${new Date(r.createdAt).toLocaleString()} · ${r.stepCount} steps · ${r.trigger === 'external' ? `driven by ${r.actor ?? 'an external agent'}` : r.trigger}`} />
-            <Chip size="small" color={STATUS_COLOR[r.status]} label={statusLabel(r.status)} />
-          </ListItemButton>
-        ))}
+        {runs.map((r) => {
+          const cost = runCost(r);
+          const stop = stopChipLabel(r.stopReason);
+          return (
+            <ListItemButton key={r.id} onClick={() => navigate(`/runs/${r.id}`)} data-testid={`run-row-${r.id}`}>
+              <ListItemText primary={r.goal} secondary={`${new Date(r.createdAt).toLocaleString()} · ${r.stepCount} steps · ${r.trigger === 'external' ? `driven by ${r.actor ?? 'an external agent'}` : r.trigger}`} />
+              {/* The cost: a column from sm up, a chip on a phone (#408). */}
+              <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' }, minWidth: 72, textAlign: 'right', mx: 1, fontVariantNumeric: 'tabular-nums' }} data-testid="run-cost">
+                {cost ?? '—'}
+              </Typography>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={0.5} sx={{ alignItems: { xs: 'flex-end', sm: 'center' }, justifyContent: 'flex-end', ml: 1, minWidth: { sm: 190 } }}>
+                {cost && <Chip size="small" variant="outlined" label={cost} sx={{ display: { xs: 'inline-flex', sm: 'none' } }} />}
+                {stop && <Chip size="small" variant="outlined" color={r.stopReason === 'error' || r.stopReason === 'no_model' ? 'error' : 'warning'} label={stop} data-testid="run-stop" />}
+                <Chip size="small" color={STATUS_COLOR[r.status]} label={statusLabel(r.status)} />
+              </Stack>
+            </ListItemButton>
+          );
+        })}
       </List>
     </Container>
   );
@@ -245,11 +285,18 @@ export function RunDetailPage() {
         <Chip color={STATUS_COLOR[run.status]} label={statusLabel(run.status)} />
       </Stack>
       <Typography color="text.secondary" gutterBottom>
-        Profile {run.profile} · {run.stepCount} steps · started {new Date(run.createdAt).toLocaleString()}
-        {run.policy && ` · policy ${run.policy.name} v${run.policy.version}${run.policy.source === 'run' ? ' (this run only)' : ''}`}
+        Profile {run.profile} · {run.stepCount} steps{runCost(run) ? ` · ${runCost(run)}` : ''} · started {new Date(run.createdAt).toLocaleString()}
       </Typography>
-      {run.result && <Alert severity={run.status === 'succeeded' ? 'success' : 'info'} sx={{ my: 2 }}>{run.result}</Alert>}
-      {run.error && <Alert severity="error" sx={{ my: 2 }}>{run.error}</Alert>}
+      <RunHeaderChips policy={run.policy} tier={run.tier} />
+      {/* A typed stop reason (#404) says why in one line; older runs keep the plain result and error. */}
+      {!isLive && run.stopReason ? (
+        <RunStopReason run={run} />
+      ) : (
+        <>
+          {run.result && <Alert severity={run.status === 'succeeded' ? 'success' : 'info'} sx={{ my: 2 }}>{run.result}</Alert>}
+          {run.error && <Alert severity="error" sx={{ my: 2 }}>{run.error}</Alert>}
+        </>
+      )}
       {run.status === 'waiting_human' && <Alert severity="warning" sx={{ my: 2 }}>The agent is waiting for you. Answer its request in the Inbox.</Alert>}
       {isLive && (
         <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
@@ -268,6 +315,7 @@ export function RunDetailPage() {
           )}
         </Stack>
       )}
+      {run.budget && <RunBudgetMeter budget={run.budget} ticking={run.status === 'running'} now={now} />}
       {run.status === 'running' && run.activity && <RunActivityBar activity={run.activity} now={now} />}
       {isLive && watch && (shot || shotFailing) && (
         <Box sx={{ mb: 2 }}>

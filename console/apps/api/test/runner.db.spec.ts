@@ -640,7 +640,7 @@ describe('the goal runner prices every model call (E31.2)', () => {
     const list = await app.inject({ method: 'GET', url: '/api/runs', headers: as(token) });
     expect(list.json<{ data: { id: string; costUsd: number }[] }>().data.find((r) => r.id === run.id)?.costUsd).toBe(0.000282);
     const tasks = await app.inject({ method: 'GET', url: '/api/tasks', headers: as(token) });
-    expect(tasks.json<{ data: { id: string; spend30d: unknown }[] }>().data.find((t) => t.id === task.id)?.spend30d).toEqual({ runs: 1, costUsd: 0.000282, costKnown: true, tokens: 45 });
+    expect(tasks.json<{ data: { id: string; spend30d: unknown }[] }>().data.find((t) => t.id === task.id)?.spend30d).toEqual({ runs: 1, costUsd: 0.000282, costKnown: true, tokens: 45, succeeded: 1, avgSuccessCostUsd: 0.000282 });
 
     // The platform's usage report is priced once the port is bound (`priced: true`).
     const usage = await app.inject({ method: 'GET', url: '/api/admin/ai/usage', headers: as(admin.token) });
@@ -654,6 +654,23 @@ describe('the goal runner prices every model call (E31.2)', () => {
     expect(got).toMatchObject({ modelCalls: 3, costUsd: 0, costKnown: false });
     const tasks = await app.inject({ method: 'GET', url: `/api/tasks/${task.id}`, headers: as(token) });
     expect(tasks.json<{ data: { spend30d: unknown } }>().data.spend30d).toMatchObject({ runs: 1, costUsd: 0, costKnown: false, tokens: 45 });
+  });
+
+  it("averages the task's spend over its successful runs only (#408)", async () => {
+    const { token, userId } = await loginWithToken(`spend-avg-${stamp}@example.test`, 'contributor');
+    const db = app.get(PrismaService).forUser({ userId });
+    const task = await db.task.create({ data: { userId, name: 'Averaged', goal: 'Look around' } });
+    const base = { userId, taskId: task.id, goal: task.goal };
+    await db.run.create({ data: { ...base, status: 'succeeded', costUsd: 0.5, inputTokens: 100, outputTokens: 10 } });
+    await db.run.create({ data: { ...base, status: 'succeeded', costUsd: 1.5, inputTokens: 100, outputTokens: 10 } });
+    await db.run.create({ data: { ...base, status: 'failed', stopReason: 'budget_cost', costUsd: 2, inputTokens: 100, outputTokens: 10 } });
+    const got = (await app.inject({ method: 'GET', url: `/api/tasks/${task.id}`, headers: as(token) })).json<{ data: { spend30d: unknown } }>().data.spend30d;
+    expect(got).toEqual({ runs: 3, costUsd: 4, costKnown: true, tokens: 330, succeeded: 2, avgSuccessCostUsd: 1 });
+
+    const none = await db.task.create({ data: { userId, name: 'Never succeeded', goal: 'Look around' } });
+    await db.run.create({ data: { userId, taskId: none.id, goal: none.goal, status: 'failed', costUsd: 0.25 } });
+    const failedOnly = (await app.inject({ method: 'GET', url: `/api/tasks/${none.id}`, headers: as(token) })).json<{ data: { spend30d: unknown } }>().data.spend30d;
+    expect(failedOnly).toMatchObject({ runs: 1, succeeded: 0, avgSuccessCostUsd: null });
   });
 });
 
@@ -957,6 +974,8 @@ describe('the goal runner enforces budgets (#404)', () => {
       expect(data.budget.used.actions).toBeGreaterThanOrEqual(2);
       expect(data.budget.percent.actions).toBeGreaterThanOrEqual(100);
       expect(data.budget.source).toMatchObject({ actions: 'ceiling', cost: null });
+      // The tier chips of the run page (#408): Unlimited starts on Standard and may reach Frontier.
+      expect((data as unknown as { tier: unknown }).tier).toMatchObject({ start: 'standard', max: 'frontier', current: 'standard', escalations: 0 });
       const list = await app.inject({ method: 'GET', url: '/api/runs', headers: as(token) });
       expect(list.json<{ data: { id: string; stopReason: string; budget: unknown }[] }>().data.find((r) => r.id === run.id)).toMatchObject({ stopReason: 'budget_actions', budget: expect.any(Object) });
       expect(JSON.stringify(data)).not.toContain('policySnapshot');
@@ -969,6 +988,7 @@ describe('the goal runner enforces budgets (#404)', () => {
       const streamed = runEvent.data as { stopReason: string; budget: { effective: { actions: number }; percent: { actions: number } }; policySnapshot?: unknown };
       expect(streamed).toMatchObject({ stopReason: 'budget_actions', budget: { effective: { actions: 2 } } });
       expect(streamed.policySnapshot).toBeUndefined();
+      expect((streamed as unknown as { tier: unknown }).tier).toMatchObject({ start: 'standard', current: 'standard' });
     } finally {
       await app.inject({ method: 'PATCH', url: '/api/system-settings', headers: as(admin.token), payload: { browserAgentCeilings: { maxActions: null } } });
     }

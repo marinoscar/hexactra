@@ -9,6 +9,7 @@ import { RunActionTokens } from './run-action-token';
 import { RunMetrics } from './run-metrics';
 import { RunNotifier } from './run-notifier';
 import { RunRemindHandler, RunRemindTask, RunReminders } from './run-reminders';
+import { RunsQueryService } from './runs.query';
 import { TasksService } from './tasks.service';
 import { TaskSchedulesController } from './task-schedules.controller';
 import { TaskSchedulesService } from './task-schedules.service';
@@ -18,7 +19,7 @@ import { TaskSummaryService } from './task-summary.service';
 @Module({
   imports: [FabricModule, PoliciesModule],
   controllers: [TasksController, TaskSchedulesController, RunsController],
-  providers: [TasksService, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders, RunRemindHandler, RunRemindTask],
-  exports: [TasksService, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders],
+  providers: [TasksService, RunsQueryService, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders, RunRemindHandler, RunRemindTask],
+  exports: [TasksService, RunsQueryService, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders],
 })
 export class TasksModule {}

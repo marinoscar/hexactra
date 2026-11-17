@@ -27,7 +27,7 @@ type Summary = {
   runCounts: { total: number; last7d: { succeeded: number; failed: number; cancelled: number } };
   policy: { id: string; name: string; builtin: boolean; isDefault: boolean } | null;
 };
-type TaskRow = { id: string; name: string; policyId: string | null; spend30d: { runs: number; costUsd: number; costKnown: boolean; tokens: number }; summary: Summary };
+type TaskRow = { id: string; name: string; policyId: string | null; spend30d: { runs: number; costUsd: number; costKnown: boolean; tokens: number; succeeded: number; avgSuccessCostUsd: number | null }; summary: Summary };
 type Page = { items: TaskRow[]; nextCursor: string | null; total: number };
 type ErrorBody = { statusCode: number; code: string; message: string; details?: { path?: string; issues?: { path: string; message: string }[] } };
 
@@ -151,7 +151,7 @@ describe('GET /tasks: summaries, search, filters, sorts and paging', () => {
     expect(alpha.summary.lastRun).toMatchObject({ id: liveRunId, status: 'running', trigger: 'manual', finishedAt: null });
     expect(alpha.summary.runCounts).toEqual({ total: 5, last7d: { succeeded: 1, failed: 0, cancelled: 0 } });
     // The run of 40 days ago is outside the 30 days; one run could not be priced.
-    expect(alpha.spend30d).toEqual({ runs: 4, costUsd: 1.5, costKnown: false, tokens: 1200 });
+    expect(alpha.spend30d).toEqual({ runs: 4, costUsd: 1.5, costKnown: false, tokens: 1200, succeeded: 1, avgSuccessCostUsd: 1.25 });
 
     const bravo = by.get('Bravo')!;
     expect(bravo.summary.scheduleState).toBe('partial');
@@ -160,12 +160,12 @@ describe('GET /tasks: summaries, search, filters, sorts and paging', () => {
     expect(bravo.summary.lastRun!.finishedAt).not.toBeNull();
     expect(bravo.summary.liveRunId).toBeNull();
     expect(bravo.summary.runCounts).toEqual({ total: 2, last7d: { succeeded: 1, failed: 1, cancelled: 0 } });
-    expect(bravo.spend30d).toEqual({ runs: 2, costUsd: 3, costKnown: true, tokens: 0 });
+    expect(bravo.spend30d).toEqual({ runs: 2, costUsd: 3, costKnown: true, tokens: 0, succeeded: 1, avgSuccessCostUsd: 1 });
 
     const charlie = by.get('Charlie')!;
     expect(charlie.summary).toMatchObject({ scheduleState: 'paused', nextRunAt: null, lastRun: null, liveRunId: null, runCounts: { total: 0, last7d: { succeeded: 0, failed: 0, cancelled: 0 } } });
     expect(charlie.summary.schedules[0]!.description).toBe('Custom schedule (5 4 * 2 *)');
-    expect(charlie.spend30d).toEqual({ runs: 0, costUsd: 0, costKnown: true, tokens: 0 });
+    expect(charlie.spend30d).toEqual({ runs: 0, costUsd: 0, costKnown: true, tokens: 0, succeeded: 0, avgSuccessCostUsd: null });
 
     const delta = by.get('delta lower')!;
     expect(delta.summary).toMatchObject({ scheduleState: 'none', schedules: [], nextRunAt: null, runCounts: { total: 1, last7d: { succeeded: 0, failed: 0, cancelled: 1 } } });
@@ -176,6 +176,9 @@ describe('GET /tasks: summaries, search, filters, sorts and paging', () => {
     const one = data<TaskRow>(await get(alice.token, `/api/tasks/${id.alpha}?include=summary`));
     expect(one.summary).toEqual(alpha.summary);
     expect(one.spend30d).toEqual(alpha.spend30d);
+    // The page's spend (one aggregate) and the plain list's (`spendByTask`) are the same figures.
+    const plain = data<TaskRow[]>(await get(alice.token, '/api/tasks'));
+    for (const t of page.items) expect(plain.find((p) => p.id === t.id)!.spend30d).toEqual(t.spend30d);
     expect(data<object>(await get(alice.token, `/api/tasks/${id.alpha}`))).not.toHaveProperty('summary');
     // A list never carries a transcript or a policy snapshot.
     expect(JSON.stringify(page)).not.toMatch(/transcript|policySnapshot|policy_snapshot/);

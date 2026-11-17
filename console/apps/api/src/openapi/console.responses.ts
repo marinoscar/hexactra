@@ -5,6 +5,7 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+import { TIERS } from '../policies/agent-policy.schema';
 import { policySummarySchema } from '../policies/policies.schemas';
 import { BUDGET_KEYS, RUN_STOP_REASONS } from '../runner/budget';
 
@@ -31,6 +32,8 @@ export const taskResponseSchema = z.object({
       costUsd: z.number().describe('USD spent on model calls by those runs; a lower bound while costKnown is false'),
       costKnown: z.boolean().describe('False when a call of those runs could not be priced (its model has no price)'),
       tokens: z.number().int().describe('Input plus output tokens'),
+      succeeded: z.number().int().describe('Of those runs, how many succeeded'),
+      avgSuccessCostUsd: z.number().nullable().describe('The average cost of one successful run (USD; a lower bound while costKnown is false); null with no successful run'),
     })
     .describe("What the task's runs spent in the last 30 days"),
   createdAt: iso,
@@ -69,6 +72,17 @@ export const runBudgetSchema = z
   })
   .describe('The run budget: `null` on a run that has not started or that was snapshotted before budgets were enforced.');
 
+/** Which model tier a run is on (#408). */
+export const runTierSchema = z
+  .object({
+    start: z.enum(TIERS).describe('The tier the policy starts runs on'),
+    max: z.enum(TIERS).describe('The highest tier the run may escalate to'),
+    current: z.enum(TIERS).describe('The tier the run is on now: the start tier until a stall escalates it'),
+    escalations: z.number().int().describe('How many times the run escalated'),
+    model: z.string().nullable().describe("The current tier's model, as `provider:modelId`; null when none was resolved"),
+  })
+  .describe("The run's model tier, from its policy snapshot: null until the run has started.");
+
 export const runResponseSchema = z.object({
   id: z.uuid(),
   userId: z.uuid(),
@@ -92,6 +106,7 @@ export const runResponseSchema = z.object({
   policy: policySummarySchema.nullable(),
   stopReason: z.enum(RUN_STOP_REASONS).nullable().describe('Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field.'),
   budget: runBudgetSchema.nullable(),
+  tier: runTierSchema.nullable(),
   currentTier: z.enum(['fast', 'standard', 'frontier']).nullable().describe('The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts.'),
   escalations: z.number().int().describe('How many times the run moved to a stronger tier because it stalled'),
   cachedInputTokens: z.number().int().describe('Input tokens the provider served from its cache (part of inputTokens)'),
@@ -103,6 +118,37 @@ export const runResponseSchema = z.object({
   finishedAt: iso.nullable(),
 });
 export class RunResponseDto extends createZodDto(runResponseSchema) {}
+
+/** A run in a list (`GET /runs`): the run, with its task's name and a budget only while it is live. */
+export const runListItemResponseSchema = runResponseSchema.extend({
+  taskName: z.string().nullable().describe("The run's task name; null for a run without a task (ad-hoc, external) or whose task was deleted"),
+  budget: runBudgetSchema.nullable().describe('The run budget while the run is live (queued, running, waiting_human); null on a finished run in a list (read it from `GET /runs/{id}`).'),
+});
+export class RunListItemResponseDto extends createZodDto(runListItemResponseSchema) {}
+
+/** `GET /runs?envelope=1`: one page of runs. */
+export const runPageResponseSchema = z.object({
+  items: z.array(runListItemResponseSchema),
+  nextCursor: z.string().nullable().describe('Pass it as `cursor` to read the next page; null on the last page. Opaque: do not parse or build it.'),
+});
+export class RunPageResponseDto extends createZodDto(runPageResponseSchema) {}
+
+/** `GET /runs/counts`. */
+export const runCountsResponseSchema = z.object({
+  total: z.number().int().describe('Runs that match the filter'),
+  live: z.number().int().describe('Of those: queued + running + waiting_human'),
+  byStatus: z.object({
+    queued: z.number().int(),
+    running: z.number().int(),
+    waiting_human: z.number().int(),
+    succeeded: z.number().int(),
+    failed: z.number().int(),
+    cancelled: z.number().int(),
+  }),
+  costUsd: z.number().nullable().describe('USD spent by the matching runs; null when none of them made a model call. A lower bound while costKnown is false'),
+  costKnown: z.boolean().describe('False when a matching run had a call that could not be priced'),
+});
+export class RunCountsResponseDto extends createZodDto(runCountsResponseSchema) {}
 
 export const runStepResponseSchema = z.object({
   id: z.uuid(),

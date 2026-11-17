@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { assertTransition, isTerminal, type RunStatus } from './run-status';
-import type { CreateTaskDto, ListRunsDto, UpdateTaskDto } from './tasks.schemas';
+import type { CreateTaskDto, UpdateTaskDto } from './tasks.schemas';
 import { FabricClient } from '../fabric/fabric.client';
 import { activeElapsedMs } from '../runner/active-time';
 import { RunMetrics } from './run-metrics';
@@ -11,7 +11,7 @@ import { PoliciesService } from '../policies/policies.service';
 import type { RunStopReason } from '../runner/budget';
 import { isDefaultLimits } from '../policies/legacy-task-policy';
 import { STOP_WAITING, startWaiting } from './reminder-schedule';
-import { NO_SPEND, SPEND_WINDOW_DAYS, withCost, type TaskSpend } from './run-cost';
+import { averageUsd, NO_SPEND, SPEND_WINDOW_DAYS, withCost, type TaskSpend } from './run-cost';
 import type { RequestWithHeaders } from '@marinoscar/platform-api/core';
 import { TaskSchedulesService } from './task-schedules.service';
 
@@ -55,18 +55,23 @@ export class TasksService {
     if (taskIds.length === 0) return out;
     const db = this.db(userId);
     const where = { taskId: { in: taskIds }, createdAt: { gte: new Date(Date.now() - SPEND_WINDOW_DAYS * 86_400_000) } };
-    const [sums, unknown] = await Promise.all([
+    const [sums, unknown, successes] = await Promise.all([
       db.run.groupBy({ by: ['taskId'], where, _count: { _all: true }, _sum: { costUsd: true, inputTokens: true, outputTokens: true } }),
       db.run.groupBy({ by: ['taskId'], where: { ...where, costKnown: false }, _count: { _all: true } }),
+      db.run.groupBy({ by: ['taskId'], where: { ...where, status: 'succeeded' }, _count: { _all: true }, _sum: { costUsd: true } }),
     ]);
     const unpriced = new Set(unknown.map((g) => g.taskId));
+    const won = new Map(successes.map((g) => [g.taskId, { count: g._count._all, costUsd: Number(g._sum.costUsd ?? 0) }]));
     for (const g of sums) {
       if (!g.taskId) continue;
+      const ok = won.get(g.taskId);
       out.set(g.taskId, {
         runs: g._count._all,
         costUsd: Number(g._sum.costUsd ?? 0),
         costKnown: !unpriced.has(g.taskId),
         tokens: (g._sum.inputTokens ?? 0) + (g._sum.outputTokens ?? 0),
+        succeeded: ok?.count ?? 0,
+        avgSuccessCostUsd: ok ? averageUsd(ok.costUsd, ok.count) : null,
       });
     }
     return out;
@@ -139,16 +144,6 @@ export class TasksService {
   async deleteTask(userId: string, id: string): Promise<void> {
     const { count } = await this.db(userId).task.deleteMany({ where: { id } });
     if (count === 0) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
-  }
-
-  async listRuns(userId: string, q: ListRunsDto) {
-    const runs = await this.db(userId).run.findMany({
-      where: { ...(q.taskId ? { taskId: q.taskId } : {}), ...(q.status ? { status: q.status } : {}) },
-      orderBy: { createdAt: 'desc' },
-      take: q.limit,
-      omit: { transcript: true },
-    });
-    return runs.map(withCost);
   }
 
   async getRun(userId: string, id: string) {
