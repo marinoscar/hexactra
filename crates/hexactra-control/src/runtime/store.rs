@@ -683,10 +683,13 @@ impl RuntimeStore {
                 if usable.is_empty() {
                     return Err(StoreError::NoHostAvailable);
                 }
-                // Spread sessions: among hosts with the profile (running ones
-                // first), the one with the fewest active sessions, then the
-                // most recently seen. Without the load term every session of a
-                // profile landed on one host (scripts/load/fabric-load.mjs).
+                // Spread sessions: among hosts with the profile, home nodes
+                // before the bundled container (it browses from a datacenter
+                // IP, #385), then running ones, then the one with the fewest
+                // active sessions, then the most recently seen. Without the
+                // load term every session of a profile landed on one host
+                // (scripts/load/fabric-load.mjs).
+                let home = |v: &HostView| v.mode != Some(HostMode::Container);
                 let mut load: HashMap<Uuid, usize> = HashMap::new();
                 for s in inner.sessions.values() {
                     if s.status == RemoteSessionStatus::Active {
@@ -698,6 +701,7 @@ impl RuntimeStore {
                     .filter(|(_, has, _)| *has)
                     .max_by_key(|(v, _, running)| {
                         (
+                            home(v),
                             *running,
                             std::cmp::Reverse(load.get(&v.id).copied().unwrap_or(0)),
                             v.last_seen,
@@ -709,7 +713,7 @@ impl RuntimeStore {
                     None if create_profile => usable
                         .iter()
                         .filter(|(v, _, _)| v.on_demand)
-                        .max_by_key(|(v, _, _)| v.last_seen)
+                        .max_by_key(|(v, _, _)| (home(v), v.last_seen))
                         .map(|(v, _, _)| v.id)
                         .ok_or_else(|| {
                             StoreError::Invalid(
@@ -1144,6 +1148,45 @@ mod tests {
             Some("https://viewer.example.test/")
         );
         assert_eq!(s.create_session(None, None).unwrap().host_id, h);
+    }
+
+    #[tokio::test]
+    async fn automatic_choice_prefers_home_nodes_over_the_container() {
+        let s = RuntimeStore::new();
+        let container = s.register_host(None, "local".into(), "0".into());
+        s.set_host_mode(container, Some(HostMode::Container), true)
+            .unwrap();
+        s.set_host_on_demand(container, true).unwrap();
+        // Only the container: it takes the session.
+        assert_eq!(s.create_session(None, None).unwrap().host_id, container);
+        // A home node joins, with the profile and more load than the container.
+        let home = s.register_host(None, "mini-pc".into(), "0".into());
+        s.set_host_mode(home, Some(HostMode::Unattended), true)
+            .unwrap();
+        s.set_host_on_demand(home, true).unwrap();
+        s.create_session(Some(home), None).unwrap();
+        s.create_session(Some(home), None).unwrap();
+        for _ in 0..3 {
+            assert_eq!(s.create_session(None, None).unwrap().host_id, home);
+        }
+        // Disabled (draining) hosts are never chosen automatically.
+        s.enqueue_host_command(
+            home,
+            hexactra_core::remote::HostCommand::Drain { enabled: true },
+            Duration::from_secs(1),
+        )
+        .unwrap();
+        assert_eq!(s.create_session(None, None).unwrap().host_id, container);
+        s.enqueue_host_command(
+            container,
+            hexactra_core::remote::HostCommand::Drain { enabled: true },
+            Duration::from_secs(1),
+        )
+        .unwrap();
+        assert_eq!(
+            s.create_session(None, None).unwrap_err(),
+            StoreError::NoHostAvailable
+        );
     }
 
     #[tokio::test]

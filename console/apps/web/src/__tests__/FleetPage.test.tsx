@@ -50,7 +50,7 @@ describe('FleetPage', () => {
     // Hosts are viewed in the console (Open desktop), never through an external viewer link.
     expect(within(card).queryByRole('link', { name: 'Open the viewer' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Enroll host' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Drain' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: 'Enabled: vps' })).not.toBeInTheDocument();
   });
 
   it('shows each host mode and which hosts can share a desktop', async () => {
@@ -76,19 +76,20 @@ describe('FleetPage', () => {
     expect(within(screen.getByLabelText('Host mini-pc-attended')).queryByRole('link', { name: 'Open desktop' })).not.toBeInTheDocument();
   });
 
-  it('drains a host, manages profiles and enrolls a new host for a writer', async () => {
+  it('disables a host, manages profiles and enrolls a new host for a writer', async () => {
     const host = renderPage(['fleet:read', 'fleet:write'], {
       [`POST /fleet/hosts/${ID}/drain`]: { state: 'succeeded' },
       [`POST /fleet/hosts/${ID}/profiles/travel/restart`]: { state: 'succeeded' },
       'POST /fleet/enrollments': enrollment,
     });
-    fireEvent.click(await screen.findByRole('button', { name: 'Drain' }));
+    fireEvent.click(await screen.findByRole('switch', { name: 'Enabled: vps' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Restart travel on vps' }));
     fireEvent.click(screen.getByRole('button', { name: 'Enroll host' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Create token' }));
     expect(await screen.findByLabelText('Agent command')).toHaveTextContent('--enrollment-token hxe_x');
     const calls = host.requests.map((r) => `${r.method} ${r.path}`);
     expect(calls).toContain(`POST /fleet/hosts/${ID}/drain`);
+    expect(host.requests.find((r) => r.path === `/fleet/hosts/${ID}/drain`)?.body).toEqual({ enabled: true });
     expect(calls).toContain(`POST /fleet/hosts/${ID}/profiles/travel/restart`);
     expect(calls).toContain('POST /fleet/enrollments');
   });
