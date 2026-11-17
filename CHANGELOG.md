@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Stall detection, tier escalation and provider fallback** (#405).
+  - Stall detection is always on, including under the Unlimited policy. It watches for consecutive failures, a repeated action, no progress and idle rounds.
+  - The policy's `onStall` response decides what happens: nudge, then escalate to a stronger tier; escalate at once; ask a person; or stop as `stalled`.
+  - Escalation switches model tiers only between chunks, and the run returns to its start tier after 5 progressing actions.
+  - A provider outage or rate limit retries the chunk once on the tier's fallback model.
+  - Routing steps show in the run timeline. Runs carry `currentTier` and `escalations`.
+  - Fixed: an unavailable provider is no longer mistaken for a model that refuses images.
 - **Context efficiency follows the run's policy** (#406).
   - Settings: `callsPerChunk`, `observationChars`, `screenshotsKept` and `pruneBatch`.
   - Screenshot window: the model sees the last few screenshots. Old ones are pruned in batches, so the provider's prompt cache keeps hitting, and only their hashes are stored.
