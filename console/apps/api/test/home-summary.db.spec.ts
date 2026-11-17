@@ -28,7 +28,7 @@ type Wire = {
   generatedAt: string;
   timezone: string;
   needsYou: { count: number; items: Record<string, unknown>[] } | null;
-  liveRuns: { count: number; items: Record<string, unknown>[] } | null;
+  liveRuns: { count: number; running: number; items: Record<string, unknown>[] } | null;
   upcoming: { items: Record<string, unknown>[]; pausedCount: number; failingCount: number } | null;
   recentRuns: { items: Record<string, unknown>[] } | null;
   week: { totals: Record<string, unknown>; series: { date: string; succeeded: number; failed: number; cancelled: number; costUsd: number | null }[] } | null;
@@ -220,6 +220,7 @@ describe('GET /api/home/summary: a busy account', () => {
 
   it('live runs: the count of all, six listed, running first then waiting then queued, newest first within each', () => {
     expect(s.liveRuns!.count).toBe(8);
+    expect(s.liveRuns!.running).toBe(4);
     expect(s.liveRuns!.items.map((r) => r.status)).toEqual(['running', 'running', 'running', 'running', 'waiting_human', 'waiting_human']);
     expect(s.liveRuns!.items[0]).toMatchObject({
       id: id.limited,
@@ -396,7 +397,7 @@ describe('GET /api/home/summary: permissions', () => {
     const viewer = await login(`home-viewer-${stamp}@example.test`, 'viewer');
     const s = await summaryOf(viewer.token);
     expect(s.needsYou).toEqual({ count: 0, items: [] });
-    expect(s.liveRuns).toEqual({ count: 0, items: [] });
+    expect(s.liveRuns).toEqual({ count: 0, running: 0, items: [] });
     expect(s.upcoming).toEqual({ items: [], pausedCount: 0, failingCount: 0 });
     expect(s.recentRuns).toEqual({ items: [] });
     expect(s.week!.series).toHaveLength(7);

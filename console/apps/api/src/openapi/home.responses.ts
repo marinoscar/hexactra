@@ -74,7 +74,7 @@ export const homeSummaryResponseSchema = z.object({
     .nullable()
     .describe('Questions waiting for the user. Needs `runs:read`; null without it. Never an answer or a secret.'),
   liveRuns: z
-    .object({ count: z.number().int(), items: z.array(homeLiveRunSchema).describe('At most 6: running first, then waiting for a person, then queued; newest first within each') })
+    .object({ count: z.number().int(), running: z.number().int().describe('How many of `count` are running; the others wait for a person or a machine'), items: z.array(homeLiveRunSchema).describe('At most 6: running first, then waiting for a person, then queued; newest first within each') })
     .nullable()
     .describe('Runs that are not finished. Needs `runs:read`; null without it.'),
   upcoming: z

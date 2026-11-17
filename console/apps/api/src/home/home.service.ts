@@ -90,7 +90,8 @@ export interface HomeSummary {
   generatedAt: Date;
   timezone: string;
   needsYou: { count: number; items: HomeQuestion[] } | null;
-  liveRuns: { count: number; items: HomeLiveRun[] } | null;
+  /** `running`: how many of `count` are running (the rest wait for a person or a machine). */
+  liveRuns: { count: number; running: number; items: HomeLiveRun[] } | null;
   upcoming: {
     items: { scheduleId: string; taskId: string; taskName: string; nextRunAt: Date; description: string; timezone: string }[];
     pausedCount: number;
@@ -171,7 +172,7 @@ export class HomeService {
       generatedAt: now,
       timezone,
       needsYou,
-      liveRuns: live && { count: live.count, items: live.items.map((r) => ({ ...r, hostName: (r.hostId && hostNames.get(r.hostId)) || null })) },
+      liveRuns: live && { count: live.count, running: live.running, items: live.items.map((r) => ({ ...r, hostName: (r.hostId && hostNames.get(r.hostId)) || null })) },
       upcoming: upcoming && { items: upcoming, pausedCount: account?.paused ?? 0, failingCount: account?.failing ?? 0 },
       recentRuns: recentRuns && { items: recentRuns },
       week,
@@ -203,7 +204,7 @@ export class HomeService {
   }
 
   /** The runs that are not finished: running first, then waiting for a person, then queued; newest first within each. */
-  private async liveRuns(userId: string, now: Date): Promise<{ count: number; items: Omit<HomeLiveRun, 'hostName'>[] }> {
+  private async liveRuns(userId: string, now: Date): Promise<{ count: number; running: number; items: Omit<HomeLiveRun, 'hostName'>[] }> {
     const rows = await this.prisma.$queryRaw<
       {
         id: string;
@@ -227,6 +228,7 @@ export class HomeService {
         activeMs: number;
         activeSince: Date | null;
         total: number;
+        running: number;
       }[]
     >(Prisma.sql`
       SELECT r.id::text AS id, r.task_id::text AS "taskId", t.name AS "taskName", left(r.goal, ${TEXT_MAX}) AS goal,
@@ -236,7 +238,7 @@ export class HomeService {
              r.policy_snapshot->'effectiveBudget' AS "effectiveBudget",
              r.model_calls AS "modelCalls", r.input_tokens AS "inputTokens", r.output_tokens AS "outputTokens",
              r.cost_usd::float8 AS "costUsd", r.cost_known AS "costKnown", r.active_ms AS "activeMs", r.active_since AS "activeSince",
-             (count(*) OVER ())::int AS total
+             (count(*) OVER ())::int AS total, (count(*) FILTER (WHERE r.status = 'running') OVER ())::int AS running
       FROM runs r
       LEFT JOIN tasks t ON t.id = r.task_id AND t.user_id = r.user_id
       WHERE r.user_id = ${userId}::uuid AND r.status IN ('queued', 'running', 'waiting_human')
@@ -244,6 +246,7 @@ export class HomeService {
       LIMIT ${HOME_LIMITS.liveRuns}`);
     return {
       count: rows[0]?.total ?? 0,
+      running: rows[0]?.running ?? 0,
       items: rows.map((r) => {
         // The run's stored budget, read the way the run API and the stream read it; nothing is recomputed here.
         const effective = readEffectiveBudget(r.effectiveBudget);
