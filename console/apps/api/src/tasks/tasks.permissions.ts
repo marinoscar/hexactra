@@ -4,4 +4,6 @@ export const TASKS_PERMISSIONS = {
   TASKS_WRITE: { id: 'tasks:write', description: 'Create, edit and delete own browser tasks', scope: 'org', defaultGrants: ['contributor', 'org_admin'] },
   RUNS_READ: { id: 'runs:read', description: 'See own runs and their steps', scope: 'org', defaultGrants: ['contributor', 'viewer', 'org_admin'] },
   RUNS_WRITE: { id: 'runs:write', description: 'Start and cancel runs', scope: 'org', defaultGrants: ['contributor', 'org_admin'] },
+  /** Apart from `runs:write`, so a role can start and answer runs without being able to erase history (#421). */
+  RUNS_DELETE: { id: 'runs:delete', description: 'Delete own runs and their steps', scope: 'org', defaultGrants: ['contributor', 'org_admin'] },
 } as const;
