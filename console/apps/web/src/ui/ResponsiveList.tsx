@@ -44,8 +44,8 @@ export interface ResponsiveListProps<T> {
   /** Names an item for its selection checkbox ("Select {label}"); default: its key. */
   getLabel?: (item: T) => string;
   /**
-   * Past this many items the list is windowed: rows far from the viewport are
-   * replaced by a spacer of their measured height, in chunks of
+   * Past this many items the list is windowed: rows (or cards) far from the
+   * viewport are replaced by a spacer of their measured height, in chunks of
    * `WINDOW_CHUNK`. Off by default, and where `IntersectionObserver` is missing.
    */
   windowAfter?: number;
@@ -106,6 +106,17 @@ function TableChunk({ windowed, colSpan, children }: { windowed: boolean; colSpa
   );
 }
 
+/** A group of cards that collapses to a spacer of its measured height while it is far from the viewport. */
+function CardChunk({ windowed, children }: { windowed: boolean; children: () => ReactNode }) {
+  const { ref, near, height } = useNearViewport<HTMLLIElement>(windowed);
+  return (
+    // Presentational: the cards inside are the list's items.
+    <Box component="li" ref={ref} role="presentation" sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, minWidth: 0 }} style={near ? undefined : { height }}>
+      {near ? children() : null}
+    </Box>
+  );
+}
+
 /** True when the event came from a control inside the row (a checkbox, a button, a link), which handles it itself. */
 function fromControl(target: EventTarget, row: HTMLElement): boolean {
   const el = target instanceof Element ? target.closest('a, button, input, select, textarea, label, [role="button"], [role="menuitem"], [role="checkbox"]') : null;
@@ -163,16 +174,21 @@ export function ResponsiveList<T>({ items, columns, renderCard, getKey, onRowCli
           </Box>
         )}
         <Stack spacing={1.5} component="ul" aria-label={label} sx={{ listStyle: 'none', p: 0, m: 0 }}>
-          {items.map((item) => {
-            const key = getKey(item);
-            return (
-              // Windowed: the browser skips laying out and painting a card that is off screen.
-              <Box component="li" key={key} sx={{ display: 'flex', alignItems: 'flex-start', minWidth: 0, ...(windowed ? { contentVisibility: 'auto', containIntrinsicSize: 'auto 150px' } : {}) }}>
-                {selection && checkbox(item, key, { mt: 0.5, width: 44, height: 44 })}
-                <Box sx={{ flexGrow: 1, minWidth: 0 }}>{renderCard(item)}</Box>
-              </Box>
-            );
-          })}
+          {chunks.map((chunk, chunkIndex) => (
+            <CardChunk key={chunk[0] ? getKey(chunk[0]) : chunkIndex} windowed={windowed}>
+              {() =>
+                chunk.map((item) => {
+                  const key = getKey(item);
+                  return (
+                    <Box key={key} role="listitem" sx={{ display: 'flex', alignItems: 'flex-start', minWidth: 0 }}>
+                      {selection && checkbox(item, key, { mt: 0.5, width: 44, height: 44 })}
+                      <Box sx={{ flexGrow: 1, minWidth: 0 }}>{renderCard(item)}</Box>
+                    </Box>
+                  );
+                })
+              }
+            </CardChunk>
+          ))}
         </Stack>
         {footer}
       </Box>
