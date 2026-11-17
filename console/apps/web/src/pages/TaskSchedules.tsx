@@ -85,7 +85,7 @@ export function TaskSchedules({ taskId, canWrite, catalog, taskPolicyId }: TaskS
               <ScheduleSummary schedule={s} catalog={catalog} profileTimezone={profileTimezone} />
             </Box>
             {canWrite && (
-              <Stack direction="row" spacing={0.5}>
+              <Stack direction="row" spacing={0.5} sx={{ '& .MuiButton-root': { minHeight: { xs: 44, sm: 'auto' } } }}>
                 <Button size="small" disabled={busy !== null} onClick={() => open(draftFromSchedule(s))}>
                   Edit
                 </Button>
@@ -101,7 +101,7 @@ export function TaskSchedules({ taskId, canWrite, catalog, taskPolicyId }: TaskS
         ))}
       </Stack>
       {canWrite && (
-        <Button disabled={busy !== null} onClick={() => open(newScheduleDraft(profileTimezone))}>
+        <Button disabled={busy !== null} onClick={() => open(newScheduleDraft(profileTimezone))} sx={{ minHeight: { xs: 44, sm: 'auto' } }}>
           Add schedule
         </Button>
       )}
