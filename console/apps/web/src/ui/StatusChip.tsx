@@ -7,6 +7,7 @@ import PersonOutlineIcon from '@mui/icons-material/PersonOutlined';
 import { Chip } from '@mui/material';
 import type { ElementType } from 'react';
 
+import { BUDGET_LABEL, type BudgetKey } from '../components/runBudget';
 import type { RunStatus, RunStopReason } from '../types/runs';
 
 export type StatusColor = 'default' | 'info' | 'warning' | 'success' | 'error';
@@ -45,15 +46,21 @@ export function isTerminal(status: RunStatus | string): boolean {
   return status === 'succeeded' || status === 'failed' || status === 'cancelled';
 }
 
-/** Every value of `runs.stop_reason`, in words. */
+const budgetLabel = (key: BudgetKey) => `${BUDGET_LABEL[key].toLowerCase()} budget`;
+
+/**
+ * Every value of `runs.stop_reason`, in words. The budget wording comes from
+ * #408's `BUDGET_LABEL` (components/runBudget.ts), so the chip, the runs
+ * list's stop chip and the run page's stop line name a budget the same way.
+ */
 export const STOP_REASON_LABEL: Record<RunStopReason, string> = {
   finished: 'finished',
-  budget_actions: 'action budget',
-  budget_model_calls: 'model call budget',
-  budget_active_time: 'time budget',
-  budget_input_tokens: 'input token budget',
-  budget_output_tokens: 'output token budget',
-  budget_cost: 'cost budget',
+  budget_actions: budgetLabel('actions'),
+  budget_model_calls: budgetLabel('modelCalls'),
+  budget_active_time: budgetLabel('activeMinutes'),
+  budget_input_tokens: budgetLabel('inputTokens'),
+  budget_output_tokens: budgetLabel('outputTokens'),
+  budget_cost: budgetLabel('cost'),
   stalled: 'stalled',
   cancelled: 'cancelled',
   error: 'error',

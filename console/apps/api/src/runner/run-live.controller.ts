@@ -21,6 +21,7 @@ import { Observable } from 'rxjs';
 import { FabricClient, FabricError, type FabricHost } from '../fabric/fabric.client';
 import { PrismaService } from '../prisma/prisma.service';
 import { readSnapshot, snapshotBudgetView } from '../policies/policy-snapshot';
+import { runTierView } from '../policies/run-tier-view';
 import { withCost } from '../tasks/run-cost';
 import { FabricSession } from './fabric-session';
 
@@ -67,10 +68,11 @@ export class RunLiveController {
     return withCost(run);
   }
 
-  /** What a `run` event carries: the run's live columns and its budget (#404); never the policy snapshot. */
+  /** What a `run` event carries: the run's live columns, its budget (#404) and its tier (#408); never the policy snapshot. */
   private liveView(run: Awaited<ReturnType<RunLiveController['ownRun']>>) {
     const { policySnapshot, activeSince: _since, ...rest } = run;
-    return { ...rest, budget: snapshotBudgetView(readSnapshot(policySnapshot), run) };
+    const snapshot = readSnapshot(policySnapshot);
+    return { ...rest, budget: snapshotBudgetView(snapshot, run), tier: runTierView(snapshot, run) };
   }
 
   /**
@@ -96,9 +98,11 @@ export class RunLiveController {
             observer.next({ type: 'step', id: `step-${s.seq}`, data: s });
             lastSeq = s.seq;
           }
-          const state = JSON.stringify([run.status, run.stepCount, run.result, run.error, run.handoffId, run.cancelRequested, run.activity, run.costUsd, run.modelCalls, run.stopReason, run.inputTokens, run.outputTokens, run.currentTier, run.escalations]);
+          const view = this.liveView(run);
+          // Not the budget itself: its active time moves every tick (the page ticks it on its own).
+          const state = JSON.stringify([run.status, run.stepCount, run.result, run.error, run.handoffId, run.cancelRequested, run.activity, run.costUsd, run.modelCalls, run.stopReason, run.inputTokens, run.outputTokens, view.tier, run.currentTier, run.escalations]);
           if (state !== lastState) {
-            observer.next({ type: 'run', data: this.liveView(run) });
+            observer.next({ type: 'run', data: view });
             lastState = state;
             sinceBeat = 0;
           } else if ((sinceBeat += POLL_MS) >= HEARTBEAT_MS) {

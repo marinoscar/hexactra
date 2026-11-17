@@ -32,6 +32,17 @@ README, "Add your first feature" is the recipe for a model, permission, settings
 - Locate code with `grep -rn` before opening a file; read only the files a task names plus their direct neighbours.
 - Use one subagent at a time and hand it the section to read, not the whole document.
 
+## MANDATORY: Agent run policies
+
+A run's models and limits come from its agent policy ([README, Agent policies](README.md#agent-policies)). The rules below keep that true.
+
+1. **Every browser-agent model call goes through the snapshot's resolved tiers.** The runner builds each call's provider, model, reasoning effort and output cap with `tierRequest(snapshot, tier)` (`apps/api/src/runner/tier-request.ts`), or `fallbackRequest` for a tier's fallback model. Never hard-code a model, never read `task.model` or `ai.defaultModel` in the runner, and never leave the model to the platform default for a `browser_agent` call.
+2. **The runner reads only `runs.policy_snapshot`.** It never re-reads the policy row, the user's settings or the ceilings during a run: the snapshot (written once at the run's first step by `policySnapshot` in `goal-runner.service.ts`) holds the spec, the effective budget and the resolved tiers.
+3. **A new budget is added in two places together:** a nullable field in `budgetSchema` of `agentPolicySpecSchema` (`apps/api/src/policies/agent-policy.schema.ts`, with `BUDGET_LIMIT_KEYS`) and a key in `BudgetTracker` (`apps/api/src/runner/budget.ts`, with `BUDGET_KEYS`, its stop reason and the ceilings schema). `null` always means unlimited, and every budget stop writes a typed `stop_reason`.
+4. **Stall detection stays on for every policy, including Unlimited.** Do not add a way to switch it off. `stall.ts` keeps only digests, never typed text, secrets or images.
+5. **A policy never widens the task's opt-ins** (allowed sites, confirmation before purchases) and never holds a secret. Built-ins are code in `builtin-policies.ts`: change a value by bumping its `version`.
+6. **The export format is versioned** (`hexactra.agent-policies`, `formatVersion`): a change to the spec that older files cannot satisfy bumps `schemaVersion` and keeps the importer reading the old one.
+
 ## Platform invariants this app must still respect
 
 The packages enforce these in their own code; your code must not undo them. `apps/api/test/conformance.spec.ts` (`runPlatformConformance()`) checks the first, third and fourth on every `npm test`.

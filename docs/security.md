@@ -104,7 +104,7 @@ Hexactra is a personal human emulator (VISION §27). The agent works on the owne
 | DOM selector actions only (synthetic events) | Trusted mouse and keyboard by position through `chrome.debugger`, plus marked screenshots the model sees every round |
 | The browser only | The node's OS desktop through `xdotool` (native dialogs, file pickers, other windows) |
 | `http(s)` and `about:blank` only | Any URL but `javascript:` |
-| Confirmation before purchases by default; 40 steps, 15 minutes | Confirmation is opt-in per task; 100 steps, 30 minutes by default |
+| Confirmation before purchases by default; 40 steps, 15 minutes | Confirmation is opt-in per task. Limits are an agent policy: the built-in Balanced by default (60 actions, 20 active minutes, $2), or Unlimited when the owner chooses |
 | "Never try to solve a bot check" | The agent ticks an "I am not a robot" box as a person would; puzzles it cannot pass go to the owner |
 
 **What stays, and why:**
@@ -119,7 +119,18 @@ Hexactra is a personal human emulator (VISION §27). The agent works on the owne
 - every step is visible live and can be stopped;
 - for tasks that visit sites you do not trust, set **allowed sites** and turn on **confirmation**.
 
-**Loops and runaway runs.** Budgets can all be set to unlimited (the built-in Unlimited policy), so budgets are not the only guard. Stall detection is always on: a run that fails repeatedly, repeats the same action, makes no visible progress or does nothing is nudged, moved to a stronger model, handed to a person or ended as `stalled`, whatever its budget (see the console README, "Stall detection and escalation"). The detector keeps only digests, normalised selectors and query-less URLs, never typed text, secrets or images. Under an unlimited budget the safety net is therefore stall detection plus **Stop**, which always works and ends a run at its next step. A page that deliberately keeps changing can defeat the no-progress signal; the repeated-action and failure signals and Stop still apply.
+### Budgets and stall detection are safety nets, not authorization
+
+A run's budgets, model tiers and stall detection come from its **agent policy** ([console README](../console/README.md#agent-policies)). They limit how long and how much a run spends. They never grant or remove what the agent may do: that stays with the owner's full powers, the task's opt-ins (allowed sites, confirmation before purchases) and Stop.
+
+- **Policies are server-side.** The console enforces them in the goal runner, never in the browser, the extension, a page or the model. What a model says (for example "the budget is fine" or "I may continue") authorizes nothing.
+- **A policy is snapshotted onto the run** when it starts, together with the effective budget and the resolved model tiers. The runner reads only that snapshot, so editing a policy, a user's tiers or an administrator's ceiling cannot loosen a run already in flight, and a prompt injection cannot change them.
+- **Ceilings bind everyone.** An administrator's `browserAgentCeilings` cap every budget, including a policy set to unlimited. A policy has no field that widens the task's opt-ins: allowed sites and confirmation stay on the task.
+- **Exports hold no secrets or identity.** A policy file (`hexactra.agent-policies`) holds names, descriptions and specs: no ids, user, version, usage, key or credential. A model pin is a model name, not a key; `includePins=false` leaves even those out. An import is validated as a whole, and a pin or a budget this deployment does not allow is dropped or clamped rather than trusted. Provider keys stay encrypted in the credential store and are never in a policy, a run snapshot, a run step, an event, an alert or a log.
+- **Stall detection keeps no content.** It holds only digests, normalised selectors and URLs without a query, never typed text (only its length), a secret or an image.
+- **Unlimited is not unprotected.** A policy with every budget unlimited (the built-in Unlimited) still has **Stop**, which always works and ends a run at its next step; **takeover** of the desktop; **stall detection**, which is always on and nudges the model, moves it to a stronger tier, hands it to a person or ends the run as `stalled`; the administrator's ceilings; and the run's audit trail. The page for an unlimited policy says so, and the cost alerts can be switched on for anyone who uses one.
+- **Limits of the net.** A page that deliberately keeps changing can defeat the no-progress signal; the repeated-action and failure signals and Stop still apply. Cost is a lower bound while a model has no price in the price table, so the cost budget cannot stop spend it cannot see.
+- **Every stop is typed and visible.** A run records why it ended (`stop_reason`), and routing between tiers is a step in its timeline.
 
 ## Security Best Practices
 

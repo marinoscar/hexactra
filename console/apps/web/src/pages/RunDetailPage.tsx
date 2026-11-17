@@ -5,6 +5,8 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { fetchRunScreenshot, subscribeRun } from '../live';
 import { ActionOverlay, frameCaption, RunActivityBar, useNow } from '../components/RunActivity';
+import { RunBudgetMeter, RunHeaderChips, RunStopReason } from '../components/RunBudgetMeter';
+import { runCost } from '../components/runBudget';
 import { RunTimeline } from '../components/RunTimeline';
 import { withStreamedSteps } from '../components/runTimeline';
 import type { Run, RunStep } from '../types/runs';
@@ -127,15 +129,22 @@ export function RunDetailPage() {
         back={back}
         subtitle={
           <>
-            Profile {run.profile} · {run.stepCount} steps · started {formatDateTime(run.createdAt)}
-            {run.policy && ` · policy ${run.policy.name} v${run.policy.version}${run.policy.source === 'run' ? ' (this run only)' : ''}`}
+            Profile {run.profile} · {run.stepCount} steps{runCost(run) ? ` · ${runCost(run)}` : ''} · started {formatDateTime(run.createdAt)}
           </>
         }
       >
-        <StatusChip status={run.status} stopReason={run.stopReason} size="medium" />
+        <StatusChip status={run.status} size="medium" />
       </PageHeader>
-      {run.result && <Alert severity={run.status === 'succeeded' ? 'success' : 'info'} sx={{ my: 2 }}>{run.result}</Alert>}
-      {run.error && <Alert severity="error" sx={{ my: 2 }}>{run.error}</Alert>}
+      <RunHeaderChips policy={run.policy} tier={run.tier} />
+      {/* A typed stop reason (#404) says why in one line; older runs keep the plain result and error. */}
+      {!isLive && run.stopReason ? (
+        <RunStopReason run={run} />
+      ) : (
+        <>
+          {run.result && <Alert severity={run.status === 'succeeded' ? 'success' : 'info'} sx={{ my: 2 }}>{run.result}</Alert>}
+          {run.error && <Alert severity="error" sx={{ my: 2 }}>{run.error}</Alert>}
+        </>
+      )}
       {run.status === 'waiting_human' && <Alert severity="warning" sx={{ my: 2 }}>The agent is waiting for you. Answer its request in the Inbox.</Alert>}
       {isLive && (
         <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
@@ -154,6 +163,7 @@ export function RunDetailPage() {
           )}
         </Stack>
       )}
+      {run.budget && <RunBudgetMeter budget={run.budget} ticking={run.status === 'running'} now={now} />}
       {run.status === 'running' && run.activity && <RunActivityBar activity={run.activity} now={now} />}
       {isLive && watch && (shot || shotFailing) && (
         <Box sx={{ mb: 2 }}>

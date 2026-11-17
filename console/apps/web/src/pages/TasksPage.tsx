@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { TaskSchedules } from './TaskSchedules';
+import { TaskSpendLine } from '../components/RunBudgetMeter';
 import { runTaskWith } from '../policies/api';
 import { taskPolicyChips } from '../policies/format';
 import { PolicySelect } from '../policies/PolicySelect';
@@ -216,6 +217,8 @@ export function TasksPage() {
                 {chips && <Chip size="small" variant="outlined" label={`policy: ${chips.policy}`} />}
                 {chips?.model && <Chip size="small" variant="outlined" label={`model: ${chips.model}`} />}
               </Stack>
+              {/* Spend (#408) */}
+              <TaskSpendLine spend={t.spend30d} />
               <TaskSchedules taskId={t.id} canWrite={canWrite} catalog={canPickPolicy ? catalog : undefined} taskPolicyId={t.policyId} />
             </CardContent>
             <CardActions>

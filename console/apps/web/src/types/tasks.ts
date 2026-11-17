@@ -1,6 +1,8 @@
 // A task and its schedules, as the API returns them (`taskResponseSchema` and
 // the schedule response in apps/api/src/openapi/console.responses.ts).
 
+import type { TaskSpend } from '../components/runBudget';
+
 /** A task, as `GET /api/tasks` returns it. */
 export interface Task {
   id: string;
@@ -11,6 +13,8 @@ export interface Task {
   hostFallback: boolean;
   allowedDomains: string[];
   confirmRiskyActions: boolean;
+  /** What the task's runs spent in the last 30 days (#400, #408). */
+  spend30d?: TaskSpend;
   /** The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default. */
   policyId: string | null;
 }

@@ -1,53 +1,21 @@
 // A run and its steps, as the API returns them (`runResponseSchema` and
 // `runStepResponseSchema` in apps/api/src/openapi/console.responses.ts).
 import type { RunActivity } from '../components/RunActivity';
+import { STOP_REASONS, type BudgetKey, type RunBudget, type RunPolicy, type RunTier, type StopReason, type Tier } from '../components/runBudget';
 
 export type RunStatus = 'queued' | 'running' | 'waiting_human' | 'succeeded' | 'failed' | 'cancelled';
 
 /** Every run status, in the order a run moves through them. */
 export const RUN_STATUSES: readonly RunStatus[] = ['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled'];
 
-/** Why a run stopped (`runs.stop_reason`), as the API spells it (`RUN_STOP_REASONS` in apps/api/src/runner/budget.ts). */
-export const RUN_STOP_REASONS = [
-  'finished',
-  'budget_actions',
-  'budget_model_calls',
-  'budget_active_time',
-  'budget_input_tokens',
-  'budget_output_tokens',
-  'budget_cost',
-  'stalled',
-  'cancelled',
-  'error',
-  'no_model',
-] as const;
-export type RunStopReason = (typeof RUN_STOP_REASONS)[number];
+/** Why a run stopped (`runs.stop_reason`): the values #408 declared (`RUN_STOP_REASONS` in apps/api/src/runner/budget.ts). */
+export const RUN_STOP_REASONS: readonly StopReason[] = STOP_REASONS;
+export type RunStopReason = StopReason;
 
-/** The model tier a run is on. */
-export type RunTier = 'fast' | 'standard' | 'frontier';
-
-/** The keys of a run budget (`BUDGET_KEYS` in apps/api/src/runner/budget.ts). */
-export type RunBudgetKey = 'actions' | 'modelCalls' | 'activeMinutes' | 'inputTokens' | 'outputTokens' | 'cost';
-
-/** The agent policy a run runs under. */
-export interface RunPolicy {
-  id: string;
-  name: string;
-  version: number;
-  source: string;
-  builtin: boolean;
-}
-
-/** What a run may spend and has spent (#404). Active time is in minutes, cost in USD; `null` is unlimited. */
-export interface RunBudget {
-  effective: Record<RunBudgetKey, number | null> & { warnAtPercent: number };
-  used: Record<RunBudgetKey, number>;
-  percent: Record<RunBudgetKey, number | null>;
-  /** Where each limit came from: the policy, or the deployment ceiling that clamped it. */
-  source: Record<RunBudgetKey, 'policy' | 'ceiling' | null>;
-  /** False when a call could not be priced: `used.cost` is then "at least". */
-  costKnown: boolean;
-}
+/** The run's budget, policy and model tier, as #408 declared them. */
+export type { RunBudget, RunPolicy, RunTier, Tier };
+/** The keys of a run budget. */
+export type RunBudgetKey = BudgetKey;
 
 export interface RunStep {
   id: string;
@@ -86,8 +54,10 @@ export interface Run {
   modelCalls?: number;
   /** Why the run stopped; null while it runs and on runs from before the field. */
   stopReason?: RunStopReason | null;
-  /** The model tier the run is on now; null before it starts. */
-  currentTier?: RunTier | null;
+  /** The run's model tier, from its policy snapshot (#408): start, max, current, escalations and model. */
+  tier?: RunTier | null;
+  /** The tier the run is on now (also `tier.current`); null before it starts. */
+  currentTier?: Tier | null;
   /** The run budget; null on a run that has not started. */
   budget?: RunBudget | null;
   createdAt: string;
