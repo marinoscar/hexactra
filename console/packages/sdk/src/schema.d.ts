@@ -11601,6 +11601,13 @@ export interface components {
                 startedAt: string;
                 /** @description How long the host has before the action times out */
                 timeoutMs?: number;
+                /** @description Where on the page it acts, in page screenshot (CSS viewport) pixels: a point, or a box with w and h */
+                target?: {
+                    x: number;
+                    y: number;
+                    w?: number;
+                    h?: number;
+                };
             } | null;
             inputTokens: number;
             outputTokens: number;
@@ -11646,6 +11653,13 @@ export interface components {
                 startedAt: string;
                 /** @description How long the host has before the action times out */
                 timeoutMs?: number;
+                /** @description Where on the page it acts, in page screenshot (CSS viewport) pixels: a point, or a box with w and h */
+                target?: {
+                    x: number;
+                    y: number;
+                    w?: number;
+                    h?: number;
+                };
             } | null;
             inputTokens: number;
             outputTokens: number;

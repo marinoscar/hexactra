@@ -34,6 +34,10 @@ export const runActivitySchema = z
     reason: z.string().optional().describe('Why the model chose the action'),
     startedAt: iso,
     timeoutMs: z.number().int().optional().describe('How long the host has before the action times out'),
+    target: z
+      .object({ x: z.number(), y: z.number(), w: z.number().optional(), h: z.number().optional() })
+      .optional()
+      .describe('Where on the page it acts, in page screenshot (CSS viewport) pixels: a point, or a box with w and h'),
   })
   .describe('What a running run is doing right now; null when it is not running');
 

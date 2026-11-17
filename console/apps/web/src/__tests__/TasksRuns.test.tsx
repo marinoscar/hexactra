@@ -155,6 +155,16 @@ describe('RunDetailPage', () => {
     expect(now).toHaveTextContent('Doing: click_at (612, 340)');
     expect(now).toHaveTextContent('Enter the member number');
     expect(now).toHaveTextContent(/\d+ s \/ 45 s/);
+    // Where it acts is marked on the frame, once the frame's size is known (#381).
+    const frame = screen.getByAltText("The run's browser, live") as HTMLImageElement;
+    Object.defineProperty(frame, 'naturalWidth', { value: 1280 });
+    Object.defineProperty(frame, 'naturalHeight', { value: 720 });
+    fireEvent.load(frame);
+    act(() => live.emit!({ type: 'run', data: { activity: { phase: 'acting', action: 'click_at', args: { x: 640, y: 360 }, target: { x: 640, y: 360 }, startedAt: new Date().toISOString(), timeoutMs: 45_000 } } }));
+    expect(await screen.findByTestId('action-target')).toHaveStyle({ left: '50.000%', top: '50.000%' });
+    // Thinking: nothing is marked.
+    act(() => live.emit!({ type: 'run', data: { activity: { phase: 'thinking', startedAt: new Date().toISOString() } } }));
+    expect(screen.queryByTestId('action-target')).not.toBeInTheDocument();
     // Stuck for a minute: the page says so.
     act(() => live.emit!({ type: 'run', data: { activity: { phase: 'acting', action: 'evaluate', startedAt: new Date(Date.now() - 60_000).toISOString(), timeoutMs: 45_000 } } }));
     expect(await screen.findByText(/waiting on the browser for 1 min/)).toBeInTheDocument();

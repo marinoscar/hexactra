@@ -9,6 +9,59 @@ export interface RunActivity {
   reason?: string;
   startedAt: string;
   timeoutMs?: number;
+  /** Where on the page it acts, in page screenshot pixels: a point, or a box (#381). */
+  target?: { x: number; y: number; w?: number; h?: number };
+}
+
+/** Percent placement of a target on an image of `natural` size; null when it cannot be placed. */
+export function overlayBox(
+  target: RunActivity['target'],
+  natural: { width: number; height: number } | null,
+): { left: string; top: string; width?: string; height?: string } | null {
+  if (!target || !natural || natural.width <= 0 || natural.height <= 0) return null;
+  const pct = (v: number, of: number) => `${Math.min(100, Math.max(0, (v / of) * 100)).toFixed(3)}%`;
+  if (target.x < 0 || target.y < 0 || target.x > natural.width || target.y > natural.height) return null;
+  const at = { left: pct(target.x, natural.width), top: pct(target.y, natural.height) };
+  if (target.w === undefined || target.h === undefined) return at;
+  return { ...at, width: pct(Math.min(target.w, natural.width - target.x), natural.width), height: pct(Math.min(target.h, natural.height - target.y), natural.height) };
+}
+
+/** A marker on the live frame where the agent acts (#381): a ring for a point, an outline for an element. */
+export function ActionOverlay({ activity, natural }: { activity: RunActivity; natural: { width: number; height: number } | null }) {
+  const box = overlayBox(activity.target, natural);
+  if (!box) return null;
+  const label = `The agent acts here: ${activity.action ?? 'an action'}`;
+  if (box.width !== undefined) {
+    return (
+      <Box
+        role="img"
+        aria-label={label}
+        data-testid="action-target"
+        sx={{ position: 'absolute', ...box, border: 3, borderColor: 'warning.main', borderRadius: 1, boxShadow: 3, pointerEvents: 'none' }}
+      />
+    );
+  }
+  return (
+    <Box
+      role="img"
+      aria-label={label}
+      data-testid="action-target"
+      sx={{
+        position: 'absolute',
+        ...box,
+        width: 28,
+        height: 28,
+        ml: '-14px',
+        mt: '-14px',
+        border: 3,
+        borderColor: 'warning.main',
+        borderRadius: '50%',
+        boxShadow: 3,
+        pointerEvents: 'none',
+        '&::after': { content: '""', position: 'absolute', left: '50%', top: '50%', width: 6, height: 6, ml: '-3px', mt: '-3px', borderRadius: '50%', bgcolor: 'warning.main' },
+      }}
+    />
+  );
 }
 
 /** After this long on one activity the page says the run may be stuck. */

@@ -298,6 +298,43 @@ describe('the goal runner sees and acts like a person (#366)', () => {
   const imageOf = (input: Input) => (typeof input === 'string' ? null : (input[0]!.content.find((c) => c.type === 'image')?.url ?? null));
   const b64 = (s: string) => `data:image/jpeg;base64,${Buffer.from(s).toString('base64')}`;
 
+  it('says where on the page each action acts: the box of a mark, a point, the box of an element, nothing on the desktop (#381)', async () => {
+    const userId = await login(`target-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const run = await db.run.create({ data: { userId, goal: 'Pan the map' } });
+    const fabric = visualFabric();
+    const inner = (fabric.client as unknown as { request: jest.Mock }).request;
+    const seen: Record<string, unknown>[] = [];
+    const request = jest.fn(async (method: string, path: string, opts: { body?: Record<string, unknown> } = {}) => {
+      const action = opts.body?.action as Record<string, unknown> | undefined;
+      if (method === 'POST' && path.endsWith('/actions') && action?.type !== 'screenshot') {
+        seen.push((await db.run.findFirstOrThrow({ where: { id: run.id } })).activity as Record<string, unknown>);
+      }
+      return inner(method, path, opts);
+    });
+    const client = { ...fabric.client, request } as unknown as FabricClient;
+    const { ai } = scriptedAi([
+      [
+        ['click_mark', { n: 1, double: false, reason: 'focus the map' }],
+        ['click_at', { x: 640, y: 360, button: 'left', double: false, modifiers: [], reason: 'drop a pin' }],
+        ['drag', { from_x: 10, from_y: 20, to_x: 30, to_y: 40 }],
+        ['click', { selector: 'canvas#map', reason: 'focus again' }],
+        ['desktop_key', { key: 'Return' }],
+        ['finish', { success: true, result: 'panned' }],
+      ],
+    ]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), client, ai);
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    expect(seen.map((a) => a.target ?? null)).toEqual([
+      { x: 0, y: 100, w: 800, h: 400 },
+      { x: 640, y: 360 },
+      { x: 10, y: 20 },
+      { x: 0, y: 100, w: 800, h: 400 },
+      null,
+    ]);
+  });
+
   it('shows the model a marked screenshot each round, clicks marks, runs JavaScript and reaches the desktop', async () => {
     const userId = await login(`vision-${stamp}@example.test`);
     const prisma = app.get(PrismaService);
