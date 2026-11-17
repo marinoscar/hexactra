@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Runs API: paging, filters, search and counts** (#420).
+  - `GET /runs?envelope=1` returns `{ items, nextCursor }` with keyset paging. Filters: `status`, `state`, `taskId`, `trigger`, `from`, `to`, `q`, `stopReason` and `policyId`. Without `envelope` the answer is the array it always was.
+  - `GET /runs/counts` returns the total, the live count, a count per status and the cost of the filtered set.
+  - List rows carry `taskName` and never the transcript or the policy snapshot.
+  - `npm run seed:runs --workspace=api` fills a development account with finished runs.
 - **Documentation for agent run policies** (#410). These documents now describe policies as the way to control a run:
   - VISION §25–§27, plus the root and console READMEs;
   - the operations and capacity runbooks, including a "run that seems to burn tokens" checklist;
