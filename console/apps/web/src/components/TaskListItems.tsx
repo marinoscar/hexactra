@@ -93,10 +93,12 @@ export interface TaskOverflowMenuProps {
   /** `runs:read`: "View runs". */
   canReadRuns: boolean;
   onDelete: () => void;
+  /** On the task's own page: only Duplicate and Delete (Open, Edit and the runs are on the page itself). */
+  onTaskPage?: boolean;
 }
 
 /** A row's other actions: Open, Edit, Duplicate, View runs, Delete. */
-export function TaskOverflowMenu({ task, canWrite, canReadRuns, onDelete }: TaskOverflowMenuProps) {
+export function TaskOverflowMenu({ task, canWrite, canReadRuns, onDelete, onTaskPage = false }: TaskOverflowMenuProps) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const menuId = useId();
   const close = () => setAnchor(null);
@@ -118,10 +120,10 @@ export function TaskOverflowMenu({ task, canWrite, canReadRuns, onDelete }: Task
         <MoreVertIcon />
       </IconButton>
       <Menu id={menuId} anchorEl={anchor} open={Boolean(anchor)} onClose={close}>
-        {link(taskPaths.detail(task.id), 'Open')}
-        {canWrite && link(taskPaths.edit(task.id), 'Edit')}
+        {!onTaskPage && link(taskPaths.detail(task.id), 'Open')}
+        {!onTaskPage && canWrite && link(taskPaths.edit(task.id), 'Edit')}
         {canWrite && link(taskPaths.duplicate(task.id), 'Duplicate')}
-        {canReadRuns && link(taskPaths.runs(task.id), 'View runs')}
+        {!onTaskPage && canReadRuns && link(taskPaths.runs(task.id), 'View runs')}
         {canWrite && <Divider />}
         {canWrite && (
           <MenuItem

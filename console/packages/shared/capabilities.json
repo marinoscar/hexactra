@@ -20,7 +20,10 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
-      "web": "/tasks"
+      "web": [
+        "/tasks",
+        "/tasks/:id"
+      ]
     },
     {
       "id": "tasks.create",
@@ -61,7 +64,10 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
-      "web": "/tasks"
+      "web": [
+        "/tasks",
+        "/tasks/:id"
+      ]
     },
     {
       "id": "tasks.run",
@@ -74,7 +80,10 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
-      "web": "/tasks"
+      "web": [
+        "/tasks",
+        "/tasks/:id"
+      ]
     },
     {
       "id": "policies.read",
@@ -375,9 +384,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
-      "web": {
-        "none": "The Tasks list reads each task's schedules in its summary (GET /api/tasks?include=summary, tasks.list)"
-      }
+      "web": "/tasks/:id"
     },
     {
       "id": "schedules.create",
@@ -390,9 +397,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
-      "web": {
-        "none": "The task form saves a task's schedules as one set (POST /api/tasks, PUT /api/tasks/{id}/schedules: tasks.create, schedules.update)"
-      }
+      "web": "/tasks/:id"
     },
     {
       "id": "schedules.update",
@@ -413,7 +418,10 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
-      "web": "/tasks"
+      "web": [
+        "/tasks",
+        "/tasks/:id"
+      ]
     },
     {
       "id": "schedules.delete",
@@ -428,9 +436,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
-      "web": {
-        "none": "The task form removes a schedule by saving the set without it (PUT /api/tasks/{id}/schedules, schedules.update)"
-      }
+      "web": "/tasks/:id"
     },
     {
       "id": "schedules.preview",
@@ -465,9 +471,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; the statistics are a chart on the web task page"
       },
-      "web": {
-        "none": "The task detail page that shows it arrives with E32.10 (#428)"
-      }
+      "web": "/tasks/:id"
     },
     {
       "id": "browser.session",

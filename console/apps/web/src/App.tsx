@@ -41,6 +41,7 @@ import { QuestionPage } from './pages/QuestionPage';
 import { RunDetailPage } from './pages/RunDetailPage';
 import { RunsPage } from './pages/RunsPage';
 import { TaskCreatePage } from './pages/TaskCreatePage';
+import { TaskDetailPage } from './pages/TaskDetailPage';
 import { TaskEditPage } from './pages/TaskEditPage';
 import { TasksPage } from './pages/TasksPage';
 import { NotesPage } from './pages/NotesPage';
@@ -200,8 +201,7 @@ export function AppRoutes() {
           <Route path="tasks" element={<Gate permission="tasks:read"><TasksPage /></Gate>} />
           <Route path="tasks/new" element={<Gate permission="tasks:write"><TaskCreatePage /></Gate>} />
           <Route path="tasks/:id/edit" element={<Gate permission="tasks:write"><TaskEditPage /></Gate>} />
-          {/* Until the task page lands (#428), a task's own address shows the list; #428 replaces this line. */}
-          <Route path="tasks/:id" element={<Navigate to="/tasks" replace />} />
+          <Route path="tasks/:id" element={<Gate permission="tasks:read"><TaskDetailPage /></Gate>} />
           <Route path="inbox" element={<Gate permission="runs:read"><InboxPage /></Gate>} />
           <Route path="inbox/q/:id" element={<Gate permission="runs:read"><QuestionPage /></Gate>} />
           <Route path="runs" element={<Gate permission="runs:read"><RunsPage /></Gate>} />
