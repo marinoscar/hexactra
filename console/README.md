@@ -320,6 +320,29 @@ The same policies are reachable from scripts and agents ([docs/mcp.md](docs/mcp.
 - **MCP:** `policies_list`, `policy_get`, `policy_create`, `policy_update`, `policy_set_default`, `policies_export`, `policies_import`, and `policy_id` on `run_goal`, `task_create`, `task_update`, `task_run` and `schedule_create`. Each tool calls the REST route as the caller, so `agent_policies:read` / `:write` apply: a read-only user is refused the write tools with `403`. Deleting a policy is not an MCP tool.
 - **SDK:** `hx.policies.list|get|create|update|setDefault|export|import`, `hx.tasks.create|update|run` and `hx.runs.start` (each with `policyId`), and the exported `AgentPolicySpec` type.
 
+## Schedules
+
+A task runs on a schedule you build in the schedule editor (Tasks → a task → **Add schedule** or **Edit**). You do not need to know cron: choose how it repeats, and the editor says in words what that means and lists the next five runs before you save.
+
+![The schedule editor: Weekly, Monday to Friday at 09:00, with the next runs](docs/images/schedule-editor.png)
+
+| Repeats | What you choose |
+|---|---|
+| **Minutes** | Every 5, 10, 15, 20 or 30 minutes. |
+| **Hourly** | Every 1, 2, 3, 4, 6, 8 or 12 hours, at a minute of the hour. |
+| **Daily** | One to four times a day. Times in one schedule share the same minute (09:00 and 17:00); for 09:00 and 17:30, add a second schedule. |
+| **Weekly** | The days of the week (with the presets Weekdays, Weekends and Every day) and one time. |
+| **Monthly** | Up to five days of the month and one time. A month without day 29, 30 or 31 is skipped; "last day of the month" is not available. |
+| **Advanced** | Any 5-field cron expression (`minute hour day-of-month month day-of-week`), for what the builder cannot say. |
+
+- **The 5-minute minimum.** A schedule cannot run more often than every 5 minutes; the editor does not offer less, and an Advanced expression that does is refused.
+- **Time zone.** A schedule runs in your profile time zone (Settings → Profile). **Change** picks another zone for that schedule. Changing your profile later does not move the schedules you already have: the editor shows that a schedule's zone differs from your profile, with a button to use your profile's.
+- **If the previous run is still going**, the schedule skips that run (the default) or starts another one anyway.
+- **Policy override.** A schedule's runs use the task's agent policy unless you choose another for that schedule.
+- **Active or Paused.** A paused schedule keeps its settings and does not run.
+
+What is stored is always a 5-field cron expression, so the CLI, the SDK and MCP read and write the same schedules. A schedule the builder cannot show (for example one made with `hexactra schedules create`) opens in Advanced, unchanged.
+
 ## Tasks and schedules API
 
 What the Tasks pages and the schedule editor read and write. Every route is the signed-in user's own data; another user's task answers `404`. The per-endpoint reference is the OpenAPI document at `/api/docs`.

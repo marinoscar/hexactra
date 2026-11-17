@@ -1,19 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Box, Button, Chip, Stack, TextField, Typography } from '@mui/material';
+import { Box, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, Typography } from '@mui/material';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
-import { PolicySelect } from '../policies/PolicySelect';
+import { ScheduleEditor } from '../components/ScheduleEditor';
+import { ScheduleSummary } from '../components/ScheduleSummary';
 import type { PolicyCatalog } from '../policies/usePolicyCatalog';
+import { draftFromSchedule, draftToItem, newScheduleDraft, type ScheduleDraft } from '../schedule/draft';
 import type { TaskSchedule } from '../types/tasks';
-import { ErrorBanner, RelativeTime, useApiAction, useConfirm } from '../ui';
-
-const browserZone = () => {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  } catch {
-    return 'UTC';
-  }
-};
+import { ErrorBanner, useApiAction, useBreakpoint, useConfirm, useProfileTimeZone } from '../ui';
 
 export interface TaskSchedulesProps {
   taskId: string;
@@ -24,16 +18,18 @@ export interface TaskSchedulesProps {
   taskPolicyId?: string | null;
 }
 
-/** A task's schedules: add one (cron + time zone, optionally another policy), pause, resume, delete. */
+/** A task's schedules: add or edit one in the schedule editor, pause, resume, delete. */
 export function TaskSchedules({ taskId, canWrite, catalog, taskPolicyId }: TaskSchedulesProps) {
   const { api } = usePlatformHost();
+  const profileTimezone = useProfileTimeZone();
+  const { isPhone } = useBreakpoint();
   const [items, setItems] = useState<TaskSchedule[]>([]);
-  const [cron, setCron] = useState('');
-  const [tz, setTz] = useState(browserZone());
   const { run, busy, error } = useApiAction();
+  const save = useApiAction('The schedule could not be saved');
   const confirm = useConfirm();
-  const [policyId, setPolicyId] = useState<string | null>(null);
-  const taskPolicy = catalog?.byId(taskPolicyId ?? catalog.defaultId);
+  // The schedule in the editor dialog; null while it is closed.
+  const [draft, setDraft] = useState<ScheduleDraft | null>(null);
+  const [valid, setValid] = useState(true);
 
   const load = useCallback(async () => {
     try {
@@ -58,64 +54,75 @@ export function TaskSchedules({ taskId, canWrite, catalog, taskPolicyId }: TaskS
     if (await confirm({ title: 'Delete this schedule?', confirmLabel: 'Delete', destructive: true })) await act(schedule.id, () => api.delete(`/schedules/${schedule.id}`));
   };
 
+  const open = (next: ScheduleDraft) => {
+    save.clearError();
+    setValid(true);
+    setDraft(next);
+  };
+
+  const submit = async () => {
+    if (!draft) return;
+    const { id, ...fields } = draftToItem(draft);
+    const saved = await save.run('save', async () => {
+      if (id) await api.patch(`/schedules/${id}`, fields);
+      else await api.post('/schedules', { taskId, ...fields });
+      return true;
+    });
+    if (saved) {
+      setDraft(null);
+      await load();
+    }
+  };
+
   return (
     <Box sx={{ mt: 2 }} aria-label="Schedules">
       <Typography variant="subtitle2">Schedules</Typography>
       <ErrorBanner error={error} />
       <Stack spacing={1} sx={{ my: 1 }}>
         {items.map((s) => (
-          <Stack key={s.id} direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
-            <Chip size="small" label={`${s.cron} (${s.timezone})`} color={s.enabled ? 'primary' : 'default'} />
-            {s.policyId && <Chip size="small" variant="outlined" label={`policy: ${catalog?.byId(s.policyId)?.name ?? 'unavailable'}`} />}
-            <Typography variant="caption" color="text.secondary">
-              {s.enabled && s.nextRunAt ? <RelativeTime iso={s.nextRunAt} prefix="next " /> : 'paused'}
-              {s.consecutiveFailures ? ` · ${s.consecutiveFailures} failed in a row` : ''}
-            </Typography>
+          <Stack key={s.id} direction="row" spacing={1} aria-label={`Schedule ${s.description ?? s.cron}`} role="group" sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+            <Box sx={{ flex: '1 1 200px', minWidth: 0 }}>
+              <ScheduleSummary schedule={s} catalog={catalog} profileTimezone={profileTimezone} />
+            </Box>
             {canWrite && (
-              <>
+              <Stack direction="row" spacing={0.5} sx={{ '& .MuiButton-root': { minHeight: { xs: 44, sm: 'auto' } } }}>
+                <Button size="small" disabled={busy !== null} onClick={() => open(draftFromSchedule(s))}>
+                  Edit
+                </Button>
                 <Button size="small" disabled={busy !== null} onClick={() => void act(s.id, () => api.patch(`/schedules/${s.id}`, { enabled: !s.enabled }))}>
                   {s.enabled ? 'Pause' : 'Resume'}
                 </Button>
                 <Button size="small" color="error" disabled={busy !== null} onClick={() => void remove(s)}>
                   Delete
                 </Button>
-              </>
+              </Stack>
             )}
           </Stack>
         ))}
       </Stack>
       {canWrite && (
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-          <TextField size="small" label="Cron" placeholder="0 9 * * 1-5" value={cron} onChange={(e) => setCron(e.target.value)} helperText="minute hour day month weekday" />
-          <TextField size="small" label="Time zone" value={tz} onChange={(e) => setTz(e.target.value)} />
-          {catalog && catalog.policies.length > 0 && (
-            <Box sx={{ minWidth: { sm: 220 } }}>
-              <PolicySelect
-                size="small"
-                label="Policy override"
-                nullLabel="Task's policy"
-                nullPolicyId={taskPolicy?.id ?? null}
-                catalog={catalog}
-                value={policyId}
-                onChange={setPolicyId}
-              />
+        <Button disabled={busy !== null} onClick={() => open(newScheduleDraft(profileTimezone))} sx={{ minHeight: { xs: 44, sm: 'auto' } }}>
+          Add schedule
+        </Button>
+      )}
+      {draft && (
+        <Dialog open fullWidth maxWidth="sm" fullScreen={isPhone} onClose={() => save.busy === null && setDraft(null)} aria-labelledby={`schedule-dialog-${taskId}`}>
+          <DialogTitle id={`schedule-dialog-${taskId}`}>{draft.id ? 'Edit schedule' : 'Add schedule'}</DialogTitle>
+          <DialogContent>
+            <ErrorBanner error={save.error} />
+            <Box sx={{ pt: 1 }}>
+              <ScheduleEditor value={draft} onChange={setDraft} onValidity={setValid} disabled={save.busy !== null} profileTimezone={profileTimezone} catalog={catalog} taskPolicyId={taskPolicyId} />
             </Box>
-          )}
-          <Box>
-            <Button
-              disabled={!cron.trim() || busy !== null}
-              onClick={() =>
-                void act('new', async () => {
-                  await api.post('/schedules', { taskId, cron: cron.trim(), timezone: tz.trim() || 'UTC', ...(policyId ? { policyId } : {}) });
-                  setCron('');
-                  setPolicyId(null);
-                })
-              }
-            >
-              Add schedule
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setDraft(null)} disabled={save.busy !== null} sx={{ minHeight: { xs: 44, sm: 'auto' } }}>
+              Cancel
             </Button>
-          </Box>
-        </Stack>
+            <Button variant="contained" onClick={() => void submit()} disabled={!valid || save.busy !== null} sx={{ minHeight: { xs: 44, sm: 'auto' } }}>
+              {draft.id ? 'Save schedule' : 'Add schedule'}
+            </Button>
+          </DialogActions>
+        </Dialog>
       )}
     </Box>
   );
