@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Model tiers: Fast, Standard and Frontier** (#403).
+  - Where they are set: the `browserAgentTiers` system setting (deployment default) and `tiers` in the user's `browserAgent` setting (per-user override). Each tier is a model, a reasoning effort, an output cap and a fallback model.
+  - How a run picks its model: policy pin, then the user's tier, then the deployment's tier, then fill-down, then the user's default AI model. A run resolves its tiers once at start, and every model call uses its tier's model, effort and output cap.
+  - Early checks: a run whose start tier has no usable model fails before a browser is allocated. A model without image input starts with screenshots off.
+  - New route `GET /api/agent-policies/model-tiers/effective` shows each value and where it came from. The console binds the platform's `AI_TARGET_RESOLVER` for the browser agent.
 - **Agent policies export and import as JSON** (#402).
   - `GET /api/agent-policies/export` (`ids`, `includePins`) returns a portable `hexactra.agent-policies` v1 file. It carries no ids, user or secrets.
   - `POST /api/agent-policies/import` takes `onConflict` set to `rename`, `skip` or `replace`. An import is atomic. Model pins this deployment cannot use are dropped with a warning, and budgets above the deployment ceilings are flagged.
