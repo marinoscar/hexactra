@@ -278,7 +278,7 @@ Everything above is on the console's pages (`apps/web/src/pages/`, one client fo
 
 ### Watching a run's spend
 
-The run page (`/runs/:id`) shows the run's **policy** (name, version, and whether it came from your default, the task, the schedule or this run), its **tier** (`tier: Standard`, highlighted as `tier: Standard → Frontier` once a stall escalated it) and the **model** that tier uses. Under them, a **budget meter** has one bar per limited budget (used / limit and the percent; a deployment ceiling is marked), turning orange at the policy's `warnAtPercent` and red at 100%; an unlimited budget shows what was used and "∞", and an unpriced cost reads "≥ $x". The meter follows the run's live stream and ticks active time between events. When the run ends, one line says why (for example "Stopped: cost budget reached ($2.00)." with the agent's summary). Escalations, de-escalations and model fallbacks appear in the step timeline as their own rows (↑, ↓, ⇄). The runs list shows each run's cost (a chip on a phone) and a chip for a budget, stall, error or cancel stop; a task card and the task's runs view show its last 30 days: runs, cost, tokens and the average cost of a successful run (`spend30d.succeeded`, `spend30d.avgSuccessCostUsd`). Run responses carry the tier as `tier: { start, max, current, escalations, model }`. Cost-aware alerts: [operations runbook](docs/runbooks/operations.md#the-run-budget-meter-stop-reasons-and-cost-alerts).
+The run page (`/runs/:id`) shows the run's **policy** (name, version, and whether it came from your default, the task, the schedule or this run), its **tier** (`tier: Standard`, highlighted as `tier: Standard → Frontier` once a stall escalated it) and the **model** that tier uses. Under them, a **budget meter** has one bar per limited budget (used / limit and the percent; a deployment ceiling is marked), turning orange at the policy's `warnAtPercent` and red at 100%; an unlimited budget shows what was used and "∞", and an unpriced cost reads "≥ $x". The meter follows the run's live stream and ticks active time between events. When the run ends, one line says why (for example "Stopped: cost budget reached ($2.00)." with the agent's summary). Escalations, de-escalations and model fallbacks appear in the step timeline as their own rows (↑, ↓, ⇄). The runs list shows each run's cost and says a budget, stall or missing-model stop in its status chip ("failed · cost budget", "failed · stalled"); a task card and the task's runs view show its last 30 days: runs, cost, tokens and the average cost of a successful run (`spend30d.succeeded`, `spend30d.avgSuccessCostUsd`). Run responses carry the tier as `tier: { start, max, current, escalations, model }`. Cost-aware alerts: [operations runbook](docs/runbooks/operations.md#the-run-budget-meter-stop-reasons-and-cost-alerts).
 
 ![The run page: policy, tier and model chips over the budget meter](docs/images/run-budget-meter.png)
 
@@ -289,6 +289,29 @@ The same policies are reachable from scripts and agents ([docs/mcp.md](docs/mcp.
 - **CLI:** `hexactra policies list|show|export|import|default`, and `--policy <id|name|builtin key>` on `runs start`, `tasks run|create|update` and `schedules create`. `runs list|show` and the terminal UI show each run's policy and cost (and tier, budget use and stop reason when the API reports them).
 - **MCP:** `policies_list`, `policy_get`, `policy_create`, `policy_update`, `policy_set_default`, `policies_export`, `policies_import`, and `policy_id` on `run_goal`, `task_create`, `task_update`, `task_run` and `schedule_create`. Each tool calls the REST route as the caller, so `agent_policies:read` / `:write` apply: a read-only user is refused the write tools with `403`. Deleting a policy is not an MCP tool.
 - **SDK:** `hx.policies.list|get|create|update|setDefault|export|import`, `hx.tasks.create|update|run` and `hx.runs.start` (each with `policyId`), and the exported `AgentPolicySpec` type.
+
+## Runs: find, filter and delete
+
+`/runs` lists every run, newest first, 50 at a time (**Load more**, or scroll to the end). It stays usable with thousands of runs: the API filters, searches and pages ([docs/runs.md](docs/runs.md)), and the page never loads everything.
+
+![The Runs page: status tabs with counts, filters, and the list](docs/images/runs-list.png)
+
+- **Status tabs** with the number of runs in each: All, Live, Needs you, Succeeded, Failed, Cancelled. Beside them, how many runs match and what they cost ("≥" when a call could not be priced).
+- **Search** looks in the goal. **Filters**: task (or "One-off goals"), trigger, a date range (Today, 7, 30 or 90 days, or two dates, cut in your profile time zone), "Stopped by" (Budget, Stalled, Error, No model; on the All and Failed tabs) and policy. On a phone they are behind the **Filters** button.
+- **Every filter is in the URL** (`?view=failed&q=invoice&trigger=schedule&from=2026-11-01`), so a filtered view can be bookmarked or sent, and survives a reload. Active filters show as chips; **Clear all** removes them.
+- **Each run** shows its status (with the reason a failed run stopped), goal, task, trigger, steps, when it started, how long it took, its cost, and what a running one is doing right now. The list refreshes the live runs every 5 seconds while the tab is visible.
+- **The ⋮ menu of a run:** Open, Run again, Run again with… (another policy), Cancel (a live run) and Delete (a finished run). "Run again" keeps the original policy only when it was chosen for that one run.
+- **New run** (top right) starts a one-off goal: the goal, the browser profile, the machine and the policy.
+
+**Deleting runs** needs the `runs:delete` permission (contributors and organization administrators have it).
+
+1. Tick the runs (on a phone, press **Select** first). The box in the header ticks every loaded run.
+2. To delete more than what is loaded, choose **Select all N finished runs that match**: the delete then goes by the current filter, not by a list.
+3. Press **Delete** in the bar at the bottom and confirm. More than 100 runs asks you to type `delete`.
+
+A run's steps and answers are deleted with it, and its cost and stop reason leave the task's spend and the alerts. This cannot be undone. A run that is queued, running or waiting for you is never deleted: cancel it first. More than 500 runs are deleted in the background; the page says so and refreshes when it is done. One run can also be deleted from its own page (`/runs/:id`, **Delete**).
+
+For code: the list is `RunList` (`apps/web/src/components/RunList.tsx`) over the `useRunList` hook (`useRunList.ts`); `<RunList scope={{ taskId }} />` is the same list fixed to one task.
 
 ## Layout
 
@@ -313,7 +336,7 @@ scripts/rename.mjs rebrand this app (identity.json plus the few literal targets)
 | `StatusChip` | A run status as colour, icon and words, with a budget or stall stop appended ("failed · cost budget"). `STOP_REASON_LABEL`, `isLive(status)`, `isTerminal(status)`. |
 | `useConfirm()` | `if (await confirm({ title, body, confirmLabel, destructive: true })) ...`. Resolves `false` on Cancel, Escape and a backdrop click. `requireText` makes the user type a word first. `ConfirmProvider` is mounted once in `App.tsx`; a page test wraps the page in one. |
 | `EmptyState`, `ErrorBanner`, `ListSkeleton`, `CardSkeleton` | Nothing to show, a failure (`role="alert"`), and the first load. |
-| `ResponsiveList` | A table at 900 px and up, cards below. It renders the items it is given: paging stays with the API. |
+| `ResponsiveList` | A table at 900 px and up, cards below. It renders the items it is given: paging stays with the API. `selection.disabledReason` disables one item's checkbox with a tooltip; a column marked `grow` takes the spare width instead of the first; `windowAfter={300}` replaces rows far from the viewport with a spacer once the list is longer than that. |
 | `useBreakpoint()` | `{ isPhone, isTablet, isDesktop }` from the theme's breakpoints. |
 | `formatDateTime`, `formatRelative`, `<RelativeTime iso />` | Dates in the **profile time zone** (the one `UserTimeZoneSync` stores), never `toLocaleString()`. An empty or invalid date renders `n/a`. |
 | `useApiAction()` | `run(key, fn)` with `busy`, `error` and `clearError` around an API call. |
