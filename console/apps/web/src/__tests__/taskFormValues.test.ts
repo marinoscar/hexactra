@@ -1,4 +1,7 @@
 // The task form's pure parts (#427): sites, request bodies and API error mapping.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { createTestApiError } from '@marinoscar/platform-web/testing';
 import { describe, expect, it } from 'vitest';
 
@@ -21,7 +24,11 @@ import {
   valuesFromTask,
   type TaskWithSchedules,
 } from '../taskForm/values';
-import openapi from '../../../../packages/sdk/openapi.json';
+
+// Read at run time, not imported: the web image's build type-checks src/ with
+// only apps/web and packages/shared in its context (apps/web/Dockerfile), so an
+// import of a file outside them fails `tsc` there.
+const openapi: unknown = JSON.parse(readFileSync(join(__dirname, '..', '..', '..', '..', 'packages', 'sdk', 'openapi.json'), 'utf8'));
 
 const TASK: TaskWithSchedules = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -58,7 +65,7 @@ describe('allowed sites', () => {
 });
 
 describe('the rules mirror the API', () => {
-  const schemas = (openapi as unknown as { components: { schemas: Record<string, { properties?: Record<string, { pattern?: string; items?: { pattern?: string } }> }> } }).components.schemas;
+  const schemas = (openapi as { components: { schemas: Record<string, { properties?: Record<string, { pattern?: string; items?: { pattern?: string } }> }> } }).components.schemas;
   const patterns = Object.values(schemas).flatMap((s) => Object.entries(s.properties ?? {}).map(([name, p]) => ({ name, pattern: name === 'allowedDomains' ? p.items?.pattern : p.pattern })));
 
   it('the domain expression is the one in the OpenAPI document', () => {
