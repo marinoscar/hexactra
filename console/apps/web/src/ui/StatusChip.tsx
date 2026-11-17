@@ -73,12 +73,13 @@ export function stopReasonLabel(reason: RunStopReason | string): string {
 }
 
 /**
- * Whether the chip says the stop reason: a budget stop, a stall, and a reason
- * this build does not know. The others repeat the status ("failed · error").
+ * Whether the chip says the stop reason: a budget stop, a stall, a run with no
+ * usable model, and a reason this build does not know. The others repeat the
+ * status ("failed · error", "cancelled · cancelled").
  */
 export function showsStopReason(reason: RunStopReason | string | null | undefined): reason is string {
   if (!reason) return false;
-  return reason.startsWith('budget_') || reason === 'stalled' || !(reason in STOP_REASON_LABEL);
+  return reason.startsWith('budget_') || reason === 'stalled' || reason === 'no_model' || !(reason in STOP_REASON_LABEL);
 }
 
 export interface StatusChipProps {

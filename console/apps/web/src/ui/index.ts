@@ -19,7 +19,7 @@ export { ConfirmDialog, ConfirmProvider, useConfirm, type Confirm, type ConfirmD
 export { EmptyState, type EmptyStateProps } from './EmptyState';
 export { ErrorBanner, type ErrorBannerProps } from './ErrorBanner';
 export { CardSkeleton, ListSkeleton, type SkeletonProps } from './Skeletons';
-export { ResponsiveList, type Column, type ListSelection, type ResponsiveListProps } from './ResponsiveList';
+export { ResponsiveList, WINDOW_CHUNK, type Column, type ListSelection, type ResponsiveListProps } from './ResponsiveList';
 export { useBreakpoint, type Breakpoint } from './useBreakpoint';
 export { NO_DATE, formatDateTime, formatRelative, formatTime, useProfileTimeZone, type FormatDateTimeOptions, type FormatRelativeOptions } from './time';
 export { RelativeTime, type RelativeTimeProps } from './RelativeTime';
