@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **MCP protocol revisions** (#461): `POST /api/mcp` speaks `2026-07-28` (stateless: no `initialize`, per-request `_meta`, `server/discover`, `Mcp-Method`/`Mcp-Name` header checks, `resultType`, `ttlMs` and `cacheScope: "private"` on lists) and `2025-11-25`, alongside `2025-06-18`, `2025-03-26` and `2024-11-05`. An unsupported version header is `400` naming the supported versions; an `initialize` asking for an unknown version is answered with `2025-11-25` (it was `2025-06-18`). `serverInfo` carries the console's version and the title "Hexactra".
+  - Transport rules on every revision: `GET`/`DELETE` are `405`, `Accept` without JSON is `406`, a browser `Origin` other than the console's own or loopback is `403` (with CORS for allowed origins), batches only on `2025-03-26`, and JSON-RPC errors (`-32700`, `-32600`) instead of generic error bodies. Details: `docs/mcp.md`, "Protocol versions".
+  - `hexactra mcp serve` forwards the negotiated version in `MCP-Protocol-Version`, and the `2026-07-28` headers, on every request, and passes the console's JSON-RPC errors through.
+  - Telemetry: a span per MCP message and the metrics `app.mcp.requests` and `app.mcp.tool.duration`.
 - **Agent policies** (epic #398): named, versioned, personal bundles that say which models a run uses and how much it may spend. A policy holds model tiers, six budgets, stall detection and context settings.
   - Four built-in, read-only policies: Economy, Balanced (the default), Thorough and Unlimited. A user duplicates one to edit a copy, chooses one default, and assigns a policy to a task, a schedule or a single run ("Run with...").
   - Resolution order: the run, then the schedule, the task, the user's default and `builtin:balanced`. The policy is snapshotted onto the run at its first step, so editing it never changes a run in flight.

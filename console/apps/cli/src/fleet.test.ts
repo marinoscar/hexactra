@@ -243,4 +243,50 @@ describe('hexactra mcp serve', () => {
     expect(lines).toHaveLength(2);
     expect(seen[0]).toMatchObject({ url: 'http://console.example.test/api/mcp', auth: 'Bearer pat_x' });
   });
+
+  it('forwards the negotiated version after initialize, and the 2026-07-28 headers from _meta', async () => {
+    const { serveMcpStdio, mcpHeaderValue } = await import('./mcp.command.js');
+    const { PassThrough } = await import('node:stream');
+    const input = new PassThrough();
+    const output = new PassThrough();
+    const seen: { method: string; headers: Headers }[] = [];
+    const fetch = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const msg = JSON.parse(String(init?.body)) as { id?: number; method: string };
+      seen.push({ method: msg.method, headers: new Headers(init?.headers) });
+      if (msg.method === 'initialize') return new Response(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { protocolVersion: '2025-06-18' } }), { status: 200 });
+      if (msg.method === 'nope') return new Response(JSON.stringify({ jsonrpc: '2.0', id: msg.id, error: { code: -32601, message: 'Method not found: nope' } }), { status: 404 });
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} }), { status: 200 });
+    });
+    let out = '';
+    output.on('data', (d) => (out += String(d)));
+    const done = serveMcpStdio({ input, output, fetch: fetch as never, credentials: { apiBaseUrl: 'http://console.example.test/api', token: 'pat_x' } });
+    const next = async (n: number) => {
+      while (out.trim().split('\n').filter(Boolean).length < n) await new Promise((r) => setTimeout(r, 5));
+    };
+    // A handshake client: initialize, then a request that must carry the negotiated version.
+    input.write('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}\n');
+    await next(1);
+    input.write('{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n');
+    await next(2);
+    // A 2026-07-28 client: the version, method and name headers come from the message.
+    const meta = { 'io.modelcontextprotocol/protocolVersion': '2026-07-28', 'io.modelcontextprotocol/clientCapabilities': {} };
+    input.write(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'run_status', arguments: {}, _meta: meta } })}\n`);
+    await next(3);
+    input.write(`${JSON.stringify({ jsonrpc: '2.0', id: 4, method: 'nope', params: { _meta: meta } })}\n`);
+    input.end();
+    await done;
+
+    expect(seen[0].headers.get('mcp-protocol-version')).toBeNull();
+    expect(seen[1].headers.get('mcp-protocol-version')).toBe('2025-06-18');
+    expect(seen[1].headers.get('mcp-method')).toBeNull();
+    expect(seen[2].headers.get('mcp-protocol-version')).toBe('2026-07-28');
+    expect(seen[2].headers.get('mcp-method')).toBe('tools/call');
+    expect(seen[2].headers.get('mcp-name')).toBe('run_status');
+    expect(seen[3].headers.get('mcp-method')).toBe('nope');
+    expect(seen[3].headers.get('mcp-name')).toBeNull();
+    // A JSON-RPC error the console answered with is passed on as it is.
+    const lines = out.trim().split('\n').map((l) => JSON.parse(l));
+    expect(lines).toContainEqual({ jsonrpc: '2.0', id: 4, error: { code: -32601, message: 'Method not found: nope' } });
+    expect(mcpHeaderValue('wetter_ä')).toBe(`=?base64?${Buffer.from('wetter_ä').toString('base64')}?=`);
+  });
 });

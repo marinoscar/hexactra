@@ -7,7 +7,7 @@ import { PlatformHostProvider } from '@marinoscar/platform-web/core';
 import { createTestApiError, createTestPlatformHost, type TestApiRequest } from '@marinoscar/platform-web/testing';
 import { useState } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ScheduleEditor, type ScheduleDraft } from '../components/ScheduleEditor';
 import { ScheduleSummary } from '../components/ScheduleSummary';
@@ -391,7 +391,15 @@ describe('ScheduleEditor on a phone', () => {
 });
 
 describe('ScheduleSummary', () => {
-  const base = { cron: '0 9 * * 1-5', timezone: PROFILE, enabled: true, nextRunAt: new Date(Date.now() + 3 * 3_600_000 + 60_000).toISOString(), consecutiveFailures: 0, description: 'Monday to Friday at 09:00' };
+  // A fixed mid-morning clock: "in 3 h" must not depend on the hour the suite
+  // runs (at 22:00 UTC, three hours later is tomorrow and reads "tomorrow 01:05").
+  const NOW = new Date('2026-06-10T09:00:00Z');
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => vi.useRealTimers());
+  const base = { cron: '0 9 * * 1-5', timezone: PROFILE, enabled: true, nextRunAt: new Date(NOW.getTime() + 3 * 3_600_000 + 60_000).toISOString(), consecutiveFailures: 0, description: 'Monday to Friday at 09:00' };
   const show = (schedule: Parameters<typeof ScheduleSummary>[0]['schedule'], withCatalog = true) =>
     render(<ScheduleSummary schedule={schedule} catalog={withCatalog ? catalog : undefined} profileTimezone={PROFILE} />).container;
 
