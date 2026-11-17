@@ -24,8 +24,8 @@ import { RunDetailPage } from '../pages/RunDetailPage';
 import { RunsPage } from '../pages/RunsPage';
 import { TasksPage } from '../pages/TasksPage';
 import type { Run } from '../types/runs';
-import type { Task } from '../types/tasks';
 import { ConfirmProvider } from '../ui';
+import { page, taskRow } from './taskFixtures';
 
 const RUN_ID = '22222222-2222-4222-8222-222222222222';
 const TASK_ID = '11111111-1111-4111-8111-111111111111';
@@ -275,20 +275,9 @@ describe('task spend', () => {
     expect(screen.queryByTestId('task-spend')).toBeNull();
   });
 
-  it('shows on the task card', async () => {
-    const task: Task = {
-      id: TASK_ID,
-      name: 'Check fare',
-      goal: 'Find the cheapest fare',
-      profile: 'travel',
-      hostId: null,
-      hostFallback: true,
-      allowedDomains: [],
-      confirmRiskyActions: true,
-      policyId: null,
-      spend30d: { runs: 2, costUsd: 0.8, costKnown: true, tokens: 4000, succeeded: 2, avgSuccessCostUsd: 0.4 },
-    };
-    const host = createTestPlatformHost({ permissions: ['tasks:read'], responses: { 'GET /tasks': [task], [`GET /schedules?taskId=${TASK_ID}`]: [] } });
+  it('shows on the task row: the total, with the runs and the average per successful run in its tooltip', async () => {
+    const task = taskRow({ id: TASK_ID, spend30d: { runs: 2, costUsd: 0.8, costKnown: true, tokens: 4000, succeeded: 2, avgSuccessCostUsd: 0.4 } });
+    const host = createTestPlatformHost({ permissions: ['tasks:read'], responses: { 'GET /tasks': page([task]) } });
     render(
       <PlatformHostProvider host={host}>
         <ConfirmProvider>
@@ -300,7 +289,7 @@ describe('task spend', () => {
         </ConfirmProvider>
       </PlatformHostProvider>,
     );
-    expect(await screen.findByTestId('task-spend')).toHaveTextContent('Last 30 days: 2 runs · $0.80 · 4,000 tokens · $0.40 per successful run');
+    expect(await screen.findByLabelText('$0.80 in the last 30 days: 2 runs in the last 30 days · $0.40 per successful run')).toHaveTextContent('$0.80');
   });
 });
 

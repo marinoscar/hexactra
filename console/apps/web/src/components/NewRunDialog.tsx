@@ -6,7 +6,7 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { PolicySelect } from '../policies/PolicySelect';
 import { usePolicyCatalog } from '../policies/usePolicyCatalog';
 import { ErrorBanner, useApiAction, useBreakpoint } from '../ui';
-import { MachinePicker, useFleetHosts } from './MachinePicker';
+import { MachinePicker, useFleetHosts, type MachineChoice } from './MachinePicker';
 
 /** The longest goal the API takes. */
 export const GOAL_MAX = 4000;
@@ -32,7 +32,7 @@ export function NewRunDialog({ open, onClose, onStarted }: NewRunDialogProps) {
   const action = useApiAction('Could not start the run');
   const [goal, setGoal] = useState('');
   const [profile, setProfile] = useState('default');
-  const [machine, setMachine] = useState({ hostId: '', hostFallback: true });
+  const [machine, setMachine] = useState<MachineChoice>({ hostId: null, hostFallback: true });
   const [policyId, setPolicyId] = useState<string | null>(null);
   const { clearError } = action;
 
@@ -90,7 +90,7 @@ export function NewRunDialog({ open, onClose, onStarted }: NewRunDialogProps) {
               }
             />
             <TextField label="Profile" value={profile} onChange={(e) => setProfile(e.target.value)} helperText="The browser profile (its sign-ins)." />
-            <MachinePicker hosts={hosts} hostId={machine.hostId} hostFallback={machine.hostFallback} onChange={setMachine} />
+            <MachinePicker hosts={hosts} hostId={machine.hostId} hostFallback={machine.hostFallback} onChange={(change) => setMachine((m) => ({ ...m, ...change }))} />
             {canPickPolicy && <PolicySelect catalog={catalog} value={policyId} onChange={setPolicyId} manageLink />}
             <Link component={RouterLink} to={`/tasks/new${trimmed ? `?goal=${encodeURIComponent(trimmed)}` : ''}`} variant="body2" onClick={onClose}>
               Save as task instead

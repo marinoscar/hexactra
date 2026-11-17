@@ -4,7 +4,10 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { machineState, type FleetHost } from '../types/fleet';
 
-/** The machines to choose from; without `fleet:read` none (the picker then offers "Any available machine" only). */
+/**
+ * The machines to choose from, for a caller that does not load the fleet itself (the "New run" dialog);
+ * without `fleet:read` none (the picker then offers "Any available machine" only).
+ */
 export function useFleetHosts(): FleetHost[] {
   const { api, viewer } = usePlatformHost();
   const [hosts, setHosts] = useState<FleetHost[]>([]);
@@ -26,34 +29,45 @@ export function useFleetHosts(): FleetHost[] {
 }
 
 export interface MachineChoice {
-  /** The chosen machine's id; `''` is any available machine. */
-  hostId: string;
+  /** The chosen machine; null is any available one. */
+  hostId: string | null;
   /** When the chosen machine cannot take the run, use another available one. */
   hostFallback: boolean;
 }
 
 export interface MachinePickerProps extends MachineChoice {
+  /** The machines to choose from; empty without `fleet:read` (the picker then offers "Any available machine" only). */
   hosts: readonly FleetHost[];
-  onChange: (choice: MachineChoice) => void;
+  /** Only what changed: the machine or the fallback switch. */
+  onChange: (change: Partial<MachineChoice>) => void;
+  disabled?: boolean;
+  error?: string;
+  id?: string;
 }
 
 /**
- * Which computer runs it (#384): the machine select with each machine's
- * state, the fallback switch once one is chosen, and a warning while the
- * chosen machine is not online. The same controls as the task form.
+ * Which computer runs a task or a one-off run (#384): any available one, or a
+ * named machine with its state, the "use another machine when it is
+ * unavailable" switch and a warning while that machine is not online. The task
+ * form and the "New run" dialog share it.
  */
-export function MachinePicker({ hosts, hostId, hostFallback, onChange }: MachinePickerProps) {
-  const chosen = hosts.find((h) => h.id === hostId);
+export function MachinePicker({ hosts, hostId, hostFallback, onChange, disabled, error, id }: MachinePickerProps) {
+  const chosen = hostId ? hosts.find((h) => h.id === hostId) : undefined;
+  const name = chosen?.name ?? hostId?.slice(0, 8);
   return (
     <Stack spacing={2}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
         <TextField
           select
+          id={id}
           label="Machine"
-          value={hostId}
-          onChange={(e) => onChange({ hostId: e.target.value, hostFallback })}
-          helperText="Which computer runs it; any available one by default (home machines first)."
-          sx={{ minWidth: { sm: 260 } }}
+          value={hostId ?? ''}
+          disabled={disabled}
+          error={Boolean(error)}
+          onChange={(e) => onChange({ hostId: e.target.value || null })}
+          helperText={error ?? 'Which computer runs it; any available one by default (home machines first).'}
+          sx={{ minWidth: { sm: 260 }, flex: { sm: '0 1 320px' } }}
+          fullWidth
           slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
         >
           <MenuItem value="">Any available machine</MenuItem>
@@ -66,14 +80,14 @@ export function MachinePicker({ hosts, hostId, hostFallback, onChange }: Machine
         </TextField>
         {hostId && (
           <FormControlLabel
-            control={<Switch checked={hostFallback} onChange={(e) => onChange({ hostId, hostFallback: e.target.checked })} />}
+            control={<Switch checked={hostFallback} disabled={disabled} onChange={(e) => onChange({ hostFallback: e.target.checked })} />}
             label="If it is unavailable, use another available machine"
           />
         )}
       </Stack>
       {chosen && machineState(chosen) !== 'online' && (
         <Alert severity="warning">
-          {chosen.name} is {machineState(chosen)} right now. {hostFallback ? 'Runs will use another available machine until it is back.' : 'Runs will fail until it is back.'}
+          {name} is {machineState(chosen)} right now. {hostFallback ? 'Runs will use another available machine until it is back.' : 'Runs will fail until it is back.'}
         </Alert>
       )}
     </Stack>

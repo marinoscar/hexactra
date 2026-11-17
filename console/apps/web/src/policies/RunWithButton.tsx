@@ -17,6 +17,9 @@ export interface RunWithButtonProps {
   size?: 'small' | 'medium';
 }
 
+/** Below `md` (touch widths) each part is a 44 px target. */
+const TOUCH_TARGET = { minHeight: { xs: 44, md: 'auto' } } as const;
+
 export interface RunWithMenuProps {
   /** The element the menu opens from; null closes it. */
   anchorEl: HTMLElement | null;
@@ -71,7 +74,7 @@ export function RunWithButton({ onRun, catalog, taskPolicyId, label = 'Run now',
   const menuId = useId();
   if (catalog.policies.length === 0) {
     return (
-      <Button variant="contained" size={size} disabled={disabled} onClick={() => onRun()}>
+      <Button variant="contained" size={size} disabled={disabled} onClick={() => onRun()} sx={TOUCH_TARGET}>
         {label}
       </Button>
     );
@@ -80,7 +83,9 @@ export function RunWithButton({ onRun, catalog, taskPolicyId, label = 'Run now',
   return (
     <>
       <ButtonGroup variant="contained" size={size} disabled={disabled} aria-label="Run">
-        <Button onClick={() => onRun()}>{label}</Button>
+        <Button onClick={() => onRun()} sx={{ ...TOUCH_TARGET, whiteSpace: 'nowrap' }}>
+          {label}
+        </Button>
         <Button
           size="small"
           aria-label="Run with…"
@@ -88,6 +93,7 @@ export function RunWithButton({ onRun, catalog, taskPolicyId, label = 'Run now',
           aria-controls={anchor ? menuId : undefined}
           aria-expanded={anchor ? 'true' : undefined}
           onClick={(e) => setAnchor(e.currentTarget)}
+          sx={{ ...TOUCH_TARGET, minWidth: { xs: 44, md: 40 } }}
         >
           <ArrowDropDownIcon />
         </Button>
