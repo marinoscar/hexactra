@@ -10,6 +10,7 @@ import { agentCommand } from './agent/agent.command.js';
 import { agentScreen } from './agent/agent.tui.js';
 import { EDGE_WEBSOCKETS_STEPS } from './edge-websockets.step.js';
 import { FABRIC_CONNECT_STEPS } from './fabric-connect.step.js';
+import { bundledHostCommand } from './bundled-host.command.js';
 import { fabricCommand } from './fabric.command.js';
 import { fleetCommand } from './fleet.command.js';
 import { inboxCommand } from './inbox.command.js';
@@ -78,7 +79,7 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   identity: { name: CLI_NAME, displayName: `${APP_NAME} CLI`, productName: APP_NAME, repoSlug: REPO_SLUG },
   version: readVersion(),
   // `android`: build, version and release the Android app (apps/android) through the platform's group.
-  extraCommands: [fabricCommand, fleetCommand, agentCommand, runsCommand, inboxCommand, questionsCommand, mcpCommand, androidCommand({ identity: ANDROID_IDENTITY_SOURCE })],
+  extraCommands: [bundledHostCommand, fabricCommand, fleetCommand, agentCommand, runsCommand, inboxCommand, questionsCommand, mcpCommand, androidCommand({ identity: ANDROID_IDENTITY_SOURCE })],
   tuiScreens: [inboxScreen, runsScreen, fleetScreen, agentScreen, androidTuiScreen],
   // The hexactra brand (docs/brand): its colours, and the Trace mark with the wordmark atop the menu.
   tuiTheme: BRAND_TUI_THEME,
