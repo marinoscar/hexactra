@@ -2,8 +2,9 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { getTask } from '../taskForm/api';
 import { TaskForm } from '../components/TaskForm';
-import { GOAL_MAX, copyValues, emptyValues, type TaskFormValues, type TaskWithSchedules } from '../taskForm/values';
+import { GOAL_MAX, copyValues, emptyValues, type TaskFormValues } from '../taskForm/values';
 import { CardSkeleton, ErrorBanner, PageContainer, PageHeader } from '../ui';
 
 /**
@@ -22,8 +23,7 @@ export function TaskCreatePage() {
   useEffect(() => {
     if (!from) return;
     let live = true;
-    api
-      .get<TaskWithSchedules>(`/tasks/${encodeURIComponent(from)}?include=summary`)
+    getTask(api, from)
       .then((task) => live && setInitial(copyValues(task)))
       .catch(() => {
         if (!live) return;

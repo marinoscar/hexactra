@@ -33,6 +33,7 @@ import { PolicySelect } from '../policies/PolicySelect';
 import { usePolicyCatalog } from '../policies/usePolicyCatalog';
 import type { ScheduleDraft } from '../schedule/draft';
 import { useSchedulePreview } from '../schedule/useSchedulePreview';
+import { createTask, deleteTask, replaceTaskSchedules, updateTask } from '../taskForm/api';
 import { useLeaveGuard } from '../taskForm/useLeaveGuard';
 import {
   GOAL_MAX,
@@ -52,7 +53,6 @@ import {
   type TaskFormValues,
 } from '../taskForm/values';
 import type { FleetHost } from '../types/fleet';
-import type { Task } from '../types/tasks';
 import { ErrorBanner, toast, useBreakpoint, useConfirm, useProfileTimeZone } from '../ui';
 
 export interface TaskFormProps {
@@ -256,7 +256,7 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo }: Ta
     let id = taskId ?? '';
     if (mode === 'create') {
       try {
-        id = (await api.post<Task>('/tasks', createBody(values, { sendPolicy }))).id;
+        id = (await createTask(api, createBody(values, { sendPolicy }))).id;
       } catch (e) {
         return fail(e, 'Could not create the task', sent);
       }
@@ -265,7 +265,7 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo }: Ta
       const patch = patchBody(fields, initialFields, { sendPolicy });
       if (patch) {
         try {
-          await api.patch(`/tasks/${id}`, patch);
+          await updateTask(api, id, patch);
         } catch (e) {
           return fail(e, 'Could not save the task', sent);
         }
@@ -274,7 +274,7 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo }: Ta
       }
       if (schedulesChanged(values.schedules, initialSchedules)) {
         try {
-          await api.put(`/tasks/${id}/schedules`, { schedules: scheduleItems(values.schedules) });
+          await replaceTaskSchedules(api, id, scheduleItems(values.schedules));
         } catch (e) {
           return fail(e, 'Could not save the schedules', sent, patch ? 'The task was saved but its schedules were not: ' : '');
         }
@@ -305,7 +305,7 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo }: Ta
     if (!ok) return;
     update({ saving: 'delete', banner: null });
     try {
-      await api.delete(`/tasks/${taskId}`);
+      await deleteTask(api, taskId);
     } catch (e) {
       return update({ saving: null, banner: e instanceof Error && e.message ? e.message : 'Could not delete the task' });
     }

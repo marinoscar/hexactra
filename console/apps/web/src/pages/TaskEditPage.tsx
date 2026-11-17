@@ -2,6 +2,7 @@ import { isPlatformApiError, usePlatformHost } from '@marinoscar/platform-web/co
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
+import { getTask } from '../taskForm/api';
 import { TaskForm, taskPath } from '../components/TaskForm';
 import { valuesFromTask, type TaskWithSchedules } from '../taskForm/values';
 import { CardSkeleton, EmptyState, ErrorBanner, PageContainer, PageHeader } from '../ui';
@@ -17,7 +18,7 @@ export function TaskEditPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      setTask(await api.get<TaskWithSchedules>(`/tasks/${encodeURIComponent(id)}?include=summary`));
+      setTask(await getTask(api, id));
     } catch (e) {
       // A task that is not the viewer's answers 404 too; a malformed id is a 400.
       if (isPlatformApiError(e) && (e.status === 404 || e.status === 400)) setMissing(true);
