@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
-import { ApiExtraModels, ApiResponse, ApiTags, getSchemaPath } from '@nestjs/swagger';
+import { ApiExtraModels, ApiTags } from '@nestjs/swagger';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 
 import { CreateTaskDto, UpdateTaskDto } from './tasks.schemas';
@@ -87,16 +87,12 @@ export class RunsController {
    * `{ items, nextCursor }` for keyset paging.
    */
   @Get()
-  @ApiExtraModels(RunListItemResponseDto, RunPageResponseDto)
-  // Written out, with its `{ data }` envelope, because the answer has two shapes and one is an array.
-  @ApiResponse({
-    status: 200,
-    description: 'An array of runs; with `envelope=1`, one page: `{ items, nextCursor }`.',
-    schema: {
-      type: 'object',
-      required: ['data'],
-      properties: { data: { oneOf: [{ type: 'array', items: { $ref: getSchemaPath(RunListItemResponseDto) } }, { $ref: getSchemaPath(RunPageResponseDto) }] } },
-    },
+  // Documented as the array, the shape without `envelope`, so typed clients of the
+  // earlier contract keep compiling; the page shape is the `RunPageResponseDto` schema.
+  @ApiExtraModels(RunPageResponseDto)
+  @ApiDataResponse(RunListItemResponseDto, {
+    isArray: true,
+    description: 'An array of runs: the newest `limit`. With `envelope=1` the data is instead one page, `{ items, nextCursor }` (schema `RunPageResponseDto`).',
   })
   @Auth({ permissions: ['runs:read'] })
   async list(@CurrentUser('id') userId: string, @Query() q: ListRunsDto) {

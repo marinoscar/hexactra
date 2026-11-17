@@ -27415,7 +27415,7 @@
         ],
         "responses": {
           "200": {
-            "description": "An array of runs; with `envelope=1`, one page: `{ items, nextCursor }`.",
+            "description": "An array of runs: the newest `limit`. With `envelope=1` the data is instead one page, `{ items, nextCursor }` (schema `RunPageResponseDto`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -27425,17 +27425,10 @@
                   ],
                   "properties": {
                     "data": {
-                      "oneOf": [
-                        {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/components/schemas/RunListItemResponseDto"
-                          }
-                        },
-                        {
-                          "$ref": "#/components/schemas/RunPageResponseDto"
-                        }
-                      ]
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RunListItemResponseDto"
+                      }
                     }
                   }
                 }

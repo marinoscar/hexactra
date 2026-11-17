@@ -30969,14 +30969,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description An array of runs; with `envelope=1`, one page: `{ items, nextCursor }`. */
+            /** @description An array of runs: the newest `limit`. With `envelope=1` the data is instead one page, `{ items, nextCursor }` (schema `RunPageResponseDto`). */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["RunListItemResponseDto"][] | components["schemas"]["RunPageResponseDto"];
+                        data: components["schemas"]["RunListItemResponseDto"][];
                     };
                 };
             };
