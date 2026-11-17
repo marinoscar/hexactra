@@ -113,7 +113,7 @@ async function main(): Promise<void> {
           trigger: task === null ? 'manual' : pick(rand, TRIGGERS).trigger,
           goal,
           result: outcome.status === 'succeeded' ? `Done: ${goal}` : null,
-          error: outcome.status === 'succeeded' ? null : outcome.status === 'cancelled' ? 'Cancelled by the user' : `Stopped: ${String(outcome.stopReason)}`,
+          error: outcome.status === 'succeeded' ? null : outcome.status === 'cancelled' ? 'Cancelled by the user' : outcome.stopReason === 'stalled' ? 'The agent stalled: the same click repeated 3 times' : `Stopped: ${String(outcome.stopReason)}`,
           stepCount,
           inputTokens,
           outputTokens,
