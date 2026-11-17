@@ -22,12 +22,14 @@ describe('task defaults (#399)', () => {
 
   it('the runner takes its limits from the policy snapshot (no literal budget numbers left in it, #401)', () => {
     const src = readFileSync(join(__dirname, '../src/runner/goal-runner.service.ts'), 'utf8');
-    expect(src).toContain('budget.maxActions ??');
-    expect(src).toContain('budget.maxActiveMinutes');
+    // The limits are the snapshot's effective budget, enforced by the BudgetTracker (#404).
+    expect(src).toContain('snapshot.effectiveBudget');
+    expect(src).toContain('new BudgetTracker(');
     expect(src).not.toMatch(/maxSteps \?\? \d|maxMinutes \?\? \d|maxActions \?\? \d/);
   });
 
   it('the budget error texts the alerts match are the ones the runner writes', () => {
-    expect(RUN_BUDGET_ERROR_LIST).toEqual([RUN_BUDGET_ERRORS.steps, RUN_BUDGET_ERRORS.time]);
+    expect(RUN_BUDGET_ERROR_LIST).toEqual(Object.values(RUN_BUDGET_ERRORS));
+    expect(RUN_BUDGET_ERROR_LIST).toEqual(expect.arrayContaining([RUN_BUDGET_ERRORS.steps, RUN_BUDGET_ERRORS.time]));
   });
 });

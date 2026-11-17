@@ -1,7 +1,8 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
-import { agentPolicySpecSchema } from './agent-policy.schema';
+import { TIERS, agentPolicySpecSchema } from './agent-policy.schema';
+import { resolvedTiersSchema } from './model-tiers.schema';
 import { parsePolicyRef } from './builtin-policies';
 import { POLICY_SOURCES } from './policy-snapshot';
 
@@ -75,3 +76,14 @@ export const policySummarySchema = z
     builtin: z.boolean(),
   })
   .describe('The agent policy a run runs under; null until the run has started.');
+
+export const effectiveTiersQuerySchema = z.object({
+  policyId: policyRefSchema.optional().describe("Resolve the tiers for this policy's pins instead of the user's default policy."),
+});
+export class EffectiveTiersQueryDto extends createZodDto(effectiveTiersQuerySchema) {}
+
+export const effectiveTiersResponseSchema = z.object({
+  policy: z.object({ id: z.string(), name: z.string(), startTier: z.enum(TIERS), maxTier: z.enum(TIERS) }).describe('The policy whose pins were applied: the default one unless `policyId` was given.'),
+  tiers: resolvedTiersSchema.describe('Per tier: the model and where it came from (pin, user, deployment, fill-down or the platform default), effort, output cap, fallback and capability flags.'),
+});
+export class EffectiveTiersResponseDto extends createZodDto(effectiveTiersResponseSchema) {}

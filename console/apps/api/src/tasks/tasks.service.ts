@@ -8,6 +8,7 @@ import { FabricClient } from '../fabric/fabric.client';
 import { activeElapsedMs } from '../runner/active-time';
 import { RunMetrics } from './run-metrics';
 import { PoliciesService } from '../policies/policies.service';
+import type { RunStopReason } from '../runner/budget';
 import { isDefaultLimits } from '../policies/legacy-task-policy';
 import { STOP_WAITING, startWaiting } from './reminder-schedule';
 import { NO_SPEND, SPEND_WINDOW_DAYS, withCost, type TaskSpend } from './run-cost';
@@ -23,6 +24,8 @@ export interface RunPatch {
   handoffExpiresAt?: Date | null;
   /** With `running`: what the runner is doing now (#379). Any other status clears it. */
   activity?: Prisma.InputJsonValue;
+  /** With a terminal status: why the run stopped (#404). */
+  stopReason?: RunStopReason | null;
 }
 
 /**
@@ -192,13 +195,13 @@ export class TasksService {
   async cancel(userId: string, id: string) {
     const run = await this.getRun(userId, id);
     if (isTerminal(run.status as RunStatus)) return run;
-    if (run.status === 'queued') return this.transition(userId, id, 'cancelled', { error: 'Cancelled before it started' });
+    if (run.status === 'queued') return this.transition(userId, id, 'cancelled', { error: 'Cancelled before it started', stopReason: 'cancelled' });
     // Waiting for a person, nothing is running to see the flag: withdraw the
     // request, end the browser session and cancel now (best effort on the fabric).
     if (run.status === 'waiting_human') {
       if (this.fabric && run.handoffId) await this.fabric.request('POST', `/v1/handoffs/${run.handoffId}/cancel`).catch(() => undefined);
       if (this.fabric && run.sessionId) await this.fabric.request('DELETE', `/v1/sessions/${run.sessionId}`).catch(() => undefined);
-      return this.transition(userId, id, 'cancelled', { error: 'Cancelled by the user' });
+      return this.transition(userId, id, 'cancelled', { error: 'Cancelled by the user', stopReason: 'cancelled' });
     }
     await this.db(userId).run.updateMany({ where: { id }, data: { cancelRequested: true } });
     return this.getRun(userId, id);

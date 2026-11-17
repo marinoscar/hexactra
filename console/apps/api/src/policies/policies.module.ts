@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 
+import { ModelTiersService } from './model-tiers.service';
 import { PoliciesController } from './policies.controller';
 import { PoliciesService } from './policies.service';
 import { PolicyModelCheck } from './policy-model-check';
 import { PolicyResolver } from './policy.resolver';
+import { PolicyTransferService } from './policy-transfer.service';
 
 /**
  * Agent policies (#401): the rows and their API, the built-ins, the model pin
@@ -14,7 +16,7 @@ import { PolicyResolver } from './policy.resolver';
  */
 @Module({
   controllers: [PoliciesController],
-  providers: [PoliciesService, PolicyModelCheck, PolicyResolver],
-  exports: [PoliciesService, PolicyResolver, PolicyModelCheck],
+  providers: [PoliciesService, PolicyTransferService, PolicyModelCheck, PolicyResolver, ModelTiersService],
+  exports: [PoliciesService, PolicyTransferService, PolicyResolver, PolicyModelCheck, ModelTiersService],
 })
 export class PoliciesModule {}

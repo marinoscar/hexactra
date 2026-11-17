@@ -12,3 +12,8 @@ registerErrorCode({ code: 'POLICY_IN_USE', status: 409, description: 'Tasks or s
 registerErrorCode({ code: 'POLICY_IS_DEFAULT', status: 409, description: 'The policy is the caller\'s default: choose another default first.' });
 registerErrorCode({ code: 'POLICY_VERSION_CONFLICT', status: 412, description: 'The `If-Match` version is stale: the policy changed since it was loaded.' });
 registerErrorCode({ code: 'POLICY_SPEC_INVALID', status: 500, description: 'A stored policy no longer passes validation.' });
+
+// Export and import (#402).
+registerErrorCode({ code: 'POLICY_IMPORT_INVALID', status: 400, description: 'A policy file is not valid: `details.errors` lists every invalid policy with its issues and `details.fileIssues` any problem with the file itself. Nothing is imported.' });
+registerErrorCode({ code: 'POLICY_IMPORT_UNSUPPORTED_VERSION', status: 400, description: 'The policy file or one of its specs was written by a newer version of the format than this deployment reads.' });
+registerErrorCode({ code: 'POLICY_IMPORT_TOO_LARGE', status: 413, description: 'The policy file is over 256 KB.' });
