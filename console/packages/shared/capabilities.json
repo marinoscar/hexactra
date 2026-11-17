@@ -545,9 +545,10 @@
     {
       "id": "deploy.bundled_host",
       "description": "Turn the bundled VPS browser host on or off (COMPOSE_PROFILES), and show whether it runs; the choice survives deploy update",
-      "rest": {
-        "none": "It changes the server's containers; run on the server, where docker is"
-      },
+      "rest": [
+        "GET /api/fleet/hosts",
+        "DELETE /api/fleet/hosts/{id}"
+      ],
       "cli": [
         "deploy bundled-host status",
         "deploy bundled-host on",
