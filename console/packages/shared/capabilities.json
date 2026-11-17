@@ -269,6 +269,25 @@
       }
     },
     {
+      "id": "runs.retention",
+      "description": "Run retention: the user's rule (keep N days, the newest N per task), what it would delete, and apply it now",
+      "rest": [
+        "GET /api/runs/retention",
+        "GET /api/runs/retention/preview",
+        "POST /api/runs/retention/apply"
+      ],
+      "cli": {
+        "none": "Not in the CLI yet: the parity decision is recorded in #432; call the REST routes"
+      },
+      "mcp": {
+        "none": "Deliberate: an agent does not erase its own history"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the web app"
+      },
+      "web": "/settings/run-history"
+    },
+    {
       "id": "runs.viewer",
       "description": "Watch or take over a run's browser",
       "rest": [

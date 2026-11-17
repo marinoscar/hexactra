@@ -126,6 +126,10 @@ runPlatformConformance({
           why: 'The runs list (#420) reads the policy summary out of `runs.policy_snapshot` in SQL, so the snapshot never leaves the database, and settles a keyset cursor to the microsecond, which a JavaScript date cannot hold. Both statements are bound to `user_id = <the caller>`.',
         },
         {
+          file: 'tasks/run-retention.service.ts',
+          why: 'Run retention (#422) ranks a user\'s finished runs per task with a window function (ROW_NUMBER() OVER (PARTITION BY task_id)) to find those beyond the newest N, in one statement shared by the preview and the job. Every value is a bound parameter and the statement is bound to one `user_id`: the caller in the routes, the user being processed in the system job.',
+        },
+        {
           file: 'tasks/task-summary.service.ts',
           why: 'The task list filters and sorts on facts computed from schedules and runs, and the summaries and statistics aggregate runs per task (FILTER, DISTINCT ON, percentile_cont, days in a time zone): one statement each instead of one per task. Every statement binds the caller\'s `user_id`.',
         },

@@ -9,6 +9,10 @@ import { RunsDeleteController } from './run-delete.controller';
 import { RunsDeleteHandler } from './run-delete.job';
 import { RUN_ARTIFACT_STORE, RunDeleteService, type RunArtifactStore } from './run-delete.service';
 import { ActionTokenStore } from './action-token-store';
+import { RunRetentionController } from './run-retention.controller';
+import { RunRetentionDoctorCheck } from './run-retention.doctor-check';
+import { RunRetentionApplyHandler, RunRetentionHandler, RunRetentionTask } from './run-retention.job';
+import { RunRetentionService } from './run-retention.service';
 import { RunActionTokens } from './run-action-token';
 import { RunMetrics } from './run-metrics';
 import { RunNotifier } from './run-notifier';
@@ -43,9 +47,9 @@ const artifacts = runArtifactStore();
 /** Browser tasks and their runs (the goal runner lives in src/runner/). */
 @Module({
   imports: [FabricModule, PoliciesModule, ...(artifacts.imports ?? [])],
-  // RunsDeleteController first: its `POST delete` is declared before any `:id` route.
-  controllers: [TasksController, TaskSchedulesController, RunsDeleteController, RunsController],
-  providers: [TasksService, RunsQueryService, RunDeleteService, RunsDeleteHandler, ...artifacts.providers, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders, RunRemindHandler, RunRemindTask],
-  exports: [TasksService, RunsQueryService, RunDeleteService, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders],
+  // RunsDeleteController and RunRetentionController first: their fixed paths are declared before any `:id` route.
+  controllers: [TasksController, TaskSchedulesController, RunsDeleteController, RunRetentionController, RunsController],
+  providers: [TasksService, RunsQueryService, RunDeleteService, RunsDeleteHandler, RunRetentionService, RunRetentionHandler, RunRetentionApplyHandler, RunRetentionTask, RunRetentionDoctorCheck, ...artifacts.providers, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders, RunRemindHandler, RunRemindTask],
+  exports: [TasksService, RunsQueryService, RunDeleteService, RunRetentionService, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders],
 })
 export class TasksModule {}
