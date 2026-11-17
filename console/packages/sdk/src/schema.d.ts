@@ -5080,10 +5080,20 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description **Requires:** authentication, plus permission `agent_policies:read`. */
+        /**
+         * List agent policies
+         * @description The four built-in policies (`builtin:economy`, `builtin:balanced`, `builtin:thorough`, `builtin:unlimited`) and your own, each with its spec, version, whether it is your default (`isDefault`), the tasks and schedules that use it (`usage`) and whether it has no hard stop (`hasNoHardStop`: every budget is `null`, so only finishing, Stop or stall detection ends a run).
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:read`.
+         */
         get: operations["policies_list"];
         put?: never;
-        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        /**
+         * Create a policy
+         * @description Creates a personal policy from a full spec. Names are unique among your policies. A budget of `null` is unlimited. A model pin must name a model enabled for you with tool calls and vision (`400 POLICY_PIN_INVALID`).
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:write`.
+         */
         post: operations["policies_create"];
         delete?: never;
         options?: never;
@@ -5098,9 +5108,19 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description **Requires:** authentication, plus permission `agent_policies:read`. */
+        /**
+         * Get your default policy
+         * @description The policy a run uses when nothing more specific names one. `explicit` is false while you have not chosen one: the default is then `builtin:balanced`.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:read`.
+         */
         get: operations["policies_getDefault"];
-        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        /**
+         * Set your default policy
+         * @description Body `{ policyId }`: an own policy's id or `builtin:<key>`; `null` goes back to `builtin:balanced`. Runs already started keep the policy they started with.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:write`.
+         */
         put: operations["policies_setDefault"];
         post?: never;
         delete?: never;
@@ -5116,7 +5136,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description **Requires:** authentication, plus permission `agent_policies:read`. */
+        /**
+         * Read the model each tier resolves to
+         * @description The Fast, Standard and Frontier models a new run of your default policy would use (`policyId` resolves for another policy), with where each value came from (`pin`, `user`, `deployment`, `fill_down` or `ai_default`) and whether the model supports tools and images.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:read`.
+         */
         get: operations["policies_effectiveTiers"];
         put?: never;
         post?: never;
@@ -5133,7 +5158,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description **Requires:** authentication, plus permission `agent_policies:read`. */
+        /**
+         * Export policies as a JSON file
+         * @description Returns a `hexactra.agent-policies` file (`formatVersion` 1) of your policies and, with `ids=all` (the default), the built-ins too. The file holds names, descriptions and specs only: no ids, user, version, usage or secret. `includePins=false` strips model pins, so the file works on any deployment.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:read`.
+         */
         get: operations["policies_export"];
         put?: never;
         post?: never;
@@ -5152,7 +5182,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        /**
+         * Import policies from a JSON file
+         * @description Creates the policies of a file made by the export route, in one transaction: an invalid entry rejects the whole file (`400 POLICY_IMPORT_INVALID`, listing every error). `onConflict` decides what happens when you already have a policy of that name: `rename` (default), `skip` or `replace`. Pins to models this deployment cannot use are dropped and budgets above the deployment ceilings are flagged, both as `warnings`. At most 100 policies and 256 KB.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:write`.
+         */
         post: operations["policies_import"];
         delete?: never;
         options?: never;
@@ -5167,15 +5202,30 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description **Requires:** authentication, plus permission `agent_policies:read`. */
+        /**
+         * Get one policy
+         * @description `id` is an own policy's UUID or `builtin:<key>`.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:read`.
+         */
         get: operations["policies_get"];
         put?: never;
         post?: never;
-        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        /**
+         * Delete a policy
+         * @description Refused with `409 POLICY_IN_USE` (listing the tasks and schedules that use it) unless `reassignTo` names the policy they move to, and with `409 POLICY_IS_DEFAULT` for your default. Built-ins cannot be deleted.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:write`.
+         */
         delete: operations["policies_remove"];
         options?: never;
         head?: never;
-        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        /**
+         * Edit a policy
+         * @description Changes the name, the description or the whole spec of your own policy and bumps its `version`. Send `If-Match: <version>` to refuse the edit when the policy moved meanwhile (`412 POLICY_VERSION_CONFLICT`). Built-in policies are read-only (`403`). Runs already started keep their own snapshot.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:write`.
+         */
         patch: operations["policies_update"];
         trace?: never;
     };
@@ -5188,7 +5238,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        /**
+         * Duplicate a policy
+         * @description Copies any policy, built-in or your own, under the given name. Use it to start from a built-in.
+         *
+         *     **Requires:** authentication, plus permission `agent_policies:write`.
+         */
         post: operations["policies_duplicate"];
         delete?: never;
         options?: never;
@@ -12546,13 +12601,13 @@ export interface components {
             allowedDomains?: string[];
             /**
              * @deprecated
-             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`.
+             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`.
              * @default 100
              */
             maxSteps?: number;
             /**
              * @deprecated
-             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`.
+             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`.
              * @default 30
              */
             maxMinutes?: number;
@@ -12560,7 +12615,7 @@ export interface components {
             confirmRiskyActions?: boolean;
             /**
              * @deprecated
-             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`.
+             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`.
              */
             model?: string | null;
             /** @description The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy. */
@@ -12575,18 +12630,18 @@ export interface components {
             allowedDomains?: string[];
             /**
              * @deprecated
-             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`.
+             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`.
              */
             maxSteps?: number;
             /**
              * @deprecated
-             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`.
+             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`.
              */
             maxMinutes?: number;
             confirmRiskyActions?: boolean;
             /**
              * @deprecated
-             * @description Deprecated: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`.
+             * @description Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`.
              */
             model?: string | null;
             /** @description The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy. */
@@ -30174,7 +30229,7 @@ export interface operations {
     policies_export: {
         parameters: {
             query?: {
-                /** @description `all`, or a comma-separated list of policy ids (UUIDs of your own policies, or `builtin:<key>`). Built-ins can be exported as a starting template. */
+                /** @description `all` (the default: the built-in policies, then your own), or a comma-separated list of policy ids (UUIDs of your own policies, or `builtin:<key>`). Built-ins can be exported as a starting template. */
                 ids?: string;
                 /** @description Keep model pins (the default). `false` strips them, so the file works on any deployment. */
                 includePins?: "true" | "false";

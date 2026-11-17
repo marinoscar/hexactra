@@ -25870,6 +25870,7 @@
     },
     "/api/agent-policies": {
       "get": {
+        "description": "The four built-in policies (`builtin:economy`, `builtin:balanced`, `builtin:thorough`, `builtin:unlimited`) and your own, each with its spec, version, whether it is your default (`isDefault`), the tasks and schedules that use it (`usage`) and whether it has no hard stop (`hasNoHardStop`: every budget is `null`, so only finishing, Stop or stall detection ends a run).\n\n**Requires:** authentication, plus permission `agent_policies:read`.",
         "operationId": "policies_list",
         "parameters": [],
         "responses": {
@@ -25933,6 +25934,7 @@
             "PAT-auth": []
           }
         ],
+        "summary": "List agent policies",
         "tags": [
           "Agent policies"
         ],
@@ -25942,10 +25944,10 @@
           "permissions": [
             "agent_policies:read"
           ]
-        },
-        "description": "**Requires:** authentication, plus permission `agent_policies:read`."
+        }
       },
       "post": {
+        "description": "Creates a personal policy from a full spec. Names are unique among your policies. A budget of `null` is unlimited. A model pin must name a model enabled for you with tool calls and vision (`400 POLICY_PIN_INVALID`).\n\n**Requires:** authentication, plus permission `agent_policies:write`.",
         "operationId": "policies_create",
         "parameters": [],
         "requestBody": {
@@ -26016,6 +26018,7 @@
             "PAT-auth": []
           }
         ],
+        "summary": "Create a policy",
         "tags": [
           "Agent policies"
         ],
@@ -26025,12 +26028,12 @@
           "permissions": [
             "agent_policies:write"
           ]
-        },
-        "description": "**Requires:** authentication, plus permission `agent_policies:write`."
+        }
       }
     },
     "/api/agent-policies/default": {
       "get": {
+        "description": "The policy a run uses when nothing more specific names one. `explicit` is false while you have not chosen one: the default is then `builtin:balanced`.\n\n**Requires:** authentication, plus permission `agent_policies:read`.",
         "operationId": "policies_getDefault",
         "parameters": [],
         "responses": {
@@ -26091,6 +26094,7 @@
             "PAT-auth": []
           }
         ],
+        "summary": "Get your default policy",
         "tags": [
           "Agent policies"
         ],
@@ -26100,10 +26104,10 @@
           "permissions": [
             "agent_policies:read"
           ]
-        },
-        "description": "**Requires:** authentication, plus permission `agent_policies:read`."
+        }
       },
       "put": {
+        "description": "Body `{ policyId }`: an own policy's id or `builtin:<key>`; `null` goes back to `builtin:balanced`. Runs already started keep the policy they started with.\n\n**Requires:** authentication, plus permission `agent_policies:write`.",
         "operationId": "policies_setDefault",
         "parameters": [],
         "requestBody": {
@@ -26174,6 +26178,7 @@
             "PAT-auth": []
           }
         ],
+        "summary": "Set your default policy",
         "tags": [
           "Agent policies"
         ],
@@ -26183,12 +26188,12 @@
           "permissions": [
             "agent_policies:write"
           ]
-        },
-        "description": "**Requires:** authentication, plus permission `agent_policies:write`."
+        }
       }
     },
     "/api/agent-policies/model-tiers/effective": {
       "get": {
+        "description": "The Fast, Standard and Frontier models a new run of your default policy would use (`policyId` resolves for another policy), with where each value came from (`pin`, `user`, `deployment`, `fill_down` or `ai_default`) and whether the model supports tools and images.\n\n**Requires:** authentication, plus permission `agent_policies:read`.",
         "operationId": "policies_effectiveTiers",
         "parameters": [
           {
@@ -26260,6 +26265,7 @@
             "PAT-auth": []
           }
         ],
+        "summary": "Read the model each tier resolves to",
         "tags": [
           "Agent policies"
         ],
@@ -26269,19 +26275,19 @@
           "permissions": [
             "agent_policies:read"
           ]
-        },
-        "description": "**Requires:** authentication, plus permission `agent_policies:read`."
+        }
       }
     },
     "/api/agent-policies/export": {
       "get": {
+        "description": "Returns a `hexactra.agent-policies` file (`formatVersion` 1) of your policies and, with `ids=all` (the default), the built-ins too. The file holds names, descriptions and specs only: no ids, user, version, usage or secret. `includePins=false` strips model pins, so the file works on any deployment.\n\n**Requires:** authentication, plus permission `agent_policies:read`.",
         "operationId": "policies_export",
         "parameters": [
           {
             "name": "ids",
             "required": false,
             "in": "query",
-            "description": "`all`, or a comma-separated list of policy ids (UUIDs of your own policies, or `builtin:<key>`). Built-ins can be exported as a starting template.",
+            "description": "`all` (the default: the built-in policies, then your own), or a comma-separated list of policy ids (UUIDs of your own policies, or `builtin:<key>`). Built-ins can be exported as a starting template.",
             "schema": {
               "minLength": 1,
               "maxLength": 8000,
@@ -26367,6 +26373,7 @@
             "PAT-auth": []
           }
         ],
+        "summary": "Export policies as a JSON file",
         "tags": [
           "Agent policies"
         ],
@@ -26376,12 +26383,12 @@
           "permissions": [
             "agent_policies:read"
           ]
-        },
-        "description": "**Requires:** authentication, plus permission `agent_policies:read`."
+        }
       }
     },
     "/api/agent-policies/import": {
       "post": {
+        "description": "Creates the policies of a file made by the export route, in one transaction: an invalid entry rejects the whole file (`400 POLICY_IMPORT_INVALID`, listing every error). `onConflict` decides what happens when you already have a policy of that name: `rename` (default), `skip` or `replace`. Pins to models this deployment cannot use are dropped and budgets above the deployment ceilings are flagged, both as `warnings`. At most 100 policies and 256 KB.\n\n**Requires:** authentication, plus permission `agent_policies:write`.",
         "operationId": "policies_import",
         "parameters": [],
         "requestBody": {
@@ -26452,6 +26459,7 @@
             "PAT-auth": []
           }
         ],
+        "summary": "Import policies from a JSON file",
         "tags": [
           "Agent policies"
         ],
@@ -26461,12 +26469,12 @@
           "permissions": [
             "agent_policies:write"
           ]
-        },
-        "description": "**Requires:** authentication, plus permission `agent_policies:write`."
+        }
       }
     },
     "/api/agent-policies/{id}": {
       "get": {
+        "description": "`id` is an own policy's UUID or `builtin:<key>`.\n\n**Requires:** authentication, plus permission `agent_policies:read`.",
         "operationId": "policies_get",
         "parameters": [
           {
@@ -26536,6 +26544,7 @@
             "PAT-auth": []
           }
         ],
+        "summary": "Get one policy",
         "tags": [
           "Agent policies"
         ],
@@ -26545,10 +26554,10 @@
           "permissions": [
             "agent_policies:read"
           ]
-        },
-        "description": "**Requires:** authentication, plus permission `agent_policies:read`."
+        }
       },
       "patch": {
+        "description": "Changes the name, the description or the whole spec of your own policy and bumps its `version`. Send `If-Match: <version>` to refuse the edit when the policy moved meanwhile (`412 POLICY_VERSION_CONFLICT`). Built-in policies are read-only (`403`). Runs already started keep their own snapshot.\n\n**Requires:** authentication, plus permission `agent_policies:write`.",
         "operationId": "policies_update",
         "parameters": [
           {
@@ -26645,6 +26654,7 @@
             "PAT-auth": []
           }
         ],
+        "summary": "Edit a policy",
         "tags": [
           "Agent policies"
         ],
@@ -26654,10 +26664,10 @@
           "permissions": [
             "agent_policies:write"
           ]
-        },
-        "description": "**Requires:** authentication, plus permission `agent_policies:write`."
+        }
       },
       "delete": {
+        "description": "Refused with `409 POLICY_IN_USE` (listing the tasks and schedules that use it) unless `reassignTo` names the policy they move to, and with `409 POLICY_IS_DEFAULT` for your default. Built-ins cannot be deleted.\n\n**Requires:** authentication, plus permission `agent_policies:write`.",
         "operationId": "policies_remove",
         "parameters": [
           {
@@ -26719,6 +26729,7 @@
             "PAT-auth": []
           }
         ],
+        "summary": "Delete a policy",
         "tags": [
           "Agent policies"
         ],
@@ -26728,12 +26739,12 @@
           "permissions": [
             "agent_policies:write"
           ]
-        },
-        "description": "**Requires:** authentication, plus permission `agent_policies:write`."
+        }
       }
     },
     "/api/agent-policies/{id}/duplicate": {
       "post": {
+        "description": "Copies any policy, built-in or your own, under the given name. Use it to start from a built-in.\n\n**Requires:** authentication, plus permission `agent_policies:write`.",
         "operationId": "policies_duplicate",
         "parameters": [
           {
@@ -26813,6 +26824,7 @@
             "PAT-auth": []
           }
         ],
+        "summary": "Duplicate a policy",
         "tags": [
           "Agent policies"
         ],
@@ -26822,8 +26834,7 @@
           "permissions": [
             "agent_policies:write"
           ]
-        },
-        "description": "**Requires:** authentication, plus permission `agent_policies:write`."
+        }
       }
     },
     "/api/tasks": {
@@ -61063,7 +61074,7 @@
             "minimum": 1,
             "maximum": 1000,
             "deprecated": true,
-            "description": "Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`."
+            "description": "Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`."
           },
           "maxMinutes": {
             "default": 30,
@@ -61071,7 +61082,7 @@
             "minimum": 1,
             "maximum": 480,
             "deprecated": true,
-            "description": "Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`."
+            "description": "Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`."
           },
           "confirmRiskyActions": {
             "default": false,
@@ -61089,7 +61100,7 @@
               }
             ],
             "deprecated": true,
-            "description": "Deprecated: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`."
+            "description": "Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`."
           },
           "policyId": {
             "anyOf": [
@@ -61155,14 +61166,14 @@
             "minimum": 1,
             "maximum": 1000,
             "deprecated": true,
-            "description": "Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`."
+            "description": "Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActions`."
           },
           "maxMinutes": {
             "type": "integer",
             "minimum": 1,
             "maximum": 480,
             "deprecated": true,
-            "description": "Deprecated: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`."
+            "description": "Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `budget.maxActiveMinutes`."
           },
           "confirmRiskyActions": {
             "type": "boolean"
@@ -61179,7 +61190,7 @@
               }
             ],
             "deprecated": true,
-            "description": "Deprecated: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`."
+            "description": "Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy's `models.pins.standard`."
           },
           "policyId": {
             "anyOf": [

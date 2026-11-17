@@ -82,39 +82,41 @@ Measured numbers, and how to size a machine: [capacity.md](capacity.md).
 
 ## 6. Watching it
 
+- **Alerts.** Administration → Alerts. It ships rules for a browser host offline (or the fabric unreachable), a schedule failing 3+ runs in a row, a user's runs over their token, cost or budget limits, a user's runs stalling, and one expensive run (off by default); see [the run budget meter, stop reasons and cost alerts](#the-run-budget-meter-stop-reasons-and-cost-alerts).
+- **Telemetry.** Administration → Telemetry. The Browser agents group charts runs, steps, waits for a person and model tokens. To trace across console and fabric, set `HEXACTRA_FABRIC_OTLP_ENDPOINT` ([vps-stack.md](vps-stack.md)).
+- **Doctor.** Administration → Doctor. It runs the `fabric.*` checks: reachability, token, hosts online, event stream.
+- **About.** Administration → About (`system_settings:read`). What is deployed: the console version, the deployment mode, the record `hexactra deploy` leaves on disk (commit, ref, install and update times, the last run's outcome and failed step, the proxy and certificate expiry, the host, the deploy history), database liveness, and a **Hexactra Fabric** section (URL, fabric version, reachable, browser hosts online and with a browser connected). The service token is never shown. API: `GET /api/admin/about`.
+
+### Agent policies in operation
+
+What an administrator sets, in the order a run meets it: the deployment's [model tiers](#model-tiers), the [model prices](#model-prices), the [ceilings](#budget-ceilings-run-time-and-why-a-run-stopped), then what the run reports ([meter, stop reasons and alerts](#the-run-budget-meter-stop-reasons-and-cost-alerts)). Users' own policies, tiers and default are in the console's settings ([README](../../README.md#agent-policies)). The three administrator pages are under Administration → Browser agent and read with `system_settings:read`.
+
+### Model tiers
+
+The browser agent picks its model by tier (Fast, Standard, Frontier; [README, Model tiers](../../README.md#model-tiers)). The deployment's default tiers are the `browserAgentTiers` system setting (Administration → Browser agent → Agent model tiers).
+
+- **Where.** `PATCH /api/system-settings` with `system_settings:write`: `{ "browserAgentTiers": { "standard": { "model": "<provider>:<model id>", "reasoningEffort": "low", "maxOutputTokens": 4000, "fallbackModel": null }, "frontier": { "model": "<provider>:<model id>", "reasoningEffort": "high" } } }`. A PATCH merges per tier and per field; `null` clears a field. The model is named as the catalogue names it (Administration → AI → Models), and must be enabled there and support tool calls. Each user may override any field in their own settings.
+- **A fresh deployment** has every tier unset: each user's own default model (AI settings) is used for all three tiers, and a run with no model anywhere fails with `No model selected`, naming the Model tiers page. Set at least Standard to give every user a working model.
+- **A good starting pair:** one capable model on Standard at `low` effort and the same model on Frontier at `high` effort (prompt caching stays warm on an escalation); add a smaller model on Fast for the Economy policy.
+- **Changing them** affects runs that start afterwards. A run in flight keeps the models it started with.
+- **Prices.** Give every tier's model (and fallback) an entry in [Model prices](#model-prices), or the run's cost is a lower bound.
+
 ### Model prices
 
 Every model call the browser agent makes is priced, so a run, a task (last 30 days) and the platform's AI usage report can show money as well as tokens. The console ships no prices: they change, and they are your contract with a provider.
 
-- **Where.** The `agentPricing` system setting (`PATCH /api/system-settings`, `system_settings:write`): `{ "agentPricing": { "models": { "<provider>:<model id>": { "inputPerMTok": 3, "outputPerMTok": 15, "cachedInputPerMTok": 0.3 } } } }`. The key is the provider id, a colon and the model id exactly as the provider reports it for a call (the model that served it, as listed in Administration → AI → Models and Usage). A PATCH replaces the whole `models` table.
+- **Where.** Administration → Browser agent → Model prices, or the `agentPricing` system setting (`PATCH /api/system-settings`, `system_settings:write`): `{ "agentPricing": { "models": { "<provider>:<model id>": { "inputPerMTok": 3, "outputPerMTok": 15, "cachedInputPerMTok": 0.3 } } } }`. The key is the provider id, a colon and the model id exactly as the provider reports it for a call (the model that served it, as listed in Administration → AI → Models and Usage). A PATCH replaces the whole `models` table.
 - **Units.** USD per **million** tokens. `cachedInputPerMTok` is optional: without it, input tokens served from the provider's cache are billed at the input price. Prices cannot be negative.
 - **Unpriced models.** A call on a model that is not in the table has no price, and counts as unknown, never as free. The run's `costKnown` becomes `false` and its cost is a lower bound: show it as "at least" (≥ $x.xx). Add the model's price to make later runs exact. Earlier runs are not re-priced, and runs from before cost tracking stay unknown.
 - **Same table, two uses.** The platform's usage report (Administration → AI → Usage) reads it through the `AI_PRICING` port: it shows `priced: true` and a cost per model, and a model with no price has no cost there either.
 - **Metrics.** `app.runs.model_calls` (counter) and `app.runs.cost` (histogram, USD, one value per finished run whose calls were all priced). Neither carries a user or run label.
 
+### Budget ceilings, run time and why a run stopped
 
-
-
-### Moving agent policies between users and deployments
-
-Agent policies are personal; a JSON file is how they are shared (format and API: [console README](../../README.md#export-and-import)).
-
-- **Export** with `GET /api/agent-policies/export?ids=all` (the signed-in user's policies and the built-ins). Add `includePins=false` for a file that carries no model id and so works on any deployment.
-- **Import** with `POST /api/agent-policies/import`. The default is `rename` on a name clash; `replace` overwrites the user's same-named policy and bumps its version (runs in flight keep their own snapshot). A file is written in one transaction: if any policy is invalid, nothing is imported and `details.errors` lists every problem.
-- **Read the `warnings`.** `PIN_DROPPED` means a model pin names a model that is unknown or disabled here (enable the model, or leave the tier to the user's tier definition); `EXCEEDS_CEILING` means a budget is above the deployment ceilings: it is stored as written and held to the ceiling when a run uses it.
-- **Limits.** 100 policies and 256 KB per file; the file holds no ids, no user and nothing secret, so it is safe to attach to a ticket.
-
-- **Alerts.** Administration → Alerts. It ships rules for a browser host offline (or the fabric unreachable), a schedule failing 3+ runs in a row, a user's runs over their token, cost or budget limits, a user's runs stalling, and one expensive run (off by default); see [the run budget meter, stop reasons and cost alerts](#the-run-budget-meter-stop-reasons-and-cost-alerts).
-- **Run time budget.** A task's `maxMinutes` counts **active** time only: the time the run spends in `running`. Time spent waiting for a person (a handoff or a question) is never counted, so a run that waited two hours for a code resumes with its remaining active time intact (`runs.active_ms`, `runs.active_since`). A new task gets the same defaults everywhere (100 steps, 30 minutes). A run that outlasts one job (30 min of work) continues in a new `browser.goal.run` job (reason "Run continued in a new job") and stays `running`; you will see two or more jobs for one run in Administration → Jobs. A budget stop ends the run as `failed` with the error `Step budget exhausted` or `Time budget exhausted` (or the model-call, input-token, output-token or cost message), after one wrap-up call; the typed reason is `stop_reason` (below).
-- **Telemetry.** Administration → Telemetry. The Browser agents group charts runs, steps, waits for a person and model tokens. To trace across console and fabric, set `HEXACTRA_FABRIC_OTLP_ENDPOINT` ([vps-stack.md](vps-stack.md)).
-- **Doctor.** Administration → Doctor. It runs the `fabric.*` checks: reachability, token, hosts online, event stream.
-- **About.** Administration → About (`system_settings:read`). What is deployed: the console version, the deployment mode, the record `hexactra deploy` leaves on disk (commit, ref, install and update times, the last run's outcome and failed step, the proxy and certificate expiry, the host, the deploy history), database liveness, and a **Hexactra Fabric** section (URL, fabric version, reachable, browser hosts online and with a browser connected). The service token is never shown. API: `GET /api/admin/about`.
-
-### Budget ceilings and why a run stopped
-
-- **Ceilings.** Administration → Settings (API: `PATCH /api/system-settings`, `system_settings:write`) holds `browserAgentCeilings`: `{ "browserAgentCeilings": { "maxActions": 200, "maxModelCalls": null, "maxActiveMinutes": 120, "maxInputTokens": null, "maxOutputTokens": null, "maxCostUsd": 25 } }`. Each key is the most any agent policy may allow a run; `null` (the default) sets no ceiling. A PATCH changes only the keys it names. A run's limit is the smaller of its policy's and the ceiling, and a ceiling also caps a policy that is unlimited, so set one if no user should ever be able to run without a hard stop. The effective numbers are fixed when the run starts: a changed ceiling applies to the next run, never to one in flight.
-- **Reading `stop_reason`.** `runs.stop_reason` says why a run ended: `finished` (the model called finish, or answered), `budget_actions`, `budget_model_calls`, `budget_active_time`, `budget_input_tokens`, `budget_output_tokens`, `budget_cost` (that budget was used up; the run made one wrap-up call and kept the model's summary; it is `succeeded` only when the wrap-up reported success), `stalled` (no progress), `cancelled`, `error` (a failure in the runner or the job; `error` holds the text) and `no_model` (no model could be chosen). It is `null` for runs from before the column. For example, to count the last day's budget stops: `SELECT stop_reason, count(*) FROM runs WHERE stop_reason LIKE 'budget_%' AND created_at > now() - interval '1 day' GROUP BY 1;`. The run's `budget.source` tells you whether the policy or a ceiling set the limit that stopped it.
-- **Alerts.** The run-budget rule counts failed runs with a `budget_%` stop reason. For one release it also counts older failed runs (no stop reason) whose error is `Step budget exhausted` or `Time budget exhausted`.
+- **Budgets belong to the policy.** A run's limits (actions, model calls, active minutes, tokens, cost) come from its agent policy, snapshotted when the run starts ([README, Budgets](../../README.md#budgets)). Edit the limits in the policy, not on the task: a task's `maxSteps`, `maxMinutes` and `model` fields are deprecated and removed in the release after the one that introduced agent policies.
+- **Ceilings.** Administration → Browser agent → Agent budget ceilings (API: `PATCH /api/system-settings`, `system_settings:write`) holds `browserAgentCeilings`: `{ "browserAgentCeilings": { "maxActions": 200, "maxModelCalls": null, "maxActiveMinutes": 120, "maxInputTokens": null, "maxOutputTokens": null, "maxCostUsd": 25 } }`. Each key is the most any agent policy may allow a run; `null` (the default) sets no ceiling. A PATCH changes only the keys it names. A run's limit is the smaller of its policy's and the ceiling, and a ceiling also caps a policy that is unlimited, so set one if no user should ever be able to run without a hard stop. The effective numbers are fixed when the run starts: a changed ceiling applies to the next run, never to one in flight.
+- **Run time counts active time only.** The time a run spends in `running` counts toward `maxActiveMinutes`; time waiting for a person (a handoff or a question) never does, so a run that waited two hours for a code resumes with its remaining active time intact (`runs.active_ms`, `runs.active_since`). A run that outlasts one job (30 minutes of work) continues in a new `browser.goal.run` job (reason "Run continued in a new job") and stays `running`: you will see two or more jobs for one run in Administration → Jobs.
+- **Reading `stop_reason`.** `runs.stop_reason` says why a run ended: `finished` (the model called finish, or answered), `budget_actions`, `budget_model_calls`, `budget_active_time`, `budget_input_tokens`, `budget_output_tokens`, `budget_cost` (that budget was used up; the run made one wrap-up call and kept the model's summary; it is `succeeded` only when the wrap-up reported success), `stalled` (no progress), `cancelled`, `error` (a failure in the runner or the job; `error` holds the text) and `no_model` (no model could be chosen). It is `null` for runs from before the column. A budget stop ends the run as `failed` with the budget's message (for example `Step budget exhausted` or `Time budget exhausted`) in `error`. To count the last day's budget stops: `SELECT stop_reason, count(*) FROM runs WHERE stop_reason::text LIKE 'budget_%' AND created_at > now() - interval '1 day' GROUP BY 1;`. The run's `budget.source` tells you whether the policy or a ceiling set the limit that stopped it.
 
 ### The run budget meter, stop reasons and cost alerts
 
@@ -135,15 +137,28 @@ The console's alert rules (Administration → Alerts, created once by key; an ed
 - **What the summary carries.** The run's short id and its task's name (or, for a one-off goal, the goal cut to 80 characters with secret-looking values such as `password: …`, `token=…` and long keys masked), and amounts as "$x" or "≥ $x". Never the full goal, the result or a step. The notifications and `alerts.alert.*` webhooks reuse the platform's channels.
 - **Resolving.** An incident resolves on its own once the condition stops: the usage window moves on, the stalls age out, or the expensive run is older than `windowHours`.
 
-### Model tiers
+### A run that seems to burn tokens: what to check
 
-The browser agent picks its model by tier (Fast, Standard, Frontier; [README, Model tiers](../../README.md#model-tiers)). The deployment's default tiers are the `browserAgentTiers` system setting, the same document as the model prices.
+Work down the list; each step names where to look.
 
-- **Where.** `PATCH /api/system-settings` with `system_settings:write`: `{ "browserAgentTiers": { "standard": { "model": "<provider>:<model id>", "reasoningEffort": "low", "maxOutputTokens": 4000, "fallbackModel": null }, "frontier": { "model": "<provider>:<model id>", "reasoningEffort": "high" } } }`. A PATCH merges per tier and per field; `null` clears a field. The model is named as the catalogue names it (Administration → AI → Models), and must be enabled there and support tool calls. Each user may override any field in their own settings.
-- **A fresh deployment** has every tier unset: each user's own default model (AI settings) is used for all three tiers, and a run with no model anywhere fails with `No model selected`, naming the Model tiers page. Set at least Standard to give every user a working model.
-- **A good starting pair:** one capable model on Standard at `low` effort and the same model on Frontier at `high` effort (prompt caching stays warm on an escalation); add a smaller model on Fast for the Economy policy.
-- **Changing them** affects runs that start afterwards. A run in flight keeps the models it started with.
-- **Prices.** Give every tier's model (and fallback) an entry in [Model prices](#model-prices), or the run's cost is a lower bound.
+1. **Open the run** (`/runs/:id`, or `GET /api/runs/:id`). The budget meter shows what it used against each limit, the policy and the tier. `modelCalls`, `costUsd` and `costKnown` give the totals.
+2. **Is the policy unlimited?** `GET /api/agent-policies` marks a policy with no budget at all as `hasNoHardStop`. The built-in Unlimited has none, and only a ceiling caps it. Switch the task to Balanced or Economy, or set `maxCostUsd` on the policy or a ceiling.
+3. **Is it on the strongest model?** The run's `currentTier` and `escalations` show whether a stall moved it to Frontier, and the timeline carries a "↑" row for each escalation. Escalation is bounded by the policy's `maxTier` and `stall.maxEscalations`; set `maxEscalations` to 0 to keep a run on one tier.
+4. **Which model does each tier resolve to?** `GET /api/agent-policies/model-tiers/effective` lists them with where each came from (`pin`, `user`, `deployment`, `fill_down`, `ai_default`). A tier with no model borrows the nearest tier that has one (Fast borrows Standard's, Standard borrows Frontier's), so an unset Fast tier gives the Economy policy no saving.
+5. **Is the cost real?** "≥ $x" means a call was on a model with no entry in [Model prices](#model-prices): the true cost is higher and the cost budget cannot stop it. Add the price. Without prices the cost alerts never fire.
+6. **Is it looping?** Look for repeated steps in the timeline and the stall alert. Stall detection stops a loop only at the policy's thresholds (`maxRepeatedAction`, `noProgressActions`, `maxConsecutiveFailures`); a page that keeps changing can defeat the no-progress signal, and `onStall: ask_human` waits for a person instead of ending the run. An unattended run (a scheduled one) that stalls with nothing left to escalate to fails as `stalled` rather than waiting for a person.
+7. **Is each call too large?** Chart `app.runs.input_tokens_per_call` on Administration → Telemetry → Browser agents. Input tokens dominate the bill because every call re-sends the context. Lower the policy's `callsPerChunk`, `observationChars` or `screenshotsKept` ([README, Context settings](../../README.md#context-settings)); `0` screenshots turns vision off.
+8. **Find the expensive runs.** `SELECT id, task_id, cost_usd, model_calls, input_tokens, output_tokens, stop_reason FROM runs ORDER BY cost_usd DESC LIMIT 10;` and the task's last-30-day spend on its card (an average cost per successful run well above its peers points at a goal or policy to tighten).
+9. **Cap it and watch it.** Set `browserAgentCeilings.maxCostUsd`, and turn on the "Expensive run" alert (below). Stop a live run from its page or `hexactra runs cancel`; Stop always works, even under Unlimited.
+
+### Moving agent policies between users and deployments
+
+Agent policies are personal; a JSON file is how they are shared (format and API: [console README](../../README.md#export-and-import)).
+
+- **Export** with `GET /api/agent-policies/export?ids=all` (the signed-in user's policies and the built-ins). Add `includePins=false` for a file that carries no model id and so works on any deployment.
+- **Import** with `POST /api/agent-policies/import`. The default is `rename` on a name clash; `replace` overwrites the user's same-named policy and bumps its version (runs in flight keep their own snapshot). A file is written in one transaction: if any policy is invalid, nothing is imported and `details.errors` lists every problem.
+- **Read the `warnings`.** `PIN_DROPPED` means a model pin names a model that is unknown or disabled here (enable the model, or leave the tier to the user's tier definition); `EXCEEDS_CEILING` means a budget is above the deployment ceilings: it is stored as written and held to the ceiling when a run uses it.
+- **Limits.** 100 policies and 256 KB per file; the file holds no ids, no user and nothing secret, so it is safe to attach to a ticket.
 
 ## 7. Questions
 

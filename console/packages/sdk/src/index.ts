@@ -73,7 +73,7 @@ export interface PoliciesClient {
   update(id: PolicyRef, spec: AgentPolicySpec, version?: number, fields?: { name?: string; description?: string | null }): Promise<AgentPolicy>;
   /** `null` goes back to `builtin:balanced`. */
   setDefault(id: PolicyRef | null): Promise<{ policyId: string; explicit: boolean }>;
-  /** The portable file of the chosen policies (default: all of your own). */
+  /** The portable file of the chosen policies (default: the built-ins and all of your own). */
   export(options?: { ids?: PolicyRef[]; includePins?: boolean }): Promise<AgentPolicyFile>;
   import(file: AgentPolicyFile | Record<string, unknown>, options?: { onConflict?: PolicyConflictMode }): Promise<Schema<'ImportPoliciesResponseDto'>>;
 }

@@ -20,10 +20,10 @@ const taskFields = {
   allowedDomains: z.array(domain).max(50),
   // Deprecated by agent policies (#401): still accepted for one release. They map to a
   // derived personal policy named "Task: <name>" and the response carries a `Deprecation` header.
-  maxSteps: z.number().int().min(1).max(1000).meta({ deprecated: true }).describe('Deprecated: use an agent policy (`policyId`). Maps to the policy\'s `budget.maxActions`.'),
-  maxMinutes: z.number().int().min(1).max(480).meta({ deprecated: true }).describe('Deprecated: use an agent policy (`policyId`). Maps to the policy\'s `budget.maxActiveMinutes`.'),
+  maxSteps: z.number().int().min(1).max(1000).meta({ deprecated: true }).describe('Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy\'s `budget.maxActions`.'),
+  maxMinutes: z.number().int().min(1).max(480).meta({ deprecated: true }).describe('Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy\'s `budget.maxActiveMinutes`.'),
   confirmRiskyActions: z.boolean(),
-  model: z.string().trim().min(1).max(200).nullable().meta({ deprecated: true }).describe('Deprecated: use an agent policy (`policyId`). Maps to the policy\'s `models.pins.standard`.'),
+  model: z.string().trim().min(1).max(200).nullable().meta({ deprecated: true }).describe('Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy\'s `models.pins.standard`.'),
   policyId: policyRefSchema.nullable().describe("The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."),
 };
 
