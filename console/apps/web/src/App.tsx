@@ -20,18 +20,19 @@ import { SettingsHub, type SettingsHubProps } from '@marinoscar/platform-web/set
 import { FactoryResetPage, OffboardOrganizationButton, UserDangerZonePage, factoryResetSettingsPage } from '@marinoscar/platform-web/user-data/ui';
 import { ShellProviders, type ShellProvider } from '@marinoscar/platform-web/shell/headless';
 import { AboutPage, InstallPrompt } from '@marinoscar/platform-web/host/ui';
-import { ShellAppBar, ShellLayout, ShellUserMenu } from '@marinoscar/platform-web/shell/ui';
+import { ShellAppBar, ShellBottomNav, ShellLayout, ShellUserMenu } from '@marinoscar/platform-web/shell/ui';
 import { UserTimeZoneSync } from '@marinoscar/platform-web/timezone/headless';
 import type { ReactElement } from 'react';
 
 import { api, platformApi } from './api';
 import { ADMIN_SECTIONS } from './config/adminSections';
-import { NAVIGATION } from './config/navigation';
+import { NAVIGATION, PHONE_NAVIGATION } from './config/navigation';
 import { USER_SETTINGS_SECTIONS } from './config/userSettingsSections';
 import { WebhooksPage } from '@marinoscar/platform-web/webhooks/ui';
 import { AlertsPage } from '@marinoscar/platform-web/alerts/ui';
 
 import { BrandLogo, BrandMark } from './components/BrandLogo';
+import { InboxCountProvider } from './components/InboxCountProvider';
 import { ALERTS_ENABLED, WEBHOOKS_ENABLED } from './config/userSettingsSections';
 import { FabricConnectionPage } from './pages/FabricConnectionPage';
 import { DesktopPage } from './pages/DesktopPage';
@@ -91,9 +92,10 @@ function Gate({ permission, children }: { permission: string; children: ReactEle
  * The providers around the signed-in shell, outermost first: the enabled
  * slices' (the notification inbox, the AI config the host's feature map reads),
  * then the platform host every packaged page reads, then the providers that
- * need the host (the onboarding fetch). Add yours to `src/slices/<id>.tsx`.
+ * need the host (the Inbox count behind the navigation badge, the onboarding
+ * fetch). Add yours to `src/slices/<id>.tsx`.
  */
-const SHELL_PROVIDERS: readonly ShellProvider[] = [...sliceShellProviders, AppPlatformHost, ...sliceHostedProviders];
+const SHELL_PROVIDERS: readonly ShellProvider[] = [...sliceShellProviders, AppPlatformHost, InboxCountProvider, ...sliceHostedProviders];
 
 /** Renders each component of a shell slot (banners, overlays, top-bar actions). */
 function Slot({ components }: { components: readonly ComponentType[] }) {
@@ -111,6 +113,8 @@ function AppShell() {
   return (
     <ShellLayout
       navigation={NAVIGATION}
+      // The phone bar: Home, Inbox, Tasks, Runs; the rest is in the user menu.
+      bottomNav={<ShellBottomNav navigation={PHONE_NAVIGATION} />}
       brand={<BrandLogo label={APP_NAME} />}
       appBar={
         <ShellAppBar
