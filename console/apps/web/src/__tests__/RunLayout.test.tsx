@@ -5,6 +5,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { PlatformHostProvider } from '@marinoscar/platform-web/core';
+import { ConfirmProvider } from '../ui';
 import { createTestPlatformHost } from '@marinoscar/platform-web/testing';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -68,12 +69,14 @@ function renderRun(run: Run, permissions = ['runs:read', 'runs:write', 'fleet:de
   });
   render(
     <PlatformHostProvider host={host}>
-      <MemoryRouter initialEntries={[`/runs/${run.id}`]}>
-        <Routes>
-          <Route path="/runs/:id" element={<RunDetailPage />} />
-          <Route path="/fleet/hosts/:id/desktop" element={<p>Desktop page</p>} />
-        </Routes>
-      </MemoryRouter>
+      <ConfirmProvider>
+        <MemoryRouter initialEntries={[`/runs/${run.id}`]}>
+          <Routes>
+            <Route path="/runs/:id" element={<RunDetailPage />} />
+            <Route path="/fleet/hosts/:id/desktop" element={<p>Desktop page</p>} />
+          </Routes>
+        </MemoryRouter>
+      </ConfirmProvider>
     </PlatformHostProvider>,
   );
   return host;
