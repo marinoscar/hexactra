@@ -1323,7 +1323,7 @@ Key design requirements:
 1. Use **typed tool calls** with the owner's full powers (Section 27): selector actions, trusted positional input, `run_javascript` (any JavaScript in the page), tabs, and the OS desktop. Shell access on the node is not a tool.
 2. **The model sees the screen.** Every round starts with a screenshot of the page, with the interactive elements boxed and numbered (`click_mark n`). `look` refreshes it, or shows the whole desktop. A model that refuses images continues text-only, with `observe_elements` and `read_text`.
 3. Account for dynamic DOM, redirects, new tabs, elements that move or disappear, modals, loading states, and inaccurate model predictions. Reobserve and replan.
-4. Provide step limit, duration limit, provider-call timeout, maximum token/cost budget where known, backoff, infinite-loop/no-progress detection, and an always-accessible Stop command.
+4. Provide step limit, duration limit, provider-call timeout, maximum token/cost budget where known, backoff, infinite-loop/no-progress detection, and an always-accessible Stop command. **Met in the console by agent policies (epic #398, Section 26.6):** six budgets (actions, model calls, active minutes, input tokens, output tokens, cost), each of which may be unlimited; stall detection that is always on (failures in a row, a repeated action, no progress, no action), which nudges the model, escalates to a stronger model tier, asks a person or ends the run as `stalled`; and Stop, which always works. A stopped run records a typed reason.
 5. Never automatically retry irreversible/non-idempotent clicks after an ambiguous timeout without rechecking state.
 6. Request human intervention for what only the owner has: passwords the agent was not given, OTPs, passkeys, authenticator approvals, and CAPTCHA puzzles it cannot pass (Sections 11–12). Approval before purchases is an opt-in per task.
 7. Keep natural-language user instructions distinct from **untrusted website content**. A page cannot promote text to higher-priority system instructions, grant permissions, or authorize new actions.
@@ -1351,7 +1351,7 @@ Hexactra must support **any endpoint implementing its documented OpenAI-compatib
 | Tools | OpenAI-style tool calls or validated structured-response fallback |
 | Streaming | SSE if supported; otherwise standard nonstreaming HTTP |
 | Vision | Capability-gated screenshots; not mandatory for text-only models |
-| Timeouts/budgets | Model request timeout, retry policy, task cost/token/step limits |
+| Timeouts/budgets | Model request timeout, retry policy, task cost/token/step limits. In the console these are an **agent policy** (Section 26.6): budgets per run, model tiers (`fast`, `standard`, `frontier`: a run starts on one tier and escalates to a stronger one when it stalls, with an optional fallback model on a provider error), and reasoning effort and output caps per tier |
 
 Do **not** equate “OpenAI-compatible” with universal support for all optional OpenAI API features, OpenAI Responses API, images, streaming, tools, or strict JSON schema. Expose an explicit **capability matrix**, a **Test Connection** function and actionable validation errors. Support manual model entry when list-models endpoints are absent. Prefer a small interoperable baseline plus optional feature negotiation, not a fake universal guarantee. Provider model output must always pass the action validator.
 
@@ -1544,7 +1544,7 @@ The TypeScript SDK (`console/packages/sdk`) is generated from the same OpenAPI d
 - **Runs are durable state machines** (`queued → running → waiting_human → running → succeeded | failed | cancelled`).
 - **Each advance is a queue job.** The runner calls the model in chunks, with the transcript persisted after each chunk.
 - **Waits release the worker.** A run waiting for a person ends its job, and the answered handoff enqueues the continuation.
-- **Policy is enforced server-side before every action:** step and time budgets (100 steps and 30 minutes by default), and the task's opt-ins: allowed sites, and confirmation before purchases and irreversible steps (off by default, Section 27).
+- **Policy is enforced server-side before every action:** the run's **agent policy** (Section 26.6), snapshotted when the run starts (the built-in Balanced by default: 60 actions, 20 active minutes, $2), and the task's opt-ins: allowed sites, and confirmation before purchases and irreversible steps (off by default, Section 27).
 - **The model sees the screen:** each round starts with a marked screenshot (Section 27).
 - **The model never sees secrets.** A person types codes and passwords into a handoff, and the runner asks the fabric to type them into the page (`type_secret`), so neither the model nor the console holds them (Section 11.6).
 - **External agents are recorded the same way.** An agent driving a browser directly through the console is recorded as a run of trigger `external`, so the person sees every step and can stop it.
@@ -1563,6 +1563,22 @@ The primary browser hosts are **home nodes** on the owner's residential network,
 - A native Android module. The app is a Trusted Web Activity: its notification buttons (Stop run, Approve) are Web Push actions handled by the service worker, which is enough today.
 - Scoped personal access tokens. Until then, a dedicated low-role user per agent framework.
 - Windows and macOS hosts (post-v1, Section 19).
+
+### 26.6 Agent policies (epic #398)
+
+A run's models and limits come from an **agent policy**: a named, versioned, personal bundle that a person defines once and reuses. It replaces the per-task step, time and model fields, which are deprecated.
+
+- **Four built-ins, read-only:** Economy, **Balanced** (the default), Thorough and Unlimited. A person duplicates one to edit a copy, picks one default, and may assign a policy to a task or schedule, or to a single run ("Run with..."). Policies move between people and deployments as a JSON file (`hexactra.agent-policies`) that carries no ids, user or secret.
+- **Model tiers, not model names.** A policy starts on a tier (`fast`, `standard`, `frontier`) and may escalate to a stronger one, up to its highest tier. Each tier is a model, a reasoning effort, an output cap and an optional fallback model, defined once per deployment and overridable per user; a policy may pin a model to a tier. The model changes only between chunks, so provider prompt caching holds.
+- **Six budgets, each optionally unlimited:** actions, model calls, active minutes (time waiting for a person never counts), input tokens, output tokens and cost in US dollars, priced from a table the administrator maintains. A budget set to `null` is unlimited. The administrator may set **ceilings** that no policy can exceed, which also cap an unlimited policy. A used-up budget ends the run after one wrap-up call, and the run records a typed `stop_reason`.
+- **Stall detection is always on**, even for an unlimited policy: repeated failures, a repeated action, no visible progress, or rounds with no action nudge the model, escalate a tier, ask a person or end the run as `stalled`, as the policy says.
+- **Context settings** (screenshots kept, calls per chunk, observation size, prune batch) bound how much the model re-reads each round.
+- **A snapshot per run.** The policy, the effective budget and the resolved tiers are written onto the run when it starts and never change, so editing a policy never alters a run in flight.
+- **Visible.** The run page shows the policy, tier, model and a live budget meter; alerts fire for runs over a cost threshold, runs that keep stalling and one expensive run.
+
+Detail, the settings and the API: `console/README.md`, "Agent policies".
+
+Status: shipped in epic #398 (E31). Not offered: policies shared across an organization (a JSON file is the sharing path), and a per-request model classifier (routing is escalate-on-stall).
 
 ---
 
@@ -1583,13 +1599,14 @@ The primary browser hosts are **home nodes** on the owner's residential network,
 | Run JavaScript | `run_javascript` / `evaluate`: any script, in the page's main world, whatever its CSP, with top-level `await` | Extension `Runtime.evaluate` |
 | Use the OS desktop | `desktop_click`, `desktop_type`, `desktop_key`, `desktop_scroll`, `desktop_drag`: native file pickers, OS dialogs, permission prompts, other windows | Host agent, `xdotool` (argv only, never a shell) |
 | Open anything | Any URL a person could type (`file:`, `chrome:`, `data:`...), except `javascript:` (use `evaluate`) | Contract `check_navigable_url` |
-| Room to work | New tasks: 100 steps and 30 minutes (up to 1000 steps and 8 hours) | Console tasks API |
+| Room to work | An agent policy sets the run's budgets: the default Balanced allows 60 actions, 120 model calls, $2 and 20 active minutes; Thorough 200 actions and 60 minutes; **Unlimited** sets none (Section 26.6) | Console agent policies |
 
 ### 27.2 What stays, and why
 
 - **Secrets never reach the model.** Codes and passwords the owner gives are typed by the fabric (`type_secret`). This is privacy, not a limit: the agent can still sign in.
 - **The owner is always in control.** Stop, takeover of the desktop, and a durable record of every step.
 - **Opt-in limits per task.** Allowed sites, and confirmation before purchases and irreversible steps. Both are off by default.
+- **Budgets are opt-in per policy and never reduce the agent's powers.** A policy bounds how long and how much a run spends, not what the agent may do; the owner may pick Unlimited, and an administrator's ceilings are the only hidden cap. Stop, takeover and stall detection still apply to an unlimited run.
 - **Owner-only checks go to the owner.** A code sent to the owner's phone, a passkey touch, or a CAPTCHA puzzle the agent cannot pass becomes a handoff. The agent ticks an "I am not a robot" box itself, as a person would.
 - **Page content never grants authority.** With full powers, a prompt injection in a page could act with the owner's authority. That is the main risk of this decision, and why the owner's controls above stay. Use allowed sites for tasks that visit untrusted sites.
 - **Stealth.** No `--enable-automation`, no WebDriver, no CDP port, no `enable`d CDP domain, and `--silent-debugger-extension-api`: the browser looks like a person's.
