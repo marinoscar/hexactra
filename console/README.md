@@ -54,7 +54,7 @@ An **agent policy** says which models a run may use and how much it may spend. I
 - **Stall detection:** failures in a row, a repeated action, actions without progress, and what to do (nudge then escalate, escalate, ask a person, fail).
 - **Context:** screenshots kept, prune batch, model calls per chunk and observation size.
 
-Enforcement arrives in steps: today a run honours the policy's **action** and **active-minute** limits (`null` is no limit); a pin on the start tier picks the model; the tier ladder, the other budgets, stall detection and the context settings are stored, validated and snapshotted already, and enforced by the stories that follow (epic #398).
+Enforcement arrives in steps: today a run enforces **every budget** (see Budgets below), takes the **start tier's model, reasoning effort and output cap** from the model tiers, and applies the **context settings**; moving between tiers (escalation) and stall detection are stored, validated and snapshotted already, and enforced by the story that follows (epic #398).
 
 **Built-in policies** are code (`builtin:economy`, `builtin:balanced`, `builtin:thorough`, `builtin:unlimited`): read-only, never pinning a model. Duplicate one to edit a copy.
 
@@ -82,6 +82,76 @@ A reference to a deleted policy (or someone else's) falls through to the next le
 **The API** (`/api/agent-policies`, permissions `agent_policies:read` / `:write`, granted like `tasks:*`): list (built-ins and your own, each with `isDefault`, `usage` and `hasNoHardStop`), create, read, edit (`If-Match: <version>`, `412` on a stale version; built-ins answer `403`), delete (`409 POLICY_IN_USE` listing the tasks and schedules, or `?reassignTo=<id>`; `409 POLICY_IS_DEFAULT`), duplicate. Tasks and schedules take `policyId`; `null` follows the next level.
 
 **The earlier task fields.** `maxSteps`, `maxMinutes` and `model` on a task still work for one release and are marked deprecated. Sending one (with no `policyId`) saves a derived personal policy named `Task: <task name>`, built from Balanced (`maxActions` = `maxSteps`, `maxActiveMinutes` = `maxMinutes`; a model becomes the `standard` pin and caps `maxTier` at `standard`) and answers with a `Deprecation: true` header. The `agent_policies` migration converted existing tasks the same way. Use `policyId` instead.
+
+### Context settings
+
+Most of a long run's cost is context re-sent on every model call. The policy's `context` block (read from the run's snapshot, never from constants) sets how much each round carries:
+
+| Knob | Range | What it does | Cost and accuracy trade-off |
+|---|---|---|---|
+| `callsPerChunk` | 1-20 | Model calls per chunk (`runTools` `maxSteps`). A chunk ends, and the conversation of tool outputs resets, after this many calls; the step log (last 60 lines) carries continuity. | Smaller: less re-sent output (input grows roughly with the square of the calls in a chunk) but a new screenshot and log each chunk. Larger: fewer resets, more cost, better short-term memory. |
+| `observationChars` | 500-20000 | Most characters of one `read_text`, `run_javascript`, `observe_elements` or `tabs` result sent to the model. `observe_elements` lists at most `min(80, floor(chars / 75))` elements. | Smaller: cheaper rounds, but a long page may be cut off. |
+| `screenshotsKept` | 0-5 | Screenshots in the model's context: the current one plus earlier ones. `0` turns vision off (text only, the same as a model that refuses images). | More images show what changed but each costs tokens on every round they stay. |
+| `pruneBatch` | 1-50 | Older screenshots go in batches, not one per call: once the window is full only the newest image is replaced, so the older images, and the prompt prefix up to them, stay byte-identical for `pruneBatch` chunks (provider prompt caching keeps hitting). Then the window is trimmed to the current screenshot and refills. | A larger batch caches better but keeps a stale image longer. |
+
+Built-ins: Economy keeps 1 screenshot and 8 calls per chunk, Balanced 2 and 10, Thorough 3 and 10, Unlimited 2 and 10; all use 6000 characters and a prune batch of 10. The values the runner used before policies (20 calls, 6000 characters, 1 screenshot) are only the schema's ceiling and the old-settings column of the measurement below.
+
+**What stays the same on purpose.**
+- Screenshots live only in the job's memory: `runs.transcript` keeps digests (`shots`), never images. After a job hop or a handoff the window restarts with the current screenshot.
+- The instructions and tool definitions contain no per-run value, so they are byte-identical for every run (a test hashes them). The round input is ordered goal and allowed sites, step log, screenshots, then the volatile tail (what the screenshot shows, steps used).
+- Provider cache hints: the platform exposes only an untyped `providerOptions` escape hatch and documents no cache option, so none is set. Providers with automatic prefix caching benefit from the stable prefix; explicit hints (for example a cache key or breakpoints) need an EnterpriseAppBase seam request.
+- Each model call records `app.runs.input_tokens_per_call` (histogram) in the "Browser agents" telemetry.
+
+**Measurement.** A deterministic fixture (`apps/api/test/context-efficiency.db.spec.ts`): the same scripted run of 30 actions on a large page, a fake model that reports input tokens as the size of everything it would be sent (characters / 4, plus 850 per image), run under the old settings and under Balanced. It measures context size, not provider prices or task success on real sites: real-provider benchmarking was not possible in the build environment.
+
+| Settings | Chunks | Model calls | Input tokens | Result |
+|---|---|---|---|---|
+| Old (20 calls, 6000 chars, 1 screenshot) | 2 | 31 | 443,728 | succeeded |
+| Balanced (10 calls, 6000 chars, 2 screenshots) | 4 | 31 | 364,417 | succeeded |
+
+Balanced sends 18% fewer input tokens here even though it shows one more image. The saving grows with page size and run length; a model that must remember more between chunks may need larger chunks.
+
+### Budgets
+
+A run is held to six budgets: **actions**, **model calls**, **active minutes** (time waiting for a person never counts), **input tokens**, **output tokens** and **cost** (US dollars, from the admin price table; an unpriced call counts nothing toward the limit and the run shows "at least"). The budget engine is `console/apps/api/src/runner/budget.ts` (`BudgetTracker`, pure and unit tested).
+
+- **`null` is unlimited.** A policy with every budget `null` (the built-in Unlimited) has no hard stop: the run ends when it finishes, when you stop it, or when it stalls. The first line of its run log says so.
+- **Ceilings.** The deployment's admin sets ceilings in the `browserAgentCeilings` system setting (same keys as a policy's budget, each nullable, none by default). A run's effective limit is `min(policy, ceiling)`; it is unlimited only when both are `null`, so a ceiling also caps an Unlimited policy. The effective budget is written to the run's snapshot at its first step (`policy_snapshot.effectiveBudget`, with where each limit came from: `policy` or `ceiling`), so changing a policy or a ceiling never changes a run in flight.
+- **Where it is checked.** After every model call (model calls, tokens, cost), before every browser action (actions) and before each chunk (everything, active time included). A run continued after a handoff or in a new job starts from what it already used, never from a fresh budget.
+- **Warning.** The first time a budget reaches the policy's `warnAtPercent`, the model's next round carries: `Budget: <budget> is at <p>% (<used> of <limit>). Finish the goal now if you can; otherwise call finish with what you achieved and what remains.` The run log records it once per budget.
+- **Wrap-up.** When a budget is used up the run makes one last model call with only the `finish` tool (one step, a capped output), exempt from the exhausted budget and counted in the run's totals, so a stopped run still returns a partial result: `finish(success: true)` ends the run `succeeded`; anything else ends it `failed` with the model's summary as `result` and the budget message (for example `Step budget exhausted`) as `error`. If the model calls no `finish`, the run ends with the budget message alone.
+- **`stopReason`.** Every finished run carries a typed `stopReason` (`runs.stop_reason`): `finished`, `budget_actions`, `budget_model_calls`, `budget_active_time`, `budget_input_tokens`, `budget_output_tokens`, `budget_cost`, `stalled`, `cancelled`, `error` or `no_model`. A wrap-up that succeeds keeps the budget reason, so the run page can say what forced the stop. Runs from before the column have `null`.
+- **API.** Run responses (and the `run` events of `GET /api/runs/:id/stream`) carry `stopReason` and `budget: { effective, used, percent, source, costKnown }`: the limits, what the run used (active time in minutes, cost in USD), the percent of each limit (`null` when unlimited), and the source of each limit. `budget` is `null` until the run's first step.
+- **No-progress guard.** Until stall detection ships (epic #398), a run whose rounds record nothing three times in a row ends `failed` with `stopReason: stalled`, so an Unlimited run cannot spin without ever acting.
+
+### Model tiers
+
+Models are chosen by **tier**, not by name. There are three fixed tiers: **Fast** (cheap and quick), **Standard** (the everyday one) and **Frontier** (the strongest, for a run that is stuck). A tier is a model, a reasoning effort (`none`, `low`, `medium`, `high`; blank is the provider's default), a cap on output tokens and an optional fallback model. A policy only says which tier a run starts on and how high it may climb.
+
+**Where tiers are defined**, once, in two layers (the spec is `console/apps/api/src/policies/model-tiers.schema.ts`):
+
+- the **deployment default**, the `browserAgentTiers` system setting, edited by an administrator (`PATCH /api/system-settings`, `system_settings:write`);
+- **your own override**, `tiers` in your `browserAgent` user setting (`PATCH /api/user-settings`), per tier and per field. A field you leave out uses the deployment's.
+
+**Which model a tier uses**, most specific first:
+
+1. the policy's **pin** for that tier;
+2. your tier;
+3. the deployment's tier;
+4. **fill-down**: a tier with no model borrows the nearest tier that has one (Fast and Frontier borrow Standard first; Standard borrows Frontier, then Fast);
+5. your default model in your AI settings (`ai.defaultModel`).
+
+If none gives a model the run fails at once, before a browser is allocated, with `No model selected`, naming the Model tiers page. The effort, output cap and fallback are the tier's own (your tier, then the deployment's, else unset): they are never borrowed, so Fast keeps the provider's default effort even when it borrows Standard's model. `none` asks the provider for the least reasoning it offers; an effort is not sent to a model that cannot reason. The per-model output caps an admin set in the AI settings still clamp the tier's cap.
+
+**Same model, different effort.** Standard and Frontier may name the same model with a lower and a higher effort (for example Standard = model X at `low`, Frontier = model X at `high`). Escalating then changes only how hard the model thinks, so the provider's prompt cache stays warm, which is cheaper and faster than switching models.
+
+**Checked at the start of a run.** Every resolved model must be one you can call right now (enabled by the administrator, on an enabled provider, with a key) and must support tool calls; otherwise the run fails with a message naming the tier. A model **without image input** is allowed: the run starts with screenshots off (it works from `observe_elements` and `read_text`) instead of finding out from a refused call.
+
+**Fixed for the run.** The resolved tiers (model, provider, effort, cap, fallback and what each can do) are written to the run's policy snapshot (`resolvedTiers`) when it starts. Every model call reads them from there, so editing the tiers while a run is in flight changes nothing for it; the next run picks the change up.
+
+**Reading them.** `GET /api/agent-policies/model-tiers/effective` (`agent_policies:read`; `?policyId=` resolves for another policy) returns the tiers a new run of your default policy would use, with where each value came from (`pin`, `user`, `deployment`, `fill_down`, `ai_default`) and `vision` / `tools` flags.
+
+**Under the hood.** The console binds the platform's `AI_TARGET_RESOLVER` (`console/apps/api/src/platform/ai/browser-agent-target.resolver.ts`). The goal runner always names the tier's provider and model (the `browser_agent` feature); every other feature (`notes-summary`) resolves exactly as the platform does by default.
 
 ### Export and import
 

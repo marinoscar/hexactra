@@ -57,6 +57,14 @@ export const RUN_METRICS: readonly AppMetricDef[] = [
     buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 25],
     attributes: { status: { kind: 'enum', values: STATUSES } },
   },
+  {
+    key: 'runInputTokensPerCall',
+    name: 'app.runs.input_tokens_per_call',
+    kind: 'histogram',
+    unit: '{token}',
+    description: 'Input tokens of one model call of the goal runner: how much context each round re-sends (context settings of the agent policy).',
+    buckets: [500, 1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000],
+  },
 ];
 registerAppMetrics(RUN_METRICS);
 
@@ -89,6 +97,11 @@ export class RunMetrics {
 
   modelCalls(n: number): void {
     if (n > 0) this.metrics?.add('runModelCalls', n);
+  }
+
+  /** The input size of one model call; never a run, task or user id as a label. */
+  inputTokensPerCall(tokens: number): void {
+    if (tokens > 0) this.metrics?.record('runInputTokensPerCall', tokens);
   }
 
   /** The spend of a finished run; never a run, task or user id as a label. */

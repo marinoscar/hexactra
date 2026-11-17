@@ -39,4 +39,15 @@ describe('system settings namespaces', () => {
     const bad = { agentPricing: { models: { 'prov-a:model-x': { inputPerMTok: -3, outputPerMTok: 15 } } } };
     expect(composePatchSystemSettingsSchema().safeParse(bad).success).toBe(false);
   });
+
+  it('registers browserAgentCeilings: all null by default, partial patches, a bad value refused', () => {
+    expect(systemSettingsNamespaceRegistry.ids()).toContain('browserAgentCeilings');
+    expect(composeDefaultSystemSettings()).toMatchObject({
+      browserAgentCeilings: { maxActions: null, maxModelCalls: null, maxActiveMinutes: null, maxInputTokens: null, maxOutputTokens: null, maxCostUsd: null },
+    });
+    const ok = { browserAgentCeilings: { maxActions: 200, maxCostUsd: 5 } };
+    expect(composePatchSystemSettingsSchema().parse(ok)).toEqual(ok);
+    expect(composePatchSystemSettingsSchema().safeParse({ browserAgentCeilings: { maxActions: 0 } }).success).toBe(false);
+    expect(composePatchSystemSettingsSchema().safeParse({ browserAgentCeilings: { maxCostUsd: -1 } }).success).toBe(false);
+  });
 });

@@ -51,6 +51,7 @@ The control plane is not the limit: one 4-core machine handles more than a thous
    - Runs waiting for a person release their slot.
    - Set it to the concurrent runs you expect, at most the number of browsers.
 3. **The model.** Every step is a model call: the provider's latency and rate limits set run speed. Administration → AI sets the per-user and per-organization caps. The **Run budget exceeded** alert watches tokens.
+   - **Tokens per run is a sizing input.** Input tokens dominate the bill, because every call re-sends the context. Chart `app.runs.input_tokens_per_call` and `app.runs.tokens` on Administration → Telemetry → Browser agents. Multiply the p50 tokens per run by the runs you expect and by your model's price; compare with the per-user and per-organization caps. In the fixture of the README's "Context settings" the old fixed settings sent about 444k input tokens for a 30-action run and Balanced about 364k. To lower it: fewer `callsPerChunk`, a smaller `observationChars`, fewer `screenshotsKept` (the policy's context block; Economy is the cheapest built-in).
 4. **Postgres.** Runs write a row per step, and screenshots go to object storage. This write rate is small next to the browsers', but the console's database was not load-tested here. Watch it on the platform's database panels.
 
 ## 3. Sizing

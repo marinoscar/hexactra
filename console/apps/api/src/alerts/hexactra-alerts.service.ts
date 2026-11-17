@@ -2,10 +2,11 @@ import { Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy }
 
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { PrismaService } from '../prisma/prisma.service';
+import { BUDGET_STOP_REASONS } from '../runner/budget';
 import { RUN_BUDGET_ERROR_LIST } from '../runner/run-budget-errors';
 import { HEXACTRA_ALERT_RULES, setAlertSources, type AlertSources } from './hexactra-alert-kinds';
 
-/** Runs whose error says a budget stopped them (goal-runner.service.ts). */
+/** Legacy: runs from before `runs.stop_reason` (#404) carry only the error text. Drop with the next major release. */
 const BUDGET_ERRORS = [...RUN_BUDGET_ERROR_LIST];
 
 /**
@@ -49,7 +50,12 @@ export class HexactraAlertsService implements OnApplicationBootstrap, OnModuleDe
       });
       const stops = await this.prisma.run.groupBy({
         by: ['userId'],
-        where: { createdAt: { gte: since }, status: 'failed', error: { in: BUDGET_ERRORS } },
+        // `stop_reason LIKE 'budget_%'` (an enum: its six budget values), or the old error text on rows with no stop reason.
+        where: {
+          createdAt: { gte: since },
+          status: 'failed',
+          OR: [{ stopReason: { in: [...BUDGET_STOP_REASONS] } }, { stopReason: null, error: { in: BUDGET_ERRORS } }],
+        },
         _count: { _all: true },
       });
       const stopped = new Map(stops.map((s) => [s.userId, s._count._all]));
