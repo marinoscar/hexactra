@@ -16,9 +16,9 @@ const routeSources = [read('App.tsx'), ...tsx('slices')].join('\n');
 const declared = new Set([...routeSources.matchAll(/<Route\s+path="([^"]+)"/g)].map((m) => `/${m[1]}`));
 // The index route has no `path`: it is `/` (Home).
 if (/<Route\s+index\b/.test(routeSources)) declared.add('/');
-// The pages, the live stream, the agent policy client (src/policies/api.ts holds every policy call), the schedule editor's
-// preview hook and the task form's client (src/taskForm/api.ts).
-const calls = [...tsx('pages'), ...tsx('policies'), ...tsx('schedule'), ...tsx('taskForm'), read('live.ts')].join('\n');
+// The pages, their components (the task list's hook and actions), the live stream, the agent policy client (src/policies/api.ts
+// holds every policy call), the schedule editor's preview hook and the task form's client (src/taskForm/api.ts).
+const calls = [...tsx('pages'), ...tsx('components'), ...tsx('policies'), ...tsx('schedule'), ...tsx('taskForm'), read('live.ts')].join('\n');
 
 /** `/api/runs/{id}/cancel` → a pattern for the call `` `/runs/${...}/cancel` `` or `'/runs'`. */
 function callPattern(op: string): RegExp {

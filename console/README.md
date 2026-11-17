@@ -264,9 +264,9 @@ Everything above is on the console's pages (`apps/web/src/pages/`, one client fo
 **Choose a policy for a task, a schedule or one run**
 
 1. In the task form ([Create a task](#create-a-task)), pick **Policy**: *Default (name)*, a built-in, or one of yours. The line under it summarises the choice; **Manage policies** opens the list. The form sends `policyId` only.
-2. A task card shows `policy: <name>` and `model: <the model its start tier uses>`.
+2. The Tasks list shows each task's policy ("Balanced (default)" when it follows your default) and the model its start tier uses.
 3. When adding a schedule, **Policy override** runs that schedule under another policy (default: the task's).
-4. **Run with…** (the arrow next to **Run now**) starts one run under the policy you pick from the menu, without changing the task.
+4. **Run with…** (the arrow next to **Run now**, on every row of the Tasks list) starts one run under the policy you pick from the menu, without changing the task. The menu marks the policy the task usually runs under.
 
 **Export and import**
 
@@ -313,6 +313,22 @@ A new account sees a **Get started** card instead of the dashboard blocks until 
 The page reads the summary when it opens, when the window gets the focus, and every 10 seconds while the tab is visible (every 5 while an agent runs or waits for you). When a read fails, the last data stays on screen, dimmed, with when it was read and a Retry.
 
 **`GET /api/home/summary`** needs a sign-in and no permission of its own. A block is built only when the caller holds its permission and is `null` otherwise, never an empty list: `needsYou`, `liveRuns`, `recentRuns` and `week` need `runs:read`; `upcoming` needs `tasks:read`; `fleet` needs `fleet:read`; `counts.tasks` and `counts.runs` are `null` without theirs. Limits: 3 questions, 6 live runs (running first), 5 firings, 8 finished runs, 6 machines; `needsYou.count` and `liveRuns.count` are the real totals. The response never carries a question's answer, a secret, a transcript, a policy snapshot, an action's arguments or a viewer URL: a live run's `activity` is its phase, the action's name and the reason only. `budgetPercent` is the highest percent among the run's limited budgets, from the run's stored budget. The week is bucketed in the profile time zone (else the `X-Time-Zone` header, else UTC). The fleet comes from the fabric with a 1.5 second limit: a fabric that is slow or down answers `fleet.stale: true` with the last hosts read, and never fails the request. It costs six SQL statements whatever the account holds, and records `app.home.summary.duration`.
+## Tasks
+
+**Tasks** (`/tasks`) lists what your agents do, and when. Each row answers five questions without opening the task: what it does, whether it is scheduled, when it runs next, how the last run went and what it cost in the last 30 days. On a phone each task is a card with the same facts.
+
+| On the row | What it tells you |
+|---|---|
+| **Schedule**, **Next run** | The first schedule in words ("Monday to Friday at 09:00", "+2 more" when there are several) and when the task fires next; "Paused" when its schedules are off, "Not scheduled" when it has none. A schedule that failed three times in a row says so. |
+| **Last run**, **7 days** | The last run's status and time (a link to the run), the live run while one is going, and the last 7 days by outcome ("12 ✓ · 1 ✗"). |
+| **Policy**, **Spend 30 d** | The agent policy and the model it starts on, and the cost of the task's runs in the last 30 days ("≥ $4.20" when a call could not be priced; the tooltip has the number of runs and the average per successful run). The policy shows only to someone who may read agent policies. |
+
+- **Find a task.** Search by name or goal, filter with the chips (Scheduled, Paused, Not scheduled, Failing, Never run), sort by newest, name, last run, next run or spend, and filter by policy once your tasks use more than one. The search, filter and sort are in the address (`/tasks?q=…&filter=…&sort=…&policyId=…`), so a view can be bookmarked or shared. The list loads 50 tasks at a time (**Load more**) and keeps itself current while the page is open.
+- **The Scheduled switch.** Off pauses every schedule of the task; on resumes them. That is all it does: a task that is off **still runs** when you press Run, or when it is started through the API, the CLI or MCP, and a run that is going when you switch it off finishes. "Partly paused" means some of the task's schedules are paused and some are not; switching it on resumes them all. A task without a schedule has an **Add schedule** link instead. The switch needs `tasks:write`; without it you see "Scheduled" or "Paused".
+- **Run now and Run with….** **Run now** starts a run under the task's own policy. The arrow next to it lists the other policies: pick one to use it for that run only, without changing the task. The list stays where it is, so you can start several tasks; "Run started · View" links to the new run. While a task is running the button reads **Run again** and asks before starting a second run. Running needs `runs:write`.
+- **New task** opens the form ([Create a task](#create-a-task)); **Edit** in a task's ⋮ menu opens the same form for that task.
+- **The ⋮ menu.** Open, Edit, Duplicate (a new task that starts as a copy, with its schedules paused), View runs, and Delete. Delete asks first and says what happens: the task's schedules are deleted, and its runs stay in Runs as one-off runs.
+
 ## Create a task
 
 A task is created at `/tasks/new` and changed at `/tasks/:id/edit`. Both are one form with five sections, read top to bottom, and **Save** stores everything in one step. Both pages need `tasks:write`.
@@ -335,7 +351,7 @@ A task is created at `/tasks/new` and changed at `/tasks/:id/edit`. Both are one
 
 ## Schedules
 
-A task runs on a schedule you build in the schedule editor (in the [task form](#create-a-task), or Tasks → a task → **Add schedule** or **Edit**). You do not need to know cron: choose how it repeats, and the editor says in words what that means and lists the next five runs before you save.
+A task runs on a schedule you build in the schedule editor (in the [task form](#create-a-task); a task without a schedule has an **Add schedule** link on the Tasks list). You do not need to know cron: choose how it repeats, and the editor says in words what that means and lists the next five runs before you save.
 
 ![The schedule editor: Weekly, Monday to Friday at 09:00, with the next runs](docs/images/schedule-editor.png)
 

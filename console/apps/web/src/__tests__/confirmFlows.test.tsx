@@ -1,5 +1,5 @@
 // Every destructive action asks through the kit's confirm dialog (#419):
-// deleting a task, a schedule and a profile, and revoking a host. Cancel
+// deleting a task and a profile, and revoking a host. (A schedule is removed in the task form, with Undo, and deleted when the form is saved: TaskForm.test.tsx.) Cancel
 // changes nothing; confirming sends the request.
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PlatformHostProvider } from '@marinoscar/platform-web/core';
@@ -8,11 +8,11 @@ import { MemoryRouter } from 'react-router-dom';
 import type { ReactElement } from 'react';
 
 import { FleetPage } from '../pages/FleetPage';
-import { TaskSchedules } from '../pages/TaskSchedules';
 import { TasksPage } from '../pages/TasksPage';
 import type { FleetHost } from '../types/fleet';
-import type { Task, TaskSchedule } from '../types/tasks';
+import type { Task } from '../types/tasks';
 import { ConfirmProvider } from '../ui';
+import { page, scheduledRow } from './taskFixtures';
 
 const TASK: Task = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -25,7 +25,6 @@ const TASK: Task = {
   confirmRiskyActions: false,
   policyId: null,
 };
-const SCHEDULE: TaskSchedule = { id: 'sc1', taskId: TASK.id, cron: '0 9 * * 1-5', timezone: 'Europe/Madrid', enabled: true, concurrency: 'skip', nextRunAt: '2026-11-18T08:00:00Z', lastRunAt: null, consecutiveFailures: 0, description: 'Monday to Friday at 09:00' };
 const HOST: FleetHost = {
   id: '22222222-2222-4222-8222-222222222222',
   name: 'mini-pc',
@@ -77,27 +76,20 @@ async function cancelThenConfirm(open: () => void, confirmLabel: string, deletes
 describe('destructive actions ask first', () => {
   it('deleting a task', async () => {
     const { deletes } = mount(<TasksPage />, ['tasks:read', 'tasks:write'], {
-      'GET /tasks': [TASK],
-      [`GET /schedules?taskId=${TASK.id}`]: [],
+      'GET /tasks': page([scheduledRow()]),
       [`DELETE /tasks/${TASK.id}`]: {},
     });
-    const card = await screen.findByLabelText('Task Check fare');
+    await screen.findByText('Check fare');
     await cancelThenConfirm(
-      () => fireEvent.click(within(card).getByRole('button', { name: 'Delete' })),
+      () => {
+        fireEvent.click(screen.getByRole('button', { name: 'More actions: Check fare' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+      },
       'Delete',
       deletes,
       `/tasks/${TASK.id}`,
-      /Delete task “Check fare”\?.*Its schedules are deleted\. Its runs are kept\./,
+      /Delete “Check fare”\?.*Its schedule is deleted\. It has no runs\./,
     );
-  });
-
-  it('deleting a schedule', async () => {
-    const { deletes } = mount(<TaskSchedules taskId={TASK.id} canWrite />, ['tasks:read', 'tasks:write'], {
-      [`GET /schedules?taskId=${TASK.id}`]: [SCHEDULE],
-      'DELETE /schedules/sc1': {},
-    });
-    await screen.findByText(/Monday to Friday at 09:00/);
-    await cancelThenConfirm(() => fireEvent.click(screen.getByRole('button', { name: 'Delete' })), 'Delete', deletes, '/schedules/sc1', /Delete this schedule\?/);
   });
 
   it('deleting a profile', async () => {

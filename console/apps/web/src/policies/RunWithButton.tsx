@@ -17,6 +17,9 @@ export interface RunWithButtonProps {
   size?: 'small' | 'medium';
 }
 
+/** Below `md` (touch widths) each part is a 44 px target. */
+const TOUCH_TARGET = { minHeight: { xs: 44, md: 'auto' } } as const;
+
 /**
  * "Run now" with a split arrow: "Run with..." a policy for this run only. The
  * choice is sent as `policyId` on `POST /api/tasks/:id/runs`. Without any
@@ -31,7 +34,7 @@ export function RunWithButton({ onRun, catalog, taskPolicyId, label = 'Run now',
 
   if (catalog.policies.length === 0) {
     return (
-      <Button variant="contained" size={size} disabled={disabled} onClick={() => onRun()}>
+      <Button variant="contained" size={size} disabled={disabled} onClick={() => onRun()} sx={TOUCH_TARGET}>
         {label}
       </Button>
     );
@@ -56,7 +59,9 @@ export function RunWithButton({ onRun, catalog, taskPolicyId, label = 'Run now',
   return (
     <>
       <ButtonGroup variant="contained" size={size} disabled={disabled} aria-label="Run">
-        <Button onClick={() => onRun()}>{label}</Button>
+        <Button onClick={() => onRun()} sx={{ ...TOUCH_TARGET, whiteSpace: 'nowrap' }}>
+          {label}
+        </Button>
         <Button
           size="small"
           aria-label="Run with…"
@@ -64,6 +69,7 @@ export function RunWithButton({ onRun, catalog, taskPolicyId, label = 'Run now',
           aria-controls={anchor ? menuId : undefined}
           aria-expanded={anchor ? 'true' : undefined}
           onClick={(e) => setAnchor(e.currentTarget)}
+          sx={{ ...TOUCH_TARGET, minWidth: { xs: 44, md: 40 } }}
         >
           <ArrowDropDownIcon />
         </Button>

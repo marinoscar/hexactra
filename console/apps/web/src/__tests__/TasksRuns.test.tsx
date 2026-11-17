@@ -19,7 +19,6 @@ vi.mock('../live', () => ({
   },
   fetchRunScreenshot: async () => 'blob:shot',
 }));
-import { TasksPage } from '../pages/TasksPage';
 
 const task: Task = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -48,84 +47,8 @@ const run: Run = {
   steps: [{ id: 's1', seq: 1, kind: 'action', action: 'navigate', args: { url: 'https://flights.example.test/' }, ok: true, summary: 'at https://flights.example.test/ — Flights', reasoning: 'open the site', createdAt: '2026-11-15T00:00:01Z' }],
 };
 
-describe('TasksPage', () => {
-  it('lists tasks and starts a run', async () => {
-    const host = createTestPlatformHost({
-      permissions: ['tasks:read', 'tasks:write', 'runs:write'],
-      responses: { 'GET /tasks': [task], [`POST /tasks/${task.id}/runs`]: { id: run.id }, [`GET /schedules?taskId=${task.id}`]: [] },
-    });
-    render(
-      <PlatformHostProvider host={host}>
-        <ConfirmProvider>
-          <MemoryRouter initialEntries={['/tasks']}>
-            <Routes>
-              <Route path="/tasks" element={<TasksPage />} />
-              <Route path="/runs/:id" element={<div>run page</div>} />
-            </Routes>
-          </MemoryRouter>
-        </ConfirmProvider>
-      </PlatformHostProvider>,
-    );
-    expect(await screen.findByText('Find the cheapest fare')).toBeInTheDocument();
-    expect(screen.getByText('flights.example.test')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Run now' }));
-    expect(await screen.findByText('run page')).toBeInTheDocument();
-  });
-
-  it('picks the machine, shows its state and saves the fallback choice (#384)', async () => {
-    const HOME = '33333333-3333-4333-8333-333333333333';
-    const base = { version: '0.1.0', browserConnected: false, onDemand: true, viewerUrl: null, desktop: true, profiles: [], lastSeen: '2026-11-17T00:00:00Z' };
-    const host = createTestPlatformHost({
-      permissions: ['tasks:read', 'tasks:write', 'runs:write', 'fleet:read'],
-      responses: {
-        'GET /tasks': [],
-        'GET /fleet/hosts': [
-          { ...base, id: HOME, name: 'Linux-Mini-PC', online: false, draining: false, mode: 'unattended' },
-          { ...base, id: '44444444-4444-4444-8444-444444444444', name: 'local', online: true, draining: true, mode: 'container' },
-        ],
-        'POST /tasks': { ...task, id: '55555555-5555-4555-8555-555555555555' },
-      },
-    });
-    render(
-      <PlatformHostProvider host={host}>
-        <ConfirmProvider>
-          <MemoryRouter>
-            <TasksPage />
-          </MemoryRouter>
-        </ConfirmProvider>
-      </PlatformHostProvider>,
-    );
-    fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: 'Miles' } });
-    fireEvent.change(screen.getByLabelText(/^Goal/), { target: { value: 'Check my miles' } });
-    // No machine chosen: no fallback switch.
-    expect(screen.queryByLabelText('If it is unavailable, use another available machine')).not.toBeInTheDocument();
-    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Machine' }));
-    expect(await screen.findByRole('option', { name: 'local (disabled)' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('option', { name: 'Linux-Mini-PC (offline)' }));
-    expect(await screen.findByText(/Linux-Mini-PC is offline right now/)).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText('If it is unavailable, use another available machine'));
-    expect(screen.getByText(/Runs will fail until it is back/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Create task' }));
-    await waitFor(() => expect(host.requests.some((r) => r.method === 'POST' && r.path === '/tasks')).toBe(true));
-    expect(host.requests.find((r) => r.method === 'POST' && r.path === '/tasks')?.body).toMatchObject({ hostId: HOME, hostFallback: false });
-  });
-
-  it('hides creating and running from a reader', async () => {
-    const host = createTestPlatformHost({ permissions: ['tasks:read'], responses: { 'GET /tasks': [task], [`GET /schedules?taskId=${task.id}`]: [] } });
-    render(
-      <PlatformHostProvider host={host}>
-        <ConfirmProvider>
-          <MemoryRouter>
-            <TasksPage />
-          </MemoryRouter>
-        </ConfirmProvider>
-      </PlatformHostProvider>,
-    );
-    expect(await screen.findByText('Check fare')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Run now' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('form', { name: 'New task' })).not.toBeInTheDocument();
-  });
-});
+// The Tasks list is covered by TasksPage.test.tsx (#426); the task form (machine picker, fallback, offline warning) and a task's
+// schedules (add, edit, policy override, remove) by TaskForm.test.tsx (#427).
 
 describe('RunDetailPage', () => {
   it('shows the steps and cancels a live run', async () => {
@@ -180,37 +103,6 @@ describe('RunDetailPage', () => {
     expect(await screen.findByText(/waiting on the browser for 1 min/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel run' }));
     expect(host.requests.map((r) => `${r.method} ${r.path}`)).toContain(`POST /runs/${run.id}/cancel`);
-  });
-});
-
-describe('TaskSchedules', () => {
-  it('lists a schedule and adds one through the editor', async () => {
-    const { TaskSchedules } = await import('../pages/TaskSchedules');
-    const host = createTestPlatformHost({
-      permissions: ['tasks:read', 'tasks:write'],
-      responses: {
-        [`GET /schedules?taskId=${task.id}`]: [
-          { id: 'sc1', taskId: task.id, cron: '0 9 * * 1-5', timezone: 'Europe/Madrid', enabled: true, concurrency: 'skip', nextRunAt: '2026-11-16T08:00:00Z', lastRunAt: null, consecutiveFailures: 0, description: 'Monday to Friday at 09:00' },
-        ],
-        'POST /schedules/preview': { valid: true, cron: '30 7 * * *', timezone: 'UTC', description: 'Every day at 07:30', next: [], intervalSeconds: 86400 },
-        'POST /schedules': { id: 'sc2' },
-      },
-    });
-    render(
-      <PlatformHostProvider host={host}>
-        <ConfirmProvider>
-          <TaskSchedules taskId={task.id} canWrite />
-        </ConfirmProvider>
-      </PlatformHostProvider>,
-    );
-    expect(await screen.findByText(/Monday to Friday at 09:00/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Add schedule' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Add schedule' });
-    fireEvent.change(within(dialog).getByLabelText('Time'), { target: { value: '07:30' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Add schedule' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    const post = host.requests.find((r) => r.method === 'POST' && r.path === '/schedules');
-    expect(post?.body).toMatchObject({ taskId: task.id, cron: '30 7 * * *', enabled: true, concurrency: 'skip', policyId: null });
   });
 });
 
