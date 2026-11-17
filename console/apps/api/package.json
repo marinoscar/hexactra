@@ -18,6 +18,7 @@
     "prisma:migrate": "node scripts/prisma-env.js migrate deploy",
     "prisma:migrate:dev": "node scripts/prisma-env.js migrate dev",
     "prisma:seed": "node scripts/prisma-env.js db seed",
+    "seed:runs": "ts-node --transpile-only scripts/seed-runs.ts",
     "db:compose": "platform db compose",
     "db:compose:check": "platform db compose --check",
     "db:sync": "platform db sync",
