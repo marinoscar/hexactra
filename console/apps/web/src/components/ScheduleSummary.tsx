@@ -21,6 +21,8 @@ export interface ScheduleSummaryProps {
   catalog?: Pick<PolicyCatalog, 'byId'>;
   /** Default: the profile time zone of the signed-in user. */
   profileTimezone?: string;
+  /** False leaves out when it runs next (or "Paused"), for a list that has its own "Next run" column; default true. */
+  showNext?: boolean;
 }
 
 /** Failed scheduled runs in a row from which the row warns (the API notifies the owner at the same count). */
@@ -31,7 +33,7 @@ export const FAILING_AFTER = 3;
  * the profile's, its policy override, when it runs next (or "Paused") and a
  * warning once it has failed three times in a row.
  */
-export function ScheduleSummary({ schedule: s, catalog, profileTimezone }: ScheduleSummaryProps) {
+export function ScheduleSummary({ schedule: s, catalog, profileTimezone, showNext = true }: ScheduleSummaryProps) {
   const displayZone = useProfileTimeZone();
   const profile = profileTimezone ?? displayZone;
   const failures = s.consecutiveFailures ?? 0;
@@ -42,15 +44,17 @@ export function ScheduleSummary({ schedule: s, catalog, profileTimezone }: Sched
         {s.timezone !== profile && ` · ${s.timezone}`}
         {s.policyId && ` · policy: ${catalog?.byId(s.policyId)?.name ?? 'unavailable'}`}
       </Typography>
-      <Typography variant="caption" color="text.secondary" component="div">
-        {!s.enabled ? 'Paused' : s.nextRunAt ? <RelativeTime iso={s.nextRunAt} prefix="next " /> : 'Not scheduled yet'}
-        {failures >= FAILING_AFTER && (
-          <Box component="span" sx={{ color: 'warning.main', fontWeight: 500 }}>
-            {' · '}
-            {failures} failed in a row
-          </Box>
-        )}
-      </Typography>
+      {(showNext || failures >= FAILING_AFTER) && (
+        <Typography variant="caption" color="text.secondary" component="div">
+          {showNext && (!s.enabled ? 'Paused' : s.nextRunAt ? <RelativeTime iso={s.nextRunAt} prefix="next " /> : 'Not scheduled yet')}
+          {failures >= FAILING_AFTER && (
+            <Box component="span" sx={{ color: 'warning.main', fontWeight: 500 }}>
+              {showNext && ' · '}
+              {failures} failed in a row
+            </Box>
+          )}
+        </Typography>
+      )}
     </Box>
   );
 }
