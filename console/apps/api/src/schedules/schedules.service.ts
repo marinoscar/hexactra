@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import type { RequestWithHeaders } from '@marinoscar/platform-api/core';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
@@ -7,12 +8,16 @@ import { PoliciesService } from '../policies/policies.service';
 import { policyRefSchema } from '../policies/policies.schemas';
 import { PrismaService } from '../prisma/prisma.service';
 import { enqueueGoalRun } from '../runner/goal-runner.jobs';
-import { nextFiring, tooFrequent, validTimezone } from './cron';
+import { FAILING_AFTER } from '../tasks/task-list.schemas';
+import { TaskSchedulesService } from '../tasks/task-schedules.service';
+import { nextFiring, nextFirings, scheduleProblem } from './cron';
+import { describeCron } from './cron-describe';
+import './schedules.errors';
 
 export const createScheduleSchema = z.object({
   taskId: z.uuid(),
   cron: z.string().trim().min(9).max(100),
-  timezone: z.string().trim().min(1).max(64).default('UTC'),
+  timezone: z.string().trim().min(1).max(64).optional().describe("An IANA time zone. Omitted: the owner's profile time zone (see `GET /schedules/defaults`)."),
   enabled: z.boolean().default(true),
   concurrency: z.enum(['skip', 'queue']).default('skip'),
   policyId: policyRefSchema.nullable().optional().describe("Overrides the task's agent policy for scheduled runs; omit or null to follow the task."),
@@ -29,14 +34,51 @@ export const updateScheduleSchema = z.object({
 });
 export class UpdateScheduleDto extends createZodDto(updateScheduleSchema) {}
 
-/** A schedule row as the API returns it: the policy reference is `policyId`. */
-export function scheduleView<T extends { policyRef: string | null }>(schedule: T): Omit<T, 'policyRef'> & { policyId: string | null } {
+export const listSchedulesSchema = z.object({
+  taskId: z.uuid().optional().describe('Only the schedules of this task.'),
+});
+export class ListSchedulesDto extends createZodDto(listSchedulesSchema) {}
+
+export const previewScheduleSchema = z.object({
+  // Loose on purpose: a bad expression or zone is answered with `valid: false`, never a 400.
+  cron: z.string().max(200),
+  timezone: z.string().trim().min(1).max(100).optional().describe("Omitted: the owner's profile time zone."),
+  count: z.number().int().min(1).max(10).default(5).describe('How many firings to return.'),
+});
+export class PreviewScheduleDto extends createZodDto(previewScheduleSchema) {}
+
+/** What `POST /schedules/preview` answers. */
+export type SchedulePreview =
+  | { valid: true; cron: string; timezone: string; description: string; next: string[]; intervalSeconds: number | null }
+  | { valid: false; code: 'INVALID_CRON' | 'INVALID_TIMEZONE' | 'CRON_TOO_FREQUENT'; message: string };
+
+/** Check a schedule and say what it means and when it fires next. Pure: never throws for bad input. */
+export function previewSchedule(cron: string, timezone: string, count: number, after: Date = new Date()): SchedulePreview {
+  const expr = cron.trim();
+  const problem = scheduleProblem(expr, timezone);
+  if (problem) return { valid: false, ...problem };
+  // A few more than asked for, so "evenly spaced" is judged on more than one gap.
+  const firings = nextFirings(expr, timezone, Math.max(count, 6), after);
+  const gaps = firings.slice(1).map((d, i) => d.getTime() - firings[i]!.getTime());
+  const even = gaps.length > 0 && gaps.every((g) => g === gaps[0]);
+  return {
+    valid: true,
+    cron: expr,
+    timezone,
+    description: describeCron(expr),
+    next: firings.slice(0, count).map((d) => d.toISOString()),
+    intervalSeconds: even ? Math.round(gaps[0]! / 1000) : null,
+  };
+}
+
+/** A schedule row as the API returns it: the policy reference is `policyId`, and `description` says the expression in words. */
+export function scheduleView<T extends { policyRef: string | null; cron: string }>(schedule: T): Omit<T, 'policyRef'> & { policyId: string | null; description: string } {
   const { policyRef, ...rest } = schedule;
-  return { ...rest, policyId: policyRef };
+  return { ...rest, policyId: policyRef, description: describeCron(schedule.cron) };
 }
 
 /** Failed runs in a row after which the owner is told the schedule is failing. */
-export const FAILING_AFTER = 3;
+export { FAILING_AFTER };
 
 @Injectable()
 export class SchedulesService {
@@ -46,6 +88,7 @@ export class SchedulesService {
     private readonly prisma: PrismaService,
     private readonly jobs: JobsService,
     private readonly policies: PoliciesService,
+    private readonly taskSchedules: TaskSchedulesService,
   ) {}
 
   private db(userId: string) {
@@ -53,24 +96,36 @@ export class SchedulesService {
   }
 
   private check(cron: string, tz: string): Date {
-    if (!validTimezone(tz)) throw new BadRequestException({ code: 'INVALID_TIMEZONE', message: `Unknown time zone "${tz}"` });
-    const next = nextFiring(cron, tz);
-    if (!next) throw new BadRequestException({ code: 'INVALID_CRON', message: 'Use a 5-field cron expression, e.g. "0 9 * * 1-5"' });
-    if (tooFrequent(cron, tz)) throw new BadRequestException({ code: 'CRON_TOO_FREQUENT', message: 'A schedule may fire at most every 5 minutes' });
-    return next;
+    const problem = scheduleProblem(cron, tz);
+    if (problem) throw new BadRequestException(problem);
+    return nextFiring(cron, tz)!;
   }
 
   async list(userId: string, taskId?: string) {
     return (await this.db(userId).taskSchedule.findMany({ where: taskId ? { taskId } : {}, orderBy: { createdAt: 'asc' } })).map(scheduleView);
   }
 
-  async create(userId: string, input: CreateScheduleDto) {
+  /** The zone a schedule gets when its request names none (the profile's; see `TaskSchedulesService.defaultTimezone`). */
+  defaults(userId: string, request?: RequestWithHeaders) {
+    return this.taskSchedules.defaultTimezone(userId, request);
+  }
+
+  /** `POST /schedules/preview`: the zone defaults like a new schedule's. */
+  async preview(userId: string, input: PreviewScheduleDto, request?: RequestWithHeaders): Promise<SchedulePreview> {
+    const timezone = input.timezone ?? (await this.defaults(userId, request)).timezone;
+    return previewSchedule(input.cron, timezone, input.count);
+  }
+
+  /** Create a schedule. Without `timezone` it gets the owner's profile time zone (#424). */
+  async create(userId: string, input: CreateScheduleDto, request?: RequestWithHeaders) {
     const task = await this.db(userId).task.findFirst({ where: { id: input.taskId }, select: { id: true } });
     if (!task) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
-    const next = this.check(input.cron, input.timezone);
+    const timezone = input.timezone ?? (await this.defaults(userId, request)).timezone;
+    const next = this.check(input.cron, timezone);
     const { policyId, ...fields } = input;
     await this.policies.assertAssignable(userId, policyId);
-    return scheduleView(await this.db(userId).taskSchedule.create({ data: { ...fields, userId, policyRef: policyId ?? null, nextRunAt: input.enabled ? next : null } }));
+    await this.taskSchedules.assertRoom(userId, input.taskId);
+    return scheduleView(await this.db(userId).taskSchedule.create({ data: { ...fields, timezone, userId, policyRef: policyId ?? null, nextRunAt: input.enabled ? next : null } }));
   }
 
   async update(userId: string, id: string, patch: UpdateScheduleDto) {

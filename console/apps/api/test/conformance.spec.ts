@@ -118,7 +118,13 @@ runPlatformConformance({
       policies: userOwnedModelRegistry.list(),
       // The raw SQL of every slice's code that is in the tree, enabled or not
       // (the scan reads every file under src/), each argued (`ApiSlice.rawSql`).
-      rawSqlAllowlist: Object.values(ALL_SLICES).flatMap((slice) => slice.rawSql ?? []),
+      rawSqlAllowlist: [
+        ...Object.values(ALL_SLICES).flatMap((slice) => slice.rawSql ?? []),
+        {
+          file: 'tasks/task-summary.service.ts',
+          why: 'The task list filters and sorts on facts computed from schedules and runs, and the summaries and statistics aggregate runs per task (FILTER, DISTINCT ON, percentile_cont, days in a time zone): one statement each instead of one per task. Every statement binds the caller\'s `user_id`.',
+        },
+      ],
       registerIn: 'src/notes/notes.ownership.ts (or your module\'s own *.ownership.ts)',
     },
     // Every route reachable from AppModule declares @Auth() or @Public(), and

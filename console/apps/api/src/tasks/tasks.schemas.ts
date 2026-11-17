@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { profileNameSchema } from '../fleet/fleet.schemas';
 import { policyRefSchema } from '../policies/policies.schemas';
 import { TASK_DEFAULTS } from './task-defaults';
+import { taskSchedulesField } from './task-list.schemas';
 
 const domain = z
   .string()
@@ -40,6 +41,7 @@ export const createTaskSchema = z.object({
   confirmRiskyActions: taskFields.confirmRiskyActions.default(false),
   model: taskFields.model.optional(),
   policyId: taskFields.policyId.optional(),
+  schedules: taskSchedulesField.optional(),
 });
 export class CreateTaskDto extends createZodDto(createTaskSchema) {}
 

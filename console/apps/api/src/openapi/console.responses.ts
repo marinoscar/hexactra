@@ -204,6 +204,7 @@ export const scheduleResponseSchema = z.object({
   lastRunId: z.uuid().nullable(),
   consecutiveFailures: z.number().int(),
   policyId: z.string().nullable().describe("Overrides the task's agent policy for scheduled runs; null follows the task"),
+  description: z.string().describe('The expression in words (English, 24-hour), e.g. "Monday to Friday at 09:00"'),
   createdAt: iso,
   updatedAt: iso,
 });
