@@ -63,7 +63,7 @@ export function RunFilterControls({ value, onChange, scoped, tasks, policies, ti
           getOptionLabel={(t) => t.name}
           isOptionEqualToValue={(a, b) => a.id === b.id}
           onChange={(_, task) => onChange({ ...value, taskId: task?.id ?? null })}
-          renderInput={(params) => <TextField {...params} label="Task" />}
+          renderInput={(params) => <TextField {...params} label="Task" fullWidth />}
           sx={row ? { minWidth: 200, flex: '1 1 200px', maxWidth: 280 } : undefined}
           fullWidth={!row}
         />

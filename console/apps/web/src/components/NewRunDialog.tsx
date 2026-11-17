@@ -83,7 +83,7 @@ export function NewRunDialog({ open, onClose, onStarted }: NewRunDialogProps) {
               helperText={
                 <Box component="span" sx={{ display: 'flex', gap: 1, justifyContent: 'space-between' }}>
                   <span>What the agent should achieve, in plain words.</span>
-                  <span>
+                  <span style={{ whiteSpace: 'nowrap' }}>
                     {goal.length.toLocaleString('en-US')} / {GOAL_MAX.toLocaleString('en-US')}
                   </span>
                 </Box>

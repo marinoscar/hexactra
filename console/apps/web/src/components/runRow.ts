@@ -19,7 +19,7 @@ export function runDuration(run: Pick<Run, 'status' | 'startedAt' | 'createdAt' 
   if (isLive(run.status)) {
     if (!run.startedAt) return null;
     const since = shortDuration(now - Date.parse(run.startedAt));
-    return run.status === 'waiting_human' ? `waiting, ${since} in` : `running ${since}`;
+    return `running ${since}`;
   }
   const start = Date.parse(run.startedAt ?? run.createdAt);
   const end = run.finishedAt ? Date.parse(run.finishedAt) : Number.NaN;

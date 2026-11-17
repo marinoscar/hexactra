@@ -54,6 +54,7 @@ export function MachinePicker({ hosts, hostId, hostFallback, onChange }: Machine
           onChange={(e) => onChange({ hostId: e.target.value, hostFallback })}
           helperText="Which computer runs it; any available one by default (home machines first)."
           sx={{ minWidth: { sm: 260 } }}
+          slotProps={{ select: { displayEmpty: true }, inputLabel: { shrink: true } }}
         >
           <MenuItem value="">Any available machine</MenuItem>
           {hosts.map((h) => (
