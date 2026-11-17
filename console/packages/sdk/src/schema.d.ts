@@ -11580,6 +11580,22 @@ export interface components {
             error: string | null;
             cancelRequested: boolean;
             stepCount: number;
+            activity: {
+                /** @enum {string} */
+                phase: "starting" | "looking" | "thinking" | "acting";
+                /** @description The fabric action being run (acting only) */
+                action?: string;
+                /** @description Redacted like step args */
+                args?: {
+                    [key: string]: unknown;
+                };
+                /** @description Why the model chose the action */
+                reason?: string;
+                /** @description ISO 8601 timestamp */
+                startedAt: string;
+                /** @description How long the host has before the action times out */
+                timeoutMs?: number;
+            } | null;
             inputTokens: number;
             outputTokens: number;
             /** @description ISO 8601 timestamp */
@@ -11608,6 +11624,22 @@ export interface components {
             error: string | null;
             cancelRequested: boolean;
             stepCount: number;
+            activity: {
+                /** @enum {string} */
+                phase: "starting" | "looking" | "thinking" | "acting";
+                /** @description The fabric action being run (acting only) */
+                action?: string;
+                /** @description Redacted like step args */
+                args?: {
+                    [key: string]: unknown;
+                };
+                /** @description Why the model chose the action */
+                reason?: string;
+                /** @description ISO 8601 timestamp */
+                startedAt: string;
+                /** @description How long the host has before the action times out */
+                timeoutMs?: number;
+            } | null;
             inputTokens: number;
             outputTokens: number;
             /** @description ISO 8601 timestamp */

@@ -10,7 +10,8 @@ import { redactActionArgs, redactUrl } from '../tasks/redact';
 import { RunNotifier } from '../tasks/run-notifier';
 import { TasksService } from '../tasks/tasks.service';
 import { BROWSER_AGENT_FEATURE_ID } from './browser-agent.feature';
-import { FabricSession, handoffOutcome, type CreatedHandoff } from './fabric-session';
+import { runActivity, type RunActivityPhase } from './activity';
+import { ACTION_TIMEOUT_MS, FabricSession, handoffOutcome, type CreatedHandoff } from './fabric-session';
 import { domainAllowed, looksRisky } from './policy';
 import { captureScreen, markCenter, roundInput, type Screen, type ScreenMark, type ScreenView } from './vision';
 
@@ -199,9 +200,9 @@ export class GoalRunnerService {
       } else {
         memory.log.push(`The person did not help (handoff ${h.status}${outcome === 'cancelled' ? ', declined' : ''}). Do not retry the same request; finish if you cannot continue.`);
       }
-      await this.tasks.transition(userId, run.id, 'running', { handoffId: null, transcript: memory as never });
+      await this.tasks.transition(userId, run.id, 'running', { handoffId: null, transcript: memory as never, activity: runActivity('starting') as never });
     } else {
-      await this.tasks.transition(userId, run.id, 'running');
+      await this.tasks.transition(userId, run.id, 'running', { activity: runActivity('starting') as never });
       await this.notifier?.started?.(userId, run);
     }
 
@@ -237,6 +238,15 @@ export class GoalRunnerService {
       view: null as ScreenView | null,
     };
 
+    /** What the run page shows as happening now (#379). Best effort: never fails the run. */
+    const setActivity = async (phase: RunActivityPhase, opts: Parameters<typeof runActivity>[1] = {}) => {
+      try {
+        await db.run.updateMany({ where: { id: run.id, status: 'running' }, data: { activity: runActivity(phase, opts) as never } });
+      } catch (e) {
+        this.log.debug(`run ${run.id}: could not record its activity: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    };
+
     const record = async (kind: string, action: string | null, args: Record<string, unknown> | null, ok: boolean, summary: string, started: number, reasoning?: string) => {
       state.stepCount += 1;
       this.tasks.metrics.step(kind, ok);
@@ -265,9 +275,19 @@ export class GoalRunnerService {
         state.stop = 'budget';
         return 'Step budget exhausted.';
       }
+      await setActivity('acting', { action, reason, timeoutMs: ACTION_TIMEOUT_MS });
+      try {
+        return await runAction(action, type, started, reason);
+      } finally {
+        // Back to the model, which reads the result and picks the next step.
+        await setActivity('thinking');
+      }
+    };
+
+    const runAction = async (action: Record<string, unknown>, type: string, started: number, reason?: string): Promise<string> => {
       let op;
       try {
-        op = await session.act(sessionId!, action);
+        op = await session.act(sessionId!, action, ACTION_TIMEOUT_MS);
       } catch (e) {
         const msg = e instanceof FabricError ? e.message : String(e);
         await record('action', type, action, false, msg, started, reason);
@@ -599,12 +619,15 @@ export class GoalRunnerService {
           const handoffId = memory.secretHandoffId;
           memory.secretHandoffId = null;
           let op;
+          await setActivity('acting', { action: { type: 'type', selector, secret: '', submit } });
           try {
             // The fabric types the value itself: the console never sees it.
             op = await session.typeSecret(sessionId!, { handoffId, selector, clear: true, submit });
           } catch {
             await record('action', 'type', { selector, secret: '' }, false, 'the secret was already used or expired', started);
             return 'The secret is no longer available; ask the person again if needed.';
+          } finally {
+            await setActivity('thinking');
           }
           const ok = op.state === 'succeeded';
           await record('action', 'type', { selector, submit }, ok, ok ? 'typed the secret' : (op.error ?? op.state), started);
@@ -643,6 +666,7 @@ export class GoalRunnerService {
       // What the model sees this round: the screen, as a person would (#366).
       let view: ScreenView | null = null;
       if (!memory.visionOff) {
+        await setActivity('looking');
         const screen: Screen = memory.look ?? 'page';
         memory.look = null;
         try {
@@ -655,6 +679,7 @@ export class GoalRunnerService {
         }
       }
       let result: AiToolLoopResult | null = null;
+      await setActivity('thinking');
       const call = (withImage: boolean) =>
         this.ai.forUser(userId, { feature: BROWSER_AGENT_FEATURE_ID, ...(orgId ? { orgId } : {}) }).runTools({
           ...(policy.model ? { model: policy.model } : {}),

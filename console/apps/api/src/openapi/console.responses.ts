@@ -25,6 +25,17 @@ export const taskResponseSchema = z.object({
 });
 export class TaskResponseDto extends createZodDto(taskResponseSchema) {}
 
+export const runActivitySchema = z
+  .object({
+    phase: z.enum(['starting', 'looking', 'thinking', 'acting']),
+    action: z.string().optional().describe('The fabric action being run (acting only)'),
+    args: z.record(z.string(), z.unknown()).optional().describe('Redacted like step args'),
+    reason: z.string().optional().describe('Why the model chose the action'),
+    startedAt: iso,
+    timeoutMs: z.number().int().optional().describe('How long the host has before the action times out'),
+  })
+  .describe('What a running run is doing right now; null when it is not running');
+
 export const runResponseSchema = z.object({
   id: z.uuid(),
   userId: z.uuid(),
@@ -41,6 +52,7 @@ export const runResponseSchema = z.object({
   error: z.string().nullable(),
   cancelRequested: z.boolean(),
   stepCount: z.number().int(),
+  activity: runActivitySchema.nullable(),
   inputTokens: z.number().int(),
   outputTokens: z.number().int(),
   createdAt: iso,

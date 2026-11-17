@@ -4,6 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { fetchRunScreenshot, subscribeRun } from '../live';
+import { frameCaption, RunActivityBar, useNow, type RunActivity } from '../components/RunActivity';
 
 /** `fetched`, plus any step of `prev` (received over the stream) it does not have yet. */
 export function withStreamedSteps(fetched: Run, prev: Run | null): Run {
@@ -41,6 +42,8 @@ export interface Run {
   error: string | null;
   cancelRequested: boolean;
   stepCount: number;
+  /** What a running run is doing right now (#379). */
+  activity?: RunActivity | null;
   createdAt: string;
   finishedAt: string | null;
   steps?: RunStep[];
@@ -144,7 +147,7 @@ interface RunViewer {
 
 /**
  * `/runs/:id`: one run, live. Steps and status arrive over the run's event
- * stream; while the run is live, the browser's screenshot refreshes every
+ * stream, with what it is doing right now (#379); while the run is live, the browser's screenshot refreshes every
  * 2 s and the viewer link lets a person take over.
  */
 export function RunDetailPage() {
@@ -154,6 +157,9 @@ export function RunDetailPage() {
   const [run, setRun] = useState<Run | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [shot, setShot] = useState<string | null>(null);
+  /** When the shown frame was taken, and whether the latest fetch failed (#379). */
+  const [shotAt, setShotAt] = useState<number | null>(null);
+  const [shotFailing, setShotFailing] = useState(false);
   const [watch, setWatch] = useState(true);
   const [where, setWhere] = useState<RunViewer | null>(null);
 
@@ -172,6 +178,7 @@ export function RunDetailPage() {
   }, [load]);
 
   const isLive = run ? live(run.status) : false;
+  const now = useNow(isLive);
 
   // Live updates over SSE: a reconnect refetches, a step appends, a run event merges.
   useEffect(() => {
@@ -201,7 +208,10 @@ export function RunDetailPage() {
         if (current) URL.revokeObjectURL(current);
         current = url;
         setShot(url);
+        setShotAt(Date.now());
       }
+      // A failed fetch keeps the last frame, but the page says how old it is.
+      setShotFailing(!url);
       timer = setTimeout(() => void next(), 2_000);
     };
     let timer = setTimeout(() => void next(), 0);
@@ -251,8 +261,19 @@ export function RunDetailPage() {
           )}
         </Stack>
       )}
-      {isLive && watch && shot && (
-        <Box component="img" src={shot} alt="The run's browser, live" sx={{ width: '100%', borderRadius: 1, border: 1, borderColor: 'divider', mb: 2 }} />
+      {run.status === 'running' && run.activity && <RunActivityBar activity={run.activity} now={now} />}
+      {isLive && watch && (shot || shotFailing) && (
+        <Box sx={{ mb: 2 }}>
+          {shot && <Box component="img" src={shot} alt="The run's browser, live" sx={{ display: 'block', width: '100%', borderRadius: 1, border: 1, borderColor: 'divider' }} />}
+          {(() => {
+            const caption = frameCaption(shotAt, shotFailing, now);
+            return (
+              <Typography variant="caption" color={caption.stale ? 'warning.main' : 'text.secondary'} data-testid="frame-age">
+                {caption.text}
+              </Typography>
+            );
+          })()}
+        </Box>
       )}
       <Paper variant="outlined">
         <List aria-label="Steps" dense>

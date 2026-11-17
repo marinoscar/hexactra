@@ -56179,6 +56179,58 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "activity": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "phase": {
+                    "type": "string",
+                    "enum": [
+                      "starting",
+                      "looking",
+                      "thinking",
+                      "acting"
+                    ]
+                  },
+                  "action": {
+                    "description": "The fabric action being run (acting only)",
+                    "type": "string"
+                  },
+                  "args": {
+                    "description": "Redacted like step args",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  },
+                  "reason": {
+                    "description": "Why the model chose the action",
+                    "type": "string"
+                  },
+                  "startedAt": {
+                    "type": "string",
+                    "description": "ISO 8601 timestamp"
+                  },
+                  "timeoutMs": {
+                    "description": "How long the host has before the action times out",
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "phase",
+                  "startedAt"
+                ],
+                "description": "What a running run is doing right now; null when it is not running"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "inputTokens": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -56232,6 +56284,7 @@
           "error",
           "cancelRequested",
           "stepCount",
+          "activity",
           "inputTokens",
           "outputTokens",
           "createdAt",
@@ -56353,6 +56406,58 @@
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
+          },
+          "activity": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "phase": {
+                    "type": "string",
+                    "enum": [
+                      "starting",
+                      "looking",
+                      "thinking",
+                      "acting"
+                    ]
+                  },
+                  "action": {
+                    "description": "The fabric action being run (acting only)",
+                    "type": "string"
+                  },
+                  "args": {
+                    "description": "Redacted like step args",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {}
+                  },
+                  "reason": {
+                    "description": "Why the model chose the action",
+                    "type": "string"
+                  },
+                  "startedAt": {
+                    "type": "string",
+                    "description": "ISO 8601 timestamp"
+                  },
+                  "timeoutMs": {
+                    "description": "How long the host has before the action times out",
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "phase",
+                  "startedAt"
+                ],
+                "description": "What a running run is doing right now; null when it is not running"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "inputTokens": {
             "type": "integer",
@@ -56503,6 +56608,7 @@
           "error",
           "cancelRequested",
           "stepCount",
+          "activity",
           "inputTokens",
           "outputTokens",
           "createdAt",
