@@ -5,6 +5,8 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import type { FleetHost } from './FleetPage';
 import { TaskSchedules } from './TaskSchedules';
+import { TaskSpendLine } from '../components/RunBudgetMeter';
+import type { TaskSpend } from '../components/runBudget';
 import { runTaskWith } from '../policies/api';
 import { startModel } from '../policies/format';
 import { PolicySelect } from '../policies/PolicySelect';
@@ -28,6 +30,8 @@ export interface Task {
   hostFallback: boolean;
   allowedDomains: string[];
   confirmRiskyActions: boolean;
+  /** What the task's runs spent in the last 30 days (#400, #408). */
+  spend30d?: TaskSpend;
   /** The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default. */
   policyId: string | null;
 }
@@ -230,6 +234,9 @@ export function TasksPage() {
                 {chips && <Chip size="small" variant="outlined" label={`policy: ${chips.policy}`} />}
                 {chips?.model && <Chip size="small" variant="outlined" label={`model: ${chips.model}`} />}
               </Stack>
+              {/* Spend (#408) */}
+              <TaskSpendLine spend={t.spend30d} />
+              
               <TaskSchedules taskId={t.id} canWrite={canWrite} catalog={canPickPolicy ? catalog : undefined} taskPolicyId={t.policyId} />
             </CardContent>
             <CardActions>
