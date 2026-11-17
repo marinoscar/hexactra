@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **Context efficiency follows the run's policy** (#406).
+  - Settings: `callsPerChunk`, `observationChars`, `screenshotsKept` and `pruneBatch`.
+  - Screenshot window: the model sees the last few screenshots. Old ones are pruned in batches, so the provider's prompt cache keeps hitting, and only their hashes are stored.
+  - Stable prompt: instructions and tool definitions stay byte-identical across runs, and the round input puts its stable parts first.
+  - New metric `app.runs.input_tokens_per_call`.
+  - On a scripted 30-action fixture, the Balanced settings use 18% fewer input tokens than the old fixed settings.
+- **The budget engine enforces every run budget** (#404): actions, model calls, active minutes, input tokens, output tokens and cost. `null` means unlimited.
+  - Ceilings: administrators set deployment ceilings in `browserAgentCeilings`, and they clamp every policy. A run's effective budget is fixed in its snapshot.
+  - Warning: a run gets one warning per budget at `warnAtPercent`.
+  - Wrap-up: when a budget is used up, the model makes one final call to report what it achieved, so a stopped run still returns a partial result.
+  - Stop reason: runs carry a typed `stopReason` (`finished`, `budget_*`, `stalled`, `cancelled`, `error`, `no_model`) and a `budget` view (effective, used, percent, source).
+  - Alerts now count budget stops by `stop_reason`. The hidden chunk cap is gone.
+- **Model tiers: Fast, Standard and Frontier** (#403).
+  - Where they are set: the `browserAgentTiers` system setting (deployment default) and `tiers` in the user's `browserAgent` setting (per-user override). Each tier is a model, a reasoning effort, an output cap and a fallback model.
+  - How a run picks its model: policy pin, then the user's tier, then the deployment's tier, then fill-down, then the user's default AI model. A run resolves its tiers once at start, and every model call uses its tier's model, effort and output cap.
+  - Early checks: a run whose start tier has no usable model fails before a browser is allocated. A model without image input starts with screenshots off.
+  - New route `GET /api/agent-policies/model-tiers/effective` shows each value and where it came from. The console binds the platform's `AI_TARGET_RESOLVER` for the browser agent.
 - **Agent policies export and import as JSON** (#402).
   - `GET /api/agent-policies/export` (`ids`, `includePins`) returns a portable `hexactra.agent-policies` v1 file. It carries no ids, user or secrets.
   - `POST /api/agent-policies/import` takes `onConflict` set to `rename`, `skip` or `replace`. An import is atomic. Model pins this deployment cannot use are dropped with a warning, and budgets above the deployment ceilings are flagged.
