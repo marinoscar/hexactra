@@ -563,7 +563,7 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
       return screenshot(action.tab_id, !!action.marks);
     case 'evaluate': {
       const tab = await resolveTab(action.tab_id);
-      return viaCdp(() => cdp.evaluate(tab.id!, action.script, !!action.await_promise));
+      return viaCdp(() => cdp.evaluate(tab.id!, action.script, !!action.await_promise, answerBudget(deadline)));
     }
     case 'click_at': {
       const tab = await resolveTab(action.tab_id);
@@ -647,15 +647,40 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
   }
 }
 
+/**
+ * The extension answers this long before the action's deadline, so the host
+ * agent can still report a clear failure before the control plane gives up on
+ * the action as "not reported in time" (#382).
+ */
+export const REPLY_MARGIN_MS = 3_000;
+
+/** How long an action may run before the extension answers anyway. */
+export function answerBudget(deadline: number, now = Date.now()): number {
+  const window = Math.max(0, deadline - now);
+  return Math.max(0, window - Math.min(REPLY_MARGIN_MS, Math.floor(window / 4)));
+}
+
 /** Handle one request frame and build the response frame. */
 export async function handleRequest(req: BridgeRequest): Promise<BridgeResponse> {
   const deadline = req.deadline_ms ?? Date.now() + DEFAULT_NAV_TIMEOUT_MS;
+  const budget = answerBudget(deadline);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // A page that never answers (a promise that never settles, an open
+  // dialog, a busy main thread) must not leave the action unanswered.
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new ActionError(`${req.action.type} did not finish within ${Math.round(budget / 1000)} s: the page is not responding (a script still running, or an open dialog)`)),
+      budget,
+    );
+  });
   try {
-    const result = await executeAction(req.action, deadline);
+    const result = await Promise.race([executeAction(req.action, deadline), late]);
     return { type: 'response', id: req.id, ok: true, result };
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
     return { type: 'response', id: req.id, ok: false, error };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

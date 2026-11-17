@@ -230,6 +230,14 @@ impl BrowserPool {
             Err(e) => return failure(format!("profile {profile}: {e:#}")),
         };
         let _busy = busy.lock().await; // per-profile ordering
+                                       // Expired while an earlier action held the browser: the control plane
+                                       // has already given up on it, so running it now would act late and
+                                       // unseen (a stale click after the agent moved on) (#382).
+        if Utc::now() >= deadline {
+            return failure(
+                "expired while an earlier action on this browser was still running; it did not run",
+            );
+        }
         let left = (deadline - Utc::now()).to_std().unwrap_or(Duration::ZERO);
         if let Err(e) = self
             .ensure_started(profile, &launcher, Instant::now() + left)
@@ -487,6 +495,37 @@ mod tests {
         // Back to travel: relaunched with its own profile directory.
         let again = act(&p, "travel").await;
         assert_eq!(again["launches"], 2);
+        p.shutdown().await;
+    }
+
+    #[tokio::test]
+    async fn an_action_that_expired_behind_another_does_not_run() {
+        if !python_available() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let p = pool(dir.path(), 1);
+        act(&p, "travel").await;
+        // An earlier action holds the browser past the next one's deadline.
+        let (_, _, busy) = p.entry("travel").await.unwrap();
+        let held = busy.lock().await;
+        let p2 = p.clone();
+        let late = tokio::spawn(async move {
+            p2.execute(
+                "travel",
+                Uuid::new_v4(),
+                &RemoteAction::Tabs,
+                Utc::now() + chrono::Duration::milliseconds(100),
+            )
+            .await
+        });
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        drop(held);
+        let r = late.await.unwrap();
+        assert!(!r.ok);
+        assert!(r.error.unwrap().contains("did not run"));
+        // The browser is still usable.
+        act(&p, "travel").await;
         p.shutdown().await;
     }
 

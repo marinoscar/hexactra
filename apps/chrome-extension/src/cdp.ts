@@ -217,8 +217,12 @@ interface RemoteObject {
   unserializableValue?: string;
 }
 
-/** Run JavaScript in the page's main world; returns its JSON value. */
-export async function evaluate(tabId: number, script: string, awaitPromise: boolean) {
+/**
+ * Run JavaScript in the page's main world; returns its JSON value.
+ * `timeoutMs` terminates a script that runs synchronously for longer, so a
+ * runaway loop cannot freeze the tab for every later action (#382).
+ */
+export async function evaluate(tabId: number, script: string, awaitPromise: boolean, timeoutMs?: number) {
   const r = await send<{ result?: RemoteObject; exceptionDetails?: { text?: string; exception?: RemoteObject } }>(tabId, 'Runtime.evaluate', {
     expression: script,
     returnByValue: true,
@@ -227,6 +231,7 @@ export async function evaluate(tabId: number, script: string, awaitPromise: bool
     // REPL mode: top-level await and the last expression's value, like the console.
     replMode: true,
     allowUnsafeEvalBlockedByCSP: true,
+    ...(timeoutMs !== undefined ? { timeout: Math.max(1, Math.floor(timeoutMs)) } : {}),
   });
   if (r.exceptionDetails) {
     const ex = r.exceptionDetails.exception;
