@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Schedule editor** (#425).
+  - A schedule is built from choices: every N minutes, every N hours, daily at one or more times, weekly on chosen days, monthly on chosen days, or Advanced for a cron expression. The stored value is still a 5-field cron expression.
+  - The editor shows the schedule as a sentence and its next runs before saving.
+  - The time zone defaults to the profile's. A schedule in another zone shows a hint with a one-click update.
+  - A schedule can now be edited, not only added and deleted. The policy override stays.
 - **Inbox and question form** (#429).
   - Fixed: labels no longer sit over the text above the field or get cut on a phone; long options wrap inside the card; the number field has no spinner between the value and its unit; the action buttons stack full width on a phone with Decline last.
   - A secret can be shown while typing. It hides again on submit, when the tab is hidden and after 30 seconds without typing.

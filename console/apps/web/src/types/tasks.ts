@@ -30,6 +30,8 @@ export interface TaskSchedule {
   nextRunAt: string | null;
   lastRunAt: string | null;
   consecutiveFailures: number;
+  /** The expression in words ("Monday to Friday at 09:00"), from the API (#424). */
+  description?: string;
   /** Overrides the task's agent policy for scheduled runs; null follows the task. */
   policyId?: string | null;
 }
