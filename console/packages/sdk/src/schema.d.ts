@@ -12524,6 +12524,10 @@ export interface components {
                 costKnown: boolean;
                 /** @description Input plus output tokens */
                 tokens: number;
+                /** @description Of those runs, how many succeeded */
+                succeeded: number;
+                /** @description The average cost of one successful run (USD; a lower bound while costKnown is false); null with no successful run */
+                avgSuccessCostUsd: number | null;
             };
             /** @description ISO 8601 timestamp */
             createdAt: string;
@@ -12672,6 +12676,27 @@ export interface components {
                 /** @description False when a call could not be priced: `used.cost` is then "at least". */
                 costKnown: boolean;
             } | null;
+            tier: {
+                /**
+                 * @description The tier the policy starts runs on
+                 * @enum {string}
+                 */
+                start: "fast" | "standard" | "frontier";
+                /**
+                 * @description The highest tier the run may escalate to
+                 * @enum {string}
+                 */
+                max: "fast" | "standard" | "frontier";
+                /**
+                 * @description The tier the run is on now: the start tier until a stall escalates it
+                 * @enum {string}
+                 */
+                current: "fast" | "standard" | "frontier";
+                /** @description How many times the run escalated */
+                escalations: number;
+                /** @description The current tier's model, as `provider:modelId`; null when none was resolved */
+                model: string | null;
+            } | null;
             /** @description The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts. */
             currentTier: ("fast" | "standard" | "frontier") | null;
             /** @description How many times the run moved to a stronger tier because it stalled */
@@ -12772,6 +12797,27 @@ export interface components {
                 };
                 /** @description False when a call could not be priced: `used.cost` is then "at least". */
                 costKnown: boolean;
+            } | null;
+            tier: {
+                /**
+                 * @description The tier the policy starts runs on
+                 * @enum {string}
+                 */
+                start: "fast" | "standard" | "frontier";
+                /**
+                 * @description The highest tier the run may escalate to
+                 * @enum {string}
+                 */
+                max: "fast" | "standard" | "frontier";
+                /**
+                 * @description The tier the run is on now: the start tier until a stall escalates it
+                 * @enum {string}
+                 */
+                current: "fast" | "standard" | "frontier";
+                /** @description How many times the run escalated */
+                escalations: number;
+                /** @description The current tier's model, as `provider:modelId`; null when none was resolved */
+                model: string | null;
             } | null;
             /** @description The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts. */
             currentTier: ("fast" | "standard" | "frontier") | null;
