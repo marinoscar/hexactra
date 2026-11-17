@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { KEY_BY_KEY_MAX, resetCdp } from '../src/cdp';
-import { MARKS_ID, closeAllWindows, handleRequest, isNavigableUrl, type BridgeRequest } from '../src/remote';
+import { MARKS_ID, REPLY_MARGIN_MS, answerBudget, closeAllWindows, handleRequest, isNavigableUrl, type BridgeRequest } from '../src/remote';
 
 type Listener = (id: number, info: { status?: string }, tab: unknown) => void;
 
@@ -142,6 +142,15 @@ describe('handleRequest', () => {
   });
 });
 
+describe('answerBudget (#382)', () => {
+  it('keeps a margin before the deadline for the host to report', () => {
+    expect(answerBudget(45_000, 0)).toBe(45_000 - REPLY_MARGIN_MS);
+    // A short window keeps three quarters of it.
+    expect(answerBudget(2_000, 0)).toBe(1_500);
+    expect(answerBudget(0, 10)).toBe(0);
+  });
+});
+
 describe('closeAllWindows', () => {
   it('closes every window so the browser exits normally', async () => {
     const removed: number[] = [];
@@ -246,6 +255,26 @@ describe('full-power actions through chrome.debugger (#366)', () => {
     expect(calls).toHaveLength(2);
     expect(calls[1][0].args).toEqual([MARKS_ID]);
     expect(chromeMock.tabs.captureVisibleTab).not.toHaveBeenCalled();
+  });
+
+  it('answers before the deadline when a script never settles, and the next action still runs (#382)', async () => {
+    reply = (method) => (method === 'Runtime.evaluate' ? new Promise(() => undefined) : {});
+    const started = Date.now();
+    const hung = await handleRequest({ type: 'request', id: 'op-hung', action: { type: 'evaluate', script: 'await new Promise(() => {})', await_promise: true }, deadline_ms: started + 400 });
+    expect(hung.ok).toBe(false);
+    expect(hung.error).toMatch(/evaluate did not finish within \d+ s: the page is not responding/);
+    // Answered with time to spare for the host to report it.
+    expect(Date.now() - started).toBeLessThan(400);
+    const next = await handleRequest(req({ type: 'click_at', x: 1, y: 1 }));
+    expect(next.ok).toBe(true);
+  });
+
+  it('gives a script a CDP timeout inside the answer budget, so a runaway loop is terminated (#382)', async () => {
+    reply = (method) => (method === 'Runtime.evaluate' ? { result: { type: 'number', value: 1 } } : {});
+    await handleRequest({ type: 'request', id: 'op-2', action: { type: 'evaluate', script: 'while (true) {}' }, deadline_ms: Date.now() + 45_000 });
+    const timeout = sent.find((c) => c.method === 'Runtime.evaluate')?.params?.timeout as number;
+    expect(timeout).toBeGreaterThan(40_000);
+    expect(timeout).toBeLessThanOrEqual(45_000 - REPLY_MARGIN_MS);
   });
 
   it('fails clearly when the debugger cannot attach', async () => {

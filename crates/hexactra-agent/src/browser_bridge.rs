@@ -68,6 +68,18 @@ pub struct BrowserBridge {
     socket: PathBuf,
 }
 
+/// The agent stops waiting for the browser this long before an action's
+/// deadline, so its report reaches the control plane before the control plane
+/// times the action out as "not reported in time" (#382).
+pub const REPORT_MARGIN: Duration = Duration::from_secs(2);
+
+/// How long to wait for the extension's answer: the time left, minus a
+/// margin to report it (at most a fifth of the time left).
+pub fn reply_wait(deadline: DateTime<Utc>, now: DateTime<Utc>) -> Duration {
+    let left = (deadline - now).to_std().unwrap_or(Duration::ZERO);
+    (left - REPORT_MARGIN.min(left / 5)).max(Duration::from_millis(100))
+}
+
 fn failure(msg: impl Into<String>) -> OperationResult {
     OperationResult {
         ok: false,
@@ -342,16 +354,12 @@ impl BrowserBridge {
             self.lock().pending.remove(&id);
             return failure("browser disconnected");
         }
-        let wait = (deadline - Utc::now())
-            .to_std()
-            .unwrap_or(Duration::ZERO)
-            .max(Duration::from_millis(100));
-        match tokio::time::timeout(wait, rx).await {
+        match tokio::time::timeout(reply_wait(deadline, Utc::now()), rx).await {
             Ok(Ok(r)) => r,
             Ok(Err(_)) => failure("browser disconnected before replying"),
             Err(_) => {
                 self.lock().pending.remove(&id);
-                failure("browser did not reply before the deadline")
+                failure("browser did not reply before the deadline (the page may be busy, or showing a dialog)")
             }
         }
     }
@@ -468,6 +476,26 @@ mod tests {
         let r = pending.await.unwrap();
         assert!(!r.ok);
         assert!(r.error.unwrap().contains("disconnected"));
+    }
+
+    #[test]
+    fn reply_wait_leaves_time_to_report() {
+        let now = Utc::now();
+        // 45 s: the browser has 43 s, the agent 2 s to report.
+        assert_eq!(
+            reply_wait(now + chrono::Duration::seconds(45), now),
+            Duration::from_secs(43)
+        );
+        // Short deadlines keep four fifths.
+        assert_eq!(
+            reply_wait(now + chrono::Duration::seconds(5), now),
+            Duration::from_secs(4)
+        );
+        // Past the deadline: a token wait, never a panic.
+        assert_eq!(
+            reply_wait(now - chrono::Duration::seconds(1), now),
+            Duration::from_millis(100)
+        );
     }
 
     #[tokio::test]
