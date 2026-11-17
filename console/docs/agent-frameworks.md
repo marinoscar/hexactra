@@ -21,13 +21,29 @@ What differs between them:
 
 ## Which tools to give the agent
 
-- **Delegate (recommended).** Give the agent `run_goal`, `run_status`, `inbox_list`, `inbox_answer` and `run_cancel` (and `ask_human`, `question_status` to let it ask you questions). Hexactra's own goal runner then drives the browser and asks you for CAPTCHAs and codes. The framework only follows progress. Filters:
+- **Delegate (recommended).** Give the agent `run_goal`, `run_status`, `inbox_list`, `inbox_answer` and `run_cancel` (and `ask_human`, `question_status` to let it ask you questions, `policies_list` to let it choose a policy). Hexactra's own goal runner then drives the browser and asks you for CAPTCHAs and codes. The framework only follows progress. Filters:
   - Hermes: `tools: { include: [run_goal, run_status, inbox_list, inbox_answer, run_cancel] }`.
   - OpenClaw: `toolFilter: { include: [...] }`.
   - Pi: `"exposure": "hidden"` with `"toolExposure": { "run_*": "direct", "inbox_*": "direct", "ask_human": "direct", "question_status": "direct" }`.
 - **Drive.** Expose the `browser_*` tools too, and the framework's model controls the browser step by step. Each action is still recorded as a run that you can watch and stop in the console.
 
 Whichever mode you choose, the agent never sees a code or password you type into a handoff: `browser_type_secret` has the fabric type it into the page.
+
+## Choosing an agent policy
+
+Delegated runs follow an **agent policy** (budgets and model tiers; [mcp.md](mcp.md#agent-policies)). Add `policies_list` to the tool filters above to let the agent see them, and pass `policy_id` to `run_goal`, `task_run`, `task_create`, `task_update` or `schedule_create`. Without it the user's default policy applies. `policy_id` is a UUID from `policies_list` or `builtin:economy|balanced|thorough|unlimited`; budgets set to `null` are unlimited, and models are chosen by tier, not by model id. The same arguments work in all three frameworks; only the tool name's prefix differs:
+
+| Framework | Call |
+|---|---|
+| Hermes Agent | `mcp_hexactra_run_goal { "goal": "Find a fare to Lisbon", "policy_id": "builtin:economy" }` |
+| OpenClaw | `hexactra__run_goal { "goal": "Find a fare to Lisbon", "policy_id": "builtin:economy" }` |
+| Pi | `mcp__hexactra__run_goal { "goal": "Find a fare to Lisbon", "policy_id": "builtin:economy" }` |
+
+For example, to run a saved task once under a bigger budget (`task_run`):
+
+```json
+{ "name": "task_run", "arguments": { "task_id": "<task id>", "policy_id": "builtin:thorough" } }
+```
 
 ## Asking you a question
 

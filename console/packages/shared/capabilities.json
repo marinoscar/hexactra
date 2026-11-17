@@ -84,12 +84,14 @@
         "GET /api/agent-policies/{id}",
         "GET /api/agent-policies/default"
       ],
-      "cli": {
-        "none": "Arrives with the policy CLI commands (E31.11, #409)"
-      },
-      "mcp": {
-        "none": "Arrives with the policy MCP tools (E31.11, #409)"
-      },
+      "cli": [
+        "policies list",
+        "policies show"
+      ],
+      "mcp": [
+        "policies_list",
+        "policy_get"
+      ],
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the web app or the CLI"
       },
@@ -106,11 +108,12 @@
         "POST /api/agent-policies/{id}/duplicate"
       ],
       "cli": {
-        "none": "Arrives with the policy CLI commands (E31.11, #409)"
+        "none": "Use `policies import` to load a file; the editor is in the web app (E31.9, #407)"
       },
-      "mcp": {
-        "none": "Arrives with the policy MCP tools (E31.11, #409)"
-      },
+      "mcp": [
+        "policy_create",
+        "policy_update"
+      ],
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the web app or the CLI"
       },
@@ -125,10 +128,10 @@
         "DELETE /api/agent-policies/{id}"
       ],
       "cli": {
-        "none": "Arrives with the policy CLI commands (E31.11, #409)"
+        "none": "Deleting reassigns tasks and schedules; do it in the web app"
       },
       "mcp": {
-        "none": "Arrives with the policy MCP tools (E31.11, #409)"
+        "none": "Deleting a policy is not offered to agents: use the web app"
       },
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the web app or the CLI"
@@ -143,12 +146,8 @@
       "rest": [
         "PUT /api/agent-policies/default"
       ],
-      "cli": {
-        "none": "Arrives with the policy CLI commands (E31.11, #409)"
-      },
-      "mcp": {
-        "none": "Arrives with the policy MCP tools (E31.11, #409)"
-      },
+      "cli": "policies default",
+      "mcp": "policy_set_default",
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the web app or the CLI"
       },
@@ -162,12 +161,8 @@
       "rest": [
         "GET /api/agent-policies/export"
       ],
-      "cli": {
-        "none": "Arrives with the policy CLI commands (E31.11, #409)"
-      },
-      "mcp": {
-        "none": "Arrives with the policy MCP tools (E31.11, #409)"
-      },
+      "cli": "policies export",
+      "mcp": "policies_export",
       "tui": {
         "none": "The TUI is for watching and answering; this needs a file and a form, so use the web app or the CLI"
       },
@@ -181,12 +176,8 @@
       "rest": [
         "POST /api/agent-policies/import"
       ],
-      "cli": {
-        "none": "Arrives with the policy CLI commands (E31.11, #409)"
-      },
-      "mcp": {
-        "none": "Arrives with the policy MCP tools (E31.11, #409)"
-      },
+      "cli": "policies import",
+      "mcp": "policies_import",
       "tui": {
         "none": "The TUI is for watching and answering; this needs a file and a form, so use the web app or the CLI"
       },
