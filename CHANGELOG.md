@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Tasks API: summaries, paging, schedules with the task, preview, pause and resume** (#424).
+  - `GET /tasks?envelope=1&include=summary` pages tasks with search, filters (`scheduled`, `paused`, `unscheduled`, `failing`, `never_run`, by policy) and sorts. Each item carries its schedules, schedule state, next run, last run, live run, run counts and resolved policy, from a fixed number of queries per page.
+  - `POST /tasks` accepts `schedules[]` and creates the task and its schedules in one transaction. `PUT /tasks/:id/schedules` replaces a task's schedules.
+  - `POST /tasks/:id/schedules/pause` and `/resume` switch all of a task's schedules.
+  - `GET /tasks/:id/stats` returns totals, success rate, durations, cost and a daily series.
+  - `POST /schedules/preview` validates a cron expression and returns a sentence and the next firings. `GET /schedules/defaults` returns the time zone a new schedule gets.
+  - A schedule's time zone is optional and defaults to the profile's. Schedule responses carry a `description`.
 - **Console UI foundation** (#419).
   - A shared page kit in `apps/web/src/ui`: page container and header, status chip with the stop reason in words, confirm dialog, empty state, error banner, skeletons, a list that is a table on desktop and cards on phones, and date, relative-time and cost formatting in the profile's time zone.
   - Every destructive action asks through the same confirm dialog; no `window.confirm` remains. Deleting a task or a schedule now asks first.
