@@ -53,4 +53,20 @@ describe('the console SDK', () => {
     expect(out.listed).toBeGreaterThanOrEqual(1);
     expect(out.updatedGoal).toBe('Find the cheapest fare to Lisbon in March');
   });
+
+  it('round-trips agent policies: create, update, export, import and run under one', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/test/login', payload: { email: `sdk-pol-${Date.now()}@example.test`, role: 'contributor' } });
+    const token = new URL(String(res.headers.location)).searchParams.get('token')!;
+    const { stdout } = await promisify(execFile)(process.execPath, [resolve(__dirname, '../../../packages/sdk/dist/examples/policies.js')], {
+      env: { ...process.env, HEXACTRA_CONSOLE_URL: base, HEXACTRA_TOKEN: token },
+      timeout: 60_000,
+    });
+    const out = JSON.parse(stdout.trim().split('\n').pop()!) as Record<string, string | number>;
+    expect(out).toMatchObject({ editedVersion: 2, editedMaxActions: 45, exported: 1, listed: 6 });
+    expect(String(out.importedName)).toMatch(/^Cheap fares \d+ \(2\)$/);
+    expect(out.taskPolicyId).toBe(out.policyId);
+    // The runs exist under the policies the example named.
+    const runs = (await (await fetch(`${base}/api/runs`, { headers: { authorization: `Bearer ${token}` } })).json()) as { data: { id: string }[] };
+    expect(runs.data.map((r) => r.id)).toEqual(expect.arrayContaining([String(out.runId), String(out.taskRunId)]));
+  });
 });
