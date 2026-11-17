@@ -96,6 +96,29 @@ export function freeDisplay(layout: NodeLayout = DEFAULT_LAYOUT, from = 90): num
   throw new Error('No free X display between :90 and :189');
 }
 
+/**
+ * The display the installed desktop unit runs on, if a node is set up here
+ * (#413). A reinstall without the node's record must reuse it: picking a free
+ * display would skip the one the node's own desktop holds.
+ */
+export function installedDisplay(layout: NodeLayout = DEFAULT_LAYOUT): number | null {
+  try {
+    const m = /Xtigervnc :(\d+)\b/.exec(readFileSync(join(layout.unitDir, UNITS.display), 'utf8'));
+    return m ? Number(m[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Whether installing `body` as `unit` changes what is installed (a unit not installed yet is not a change). */
+function unitChanges(unit: string, body: string, layout: NodeLayout): boolean {
+  try {
+    return readFileSync(join(layout.unitDir, unit), 'utf8') !== body;
+  } catch {
+    return false;
+  }
+}
+
 export interface UnattendedConfig {
   name: string;
   agentUrl: string;
@@ -250,6 +273,9 @@ export function installSteps(
     [UNITS.agent, agentUnit(c, layout)],
   ];
   for (const [n, body] of files) writeFileSync(join(o.stage, n), body);
+  // A running desktop keeps its old display and session until restarted:
+  // `enable --now` does not restart it, so the agent alone would move (#413).
+  const desktopChanged = files.slice(0, 2).some(([n, body]) => unitChanges(n, body, layout));
   const target = `${layout.opt}/agent/${o.bundleId}`;
   const steps: PrivilegedStep[] = [
     { what: `install the desktop packages (${APT_PACKAGES.join(', ')})`, argv: ['apt-get', 'install', '-y', '--no-install-recommends', ...APT_PACKAGES] },
@@ -277,7 +303,9 @@ export function installSteps(
   steps.push(
     { what: 'reload systemd', argv: ['systemctl', 'daemon-reload'] },
     { what: 'start the desktop and the agent now and at every boot', argv: ['systemctl', 'enable', '--now', UNITS.display, UNITS.session, UNITS.agent] },
-    { what: 'restart the agent with this configuration', argv: ['systemctl', 'restart', UNITS.agent] },
+    desktopChanged
+      ? { what: 'restart the desktop, its session and the agent with this configuration', argv: ['systemctl', 'restart', UNITS.display, UNITS.session, UNITS.agent] }
+      : { what: 'restart the agent with this configuration', argv: ['systemctl', 'restart', UNITS.agent] },
   );
   return steps;
 }
