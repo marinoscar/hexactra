@@ -33,7 +33,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
-      "web": "/tasks"
+      "web": "/tasks/new"
     },
     {
       "id": "tasks.update",
@@ -46,7 +46,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
-      "web": "/tasks"
+      "web": "/tasks/:id/edit"
     },
     {
       "id": "tasks.delete",

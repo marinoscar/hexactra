@@ -22,6 +22,11 @@ export interface PolicySelectProps {
   manageLink?: boolean;
   disabled?: boolean;
   size?: 'small' | 'medium';
+  /** Show the chosen policy's one-line summary under the select (default true); a form with its own summary turns it off. */
+  summary?: boolean;
+  /** A message that replaces the summary and marks the select as invalid (a policy the server refused). */
+  error?: string;
+  id?: string;
 }
 
 const NULL_VALUE = '__inherit__';
@@ -31,7 +36,7 @@ const NULL_VALUE = '__inherit__';
  * (<name>)", then the built-ins, then the user's own policies, with a one-line
  * summary of the chosen one under it.
  */
-export function PolicySelect({ catalog, value, onChange, label = 'Policy', nullLabel = 'Default', nullPolicyId, manageLink, disabled, size }: PolicySelectProps) {
+export function PolicySelect({ catalog, value, onChange, label = 'Policy', nullLabel = 'Default', nullPolicyId, manageLink, disabled, size, summary = true, error, id }: PolicySelectProps) {
   const inherited = catalog.byId(nullPolicyId === undefined ? catalog.defaultId : nullPolicyId);
   const chosen = value ? catalog.byId(value) : inherited;
   const builtins = catalog.policies.filter((p) => p.builtin);
@@ -44,13 +49,15 @@ export function PolicySelect({ catalog, value, onChange, label = 'Policy', nullL
         select
         fullWidth
         size={size}
+        id={id}
+        error={Boolean(error)}
         label={label}
         value={value ?? NULL_VALUE}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value === NULL_VALUE ? null : e.target.value)}
         helperText={
           <>
-            {chosen ? policyLine(chosen) : unknown ? 'This policy is no longer available: runs fall back to your default.' : ' '}
+            {error ?? (!summary ? '' : chosen ? policyLine(chosen) : unknown ? 'This policy is no longer available: runs fall back to your default.' : ' ')}
             {manageLink && (
               <>
                 {' '}

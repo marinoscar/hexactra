@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Task create and edit pages** (#427).
+  - `/tasks/new` and `/tasks/:id/edit` are one form: the goal, where it runs (machine and browser profile), the agent policy, safety (allowed sites, ask before purchases) and schedules. Save stores the task and its schedules together.
+  - "Save and run now" saves, starts a run and opens it. A value the server refuses is shown on its field.
+  - `/tasks/new?goal=` starts from a goal and `/tasks/new?from=<task id>` from a copy of a task, with its schedules paused.
+  - Leaving with unsaved changes asks first.
 - **Responsive pass** (#431).
   - Phone navigation: the bottom bar is Home, Inbox, Tasks, Runs. Fleet, Settings and Administration are in the user menu. Inbox shows the number of pending questions on the bar, the rail and the tab title.
   - Fleet: profile actions are icon buttons, or one menu on a phone. The enrollment dialog is full screen on a phone, with a Copy button that confirms.

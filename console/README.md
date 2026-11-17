@@ -15,7 +15,7 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 | Capability | Web | API | CLI / TUI | Permission |
 |---|---|---|---|---|
 | Fabric connection (URL and `hxs_` service token, stored encrypted; Doctor checks `fabric.*`) | Administration → Fabric connection | `GET/PUT/DELETE /api/fabric/connection`, `POST …/test` | `hexactra fabric show\|set URL --token-stdin\|test\|clear --yes` | `fabric_config:read` / `:write` |
-| Tasks: saved goals with a profile, an agent policy (budgets and models), optional allowed sites, opt-in confirm-before-purchase | `/tasks` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
+| Tasks: saved goals with a profile, an agent policy (budgets and models), optional allowed sites, opt-in confirm-before-purchase ([Create a task](#create-a-task)) | `/tasks`, `/tasks/new`, `/tasks/:id/edit` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
 | Agent policies: named, versioned bundles of model tiers, budgets (any of them unlimited), stall detection and context settings; four built-ins, a default per user, one per task, schedule or run ([Agent policies](#agent-policies)) | Settings → Browser agent → Agent policies; Administration → Browser agent | `/api/agent-policies` | `hexactra policies`; MCP `policies_*` and `policy_*` tools; SDK `hx.policies` | `agent_policies:read` / `:write` |
 | Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel; the list is paged, filtered and searched on the server, with counts per status; finished runs can be deleted, one, many or everything a filter matches ([docs/runs.md](docs/runs.md)) | `/runs`, `/runs/:id` | `/api/runs`, `GET /api/runs/counts`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel`, `DELETE /api/runs/:id`, `POST /api/runs/delete` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` / `runs:delete` |
 | Inbox: what agents wait for (CAPTCHA, code, sign-in, confirmation); answers resume the run | `/inbox` | `GET /api/inbox`, `POST /api/inbox/:runId/respond` | `hexactra inbox list\|answer RUN --done\|--value\|--choice\|--secret-stdin\|--decline`; TUI **Agent ▸ Inbox** | `runs:read` / `runs:write` |
@@ -262,7 +262,7 @@ Everything above is on the console's pages (`apps/web/src/pages/`, one client fo
 
 **Choose a policy for a task, a schedule or one run**
 
-1. In the task form (**Tasks**), pick **Policy**: *Default (name)*, a built-in, or one of yours. The line under it summarises the choice; **Manage policies** opens the list. The form sends `policyId` only.
+1. In the task form ([Create a task](#create-a-task)), pick **Policy**: *Default (name)*, a built-in, or one of yours. The line under it summarises the choice; **Manage policies** opens the list. The form sends `policyId` only.
 2. A task card shows `policy: <name>` and `model: <the model its start tier uses>`.
 3. When adding a schedule, **Policy override** runs that schedule under another policy (default: the task's).
 4. **Run with…** (the arrow next to **Run now**) starts one run under the policy you pick from the menu, without changing the task.
@@ -290,9 +290,29 @@ The same policies are reachable from scripts and agents ([docs/mcp.md](docs/mcp.
 - **MCP:** `policies_list`, `policy_get`, `policy_create`, `policy_update`, `policy_set_default`, `policies_export`, `policies_import`, and `policy_id` on `run_goal`, `task_create`, `task_update`, `task_run` and `schedule_create`. Each tool calls the REST route as the caller, so `agent_policies:read` / `:write` apply: a read-only user is refused the write tools with `403`. Deleting a policy is not an MCP tool.
 - **SDK:** `hx.policies.list|get|create|update|setDefault|export|import`, `hx.tasks.create|update|run` and `hx.runs.start` (each with `policyId`), and the exported `AgentPolicySpec` type.
 
+## Create a task
+
+A task is created at `/tasks/new` and changed at `/tasks/:id/edit`. Both are one form with five sections, read top to bottom, and **Save** stores everything in one step. Both pages need `tasks:write`.
+
+1. **What should the agent do?** A name (up to 200 characters) and the goal (up to 4,000). Say what you want done and what you want back; **Tips** has three reminders.
+2. **Where it runs.**
+   - **Machine**: any available machine, or one you name. For a named machine, the switch decides whether another machine may take the run when that one is unavailable; a warning shows while the machine is offline or disabled.
+   - **Browser profile**: the sign-ins the agent uses. The list holds the chosen machine's profiles (or every profile in the fleet, with how many machines have it). A warning shows when the machine does not have the profile. Without `fleet:read` the profile is typed by name.
+3. **Model and budget** (with `agent_policies:read`). The task's [agent policy](#agent-policies): *Default (name)*, a built-in or one of yours. The line under it shows the model the policy starts on and its limits. The policy controls the models and every limit of a run (actions, cost, time); the form has no step, minute or model field.
+4. **Safety.** Both are off unless you turn them on.
+   - **Allowed sites**: the agent may only visit these sites. Type or paste a site, then Enter, a comma or a space; a pasted address keeps its hostname; `*.example.test` covers every subdomain. Empty allows any site.
+   - **Ask me before purchases and other irreversible steps**: the agent pauses and asks in your Inbox.
+5. **Schedule.** **Add a schedule** opens the [schedule editor](#schedules) in the form (up to 10 per task). Schedules are saved with the task: a new task and its schedules are created together, and on an existing task an added, changed or removed schedule takes effect only when you save. A removed schedule shows "will be removed when you save" with **Undo**.
+
+- **Save and run now** (with `runs:write`) saves, starts a run and opens it.
+- A value the server refuses is shown on its field, and the form scrolls to it.
+- Leaving the page with unsaved changes asks first.
+- `/tasks/new?goal=<text>` starts with that goal; `/tasks/new?from=<task id>` starts from a copy of that task, with its schedules paused.
+- On the edit page, **Danger zone** deletes the task (its schedules go with it; its runs are kept).
+
 ## Schedules
 
-A task runs on a schedule you build in the schedule editor (Tasks → a task → **Add schedule** or **Edit**). You do not need to know cron: choose how it repeats, and the editor says in words what that means and lists the next five runs before you save.
+A task runs on a schedule you build in the schedule editor (in the [task form](#create-a-task), or Tasks → a task → **Add schedule** or **Edit**). You do not need to know cron: choose how it repeats, and the editor says in words what that means and lists the next five runs before you save.
 
 ![The schedule editor: Weekly, Monday to Friday at 09:00, with the next runs](docs/images/schedule-editor.png)
 
