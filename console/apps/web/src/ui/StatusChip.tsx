@@ -7,7 +7,7 @@ import PersonOutlineIcon from '@mui/icons-material/PersonOutlined';
 import { Chip } from '@mui/material';
 import type { ElementType } from 'react';
 
-import { BUDGET_LABEL, type BudgetKey } from '../components/runBudget';
+import { BUDGET_LABEL, STALLED_LABEL, type BudgetKey } from '../components/runBudget';
 import type { RunStatus, RunStopReason } from '../types/runs';
 
 export type StatusColor = 'default' | 'info' | 'warning' | 'success' | 'error';
@@ -61,7 +61,7 @@ export const STOP_REASON_LABEL: Record<RunStopReason, string> = {
   budget_input_tokens: budgetLabel('inputTokens'),
   budget_output_tokens: budgetLabel('outputTokens'),
   budget_cost: budgetLabel('cost'),
-  stalled: 'stalled',
+  stalled: STALLED_LABEL,
   cancelled: 'cancelled',
   error: 'error',
   no_model: 'no model',

@@ -24,7 +24,7 @@ import { RunDetailPage } from '../pages/RunDetailPage';
 import { RunsPage } from '../pages/RunsPage';
 import { TasksPage } from '../pages/TasksPage';
 import type { Run } from '../types/runs';
-import { ConfirmProvider } from '../ui';
+import { ConfirmProvider, STOP_REASON_LABEL } from '../ui';
 import { page, taskRow } from './taskFixtures';
 
 const RUN_ID = '22222222-2222-4222-8222-222222222222';
@@ -122,7 +122,7 @@ describe('stop reasons', () => {
     budget_input_tokens: /^Stopped: input tokens budget reached\.$/,
     budget_output_tokens: /^Stopped: output tokens budget reached\.$/,
     budget_cost: /^Stopped: cost budget reached \(\$2\.00\)\.$/,
-    stalled: /^Stopped: stuck \(the same click repeated 3×\)\.$/,
+    stalled: /^Stopped: stalled \(the same click repeated 3×\)\.$/,
     cancelled: /^Stopped: cancelled\.$/,
     error: /^Stopped: an error ended the run\.$/,
     no_model: /^Stopped: no usable model for this run's tier\.$/,
@@ -139,7 +139,9 @@ describe('stop reasons', () => {
 
   it('reads the stall reason the runner records (#405) without repeating "stalled"', () => {
     const run = { status: 'failed', stopReason: 'stalled' as const, result: null, error: 'The agent stalled: no action in 3 rounds in a row', budget: budget() };
-    expect(stopLine(run)!.title).toBe('Stopped: stuck (no action in 3 rounds in a row).');
+    expect(stopLine(run)!.title).toBe('Stopped: stalled (no action in 3 rounds in a row).');
+    // One wording: the run page's line uses the status chip's word.
+    expect(stopLine(run)!.title).toContain(`Stopped: ${STOP_REASON_LABEL.stalled}`);
   });
 
   it('says nothing while a run has no stop reason', () => {
