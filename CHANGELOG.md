@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Inbox and question form** (#429).
+  - Fixed: labels no longer sit over the text above the field or get cut on a phone; long options wrap inside the card; the number field has no spinner between the value and its unit; the action buttons stack full width on a phone with Decline last.
+  - A secret can be shown while typing. It hides again on submit, when the tab is hidden and after 30 seconds without typing.
+  - Each request shows a live countdown and a thumbnail of the run's browser. An answered card says "Sent." and then leaves the list.
+  - Declining a request that a browser session is waiting on asks first.
 - **Delete runs** (#421).
   - `DELETE /runs/:id` deletes one finished run. `POST /runs/delete` deletes by ids or by a filter and returns how many were deleted, their cost and which were skipped because they are live.
   - A filter that matches more than 500 runs is deleted by a queue job. Deleting every finished run requires the expected count, and the request fails if the match has changed by more than 5%.
