@@ -4,6 +4,18 @@
  * count, and the list can run newest first.
  */
 
+import type { Run } from '../types/runs';
+
+/** `fetched`, plus any step of `prev` (received over the stream) it does not have yet. */
+export function withStreamedSteps(fetched: Run, prev: Run | null): Run {
+  if (!prev || prev.id !== fetched.id || !prev.steps?.length) return fetched;
+  const have = new Set((fetched.steps ?? []).map((st) => st.seq));
+  const extra = prev.steps.filter((st) => !have.has(st.seq));
+  if (!extra.length) return fetched;
+  const steps = [...(fetched.steps ?? []), ...extra].sort((a, b) => a.seq - b.seq);
+  return { ...fetched, steps, stepCount: Math.max(fetched.stepCount, ...steps.map((st) => st.seq)) };
+}
+
 /** The fields of a run step the timeline reads. */
 export interface TimelineStep {
   id: string;

@@ -5,7 +5,11 @@ import { createTestPlatformHost } from '@marinoscar/platform-web/testing';
 
 import { vi } from 'vitest';
 
-import { RunDetailPage, withStreamedSteps, type Run } from '../pages/RunsPage';
+import { withStreamedSteps } from '../components/runTimeline';
+import { RunDetailPage } from '../pages/RunDetailPage';
+import type { Run } from '../types/runs';
+import type { Task } from '../types/tasks';
+import { ConfirmProvider } from '../ui';
 
 const live = vi.hoisted(() => ({ emit: null as null | ((e: unknown) => void) }));
 vi.mock('../live', () => ({
@@ -15,7 +19,7 @@ vi.mock('../live', () => ({
   },
   fetchRunScreenshot: async () => 'blob:shot',
 }));
-import { TasksPage, type Task } from '../pages/TasksPage';
+import { TasksPage } from '../pages/TasksPage';
 
 const task: Task = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -52,12 +56,14 @@ describe('TasksPage', () => {
     });
     render(
       <PlatformHostProvider host={host}>
-        <MemoryRouter initialEntries={['/tasks']}>
-          <Routes>
-            <Route path="/tasks" element={<TasksPage />} />
-            <Route path="/runs/:id" element={<div>run page</div>} />
-          </Routes>
-        </MemoryRouter>
+        <ConfirmProvider>
+          <MemoryRouter initialEntries={['/tasks']}>
+            <Routes>
+              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/runs/:id" element={<div>run page</div>} />
+            </Routes>
+          </MemoryRouter>
+        </ConfirmProvider>
       </PlatformHostProvider>,
     );
     expect(await screen.findByText('Find the cheapest fare')).toBeInTheDocument();
@@ -82,9 +88,11 @@ describe('TasksPage', () => {
     });
     render(
       <PlatformHostProvider host={host}>
-        <MemoryRouter>
-          <TasksPage />
-        </MemoryRouter>
+        <ConfirmProvider>
+          <MemoryRouter>
+            <TasksPage />
+          </MemoryRouter>
+        </ConfirmProvider>
       </PlatformHostProvider>,
     );
     fireEvent.change(await screen.findByLabelText(/^Name/), { target: { value: 'Miles' } });
@@ -106,9 +114,11 @@ describe('TasksPage', () => {
     const host = createTestPlatformHost({ permissions: ['tasks:read'], responses: { 'GET /tasks': [task], [`GET /schedules?taskId=${task.id}`]: [] } });
     render(
       <PlatformHostProvider host={host}>
-        <MemoryRouter>
-          <TasksPage />
-        </MemoryRouter>
+        <ConfirmProvider>
+          <MemoryRouter>
+            <TasksPage />
+          </MemoryRouter>
+        </ConfirmProvider>
       </PlatformHostProvider>,
     );
     expect(await screen.findByText('Check fare')).toBeInTheDocument();
@@ -130,11 +140,13 @@ describe('RunDetailPage', () => {
     });
     render(
       <PlatformHostProvider host={host}>
-        <MemoryRouter initialEntries={[`/runs/${run.id}`]}>
-          <Routes>
-            <Route path="/runs/:id" element={<RunDetailPage />} />
-          </Routes>
-        </MemoryRouter>
+        <ConfirmProvider>
+          <MemoryRouter initialEntries={[`/runs/${run.id}`]}>
+            <Routes>
+              <Route path="/runs/:id" element={<RunDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </ConfirmProvider>
       </PlatformHostProvider>,
     );
     expect(await screen.findByText(/1\. navigate: at https:\/\/flights.example.test/)).toBeInTheDocument();
@@ -183,7 +195,9 @@ describe('TaskSchedules', () => {
     });
     render(
       <PlatformHostProvider host={host}>
-        <TaskSchedules taskId={task.id} canWrite />
+        <ConfirmProvider>
+          <TaskSchedules taskId={task.id} canWrite />
+        </ConfirmProvider>
       </PlatformHostProvider>,
     );
     expect(await screen.findByText('0 9 * * 1-5 (Europe/Madrid)')).toBeInTheDocument();

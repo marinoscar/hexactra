@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Card, CardContent, Chip, Container, Link, Stack, Typography } from '@mui/material';
+import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
+import { Alert, Card, CardContent, Chip, Link, Stack, Typography } from '@mui/material';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { QuestionAnswerForm } from '../components/QuestionAnswerForm';
 import { KIND_LABEL, askerText, type AnswerBody, type AskedQuestion } from '../components/questions';
 import { useOpenViewer } from '../components/useOpenViewer';
+import { CardSkeleton, EmptyState, ErrorBanner, PageContainer, PageHeader, formatTime, useApiAction, useProfileTimeZone } from '../ui';
 
 /** `GET /api/inbox`: one pending question. */
 export interface InboxItem extends AskedQuestion {
@@ -32,8 +34,8 @@ export function InboxPage() {
   const { api, viewer } = usePlatformHost();
   const canAnswer = viewer.hasPermission('runs:write');
   const [items, setItems] = useState<InboxItem[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const { run, busy, error, setError } = useApiAction('Could not send the answer');
+  useProfileTimeZone();
   const openViewer = useOpenViewer(setError);
   // `/inbox?run=<id>` (or `?q=<question id>`): the deep link of a "needs you" notification.
   const [params] = useSearchParams();
@@ -47,7 +49,7 @@ export function InboxPage() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the inbox');
     }
-  }, [api]);
+  }, [api, setError]);
 
   useEffect(() => {
     void load();
@@ -56,30 +58,19 @@ export function InboxPage() {
   }, [load]);
 
   const respond = async (item: InboxItem, answer: AnswerBody) => {
-    setBusy(item.questionId);
-    setError(null);
-    try {
+    await run(item.questionId, async () => {
       if (answer.outcome === 'cancelled') await api.post(`/questions/${item.questionId}/cancel`, { channel: 'web' });
       else await api.post(`/questions/${item.questionId}/answer`, { ...answer, channel: 'web' });
       await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not send the answer');
-    } finally {
-      setBusy(null);
-    }
+    });
   };
 
   return (
-    <Container maxWidth="sm" sx={{ py: { xs: 2, sm: 4 } }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Inbox
-      </Typography>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
-      {items?.length === 0 && <Alert severity="success">Nothing is waiting for you.</Alert>}
+    <PageContainer width="narrow">
+      <PageHeader title="Inbox" />
+      <ErrorBanner error={error} />
+      {items === null && !error && <CardSkeleton rows={2} />}
+      {items?.length === 0 && <EmptyState Icon={InboxOutlinedIcon} title="Nothing is waiting for you." />}
       {(focusRun || focusQuestion) && items && items.length > 0 && !items.some(focused) && (
         <Alert severity="info" sx={{ mb: 2 }}>
           That request was already answered or expired.
@@ -99,7 +90,7 @@ export function InboxPage() {
                 <Chip size="small" color="warning" label={KIND_LABEL[item.kind] ?? item.kind} />
                 {item.risk === 'high' && <Chip size="small" color="error" variant="outlined" label="High risk" />}
                 <Typography variant="caption" color="text.secondary">
-                  expires {new Date(item.expiresAt).toLocaleTimeString()}
+                  expires {formatTime(item.expiresAt)}
                 </Typography>
               </Stack>
               <Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{item.prompt}</Typography>
@@ -130,6 +121,6 @@ export function InboxPage() {
           </Card>
         ))}
       </Stack>
-    </Container>
+    </PageContainer>
   );
 }

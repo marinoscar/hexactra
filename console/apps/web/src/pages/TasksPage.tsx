@@ -1,44 +1,17 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Alert, Box, Button, Card, CardActions, CardContent, Chip, Container, FormControlLabel, MenuItem, Stack, Switch, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardActions, CardContent, Chip, FormControlLabel, MenuItem, Stack, Switch, TextField, Typography } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
-import type { FleetHost } from './FleetPage';
 import { TaskSchedules } from './TaskSchedules';
 import { runTaskWith } from '../policies/api';
-import { startModel } from '../policies/format';
+import { taskPolicyChips } from '../policies/format';
 import { PolicySelect } from '../policies/PolicySelect';
 import { RunWithButton } from '../policies/RunWithButton';
-import { usePolicyCatalog, type PolicyCatalog } from '../policies/usePolicyCatalog';
-
-/** The machine's state as the picker shows it (#384). */
-export function machineState(h: FleetHost): string {
-  if (h.draining) return 'disabled';
-  if (!h.online) return 'offline';
-  return 'online';
-}
-
-/** A task, as `GET /api/tasks` returns it. */
-export interface Task {
-  id: string;
-  name: string;
-  goal: string;
-  profile: string;
-  hostId: string | null;
-  hostFallback: boolean;
-  allowedDomains: string[];
-  confirmRiskyActions: boolean;
-  /** The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default. */
-  policyId: string | null;
-}
-
-/** The policy a task runs under, and the model its start tier uses, as the task chips show them. */
-export function taskPolicyChips(task: Pick<Task, 'policyId'>, catalog: Pick<PolicyCatalog, 'byId' | 'defaultId' | 'effective'>): { policy: string; model: string | null } | null {
-  const policy = catalog.byId(task.policyId ?? catalog.defaultId);
-  if (!policy) return null;
-  const { model } = startModel(policy.spec, catalog.effective);
-  return { policy: task.policyId ? policy.name : `${policy.name} (default)`, model };
-}
+import { usePolicyCatalog } from '../policies/usePolicyCatalog';
+import { machineState, type FleetHost } from '../types/fleet';
+import type { Task } from '../types/tasks';
+import { CardSkeleton, ErrorBanner, PageContainer, PageHeader, useConfirm } from '../ui';
 
 function message(e: unknown, fallback: string): string {
   return e instanceof Error ? e.message : fallback;
@@ -50,7 +23,8 @@ export function TasksPage() {
   const navigate = useNavigate();
   const canWrite = viewer.hasPermission('tasks:write');
   const canRun = viewer.hasPermission('runs:write');
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<Task[] | null>(null);
+  const confirm = useConfirm();
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [goal, setGoal] = useState('');
@@ -145,16 +119,27 @@ export function TasksPage() {
     }
   };
 
+  /** Delete asks first: the task's schedules go with it. */
+  const remove = async (task: Task) => {
+    const ok = await confirm({
+      title: `Delete task “${task.name}”?`,
+      body: 'Its schedules are deleted. Its runs are kept.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/tasks/${task.id}`);
+      await load();
+    } catch (e) {
+      setError(message(e, 'Could not delete the task'));
+    }
+  };
+
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Tasks
-      </Typography>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+    <PageContainer>
+      <PageHeader title="Tasks" />
+      <ErrorBanner error={error} />
       {canWrite && (
         <Card variant="outlined" sx={{ mb: 3 }}>
           <CardContent component="form" onSubmit={create} aria-label={editing ? 'Edit task' : 'New task'}>
@@ -211,8 +196,9 @@ export function TasksPage() {
           </CardContent>
         </Card>
       )}
+      {tasks === null && !error && <CardSkeleton />}
       <Stack spacing={2} aria-label="Tasks">
-        {tasks.map((t) => {
+        {(tasks ?? []).map((t) => {
           const chips = taskPolicyChips(t, catalog);
           return (
           <Card key={t.id} variant="outlined" aria-label={`Task ${t.name}`}>
@@ -237,7 +223,7 @@ export function TasksPage() {
               <Button onClick={() => navigate(`/runs?taskId=${t.id}`)}>Runs</Button>
               {canWrite && <Button onClick={() => edit(t)}>Edit</Button>}
               {canWrite && (
-                <Button color="error" onClick={() => void api.delete(`/tasks/${t.id}`).then(load)}>
+                <Button color="error" onClick={() => void remove(t)}>
                   Delete
                 </Button>
               )}
@@ -246,6 +232,6 @@ export function TasksPage() {
           );
         })}
       </Stack>
-    </Container>
+    </PageContainer>
   );
 }

@@ -4,7 +4,9 @@ import { createTestPlatformHost } from '@marinoscar/platform-web/testing';
 import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 
-import { FleetPage, type FleetEnrollment, type FleetHost } from '../pages/FleetPage';
+import { FleetPage } from '../pages/FleetPage';
+import type { FleetEnrollment, FleetHost } from '../types/fleet';
+import { ConfirmProvider } from '../ui';
 
 const ID = '11111111-1111-4111-8111-111111111111';
 const hosts: FleetHost[] = [
@@ -32,9 +34,11 @@ function renderPage(permissions: string[], responses: Record<string, unknown> = 
   const host = createTestPlatformHost({ permissions, responses: { 'GET /fleet/hosts': hosts, ...responses } });
   render(
     <PlatformHostProvider host={host}>
-      <MemoryRouter>
-        <FleetPage />
-      </MemoryRouter>
+      <ConfirmProvider>
+        <MemoryRouter>
+          <FleetPage />
+        </MemoryRouter>
+      </ConfirmProvider>
     </PlatformHostProvider>,
   );
   return host;

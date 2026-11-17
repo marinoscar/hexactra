@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Box, Card, CardContent, Chip, CircularProgress, Container, Link, Stack, Typography } from '@mui/material';
+import { Alert, Box, Card, CardContent, Chip, CircularProgress, Link, Stack, Typography } from '@mui/material';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { QuestionAnswerForm } from '../components/QuestionAnswerForm';
 import { KIND_LABEL, answerText, askerText, remaining, type AnswerBody, type Question } from '../components/questions';
 import { useOpenViewer } from '../components/useOpenViewer';
+import { ErrorBanner, PageContainer, PageHeader } from '../ui';
 
 const STATUS_LABEL: Record<Question['status'], string> = { pending: 'Waiting for you', answered: 'Answered', cancelled: 'Declined', expired: 'Expired' };
 
@@ -70,17 +71,9 @@ export function QuestionPage() {
   const expiredNow = question && pending && new Date(question.expiresAt).getTime() <= now;
 
   return (
-    <Container maxWidth="sm" sx={{ py: { xs: 2, sm: 4 } }}>
-      <Typography variant="body2" sx={{ mb: 1 }}>
-        <Link component={RouterLink} to="/inbox">
-          ← Inbox
-        </Link>
-      </Typography>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+    <PageContainer width="narrow">
+      <PageHeader variant="h5" title="Question" back={{ to: '/inbox', label: 'Inbox' }} />
+      <ErrorBanner error={error} />
       {missing && <Alert severity="info">This question does not exist or is not yours.</Alert>}
       {!question && !missing && !error && (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -100,7 +93,7 @@ export function QuestionPage() {
                 </Typography>
               )}
             </Stack>
-            <Typography variant="h6" component="h1" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+            <Typography variant="h6" component="h2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
               {question.prompt}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1, overflowWrap: 'anywhere' }}>
@@ -136,6 +129,6 @@ export function QuestionPage() {
           </CardContent>
         </Card>
       )}
-    </Container>
+    </PageContainer>
   );
 }

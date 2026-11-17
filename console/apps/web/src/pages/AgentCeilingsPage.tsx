@@ -1,4 +1,4 @@
-import { Alert, Box, Button, CircularProgress, Container, FormControlLabel, Paper, Stack, Switch, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, FormControlLabel, Paper, Stack, Switch, TextField } from '@mui/material';
 import { isPlatformApiError, usePlatformHost } from '@marinoscar/platform-web/core';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -7,6 +7,7 @@ import { BUDGET_LABEL } from '../policies/format';
 import { BUDGET_HELP, budgetHelp } from '../policies/help';
 import { BUDGET_LIMIT_KEYS, type BudgetCeilings, type BudgetLimitKey } from '../policies/types';
 import { errorText } from '../policies/usePolicyCatalog';
+import { ErrorBanner, PageContainer, PageHeader } from '../ui';
 
 type Drafts = Record<BudgetLimitKey, { none: boolean; text: string }>;
 
@@ -69,18 +70,12 @@ export function AgentCeilingsPage() {
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: { xs: 2, sm: 4 } }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        Agent budget ceilings
-      </Typography>
-      <Typography color="text.secondary" sx={{ mb: 2 }}>
-        The most any run on this deployment may spend, whatever its policy says. A run gets the smaller of its policy&apos;s budget and the ceiling, so a ceiling also caps “Unlimited” policies. Users see the ceilings under their policy&apos;s budgets.
-      </Typography>
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      )}
+    <PageContainer>
+      <PageHeader
+        title="Agent budget ceilings"
+        subtitle="The most any run on this deployment may spend, whatever its policy says. A run gets the smaller of its policy's budget and the ceiling, so a ceiling also caps “Unlimited” policies. Users see the ceilings under their policy's budgets."
+      />
+      <ErrorBanner error={error} />
       {!drafts && !error && <CircularProgress aria-label="Loading" />}
       {drafts && (
         <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
@@ -127,6 +122,6 @@ export function AgentCeilingsPage() {
           </Stack>
         </Paper>
       )}
-    </Container>
+    </PageContainer>
   );
 }
