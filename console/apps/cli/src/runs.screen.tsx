@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { consoleApi } from './console-api.js';
 import { costText, runPolicyLines, type RunPolicyFields } from './policies.js';
+import { mergeRunPages, type RunPage } from './runs.js';
 
 interface Step {
   seq: number;
@@ -25,14 +26,27 @@ export interface Run extends RunPolicyFields {
 const label = (s: string) => (s === 'waiting_human' ? 'needs you' : s);
 const live = (s: string) => s === 'queued' || s === 'running' || s === 'waiting_human';
 
+/** How many runs one page holds: the first one, and each "more". */
+export const RUNS_PAGE_SIZE = 30;
+
 /**
- * Runs, refreshed every 2 s. Up/down selects; Enter shows the run's steps
- * (live); `c` cancels it; `r` refreshes; Esc goes back (to the list, then
- * the menu).
+ * Runs, newest first; the first page is refreshed every 2 s. Up/down selects;
+ * Enter shows the run's steps (live); `c` cancels it; `m` loads the next page
+ * of older runs (`GET /runs?envelope=1&cursor=…`); `r` refreshes; Esc goes
+ * back (to the list, then the menu).
  */
 export function RunsScreen({ onDone }: TuiScreenProps): ReactNode {
   const theme = useTuiTheme();
-  const [runs, setRuns] = useState<Run[] | null>(null);
+  /** The first page, re-read on every refresh. */
+  const [head, setHead] = useState<Run[] | null>(null);
+  /** The pages loaded with `m`, and where the next one starts (null: the list ends). */
+  const [older, setOlder] = useState<Run[]>([]);
+  const [headCursor, setHeadCursor] = useState<string | null>(null);
+  const [olderCursor, setOlderCursor] = useState<string | null | undefined>(undefined);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const runs = head ? mergeRunPages(head, older) : null;
+  // Until "more" has been used the list continues after the first page.
+  const nextCursor = olderCursor === undefined ? headCursor : olderCursor;
   const [selected, setSelected] = useState(0);
   const [open, setOpen] = useState<Run | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -41,8 +55,9 @@ export function RunsScreen({ onDone }: TuiScreenProps): ReactNode {
   const load = useCallback(async () => {
     try {
       const api = consoleApi();
-      const list = await api.get<Run[]>('/runs', { query: { limit: 30 } });
-      setRuns(list);
+      const page = await api.get<RunPage<Run>>('/runs', { query: { envelope: 1, limit: RUNS_PAGE_SIZE } });
+      setHead(page.items);
+      setHeadCursor(page.nextCursor);
       setError(null);
       setOpen((o) => o);
       if (open) setOpen(await api.get<Run>(`/runs/${open.id}`));
@@ -63,6 +78,19 @@ export function RunsScreen({ onDone }: TuiScreenProps): ReactNode {
       return onDone();
     }
     if (input === 'r') return void load();
+    if (input === 'm' && !open && nextCursor && !loadingMore) {
+      setLoadingMore(true);
+      void consoleApi()
+        .get<RunPage<Run>>('/runs', { query: { envelope: 1, limit: RUNS_PAGE_SIZE, cursor: nextCursor } })
+        .then((page) => {
+          setOlder((rows) => [...rows, ...page.items]);
+          setOlderCursor(page.nextCursor);
+          setStatus(null);
+        })
+        .catch((e: unknown) => setStatus(e instanceof Error ? e.message : String(e)))
+        .finally(() => setLoadingMore(false));
+      return;
+    }
     const list = runs ?? [];
     if (!open && key.upArrow) setSelected((i) => Math.max(0, i - 1));
     if (!open && key.downArrow) setSelected((i) => Math.min(Math.max(0, list.length - 1), i + 1));
@@ -123,7 +151,8 @@ export function RunsScreen({ onDone }: TuiScreenProps): ReactNode {
         ))}
       </Box>
       {status && <Text>{status}</Text>}
-      <Text dimColor>↑/↓ select · enter steps · c cancel · r refresh · esc back</Text>
+      {runs && runs.length > 0 && <Text dimColor>{loadingMore ? 'Loading older runs…' : nextCursor ? `${runs.length} runs shown · m for older runs` : `${runs.length} runs shown · that is all of them`}</Text>}
+      <Text dimColor>↑/↓ select · enter steps · c cancel · m more · r refresh · esc back</Text>
     </Box>
   );
 }
