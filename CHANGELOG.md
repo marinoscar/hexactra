@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Runs page** (#423).
+  - `/runs` shows status tabs with counts, the number of runs and their cost, search and filters (task, trigger, dates, stop reason, policy), all kept in the address. Rows load 50 at a time; live rows refresh on their own.
+  - Runs can be selected and deleted together, or "everything that matches" the filter can be deleted after typing a confirmation. A large delete runs in the background and the page says so.
+  - A **New run** dialog starts a one-off run with a goal, profile, machine and policy.
+  - The run page gains **Delete** and **Run again**, and links back to its task.
+  - The status chip states the stop reason in words ("failed · stalled", "failed · cost budget").
 - **Tasks list page** (#426).
   - `/tasks` is a paged list: a table on desktop and cards on a phone, with search, filters (scheduled, paused, not scheduled, failing, never run), sort and a policy filter, all kept in the address.
   - Each task shows its schedule, next run, last run, the last 7 days' outcomes, policy and spend from one request.
