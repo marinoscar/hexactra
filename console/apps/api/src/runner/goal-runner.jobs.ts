@@ -7,7 +7,7 @@ import { FabricClient } from '../fabric/fabric.client';
 import { PrismaService } from '../prisma/prisma.service';
 import { QuestionsService } from '../questions/questions.service';
 import { FabricSession } from './fabric-session';
-import { GOAL_RUN_JOB, HANDOFF_CHECK_JOB, enqueueGoalRun, type GoalRunPayload } from './goal-run.enqueue';
+import { GOAL_RUN_JOB, GOAL_RUN_MAX_RUNTIME_MS, HANDOFF_CHECK_JOB, enqueueGoalRun, enqueueGoalRunContinuation, type GoalRunPayload } from './goal-run.enqueue';
 import { GoalRunnerService } from './goal-runner.service';
 
 export { GOAL_RUN_JOB, GOAL_RUN_REASONS, HANDOFF_CHECK_JOB, enqueueGoalRun, type GoalRunPayload, type GoalRunReason } from './goal-run.enqueue';
@@ -22,13 +22,14 @@ export { GOAL_RUN_JOB, GOAL_RUN_REASONS, HANDOFF_CHECK_JOB, enqueueGoalRun, type
 export class GoalRunHandler implements JobHandler, OnModuleInit {
   readonly type = GOAL_RUN_JOB;
   readonly label = 'Run a browser goal';
-  readonly profile = { maxRuntimeMs: 30 * 60_000, maxAttempts: 1 };
+  readonly profile = { maxRuntimeMs: GOAL_RUN_MAX_RUNTIME_MS, maxAttempts: 1 };
   private readonly log = new Logger(GoalRunHandler.name);
 
   constructor(
     private readonly registry: JobHandlerRegistry,
     private readonly runner: GoalRunnerService,
     private readonly prisma: PrismaService,
+    private readonly jobs: JobsService,
   ) {}
 
   onModuleInit(): void {
@@ -40,6 +41,8 @@ export class GoalRunHandler implements JobHandler, OnModuleInit {
     try {
       const outcome = await this.runner.advance(p.runId, p.userId, p.orgId ?? job.orgId ?? null);
       this.log.log(`job ${job.id}: run ${p.runId} ${outcome}`);
+      // Near this job's runtime limit: carry on in a new job (the run stays `running`).
+      if (outcome === 'continue') await enqueueGoalRunContinuation(this.jobs, { runId: p.runId, userId: p.userId, orgId: p.orgId ?? job.orgId ?? null });
     } catch (e) {
       // Record the failure on the run so the user sees why; never retried.
       const message = e instanceof AiError ? `${e.code}: ${e.message}` : e instanceof Error ? e.message : String(e);
