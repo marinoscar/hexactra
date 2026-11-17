@@ -116,6 +116,31 @@ const task = (id, name, extra = {}) => ({
   spend30d: { runs: 12, succeeded: 9, costUsd: 14.2, costKnown: true, inputTokens: 3_100_000, outputTokens: 92_000 }, ...extra,
 });
 
+const taskSchedule = (id, description, extra = {}) => ({
+  id, cron: '0 9 * * 1-5', timezone: 'Etc/UTC', enabled: true, concurrency: 'skip', nextRunAt: iso(5 * 3_600_000), lastRunAt: iso(-19 * 3_600_000), consecutiveFailures: 0, description, policyId: null, ...extra,
+});
+/** `summary` of `GET /tasks/:id?include=summary`: two schedules (one failing, one paused with a policy override) and a finished last run. */
+const taskSummary = {
+  schedules: [
+    taskSchedule('33333333-3333-4333-8333-333333333331', 'Monday to Friday at 09:00', { consecutiveFailures: 3 }),
+    taskSchedule('33333333-3333-4333-8333-333333333332', 'On day 1 of every month at 07:30', { enabled: false, nextRunAt: null, lastRunAt: null, policyId: IDS.policy, timezone: 'Europe/Madrid' }),
+  ],
+  scheduleState: 'partial',
+  nextRunAt: iso(5 * 3_600_000),
+  lastRun: { id: IDS.finishedRun, status: 'failed', trigger: 'schedule', createdAt: iso(-19 * 3_600_000), finishedAt: iso(-19 * 3_600_000 + 200_000) },
+  liveRunId: null,
+  runCounts: { total: 148, last7d: { succeeded: 12, failed: 1, cancelled: 0 } },
+  policy: { id: 'builtin:balanced', name: 'Balanced', builtin: true, isDefault: true },
+};
+/** `GET /tasks/:id/stats`: 30 days, whatever `days` asks for. */
+const taskStats = {
+  days: 30, timezone: 'Etc/UTC',
+  totals: { runs: 26, succeeded: 23, failed: 2, cancelled: 1, successRate: 0.92, costUsd: 4.2, costKnown: true },
+  avgDurationSeconds: 200, p95DurationSeconds: 540, avgSteps: 12.4, avgCostPerSuccessUsd: 0.18,
+  series: Array.from({ length: 30 }, (_, i) => ({ date: iso(-(29 - i) * 86_400_000).slice(0, 10), succeeded: (i * 7) % 4, failed: i % 6 === 0 ? 1 : 0, cancelled: i % 13 === 5 ? 1 : 0, costUsd: 0.1 })),
+  stopReasons: [{ reason: 'finished', count: 23 }, { reason: 'budget_cost', count: 2 }, { reason: 'cancelled', count: 1 }],
+};
+
 /** `"<METHOD> <path>"` to the response `data`. A function gets the request URL. */
 export const RESPONSES = {
   'POST /auth/refresh': { accessToken: 'ui-screens-token', expiresIn: 900 },
@@ -129,7 +154,9 @@ export const RESPONSES = {
     browserAgentCeilings: { ...limits, maxActiveMinutes: 60, maxCostUsd: 10 },
   },
   'GET /tasks': [task(IDS.task, 'Check fare'), task('11111111-1111-4111-8111-111111111112', 'Weekly groceries order with a long task name that wraps', { hostId: null, hostFallback: true, allowedDomains: [], policyId: IDS.policy })],
-  [`GET /tasks/${IDS.task}`]: task(IDS.task, 'Check fare'),
+  // The task page (#428) reads the task with its summary, and its statistics.
+  [`GET /tasks/${IDS.task}`]: task(IDS.task, 'Check fare', { createdAt: iso(-40 * 86_400_000), updatedAt: iso(-3 * 86_400_000), summary: taskSummary }),
+  [`GET /tasks/${IDS.task}/stats`]: taskStats,
   'GET /schedules': [{ id: 'schedule-1', taskId: IDS.task, cron: '0 9 * * 1-5', timezone: 'Etc/UTC', enabled: true, concurrency: 'skip', nextRunAt: iso(5 * 3_600_000), lastRunAt: null, consecutiveFailures: 0, policyId: null }],
   'GET /runs': runs,
   [`GET /runs/${IDS.liveRun}`]: liveRun,

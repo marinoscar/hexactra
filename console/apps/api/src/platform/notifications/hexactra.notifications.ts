@@ -55,10 +55,14 @@ const finished: BrowserNotificationTemplate = (d) => ({
   body: trim(`${str(d, 'goal')}${str(d, 'result') ? ` — ${str(d, 'result')}` : ''}`, 180),
   link: `/runs/${str(d, 'runId')}`,
 });
+/** Where a failing-schedule notice leads: the task's schedules (`/tasks/:id#schedule`); the Tasks list for a notice without a task id. */
+export function failingScheduleLink(taskId: string | null | undefined): string {
+  return taskId ? `/tasks/${encodeURIComponent(taskId)}#schedule` : '/tasks';
+}
 const failing: BrowserNotificationTemplate = (d) => ({
   title: 'A schedule keeps failing',
   body: trim(`"${str(d, 'taskName')}" failed ${String((d as { failures?: number }).failures ?? 3)} times in a row.`, 180),
-  link: '/tasks',
+  link: failingScheduleLink(str(d, 'taskId')),
 });
 
 const retentionNotice: BrowserNotificationTemplate = (d) => {

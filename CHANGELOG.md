@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Task page** (#428).
+  - `/tasks/:id` shows a task's overview (goal, machine, policy, model, schedule state, next and last run), statistics for 7, 30 or 90 days (runs, success rate, durations, cost, why runs stopped, a daily chart), its run history with the Runs page's filters and delete, and its schedules with add, edit, pause and delete.
+  - Run, "Run with…", the Scheduled switch, Edit, Duplicate and Delete are on the page.
+  - The failing-schedule notification links to the task's schedules.
 - **Run retention** (#422). **Finished runs are now kept for 90 days by default.**
   - Each user sets a rule under Settings → Browser agent → Run history: keep runs for N days, keep the last N per task, both, or keep everything. Failed runs can be kept longer.
   - A nightly job deletes what falls outside the rule. Live runs, runs with a pending question and anything newer than 24 hours are never deleted.

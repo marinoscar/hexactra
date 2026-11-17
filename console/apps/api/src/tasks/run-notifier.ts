@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { WebhooksService } from '@marinoscar/platform-api/webhooks';
 
-import { RUN_FINISHED_EVENT, RUN_NEEDS_YOU_EVENT, RUN_REMINDER_EVENT, SCHEDULE_FAILING_EVENT } from '../platform/notifications/hexactra.notifications';
+import { RUN_FINISHED_EVENT, RUN_NEEDS_YOU_EVENT, RUN_REMINDER_EVENT, SCHEDULE_FAILING_EVENT, failingScheduleLink } from '../platform/notifications/hexactra.notifications';
 import { RunActionTokens } from './run-action-token';
 import { FINAL_WINDOW_MS, canSnooze } from './reminder-schedule';
 import { RUN_FINISHED_WEBHOOK, RUN_STARTED_WEBHOOK, RUN_WAITING_WEBHOOK, SCHEDULE_FAILING_WEBHOOK } from '../platform/webhooks/hexactra.webhook-events';
@@ -111,8 +111,9 @@ export class RunNotifier {
     await this.hook(RUN_FINISHED_WEBHOOK, userId, { ...this.runData(run, status), result: (result ?? '').slice(0, 2000) || null });
   }
 
-  async scheduleFailing(userId: string, e: { scheduleId: string; taskName: string; failures: number }): Promise<void> {
-    await this.send(SCHEDULE_FAILING_EVENT, userId, { ...e, tasksUrl: this.url('/tasks') });
+  /** The notice links to the task's schedules (`/tasks/:id#schedule`, #428), where the failing one carries a warning. */
+  async scheduleFailing(userId: string, e: { scheduleId: string; taskId: string; taskName: string; failures: number }): Promise<void> {
+    await this.send(SCHEDULE_FAILING_EVENT, userId, { ...e, tasksUrl: this.url(failingScheduleLink(e.taskId)) });
     await this.hook(SCHEDULE_FAILING_WEBHOOK, userId, { scheduleId: e.scheduleId, taskName: e.taskName, failures: e.failures });
   }
 }

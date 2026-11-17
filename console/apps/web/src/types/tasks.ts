@@ -17,6 +17,9 @@ export interface Task {
   spend30d?: TaskSpend;
   /** The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default. */
   policyId: string | null;
+  createdAt?: string;
+  /** When the task was last edited. */
+  updatedAt?: string;
 }
 
 /** `GET /api/schedules?taskId=`. */
@@ -29,6 +32,8 @@ export interface TaskSchedule {
   concurrency: 'skip' | 'queue';
   nextRunAt: string | null;
   lastRunAt: string | null;
+  /** The run its last firing started; null before the first one, or once that run was deleted. */
+  lastRunId?: string | null;
   consecutiveFailures: number;
   /** The expression in words ("Monday to Friday at 09:00"), from the API (#424). */
   description?: string;
@@ -93,4 +98,31 @@ export type TaskListSort = 'created_desc' | 'name_asc' | 'last_run_desc' | 'next
 /** `POST /api/tasks/:id/schedules/pause|resume`: the task, plus the schedules a resume left paused. */
 export interface TaskSchedulesChanged extends TaskWithSummary {
   skipped: string[];
+}
+
+/** `GET /api/tasks/:id/stats?days=` (`taskStatsSchema`, #424): the task's runs over a period. */
+export interface TaskStats {
+  days: number;
+  /** The zone the days are cut in. */
+  timezone: string;
+  totals: {
+    /** Runs created in the period, live ones included. */
+    runs: number;
+    succeeded: number;
+    failed: number;
+    cancelled: number;
+    /** succeeded / (succeeded + failed), 0 to 1; null when no run succeeded or failed. */
+    successRate: number | null;
+    /** USD spent by the period's runs; null when none has a cost. */
+    costUsd: number | null;
+    /** False when a call could not be priced: `costUsd` is then "at least". */
+    costKnown: boolean;
+  };
+  avgDurationSeconds: number | null;
+  p95DurationSeconds: number | null;
+  avgSteps: number | null;
+  avgCostPerSuccessUsd: number | null;
+  /** One entry per calendar day, oldest first, zeros included. */
+  series: Array<{ date: string; succeeded: number; failed: number; cancelled: number; costUsd: number | null }>;
+  stopReasons: Array<{ reason: string; count: number }>;
 }
