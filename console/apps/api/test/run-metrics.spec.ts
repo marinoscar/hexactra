@@ -38,6 +38,8 @@ describe('run metrics', () => {
     m.modelCalls(3);
     m.modelCalls(0);
     m.cost('succeeded', 0.42);
+    m.inputTokensPerCall(8200);
+    m.inputTokensPerCall(0);
     m.finished('failed', 'schedule', 42.5);
     expect(calls).toEqual([
       ['add', 'runsStarted', 1, { trigger: 'schedule' }],
@@ -46,6 +48,7 @@ describe('run metrics', () => {
       ['add', 'runTokens', 1200, { direction: 'input' }],
       ['add', 'runModelCalls', 3, undefined],
       ['record', 'runCost', 0.42, { status: 'succeeded' }],
+      ['record', 'runInputTokensPerCall', 8200, undefined],
       ['add', 'runsFinished', 1, { status: 'failed', trigger: 'schedule' }],
       ['record', 'runDuration', 42.5, { status: 'failed' }],
     ]);

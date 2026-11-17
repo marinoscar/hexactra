@@ -25,13 +25,11 @@ import { RUN_BUDGET_ERRORS } from './run-budget-errors';
 import { actionTarget, runActivity, type ActivityTarget, type RunActivityPhase } from './activity';
 import { ACTION_TIMEOUT_MS, FabricSession, handoffOutcome, type CreatedHandoff } from './fabric-session';
 import { domainAllowed, looksRisky } from './policy';
+import { chunkAllowance, maxElementsFor, PLATFORM_MAX_CALLS_PER_CHUNK, ScreenshotWindow } from './context-settings';
 import { captureScreen, markCenter, roundInput, type Screen, type ScreenMark, type ScreenView } from './vision';
 
-/** Round-trips per `runTools` call (the platform's cap is 20). */
-const CHUNK_STEPS = 20;
 /** Lines of the step log handed back to the model each chunk. */
 const LOG_LINES = 60;
-const OBSERVATION_CHARS = 6_000;
 
 /** What the run keeps between chunks and across a handoff (`runs.transcript`). Never secrets. */
 export interface RunMemory {
@@ -45,6 +43,8 @@ export interface RunMemory {
   visionOff?: boolean;
   /** The screen the next round shows the model (default: the page). */
   look?: Screen | null;
+  /** Digests of the screenshots last shown to the model (never the images, #406). */
+  shots?: string[];
 }
 
 /** `continue`: the job is near its runtime limit; the handler queues a new job and the run stays `running`. */
@@ -315,6 +315,9 @@ export class GoalRunnerService {
 
     // The limits come from the run's policy snapshot; `null` means no limit.
     const budget = snapshot.spec.budget;
+    // Context efficiency (#406): every knob is the run's own snapshot, never a constant.
+    const ctx = snapshot.spec.context;
+    const shotWindow = new ScreenshotWindow(ctx.screenshotsKept, ctx.pruneBatch);
     const pinned = await this.pinnedModel(userId, snapshot);
     const policy = {
       allowedDomains: run.task?.allowedDomains ?? [],
@@ -413,25 +416,25 @@ export class GoalRunnerService {
       if (type === 'text') {
         const text = String(result.text ?? '');
         summary = `read ${text.length} characters`;
-        forModel = trim(text, OBSERVATION_CHARS);
+        forModel = trim(text, ctx.observationChars);
       }
       if (type === 'elements') {
         const els = (result.elements as Array<Record<string, unknown>> | undefined) ?? [];
         state.labels.clear();
         for (const el of els) state.labels.set(String(el.selector), `${String(el.text ?? '')} ${String(el.aria_label ?? el.name ?? '')}`);
         summary = `${els.length} interactive elements`;
-        forModel = trim(JSON.stringify(els.map((el) => ({ selector: el.selector, tag: el.tag, role: el.role, text: el.text, type: el.type, name: el.name }))), OBSERVATION_CHARS);
+        forModel = trim(JSON.stringify(els.map((el) => ({ selector: el.selector, tag: el.tag, role: el.role, text: el.text, type: el.type, name: el.name }))), ctx.observationChars);
       }
       if (type === 'scroll') summary = forModel = `scrolled to ${String(result.y ?? '?')}`;
       if (type === 'evaluate') {
         const value = JSON.stringify(result.value ?? null) ?? 'undefined';
         summary = `returned ${String(result.type ?? typeof result.value)} (${value.length} characters)`;
-        forModel = trim(`${String(result.type ?? '')}: ${value}${result.description ? ` (${String(result.description)})` : ''}`, OBSERVATION_CHARS);
+        forModel = trim(`${String(result.type ?? '')}: ${value}${result.description ? ` (${String(result.description)})` : ''}`, ctx.observationChars);
       }
       if (type === 'tabs') {
         const tabs = (result.tabs as Record<string, unknown>[] | undefined) ?? [];
         summary = `${tabs.length} tabs`;
-        forModel = trim(JSON.stringify(tabs.map((t) => ({ id: t.id, title: t.title, url: t.url, active: t.active }))), OBSERVATION_CHARS);
+        forModel = trim(JSON.stringify(tabs.map((t) => ({ id: t.id, title: t.title, url: t.url, active: t.active }))), ctx.observationChars);
       }
       if (type === 'new_tab') summary = forModel = `opened tab ${String(result.tab_id ?? '?')}`;
       await record('action', type, action, true, summary, started, reason);
@@ -443,13 +446,13 @@ export class GoalRunnerService {
         name: 'observe_elements',
         description: 'List the interactive elements of the current page with CSS selectors.',
         parameters: z.object({}),
-        execute: () => act({ type: 'elements', max_elements: 80 }),
+        execute: () => act({ type: 'elements', max_elements: maxElementsFor(ctx.observationChars) }),
       }),
       defineTool({
         name: 'read_text',
         description: 'Read the visible text of the page, or of one element.',
         parameters: z.object({ selector: z.string().max(2000).nullable() }),
-        execute: ({ selector }) => act({ type: 'text', ...(selector ? { selector } : {}), max_chars: OBSERVATION_CHARS }),
+        execute: ({ selector }) => act({ type: 'text', ...(selector ? { selector } : {}), max_chars: ctx.observationChars }),
       }),
       defineTool({
         name: 'navigate',
@@ -513,7 +516,7 @@ export class GoalRunnerService {
           'Take a fresh screenshot and end this turn; the next turn starts with the image. screen "page" shows the tab with numbered interactive elements; "desktop" shows the whole computer screen (native dialogs, file pickers, other windows).',
         parameters: z.object({ screen: z.enum(['page', 'desktop']), reason: z.string().max(500) }),
         execute: async ({ screen, reason }) => {
-          if (memory.visionOff) return 'Screenshots are not available with this model: use observe_elements and read_text.';
+          if (memory.visionOff || !shotWindow.enabled) return 'Screenshots are not available with this model: use observe_elements and read_text.';
           if (state.stepCount >= policy.maxSteps) {
             state.stop = 'budget';
             return 'Step budget exhausted.';
@@ -755,7 +758,7 @@ export class GoalRunnerService {
     const timeUp = () => activeElapsedMs(current, this.clock()) > policy.maxActiveMs;
     // This job hands the run on a little before its lease runs out.
     const hopDue = () => this.clock() - jobStartedAt > GOAL_RUN_MAX_RUNTIME_MS - GOAL_RUN_HOP_MARGIN_MS;
-    const remainingChunks = Math.max(1, Math.ceil(policy.maxSteps / 4));
+    const remainingChunks = chunkAllowance(policy.maxSteps, ctx.callsPerChunk);
     const prices = await this.priceTable();
     const used = new RunUsage();
     for (let chunk = 0; chunk < remainingChunks; chunk++) {
@@ -769,16 +772,19 @@ export class GoalRunnerService {
       const stepsBefore = state.stepCount;
       const input = [
         `Goal: ${goal}`,
-        `Allowed sites: ${policy.allowedDomains.join(', ') || 'any'}. Steps used: ${state.stepCount}${Number.isFinite(policy.maxSteps) ? ` of ${policy.maxSteps}` : ' (no limit)'}.`,
+        `Allowed sites: ${policy.allowedDomains.join(', ') || 'any'}.`,
         memory.log.length ? `Progress so far (latest last):\n${memory.log.slice(-LOG_LINES).join('\n')}` : 'Nothing has been done yet. Start by navigating or observing the page.',
         memory.confirmationGranted ? 'The person approved the next irreversible step.' : '',
         'Continue toward the goal.',
       ]
         .filter(Boolean)
         .join('\n\n');
+      // Volatile status goes last, after the screenshots, so the prefix stays cacheable (#406).
+      const status = `Steps used: ${state.stepCount}${Number.isFinite(policy.maxSteps) ? ` of ${policy.maxSteps}` : ' (no limit)'}.`;
       // What the model sees this round: the screen, as a person would (#366).
       let view: ScreenView | null = null;
-      if (!memory.visionOff) {
+      let shown: ScreenView[] = [];
+      if (!memory.visionOff && shotWindow.enabled) {
         await setActivity('looking');
         const screen: Screen = memory.look ?? 'page';
         memory.look = null;
@@ -786,6 +792,8 @@ export class GoalRunnerService {
           view = await captureScreen(session, this.fabric, sessionId!, screen);
           if (screen === 'page') state.marks = new Map(view.marks.map((m) => [m.n, m]));
           state.view = view;
+          shown = shotWindow.push(view);
+          memory.shots = shotWindow.hashes;
         } catch (e) {
           this.log.debug(`run ${run.id}: no ${screen} screenshot this round: ${e instanceof Error ? e.message : String(e)}`);
           memory.log.push(`(No ${screen} screenshot this round: ${trim(e instanceof Error ? e.message : String(e), 200)})`);
@@ -798,11 +806,12 @@ export class GoalRunnerService {
           ...(policy.model ? { model: policy.model } : {}),
           ...(policy.provider ? { provider: policy.provider } : {}),
           instructions: INSTRUCTIONS,
-          input: roundInput(input, withImage ? view : null),
+          input: roundInput(input, withImage && shown.length ? shown : null, status),
           tools,
-          maxSteps: CHUNK_STEPS,
+          maxSteps: Math.min(ctx.callsPerChunk, PLATFORM_MAX_CALLS_PER_CHUNK),
           onStep: (step) => {
             used.add(step.response.provider, step.response.model || policy.model, step.response.usage, prices);
+            this.tasks.metrics.inputTokensPerCall(step.response.usage?.inputTokens ?? 0);
             if (timeUp()) {
               state.stop = 'budget';
               state.budgetError = RUN_BUDGET_ERRORS.time;

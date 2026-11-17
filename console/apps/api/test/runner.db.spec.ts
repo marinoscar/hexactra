@@ -299,7 +299,8 @@ describe('the goal runner sees and acts like a person (#366)', () => {
   }
 
   type Input = string | { content: { type: string; url?: string; text?: string }[] }[];
-  const imageOf = (input: Input) => (typeof input === 'string' ? null : (input[0]!.content.find((c) => c.type === 'image')?.url ?? null));
+  // The window shows older screenshots first: the current one is the last image (#406).
+  const imageOf = (input: Input) => (typeof input === 'string' ? null : (input[0]!.content.filter((c) => c.type === 'image').at(-1)?.url ?? null));
   const b64 = (s: string) => `data:image/jpeg;base64,${Buffer.from(s).toString('base64')}`;
 
   it('says where on the page each action acts: the box of a mark, a point, the box of an element, nothing on the desktop (#381)', async () => {
