@@ -6,6 +6,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import { policySummarySchema } from '../policies/policies.schemas';
+import { BUDGET_KEYS, RUN_STOP_REASONS } from '../runner/budget';
 
 const iso = z.string().describe('ISO 8601 timestamp');
 const runStatus = z.enum(['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled']);
@@ -52,6 +53,21 @@ export const runActivitySchema = z
   })
   .describe('What a running run is doing right now; null when it is not running');
 
+const budgetNumbers = z.record(z.enum(BUDGET_KEYS), z.number().nullable());
+
+/** What a run may spend and has spent (#404). */
+export const runBudgetSchema = z
+  .object({
+    effective: budgetNumbers
+      .and(z.object({ warnAtPercent: z.number().int() }))
+      .describe('The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD.'),
+    used: z.record(z.enum(BUDGET_KEYS), z.number()).describe('What the run has used so far, in the same units (active time includes the stretch in progress).'),
+    percent: budgetNumbers.describe('Percent of each limit used, one decimal; `null` for an unlimited budget.'),
+    source: z.record(z.enum(BUDGET_KEYS), z.enum(['policy', 'ceiling']).nullable()).describe('Where each limit came from: the `policy`, or the deployment `ceiling` that clamped it. `null` when unlimited.'),
+    costKnown: z.boolean().describe('False when a call could not be priced: `used.cost` is then "at least".'),
+  })
+  .describe('The run budget: `null` on a run that has not started or that was snapshotted before budgets were enforced.');
+
 export const runResponseSchema = z.object({
   id: z.uuid(),
   userId: z.uuid(),
@@ -73,6 +89,8 @@ export const runResponseSchema = z.object({
   inputTokens: z.number().int(),
   outputTokens: z.number().int(),
   policy: policySummarySchema.nullable(),
+  stopReason: z.enum(RUN_STOP_REASONS).nullable().describe('Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field.'),
+  budget: runBudgetSchema.nullable(),
   cachedInputTokens: z.number().int().describe('Input tokens the provider served from its cache (part of inputTokens)'),
   modelCalls: z.number().int().describe('Model calls (provider round trips) made so far'),
   costUsd: z.number().describe('USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false'),

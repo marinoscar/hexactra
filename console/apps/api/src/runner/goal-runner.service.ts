@@ -8,6 +8,8 @@ import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { chooseHost } from './host-choice';
 import { balancedSpec, builtinPolicy, SYSTEM_DEFAULT_POLICY_REF } from '../policies/builtin-policies';
 import { PolicyModelCheck } from '../policies/policy-model-check';
+import { ModelTiersService } from '../policies/model-tiers.service';
+import { tierHasVision, tierProblem, tierRequest } from './tier-request';
 import { PolicyResolver } from '../policies/policy.resolver';
 import { readSnapshot, type RunPolicySnapshot } from '../policies/policy-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,15 +23,33 @@ import { priceTableOf } from './agent-pricing.settings';
 import { RunUsage, type PriceTable, type UsageDelta } from './cost';
 import { activeElapsedMs } from './active-time';
 import { GOAL_RUN_HOP_MARGIN_MS, GOAL_RUN_MAX_RUNTIME_MS } from './goal-run.enqueue';
-import { RUN_BUDGET_ERRORS } from './run-budget-errors';
+import { BUDGET_ERROR } from './run-budget-errors';
+import {
+  BUDGET_LABEL,
+  BUDGET_STOP_REASON,
+  BudgetTracker,
+  computeEffectiveBudget,
+  isUnlimited,
+  UNLIMITED_LOG_LINE,
+  usedOfLimit,
+  warningLine,
+  wrapUpInstruction,
+  type BudgetCeilings,
+  type BudgetKey,
+  type RunStopReason,
+} from './budget';
 import { actionTarget, runActivity, type ActivityTarget, type RunActivityPhase } from './activity';
 import { ACTION_TIMEOUT_MS, FabricSession, handoffOutcome, type CreatedHandoff } from './fabric-session';
 import { domainAllowed, looksRisky } from './policy';
-import { chunkAllowance, maxElementsFor, PLATFORM_MAX_CALLS_PER_CHUNK, ScreenshotWindow } from './context-settings';
+import { maxElementsFor, PLATFORM_MAX_CALLS_PER_CHUNK, ScreenshotWindow } from './context-settings';
 import { captureScreen, markCenter, roundInput, type Screen, type ScreenMark, type ScreenView } from './vision';
 
 /** Lines of the step log handed back to the model each chunk. */
 const LOG_LINES = 60;
+/** Output cap of the wrap-up call (#404): a summary, not a continuation. */
+const WRAP_UP_MAX_OUTPUT_TOKENS = 1_500;
+/** Rounds in a row without a single recorded step before the run is stopped as stalled. */
+const MAX_IDLE_CHUNKS = 3;
 
 /** What the run keeps between chunks and across a handoff (`runs.transcript`). Never secrets. */
 export interface RunMemory {
@@ -45,6 +65,10 @@ export interface RunMemory {
   look?: Screen | null;
   /** Digests of the screenshots last shown to the model (never the images, #406). */
   shots?: string[];
+  /** Budgets already warned about (#404): each is warned once per run, across jobs. */
+  warned?: BudgetKey[];
+  /** Warning lines the next round's input carries (#404). */
+  pendingWarnings?: string[];
 }
 
 /** `continue`: the job is near its runtime limit; the handler queues a new job and the run stays `running`. */
@@ -52,7 +76,7 @@ export type RunOutcome = 'succeeded' | 'failed' | 'cancelled' | 'waiting_human' 
 
 /** Ends a chunk early: the loop is stopped from `onStep`. */
 class StopLoop extends Error {
-  constructor(readonly reason: 'finish' | 'pause' | 'cancel' | 'budget' | 'look' | 'hop') {
+  constructor(readonly reason: 'finish' | 'pause' | 'cancel' | 'budget' | 'look' | 'hop' | 'warn') {
     super(reason);
   }
 }
@@ -168,6 +192,7 @@ export class GoalRunnerService {
     @Optional() private readonly systemSettings?: SystemSettingsService,
     @Optional() private readonly policies?: PolicyResolver,
     @Optional() private readonly modelCheck?: PolicyModelCheck,
+    @Optional() private readonly modelTiers?: ModelTiersService,
   ) {}
 
   /** The admin's price table; empty when unreadable (calls are then unpriced, never free). */
@@ -179,6 +204,16 @@ export class GoalRunnerService {
       return {};
     }
   }
+  /** The deployment's budget ceilings; none when unreadable or when no settings service is wired. */
+  private async ceilings(): Promise<BudgetCeilings> {
+    try {
+      return (await this.systemSettings?.getNamespace('browserAgentCeilings')) ?? {};
+    } catch (e) {
+      this.log.warn(`could not read the budget ceilings: ${e instanceof Error ? e.message : String(e)}`);
+      return {};
+    }
+  }
+
   /** The wall clock; tests replace it to pass time without waiting. */
   clock: () => number = Date.now;
 
@@ -190,7 +225,14 @@ export class GoalRunnerService {
    */
   private async policySnapshot(db: ReturnType<PrismaService['forUser']>, run: { id: string; userId: string; taskId: string | null; policyRef: string | null; policySource: RunPolicySnapshot['source'] | null; policySnapshot: Prisma.JsonValue | null; task: { policyRef: string | null } | null }, memory: RunMemory): Promise<RunPolicySnapshot> {
     const stored = readSnapshot(run.policySnapshot);
-    if (stored) return stored;
+    if (stored) {
+      // Upgrade an older snapshot once, then never change it: the effective budget (#404) and the model tiers (#403).
+      let upgraded = stored;
+      if (!upgraded.effectiveBudget) upgraded = { ...upgraded, effectiveBudget: computeEffectiveBudget(upgraded.spec.budget, await this.ceilings()) };
+      if (upgraded.resolvedTiers === undefined && this.modelTiers) upgraded = await this.withTiers(run.userId, upgraded);
+      if (upgraded !== stored) await db.run.updateMany({ where: { id: run.id }, data: { policySnapshot: upgraded as never } });
+      return upgraded;
+    }
     let snapshot: RunPolicySnapshot;
     let notes: string[] = [];
     if (this.policies) {
@@ -203,11 +245,15 @@ export class GoalRunnerService {
       });
       snapshot = this.policies.snapshot(resolved);
       notes = resolved.notes;
+      snapshot = await this.withTiers(run.userId, snapshot);
     } else {
       // Without a resolver (a runner built by hand): the system default.
       const b = builtinPolicy(SYSTEM_DEFAULT_POLICY_REF)!;
       snapshot = { schemaVersion: 1, ref: b.id, name: b.name, version: b.version, builtin: true, source: 'system_default', spec: balancedSpec(), tiers: null, takenAt: new Date().toISOString() };
+      snapshot = await this.withTiers(run.userId, snapshot);
     }
+    // What the run is held to: the policy's budget under the deployment's ceilings, fixed for the run (#404).
+    snapshot = { ...snapshot, effectiveBudget: computeEffectiveBudget(snapshot.spec.budget, await this.ceilings()) };
     // Compare-and-set: only the first writer's snapshot stands (a retried job re-reads it).
     const { count } = await db.run.updateMany({
       where: { id: run.id, policySnapshot: { equals: Prisma.DbNull } },
@@ -218,16 +264,23 @@ export class GoalRunnerService {
       const winner = readSnapshot(fresh?.policySnapshot);
       if (winner) return winner;
     }
+    if (isUnlimited(snapshot.effectiveBudget!)) memory.log.unshift(UNLIMITED_LOG_LINE);
     for (const n of notes) memory.log.push(n);
     return snapshot;
   }
 
-  /** The model a pin names for the run's start tier (legacy parity until the tier resolver, #403): `{ provider?, model? }`. */
-  private async pinnedModel(userId: string, snapshot: RunPolicySnapshot): Promise<{ provider?: string; model?: string }> {
-    const pin = snapshot.spec.models.pins?.[snapshot.spec.models.startTier] ?? null;
-    if (!pin) return {};
-    const resolved = await this.modelCheck?.resolvePin(userId, pin).catch(() => null);
-    return resolved ? { provider: resolved.provider, model: resolved.modelId } : { model: pin };
+  /** The snapshot with its three model tiers resolved (#403): the models of the run are fixed here, once. */
+  private async withTiers(userId: string, snapshot: RunPolicySnapshot): Promise<RunPolicySnapshot> {
+    if (!this.modelTiers) return snapshot;
+    try {
+      const resolvedTiers = await this.modelTiers.resolve(userId, snapshot.spec);
+      const tiers = Object.fromEntries(Object.entries(resolvedTiers).map(([t, r]) => [t, { provider: r.provider, model: r.modelId ?? r.model }]));
+      return { ...snapshot, resolvedTiers, tiers };
+    } catch (e) {
+      // Without resolved tiers the platform's target resolver picks the model, as before.
+      this.log.warn(`run: the model tiers could not be resolved: ${e instanceof Error ? e.message : String(e)}`);
+      return snapshot;
+    }
   }
 
 
@@ -247,17 +300,30 @@ export class GoalRunnerService {
     const memory: RunMemory = (run.transcript as unknown as RunMemory | null) ?? { log: [], chunks: 0 };
 
     if (run.cancelRequested) {
-      await this.finish(userId, run.id, run.sessionId, session, 'cancelled', { error: 'Cancelled by the user' });
+      await this.finish(userId, run.id, run.sessionId, session, 'cancelled', { error: 'Cancelled by the user', stopReason: 'cancelled' });
       return 'cancelled';
     }
 
     // The policy snapshot, written once at the first advance (resolved apart from the run's own state).
     const snapshot = await this.policySnapshot(db, run, memory);
+    // The tier the run is on. #405 moves it on a stall; until then it is the start tier.
+    const tier = snapshot.spec.models.startTier;
+    // A tier with no usable model fails the run now, before a browser is allocated (#403).
+    const tierError = this.modelTiers ? tierProblem(snapshot, tier) : null;
+    if (tierError) {
+      await this.finish(userId, run.id, run.sessionId, session, 'failed', { error: tierError });
+      return 'failed';
+    }
+    // A model without image input starts the run without screenshots, instead of finding out from a refused call.
+    if (!memory.visionOff && tierHasVision(snapshot, tier) === false) {
+      memory.visionOff = true;
+      memory.log.push('(Screenshots are off: the model of this tier does not accept images. Use observe_elements and read_text.)');
+    }
 
     // Resume after a handoff: fold the person's answer into the memory.
     if (run.status === 'waiting_human') {
       if (!run.handoffId) {
-        await this.tasks.transition(userId, run.id, 'failed', { error: 'Waiting for a person without a handoff' });
+        await this.tasks.transition(userId, run.id, 'failed', { error: 'Waiting for a person without a handoff', stopReason: 'error' });
         return 'failed';
       }
       const h = await session.getHandoff(run.handoffId);
@@ -298,7 +364,7 @@ export class GoalRunnerService {
         const hosts = run.hostId ? await this.fabric.hosts() : [];
         const choice = chooseHost(hosts, run.hostId, run.hostFallback);
         if (choice.kind === 'fail') {
-          await this.finish(userId, run.id, null, session, 'failed', { error: choice.error });
+          await this.finish(userId, run.id, null, session, 'failed', { error: choice.error, stopReason: 'error' });
           return 'failed';
         }
         if (choice.note) {
@@ -307,32 +373,37 @@ export class GoalRunnerService {
         }
         sessionId = await session.create({ profile: run.profile, hostId: choice.hostId, label: `run ${run.id}` });
       } catch (e) {
-        await this.finish(userId, run.id, null, session, 'failed', { error: `No browser available: ${e instanceof Error ? e.message : String(e)}` });
+        await this.finish(userId, run.id, null, session, 'failed', { error: `No browser available: ${e instanceof Error ? e.message : String(e)}`, stopReason: 'error' });
         return 'failed';
       }
       await db.run.updateMany({ where: { id: run.id }, data: { sessionId } });
     }
 
-    // The limits come from the run's policy snapshot; `null` means no limit.
-    const budget = snapshot.spec.budget;
+    // The limits come from the run's policy snapshot (its effective budget: policy under the ceilings); `null` means no limit.
+    const effective = snapshot.effectiveBudget ?? computeEffectiveBudget(snapshot.spec.budget, null);
+    // Starts from what the run already used in earlier jobs and chunks, so a continued run never gets a fresh budget.
+    const tracker = new BudgetTracker(effective, {
+      actions: run.stepCount,
+      modelCalls: run.modelCalls,
+      inputTokens: run.inputTokens,
+      outputTokens: run.outputTokens,
+      costUsd: Number(run.costUsd),
+      costKnown: run.costKnown,
+      activeMs: run.activeMs,
+      warned: memory.warned,
+    });
     // Context efficiency (#406): every knob is the run's own snapshot, never a constant.
     const ctx = snapshot.spec.context;
     const shotWindow = new ScreenshotWindow(ctx.screenshotsKept, ctx.pruneBatch);
-    const pinned = await this.pinnedModel(userId, snapshot);
     const policy = {
       allowedDomains: run.task?.allowedDomains ?? [],
-      maxSteps: budget.maxActions ?? Number.POSITIVE_INFINITY,
-      /** The time budget counts active time only, never the wait for a person (#399); null is no limit. */
-      maxActiveMs: budget.maxActiveMinutes === null ? Number.POSITIVE_INFINITY : budget.maxActiveMinutes * 60_000,
       confirmRisky: run.task?.confirmRiskyActions ?? false,
-      model: pinned.model,
-      provider: pinned.provider,
     };
     const state = {
       stepCount: run.stepCount,
       stop: null as StopLoop['reason'] | null,
       /** Which budget ended the run (set with `stop = 'budget'`). */
-      budgetError: RUN_BUDGET_ERRORS.steps as string,
+      budgetKey: null as BudgetKey | null,
       finished: null as { success: boolean; result: string } | null,
       handoffId: null as string | null,
       handoffExpiresAt: null as Date | null,
@@ -353,8 +424,33 @@ export class GoalRunnerService {
       }
     };
 
+    /** The first exhausted budget now (active time read off the clock), or null (#404). */
+    const budgetCheck = (): BudgetKey | null => {
+      tracker.setActiveMs(activeElapsedMs(current, this.clock()));
+      return tracker.state().exhausted;
+    };
+    const stopForBudget = (key: BudgetKey) => {
+      state.stop = 'budget';
+      state.budgetKey = key;
+    };
+    /** A budget newly over `warnAtPercent`: log it once and queue the line the next round's input carries. */
+    const noteWarnings = (): boolean => {
+      const keys = tracker.takeWarnings();
+      if (keys.length === 0) return false;
+      const { percent } = tracker.state();
+      const usedNow = tracker.used();
+      memory.warned = tracker.warnedKeys();
+      for (const k of keys) {
+        const limit = effective.limits[k]!;
+        memory.pendingWarnings = [...(memory.pendingWarnings ?? []), warningLine(k, percent[k]!, usedNow[k], limit)];
+        memory.log.push(`Budget warning: ${BUDGET_LABEL[k]} is at ${Math.floor(percent[k]!)}% (${usedOfLimit(k, usedNow[k], limit)}).`);
+      }
+      return true;
+    };
+
     const record = async (kind: string, action: string | null, args: Record<string, unknown> | null, ok: boolean, summary: string, started: number, reasoning?: string) => {
       state.stepCount += 1;
+      tracker.add({ actions: 1 });
       this.tasks.metrics.step(kind, ok);
       await this.prisma.runStep.create({
         data: {
@@ -377,10 +473,10 @@ export class GoalRunnerService {
     const act = async (action: Record<string, unknown>, reason?: string, target?: ActivityTarget): Promise<string> => {
       const started = Date.now();
       const type = String(action.type);
-      if (state.stepCount >= policy.maxSteps) {
-        state.stop = 'budget';
-        state.budgetError = RUN_BUDGET_ERRORS.steps;
-        return 'Step budget exhausted.';
+      const spent = budgetCheck();
+      if (spent) {
+        stopForBudget(spent);
+        return `${BUDGET_ERROR[spent]}.`;
       }
       await setActivity('acting', { action, reason, timeoutMs: ACTION_TIMEOUT_MS, target: target ?? actionTarget(action, state.marks.values()) });
       try {
@@ -517,9 +613,10 @@ export class GoalRunnerService {
         parameters: z.object({ screen: z.enum(['page', 'desktop']), reason: z.string().max(500) }),
         execute: async ({ screen, reason }) => {
           if (memory.visionOff || !shotWindow.enabled) return 'Screenshots are not available with this model: use observe_elements and read_text.';
-          if (state.stepCount >= policy.maxSteps) {
-            state.stop = 'budget';
-            return 'Step budget exhausted.';
+          const spent = budgetCheck();
+          if (spent) {
+            stopForBudget(spent);
+            return `${BUDGET_ERROR[spent]}.`;
           }
           await record('observe', 'look', { screen }, true, `looked at the ${screen}`, Date.now(), reason);
           memory.look = screen;
@@ -755,32 +852,79 @@ export class GoalRunnerService {
     ];
 
     const goal = run.goal;
-    const timeUp = () => activeElapsedMs(current, this.clock()) > policy.maxActiveMs;
     // This job hands the run on a little before its lease runs out.
     const hopDue = () => this.clock() - jobStartedAt > GOAL_RUN_MAX_RUNTIME_MS - GOAL_RUN_HOP_MARGIN_MS;
-    const remainingChunks = chunkAllowance(policy.maxSteps, ctx.callsPerChunk);
     const prices = await this.priceTable();
     const used = new RunUsage();
-    for (let chunk = 0; chunk < remainingChunks; chunk++) {
-      if (timeUp()) {
-        await this.finish(userId, run.id, sessionId, session, 'failed', { error: RUN_BUDGET_ERRORS.time });
-        return 'failed';
+    const provider = () => this.ai.forUser(userId, { feature: BROWSER_AGENT_FEATURE_ID, ...(orgId ? { orgId } : {}) });
+    /** Count one model call in the usage totals (saved per chunk) and in the budget. */
+    const countCall = (step: { response: { provider?: string; model?: string; usage?: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number } } }) => {
+      const usd = used.add(step.response.provider, step.response.model || tierRequest(snapshot, tier).modelLabel || undefined, step.response.usage, prices);
+      tracker.add({ modelCalls: 1, inputTokens: step.response.usage?.inputTokens, outputTokens: step.response.usage?.outputTokens, costUsd: usd ?? 0, costKnown: usd !== null });
+    };
+
+    /**
+     * A budget is used up: one last call with only `finish` (exempt from the budget, counted in the
+     * totals) so the run still returns a partial result. Without a `finish` the run ends on the budget's message.
+     * `finish(success: true)` is a success; anything else is a failure with the typed stop reason.
+     */
+    const wrapUp = async (key: BudgetKey): Promise<RunOutcome> => {
+      const stopReason: RunStopReason = BUDGET_STOP_REASON[key];
+      const error = BUDGET_ERROR[key];
+      memory.log.push(`${error}: asking the model to wrap up.`);
+      state.stop = null;
+      state.finished = null;
+      const finishTool = tools.filter((t) => t.tool.name === 'finish');
+      const input = [`Goal: ${goal}`, memory.log.length ? `Progress so far (latest last):\n${memory.log.slice(-LOG_LINES).join('\n')}` : '', wrapUpInstruction(key)].filter(Boolean).join('\n\n');
+      await setActivity('thinking');
+      try {
+        await provider().runTools({
+          // The current tier's model and effort (#403); the wrap-up keeps its own small output cap.
+          ...(({ modelLabel: _label, ...req }) => req)(tierRequest(snapshot, tier)),
+          instructions: INSTRUCTIONS,
+          input,
+          tools: finishTool,
+          maxSteps: 1,
+          maxOutputTokens: WRAP_UP_MAX_OUTPUT_TOKENS,
+          onStep: (step) => countCall(step),
+        });
+      } catch (e) {
+        this.log.warn(`run ${run.id}: the wrap-up call failed: ${e instanceof Error ? e.message : String(e)}`);
       }
+      await this.saveMemory(userId, run.id, memory, used.drain());
+      const done = state.finished as { success: boolean; result: string } | null;
+      if (done?.success) {
+        await this.finish(userId, run.id, sessionId, session, 'succeeded', { result: done.result, stopReason });
+        return 'succeeded';
+      }
+      await this.finish(userId, run.id, sessionId, session, 'failed', { ...(done ? { result: done.result } : {}), error, stopReason });
+      return 'failed';
+    };
+
+    let idleChunks = 0;
+    for (;;) {
+      // Everything is checked before each chunk, active time included (#399, #404).
+      const spent = budgetCheck();
+      if (spent) return wrapUp(spent);
+      noteWarnings();
       if (hopDue()) return 'continue';
       memory.chunks += 1;
       state.stop = null;
       const stepsBefore = state.stepCount;
+      const warnings = memory.pendingWarnings ?? [];
+      memory.pendingWarnings = [];
       const input = [
         `Goal: ${goal}`,
         `Allowed sites: ${policy.allowedDomains.join(', ') || 'any'}.`,
         memory.log.length ? `Progress so far (latest last):\n${memory.log.slice(-LOG_LINES).join('\n')}` : 'Nothing has been done yet. Start by navigating or observing the page.',
         memory.confirmationGranted ? 'The person approved the next irreversible step.' : '',
+        ...warnings,
         'Continue toward the goal.',
       ]
         .filter(Boolean)
         .join('\n\n');
       // Volatile status goes last, after the screenshots, so the prefix stays cacheable (#406).
-      const status = `Steps used: ${state.stepCount}${Number.isFinite(policy.maxSteps) ? ` of ${policy.maxSteps}` : ' (no limit)'}.`;
+      const status = `Steps used: ${state.stepCount}${effective.limits.actions !== null ? ` of ${effective.limits.actions}` : ' (no limit)'}.`;
       // What the model sees this round: the screen, as a person would (#366).
       let view: ScreenView | null = null;
       let shown: ScreenView[] = [];
@@ -801,21 +945,26 @@ export class GoalRunnerService {
       }
       let result: AiToolLoopResult | null = null;
       await setActivity('thinking');
+      const tierReq = tierRequest(snapshot, tier);
       const call = (withImage: boolean) =>
-        this.ai.forUser(userId, { feature: BROWSER_AGENT_FEATURE_ID, ...(orgId ? { orgId } : {}) }).runTools({
-          ...(policy.model ? { model: policy.model } : {}),
-          ...(policy.provider ? { provider: policy.provider } : {}),
+        provider().runTools({
+          // The model, effort and output cap of the run's current tier, from the snapshot (#403).
+          ...(({ modelLabel: _label, ...req }) => req)(tierReq),
           instructions: INSTRUCTIONS,
           input: roundInput(input, withImage && shown.length ? shown : null, status),
           tools,
           maxSteps: Math.min(ctx.callsPerChunk, PLATFORM_MAX_CALLS_PER_CHUNK),
           onStep: (step) => {
-            used.add(step.response.provider, step.response.model || policy.model, step.response.usage, prices);
+            countCall(step);
             this.tasks.metrics.inputTokensPerCall(step.response.usage?.inputTokens ?? 0);
-            if (timeUp()) {
-              state.stop = 'budget';
-              state.budgetError = RUN_BUDGET_ERRORS.time;
-            } else if (!state.stop && hopDue()) state.stop = 'hop';
+            // A finish, a pause for a person or a look already ends the chunk; otherwise the budget decides.
+            if (!state.stop) {
+              const key = budgetCheck();
+              if (key) stopForBudget(key);
+              else if (hopDue()) state.stop = 'hop';
+              // The warning goes into the next round's input, so the chunk ends here (once per budget).
+              else if (noteWarnings()) state.stop = 'warn';
+            }
             if (state.stop) throw new StopLoop(state.stop);
           },
         });
@@ -840,7 +989,7 @@ export class GoalRunnerService {
 
       const fresh = await db.run.findFirst({ where: { id: run.id }, select: { cancelRequested: true } });
       if (fresh?.cancelRequested) {
-        await this.finish(userId, run.id, sessionId, session, 'cancelled', { error: 'Cancelled by the user' });
+        await this.finish(userId, run.id, sessionId, session, 'cancelled', { error: 'Cancelled by the user', stopReason: 'cancelled' });
         return 'cancelled';
       }
       if (state.stop === 'pause' && state.handoffId) {
@@ -850,23 +999,24 @@ export class GoalRunnerService {
       }
       if (state.stop === 'finish' && state.finished) {
         const to = state.finished.success ? 'succeeded' : 'failed';
-        await this.finish(userId, run.id, sessionId, session, to, state.finished.success ? { result: state.finished.result } : { result: state.finished.result, error: 'The agent could not reach the goal' });
+        await this.finish(userId, run.id, sessionId, session, to, state.finished.success ? { result: state.finished.result, stopReason: 'finished' } : { result: state.finished.result, error: 'The agent could not reach the goal', stopReason: 'finished' });
         return to;
       }
-      if (state.stop === 'budget') {
-        await this.finish(userId, run.id, sessionId, session, 'failed', { error: state.budgetError });
-        return 'failed';
-      }
+      if (state.stop === 'budget' && state.budgetKey) return wrapUp(state.budgetKey);
       if (state.stop === 'hop') return 'continue';
       if (result && result.stopReason === 'completed') {
         // The model answered without calling finish: take its answer as the result.
-        await this.finish(userId, run.id, sessionId, session, 'succeeded', { result: trim(result.final.outputText || 'Done.', 7_900) });
+        await this.finish(userId, run.id, sessionId, session, 'succeeded', { result: trim(result.final.outputText || 'Done.', 7_900), stopReason: 'finished' });
         return 'succeeded';
       }
-      // steps_exhausted: another chunk.
+      // Rounds that record nothing at all (a model that only talks) cannot go on for ever with no budget to end them.
+      idleChunks = state.stepCount === stepsBefore && !state.stop ? idleChunks + 1 : 0;
+      if (idleChunks >= MAX_IDLE_CHUNKS) {
+        await this.finish(userId, run.id, sessionId, session, 'failed', { error: `The agent made no progress in ${MAX_IDLE_CHUNKS} rounds in a row`, stopReason: 'stalled' });
+        return 'failed';
+      }
+      // steps_exhausted, or a budget warning: another chunk.
     }
-    await this.finish(userId, run.id, sessionId, session, 'failed', { error: 'The agent did not finish within its budget' });
-    return 'failed';
   }
 
   /** Record the handoff in the question broker (the inbox and the channels read it there). Never fails the run. */
@@ -904,7 +1054,7 @@ export class GoalRunnerService {
     sessionId: string | null,
     session: FabricSession,
     to: 'succeeded' | 'failed' | 'cancelled',
-    patch: { result?: string; error?: string },
+    patch: { result?: string; error?: string; stopReason?: RunStopReason },
   ) {
     if (sessionId) await session.end(sessionId);
     const done = await this.tasks.transition(userId, runId, to, patch);
