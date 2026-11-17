@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Alert, AlertTitle, Box, Chip, LinearProgress, Paper, Stack, Tooltip, Typography } from '@mui/material';
+import { Alert, AlertTitle, Box, Button, Chip, LinearProgress, Paper, Stack, Tooltip, Typography } from '@mui/material';
 
-import { meterRows, policyChipLabel, spendLine, stopLine, TIER_LABEL, tierChip, type RunBudget, type RunPolicy, type RunTier, type StopReasonRun, type TaskSpend } from './runBudget';
+import { meterRows, type MeterRow, policyChipLabel, spendLine, stopLine, TIER_LABEL, tierChip, type RunBudget, type RunPolicy, type RunTier, type StopReasonRun, type TaskSpend } from './runBudget';
 
 /** `policy: Balanced v1 · default`, `tier: Standard → Frontier` (highlighted once escalated) and `model: …`. */
 export function RunHeaderChips({ policy, tier }: { policy?: RunPolicy | null; tier?: RunTier | null }) {
@@ -20,22 +20,49 @@ export function RunHeaderChips({ policy, tier }: { policy?: RunPolicy | null; ti
   );
 }
 
+/** The budget closest to its limit: the one bar a collapsed meter shows. The first row when none is limited. */
+export function mostUsedRow(rows: MeterRow[]): MeterRow | undefined {
+  return rows.reduce<MeterRow | undefined>((best, r) => (r.percent !== null && (best === undefined || best.percent === null || r.percent > best.percent) ? r : best), rows[0]);
+}
+
+export interface RunBudgetMeterProps {
+  budget: RunBudget;
+  ticking: boolean;
+  now: number;
+  /** On a phone: show only the most-used bar until "Show all" is pressed. */
+  collapsible?: boolean;
+  /** How many bars sit side by side at most (a narrow pane takes fewer). Default 3. */
+  maxColumns?: 1 | 2 | 3;
+}
+
 /**
  * One compact bar per limited budget (used / limit, percent), the used figure
  * with "∞" for an unlimited one. `ticking` (a running run) moves active time
  * forward between stream events, from when this budget arrived.
  */
-export function RunBudgetMeter({ budget, ticking, now }: { budget: RunBudget; ticking: boolean; now: number }) {
+export function RunBudgetMeter({ budget, ticking, now, collapsible = false, maxColumns = 3 }: RunBudgetMeterProps) {
   const [receivedAt, setReceivedAt] = useState(() => Date.now());
   useEffect(() => setReceivedAt(Date.now()), [budget]);
+  const [expanded, setExpanded] = useState(false);
   const extra = ticking ? Math.max(0, now - receivedAt) / 60_000 : 0;
-  const rows = meterRows(budget, extra);
+  const all = meterRows(budget, extra);
+  const collapsed = collapsible && !expanded && all.length > 1;
+  const top = mostUsedRow(all);
+  const rows = collapsed && top ? [top] : all;
+  const columns = collapsed ? '1fr' : { xs: '1fr', sm: maxColumns >= 2 ? '1fr 1fr' : '1fr', md: `repeat(${maxColumns}, 1fr)` };
   return (
     <Paper variant="outlined" sx={{ p: 1.5, mb: 2 }} aria-label="Budget" role="group">
-      <Typography variant="subtitle2" sx={{ mb: 1 }}>
-        Budget
-      </Typography>
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, columnGap: 2, rowGap: 1.25 }}>
+      <Stack direction="row" sx={{ alignItems: 'center', mb: 1, minHeight: collapsible ? 32 : undefined }}>
+        <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
+          Budget
+        </Typography>
+        {collapsible && all.length > 1 && (
+          <Button size="small" aria-expanded={expanded} onClick={() => setExpanded((e) => !e)} sx={{ minHeight: 32, my: -0.5 }}>
+            {expanded ? 'Show less' : `Show all ${all.length}`}
+          </Button>
+        )}
+      </Stack>
+      <Box sx={{ display: 'grid', gridTemplateColumns: columns, columnGap: 2, rowGap: 1.25 }}>
         {rows.map((r) => (
           <Box key={r.key} data-testid={`budget-${r.key}`} data-tone={r.tone}>
             <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>

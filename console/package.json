@@ -20,6 +20,7 @@
     "test": "npm test --workspace=api && npm run test:run --workspace=web && npm run test:run --workspace=cli",
     "platform:infra:sync": "platform-infra sync",
     "platform:check": "npm run db:check --workspace=api && npm run db:compose:check --workspace=api && platform-infra sync --check",
-    "rename": "node scripts/rename.mjs"
+    "rename": "node scripts/rename.mjs",
+    "ui:screens": "node scripts/ui-screens.mjs"
   }
 }
