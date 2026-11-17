@@ -256,7 +256,7 @@ export function RunHistorySettingsPage() {
 
           <Box>
             <Button size="small" onClick={() => setMore(!more)} aria-expanded={more} aria-controls={moreId} sx={{ minHeight: 44, ml: -1 }}>
-              {more ? 'Less' : 'More'}
+              {more ? 'Fewer options' : 'More options'}
             </Button>
             <Collapse in={more} id={moreId} unmountOnExit>
               <Box sx={{ pt: 1 }}>
@@ -307,27 +307,46 @@ export function RunHistorySettingsPage() {
 
           {notice && <Alert severity="success">{notice}</Alert>}
 
-          <Stack direction="row" spacing={1.5} useFlexGap sx={{ flexWrap: 'wrap' }}>
-            {canSave && (
-              <Button variant="contained" sx={{ minHeight: 44 }} disabled={busy || !dirty} onClick={() => void save()}>
-                Save
-              </Button>
-            )}
-            <Button
-              variant="outlined"
-              color="error"
-              sx={{ minHeight: 44 }}
-              disabled={busy || limits === null || dirty || !preview || preview.wouldDelete === 0}
-              onClick={() => void applyNow()}
-            >
-              Apply now
-            </Button>
-          </Stack>
           {dirty && (
             <Typography variant="body2" color="text.secondary">
               Save your changes to apply them now.
             </Typography>
           )}
+        </Stack>
+        {/* On a phone the actions stay in view above the bottom navigation, however long the form gets. */}
+        <Stack
+          direction="row"
+          spacing={1.5}
+          useFlexGap
+          sx={{
+            flexWrap: 'wrap',
+            position: { xs: 'sticky', sm: 'static' },
+            bottom: { xs: 56 },
+            zIndex: 1,
+            bgcolor: 'background.paper',
+            // A footer bar across the card on a phone, so what scrolls under it is cut at a line.
+            mt: 3,
+            mx: { xs: -2, sm: 0 },
+            px: { xs: 2, sm: 0 },
+            py: { xs: 1.5, sm: 0 },
+            borderTop: { xs: 1, sm: 0 },
+            borderColor: { xs: 'divider' },
+          }}
+        >
+          {canSave && (
+            <Button variant="contained" sx={{ minHeight: 44 }} disabled={busy || !dirty} onClick={() => void save()}>
+              Save
+            </Button>
+          )}
+          <Button
+            variant="outlined"
+            color="error"
+            sx={{ minHeight: 44 }}
+            disabled={busy || limits === null || dirty || !preview || preview.wouldDelete === 0}
+            onClick={() => void applyNow()}
+          >
+            Apply now
+          </Button>
         </Stack>
       </Paper>
     </PageContainer>

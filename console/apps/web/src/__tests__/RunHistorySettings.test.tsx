@@ -72,13 +72,13 @@ describe('Run history settings', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
-  it('saves a per-task limit and a longer limit for failed runs (under More)', async () => {
+  it('saves a per-task limit and a longer limit for failed runs (under More options)', async () => {
     const host = user();
     await days();
     fireEvent.click(screen.getByRole('switch', { name: 'No limit on runs per task' }));
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Keep only the latest N runs of each task' }), { target: { value: '50' } });
     expect(screen.queryByRole('spinbutton', { name: 'Keep failed runs for (days)' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     fireEvent.change(await screen.findByRole('spinbutton', { name: 'Keep failed runs for (days)' }), { target: { value: '180' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await screen.findByText(/Saved\./);
