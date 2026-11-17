@@ -7218,6 +7218,20 @@ export interface components {
                     };
                 };
             };
+            browserAgentCeilings: {
+                /** @description Most browser actions a run may take. `null` sets no ceiling. */
+                maxActions: number | null;
+                /** @description Most model round trips a run may make. `null` sets no ceiling. */
+                maxModelCalls: number | null;
+                /** @description Most active minutes a run may use. `null` sets no ceiling. */
+                maxActiveMinutes: number | null;
+                /** @description Most input tokens a run may send. `null` sets no ceiling. */
+                maxInputTokens: number | null;
+                /** @description Most output tokens a run may receive. `null` sets no ceiling. */
+                maxOutputTokens: number | null;
+                /** @description Most a run may cost in US dollars. `null` sets no ceiling. */
+                maxCostUsd: number | null;
+            };
             storage: {
                 provider: string;
                 drivers: {
@@ -7368,6 +7382,20 @@ export interface components {
                         cachedInputPerMTok?: number;
                     };
                 };
+            };
+            browserAgentCeilings?: {
+                /** @description Most browser actions a run may take. `null` sets no ceiling. */
+                maxActions: number | null;
+                /** @description Most model round trips a run may make. `null` sets no ceiling. */
+                maxModelCalls: number | null;
+                /** @description Most active minutes a run may use. `null` sets no ceiling. */
+                maxActiveMinutes: number | null;
+                /** @description Most input tokens a run may send. `null` sets no ceiling. */
+                maxInputTokens: number | null;
+                /** @description Most output tokens a run may receive. `null` sets no ceiling. */
+                maxOutputTokens: number | null;
+                /** @description Most a run may cost in US dollars. `null` sets no ceiling. */
+                maxCostUsd: number | null;
             };
             storage?: {
                 provider: string;
@@ -7526,6 +7554,20 @@ export interface components {
                         cachedInputPerMTok?: number;
                     };
                 };
+            };
+            browserAgentCeilings?: {
+                /** @description Most browser actions a run may take. `null` sets no ceiling. */
+                maxActions?: number | null;
+                /** @description Most model round trips a run may make. `null` sets no ceiling. */
+                maxModelCalls?: number | null;
+                /** @description Most active minutes a run may use. `null` sets no ceiling. */
+                maxActiveMinutes?: number | null;
+                /** @description Most input tokens a run may send. `null` sets no ceiling. */
+                maxInputTokens?: number | null;
+                /** @description Most output tokens a run may receive. `null` sets no ceiling. */
+                maxOutputTokens?: number | null;
+                /** @description Most a run may cost in US dollars. `null` sets no ceiling. */
+                maxCostUsd?: number | null;
             };
             storage?: {
                 provider?: string;
@@ -12080,6 +12122,30 @@ export interface components {
                 source: "run" | "schedule" | "task" | "user_default" | "system_default";
                 builtin: boolean;
             } | null;
+            /** @description Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field. */
+            stopReason: ("finished" | "budget_actions" | "budget_model_calls" | "budget_active_time" | "budget_input_tokens" | "budget_output_tokens" | "budget_cost" | "stalled" | "cancelled" | "error" | "no_model") | null;
+            budget: {
+                /** @description The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD. */
+                effective: {
+                    [key: string]: number | null;
+                } & {
+                    warnAtPercent: number;
+                };
+                /** @description What the run has used so far, in the same units (active time includes the stretch in progress). */
+                used: {
+                    [key: string]: number;
+                };
+                /** @description Percent of each limit used, one decimal; `null` for an unlimited budget. */
+                percent: {
+                    [key: string]: number | null;
+                };
+                /** @description Where each limit came from: the `policy`, or the deployment `ceiling` that clamped it. `null` when unlimited. */
+                source: {
+                    [key: string]: ("policy" | "ceiling") | null;
+                };
+                /** @description False when a call could not be priced: `used.cost` is then "at least". */
+                costKnown: boolean;
+            } | null;
             /** @description Input tokens the provider served from its cache (part of inputTokens) */
             cachedInputTokens: number;
             /** @description Model calls (provider round trips) made so far */
@@ -12150,6 +12216,30 @@ export interface components {
                  */
                 source: "run" | "schedule" | "task" | "user_default" | "system_default";
                 builtin: boolean;
+            } | null;
+            /** @description Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field. */
+            stopReason: ("finished" | "budget_actions" | "budget_model_calls" | "budget_active_time" | "budget_input_tokens" | "budget_output_tokens" | "budget_cost" | "stalled" | "cancelled" | "error" | "no_model") | null;
+            budget: {
+                /** @description The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD. */
+                effective: {
+                    [key: string]: number | null;
+                } & {
+                    warnAtPercent: number;
+                };
+                /** @description What the run has used so far, in the same units (active time includes the stretch in progress). */
+                used: {
+                    [key: string]: number;
+                };
+                /** @description Percent of each limit used, one decimal; `null` for an unlimited budget. */
+                percent: {
+                    [key: string]: number | null;
+                };
+                /** @description Where each limit came from: the `policy`, or the deployment `ceiling` that clamped it. `null` when unlimited. */
+                source: {
+                    [key: string]: ("policy" | "ceiling") | null;
+                };
+                /** @description False when a call could not be priced: `used.cost` is then "at least". */
+                costKnown: boolean;
             } | null;
             /** @description Input tokens the provider served from its cache (part of inputTokens) */
             cachedInputTokens: number;

@@ -35812,6 +35812,97 @@
               "models"
             ]
           },
+          "browserAgentCeilings": {
+            "type": "object",
+            "properties": {
+              "maxActions": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most browser actions a run may take. `null` sets no ceiling."
+              },
+              "maxModelCalls": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most model round trips a run may make. `null` sets no ceiling."
+              },
+              "maxActiveMinutes": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10080
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most active minutes a run may use. `null` sets no ceiling."
+              },
+              "maxInputTokens": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000000000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most input tokens a run may send. `null` sets no ceiling."
+              },
+              "maxOutputTokens": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most output tokens a run may receive. `null` sets no ceiling."
+              },
+              "maxCostUsd": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 100000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most a run may cost in US dollars. `null` sets no ceiling."
+              }
+            },
+            "required": [
+              "maxActions",
+              "maxModelCalls",
+              "maxActiveMinutes",
+              "maxInputTokens",
+              "maxOutputTokens",
+              "maxCostUsd"
+            ]
+          },
           "storage": {
             "type": "object",
             "properties": {
@@ -36350,6 +36441,7 @@
           "security",
           "notes",
           "agentPricing",
+          "browserAgentCeilings",
           "storage",
           "notifications",
           "ai",
@@ -36421,6 +36513,97 @@
             "required": [
               "currency",
               "models"
+            ]
+          },
+          "browserAgentCeilings": {
+            "type": "object",
+            "properties": {
+              "maxActions": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most browser actions a run may take. `null` sets no ceiling."
+              },
+              "maxModelCalls": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most model round trips a run may make. `null` sets no ceiling."
+              },
+              "maxActiveMinutes": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10080
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most active minutes a run may use. `null` sets no ceiling."
+              },
+              "maxInputTokens": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000000000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most input tokens a run may send. `null` sets no ceiling."
+              },
+              "maxOutputTokens": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most output tokens a run may receive. `null` sets no ceiling."
+              },
+              "maxCostUsd": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 100000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most a run may cost in US dollars. `null` sets no ceiling."
+              }
+            },
+            "required": [
+              "maxActions",
+              "maxModelCalls",
+              "maxActiveMinutes",
+              "maxInputTokens",
+              "maxOutputTokens",
+              "maxCostUsd"
             ]
           },
           "storage": {
@@ -37111,6 +37294,89 @@
                     "outputPerMTok"
                   ]
                 }
+              }
+            }
+          },
+          "browserAgentCeilings": {
+            "type": "object",
+            "properties": {
+              "maxActions": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most browser actions a run may take. `null` sets no ceiling."
+              },
+              "maxModelCalls": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most model round trips a run may make. `null` sets no ceiling."
+              },
+              "maxActiveMinutes": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10080
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most active minutes a run may use. `null` sets no ceiling."
+              },
+              "maxInputTokens": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000000000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most input tokens a run may send. `null` sets no ceiling."
+              },
+              "maxOutputTokens": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100000000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most output tokens a run may receive. `null` sets no ceiling."
+              },
+              "maxCostUsd": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 100000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Most a run may cost in US dollars. `null` sets no ceiling."
               }
             }
           },
@@ -58341,6 +58607,192 @@
               }
             ]
           },
+          "stopReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "finished",
+                  "budget_actions",
+                  "budget_model_calls",
+                  "budget_active_time",
+                  "budget_input_tokens",
+                  "budget_output_tokens",
+                  "budget_cost",
+                  "stalled",
+                  "cancelled",
+                  "error",
+                  "no_model"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field."
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "effective": {
+                    "allOf": [
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string",
+                          "enum": [
+                            "actions",
+                            "modelCalls",
+                            "activeMinutes",
+                            "inputTokens",
+                            "outputTokens",
+                            "cost"
+                          ]
+                        },
+                        "additionalProperties": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "required": [
+                          "actions",
+                          "modelCalls",
+                          "activeMinutes",
+                          "inputTokens",
+                          "outputTokens",
+                          "cost"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "warnAtPercent": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "warnAtPercent"
+                        ]
+                      }
+                    ],
+                    "description": "The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD."
+                  },
+                  "used": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "enum": [
+                        "actions",
+                        "modelCalls",
+                        "activeMinutes",
+                        "inputTokens",
+                        "outputTokens",
+                        "cost"
+                      ]
+                    },
+                    "additionalProperties": {
+                      "type": "number"
+                    },
+                    "required": [
+                      "actions",
+                      "modelCalls",
+                      "activeMinutes",
+                      "inputTokens",
+                      "outputTokens",
+                      "cost"
+                    ],
+                    "description": "What the run has used so far, in the same units (active time includes the stretch in progress)."
+                  },
+                  "percent": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "enum": [
+                        "actions",
+                        "modelCalls",
+                        "activeMinutes",
+                        "inputTokens",
+                        "outputTokens",
+                        "cost"
+                      ]
+                    },
+                    "additionalProperties": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "required": [
+                      "actions",
+                      "modelCalls",
+                      "activeMinutes",
+                      "inputTokens",
+                      "outputTokens",
+                      "cost"
+                    ],
+                    "description": "Percent of each limit used, one decimal; `null` for an unlimited budget."
+                  },
+                  "source": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "enum": [
+                        "actions",
+                        "modelCalls",
+                        "activeMinutes",
+                        "inputTokens",
+                        "outputTokens",
+                        "cost"
+                      ]
+                    },
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "policy",
+                            "ceiling"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "required": [
+                      "actions",
+                      "modelCalls",
+                      "activeMinutes",
+                      "inputTokens",
+                      "outputTokens",
+                      "cost"
+                    ],
+                    "description": "Where each limit came from: the `policy`, or the deployment `ceiling` that clamped it. `null` when unlimited."
+                  },
+                  "costKnown": {
+                    "type": "boolean",
+                    "description": "False when a call could not be priced: `used.cost` is then \"at least\"."
+                  }
+                },
+                "required": [
+                  "effective",
+                  "used",
+                  "percent",
+                  "source",
+                  "costKnown"
+                ],
+                "description": "The run budget: `null` on a run that has not started or that was snapshotted before budgets were enforced."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "cachedInputTokens": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -58409,6 +58861,8 @@
           "inputTokens",
           "outputTokens",
           "policy",
+          "stopReason",
+          "budget",
           "cachedInputTokens",
           "modelCalls",
           "costUsd",
@@ -58665,6 +59119,192 @@
               }
             ]
           },
+          "stopReason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "finished",
+                  "budget_actions",
+                  "budget_model_calls",
+                  "budget_active_time",
+                  "budget_input_tokens",
+                  "budget_output_tokens",
+                  "budget_cost",
+                  "stalled",
+                  "cancelled",
+                  "error",
+                  "no_model"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the run stopped (typed): finished, budget_* (actions, model_calls, active_time, input_tokens, output_tokens, cost), stalled, cancelled, error or no_model. Null while it runs and on runs from before this field."
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "effective": {
+                    "allOf": [
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string",
+                          "enum": [
+                            "actions",
+                            "modelCalls",
+                            "activeMinutes",
+                            "inputTokens",
+                            "outputTokens",
+                            "cost"
+                          ]
+                        },
+                        "additionalProperties": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "required": [
+                          "actions",
+                          "modelCalls",
+                          "activeMinutes",
+                          "inputTokens",
+                          "outputTokens",
+                          "cost"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "warnAtPercent": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "warnAtPercent"
+                        ]
+                      }
+                    ],
+                    "description": "The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD."
+                  },
+                  "used": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "enum": [
+                        "actions",
+                        "modelCalls",
+                        "activeMinutes",
+                        "inputTokens",
+                        "outputTokens",
+                        "cost"
+                      ]
+                    },
+                    "additionalProperties": {
+                      "type": "number"
+                    },
+                    "required": [
+                      "actions",
+                      "modelCalls",
+                      "activeMinutes",
+                      "inputTokens",
+                      "outputTokens",
+                      "cost"
+                    ],
+                    "description": "What the run has used so far, in the same units (active time includes the stretch in progress)."
+                  },
+                  "percent": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "enum": [
+                        "actions",
+                        "modelCalls",
+                        "activeMinutes",
+                        "inputTokens",
+                        "outputTokens",
+                        "cost"
+                      ]
+                    },
+                    "additionalProperties": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "required": [
+                      "actions",
+                      "modelCalls",
+                      "activeMinutes",
+                      "inputTokens",
+                      "outputTokens",
+                      "cost"
+                    ],
+                    "description": "Percent of each limit used, one decimal; `null` for an unlimited budget."
+                  },
+                  "source": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "enum": [
+                        "actions",
+                        "modelCalls",
+                        "activeMinutes",
+                        "inputTokens",
+                        "outputTokens",
+                        "cost"
+                      ]
+                    },
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "policy",
+                            "ceiling"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "required": [
+                      "actions",
+                      "modelCalls",
+                      "activeMinutes",
+                      "inputTokens",
+                      "outputTokens",
+                      "cost"
+                    ],
+                    "description": "Where each limit came from: the `policy`, or the deployment `ceiling` that clamped it. `null` when unlimited."
+                  },
+                  "costKnown": {
+                    "type": "boolean",
+                    "description": "False when a call could not be priced: `used.cost` is then \"at least\"."
+                  }
+                },
+                "required": [
+                  "effective",
+                  "used",
+                  "percent",
+                  "source",
+                  "costKnown"
+                ],
+                "description": "The run budget: `null` on a run that has not started or that was snapshotted before budgets were enforced."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "cachedInputTokens": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -58829,6 +59469,8 @@
           "inputTokens",
           "outputTokens",
           "policy",
+          "stopReason",
+          "budget",
           "cachedInputTokens",
           "modelCalls",
           "costUsd",

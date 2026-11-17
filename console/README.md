@@ -54,7 +54,7 @@ An **agent policy** says which models a run may use and how much it may spend. I
 - **Stall detection:** failures in a row, a repeated action, actions without progress, and what to do (nudge then escalate, escalate, ask a person, fail).
 - **Context:** screenshots kept, prune batch, model calls per chunk and observation size.
 
-Enforcement arrives in steps: today a run honours the policy's **action** and **active-minute** limits (`null` is no limit); a pin on the start tier picks the model; the tier ladder, the other budgets, stall detection and the context settings are stored, validated and snapshotted already, and enforced by the stories that follow (epic #398).
+Enforcement arrives in steps: today a run enforces **every budget** (see Budgets below); a pin on the start tier picks the model; the tier ladder, stall detection and the context settings are stored, validated and snapshotted already, and enforced by the stories that follow (epic #398).
 
 **Built-in policies** are code (`builtin:economy`, `builtin:balanced`, `builtin:thorough`, `builtin:unlimited`): read-only, never pinning a model. Duplicate one to edit a copy.
 
@@ -82,6 +82,19 @@ A reference to a deleted policy (or someone else's) falls through to the next le
 **The API** (`/api/agent-policies`, permissions `agent_policies:read` / `:write`, granted like `tasks:*`): list (built-ins and your own, each with `isDefault`, `usage` and `hasNoHardStop`), create, read, edit (`If-Match: <version>`, `412` on a stale version; built-ins answer `403`), delete (`409 POLICY_IN_USE` listing the tasks and schedules, or `?reassignTo=<id>`; `409 POLICY_IS_DEFAULT`), duplicate. Tasks and schedules take `policyId`; `null` follows the next level.
 
 **The earlier task fields.** `maxSteps`, `maxMinutes` and `model` on a task still work for one release and are marked deprecated. Sending one (with no `policyId`) saves a derived personal policy named `Task: <task name>`, built from Balanced (`maxActions` = `maxSteps`, `maxActiveMinutes` = `maxMinutes`; a model becomes the `standard` pin and caps `maxTier` at `standard`) and answers with a `Deprecation: true` header. The `agent_policies` migration converted existing tasks the same way. Use `policyId` instead.
+
+### Budgets
+
+A run is held to six budgets: **actions**, **model calls**, **active minutes** (time waiting for a person never counts), **input tokens**, **output tokens** and **cost** (US dollars, from the admin price table; an unpriced call counts nothing toward the limit and the run shows "at least"). The budget engine is `console/apps/api/src/runner/budget.ts` (`BudgetTracker`, pure and unit tested).
+
+- **`null` is unlimited.** A policy with every budget `null` (the built-in Unlimited) has no hard stop: the run ends when it finishes, when you stop it, or when it stalls. The first line of its run log says so.
+- **Ceilings.** The deployment's admin sets ceilings in the `browserAgentCeilings` system setting (same keys as a policy's budget, each nullable, none by default). A run's effective limit is `min(policy, ceiling)`; it is unlimited only when both are `null`, so a ceiling also caps an Unlimited policy. The effective budget is written to the run's snapshot at its first step (`policy_snapshot.effectiveBudget`, with where each limit came from: `policy` or `ceiling`), so changing a policy or a ceiling never changes a run in flight.
+- **Where it is checked.** After every model call (model calls, tokens, cost), before every browser action (actions) and before each chunk (everything, active time included). A run continued after a handoff or in a new job starts from what it already used, never from a fresh budget.
+- **Warning.** The first time a budget reaches the policy's `warnAtPercent`, the model's next round carries: `Budget: <budget> is at <p>% (<used> of <limit>). Finish the goal now if you can; otherwise call finish with what you achieved and what remains.` The run log records it once per budget.
+- **Wrap-up.** When a budget is used up the run makes one last model call with only the `finish` tool (one step, a capped output), exempt from the exhausted budget and counted in the run's totals, so a stopped run still returns a partial result: `finish(success: true)` ends the run `succeeded`; anything else ends it `failed` with the model's summary as `result` and the budget message (for example `Step budget exhausted`) as `error`. If the model calls no `finish`, the run ends with the budget message alone.
+- **`stopReason`.** Every finished run carries a typed `stopReason` (`runs.stop_reason`): `finished`, `budget_actions`, `budget_model_calls`, `budget_active_time`, `budget_input_tokens`, `budget_output_tokens`, `budget_cost`, `stalled`, `cancelled`, `error` or `no_model`. A wrap-up that succeeds keeps the budget reason, so the run page can say what forced the stop. Runs from before the column have `null`.
+- **API.** Run responses (and the `run` events of `GET /api/runs/:id/stream`) carry `stopReason` and `budget: { effective, used, percent, source, costKnown }`: the limits, what the run used (active time in minutes, cost in USD), the percent of each limit (`null` when unlimited), and the source of each limit. `budget` is `null` until the run's first step.
+- **No-progress guard.** Until stall detection ships (epic #398), a run whose rounds record nothing three times in a row ends `failed` with `stopReason: stalled`, so an Unlimited run cannot spin without ever acting.
 
 ## Layout
 

@@ -19,6 +19,13 @@ import { GoalRunHandler } from '../src/runner/goal-runner.jobs';
 import { TasksService } from '../src/tasks/tasks.service';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { PolicyModelCheck, PolicyResolver } from '../src/policies';
+import { balancedSpec } from '../src/policies/builtin-policies';
+import type { AgentPolicySpec } from '../src/policies/agent-policy.schema';
+import type { RunPolicySnapshot } from '../src/policies/policy-snapshot';
+import { UNLIMITED_LOG_LINE } from '../src/runner/budget';
+import { AiError } from '@marinoscar/platform-api/ai';
+import { lastValueFrom, toArray } from 'rxjs';
+import { RunLiveController } from '../src/runner/run-live.controller';
 
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
@@ -82,7 +89,7 @@ function fakeFabric() {
 type Call = [name: string, args: Record<string, unknown>];
 
 /** A model that makes the scripted tool calls, one script per runTools call. */
-function scriptedAi(scripts: Call[][], served: { provider: string; model: string; cachedInputTokens?: number } | null = null) {
+function scriptedAi(scripts: Call[][], served: { provider: string; model: string; cachedInputTokens?: number } | null = null, usage: { inputTokens: number; outputTokens: number } = { inputTokens: 10, outputTokens: 5 }) {
   const outputs: string[] = [];
   const runTools = jest.fn(async (req: { tools: { tool: { name: string }; execute: (a: unknown, c: unknown) => Promise<unknown> }[]; onStep?: (s: unknown) => void; input: string }) => {
     const script = scripts.shift() ?? [];
@@ -90,7 +97,7 @@ function scriptedAi(scripts: Call[][], served: { provider: string; model: string
     for (const [name, args] of script) {
       const t = req.tools.find((x) => x.tool.name === name)!;
       outputs.push(String(await t.execute(args, { userId: 'u' })));
-      req.onStep?.({ step: ++step, response: { ...(served ? { provider: served.provider, model: served.model } : {}), usage: { inputTokens: 10, outputTokens: 5, ...(served?.cachedInputTokens ? { cachedInputTokens: served.cachedInputTokens } : {}) } }, calls: [] });
+      req.onStep?.({ step: ++step, response: { ...(served ? { provider: served.provider, model: served.model } : {}), usage: { ...usage, ...(served?.cachedInputTokens ? { cachedInputTokens: served.cachedInputTokens } : {}) } }, calls: [] });
     }
     return { final: { outputText: '' }, steps: [], stopReason: 'steps_exhausted' };
   });
@@ -649,6 +656,13 @@ describe('the goal runner prices every model call (E31.2)', () => {
   });
 });
 
+/** A run policy snapshot of Balanced with these budget values (every other limit unlimited), as a first advance would store it. */
+function snapshotWith(budget: Partial<AgentPolicySpec['budget']>): RunPolicySnapshot {
+  const spec = balancedSpec();
+  spec.budget = { ...spec.budget, maxActions: null, maxModelCalls: null, maxActiveMinutes: null, maxInputTokens: null, maxOutputTokens: null, maxCostUsd: null, ...budget };
+  return { schemaVersion: 1, ref: 'builtin:balanced', name: 'Balanced', version: 1, builtin: true, source: 'system_default', spec, tiers: null, takenAt: new Date().toISOString() };
+}
+
 describe('the goal runner budgets (#399)', () => {
   async function setup(email: string, maxMinutes: number) {
     const userId = await login(email);
@@ -682,8 +696,9 @@ describe('the goal runner budgets (#399)', () => {
     expect(done.activeMs).toBeLessThan(60_000);
   });
 
-  it('still stops with "Time budget exhausted" once active time passes maxMinutes, and the alert counts it', async () => {
+  it('still stops with "Time budget exhausted" once active time passes the budget, and the alert counts it', async () => {
     const { userId, prisma, db, run, fabric } = await setup(`runner-time-${stamp}@example.test`, 1);
+    await db.run.updateMany({ where: { id: run.id }, data: { policySnapshot: snapshotWith({ maxActiveMinutes: 1 }) as never, policySource: 'task', policyRef: 'builtin:balanced', policyVersion: 1 } });
     const { ai } = scriptedAi([[['navigate', { url: 'https://example.test/', reason: 'go' }], ['navigate', { url: 'https://example.test/2', reason: 'go' }]]]);
     const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai);
     // Every clock read passes 40 s of active time.
@@ -691,7 +706,7 @@ describe('the goal runner budgets (#399)', () => {
     runner.clock = () => (now += 40_000);
     expect(await runner.advance(run.id, userId, null)).toBe('failed');
     const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
-    expect(done).toMatchObject({ status: 'failed', error: 'Time budget exhausted' });
+    expect(done).toMatchObject({ status: 'failed', error: 'Time budget exhausted', stopReason: 'budget_active_time' });
     const usage = await app.get(HexactraAlertsService, { strict: false }).sources.usage(new Date(Date.now() - 3_600_000));
     expect(usage.find((u) => u.userId === userId)?.budgetStops).toBe(1);
   });
@@ -736,5 +751,287 @@ describe('the goal runner budgets (#399)', () => {
     await handler.process({ id: 'job-1', orgId: null, payload: { runId: run.id, userId, orgId: null } } as never);
     expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ type: 'browser.goal.run', reason: 'run_continued', subjectId: run.id, skipDedup: true, scheduledFor: expect.any(Date) }));
     expect(handler.profile.maxRuntimeMs).toBe(30 * 60_000);
+  });
+});
+
+describe('the goal runner enforces budgets (#404)', () => {
+  const as = (token: string) => ({ authorization: `Bearer ${token}` });
+  const nav = (n: number): Call[] => Array.from({ length: n }, (_, i): Call => ['navigate', { url: `https://shop.example.test/${i}`, reason: 'go' }]);
+  const names = (req: { tools: { tool: { name: string } }[] }) => req.tools.map((t) => t.tool.name);
+
+  async function loginToken(email: string, role: 'admin' | 'contributor'): Promise<{ token: string; userId: string }> {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/test/login', payload: { email, role } });
+    const token = new URL(String(res.headers.location)).searchParams.get('token')!;
+    const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: as(token) });
+    return { token, userId: me.json<{ data: { id: string } }>().data.id };
+  }
+
+  /** A run whose snapshot holds exactly these budgets, as a first advance stores it. */
+  async function budgetRun(email: string, budget: Partial<AgentPolicySpec['budget']>, columns: Record<string, unknown> = {}, withToken = false) {
+    const { token, userId } = await loginToken(email, 'contributor');
+    void withToken;
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const run = await db.run.create({
+      data: { userId, goal: 'Browse the shop', policyRef: 'builtin:balanced', policyVersion: 1, policySource: 'system_default', policySnapshot: snapshotWith(budget) as never, ...columns },
+    });
+    return { token, userId, prisma, db, run };
+  }
+  const runnerOf = (prisma: PrismaService, ai: AiService, fabric: ReturnType<typeof fakeFabric>) => new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai, undefined, undefined, app.get(SystemSettingsService));
+
+  const WRAP = 'Done 3 pages; the checkout remains.';
+  const priced = { provider: 'prov-b', model: 'model-y' };
+
+  async function setPricing(token: string) {
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/api/system-settings',
+      headers: as(token),
+      payload: { agentPricing: { models: { 'prov-a:model-x': { inputPerMTok: 3, outputPerMTok: 15, cachedInputPerMTok: 0.3 }, 'prov-b:model-y': { inputPerMTok: 100_000, outputPerMTok: 0 } } } },
+    });
+    expect(res.statusCode).toBe(200);
+  }
+
+  // Each model step of the scripted AI is one call of 10 input and 5 output tokens (and $1 on prov-b:model-y).
+  it.each([
+    { key: 'budget_actions', error: 'Step budget exhausted', budget: { maxActions: 2 }, script: nav(3), usage: undefined },
+    { key: 'budget_model_calls', error: 'Model call budget exhausted', budget: { maxModelCalls: 2 }, script: nav(3), usage: undefined },
+    { key: 'budget_input_tokens', error: 'Input token budget exhausted', budget: { maxInputTokens: 15 }, script: nav(3), usage: undefined },
+    { key: 'budget_output_tokens', error: 'Output token budget exhausted', budget: { maxOutputTokens: 8 }, script: nav(3), usage: undefined },
+    { key: 'budget_cost', error: 'Cost budget exhausted', budget: { maxCostUsd: 1.5 }, script: nav(3), usage: priced },
+  ])('$key: stops the run, makes a wrap-up call with only finish, and keeps the model\'s summary', async ({ key, error, budget, script, usage }) => {
+    const admin = await loginToken(`budget-admin-${key}-${stamp}@example.test`, 'admin');
+    await setPricing(admin.token);
+    const { userId, prisma, db, run } = await budgetRun(`budget-${key}-${stamp}@example.test`, budget);
+    const fabric = fakeFabric();
+    const { ai, runTools } = scriptedAi([script, [['finish', { success: false, result: WRAP }]]], usage ?? null);
+    expect(await runnerOf(prisma, ai, fabric).advance(run.id, userId, null)).toBe('failed');
+
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({ status: 'failed', stopReason: key, error, result: WRAP });
+    // The chunk ended on the budget, then exactly one more call: only `finish`, one step, a capped output.
+    expect(runTools).toHaveBeenCalledTimes(2);
+    const wrap = runTools.mock.calls[1]![0] as unknown as { tools: { tool: { name: string } }[]; maxSteps: number; maxOutputTokens: number; input: string };
+    expect(names(wrap)).toEqual(['finish']);
+    expect(wrap).toMatchObject({ maxSteps: 1, maxOutputTokens: expect.any(Number) });
+    expect(wrap.input).toMatch(/budget is used up\. Call finish now: success only if the goal is fully done/);
+    // The wrap-up call is counted in the run's totals (2 chunk calls + 1 wrap-up call, minus what the budget cut).
+    expect(done.modelCalls).toBeGreaterThanOrEqual(3);
+    // Alerts count it from the typed reason.
+    const usageRows = await app.get(HexactraAlertsService, { strict: false }).sources.usage(new Date(Date.now() - 3_600_000));
+    expect(usageRows.find((u) => u.userId === userId)?.budgetStops).toBe(1);
+  });
+
+  it('active time: stops on the active-time budget with its own stop reason', async () => {
+    const { userId, prisma, db, run } = await budgetRun(`budget-time-${stamp}@example.test`, { maxActiveMinutes: 1 });
+    const { ai, runTools } = scriptedAi([nav(2), [['finish', { success: false, result: WRAP }]]]);
+    const runner = runnerOf(prisma, ai, fakeFabric());
+    let now = Date.now();
+    runner.clock = () => (now += 20_000);
+    expect(await runner.advance(run.id, userId, null)).toBe('failed');
+    expect(await db.run.findFirstOrThrow({ where: { id: run.id } })).toMatchObject({ status: 'failed', stopReason: 'budget_active_time', error: 'Time budget exhausted', result: WRAP });
+    expect(names(runTools.mock.calls[1]![0] as never)).toEqual(['finish']);
+  });
+
+  it('a wrap-up finish(success: true) ends the run as succeeded, still typed by the budget', async () => {
+    const { userId, prisma, db, run } = await budgetRun(`budget-wrap-ok-${stamp}@example.test`, { maxActions: 2 });
+    const { ai } = scriptedAi([nav(3), [['finish', { success: true, result: 'The goal was already met.' }]]]);
+    expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('succeeded');
+    expect(await db.run.findFirstOrThrow({ where: { id: run.id } })).toMatchObject({ status: 'succeeded', stopReason: 'budget_actions', result: 'The goal was already met.', error: null });
+  });
+
+  it('without a finish in the wrap-up call the run ends on the budget message', async () => {
+    const { userId, prisma, db, run } = await budgetRun(`budget-wrap-none-${stamp}@example.test`, { maxModelCalls: 1 });
+    const { ai, runTools } = scriptedAi([nav(2), []]);
+    expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('failed');
+    expect(runTools).toHaveBeenCalledTimes(2);
+    expect(await db.run.findFirstOrThrow({ where: { id: run.id } })).toMatchObject({ status: 'failed', stopReason: 'budget_model_calls', error: 'Model call budget exhausted', result: null });
+  });
+
+  it('a wrap-up that fails at the provider still ends the run on the budget', async () => {
+    const { userId, prisma, db, run } = await budgetRun(`budget-wrap-err-${stamp}@example.test`, { maxActions: 1 });
+    const { ai, runTools } = scriptedAi([nav(2)]);
+    const scripted = runTools.getMockImplementation()!;
+    let calls = 0;
+    runTools.mockImplementation(async (req) => {
+      if (++calls >= 2) throw new Error('provider down');
+      return scripted(req);
+    });
+    expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('failed');
+    expect(await db.run.findFirstOrThrow({ where: { id: run.id } })).toMatchObject({ status: 'failed', stopReason: 'budget_actions', error: 'Step budget exhausted' });
+  });
+
+  it('a continued run starts from what it already used: no fresh budget after a hop or a handoff', async () => {
+    // 5 of 6 model calls used in earlier jobs: this job's first call uses the last one.
+    const { userId, prisma, db, run } = await budgetRun(`budget-resume-${stamp}@example.test`, { maxModelCalls: 6, maxCostUsd: 1 }, { modelCalls: 5, stepCount: 3, costUsd: 0.4 });
+    const { ai, runTools } = scriptedAi([nav(3), [['finish', { success: false, result: WRAP }]]]);
+    expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('failed');
+    expect(await db.run.findFirstOrThrow({ where: { id: run.id } })).toMatchObject({ stopReason: 'budget_model_calls', modelCalls: 7 });
+    expect(runTools).toHaveBeenCalledTimes(2);
+    // Already past a budget when a job starts: it goes straight to the wrap-up.
+    const spent = await budgetRun(`budget-resume2-${stamp}@example.test`, { maxActions: 4 }, { stepCount: 4 });
+    const second = scriptedAi([[['finish', { success: false, result: WRAP }]]]);
+    expect(await runnerOf(spent.prisma, second.ai, fakeFabric()).advance(spent.run.id, spent.userId, null)).toBe('failed');
+    expect(second.runTools).toHaveBeenCalledTimes(1);
+    expect(names(second.runTools.mock.calls[0]![0] as never)).toEqual(['finish']);
+    expect(await spent.db.run.findFirstOrThrow({ where: { id: spent.run.id } })).toMatchObject({ stopReason: 'budget_actions', result: WRAP });
+  });
+
+  it('warns once per budget at the threshold: the next round carries the line, and the log records it once', async () => {
+    const { userId, prisma, db, run } = await budgetRun(`budget-warn-${stamp}@example.test`, { maxActions: 10, warnAtPercent: 80 });
+    const { ai, runTools } = scriptedAi([nav(8), [...nav(1), ['finish', { success: true, result: 'Done' }]]]);
+    expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('succeeded');
+    const inputs = runTools.mock.calls.map((c) => String((c[0] as { input: string }).input));
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0]).not.toContain('Budget:');
+    expect(inputs[1]).toContain('Budget: actions is at 80% (8 of 10). Finish the goal now if you can; otherwise call finish with what you achieved and what remains.');
+    const saved = (await db.run.findFirstOrThrow({ where: { id: run.id } })).transcript as unknown as { log: string[]; warned: string[]; pendingWarnings: string[] };
+    expect(saved.log.filter((l) => l.startsWith('Budget warning:'))).toEqual(['Budget warning: actions is at 80% (8 of 10).']);
+    expect(saved.warned).toEqual(['actions']);
+    expect(saved.pendingWarnings).toEqual([]);
+  });
+
+  it('carries no secret material in the warning, the wrap-up or the log', async () => {
+    const { userId, prisma, run } = await budgetRun(`budget-secret-${stamp}@example.test`, { maxActions: 2, warnAtPercent: 50 });
+    const { ai, runTools } = scriptedAi([[['type_text', { selector: '#otp', text: SECRET, submit: false }], ...nav(2)], [['finish', { success: false, result: WRAP }]]]);
+    await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null);
+    const sent = runTools.mock.calls.map((c) => String((c[0] as { input: string }).input)).join('\n');
+    expect(sent).not.toContain(SECRET);
+  });
+
+  it('an Unlimited policy with no ceilings runs past 1,000 actions and stops only by finishing', async () => {
+    const userId = await login(`budget-unlimited-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const task = await db.task.create({ data: { userId, name: 'Endless', goal: 'Browse', policyRef: 'builtin:unlimited' } });
+    const run = await db.run.create({ data: { userId, taskId: task.id, goal: task.goal } });
+    const many = nav(1_050);
+    const { ai, runTools } = scriptedAi([many.slice(0, 350), many.slice(350, 700), many.slice(700), [['finish', { success: true, result: 'Browsed it all' }]]]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fakeFabric().client, ai, undefined, undefined, app.get(SystemSettingsService), app.get(PolicyResolver), app.get(PolicyModelCheck));
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({ status: 'succeeded', stopReason: 'finished', stepCount: 1_051 });
+    expect(runTools).toHaveBeenCalledTimes(4);
+    const view = await app.inject({ method: 'GET', url: `/api/runs/${run.id}`, headers: as((await loginToken(`budget-unlimited-${stamp}@example.test`, 'contributor')).token) });
+    const budget = view.json<{ data: { budget: { effective: Record<string, number | null>; percent: Record<string, number | null> } } }>().data.budget;
+    expect(Object.values(budget.percent).every((p) => p === null)).toBe(true);
+    expect(budget.effective).toMatchObject({ actions: null, cost: null });
+  }, 180_000);
+
+  it('an Unlimited run says so on the first line of its log', async () => {
+    const userId = await login(`budget-unlimited-log-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const task = await db.task.create({ data: { userId, name: 'Endless', goal: 'Browse', policyRef: 'builtin:unlimited' } });
+    const run = await db.run.create({ data: { userId, taskId: task.id, goal: task.goal } });
+    const { ai } = scriptedAi([[['finish', { success: true, result: 'ok' }]]]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fakeFabric().client, ai, undefined, undefined, app.get(SystemSettingsService), app.get(PolicyResolver), app.get(PolicyModelCheck));
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    expect(((await db.run.findFirstOrThrow({ where: { id: run.id } })).transcript as unknown as { log: string[] }).log[0]).toBe(UNLIMITED_LOG_LINE);
+  });
+
+  it('a deployment ceiling clamps an unlimited policy; the run, its response and its stream say so', async () => {
+    const admin = await loginToken(`budget-ceiling-admin-${stamp}@example.test`, 'admin');
+    const set = await app.inject({ method: 'PATCH', url: '/api/system-settings', headers: as(admin.token), payload: { browserAgentCeilings: { maxActions: 2, maxCostUsd: null } } });
+    expect(set.statusCode).toBe(200);
+    try {
+      const { token, userId } = await loginToken(`budget-ceiling-${stamp}@example.test`, 'contributor');
+      const prisma = app.get(PrismaService);
+      const db = prisma.forUser({ userId });
+      const task = await db.task.create({ data: { userId, name: 'Capped', goal: 'Browse', policyRef: 'builtin:unlimited' } });
+      const run = await db.run.create({ data: { userId, taskId: task.id, goal: task.goal } });
+      const { ai } = scriptedAi([nav(3), [['finish', { success: false, result: WRAP }]]]);
+      const runner = new GoalRunnerService(prisma, app.get(TasksService), fakeFabric().client, ai, undefined, undefined, app.get(SystemSettingsService), app.get(PolicyResolver), app.get(PolicyModelCheck));
+      expect(await runner.advance(run.id, userId, null)).toBe('failed');
+      const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+      expect(done).toMatchObject({ stopReason: 'budget_actions', result: WRAP });
+      expect((done.policySnapshot as unknown as { effectiveBudget: { limits: { actions: number }; source: { actions: string; cost: null } } }).effectiveBudget).toMatchObject({ limits: { actions: 2 }, source: { actions: 'ceiling', cost: null } });
+      // A later change of the ceiling does not touch the snapshot of this run.
+      await app.inject({ method: 'PATCH', url: '/api/system-settings', headers: as(admin.token), payload: { browserAgentCeilings: { maxActions: 50 } } });
+
+      const res = await app.inject({ method: 'GET', url: `/api/runs/${run.id}`, headers: as(token) });
+      const data = res.json<{ data: { stopReason: string; budget: { effective: Record<string, number | null>; used: Record<string, number>; percent: Record<string, number | null>; source: Record<string, string | null>; costKnown: boolean } } }>().data;
+      expect(data.stopReason).toBe('budget_actions');
+      expect(data.budget.effective).toMatchObject({ actions: 2, warnAtPercent: 80, cost: null });
+      expect(data.budget.used.actions).toBeGreaterThanOrEqual(2);
+      expect(data.budget.percent.actions).toBeGreaterThanOrEqual(100);
+      expect(data.budget.source).toMatchObject({ actions: 'ceiling', cost: null });
+      const list = await app.inject({ method: 'GET', url: '/api/runs', headers: as(token) });
+      expect(list.json<{ data: { id: string; stopReason: string; budget: unknown }[] }>().data.find((r) => r.id === run.id)).toMatchObject({ stopReason: 'budget_actions', budget: expect.any(Object) });
+      expect(JSON.stringify(data)).not.toContain('policySnapshot');
+
+      // The live stream carries the budget on its run event.
+      // (`inject` cannot hold an event stream open: read the controller's observable.)
+      const events = await lastValueFrom(app.get(RunLiveController).stream(userId, run.id).pipe(toArray()));
+      const runEvent = events.find((ev) => ev.type === 'run');
+      if (!runEvent) throw new Error('the stream sent no run event');
+      const streamed = runEvent.data as { stopReason: string; budget: { effective: { actions: number }; percent: { actions: number } }; policySnapshot?: unknown };
+      expect(streamed).toMatchObject({ stopReason: 'budget_actions', budget: { effective: { actions: 2 } } });
+      expect(streamed.policySnapshot).toBeUndefined();
+    } finally {
+      await app.inject({ method: 'PATCH', url: '/api/system-settings', headers: as(admin.token), payload: { browserAgentCeilings: { maxActions: null } } });
+    }
+  });
+
+  it('stamps stop_reason on every other way a run ends', async () => {
+    // The model's own finish, a failed finish, and an answer without a finish.
+    const a = await budgetRun(`stop-finish-${stamp}@example.test`, {});
+    const fin = scriptedAi([[['finish', { success: true, result: 'ok' }]]]);
+    expect(await runnerOf(a.prisma, fin.ai, fakeFabric()).advance(a.run.id, a.userId, null)).toBe('succeeded');
+    expect(await a.db.run.findFirstOrThrow({ where: { id: a.run.id } })).toMatchObject({ status: 'succeeded', stopReason: 'finished' });
+
+    const b = await budgetRun(`stop-failed-finish-${stamp}@example.test`, {});
+    const bad = scriptedAi([[['finish', { success: false, result: 'could not' }]]]);
+    expect(await runnerOf(b.prisma, bad.ai, fakeFabric()).advance(b.run.id, b.userId, null)).toBe('failed');
+    expect(await b.db.run.findFirstOrThrow({ where: { id: b.run.id } })).toMatchObject({ status: 'failed', stopReason: 'finished' });
+
+    const c = await budgetRun(`stop-completed-${stamp}@example.test`, {});
+    const chat = scriptedAi([]);
+    chat.runTools.mockImplementation(async () => ({ final: { outputText: 'All done' }, steps: [], stopReason: 'completed' }));
+    expect(await runnerOf(c.prisma, chat.ai, fakeFabric()).advance(c.run.id, c.userId, null)).toBe('succeeded');
+    expect(await c.db.run.findFirstOrThrow({ where: { id: c.run.id } })).toMatchObject({ status: 'succeeded', stopReason: 'finished', result: 'All done' });
+
+    // Cancelled (by the runner, and by the API while queued).
+    const d = await budgetRun(`stop-cancel-${stamp}@example.test`, {}, { cancelRequested: true });
+    expect(await runnerOf(d.prisma, scriptedAi([]).ai, fakeFabric()).advance(d.run.id, d.userId, null)).toBe('cancelled');
+    expect(await d.db.run.findFirstOrThrow({ where: { id: d.run.id } })).toMatchObject({ status: 'cancelled', stopReason: 'cancelled' });
+    const e = await budgetRun(`stop-cancel-queued-${stamp}@example.test`, {});
+    await app.get(TasksService).cancel(e.userId, e.run.id);
+    expect(await e.db.run.findFirstOrThrow({ where: { id: e.run.id } })).toMatchObject({ status: 'cancelled', stopReason: 'cancelled' });
+
+    // No browser: an error.
+    const f = await budgetRun(`stop-nobrowser-${stamp}@example.test`, {});
+    const broken = fakeFabric();
+    (broken.client.request as unknown as jest.Mock).mockImplementation(async () => {
+      throw new Error('fabric down');
+    });
+    expect(await runnerOf(f.prisma, scriptedAi([]).ai, broken).advance(f.run.id, f.userId, null)).toBe('failed');
+    expect(await f.db.run.findFirstOrThrow({ where: { id: f.run.id } })).toMatchObject({ status: 'failed', stopReason: 'error' });
+  });
+
+  it('the job handler records stop_reason error, and no_model when no model could be chosen', async () => {
+    const g = await budgetRun(`stop-handler-${stamp}@example.test`, {});
+    const h = await budgetRun(`stop-handler-model-${stamp}@example.test`, {});
+    const fail = (runId: string, userId: string, error: Error) => {
+      const handler = new GoalRunHandler({ register: jest.fn() } as never, { advance: jest.fn(async () => { throw error; }) } as never, app.get(PrismaService), { enqueue: jest.fn() } as never);
+      return handler.process({ id: 'job', orgId: null, payload: { runId, userId, orgId: null } } as never).catch(() => undefined);
+    };
+    await fail(g.run.id, g.userId, new Error('boom'));
+    expect(await g.db.run.findFirstOrThrow({ where: { id: g.run.id } })).toMatchObject({ status: 'failed', stopReason: 'error', error: 'boom' });
+    await fail(h.run.id, h.userId, new AiError('AI_INVALID_REQUEST', 'No model selected.'));
+    expect(await h.db.run.findFirstOrThrow({ where: { id: h.run.id } })).toMatchObject({ status: 'failed', stopReason: 'no_model' });
+  });
+
+  it('alerts count budget stops from stop_reason, and legacy rows from their error text', async () => {
+    const { userId, db } = await budgetRun(`budget-alerts-${stamp}@example.test`, {});
+    const base = { userId, goal: 'g', status: 'failed' as const };
+    await db.run.create({ data: { ...base, stopReason: 'budget_cost', error: 'anything' } });
+    await db.run.create({ data: { ...base, stopReason: null, error: 'Step budget exhausted' } });
+    await db.run.create({ data: { ...base, stopReason: 'error', error: 'Time budget exhausted' } });
+    await db.run.create({ data: { ...base, stopReason: 'stalled', error: 'stuck' } });
+    await db.run.create({ data: { ...base, stopReason: 'budget_actions', status: 'succeeded' } });
+    const usage = await app.get(HexactraAlertsService, { strict: false }).sources.usage(new Date(Date.now() - 3_600_000));
+    // The new reason and the legacy string count; an error that merely says so, a stall and a success do not.
+    expect(usage.find((u) => u.userId === userId)?.budgetStops).toBe(2);
   });
 });
