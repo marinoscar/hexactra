@@ -84,6 +84,36 @@ export class PolicyResolver {
     return { policy, source: 'system_default', notes };
   }
 
+  /**
+   * The policy that would apply to a run of each task started now with no
+   * override: the task's own, else the user's default, else `builtin:balanced`
+   * (levels 3 to 5 of `forRun`). For a page of tasks, in two reads whatever the
+   * page size. `isDefault` says the policy is the one the user's default
+   * resolves to. Nothing is logged: a list is read often, and a run of the
+   * task logs the fall-through when it happens.
+   */
+  async forTasks(userId: string, tasks: readonly { id: string; policyRef: string | null }[]): Promise<Map<string, { policy: PolicyRecord; source: PolicySource; isDefault: boolean }>> {
+    const out = new Map<string, { policy: PolicyRecord; source: PolicySource; isDefault: boolean }>();
+    if (tasks.length === 0) return out;
+    const userRef = await this.policies.readDefaultRef(userId);
+    const refs = new Set<string>([SYSTEM_DEFAULT_POLICY_REF]);
+    if (userRef !== null) refs.add(userRef);
+    for (const t of tasks) if (t.policyRef !== null) refs.add(t.policyRef);
+    const found = await this.policies.findMany(userId, refs);
+    const userDefault = userRef !== null ? found.get(userRef) : undefined;
+    const fallback: { policy: PolicyRecord; source: PolicySource } | null = userDefault
+      ? { policy: userDefault, source: 'user_default' }
+      : found.has(SYSTEM_DEFAULT_POLICY_REF)
+        ? { policy: found.get(SYSTEM_DEFAULT_POLICY_REF)!, source: 'system_default' }
+        : null;
+    for (const t of tasks) {
+      const own = t.policyRef !== null ? found.get(t.policyRef) : undefined;
+      const chosen = own ? { policy: own, source: 'task' as const } : fallback;
+      if (chosen) out.set(t.id, { ...chosen, isDefault: fallback !== null && chosen.policy.id === fallback.policy.id });
+    }
+    return out;
+  }
+
   private async taskRef(input: PolicyResolveInput): Promise<string | null> {
     if (!input.taskId) return null;
     const task = await this.prisma.task.findFirst({ where: { id: input.taskId, userId: input.userId }, select: { policyRef: true } });

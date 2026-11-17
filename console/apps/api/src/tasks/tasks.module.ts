@@ -11,12 +11,15 @@ import { RunNotifier } from './run-notifier';
 import { RunRemindHandler, RunRemindTask, RunReminders } from './run-reminders';
 import { RunsQueryService } from './runs.query';
 import { TasksService } from './tasks.service';
+import { TaskSchedulesController } from './task-schedules.controller';
+import { TaskSchedulesService } from './task-schedules.service';
+import { TaskSummaryService } from './task-summary.service';
 
 /** Browser tasks and their runs (the goal runner lives in src/runner/). */
 @Module({
   imports: [FabricModule, PoliciesModule],
-  controllers: [TasksController, RunsController],
-  providers: [TasksService, RunsQueryService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders, RunRemindHandler, RunRemindTask],
-  exports: [TasksService, RunsQueryService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders],
+  controllers: [TasksController, TaskSchedulesController, RunsController],
+  providers: [TasksService, RunsQueryService, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders, RunRemindHandler, RunRemindTask],
+  exports: [TasksService, RunsQueryService, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders],
 })
 export class TasksModule {}

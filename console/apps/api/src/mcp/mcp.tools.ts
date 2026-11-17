@@ -205,9 +205,9 @@ export const MCP_TOOLS: McpTool[] = [
   },
   {
     name: 'schedule_create',
-    description: 'Run a task on a schedule: a 5-field cron expression in an IANA time zone (at most every 5 minutes). policy_id makes the scheduled runs use that agent policy instead of the task\'s.',
-    input: z.object({ task_id: id, cron: z.string().min(9).max(100), timezone: z.string().default('UTC'), policy_id: policyIdParam.optional() }),
-    call: async (a, ctx) => text(await ctx.api('POST', '/schedules', { taskId: a.task_id, cron: a.cron, timezone: a.timezone, ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}) })),
+    description: 'Run a task on a schedule: a 5-field cron expression (at most every 5 minutes). timezone is an IANA time zone; leave it out to use the time zone of the user\'s profile (UTC when the profile has none). policy_id makes the scheduled runs use that agent policy instead of the task\'s.',
+    input: z.object({ task_id: id, cron: z.string().min(9).max(100), timezone: z.string().optional(), policy_id: policyIdParam.optional() }),
+    call: async (a, ctx) => text(await ctx.api('POST', '/schedules', { taskId: a.task_id, cron: a.cron, ...(a.timezone !== undefined ? { timezone: a.timezone } : {}), ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}) })),
   },
   { name: 'schedules_list', description: 'Task schedules.', input: z.object({}), call: async (_a, ctx) => text(await ctx.api('GET', '/schedules')) },
   { name: 'inbox_list', description: "What the user's agents are waiting for (CAPTCHAs, codes, sign-ins, confirmations). Relay these to the user.", input: z.object({}), call: async (_a, ctx) => text(await ctx.api('GET', '/inbox')) },

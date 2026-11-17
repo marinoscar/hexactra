@@ -373,7 +373,10 @@
       "id": "schedules.update",
       "description": "Pause, resume or change a schedule",
       "rest": [
-        "PATCH /api/schedules/{id}"
+        "PATCH /api/schedules/{id}",
+        "PUT /api/tasks/{id}/schedules",
+        "POST /api/tasks/{id}/schedules/pause",
+        "POST /api/tasks/{id}/schedules/resume"
       ],
       "cli": [
         "schedules pause",
@@ -401,6 +404,45 @@
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
       "web": "/tasks"
+    },
+    {
+      "id": "schedules.preview",
+      "description": "Check a schedule before saving it (what it means, when it fires next) and read the time zone a new schedule gets",
+      "rest": [
+        "POST /api/schedules/preview",
+        "GET /api/schedules/defaults"
+      ],
+      "cli": {
+        "none": "`schedules create` reports the same errors when it saves; the preview serves the web schedule editor"
+      },
+      "mcp": {
+        "none": "schedule_create reports the same errors when it saves, and uses the profile time zone when none is given"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": {
+        "none": "The schedule editor that calls it arrives with E32.7 (#425)"
+      }
+    },
+    {
+      "id": "tasks.stats",
+      "description": "A task's run statistics: outcomes, durations, cost and stop reasons per day",
+      "rest": [
+        "GET /api/tasks/{id}/stats"
+      ],
+      "cli": {
+        "none": "A chart on the task page; the CLI lists the runs themselves (client parity is settled in #432)"
+      },
+      "mcp": {
+        "none": "An agent reads the runs themselves with runs_list; the statistics are a chart for a person"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; the statistics are a chart on the web task page"
+      },
+      "web": {
+        "none": "The task detail page that shows it arrives with E32.10 (#428)"
+      }
     },
     {
       "id": "browser.session",
