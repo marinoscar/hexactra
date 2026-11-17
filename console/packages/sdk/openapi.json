@@ -27238,6 +27238,271 @@
         "description": "**Requires:** authentication, plus permission `tasks:write`."
       }
     },
+    "/api/runs/delete": {
+      "post": {
+        "description": "Permanent. Send exactly one of `ids` or `filter`. Live runs (queued, running, waiting_human) are never deleted: with `ids` they are listed in `skippedLive`, with `filter` they are not matched. A filter that matches more than 500 finished runs answers 202 and a queue job deletes them. Deleting runs also removes their cost and stop-reason history from task spend and from alert counts.\n\n**Requires:** authentication, plus permission `runs:delete`.",
+        "operationId": "runsDelete_deleteMany",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteRunsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The runs were deleted in the request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunsDeletedResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "More than 500 finished runs matched the filter: the `browser.runs.delete` job deletes them.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunsDeleteQueuedResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`COUNT_CHANGED`: the matching count is more than 5 % away from `expectedCount`; `details.matched` is the real count. Nothing was deleted."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Delete runs: a list of ids, or every finished run that matches a filter",
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:delete"
+          ]
+        }
+      }
+    },
+    "/api/runs/{id}": {
+      "delete": {
+        "description": "Permanent: the run, its steps and its questions. 409 `RUN_LIVE` while the run is queued, running or waiting for a person: cancel it first.\n\n**Requires:** authentication, plus permission `runs:delete`.",
+        "operationId": "runsDelete_deleteOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`RUN_NOT_FOUND`: no such run, or it is another user's."
+          },
+          "409": {
+            "description": "`RUN_LIVE`: the run is live. Cancel it first."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Delete one finished run",
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:delete"
+          ]
+        }
+      },
+      "get": {
+        "operationId": "runs_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RunDetailResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:read`."
+      }
+    },
     "/api/runs": {
       "get": {
         "operationId": "runs_list",
@@ -27698,90 +27963,6 @@
                   "properties": {
                     "data": {
                       "$ref": "#/components/schemas/RunCountsResponseDto"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized - Invalid or missing token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden - Insufficient permissions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorDto"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "JWT-auth": []
-          },
-          {
-            "PAT-auth": []
-          }
-        ],
-        "tags": [
-          "Runs"
-        ],
-        "x-rbac": {
-          "authenticated": true,
-          "roles": [],
-          "permissions": [
-            "runs:read"
-          ]
-        },
-        "description": "**Requires:** authentication, plus permission `runs:read`."
-      }
-    },
-    "/api/runs/{id}": {
-      "get": {
-        "operationId": "runs_get",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/RunDetailResponseDto"
                     }
                   }
                 }
@@ -34208,6 +34389,9 @@
               "POLICY_IMPORT_TOO_LARGE",
               "INVALID_FILTER",
               "INVALID_CURSOR",
+              "RUN_NOT_FOUND",
+              "RUN_LIVE",
+              "COUNT_CHANGED",
               "WEBHOOK_NOT_FOUND",
               "WEBHOOK_DELIVERY_NOT_FOUND",
               "WEBHOOK_URL_INVALID",
@@ -61528,6 +61712,193 @@
           }
         }
       },
+      "RunsDeleteQueuedResponseDto": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "The `browser.runs.delete` job that deletes the runs"
+          },
+          "matched": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Finished runs that matched when the request was made; runs created later are never deleted by the job"
+          },
+          "costUsd": {
+            "description": "The recorded model spend (USD) of the matched runs; null when none of them made a model call",
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "jobId",
+          "matched",
+          "costUsd"
+        ]
+      },
+      "RunsDeletedResponseDto": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Runs deleted, with their steps and questions"
+          },
+          "costUsd": {
+            "description": "The recorded model spend (USD) of the deleted runs; null when none of them made a model call",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "skippedLive": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "description": "Runs left alone because they are queued, running or waiting for a person: cancel them first"
+          },
+          "notFound": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "description": "With `ids`: ids that are not the caller's runs (missing, already deleted, or another user's). Always empty with `filter`"
+          }
+        },
+        "required": [
+          "deleted",
+          "costUsd",
+          "skippedLive",
+          "notFound"
+        ]
+      },
+      "DeleteRunsDto": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "description": "The runs to delete: 1 to 500 unique ids. Not together with `filter`.",
+            "minItems": 1,
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          "filter": {
+            "description": "Delete every FINISHED run (succeeded, failed, cancelled) that matches: the same filter as `GET /runs`. A live status in it is ignored, never deleted. Not together with `ids`. `{}` means all finished runs and needs `expectedCount`.",
+            "type": "object",
+            "properties": {
+              "status": {
+                "description": "Run status. Any of: queued, running, waiting_human, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "state": {
+                "description": "Shorthand for a status group: `live` = queued, running, waiting_human; `finished` = succeeded, failed, cancelled. Not together with `status`.",
+                "type": "string",
+                "enum": [
+                  "live",
+                  "finished"
+                ]
+              },
+              "taskId": {
+                "description": "A task's id, or `none` for runs without a task (ad-hoc and external runs).",
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "const": "none"
+                  },
+                  {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                ]
+              },
+              "trigger": {
+                "description": "What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "from": {
+                "description": "Runs created at or after this ISO 8601 date-time (inclusive).",
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "to": {
+                "description": "Runs created before this ISO 8601 date-time (exclusive).",
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "q": {
+                "description": "Case-insensitive substring of the goal (1 to 200 characters).",
+                "type": "string",
+                "maxLength": 200
+              },
+              "stopReason": {
+                "description": "Why the run stopped; `budget` is every `budget_*` reason. Any of: finished, budget_actions, budget_model_calls, budget_active_time, budget_input_tokens, budget_output_tokens, budget_cost, stalled, cancelled, error, no_model, budget. Repeat the parameter or separate the values with commas.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "policyId": {
+                "description": "Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`.",
+                "type": "string",
+                "maxLength": 64
+              }
+            },
+            "additionalProperties": false
+          },
+          "expectedCount": {
+            "description": "With `filter`: the number of runs the caller expects to delete (the count it showed). When the real count differs by more than 5 %, nothing is deleted and the answer is 409 `COUNT_CHANGED`.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "additionalProperties": false
+      },
       "RunListItemResponseDto": {
         "type": "object",
         "properties": {
@@ -62581,6 +62952,66 @@
                   ],
                   "description": "The run budget while the run is live (queued, running, waiting_human); null on a finished run in a list (read it from `GET /runs/{id}`)."
                 },
+                "tier": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "start": {
+                          "type": "string",
+                          "enum": [
+                            "fast",
+                            "standard",
+                            "frontier"
+                          ],
+                          "description": "The tier the policy starts runs on"
+                        },
+                        "max": {
+                          "type": "string",
+                          "enum": [
+                            "fast",
+                            "standard",
+                            "frontier"
+                          ],
+                          "description": "The highest tier the run may escalate to"
+                        },
+                        "current": {
+                          "type": "string",
+                          "enum": [
+                            "fast",
+                            "standard",
+                            "frontier"
+                          ],
+                          "description": "The tier the run is on now: the start tier until a stall escalates it"
+                        },
+                        "escalations": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "How many times the run escalated"
+                        },
+                        "model": {
+                          "description": "The current tier's model, as `provider:modelId`; null when none was resolved",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "start",
+                        "max",
+                        "current",
+                        "escalations",
+                        "model"
+                      ],
+                      "description": "The run's model tier, from its policy snapshot: null until the run has started."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "currentTier": {
                   "anyOf": [
                     {
@@ -62680,6 +63111,7 @@
                 "policy",
                 "stopReason",
                 "budget",
+                "tier",
                 "currentTier",
                 "escalations",
                 "cachedInputTokens",
@@ -63919,6 +64351,66 @@
               }
             ]
           },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The tier the policy starts runs on"
+                  },
+                  "max": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The highest tier the run may escalate to"
+                  },
+                  "current": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The tier the run is on now: the start tier until a stall escalates it"
+                  },
+                  "escalations": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "How many times the run escalated"
+                  },
+                  "model": {
+                    "description": "The current tier's model, as `provider:modelId`; null when none was resolved",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "start",
+                  "max",
+                  "current",
+                  "escalations",
+                  "model"
+                ],
+                "description": "The run's model tier, from its policy snapshot: null until the run has started."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "currentTier": {
             "anyOf": [
               {
@@ -64011,6 +64503,7 @@
           "policy",
           "stopReason",
           "budget",
+          "tier",
           "currentTier",
           "escalations",
           "cachedInputTokens",
