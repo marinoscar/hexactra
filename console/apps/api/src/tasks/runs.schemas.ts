@@ -21,7 +21,8 @@ export const RUN_STATES = { live: LIVE_RUN_STATUSES, finished: TERMINAL_RUN_STAT
 
 /** `stopReason=budget`: every `budget_*` stop reason. */
 export const BUDGET_STOP_REASONS = RUN_STOP_REASONS.filter((r) => r.startsWith('budget_'));
-const STOP_REASON_FILTERS = [...RUN_STOP_REASONS, 'budget'] as const;
+/** What `stopReason` filters by: a stop reason, or `budget` for every `budget_*` one. */
+export const STOP_REASON_FILTERS = [...RUN_STOP_REASONS, 'budget'] as const;
 
 /**
  * A list parameter: repeated (`?status=a&status=b`), comma-separated

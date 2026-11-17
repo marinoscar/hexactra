@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { agentPolicySpecSchema } from '../policies/agent-policy.schema';
 import { parsePolicyRef } from '../policies/builtin-policies';
+import { RUN_STATUSES, STOP_REASON_FILTERS } from '../tasks/runs.schemas';
 
 /** How a tool reaches the console: its own REST API, as the caller. */
 export interface McpContext {
@@ -35,6 +36,14 @@ const policyIdParam = policyRef.describe("An agent policy: its id from policies_
 const POLICY_NOTE =
   'A policy holds the run budgets (actions, model calls, active minutes, tokens, cost; `null` means unlimited) and the model tiers (fast, standard, frontier; start tier and the highest tier a stalled run may escalate to). ' +
   'Pick models through tiers, not model ids: pins are an advanced override. ';
+const cronParam = z.string().min(9).max(100).describe('A 5-field cron expression: minute hour day-of-month month day-of-week, for example "0 9 * * 1-5".');
+/** One schedule of `task_create`: what `POST /tasks` takes in `schedules[]`, in the tools' snake_case. */
+const scheduleItem = z.object({
+  cron: cronParam,
+  timezone: z.string().optional().describe("An IANA time zone; leave it out to use the time zone of the user's profile."),
+  enabled: z.boolean().optional().describe('false creates the schedule paused.'),
+  policy_id: policyIdParam.optional().describe("Runs of this schedule use this agent policy instead of the task's."),
+});
 const profile = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/).default('default').describe('Browser profile (its own cookies and sign-ins)');
 
 /** One browser action through an external session (recorded as a step). */
@@ -149,6 +158,7 @@ Two ways to work:
 1. Delegate: run_goal (or task_run) hands a goal to Hexactra's own browser agent; follow it with run_status. It asks the person for CAPTCHAs, codes and confirmations itself.
 2. Drive: browser_open, then browser_* tools step by step; every action is recorded and the user can stop you at any time.
 3. Policies: every delegated run follows an agent policy (budgets and model tiers). policies_list shows them; pass policy_id to run_goal, task_run, task_create, task_update or schedule_create to choose one, otherwise the user's default applies.
+   Schedules: task_create takes schedules, schedule_preview checks a cron expression before it is saved, task_pause and task_resume switch all of a task's schedules. You cannot delete runs: the user's run history is theirs to erase.
 4. Ask: ask_human asks the user a question with no browser involved (text, choice, multi_choice, number, confirm, none, takeover) and can wait for the answer (wait_s); question_status follows it. The user answers on any of their devices.
 You act with the user's full authority on their own machines, like a person at the computer: look at the page (browser_screenshot with marks), act by selector or by position with real mouse and keyboard events (browser_click_at, browser_hover_at, browser_drag, browser_scroll_at, browser_type_keys, browser_key), run JavaScript (browser_evaluate), and reach the whole desktop for native dialogs and file pickers (browser_desktop_*).
 When only the person can help (a code sent to their phone, a passkey, a password you do not have, a CAPTCHA puzzle you cannot pass), call browser_request_human and wait (browser_handoff_status); type codes with browser_type_secret, so you never see them. Close sessions with browser_close.`;
@@ -173,14 +183,67 @@ export const MCP_TOOLS: McpTool[] = [
       return text({ ...r, steps });
     },
   },
-  { name: 'runs_list', description: 'Recent runs, each with its agent policy, tier, cost, budget use and stop reason.', input: z.object({ status: z.enum(['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled']).optional() }), call: async (a, ctx) => text(await ctx.api('GET', `/runs${a.status ? `?status=${String(a.status)}` : ''}`)) },
+  {
+    name: 'runs_list',
+    description:
+      'Runs, newest first, each with its agent policy, tier, cost, budget use and stop reason. Filter with status, task_id and stop_reason. ' +
+      'Without limit or cursor it returns the most recent runs as a list. With limit (1 to 100) or cursor it returns one page, { items, nextCursor }: pass nextCursor back as cursor for the next page; null means the end.',
+    input: z.object({
+      status: z.enum(RUN_STATUSES).optional(),
+      task_id: z.union([z.literal('none'), id]).optional().describe('Runs of this task; "none" is the runs without a task.'),
+      stop_reason: z.enum(STOP_REASON_FILTERS).optional().describe('Why the run stopped; "budget" is every budget_* reason.'),
+      limit: z.number().int().min(1).max(100).optional().describe('Page size; asks for a page instead of a list.'),
+      cursor: z.string().min(1).max(500).optional().describe('nextCursor of the previous page, with the same filters.'),
+    }),
+    async call(a, ctx) {
+      const query = new URLSearchParams();
+      if (a.status !== undefined) query.set('status', String(a.status));
+      if (a.task_id !== undefined) query.set('taskId', String(a.task_id));
+      if (a.stop_reason !== undefined) query.set('stopReason', String(a.stop_reason));
+      if (a.limit !== undefined || a.cursor !== undefined) {
+        query.set('envelope', '1');
+        if (a.limit !== undefined) query.set('limit', String(a.limit));
+        if (a.cursor !== undefined) query.set('cursor', String(a.cursor));
+      }
+      const qs = query.toString();
+      return text(await ctx.api('GET', `/runs${qs ? `?${qs}` : ''}`));
+    },
+  },
   { name: 'run_cancel', description: 'Stop a run (after its current step).', input: z.object({ run_id: id }), call: async (a, ctx) => text(await ctx.api('POST', `/runs/${String(a.run_id)}/cancel`, {})) },
   { name: 'tasks_list', description: 'Saved tasks (reusable goals with a profile, allowed sites and an agent policy that sets budgets and models).', input: z.object({}), call: async (_a, ctx) => text(await ctx.api('GET', '/tasks')) },
   {
     name: 'task_create',
-    description: 'Save a task. allowed_domains limits where the agent may go (empty = any site). policy_id picks the agent policy (budgets and model tiers); without it the task follows the user\'s default policy.',
-    input: z.object({ name: z.string().min(1).max(200), goal: z.string().min(1).max(4000), profile, allowed_domains: z.array(z.string()).max(50).default([]), policy_id: policyIdParam.optional() }),
-    call: async (a, ctx) => text(await ctx.api('POST', '/tasks', { name: a.name, goal: a.goal, profile: a.profile, allowedDomains: a.allowed_domains, ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}) })),
+    description:
+      'Save a task. allowed_domains limits where the agent may go (empty = any site). policy_id picks the agent policy (budgets and model tiers); without it the task follows the user\'s default policy. ' +
+      'schedules creates the task with its schedules in one step (at most 10): each is a 5-field cron expression with an optional timezone, policy_id and enabled; one invalid schedule creates nothing. Check an expression first with schedule_preview.',
+    input: z.object({
+      name: z.string().min(1).max(200),
+      goal: z.string().min(1).max(4000),
+      profile,
+      allowed_domains: z.array(z.string()).max(50).default([]),
+      policy_id: policyIdParam.optional(),
+      schedules: z.array(scheduleItem).max(10).optional(),
+    }),
+    call: async (a, ctx) =>
+      text(
+        await ctx.api('POST', '/tasks', {
+          name: a.name,
+          goal: a.goal,
+          profile: a.profile,
+          allowedDomains: a.allowed_domains,
+          ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}),
+          ...(a.schedules !== undefined
+            ? {
+                schedules: (a.schedules as z.infer<typeof scheduleItem>[]).map((sc) => ({
+                  cron: sc.cron,
+                  ...(sc.timezone !== undefined ? { timezone: sc.timezone } : {}),
+                  ...(sc.enabled !== undefined ? { enabled: sc.enabled } : {}),
+                  ...(sc.policy_id !== undefined ? { policyId: sc.policy_id } : {}),
+                })),
+              }
+            : {}),
+        }),
+      ),
   },
   {
     name: 'task_update',
@@ -206,8 +269,29 @@ export const MCP_TOOLS: McpTool[] = [
   {
     name: 'schedule_create',
     description: 'Run a task on a schedule: a 5-field cron expression (at most every 5 minutes). timezone is an IANA time zone; leave it out to use the time zone of the user\'s profile (UTC when the profile has none). policy_id makes the scheduled runs use that agent policy instead of the task\'s.',
-    input: z.object({ task_id: id, cron: z.string().min(9).max(100), timezone: z.string().optional(), policy_id: policyIdParam.optional() }),
+    input: z.object({ task_id: id, cron: cronParam, timezone: z.string().optional(), policy_id: policyIdParam.optional() }),
     call: async (a, ctx) => text(await ctx.api('POST', '/schedules', { taskId: a.task_id, cron: a.cron, ...(a.timezone !== undefined ? { timezone: a.timezone } : {}), ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}) })),
+  },
+  {
+    name: 'schedule_preview',
+    description:
+      'Check a schedule before saving it: what the cron expression means in words and when it fires next, or why it would be refused (not valid, more often than every 5 minutes, unknown time zone). Saves nothing. ' +
+      "Leave timezone out to use the time zone of the user's profile.",
+    input: z.object({ cron: cronParam, timezone: z.string().optional(), count: z.number().int().min(1).max(10).optional().describe('How many next firings to list (default 5).') }),
+    call: async (a, ctx) => text(await ctx.api('POST', '/schedules/preview', { cron: a.cron, ...(a.timezone !== undefined ? { timezone: a.timezone } : {}), ...(a.count !== undefined ? { count: a.count } : {}) })),
+  },
+  {
+    name: 'task_pause',
+    description:
+      "Pause a task: disable every schedule it has, so it no longer starts by itself. It can still be started with task_run, and a run that is going finishes. A task without a schedule answers NO_SCHEDULES. Returns the task with its summary.",
+    input: z.object({ task_id: id }),
+    call: async (a, ctx) => text(await ctx.api('POST', `/tasks/${String(a.task_id)}/schedules/pause`, {})),
+  },
+  {
+    name: 'task_resume',
+    description: 'Resume a paused task: enable every schedule it has and compute their next firing. Returns the task with its summary.',
+    input: z.object({ task_id: id }),
+    call: async (a, ctx) => text(await ctx.api('POST', `/tasks/${String(a.task_id)}/schedules/resume`, {})),
   },
   { name: 'schedules_list', description: 'Task schedules.', input: z.object({}), call: async (_a, ctx) => text(await ctx.api('GET', '/schedules')) },
   { name: 'inbox_list', description: "What the user's agents are waiting for (CAPTCHAs, codes, sign-ins, confirmations). Relay these to the user.", input: z.object({}), call: async (_a, ctx) => text(await ctx.api('GET', '/inbox')) },
@@ -420,6 +504,6 @@ export const MCP_TOOLS: McpTool[] = [
  * them without asking. Every other tool acts and is announced as such.
  */
 export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
-  'run_status', 'runs_list', 'tasks_list', 'policies_list', 'policy_get', 'policies_export', 'schedules_list', 'inbox_list', 'hosts_list',
+  'run_status', 'runs_list', 'tasks_list', 'schedule_preview', 'policies_list', 'policy_get', 'policies_export', 'schedules_list', 'inbox_list', 'hosts_list',
   'browser_elements', 'browser_text', 'browser_tabs', 'browser_screenshot', 'browser_desktop_screenshot', 'browser_handoff_status', 'question_status',
 ]);
