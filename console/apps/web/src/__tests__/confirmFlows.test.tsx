@@ -25,7 +25,7 @@ const TASK: Task = {
   confirmRiskyActions: false,
   policyId: null,
 };
-const SCHEDULE: TaskSchedule = { id: 'sc1', taskId: TASK.id, cron: '0 9 * * 1-5', timezone: 'Europe/Madrid', enabled: true, concurrency: 'skip', nextRunAt: '2026-11-18T08:00:00Z', lastRunAt: null, consecutiveFailures: 0 };
+const SCHEDULE: TaskSchedule = { id: 'sc1', taskId: TASK.id, cron: '0 9 * * 1-5', timezone: 'Europe/Madrid', enabled: true, concurrency: 'skip', nextRunAt: '2026-11-18T08:00:00Z', lastRunAt: null, consecutiveFailures: 0, description: 'Monday to Friday at 09:00' };
 const HOST: FleetHost = {
   id: '22222222-2222-4222-8222-222222222222',
   name: 'mini-pc',
@@ -96,7 +96,7 @@ describe('destructive actions ask first', () => {
       [`GET /schedules?taskId=${TASK.id}`]: [SCHEDULE],
       'DELETE /schedules/sc1': {},
     });
-    await screen.findByText('0 9 * * 1-5 (Europe/Madrid)');
+    await screen.findByText(/Monday to Friday at 09:00/);
     await cancelThenConfirm(() => fireEvent.click(screen.getByRole('button', { name: 'Delete' })), 'Delete', deletes, '/schedules/sc1', /Delete this schedule\?/);
   });
 
