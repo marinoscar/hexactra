@@ -11,9 +11,10 @@ const BUDGET_ERRORS = [...RUN_BUDGET_ERROR_LIST];
 
 /**
  * Gives the console's alert kinds their data (the fabric's hosts, the
- * schedules and runs tables) and creates the console's three rules once, by
- * key: a rule that exists is never touched, so an administrator's edits and
- * thresholds survive restarts.
+ * schedules and runs tables) and creates the console's rules once, by key
+ * (`HEXACTRA_ALERT_RULES`; the expensive-run rule disabled): a rule that
+ * exists is never touched, so an administrator's edits and thresholds survive
+ * restarts.
  */
 @Injectable()
 export class HexactraAlertsService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -45,9 +46,11 @@ export class HexactraAlertsService implements OnApplicationBootstrap, OnModuleDe
       const runs = await this.prisma.run.groupBy({
         by: ['userId'],
         where: { createdAt: { gte: since } },
-        _sum: { inputTokens: true, outputTokens: true },
+        _sum: { inputTokens: true, outputTokens: true, costUsd: true },
         _count: { _all: true },
       });
+      const unpriced = await this.prisma.run.groupBy({ by: ['userId'], where: { createdAt: { gte: since }, costKnown: false }, _count: { _all: true } });
+      const unknownCost = new Set(unpriced.map((u) => u.userId));
       const stops = await this.prisma.run.groupBy({
         by: ['userId'],
         // `stop_reason LIKE 'budget_%'` (an enum: its six budget values), or the old error text on rows with no stop reason.
@@ -64,7 +67,35 @@ export class HexactraAlertsService implements OnApplicationBootstrap, OnModuleDe
         tokens: (r._sum.inputTokens ?? 0) + (r._sum.outputTokens ?? 0),
         budgetStops: stopped.get(r.userId) ?? 0,
         runs: r._count._all,
+        costUsd: Number(r._sum.costUsd ?? 0),
+        costKnown: !unknownCost.has(r.userId),
       }));
+    },
+    stalls: async (since) => {
+      const where = { createdAt: { gte: since }, stopReason: 'stalled' as const };
+      const counts = await this.prisma.run.groupBy({ by: ['userId'], where, _count: { _all: true }, _max: { createdAt: true } });
+      if (counts.length === 0) return [];
+      // The latest stalled run of each user, to name it in the summary.
+      const latest = await this.prisma.run.findMany({
+        where: { ...where, OR: counts.map((c) => ({ userId: c.userId, createdAt: c._max.createdAt ?? since })) },
+        select: { id: true, userId: true, goal: true, createdAt: true, task: { select: { name: true } } },
+        orderBy: { createdAt: 'desc' },
+      });
+      const byUser = new Map<string, (typeof latest)[number]>();
+      for (const r of latest) if (!byUser.has(r.userId)) byUser.set(r.userId, r);
+      return counts.flatMap((c) => {
+        const r = byUser.get(c.userId);
+        return r ? [{ userId: c.userId, stalls: c._count._all, latest: { runId: r.id, taskName: r.task?.name ?? null, goal: r.goal } }] : [];
+      });
+    },
+    expensiveRuns: async (overUsd, since) => {
+      const rows = await this.prisma.run.findMany({
+        where: { createdAt: { gte: since }, costUsd: { gt: overUsd } },
+        select: { id: true, userId: true, goal: true, costUsd: true, costKnown: true, task: { select: { name: true } } },
+        orderBy: { costUsd: 'desc' },
+        take: 200,
+      });
+      return rows.map((r) => ({ runId: r.id, userId: r.userId, taskName: r.task?.name ?? null, goal: r.goal, costUsd: Number(r.costUsd), costKnown: r.costKnown }));
     },
   };
 
@@ -88,7 +119,7 @@ export class HexactraAlertsService implements OnApplicationBootstrap, OnModuleDe
       if (await this.prisma.alertRule.findUnique({ where: { key: r.key }, select: { id: true } })) continue;
       try {
         await this.prisma.alertRule.create({
-          data: { key: r.key, name: r.name, kind: r.kind, severity: r.severity, config: r.config, forSeconds: r.forSeconds, enabled: true },
+          data: { key: r.key, name: r.name, kind: r.kind, severity: r.severity, config: r.config, forSeconds: r.forSeconds, enabled: r.enabled },
         });
         created++;
       } catch (e) {

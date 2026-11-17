@@ -50,11 +50,26 @@ The control plane is not the limit: one 4-core machine handles more than a thous
    - `JOBS_WORKER_CONCURRENCY` (default 2) is therefore the number of AI runs that execute at once per API instance.
    - Runs waiting for a person release their slot.
    - Set it to the concurrent runs you expect, at most the number of browsers.
-3. **The model.** Every step is a model call: the provider's latency and rate limits set run speed. Administration → AI sets the per-user and per-organization caps. The **Run budget exceeded** alert watches tokens.
-   - **Tokens per run is a sizing input.** Input tokens dominate the bill, because every call re-sends the context. Chart `app.runs.input_tokens_per_call` and `app.runs.tokens` on Administration → Telemetry → Browser agents. Multiply the p50 tokens per run by the runs you expect and by your model's price; compare with the per-user and per-organization caps. In the fixture of the README's "Context settings" the old fixed settings sent about 444k input tokens for a 30-action run and Balanced about 364k. To lower it: fewer `callsPerChunk`, a smaller `observationChars`, fewer `screenshotsKept` (the policy's context block; Economy is the cheapest built-in).
+3. **The model.** Every model call is a provider round trip: the provider's latency and rate limits set run speed, and its price sets the bill. Administration → AI sets the per-user and per-organization caps. The agent policy's budgets bound each run ([section 3](#3-model-cost-per-run-as-a-sizing-input)), and the **Run budget exceeded** and **Expensive run** alerts watch tokens and cost.
 4. **Postgres.** Runs write a row per step, and screenshots go to object storage. This write rate is small next to the browsers', but the console's database was not load-tested here. Watch it on the platform's database panels.
 
-## 3. Sizing
+## 3. Model cost per run, as a sizing input
+
+Browsers and machines are the fixed cost; the model is the variable one. Size it with the same numbers the console records.
+
+- **Worst case per run is the policy's budget.** The built-in Balanced stops a run at 60 actions, 120 model calls, $2 and 20 active minutes, Economy at $0.50, Thorough at $10, and Unlimited sets none. Concurrent runs times the cost budget is the most you can spend at once; a ceiling (`browserAgentCeilings.maxCostUsd`) caps even Unlimited ([operations runbook](operations.md#budget-ceilings-run-time-and-why-a-run-stopped)). Costs are only exact for models in the price table ([Model prices](operations.md#model-prices)).
+- **Typical cost per run is measured.** A task card shows its last 30 days (runs, cost, tokens, average cost of a successful run). Multiply the average by the runs a day you expect, then compare with the per-user and per-organization AI caps. Chart `app.runs.cost`, `app.runs.model_calls`, `app.runs.input_tokens_per_call` and `app.runs.tokens` on Administration → Telemetry → Browser agents.
+- **Input tokens dominate**, because every call re-sends the context: the goal, the step log, the screenshots and the tool output of the chunk. Two policy settings move that most:
+
+| Setting | Effect on input tokens | Cost of lowering it |
+|---|---|---|
+| `callsPerChunk` | Within a chunk, input grows roughly with the square of the calls, so smaller chunks re-send less tool output. A chunk boundary adds a fresh screenshot and step log | More chunks; less short-term memory for the model |
+| `screenshotsKept` | Each kept screenshot costs tokens on every round it stays (the fixture assumes 850 per image) | The model sees less of what changed; `0` is text only |
+
+- **Measured on the fixture** of the console README ([Context settings](../../README.md#context-settings)): a scripted 30-action run on a large page. The pre-policy settings (20 calls per chunk, 1 screenshot) sent 443,728 input tokens in 31 model calls; Balanced (10 calls, 2 screenshots) sent 364,417 for the same run, 18% fewer, although it keeps one more image. This measures context size with a fake model, not provider prices or success on real sites: confirm on your own tasks with the task spend line.
+- **Escalation costs more per call.** A run that stalls moves up a tier; Frontier is usually the dearest model. Standard and Frontier on the same model at different reasoning effort keep the provider cache warm.
+
+## 4. Sizing
 
 Browsers belong on **nodes at home** where you can: a residential IP faces fewer challenges than a VPS ([docs/nodes.md](../../../docs/nodes.md)). An unattended node also runs a desktop (XFCE), so add about 1 GB of RAM for it. The bundled VPS host is optional.
 
