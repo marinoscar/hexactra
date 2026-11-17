@@ -6717,7 +6717,6 @@ export interface components {
              * @example POLICY_IMPORT_TOO_LARGE
              * @example INVALID_FILTER
              * @example INVALID_CURSOR
-<<<<<<< HEAD
              * @example INVALID_CRON
              * @example INVALID_TIMEZONE
              * @example CRON_TOO_FREQUENT
@@ -6725,8 +6724,6 @@ export interface components {
              * @example INVALID_TASK_CURSOR
              * @example SCHEDULE_LIMIT
              * @example NO_SCHEDULES
-=======
->>>>>>> origin/main
              * @example WEBHOOK_NOT_FOUND
              * @example WEBHOOK_DELIVERY_NOT_FOUND
              * @example WEBHOOK_URL_INVALID
@@ -13188,7 +13185,6 @@ export interface components {
             /** @description The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy. */
             policyId?: string | null;
         };
-<<<<<<< HEAD
         ReplaceTaskSchedulesDto: {
             schedules: {
                 /** @description A 5-field cron expression that fires at most every 5 minutes, e.g. `0 9 * * 1-5`. */
@@ -13364,8 +13360,6 @@ export interface components {
                 count: number;
             }[];
         };
-=======
->>>>>>> origin/main
         RunListItemResponseDto: {
             /** Format: uuid */
             id: string;
@@ -31839,38 +31833,7 @@ export interface operations {
     };
     taskSchedules_replace: {
         parameters: {
-<<<<<<< HEAD
             query?: never;
-=======
-            query?: {
-                /** @description Run status. Any of: queued, running, waiting_human, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas. */
-                status?: string | string[];
-                /** @description Shorthand for a status group: `live` = queued, running, waiting_human; `finished` = succeeded, failed, cancelled. Not together with `status`. */
-                state?: "live" | "finished";
-                /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
-                taskId?: "none" | string;
-                /** @description What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas. */
-                trigger?: string | string[];
-                /** @description Runs created at or after this ISO 8601 date-time (inclusive). */
-                from?: string;
-                /** @description Runs created before this ISO 8601 date-time (exclusive). */
-                to?: string;
-                /** @description Case-insensitive substring of the goal (1 to 200 characters). */
-                q?: string;
-                /** @description Why the run stopped; `budget` is every `budget_*` reason. Any of: finished, budget_actions, budget_model_calls, budget_active_time, budget_input_tokens, budget_output_tokens, budget_cost, stalled, cancelled, error, no_model, budget. Repeat the parameter or separate the values with commas. */
-                stopReason?: string | string[];
-                /** @description Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`. */
-                policyId?: string;
-                /** @description `1` returns `{ items, nextCursor }` instead of an array. */
-                envelope?: "1" | "true";
-                /** @description The previous page's `nextCursor`. Opaque: do not parse or build it. */
-                cursor?: string;
-                /** @description Rows to return: 1 to 100 with `envelope`, 1 to 200 without. Default 50. */
-                limit?: number;
-                /** @description By creation time, then id: `desc` is newest first. */
-                order?: "desc" | "asc";
-            };
->>>>>>> origin/main
             header?: never;
             path: {
                 id: string;
@@ -31933,14 +31896,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description An array of runs: the newest `limit`. With `envelope=1` the data is instead one page, `{ items, nextCursor }` (schema `RunPageResponseDto`). */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-<<<<<<< HEAD
                         data: components["schemas"]["TaskSchedulesChangedResponseDto"];
                     };
                 };
@@ -32120,8 +32081,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-=======
->>>>>>> origin/main
                         data: components["schemas"]["RunListItemResponseDto"][];
                     };
                 };
