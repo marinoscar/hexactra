@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **E32 close-out: documentation and client parity** (#432).
+  - MCP: new tools `schedule_preview`, `task_pause` and `task_resume`; `task_create` accepts `schedules[]`; `runs_list` is paged.
+  - CLI: `runs delete <id>` and `runs delete --older-than <days>`, `tasks pause` and `tasks resume`; the TUI's run list loads more with `m`.
+  - SDK: `hx.runs.list`, `hx.runs.delete`, `hx.runs.deleteMany`, `hx.tasks.pauseSchedules`, `hx.tasks.resumeSchedules` and `hx.schedules.preview`.
+  - Web: Home links to the task pages and the New run dialog (`/runs?new=1`). A stalled run reads "stalled" everywhere. Bars pinned above the phone navigation share one offset.
+  - Fixed: the task page scrolled sideways by one pixel at 390 px; the background-delete banner stayed 30 seconds when the job had already finished.
+  - Docs: README "Using the console" with screenshots, `console/docs/api-tasks-runs.md` with the client parity table.
 - **Task page** (#428).
   - `/tasks/:id` shows a task's overview (goal, machine, policy, model, schedule state, next and last run), statistics for 7, 30 or 90 days (runs, success rate, durations, cost, why runs stopped, a daily chart), its run history with the Runs page's filters and delete, and its schedules with add, edit, pause and delete.
   - Run, "Run with…", the Scheduled switch, Edit, Duplicate and Delete are on the page.
