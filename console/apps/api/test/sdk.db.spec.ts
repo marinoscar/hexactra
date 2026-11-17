@@ -49,9 +49,17 @@ describe('the console SDK', () => {
       env: { ...process.env, HEXACTRA_CONSOLE_URL: base, HEXACTRA_TOKEN: token },
       timeout: 60_000,
     });
-    const out = JSON.parse(stdout.trim().split('\n').pop()!) as { taskId: string; listed: number; updatedGoal: string };
+    const out = JSON.parse(stdout.trim().split('\n').pop()!) as Record<string, unknown> & { listed: number };
     expect(out.listed).toBeGreaterThanOrEqual(1);
     expect(out.updatedGoal).toBe('Find the cheapest fare to Lisbon in March');
+    // The typed helpers of #432: schedules.preview, tasks.create with schedules, pause and resume, runs.list, runs.deleteMany.
+    expect(out).toMatchObject({
+      preview: 'Monday to Friday at 09:00',
+      refused: 'CRON_TOO_FREQUENT',
+      scheduleState: ['active', 'paused', 'active'],
+      page: { items: 0, nextCursor: null },
+      deleted: 0,
+    });
   });
 
   it('round-trips agent policies: create, update, export, import and run under one', async () => {
