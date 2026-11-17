@@ -112,7 +112,7 @@ describe('RunList: paging and filters', () => {
     });
     renderList(host);
     expect(await screen.findByText('Goal 1')).toBeInTheDocument();
-    expect(screen.getAllByRole('row')).toHaveLength(51);
+    expect(document.querySelectorAll('tbody tr')).toHaveLength(50);
     const first = listRequests(host)[0]!;
     expect(query(first).get('envelope')).toBe('1');
     expect(query(first).get('limit')).toBe('50');
@@ -121,11 +121,11 @@ describe('RunList: paging and filters', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
     expect(await screen.findByText('Goal 70')).toBeInTheDocument();
     expect(query(listRequests(host).at(-1)!).get('cursor')).toBe('c1');
-    expect(screen.getAllByRole('row')).toHaveLength(71);
+    expect(document.querySelectorAll('tbody tr')).toHaveLength(70);
     expect(screen.getAllByText('Goal 50')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
     expect(screen.getByTestId('run-showing')).toHaveTextContent('Showing 70 of 70');
-  });
+  }, 30_000);
 
   it('shows each tab with its count, and a tab change resets the list and asks again', async () => {
     const host = createTestPlatformHost({

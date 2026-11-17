@@ -127,7 +127,7 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
   // ---- Filters, in the URL ----
   const [params, setParams] = useSearchParams();
   const paramText = params.toString();
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- the text is the identity of the parameters
+  // The text is the identity of the parameters: `params` is a new object on every render.
   const filters = useMemo(() => filtersFromParams(params), [paramText]);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
