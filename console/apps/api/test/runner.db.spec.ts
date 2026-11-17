@@ -187,6 +187,40 @@ describe('the goal runner', () => {
   });
 });
 
+describe('the goal runner picks the machine (#384)', () => {
+  const HOME = '22222222-2222-4222-8222-222222222222';
+  const offline = { id: HOME, name: 'mini-pc', version: '0', online: false, browser_connected: false, on_demand: true, profiles: ['default'], running_profiles: [], draining: false, last_seen: '2026-11-17T00:00:00Z' };
+
+  async function setup(hostFallback: boolean) {
+    const userId = await login(`runner-host-${hostFallback}-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const run = await db.run.create({ data: { userId, goal: 'Browse', hostId: HOME, hostFallback } });
+    const fabric = fakeFabric();
+    (fabric.client as unknown as { hosts: () => Promise<unknown[]> }).hosts = async () => [offline];
+    const { ai } = scriptedAi([[['finish', { result: 'done' }]]]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai);
+    return { userId, db, run, fabric, runner };
+  }
+
+  it('runs on another available machine when the chosen one is offline and fallback is on', async () => {
+    const { userId, db, run, fabric, runner } = await setup(true);
+    await runner.advance(run.id, userId, null);
+    const create = (fabric.client.request as jest.Mock).mock.calls.find(([m, p]) => m === 'POST' && p === '/v1/sessions');
+    expect(create?.[2].body).not.toHaveProperty('host_id');
+    const after = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(JSON.stringify(after.transcript)).toContain('mini-pc is offline; running on another available machine.');
+  });
+
+  it('fails with the reason when the chosen machine is offline and fallback is off', async () => {
+    const { userId, db, run, fabric, runner } = await setup(false);
+    expect(await runner.advance(run.id, userId, null)).toBe('failed');
+    const after = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(after.error).toBe('mini-pc is offline, and this task does not fall back to another machine.');
+    expect((fabric.client.request as jest.Mock).mock.calls.some(([m, p]) => m === 'POST' && p === '/v1/sessions')).toBe(false);
+  });
+});
+
 describe('the goal runner sees and acts like a person (#366)', () => {
   /** A fabric whose screenshots carry marks and are fetched by artifact handle. */
   function visualFabric() {

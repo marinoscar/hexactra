@@ -3,6 +3,7 @@ import { AiService, defineTool, type AiDefinedTool, type AiToolLoopResult } from
 import { z } from 'zod';
 
 import { FabricClient, FabricError } from '../fabric/fabric.client';
+import { chooseHost } from './host-choice';
 import { PrismaService } from '../prisma/prisma.service';
 import { questionSpecSchema, type QuestionConstraints, type QuestionInputType, type QuestionOption, type QuestionResponse, type QuestionSpec } from '../questions/questions.contract';
 import { QuestionsService } from '../questions/questions.service';
@@ -208,7 +209,17 @@ export class GoalRunnerService {
     let sessionId = run.sessionId;
     if (!sessionId) {
       try {
-        sessionId = await session.create({ profile: run.profile, hostId: run.hostId, label: `run ${run.id}` });
+        const hosts = run.hostId ? await this.fabric.hosts() : [];
+        const choice = chooseHost(hosts, run.hostId, run.hostFallback);
+        if (choice.kind === 'fail') {
+          await this.finish(userId, run.id, null, session, 'failed', { error: choice.error });
+          return 'failed';
+        }
+        if (choice.note) {
+          memory.log.push(choice.note);
+          this.log.log(`run ${run.id}: ${choice.note}`);
+        }
+        sessionId = await session.create({ profile: run.profile, hostId: choice.hostId, label: `run ${run.id}` });
       } catch (e) {
         await this.finish(userId, run.id, null, session, 'failed', { error: `No browser available: ${e instanceof Error ? e.message : String(e)}` });
         return 'failed';

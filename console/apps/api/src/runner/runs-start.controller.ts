@@ -16,6 +16,8 @@ const startRunSchema = z.object({
   goal: z.string().trim().min(1).max(4000),
   profile: profileNameSchema.default('default'),
   hostId: z.uuid().nullable().optional(),
+  /** When the chosen host cannot take the run, run on another available one (#384). */
+  hostFallback: z.boolean().default(true),
 });
 class StartRunDto extends createZodDto(startRunSchema) {}
 
@@ -41,7 +43,7 @@ export class RunsStartController {
   async runTask(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string) {
     const task = await this.tasks.getTask(user.id, id);
     const run = await this.prisma.forUser({ userId: user.id }).run.create({
-      data: { userId: user.id, taskId: task.id, goal: task.goal, profile: task.profile, hostId: task.hostId, trigger: 'manual' },
+      data: { userId: user.id, taskId: task.id, goal: task.goal, profile: task.profile, hostId: task.hostId, hostFallback: task.hostFallback, trigger: 'manual' },
       omit: { transcript: true },
     });
     await enqueueGoalRun(this.jobs, { runId: run.id, userId: user.id, orgId: user.activeOrgId ?? null }, 'run_started');
@@ -54,7 +56,7 @@ export class RunsStartController {
   @Auth({ permissions: ['runs:write'] })
   async start(@CurrentUser() user: Principal, @Body() body: StartRunDto) {
     const run = await this.prisma.forUser({ userId: user.id }).run.create({
-      data: { userId: user.id, goal: body.goal, profile: body.profile, hostId: body.hostId ?? null, trigger: 'api' },
+      data: { userId: user.id, goal: body.goal, profile: body.profile, hostId: body.hostId ?? null, hostFallback: body.hostFallback, trigger: 'api' },
       omit: { transcript: true },
     });
     await enqueueGoalRun(this.jobs, { runId: run.id, userId: user.id, orgId: user.activeOrgId ?? null }, 'run_started');
