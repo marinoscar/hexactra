@@ -47,6 +47,7 @@ Sessions are limited to `allowed_domains` when the client sets them.
 
 A policy is what a delegated run may spend and which models it uses: budgets (actions, model calls, active minutes, tokens, cost), the model **tiers** (`fast`, `standard`, `frontier`: the tier a run starts on and the highest it may escalate to when it stalls), stall detection and context settings. Four built-ins always exist (`builtin:economy`, `builtin:balanced`, `builtin:thorough`, `builtin:unlimited`); the user may add their own. The full model is in [../README.md](../README.md#agent-policies).
 
+- **Schedules take the profile time zone.** `schedule_create` has an optional `timezone` (an IANA zone). Leave it out and the schedule uses the time zone of the user's profile, or `UTC` when the profile has none.
 - **Choose a policy per call.** `run_goal`, `task_create`, `task_update`, `task_run` and `schedule_create` take an optional `policy_id` (a UUID from `policies_list`, or `builtin:<key>`). Without it a run uses the schedule's, then the task's, then the user's default policy (`policy_set_default` changes the default; `null` goes back to `builtin:balanced`).
   - `task_run { task_id, policy_id }` runs the task under another policy for that run only.
   - `task_update { policy_id: null }` makes the task follow the default again.
