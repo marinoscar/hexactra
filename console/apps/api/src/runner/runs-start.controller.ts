@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { profileNameSchema } from '../fleet/fleet.schemas';
 import { PrismaService } from '../prisma/prisma.service';
 import { TasksService } from '../tasks/tasks.service';
+import { withCost } from '../tasks/run-cost';
 import { enqueueGoalRun } from './goal-runner.jobs';
 import { RunResponseDto } from '../openapi/console.responses';
 
@@ -47,7 +48,7 @@ export class RunsStartController {
       omit: { transcript: true },
     });
     await enqueueGoalRun(this.jobs, { runId: run.id, userId: user.id, orgId: user.activeOrgId ?? null }, 'run_started');
-    return run;
+    return withCost(run);
   }
 
   /** Run an ad-hoc goal (default policy: any http(s) site, 40 steps, 15 minutes). */
@@ -60,6 +61,6 @@ export class RunsStartController {
       omit: { transcript: true },
     });
     await enqueueGoalRun(this.jobs, { runId: run.id, userId: user.id, orgId: user.activeOrgId ?? null }, 'run_started');
-    return run;
+    return withCost(run);
   }
 }

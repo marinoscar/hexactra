@@ -15,6 +15,7 @@ import { InboxController } from '../src/browser/inbox.controller';
 import { QuestionEvents } from '../src/questions/question-events';
 import { QuestionsService } from '../src/questions/questions.service';
 import { TasksService } from '../src/tasks/tasks.service';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
@@ -78,7 +79,7 @@ function fakeFabric() {
 type Call = [name: string, args: Record<string, unknown>];
 
 /** A model that makes the scripted tool calls, one script per runTools call. */
-function scriptedAi(scripts: Call[][]) {
+function scriptedAi(scripts: Call[][], served: { provider: string; model: string; cachedInputTokens?: number } | null = null) {
   const outputs: string[] = [];
   const runTools = jest.fn(async (req: { tools: { tool: { name: string }; execute: (a: unknown, c: unknown) => Promise<unknown> }[]; onStep?: (s: unknown) => void; input: string }) => {
     const script = scripts.shift() ?? [];
@@ -86,7 +87,7 @@ function scriptedAi(scripts: Call[][]) {
     for (const [name, args] of script) {
       const t = req.tools.find((x) => x.tool.name === name)!;
       outputs.push(String(await t.execute(args, { userId: 'u' })));
-      req.onStep?.({ step: ++step, response: { usage: { inputTokens: 10, outputTokens: 5 } }, calls: [] });
+      req.onStep?.({ step: ++step, response: { ...(served ? { provider: served.provider, model: served.model } : {}), usage: { inputTokens: 10, outputTokens: 5, ...(served?.cachedInputTokens ? { cachedInputTokens: served.cachedInputTokens } : {}) } }, calls: [] });
     }
     return { final: { outputText: '' }, steps: [], stopReason: 'steps_exhausted' };
   });
@@ -573,5 +574,74 @@ describe('external agents driving a browser through the console', () => {
     await expect(ctl.act(userId, runId, { action: { type: 'tabs' } })).rejects.toThrow(/stopped this session/);
     expect((await db.run.findFirstOrThrow({ where: { id: runId } })).status).toBe('cancelled');
     expect(fabric.ended()).toBe(1);
+  });
+});
+
+describe('the goal runner prices every model call (E31.2)', () => {
+  const as = (token: string) => ({ authorization: `Bearer ${token}` });
+
+  async function loginWithToken(email: string, role: 'admin' | 'contributor'): Promise<{ token: string; userId: string }> {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/test/login', payload: { email, role } });
+    const token = new URL(String(res.headers.location)).searchParams.get('token')!;
+    const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: as(token) });
+    return { token, userId: me.json<{ data: { id: string } }>().data.id };
+  }
+
+  /** Three calls on `served`, then the run finishes: one scripted round of two tool calls and one more. */
+  async function threeCallRun(email: string, served: { provider: string; model: string; cachedInputTokens?: number }) {
+    const { token, userId } = await loginWithToken(email, 'contributor');
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const task = await db.task.create({ data: { userId, name: 'Priced', goal: 'Look around' } });
+    const run = await db.run.create({ data: { userId, taskId: task.id, goal: task.goal } });
+    const { ai } = scriptedAi(
+      [
+        [
+          ['navigate', { url: 'https://shop.example.test/', reason: 'open' }],
+          ['observe_elements', {}],
+          ['finish', { success: true, result: 'Done' }],
+        ],
+      ],
+      served,
+    );
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fakeFabric().client, ai, undefined, undefined, app.get(SystemSettingsService));
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    return { token, userId, run, task };
+  }
+
+  it('stores the summed calls, tokens and cost for the model that served them, and serves them as numbers', async () => {
+    const admin = await loginWithToken(`pricing-admin-${stamp}@example.test`, 'admin');
+    const patched = await app.inject({
+      method: 'PATCH',
+      url: '/api/system-settings',
+      headers: as(admin.token),
+      payload: { agentPricing: { models: { 'prov-a:model-x': { inputPerMTok: 3, outputPerMTok: 15, cachedInputPerMTok: 0.3 } } } },
+    });
+    expect(patched.statusCode).toBe(200);
+
+    const { token, run, task } = await threeCallRun(`priced-${stamp}@example.test`, { provider: 'prov-a', model: 'model-x', cachedInputTokens: 4 });
+    // 3 calls of 10 input (4 cached) and 5 output tokens: 3 * (6*3 + 4*0.3 + 5*15) / 1e6
+    const res = await app.inject({ method: 'GET', url: `/api/runs/${run.id}`, headers: as(token) });
+    const got = res.json<{ data: Record<string, unknown> }>().data;
+    expect(got).toMatchObject({ modelCalls: 3, inputTokens: 30, outputTokens: 15, cachedInputTokens: 12, costKnown: true });
+    expect(got.costUsd).toBe(0.000282);
+
+    const list = await app.inject({ method: 'GET', url: '/api/runs', headers: as(token) });
+    expect(list.json<{ data: { id: string; costUsd: number }[] }>().data.find((r) => r.id === run.id)?.costUsd).toBe(0.000282);
+    const tasks = await app.inject({ method: 'GET', url: '/api/tasks', headers: as(token) });
+    expect(tasks.json<{ data: { id: string; spend30d: unknown }[] }>().data.find((t) => t.id === task.id)?.spend30d).toEqual({ runs: 1, costUsd: 0.000282, costKnown: true, tokens: 45 });
+
+    // The platform's usage report is priced once the port is bound (`priced: true`).
+    const usage = await app.inject({ method: 'GET', url: '/api/admin/ai/usage', headers: as(admin.token) });
+    expect(usage.statusCode).toBe(200);
+    expect(usage.json<{ data: { priced: boolean } }>().data.priced).toBe(true);
+  });
+
+  it('marks the cost unknown when a call is on a model with no price, and the task spend with it', async () => {
+    const { token, run, task } = await threeCallRun(`unpriced-${stamp}@example.test`, { provider: 'prov-a', model: 'model-unlisted' });
+    const got = (await app.inject({ method: 'GET', url: `/api/runs/${run.id}`, headers: as(token) })).json<{ data: Record<string, unknown> }>().data;
+    expect(got).toMatchObject({ modelCalls: 3, costUsd: 0, costKnown: false });
+    const tasks = await app.inject({ method: 'GET', url: `/api/tasks/${task.id}`, headers: as(token) });
+    expect(tasks.json<{ data: { spend30d: unknown } }>().data.spend30d).toMatchObject({ runs: 1, costUsd: 0, costKnown: false, tokens: 45 });
   });
 });

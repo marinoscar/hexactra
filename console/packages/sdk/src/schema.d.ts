@@ -7114,6 +7114,17 @@ export interface components {
             notes: {
                 archiveAfterDays: number;
             };
+            agentPricing: {
+                /** @constant */
+                currency: "USD";
+                models: {
+                    [key: string]: {
+                        inputPerMTok: number;
+                        outputPerMTok: number;
+                        cachedInputPerMTok?: number;
+                    };
+                };
+            };
             storage: {
                 provider: string;
                 drivers: {
@@ -7253,6 +7264,17 @@ export interface components {
         UpdateSystemSettingsDto: {
             notes?: {
                 archiveAfterDays: number;
+            };
+            agentPricing?: {
+                /** @constant */
+                currency: "USD";
+                models: {
+                    [key: string]: {
+                        inputPerMTok: number;
+                        outputPerMTok: number;
+                        cachedInputPerMTok?: number;
+                    };
+                };
             };
             storage?: {
                 provider: string;
@@ -7400,6 +7422,17 @@ export interface components {
         PatchSystemSettingsDto: {
             notes?: {
                 archiveAfterDays?: number;
+            };
+            agentPricing?: {
+                /** @constant */
+                currency?: "USD";
+                models?: {
+                    [key: string]: {
+                        inputPerMTok: number;
+                        outputPerMTok: number;
+                        cachedInputPerMTok?: number;
+                    };
+                };
             };
             storage?: {
                 provider?: string;
@@ -11529,6 +11562,17 @@ export interface components {
             maxMinutes: number;
             confirmRiskyActions: boolean;
             model: string | null;
+            /** @description What the task's runs spent in the last 30 days */
+            spend30d: {
+                /** @description Runs created in the last 30 days */
+                runs: number;
+                /** @description USD spent on model calls by those runs; a lower bound while costKnown is false */
+                costUsd: number;
+                /** @description False when a call of those runs could not be priced (its model has no price) */
+                costKnown: boolean;
+                /** @description Input plus output tokens */
+                tokens: number;
+            };
             /** @description ISO 8601 timestamp */
             createdAt: string;
             /** @description ISO 8601 timestamp */
@@ -11611,6 +11655,14 @@ export interface components {
             } | null;
             inputTokens: number;
             outputTokens: number;
+            /** @description Input tokens the provider served from its cache (part of inputTokens) */
+            cachedInputTokens: number;
+            /** @description Model calls (provider round trips) made so far */
+            modelCalls: number;
+            /** @description USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false */
+            costUsd: number;
+            /** @description False once a call could not be priced because its model has no price: show costUsd as "at least" */
+            costKnown: boolean;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -11663,6 +11715,14 @@ export interface components {
             } | null;
             inputTokens: number;
             outputTokens: number;
+            /** @description Input tokens the provider served from its cache (part of inputTokens) */
+            cachedInputTokens: number;
+            /** @description Model calls (provider round trips) made so far */
+            modelCalls: number;
+            /** @description USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false */
+            costUsd: number;
+            /** @description False once a call could not be priced because its model has no price: show costUsd as "at least" */
+            costKnown: boolean;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;

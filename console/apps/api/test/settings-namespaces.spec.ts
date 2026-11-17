@@ -31,4 +31,12 @@ describe('system settings namespaces', () => {
     const body = { notes: { archiveAfterDays: 30 }, jobs: { history: { purgeEnabled: false } } };
     expect(composePatchSystemSettingsSchema().parse(body)).toEqual(body);
   });
+
+  it('registers agentPricing, accepts a price table and rejects a negative price', () => {
+    expect(systemSettingsNamespaceRegistry.ids()).toContain('agentPricing');
+    const ok = { agentPricing: { models: { 'prov-a:model-x': { inputPerMTok: 3, outputPerMTok: 15 } } } };
+    expect(composePatchSystemSettingsSchema().parse(ok)).toEqual(ok);
+    const bad = { agentPricing: { models: { 'prov-a:model-x': { inputPerMTok: -3, outputPerMTok: 15 } } } };
+    expect(composePatchSystemSettingsSchema().safeParse(bad).success).toBe(false);
+  });
 });

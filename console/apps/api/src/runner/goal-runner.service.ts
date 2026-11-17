@@ -1,5 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { AiService, defineTool, type AiDefinedTool, type AiToolLoopResult } from '@marinoscar/platform-api/ai';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { z } from 'zod';
 
 import { FabricClient, FabricError } from '../fabric/fabric.client';
@@ -11,6 +12,8 @@ import { redactActionArgs, redactUrl } from '../tasks/redact';
 import { RunNotifier } from '../tasks/run-notifier';
 import { TasksService } from '../tasks/tasks.service';
 import { BROWSER_AGENT_FEATURE_ID } from './browser-agent.feature';
+import { priceTableOf } from './agent-pricing.settings';
+import { RunUsage, type PriceTable, type UsageDelta } from './cost';
 import { actionTarget, runActivity, type ActivityTarget, type RunActivityPhase } from './activity';
 import { ACTION_TIMEOUT_MS, FabricSession, handoffOutcome, type CreatedHandoff } from './fabric-session';
 import { domainAllowed, looksRisky } from './policy';
@@ -153,7 +156,18 @@ export class GoalRunnerService {
     private readonly ai: AiService,
     @Optional() private readonly notifier?: RunNotifier,
     @Optional() private readonly questions?: QuestionsService,
+    @Optional() private readonly systemSettings?: SystemSettingsService,
   ) {}
+
+  /** The admin's price table; empty when unreadable (calls are then unpriced, never free). */
+  private async priceTable(): Promise<PriceTable> {
+    try {
+      return priceTableOf(await this.systemSettings?.getNamespace('agentPricing'));
+    } catch (e) {
+      this.log.warn(`could not read the agent price table: ${e instanceof Error ? e.message : String(e)}`);
+      return {};
+    }
+  }
 
   /**
    * Advance a run: start it, resume it after a handoff, or finish it.
@@ -660,7 +674,8 @@ export class GoalRunnerService {
 
     const goal = run.goal;
     const remainingChunks = Math.max(1, Math.ceil(policy.maxSteps / 4));
-    let usage = { input: 0, output: 0 };
+    const prices = await this.priceTable();
+    const used = new RunUsage();
     for (let chunk = 0; chunk < remainingChunks; chunk++) {
       memory.chunks += 1;
       state.stop = null;
@@ -699,7 +714,7 @@ export class GoalRunnerService {
           tools,
           maxSteps: CHUNK_STEPS,
           onStep: (step) => {
-            usage = { input: usage.input + (step.response.usage.inputTokens ?? 0), output: usage.output + (step.response.usage.outputTokens ?? 0) };
+            used.add(step.response.provider, step.response.model || policy.model, step.response.usage, prices);
             if (Date.now() > policy.deadline) state.stop = 'budget';
             if (state.stop) throw new StopLoop(state.stop);
           },
@@ -717,12 +732,11 @@ export class GoalRunnerService {
         }
       } catch (e) {
         if (!(e instanceof StopLoop)) {
-          await this.saveMemory(userId, run.id, memory, usage);
+          await this.saveMemory(userId, run.id, memory, used.drain());
           throw e;
         }
       }
-      await this.saveMemory(userId, run.id, memory, usage);
-      usage = { input: 0, output: 0 };
+      await this.saveMemory(userId, run.id, memory, used.drain());
 
       const fresh = await db.run.findFirst({ where: { id: run.id }, select: { cancelRequested: true } });
       if (fresh?.cancelRequested) {
@@ -764,12 +778,22 @@ export class GoalRunnerService {
     }
   }
 
-  private async saveMemory(userId: string, runId: string, memory: RunMemory, usage: { input: number; output: number }) {
+  private async saveMemory(userId: string, runId: string, memory: RunMemory, usage: UsageDelta) {
     memory.log = memory.log.slice(-200);
-    this.tasks.metrics.tokens(usage.input, usage.output);
+    this.tasks.metrics.tokens(usage.inputTokens, usage.outputTokens);
+    this.tasks.metrics.modelCalls(usage.modelCalls);
     await this.prisma.forUser({ userId }).run.updateMany({
       where: { id: runId },
-      data: { transcript: memory as never, inputTokens: { increment: usage.input }, outputTokens: { increment: usage.output } },
+      data: {
+        transcript: memory as never,
+        inputTokens: { increment: usage.inputTokens },
+        outputTokens: { increment: usage.outputTokens },
+        cachedInputTokens: { increment: usage.cachedInputTokens },
+        modelCalls: { increment: usage.modelCalls },
+        costUsd: { increment: usage.costUsd },
+        // Only ever flips to false: one unpriced call makes the whole figure a lower bound.
+        ...(usage.costKnown ? {} : { costKnown: false }),
+      },
     });
   }
 
