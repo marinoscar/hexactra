@@ -349,6 +349,8 @@ describe('policy, model and spend', () => {
     expect(within(pinned).getByText('Careful shopping')).toBeInTheDocument();
     expect(within(pinned).getByText('provider-a:model-big')).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Policy' })).toBeInTheDocument();
+    // Below xl, where the Policy column is hidden, the same two facts sit under the task's goal.
+    expect(within(pinned).getByTestId('task-policy-line')).toHaveTextContent('Careful shopping · provider-a:model-big');
   });
 
   it('has no Policy column and a plain Run button without agent_policies:read', async () => {

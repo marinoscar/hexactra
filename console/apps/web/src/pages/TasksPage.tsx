@@ -18,6 +18,7 @@ import {
   TaskOutcomeStrip,
   TaskOverflowMenu,
   TaskPolicyCell,
+  TaskPolicyLine,
   TaskRunButton,
   TaskScheduleCell,
   TaskSpendCell,
@@ -162,17 +163,23 @@ export function TasksPage() {
       key: 'task',
       header: 'Task',
       render: (t) => (
-        <Box sx={{ minWidth: 160 }}>
+        <Box sx={{ minWidth: 120 }}>
           <TaskName task={t} canOpen={canOpen} />
           <TaskGoalExcerpt goal={t.goal} />
+          {/* Below `xl` the Policy column is hidden: the policy and model stay on the row, here. */}
+          {policiesShown && (
+            <Box sx={{ display: { xl: 'none' } }} data-testid="task-policy-line">
+              <TaskPolicyLine task={t} catalog={catalog} />
+            </Box>
+          )}
         </Box>
       ),
     },
-    { key: 'schedule', header: 'Schedule', render: (t) => <Box sx={{ minWidth: 150, maxWidth: 220 }}><TaskScheduleCell task={t} catalog={policiesShown ? catalog : undefined} /></Box> },
-    { key: 'next', header: 'Next run', render: (t) => <TaskNextRun task={t} /> },
-    { key: 'last', header: 'Last run', render: (t) => <TaskLastRun task={t} canReadRuns={canReadRuns} /> },
+    { key: 'schedule', header: 'Schedule', render: (t) => <Box sx={{ minWidth: 110, maxWidth: 220 }}><TaskScheduleCell task={t} catalog={policiesShown ? catalog : undefined} /></Box> },
+    { key: 'next', header: 'Next run', render: (t) => <Box sx={{ maxWidth: 96, whiteSpace: 'normal' }}><TaskNextRun task={t} /></Box> },
+    { key: 'last', header: 'Last run', render: (t) => <TaskLastRun task={t} canReadRuns={canReadRuns} stacked /> },
     { key: 'week', header: '7 days', hideBelow: 'lg', render: (t) => <TaskOutcomeStrip task={t} /> },
-    ...(policiesShown ? [{ key: 'policy', header: 'Policy', hideBelow: 'lg', render: (t) => <TaskPolicyCell task={t} catalog={catalog} /> } satisfies Column<TaskWithSummary>] : []),
+    ...(policiesShown ? [{ key: 'policy', header: 'Policy', hideBelow: 'xl', render: (t) => <TaskPolicyCell task={t} catalog={catalog} /> } satisfies Column<TaskWithSummary>] : []),
     { key: 'spend', header: 'Spend 30 d', hideBelow: 'lg', align: 'right', render: (t) => <TaskSpendCell task={t} /> },
     { key: 'machine', header: 'Machine', hideBelow: 'xl', render: (t) => <TaskMachineCell task={t} hostName={hostName} /> },
     { key: 'scheduled', header: 'Scheduled', render: (t) => scheduled(t, false) },
@@ -341,7 +348,7 @@ export function TasksPage() {
 
       {items !== null && items.length > 0 && (
         // Tighter cells than the kit's default, so the columns fit beside the navigation rail.
-        <Box sx={{ opacity: list.loading ? 0.6 : 1, transition: 'opacity 120ms', pb: { xs: 9, sm: 0 }, '& .MuiTableCell-root': { px: 1 } }} aria-busy={list.loading}>
+        <Box sx={{ opacity: list.loading ? 0.6 : 1, transition: 'opacity 120ms', pb: { xs: 9, sm: 0 }, '& .MuiTableCell-root': { px: 0.75 } }} aria-busy={list.loading}>
           <ResponsiveList
             aria-label="Tasks"
             items={items}
@@ -401,7 +408,8 @@ export function TasksPage() {
   );
 }
 
-const visuallyHidden = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' } as const;
+/** Read by assistive technology, not shown; not absolutely positioned, which would widen the table's scroll area. */
+const visuallyHidden = { display: 'inline-block', width: 0, height: 0, overflow: 'hidden', whiteSpace: 'nowrap', verticalAlign: 'top' } as const;
 
 /** The Policy filter: every policy, the default, or one policy (`policyId` on the request). */
 function policyFilter(value: string | null, onChange: (policyId: string | null) => void, policies: ReadonlyArray<{ id: string; name: string }>) {

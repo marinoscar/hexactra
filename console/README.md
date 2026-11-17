@@ -256,9 +256,9 @@ Everything above is on the console's pages (`apps/web/src/pages/`, one client fo
 **Choose a policy for a task, a schedule or one run**
 
 1. In the task form (**Tasks**), pick **Policy**: *Default (name)*, a built-in, or one of yours. The line under it summarises the choice; **Manage policies** opens the list. The form sends `policyId` only.
-2. A task card shows `policy: <name>` and `model: <the model its start tier uses>`.
+2. The Tasks list shows each task's policy ("Balanced (default)" when it follows your default) and the model its start tier uses.
 3. When adding a schedule, **Policy override** runs that schedule under another policy (default: the task's).
-4. **Run with…** (the arrow next to **Run now**) starts one run under the policy you pick from the menu, without changing the task.
+4. **Run with…** (the arrow next to **Run now**, on every row of the Tasks list) starts one run under the policy you pick from the menu, without changing the task. The menu marks the policy the task usually runs under.
 
 **Export and import**
 
@@ -282,6 +282,21 @@ The same policies are reachable from scripts and agents ([docs/mcp.md](docs/mcp.
 - **CLI:** `hexactra policies list|show|export|import|default`, and `--policy <id|name|builtin key>` on `runs start`, `tasks run|create|update` and `schedules create`. `runs list|show` and the terminal UI show each run's policy and cost (and tier, budget use and stop reason when the API reports them).
 - **MCP:** `policies_list`, `policy_get`, `policy_create`, `policy_update`, `policy_set_default`, `policies_export`, `policies_import`, and `policy_id` on `run_goal`, `task_create`, `task_update`, `task_run` and `schedule_create`. Each tool calls the REST route as the caller, so `agent_policies:read` / `:write` apply: a read-only user is refused the write tools with `403`. Deleting a policy is not an MCP tool.
 - **SDK:** `hx.policies.list|get|create|update|setDefault|export|import`, `hx.tasks.create|update|run` and `hx.runs.start` (each with `policyId`), and the exported `AgentPolicySpec` type.
+
+## Tasks
+
+**Tasks** (`/tasks`) lists what your agents do, and when. Each row answers five questions without opening the task: what it does, whether it is scheduled, when it runs next, how the last run went and what it cost in the last 30 days. On a phone each task is a card with the same facts.
+
+| On the row | What it tells you |
+|---|---|
+| **Schedule**, **Next run** | The first schedule in words ("Monday to Friday at 09:00", "+2 more" when there are several) and when the task fires next; "Paused" when its schedules are off, "Not scheduled" when it has none. A schedule that failed three times in a row says so. |
+| **Last run**, **7 days** | The last run's status and time (a link to the run), the live run while one is going, and the last 7 days by outcome ("12 ✓ · 1 ✗"). |
+| **Policy**, **Spend 30 d** | The agent policy and the model it starts on, and the cost of the task's runs in the last 30 days ("≥ $4.20" when a call could not be priced; the tooltip has the number of runs and the average per successful run). The policy shows only to someone who may read agent policies. |
+
+- **Find a task.** Search by name or goal, filter with the chips (Scheduled, Paused, Not scheduled, Failing, Never run), sort by newest, name, last run, next run or spend, and filter by policy once your tasks use more than one. The search, filter and sort are in the address (`/tasks?q=…&filter=…&sort=…&policyId=…`), so a view can be bookmarked or shared. The list loads 50 tasks at a time (**Load more**) and keeps itself current while the page is open.
+- **The Scheduled switch.** Off pauses every schedule of the task; on resumes them. That is all it does: a task that is off **still runs** when you press Run, or when it is started through the API, the CLI or MCP, and a run that is going when you switch it off finishes. "Partly paused" means some of the task's schedules are paused and some are not; switching it on resumes them all. A task without a schedule has an **Add schedule** link instead. The switch needs `tasks:write`; without it you see "Scheduled" or "Paused".
+- **Run now and Run with….** **Run now** starts a run under the task's own policy. The arrow next to it lists the other policies: pick one to use it for that run only, without changing the task. The list stays where it is, so you can start several tasks; "Run started · View" links to the new run. While a task is running the button reads **Run again** and asks before starting a second run. Running needs `runs:write`.
+- **The ⋮ menu.** Edit, Duplicate (a new task that starts as a copy), View runs, and Delete. Delete asks first and says what happens: the task's schedules are deleted, and its runs stay in Runs as one-off runs.
 
 ## Schedules
 

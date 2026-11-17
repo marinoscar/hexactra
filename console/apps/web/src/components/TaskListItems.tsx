@@ -53,7 +53,7 @@ export function ScheduledControl({ task, canWrite, onChange, disabled, showLabel
   return (
     <Tooltip title={SCHEDULED_HELP}>
       {/* The label is the tap target: 44 px high on every width. */}
-      <Box component="label" sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, minWidth: 58, cursor: disabled ? 'default' : 'pointer' }}>
+      <Box component="label" sx={{ display: 'inline-flex', flexDirection: showLabel ? 'row' : 'column', alignItems: showLabel ? 'center' : 'flex-start', justifyContent: 'center', minHeight: 44, minWidth: 58, cursor: disabled ? 'default' : 'pointer' }}>
         <Switch
           checked={state === 'active'}
           disabled={disabled}
@@ -63,7 +63,7 @@ export function ScheduledControl({ task, canWrite, onChange, disabled, showLabel
           sx={partial ? { '& .MuiSwitch-switchBase': { transform: 'translateX(10px)', color: 'primary.light' }, '& .MuiSwitch-track': { bgcolor: 'primary.main', opacity: 0.3 } } : undefined}
         />
         {(showLabel || partial) && (
-          <Typography variant="caption" sx={{ ...muted, whiteSpace: 'nowrap', pr: 0.5 }}>
+          <Typography variant="caption" sx={{ ...muted, whiteSpace: 'nowrap', lineHeight: 1.2, ...(showLabel ? {} : { pl: 1.5, mt: -0.5 }) }}>
             {word}
           </Typography>
         )}
@@ -153,16 +153,18 @@ export function TaskName({ task, canOpen }: { task: TaskWithSummary; canOpen: bo
   );
 }
 
-/** The first schedule in words ("Monday to Friday at 09:00"), "+2 more", or "Not scheduled". */
-export function TaskScheduleCell({ task, catalog }: { task: TaskWithSummary; catalog?: Pick<PolicyCatalog, 'byId'> }) {
+/** The first schedule in words ("Monday to Friday at 09:00"), "+2 more", or "Not scheduled"; `after` joins the small line under it (the card's next run). */
+export function TaskScheduleCell({ task, catalog, after }: { task: TaskWithSummary; catalog?: Pick<PolicyCatalog, 'byId'>; after?: ReactNode }) {
   const [first, ...rest] = task.summary.schedules;
   if (!first) return <Typography variant="body2" sx={muted}>Not scheduled</Typography>;
   return (
     <Box sx={{ minWidth: 0, whiteSpace: 'normal' }}>
       <ScheduleSummary schedule={first} catalog={catalog} showNext={false} />
-      {rest.length > 0 && (
-        <Typography variant="caption" sx={muted} title={rest.map((s) => s.description || s.cron).join('\n')}>
-          +{rest.length} more
+      {(rest.length > 0 || after) && (
+        <Typography variant="caption" component="div" sx={muted}>
+          {rest.length > 0 && <span title={rest.map((s) => s.description || s.cron).join('\n')}>+{rest.length} more</span>}
+          {rest.length > 0 && after && ' · '}
+          {after}
         </Typography>
       )}
     </Box>
@@ -178,15 +180,17 @@ export function TaskNextRun({ task, prefix }: { task: TaskWithSummary; prefix?: 
 }
 
 /** The last run's status and time, linking to the run; the live run while there is one; "Never run". */
-export function TaskLastRun({ task, canReadRuns }: { task: TaskWithSummary; canReadRuns: boolean }) {
+export function TaskLastRun({ task, canReadRuns, stacked = false }: { task: TaskWithSummary; canReadRuns: boolean; stacked?: boolean }) {
   const { lastRun, liveRunId } = task.summary;
+  // Stacked (the table): the time sits under the chip, so the column stays narrow.
+  const layout = stacked ? ({ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.25 } as const) : ({ display: 'inline-flex', alignItems: 'center', gap: 0.75 } as const);
   const wrap = (runId: string, label: string, children: ReactNode) =>
     canReadRuns ? (
-      <Link component={RouterLink} to={taskPaths.run(runId)} underline="none" color="inherit" aria-label={label} sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, minHeight: { xs: 32, md: 'auto' } }}>
+      <Link component={RouterLink} to={taskPaths.run(runId)} underline="none" color="inherit" aria-label={label} sx={{ ...layout, minHeight: { xs: 32, md: 'auto' } }}>
         {children}
       </Link>
     ) : (
-      <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>{children}</Box>
+      <Box component="span" sx={layout}>{children}</Box>
     );
   if (liveRunId) {
     // The live run is normally the newest one: its own status ("needs you") says more than "running".
@@ -199,7 +203,7 @@ export function TaskLastRun({ task, canReadRuns }: { task: TaskWithSummary; canR
     `Last run of ${task.name}: ${lastRun.status}`,
     <>
       <StatusChip status={lastRun.status} />
-      <Typography variant="body2" component="span" sx={muted}>
+      <Typography variant={stacked ? 'caption' : 'body2'} component="span" sx={muted}>
         <RelativeTime iso={lastRun.finishedAt ?? lastRun.createdAt} />
       </Typography>
     </>,
@@ -229,6 +233,18 @@ export function TaskPolicyCell({ task, catalog }: { task: TaskWithSummary; catal
         </Typography>
       )}
     </Box>
+  );
+}
+
+/** The policy and its start model on one muted line ("Balanced (default) · model"), where the Policy column is hidden. */
+export function TaskPolicyLine({ task, catalog }: { task: TaskWithSummary; catalog: Pick<PolicyCatalog, 'byId' | 'defaultId' | 'effective'> }) {
+  const chips = taskPolicyChips(task, catalog);
+  if (!chips) return null;
+  const text = [chips.policy, chips.model].filter(Boolean).join(' · ');
+  return (
+    <Typography variant="caption" component="div" title={text} sx={{ ...muted, display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>
+      {text}
+    </Typography>
   );
 }
 
@@ -288,14 +304,9 @@ export function TaskCard({ task, catalog, canOpen, canReadRuns, scheduled, actio
         <Typography variant="body2" title={task.goal} sx={{ ...muted, mt: 0.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>
           {task.goal}
         </Typography>
-        <Stack direction="row" useFlexGap sx={{ mt: 1, flexWrap: 'wrap', columnGap: 1, alignItems: 'baseline' }}>
-          <TaskScheduleCell task={task} catalog={catalog} />
-          {task.summary.scheduleState !== 'none' && (
-            <Typography variant="body2" component="span" sx={muted}>
-              · <TaskNextRun task={task} prefix="next " />
-            </Typography>
-          )}
-        </Stack>
+        <Box sx={{ mt: 1 }}>
+          <TaskScheduleCell task={task} catalog={catalog} after={<TaskNextRun task={task} prefix="next " />} />
+        </Box>
         <Stack direction="row" useFlexGap sx={{ mt: 1, flexWrap: 'wrap', columnGap: 1.5, rowGap: 0.5, alignItems: 'center' }}>
           <TaskLastRun task={task} canReadRuns={canReadRuns} />
           <Typography variant="body2" component="span">
@@ -309,7 +320,7 @@ export function TaskCard({ task, catalog, canOpen, canReadRuns, scheduled, actio
         )}
       </CardContent>
       <Divider />
-      <Stack direction="row" useFlexGap sx={{ px: 1.5, py: 0.5, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', columnGap: 1, minHeight: 52 }}>
+      <Stack direction="row" useFlexGap sx={{ pl: 0.5, pr: 1, py: 0.5, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', columnGap: 0.5, minHeight: 52 }}>
         <Box sx={{ minWidth: 0 }}>{scheduled}</Box>
         <Stack direction="row" sx={{ alignItems: 'center', ml: 'auto' }}>{actions}</Stack>
       </Stack>
