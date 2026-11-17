@@ -1,6 +1,7 @@
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import RuleOutlinedIcon from '@mui/icons-material/RuleOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
+import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/ui';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { DANGER_ZONE_GROUP_LABEL } from '@marinoscar/platform-web/user-data/headless';
@@ -60,6 +61,15 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
         path: '/settings/agent-model-tiers',
         permission: 'agent_policies:read',
         feature: 'ai',
+      },
+      // Run retention (#422). `runs:delete` is what `GET /api/runs/retention`, its preview and
+      // `POST /api/runs/retention/apply` enforce (apps/api/src/tasks/run-retention.controller.ts).
+      {
+        title: 'Run history',
+        description: 'How long finished runs are kept.',
+        Icon: HistoryOutlinedIcon,
+        path: '/settings/run-history',
+        permission: 'runs:delete',
       },
     ],
   },

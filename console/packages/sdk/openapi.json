@@ -27987,6 +27987,289 @@
         "description": "**Requires:** authentication, plus permission `runs:read`."
       }
     },
+    "/api/runs/retention": {
+      "get": {
+        "description": "The saved rule, or the defaults (keep 90 days) while none was saved, with the deployment ceiling and the floor. Save it with `PATCH /api/user-settings` (`{ \"runs\": { \"keepDays\": 30 } }`).\n\n**Requires:** authentication, plus permission `runs:delete`.",
+        "operationId": "runRetention_settings",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RetentionSettingsResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The caller's run retention rule",
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:delete"
+          ]
+        }
+      }
+    },
+    "/api/runs/retention/preview": {
+      "get": {
+        "description": "Counts the caller's finished runs the given limits would delete, with the same query the nightly job uses, and deletes nothing. An empty or absent limit means none. The deployment ceiling is applied; live runs, runs younger than the floor and runs with a pending question are never counted.\n\n**Requires:** authentication, plus permission `runs:delete`.",
+        "operationId": "runRetention_preview",
+        "parameters": [
+          {
+            "name": "keepDays",
+            "required": true,
+            "in": "query",
+            "description": "Days finished runs are kept; empty or absent: no age limit",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 3650
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "keepPerTask",
+            "required": true,
+            "in": "query",
+            "description": "Newest finished runs kept per task; empty or absent: no limit",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          {
+            "name": "keepFailedDays",
+            "required": true,
+            "in": "query",
+            "description": "Days failed runs are kept; empty or absent: the same as `keepDays`",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 3650
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RetentionPreviewResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "What a retention rule would delete now",
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:delete"
+          ]
+        }
+      }
+    },
+    "/api/runs/retention/apply": {
+      "post": {
+        "description": "Enqueues the `browser.runs.retention.apply` job for the caller's runs only, instead of waiting for the nightly pass. Permanent. Sent again while the job is pending, it answers the same job.\n\n**Requires:** authentication, plus permission `runs:delete`.",
+        "operationId": "runRetention_apply",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RetentionApplyResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Apply the caller's saved retention rule now",
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:delete"
+          ]
+        }
+      }
+    },
     "/api/runs": {
       "get": {
         "operationId": "runs_list",
@@ -37015,6 +37298,68 @@
               "defaultPolicyRef"
             ]
           },
+          "runs": {
+            "type": "object",
+            "properties": {
+              "keepDays": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Finished runs older than this many days are deleted. `null`: no age limit."
+              },
+              "keepPerTask": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Only the newest N finished runs of each task are kept (runs without a task are one group). `null`: no limit."
+              },
+              "keepFailedDays": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The age limit of failed runs, to keep failures longer. `null`: the same as `keepDays`."
+              },
+              "noticeSentAt": {
+                "description": "Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing.",
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "keepDays",
+              "keepPerTask",
+              "keepFailedDays"
+            ]
+          },
           "notifications": {
             "type": "object",
             "propertyNames": {
@@ -37336,6 +37681,68 @@
             },
             "required": [
               "defaultPolicyRef"
+            ]
+          },
+          "runs": {
+            "type": "object",
+            "properties": {
+              "keepDays": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Finished runs older than this many days are deleted. `null`: no age limit."
+              },
+              "keepPerTask": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Only the newest N finished runs of each task are kept (runs without a task are one group). `null`: no limit."
+              },
+              "keepFailedDays": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The age limit of failed runs, to keep failures longer. `null`: the same as `keepDays`."
+              },
+              "noticeSentAt": {
+                "description": "Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing.",
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "keepDays",
+              "keepPerTask",
+              "keepFailedDays"
             ]
           },
           "notifications": {
@@ -37695,6 +38102,70 @@
               }
             ]
           },
+          "runs": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "keepDays": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 3650
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Finished runs older than this many days are deleted. `null`: no age limit."
+                  },
+                  "keepPerTask": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Only the newest N finished runs of each task are kept (runs without a task are one group). `null`: no limit."
+                  },
+                  "keepFailedDays": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 3650
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The age limit of failed runs, to keep failures longer. `null`: the same as `keepDays`."
+                  },
+                  "noticeSentAt": {
+                    "description": "Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "notifications": {
             "anyOf": [
               {
@@ -37853,6 +38324,27 @@
             "required": [
               "jwtAccessTtlMinutes",
               "refreshTtlDays"
+            ]
+          },
+          "runs": {
+            "type": "object",
+            "properties": {
+              "maxKeepDays": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling."
+              }
+            },
+            "required": [
+              "maxKeepDays"
             ]
           },
           "notes": {
@@ -38752,6 +39244,7 @@
         },
         "required": [
           "security",
+          "runs",
           "notes",
           "browserAgentTiers",
           "agentPricing",
@@ -38771,6 +39264,27 @@
       "UpdateSystemSettingsDto": {
         "type": "object",
         "properties": {
+          "runs": {
+            "type": "object",
+            "properties": {
+              "maxKeepDays": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling."
+              }
+            },
+            "required": [
+              "maxKeepDays"
+            ]
+          },
           "notes": {
             "type": "object",
             "properties": {
@@ -39772,6 +40286,24 @@
       "PatchSystemSettingsDto": {
         "type": "object",
         "properties": {
+          "runs": {
+            "type": "object",
+            "properties": {
+              "maxKeepDays": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 3650
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling."
+              }
+            }
+          },
           "notes": {
             "type": "object",
             "properties": {
@@ -42246,6 +42778,68 @@
                 },
                 "required": [
                   "defaultPolicyRef"
+                ]
+              },
+              "runs": {
+                "type": "object",
+                "properties": {
+                  "keepDays": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 3650
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Finished runs older than this many days are deleted. `null`: no age limit."
+                  },
+                  "keepPerTask": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Only the newest N finished runs of each task are kept (runs without a task are one group). `null`: no limit."
+                  },
+                  "keepFailedDays": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 3650
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The age limit of failed runs, to keep failures longer. `null`: the same as `keepDays`."
+                  },
+                  "noticeSentAt": {
+                    "description": "Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "keepDays",
+                  "keepPerTask",
+                  "keepFailedDays"
                 ]
               },
               "notifications": {
@@ -64637,6 +65231,164 @@
           }
         },
         "additionalProperties": false
+      },
+      "RetentionSettingsResponseDto": {
+        "type": "object",
+        "properties": {
+          "keepDays": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3650
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Finished runs older than this many days are deleted. `null`: no age limit."
+          },
+          "keepPerTask": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only the newest N finished runs of each task are kept (runs without a task are one group). `null`: no limit."
+          },
+          "keepFailedDays": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 3650
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The age limit of failed runs, to keep failures longer. `null`: the same as `keepDays`."
+          },
+          "saved": {
+            "type": "boolean",
+            "description": "False while the user never saved a rule: the defaults apply"
+          },
+          "maxKeepDays": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The deployment's ceiling in days; null: none"
+          },
+          "floorHours": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Runs that finished less than this many hours ago are never deleted by retention"
+          }
+        },
+        "required": [
+          "keepDays",
+          "keepPerTask",
+          "keepFailedDays",
+          "saved",
+          "maxKeepDays",
+          "floorHours"
+        ]
+      },
+      "RetentionPreviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "wouldDelete": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Finished runs the rule would delete now (the nightly job deletes at most 20,000 per night)"
+          },
+          "finished": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "All of the caller's finished runs"
+          },
+          "oldestKept": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the oldest run that would be kept finished; null when none would be kept"
+          },
+          "costUsd": {
+            "description": "The recorded model spend (USD) of the runs that would be deleted; null when none of them made a model call",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "maxKeepDays": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The deployment's ceiling in days, applied to the limits given; null: none"
+          },
+          "capped": {
+            "type": "boolean",
+            "description": "True when the ceiling shortened a limit given"
+          },
+          "floorHours": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Runs that finished less than this many hours ago are never deleted by retention"
+          }
+        },
+        "required": [
+          "wouldDelete",
+          "finished",
+          "oldestKept",
+          "costUsd",
+          "maxKeepDays",
+          "capped",
+          "floorHours"
+        ]
+      },
+      "RetentionApplyResponseDto": {
+        "type": "object",
+        "properties": {
+          "jobId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "description": "The `browser.runs.retention` job that applies the caller's saved rule to the caller's runs"
+          }
+        },
+        "required": [
+          "jobId"
+        ]
       },
       "RunListItemResponseDto": {
         "type": "object",

@@ -9,9 +9,11 @@ import {
   composeDefaultSystemSettings,
   composePatchSystemSettingsSchema,
   systemSettingsNamespaceRegistry,
+  userSettingsNamespaceRegistry,
 } from '@marinoscar/platform-api/settings';
 
 import '../src/platform/platform';
+import { browserAgentSettingsSchema } from '../src/policies/policies.settings';
 
 describe('system settings namespaces', () => {
   it('registers notes, then jobs (from JobsModule.forRoot())', () => {
@@ -49,5 +51,30 @@ describe('system settings namespaces', () => {
     expect(composePatchSystemSettingsSchema().parse(ok)).toEqual(ok);
     expect(composePatchSystemSettingsSchema().safeParse({ browserAgentCeilings: { maxActions: 0 } }).success).toBe(false);
     expect(composePatchSystemSettingsSchema().safeParse({ browserAgentCeilings: { maxCostUsd: -1 } }).success).toBe(false);
+  });
+
+  it('registers the system namespace runs: no ceiling by default, a bad value refused (#422)', () => {
+    expect(systemSettingsNamespaceRegistry.ids()).toContain('runs');
+    expect(composeDefaultSystemSettings()).toMatchObject({ runs: { maxKeepDays: null } });
+    const ok = { runs: { maxKeepDays: 180 } };
+    expect(composePatchSystemSettingsSchema().parse(ok)).toEqual(ok);
+    expect(composePatchSystemSettingsSchema().safeParse({ runs: { maxKeepDays: 0 } }).success).toBe(false);
+    expect(composePatchSystemSettingsSchema().safeParse({ runs: { maxKeepDays: 3651 } }).success).toBe(false);
+  });
+
+  it('registers the user namespace runs apart from browserAgent, and stamps a saved rule (#422)', () => {
+    expect(userSettingsNamespaceRegistry.ids()).toEqual(expect.arrayContaining(['browserAgent', 'runs']));
+    const runs = userSettingsNamespaceRegistry.get('runs')!;
+    expect(runs.patchSchema.safeParse({ keepDays: 0 }).success).toBe(false);
+    expect(runs.patchSchema.safeParse({ keepPerTask: 10_001 }).success).toBe(false);
+    // A first save starts from the defaults and records that the user chose.
+    expect(runs.merge(undefined, { keepPerTask: 50 })).toEqual({ keepDays: 90, keepPerTask: 50, keepFailedDays: null, noticeSentAt: expect.any(String) });
+    // "Forever" is null, and the stamp is kept.
+    const saved = { keepDays: 30, keepPerTask: null, keepFailedDays: null, noticeSentAt: '2026-01-01T00:00:00.000Z' };
+    expect(runs.merge(saved, { keepDays: null })).toEqual({ ...saved, keepDays: null });
+    // Clearing the namespace goes back to the defaults.
+    expect(runs.merge(saved, null)).toBeUndefined();
+    // No field of #422 lives in E31's namespace.
+    expect(Object.keys(browserAgentSettingsSchema.shape).sort()).toEqual(['defaultPolicyRef', 'tiers']);
   });
 });

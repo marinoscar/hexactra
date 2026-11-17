@@ -11,6 +11,8 @@ export const RUN_FINISHED_EVENT = 'runs.finished';
 export const SCHEDULE_FAILING_EVENT = 'schedules.failing';
 export const RUN_REMINDER_EVENT = 'runs.needs_you_reminder';
 export const QUESTION_ASKED_EVENT = 'questions.asked';
+/** Run retention (#422): the default rule is about to delete runs for the first time. */
+export const RUN_RETENTION_NOTICE_EVENT = 'runs.retention_notice';
 
 const str = (d: unknown, k: string) => (typeof (d as Record<string, unknown>)[k] === 'string' ? String((d as Record<string, unknown>)[k]) : '');
 const trim = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -58,6 +60,15 @@ const failing: BrowserNotificationTemplate = (d) => ({
   body: trim(`"${str(d, 'taskName')}" failed ${String((d as { failures?: number }).failures ?? 3)} times in a row.`, 180),
   link: '/tasks',
 });
+
+const retentionNotice: BrowserNotificationTemplate = (d) => {
+  const days = Number((d as { days?: unknown }).days);
+  return {
+    title: 'Old runs will be removed',
+    body: `Runs older than ${Number.isFinite(days) && days > 0 ? days : 90} days will be removed starting tomorrow. Change this in Settings → Run history.`,
+    link: '/settings/run-history',
+  };
+};
 
 /** What the console tells people about their browser agents. */
 export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
@@ -112,6 +123,16 @@ export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
       defaultEnabled: true,
     },
     browserTemplate: failing,
+  },
+  {
+    event: {
+      key: RUN_RETENTION_NOTICE_EVENT,
+      label: 'Run history cleanup',
+      description: 'Once, before the default retention rule removes old runs of yours for the first time.',
+      channels: ['browser'],
+      defaultEnabled: true,
+    },
+    browserTemplate: retentionNotice,
   },
 ];
 

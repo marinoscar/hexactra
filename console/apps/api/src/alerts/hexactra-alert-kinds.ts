@@ -11,6 +11,8 @@
 import { registerAlertRuleKind, type AlertObservation, type AlertRuleKind } from '@marinoscar/platform-api/alerts';
 import { z } from 'zod';
 
+import { RUN_READING_ALERT_KINDS } from './run-alert-kinds';
+
 /** What the kinds read. Ids are PERMANENT once rules of a kind exist. */
 export interface AlertSources {
   /** `null` when no fabric connection is configured yet (nothing to watch). */
@@ -244,6 +246,12 @@ export const runCostSpikeKind: AlertRuleKind<z.infer<typeof costSpikeConfig>> = 
   },
   describe: (rule) => `One run cost more than ${usd(rule.config.maxRunCostUsd)} (runs of the last ${rule.config.windowHours} h)`,
 };
+
+// Run retention keeps runs for these kinds' windows: a new kind that reads `runs` joins the list.
+const RUN_READERS: readonly string[] = [HEXACTRA_ALERT_KINDS.RUN_BUDGET, HEXACTRA_ALERT_KINDS.RUN_STALLED, HEXACTRA_ALERT_KINDS.RUN_COST_SPIKE];
+if (RUN_READING_ALERT_KINDS.length !== RUN_READERS.length || RUN_READING_ALERT_KINDS.some((k) => !RUN_READERS.includes(k))) {
+  throw new Error('RUN_READING_ALERT_KINDS (run-alert-kinds.ts) must list exactly the alert kinds that read runs');
+}
 
 registerAlertRuleKind(hostOfflineKind);
 registerAlertRuleKind(scheduleFailingKind);

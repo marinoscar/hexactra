@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Run retention** (#422). **Finished runs are now kept for 90 days by default.**
+  - Each user sets a rule under Settings → Browser agent → Run history: keep runs for N days, keep the last N per task, both, or keep everything. Failed runs can be kept longer.
+  - A nightly job deletes what falls outside the rule. Live runs, runs with a pending question and anything newer than 24 hours are never deleted.
+  - A user who never chose a rule gets a notice first: the first night deletes nothing and says what will be removed from the next night on.
+  - The page previews how many runs a rule would delete and can apply it now. Administrators can set a ceiling under Administration → Browser agent → Run history.
+  - Doctor check `runs.retention`. Runbook: `console/docs/runbooks/run-retention.md`.
 - **Home dashboard** (#430).
   - Home shows what needs you (pending questions, with Approve and Deny for a simple confirmation), what is running now, what runs next, what just finished, the week's outcomes and cost, and the machines.
   - It is one request, `GET /api/home/summary`. A block the viewer lacks the permission for is left out.
