@@ -541,6 +541,27 @@
         "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
       },
       "web": "/admin/settings/fabric"
+    },
+    {
+      "id": "deploy.bundled_host",
+      "description": "Turn the bundled VPS browser host on or off (COMPOSE_PROFILES), and show whether it runs; the choice survives deploy update",
+      "rest": {
+        "none": "It changes the server's containers; run on the server, where docker is"
+      },
+      "cli": [
+        "deploy bundled-host status",
+        "deploy bundled-host on",
+        "deploy bundled-host off"
+      ],
+      "mcp": {
+        "none": "A server operator's change, kept off agent surfaces"
+      },
+      "tui": {
+        "none": "A one-off server change; the CLI command runs it"
+      },
+      "web": {
+        "none": "It changes the server's containers; the Fleet page can disable the host instead"
+      }
     }
   ]
 }

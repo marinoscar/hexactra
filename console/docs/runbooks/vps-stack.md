@@ -21,7 +21,15 @@ api ──http://fabric-control:8787 (hxs_ service token)──▶ fabric-contro
 - The console lives in `console/`, so the CLI declares `deploy: { appDir: 'console' }` (`apps/cli/src/app.ts`).
   - The deploy keeps one checkout of the whole repository under `<deploy root>/repo` and builds from `repo/console/infra/compose`.
   - The fabric images build from the repository root.
-- The deploy generates `HEXACTRA_FABRIC_OPERATOR_TOKEN` without asking, and sets `COMPOSE_PROFILES`: `bundled-host` where the bundled host's data volume already exists, `none` on a new server. Change it in `infra/compose/.env`, then run `hexactra deploy update`.
+- The deploy generates `HEXACTRA_FABRIC_OPERATOR_TOKEN` without asking, and sets `COMPOSE_PROFILES`: `bundled-host` where the bundled host's data volume already exists, `none` on a new server. Change it with one command on the server; the choice survives `hexactra deploy update`:
+
+  ```bash
+  hexactra deploy bundled-host status   # on/off, and whether the container runs
+  hexactra deploy bundled-host off      # COMPOSE_PROFILES=none; stops and removes fabric-host (its profiles volume stays)
+  hexactra deploy bundled-host on       # COMPOSE_PROFILES=bundled-host; starts fabric-host again
+  ```
+
+  After `off`, the host shows offline in Fleet: revoke it there, or keep it to turn it back on later. To keep it running but out of automatic choice, switch it off on the Fleet page instead (Enabled).
 - `infra/compose/app.vps.stack-agent-image.compose.yml` runs the platform's published stack-agent image, because only the platform repository ships `apps/stack-agent`.
 
 **Before you start** (`deploy doctor` checks each one):
