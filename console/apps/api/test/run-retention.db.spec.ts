@@ -305,6 +305,15 @@ describe('the preview', () => {
     const user = await login('preview-bad');
     expect((await call(user, 'GET', '/runs/retention/preview?keepDays=0')).statusCode).toBe(400);
     expect((await call(user, 'GET', '/runs/retention/preview?keepPerTask=1.5')).statusCode).toBe(400);
+    // Every limit may be left out or sent empty (no limit), and the OpenAPI document says so.
+    expect((await call<Preview>(user, 'GET', '/runs/retention/preview')).data).toMatchObject({ wouldDelete: 0 });
+    expect((await call<Preview>(user, 'GET', '/runs/retention/preview?keepDays=&keepPerTask=null')).data).toMatchObject({ wouldDelete: 0 });
+    const doc = (await app.inject({ method: 'GET', url: '/api/openapi.json' })).json<{ paths: Record<string, { get: { parameters: { name: string; required: boolean }[] } }> }>();
+    expect(doc.paths['/api/runs/retention/preview']!.get.parameters.map((p) => [p.name, p.required])).toEqual([
+      ['keepDays', false],
+      ['keepPerTask', false],
+      ['keepFailedDays', false],
+    ]);
     expect((await call(user, 'GET', '/runs/retention/preview?keepDays=')).statusCode).toBe(200);
     const viewer = await login('preview-viewer', 'viewer');
     expect((await call(viewer, 'GET', '/runs/retention/preview')).statusCode).toBe(403);

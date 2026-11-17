@@ -83,8 +83,13 @@ export function keepsEverything(rule: EffectiveRetentionRule): boolean {
   return rule.keepDays === null && rule.keepFailedDays === null && rule.keepPerTask === null;
 }
 
-// A query value: a number, or empty / absent for "no limit".
-const queryLimit = (max: number) => z.preprocess((v) => (v === undefined || v === '' || v === 'null' ? null : v), z.coerce.number().int().min(1).max(max).nullable());
+// A query value: a number, or empty / absent for "no limit". Optional in the schema, so the OpenAPI document does
+// not call a parameter required that the route accepts without; what the handler reads is still a number or null.
+const queryLimit = (max: number) =>
+  z
+    .preprocess((v) => (v === '' || v === 'null' ? null : v), z.coerce.number().int().min(1).max(max).nullable())
+    .optional()
+    .transform((v) => v ?? null);
 
 export const retentionPreviewQuerySchema = z.object({
   keepDays: queryLimit(RETENTION_MAX_DAYS).describe('Days finished runs are kept; empty or absent: no age limit'),
