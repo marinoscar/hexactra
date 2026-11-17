@@ -255,7 +255,7 @@ export function HomePage() {
           {/* One column on a phone, in the order of `Slot`; two from `md` (7fr / 5fr). */}
           {(main || side) && (
             <Box
-              sx={{ display: { xs: 'flex', md: 'grid' }, flexDirection: 'column', gap: 3, gridTemplateColumns: main && side ? 'minmax(0, 7fr) minmax(0, 5fr)' : 'minmax(0, 1fr)', alignItems: 'start' }}
+              sx={{ display: { xs: 'flex', md: 'grid' }, flexDirection: 'column', gap: 3, gridTemplateColumns: main && side ? 'minmax(0, 7fr) minmax(0, 5fr)' : 'minmax(0, 1fr)', alignItems: { xs: 'stretch', md: 'start' } }}
               data-testid="home-columns"
             >
               {main && (

@@ -284,8 +284,12 @@ function RecentRunRow({ run }: { run: HomeRecentRun }) {
         data-testid={`home-recent-${run.id}`}
         sx={{
           display: 'grid',
-          gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+          // A phone: the chip and the time on one line, the name on its own line under them.
+          gridTemplateColumns: { xs: 'minmax(0, 1fr) auto', sm: 'auto minmax(0, 1fr) auto' },
+          gridTemplateAreas: { xs: '"chip meta" "name name"', sm: '"chip name meta"' },
+          justifyItems: 'start',
           columnGap: 1.5,
+          rowGap: 0.5,
           alignItems: 'center',
           py: 1,
           minHeight: 44,
@@ -296,8 +300,10 @@ function RecentRunRow({ run }: { run: HomeRecentRun }) {
           '&:focus-visible': { outline: 2, outlineColor: 'primary.main', outlineOffset: 2 },
         }}
       >
-        <StatusChip status={run.status} stopReason={run.stopReason} />
-        <Box sx={{ minWidth: 0 }}>
+        <Box sx={{ gridArea: 'chip', minWidth: 0, maxWidth: '100%' }}>
+          <StatusChip status={run.status} stopReason={run.stopReason} />
+        </Box>
+        <Box sx={{ gridArea: 'name', minWidth: 0, maxWidth: '100%' }}>
           <Typography sx={ONE_LINE}>{run.taskName ?? run.goal}</Typography>
           {run.error && (
             <Typography variant="body2" color="error" sx={ONE_LINE}>
@@ -305,7 +311,7 @@ function RecentRunRow({ run }: { run: HomeRecentRun }) {
             </Typography>
           )}
         </Box>
-        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'baseline', whiteSpace: 'nowrap', color: 'text.secondary', typography: 'body2', ...TABULAR }}>
+        <Stack direction="row" spacing={1.5} sx={{ gridArea: 'meta', justifySelf: 'end', alignItems: 'baseline', whiteSpace: 'nowrap', color: 'text.secondary', typography: 'body2', ...TABULAR }}>
           {duration && <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>{duration}</Box>}
           {cost && (
             <Box component="span" data-testid="home-recent-cost" sx={{ display: { xs: 'none', md: 'inline' } }}>
@@ -356,7 +362,7 @@ function Figure({ label, value, to, testId }: { label: string; value: string; to
   );
 }
 
-const SR_ONLY = { position: 'absolute', width: 1, height: 1, p: 0, m: -1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 } as const;
+const SR_ONLY = { position: 'absolute', width: '1px', height: '1px', p: 0, m: '-1px', overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 } as const;
 
 export function ThisWeekBlock({ week }: { week: HomeWeek }) {
   const t = week.totals;
@@ -380,7 +386,7 @@ export function ThisWeekBlock({ week }: { week: HomeWeek }) {
   }
   return (
     <Block title="This week" testId="week" footer={<BlockLink to="/runs">All runs</BlockLink>}>
-      <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${spend ? 4 : 3}, minmax(0, 1fr))`, gap: 2, mb: 1 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: `repeat(${spend ? 4 : 3}, minmax(0, 1fr))` }, gap: 2, mb: 1 }}>
         <Figure label="Runs" value={String(runs)} testId="runs" />
         <Figure label="Success rate" value={successRate(t.successRate)} testId="rate" />
         <Figure label="Failed" value={String(t.failed)} to={weekRunsLink(from)} testId="failed" />
@@ -410,26 +416,28 @@ export function ThisWeekBlock({ week }: { week: HomeWeek }) {
         </>
       )}
       {/* The same numbers for a screen reader: the chart itself is hidden from it. */}
-      <Box component="table" sx={SR_ONLY} data-testid="home-week-table">
-        <caption>Runs per day over the last 7 days</caption>
-        <thead>
-          <tr>
-            <th scope="col">Day</th>
-            <th scope="col">Succeeded</th>
-            <th scope="col">Failed</th>
-            <th scope="col">Cancelled</th>
-          </tr>
-        </thead>
-        <tbody>
-          {week.series.map((d) => (
-            <tr key={d.date}>
-              <th scope="row">{d.date}</th>
-              <td>{d.succeeded}</td>
-              <td>{d.failed}</td>
-              <td>{d.cancelled}</td>
+      <Box sx={SR_ONLY}>
+        <table data-testid="home-week-table">
+          <caption>Runs per day over the last 7 days</caption>
+          <thead>
+            <tr>
+              <th scope="col">Day</th>
+              <th scope="col">Succeeded</th>
+              <th scope="col">Failed</th>
+              <th scope="col">Cancelled</th>
             </tr>
-          ))}
-        </tbody>
+          </thead>
+          <tbody>
+            {week.series.map((d) => (
+              <tr key={d.date}>
+                <th scope="row">{d.date}</th>
+                <td>{d.succeeded}</td>
+                <td>{d.failed}</td>
+                <td>{d.cancelled}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </Box>
       {stops.length > 0 && (
         <Typography variant="body2" sx={{ mt: 1, ...TABULAR }} data-testid="home-week-stops">
