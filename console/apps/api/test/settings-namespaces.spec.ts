@@ -77,4 +77,11 @@ describe('system settings namespaces', () => {
     // No field of #422 lives in E31's namespace.
     expect(Object.keys(browserAgentSettingsSchema.shape).sort()).toEqual(['defaultPolicyRef', 'tiers']);
   });
+
+  it('registers the system namespace mcp: elicitation on by default, a bad value refused (#463)', () => {
+    expect(systemSettingsNamespaceRegistry.ids()).toContain('mcp');
+    expect(composeDefaultSystemSettings()).toMatchObject({ mcp: { elicitation: true } });
+    expect(composePatchSystemSettingsSchema().parse({ mcp: { elicitation: false } })).toEqual({ mcp: { elicitation: false } });
+    expect(composePatchSystemSettingsSchema().safeParse({ mcp: { elicitation: 'no' } }).success).toBe(false);
+  });
 });

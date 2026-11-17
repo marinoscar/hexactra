@@ -72,6 +72,7 @@ describe('structured results validate against the output schemas (real REST answ
       const status = await call(t, 'run_status', { run_id: run.id });
       expect(status).toMatchObject({ id: run.id, steps: [], olderSteps: 0 });
       expect(status).not.toHaveProperty('transcript');
+      expect(await call(t, 'run_wait', { run_id: run.id, wait_s: 0 })).toMatchObject({ run_id: run.id, status: 'queued', needs_human: false });
       expect((await call(t, 'runs_list', {})).items!.map((r) => r.id)).toContain(run.id);
       expect(await call(t, 'runs_list', { limit: 1 })).toMatchObject({ items: [expect.objectContaining({ id: run.id })] });
       expect(await call(t, 'run_cancel', { run_id: run.id })).toMatchObject({ id: run.id });

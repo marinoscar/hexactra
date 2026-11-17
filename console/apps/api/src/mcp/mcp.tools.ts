@@ -13,8 +13,10 @@ import { agentPolicyResponseSchema, defaultPolicyResponseSchema } from '../polic
 import { importPoliciesResponseSchema } from '../policies/policy-transfer.schemas';
 import { RUN_STATUSES, STOP_REASON_FILTERS } from '../tasks/runs.schemas';
 
-import { errorOutcome } from './mcp.errors';
+import { McpApiError, errorOutcome } from './mcp.errors';
+import { appUrlOf, followRun, progressOf, readRunState, relayChannel, runScreenshot, viaOf, type Followed } from './mcp.run-follow';
 import { MAX_TOOL_WAIT_S, UNTRUSTED_NOTICE, limitsOf, textResult, toolOutput, type McpContext, type McpToolResult } from './mcp.results';
+import { answerableHere, howToAnswer, progressHasPageText, progressSummary, runProgressSchema, type RunProgress } from './run-progress';
 import type { McpEffect, McpScope } from './mcp.scopes';
 
 export type { McpContent, McpContext, McpToolResult } from './mcp.results';
@@ -212,6 +214,8 @@ interface QuestionView {
   prompt: string;
   status: string;
   expiresAt: string;
+  runId?: string | null;
+  risk?: 'low' | 'high' | null;
   response: { outcome: string; value?: string; values?: string[]; valueWithheld?: boolean; channel?: string } | null;
 }
 
@@ -280,9 +284,47 @@ function runHasPageText(r: Record<string, unknown>): boolean {
   return (typeof r.result === 'string' && r.result !== '') || (typeof r.error === 'string' && r.error !== '');
 }
 
-function runOutput(r: Record<string, unknown>): McpToolResult {
-  const v = stripRun(r);
-  return toolOutput({ text: v, structured: v, summary: runSummary(v), untrusted: runHasPageText(v) });
+/** How long run_goal and task_run wait by default: hosted (OAuth) clients have no timers, so they wait for a first report. */
+export const RUN_START_WAIT_S_OAUTH = 45;
+/** How long run_wait waits by default. */
+export const RUN_WAIT_DEFAULT_S = 60;
+
+const startWaitS = z
+  .number()
+  .int()
+  .min(0)
+  .max(MAX_TOOL_WAIT_S)
+  .optional()
+  .describe(
+    `After starting, wait up to this many seconds for a first progress report or, for a short goal, the result (as run_wait does). Default 0 (return at once); ${RUN_START_WAIT_S_OAUTH} for apps signed in with OAuth. At most ${MAX_TOOL_WAIT_S} (200 with OAuth).`,
+  );
+const screenshotParam = z.boolean().default(false).describe("true adds a picture of the run's browser as it is now (none while a code or password is being entered).");
+
+/** The run as a run tool answers it, with its progress block; never the steps list (run_status pages those itself). */
+function runWithProgress(run: Record<string, unknown>, progress: RunProgress, images: McpToolResult['content'] = []): McpToolResult {
+  const { steps: _s, ...rest } = stripRun(run);
+  const v = { ...rest, progress };
+  const out = toolOutput({ text: v, structured: v, summary: progressSummary(progress), untrusted: runHasPageText(v) || progressHasPageText(progress) });
+  return images.length ? { ...out, content: [...out.content, ...images] } : out;
+}
+
+/** A followed run as a tool result: `input_required` when the client is asked the question, else the run (or the bare block) with its progress. */
+function followedOutput(f: Followed, shape: 'run' | 'progress'): McpToolResult {
+  if (f.inputRequired) return { content: [], inputRequired: f.inputRequired };
+  if (shape === 'run') return runWithProgress(f.st.run, f.progress, f.images);
+  const p = f.progress;
+  const out = toolOutput({ text: `${progressSummary(p)}\n\n${JSON.stringify(p, null, 2)}`, structured: p, untrusted: progressHasPageText(p) });
+  return f.images.length ? { ...out, content: [...out.content, ...f.images] } : out;
+}
+
+/** Start a run (or, on a retried elicitation, take the run it was about), then wait as run_wait does when asked to. */
+async function startAndFollow(ctx: McpContext, a: Record<string, unknown>, start: () => Promise<Record<string, unknown>>): Promise<McpToolResult> {
+  const resume = ctx.elicitation?.resume;
+  const created = resume ? null : await start();
+  const runId = resume?.runId ?? String(created!.id);
+  const waitS = a.wait_s !== undefined ? Number(a.wait_s) : viaOf(ctx) === 'oauth' ? RUN_START_WAIT_S_OAUTH : 0;
+  if (created && waitS === 0) return runWithProgress(created, progressOf(ctx, { run: created as never, question: null, secretOpen: false }, true));
+  return followedOutput(await followRun(ctx, runId, { waitS, since: null, screenshot: false }), 'run');
 }
 
 /** A list answer: the bare list in `content` (as it always was), `{ items }` as structured content. */
@@ -293,7 +335,11 @@ function listOutput(items: unknown[], noun: string, extra: { untrusted?: boolean
 const runStatusOutput = runResponseSchema.extend({
   steps: z.array(runStepResponseSchema).describe('The latest steps, oldest first'),
   olderSteps: z.number().int().describe('Steps before the first one returned: page back with steps_before = the first step\'s seq'),
+  progress: runProgressSchema.describe('The run in plain words (#463)'),
 });
+
+/** A run answer with its progress block (run_goal, task_run, run_cancel). */
+const runWithProgressOutput = runResponseSchema.extend({ progress: runProgressSchema.describe('The run in plain words: what it is doing, whether it needs the user, its result (#463)') });
 
 /** `GET /runs` answers its items without `tier` (read it from run_status): optional here. */
 const runsListOutput = runPageResponseSchema.extend({
@@ -358,7 +404,7 @@ const pageTextSchema = z.object({
 
 export const MCP_INSTRUCTIONS = `Hexactra runs real browsers for the user, on their own machines and profiles, through this console.
 Two ways to work:
-1. Delegate: run_goal (or task_run) hands a goal to Hexactra's own browser agent; follow it with run_status. It asks the person for CAPTCHAs, codes and confirmations itself.
+1. Delegate: run_goal (or task_run) hands a goal to Hexactra's own browser agent; follow it with run_wait (pass the last cursor as since), not run_status in a loop. It asks the person for CAPTCHAs, codes and confirmations itself; when a run's progress says needs_human and answerable_here, ask the user in the chat and pass the answer on with inbox_answer, otherwise give them how_to_answer.
 2. Drive: browser_open, then browser_* tools step by step; every action is recorded and the user can stop you at any time.
 3. Policies: every delegated run follows an agent policy (budgets and model tiers). policies_list shows them; pass policy_id to run_goal, task_run, task_create, task_update or schedule_create to choose one, otherwise the user's default applies.
    Schedules: task_create takes schedules, schedule_preview checks a cron expression before it is saved, task_pause and task_resume switch all of a task's schedules. You cannot delete runs: the user's run history is theirs to erase.
@@ -374,14 +420,14 @@ export const MCP_TOOLS: McpTool[] = [
     title: 'Start a run',
     description:
       "Hand a goal to Hexactra's own browser agent, which plans and acts by itself on the user's machine. " +
-      'Use it for a task the agent can finish on its own; follow the run with run_status. ' +
-      "Returns the run. Without policy_id the run uses the user's default agent policy (see policies_list).",
-    input: z.object({ goal: z.string().min(1).max(4000).describe('What the agent should do, in plain words.'), profile, policy_id: policyIdParam.optional() }),
-    output: runResponseSchema,
+      'Use it for a task the agent can finish on its own; follow the run with run_wait. ' +
+      "Returns the run with a progress block (`progress`: what it is doing, whether it needs the user, its result). With wait_s it first waits like run_wait. Without policy_id the run uses the user's default agent policy (see policies_list).",
+    input: z.object({ goal: z.string().min(1).max(4000).describe('What the agent should do, in plain words.'), profile, policy_id: policyIdParam.optional(), wait_s: startWaitS }),
+    output: runWithProgressOutput,
     scope: 'runs:write',
     effect: 'write',
     openWorld: true,
-    call: async (a, ctx) => runOutput(await ctx.api('POST', '/runs', { goal: a.goal, profile: a.profile, ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}) })),
+    call: (a, ctx) => startAndFollow(ctx, a, () => ctx.api('POST', '/runs', { goal: a.goal, profile: a.profile, ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}) })),
   },
   {
     name: 'run_status',
@@ -390,11 +436,13 @@ export const MCP_TOOLS: McpTool[] = [
       'Read one run: its status (queued, running, waiting_human = needs the person, succeeded, failed, cancelled), result and latest steps. ' +
       'Use it to follow a run started with run_goal or task_run. ' +
       'It also has the agent policy (`policy`), tier (`tier`, `currentTier`, `escalations`), cost (`costUsd`, `costKnown`, `modelCalls`), budget use (`budget`) and why it stopped (`stopReason`). ' +
-      'steps is how many of the latest steps to return (default 20); steps_before pages back to steps before that seq. Never the transcript.',
+      '`progress` says it plainly (what it is doing now, whether it waits for the user and how to answer, its result, a console link); screenshot: true adds a picture of its browser. ' +
+      'steps is how many of the latest steps to return (default 20); steps_before pages back to steps before that seq. Never the transcript. To wait for a change, use run_wait.',
     input: z.object({
       run_id: runId,
       steps: z.number().int().min(0).max(50).default(RUN_STATUS_DEFAULT_STEPS).describe('How many of the latest steps to return (0 to 50, default 20).'),
       steps_before: z.number().int().min(0).optional().describe('Only steps with a seq below this one: pass the seq of the first step you have to read older steps.'),
+      screenshot: screenshotParam,
     }),
     output: runStatusOutput,
     scope: 'runs:read',
@@ -402,15 +450,49 @@ export const MCP_TOOLS: McpTool[] = [
     openWorld: false,
     idempotent: true,
     async call(a, ctx) {
-      const r = await ctx.api<{ steps?: { seq: number }[] } & Record<string, unknown>>('GET', `/runs/${String(a.run_id)}`);
-      const { steps: rawSteps, ...run } = stripRun(r);
+      const st = await readRunState(ctx, String(a.run_id));
+      const { steps: rawSteps, ...run } = stripRun(st.run);
       const all = (rawSteps ?? []) as { seq: number }[];
       const window = a.steps_before !== undefined ? all.filter((s) => s.seq < Number(a.steps_before)) : all;
       const n = Number(a.steps);
       const steps = n > 0 ? window.slice(-n) : [];
-      const v = { ...run, steps, olderSteps: window.length - steps.length };
-      return toolOutput({ text: v, structured: v, summary: runSummary(v), untrusted: runHasPageText(v) || steps.length > 0 });
+      let progress = progressOf(ctx, st, true);
+      let images: McpToolResult['content'] = [];
+      if (a.screenshot) {
+        const shot = await runScreenshot(ctx, st);
+        progress = { ...progress, screenshot: shot.state, ...(shot.note ? { screenshot_note: shot.note } : {}) };
+        images = shot.content;
+      }
+      const v = { ...run, steps, olderSteps: window.length - steps.length, progress };
+      const out = toolOutput({ text: v, structured: v, summary: `${runSummary(v)} ${progressSummary(progress)}`, untrusted: runHasPageText(v) || steps.length > 0 || progressHasPageText(progress) });
+      return images.length ? { ...out, content: [...out.content, ...images] } : out;
     },
+  },
+  {
+    name: 'run_wait',
+    title: 'Wait for a run',
+    description:
+      'Wait until something the user would care about happens on a run, then say what: it finished, failed or was stopped; it needs the user (a question, with how to answer it); or it made progress (at most once per 10 s). ' +
+      'Use it after run_goal or task_run instead of calling run_status in a loop: pass the cursor of the last answer as since to hear only what is new. ' +
+      'Returns the progress block with changed: false when wait_s passes quietly. screenshot: true adds a picture of the browser. Leaving or timing out never stops the run.',
+    input: z.object({
+      run_id: runId,
+      wait_s: z
+        .number()
+        .int()
+        .min(0)
+        .max(MAX_TOOL_WAIT_S)
+        .default(RUN_WAIT_DEFAULT_S)
+        .describe(`Wait up to this many seconds (default ${RUN_WAIT_DEFAULT_S}; at most ${MAX_TOOL_WAIT_S}, 200 for apps signed in with OAuth); 0 answers at once.`),
+      since: z.string().max(500).optional().describe('The cursor of a previous answer (run_wait, run_goal, task_run, run_status): only what happened after it is reported.'),
+      screenshot: screenshotParam,
+    }),
+    output: runProgressSchema,
+    scope: 'runs:read',
+    effect: 'read',
+    openWorld: false,
+    idempotent: true,
+    call: async (a, ctx) => followedOutput(await followRun(ctx, String(a.run_id), { waitS: Number(a.wait_s), since: a.since !== undefined ? String(a.since) : null, screenshot: Boolean(a.screenshot) }), 'progress'),
   },
   {
     name: 'runs_list',
@@ -455,14 +537,17 @@ export const MCP_TOOLS: McpTool[] = [
   {
     name: 'run_cancel',
     title: 'Stop a run',
-    description: 'Stop a run after its current step. Use it when the user asks to stop, or a run is going wrong. Stopping a run that already ended changes nothing.',
+    description: 'Stop a run after its current step. Use it when the user asks to stop, or a run is going wrong. Stopping a run that already ended changes nothing. Returns the run with its progress block; follow it with run_wait until it says cancelled.',
     input: z.object({ run_id: runId }),
-    output: runResponseSchema,
+    output: runWithProgressOutput,
     scope: 'runs:write',
     effect: 'destructive',
     openWorld: false,
     idempotent: true,
-    call: async (a, ctx) => runOutput(await ctx.api('POST', `/runs/${String(a.run_id)}/cancel`, {})),
+    async call(a, ctx) {
+      const run = await ctx.api<Record<string, unknown>>('POST', `/runs/${String(a.run_id)}/cancel`, {});
+      return runWithProgress(run, progressOf(ctx, { run: run as never, question: null, secretOpen: false }, true));
+    },
   },
   {
     name: 'tasks_list',
@@ -547,14 +632,14 @@ export const MCP_TOOLS: McpTool[] = [
     name: 'task_run',
     title: 'Run a saved task',
     description:
-      "Start a saved task now with Hexactra's browser agent. Use it to run a task from tasks_list; follow the run with run_status. " +
-      "policy_id runs it under another agent policy for this run only; otherwise the task's or the default policy applies.",
-    input: z.object({ task_id: taskId, policy_id: policyIdParam.optional() }),
-    output: runResponseSchema,
+      "Start a saved task now with Hexactra's browser agent. Use it to run a task from tasks_list; follow the run with run_wait. " +
+      "Returns the run with its progress block; with wait_s it first waits like run_wait. policy_id runs it under another agent policy for this run only; otherwise the task's or the default policy applies.",
+    input: z.object({ task_id: taskId, policy_id: policyIdParam.optional(), wait_s: startWaitS }),
+    output: runWithProgressOutput,
     scope: 'runs:write',
     effect: 'write',
     openWorld: true,
-    call: async (a, ctx) => runOutput(await ctx.api('POST', `/tasks/${String(a.task_id)}/runs`, a.policy_id !== undefined ? { policyId: a.policy_id } : {})),
+    call: (a, ctx) => startAndFollow(ctx, a, () => ctx.api('POST', `/tasks/${String(a.task_id)}/runs`, a.policy_id !== undefined ? { policyId: a.policy_id } : {})),
   },
   {
     name: 'schedule_create',
@@ -649,8 +734,9 @@ export const MCP_TOOLS: McpTool[] = [
     name: 'inbox_answer',
     title: "Pass on the user's answer",
     description:
-      "Answer a waiting question with the answer the user gave you in this conversation (only an answer they actually gave). Name it by question_id (from inbox_list or ask_human) or by run_id. " +
-      'outcome completed with value for text, choice (an option id), number or confirm ("approve" or "deny"); values (option ids) for multi_choice; completed alone for none and takeover; cancelled to decline.',
+      "Answer a waiting question with the answer the user gave you in this conversation: only pass on an answer the user actually gave, never one you chose. Name it by question_id (from inbox_list, ask_human or a run's progress) or by run_id. " +
+      'outcome completed with value for text, choice (an option id), number or confirm ("approve" or "deny"); values (option ids) for multi_choice; completed alone for none and takeover; cancelled to decline. ' +
+      "A question whose answerable_here is false (a code or password, a takeover, a high-risk confirmation for apps signed in with OAuth) is refused: give the user its how_to_answer link. Returns the run's progress after it; continue with run_wait.",
     input: z.object({
       question_id: id.optional().describe('The question (from inbox_list or ask_human); give this or run_id.'),
       run_id: id.optional().describe('The run whose question to answer; give this or question_id.'),
@@ -658,16 +744,53 @@ export const MCP_TOOLS: McpTool[] = [
       value: z.union([z.string().max(4096), z.number()]).optional().describe('The answer for text, choice, number and confirm.'),
       values: z.array(z.string().max(64)).max(10).optional().describe('multi_choice: the option ids chosen.'),
     }),
-    output: questionToolSchema.partial().extend({ ok: z.boolean().optional() }),
+    output: questionToolSchema.partial().extend({
+      ok: z.boolean().optional(),
+      already_answered: z.boolean().optional().describe('Someone answered first (on another device); outcome and value are theirs'),
+      progress: runProgressSchema.optional().describe("The run's progress after the answer (a run's question only)"),
+    }),
     scope: 'inbox:write',
     effect: 'write',
     openWorld: false,
     async call(a, ctx) {
       if (Boolean(a.question_id) === Boolean(a.run_id)) return errorOutcome('Invalid arguments: give question_id or run_id (one of them).', 'INVALID_ARGUMENTS');
       const body = { outcome: a.outcome, ...(a.value !== undefined ? { value: a.value } : {}), ...(a.values !== undefined ? { values: a.values } : {}) };
-      if (a.question_id) return questionOutput(await ctx.api<QuestionView>('POST', `/questions/${String(a.question_id)}/answer`, { ...body, channel: 'mcp' }));
-      const r = await ctx.api<Record<string, unknown>>('POST', `/inbox/${String(a.run_id)}/respond`, body);
-      return toolOutput({ text: r, structured: r, summary: `Answer passed on to run ${String(a.run_id)}.` });
+      const oauth = viaOf(ctx) === 'oauth';
+      let qid = a.question_id ? String(a.question_id) : null;
+      if (oauth) {
+        // A hosted app relays the chat: it answers by question, under the channel rules (questions/channels/channel-rules.ts).
+        let q: QuestionView | undefined;
+        if (qid) q = await ctx.api<QuestionView>('GET', `/questions/${qid}`);
+        else {
+          const pending = await ctx.api<unknown>('GET', `/questions?runId=${String(a.run_id)}&status=pending&limit=20`);
+          q = (Array.isArray(pending) ? (pending as QuestionView[]) : [])[0];
+          if (!q) return errorOutcome('Nothing on that run is waiting for an answer. Check it with run_wait.', 'NOT_WAITING');
+          qid = q.id;
+        }
+        if (a.outcome === 'completed' && q.status === 'pending' && !answerableHere(q, 'oauth')) {
+          const why = q.input === 'secret' ? 'a code or password is never passed through a chat' : q.input === 'confirm' ? 'a high-risk confirmation needs the user signed in to Hexactra' : 'it is done in the browser itself';
+          return errorOutcome(`This question cannot be answered from the chat: ${why}. Give the user this: ${howToAnswer(appUrlOf(ctx), q.id)}`, 'NOT_ANSWERABLE_HERE');
+        }
+      }
+      let answered: QuestionView | null = null;
+      let plain: Record<string, unknown> | null = null;
+      try {
+        if (qid) answered = await ctx.api<QuestionView>('POST', `/questions/${qid}/answer`, { ...body, channel: relayChannel(ctx, 'relay') });
+        else plain = await ctx.api<Record<string, unknown>>('POST', `/inbox/${String(a.run_id)}/respond`, body);
+      } catch (e) {
+        // First answer wins: say who won, as a normal answer (a 409 on a question that is settled with an answer).
+        if (!(e instanceof McpApiError && e.status === 409 && qid)) throw e;
+        const won = await ctx.api<QuestionView>('GET', `/questions/${qid}`);
+        if (won.status !== 'answered' && won.status !== 'cancelled') throw e;
+        const v = { ...questionResult(won), already_answered: true };
+        delete (v as { hint?: string }).hint;
+        return toolOutput({ text: v, structured: v, summary: `This was already answered on another device${won.response ? ` (${won.response.outcome}${won.response.value !== undefined ? `: ${won.response.value}` : ''})` : ''}.` });
+      }
+      const runOf = a.run_id ? String(a.run_id) : (answered?.runId ?? null);
+      const progress = runOf ? progressOf(ctx, await readRunState(ctx, runOf), true) : undefined;
+      const v = { ...(answered ? questionResult(answered) : (plain ?? {})), ...(progress ? { progress } : {}) };
+      const summary = answered ? `Question ${answered.id}: ${answered.status}${answered.response ? ` (${answered.response.outcome})` : ''}.` : `Answer passed on to run ${String(a.run_id)}.`;
+      return toolOutput({ text: v, structured: v, summary: progress ? `${summary} ${progressSummary(progress)}` : summary, untrusted: progress ? progressHasPageText(progress) : false });
     },
   },
   {
@@ -676,7 +799,8 @@ export const MCP_TOOLS: McpTool[] = [
     description:
       'Ask the user a question that needs no browser; they answer on the web app, the Android app, the CLI or a notification. Use it when you need a decision or a fact only the user has. ' +
       'input: text, choice (one of options), multi_choice (several), number, confirm (approve/deny), none or takeover (they press Done). ' +
-      'Not for passwords or codes: use browser_request_human with input secret. With wait_s the call waits for the answer; otherwise follow it with question_status.',
+      'Not for passwords or codes: use browser_request_human with input secret. With wait_s the call waits for the answer; otherwise follow it with question_status. ' +
+      'In a live conversation, ask the user directly instead; use this when the user is away or the answer must reach them on their phone.',
     input: z.object({
       prompt: z.string().min(1).max(2000).describe('The question, as the user will read it.'),
       input: z.enum(['none', 'text', 'choice', 'multi_choice', 'number', 'confirm', 'takeover']).describe('The kind of answer.'),
