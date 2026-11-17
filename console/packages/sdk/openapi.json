@@ -62581,6 +62581,66 @@
                   ],
                   "description": "The run budget while the run is live (queued, running, waiting_human); null on a finished run in a list (read it from `GET /runs/{id}`)."
                 },
+                "tier": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "start": {
+                          "type": "string",
+                          "enum": [
+                            "fast",
+                            "standard",
+                            "frontier"
+                          ],
+                          "description": "The tier the policy starts runs on"
+                        },
+                        "max": {
+                          "type": "string",
+                          "enum": [
+                            "fast",
+                            "standard",
+                            "frontier"
+                          ],
+                          "description": "The highest tier the run may escalate to"
+                        },
+                        "current": {
+                          "type": "string",
+                          "enum": [
+                            "fast",
+                            "standard",
+                            "frontier"
+                          ],
+                          "description": "The tier the run is on now: the start tier until a stall escalates it"
+                        },
+                        "escalations": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991,
+                          "description": "How many times the run escalated"
+                        },
+                        "model": {
+                          "description": "The current tier's model, as `provider:modelId`; null when none was resolved",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "start",
+                        "max",
+                        "current",
+                        "escalations",
+                        "model"
+                      ],
+                      "description": "The run's model tier, from its policy snapshot: null until the run has started."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "currentTier": {
                   "anyOf": [
                     {
@@ -62680,6 +62740,7 @@
                 "policy",
                 "stopReason",
                 "budget",
+                "tier",
                 "currentTier",
                 "escalations",
                 "cachedInputTokens",
@@ -63919,6 +63980,66 @@
               }
             ]
           },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "start": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The tier the policy starts runs on"
+                  },
+                  "max": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The highest tier the run may escalate to"
+                  },
+                  "current": {
+                    "type": "string",
+                    "enum": [
+                      "fast",
+                      "standard",
+                      "frontier"
+                    ],
+                    "description": "The tier the run is on now: the start tier until a stall escalates it"
+                  },
+                  "escalations": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "How many times the run escalated"
+                  },
+                  "model": {
+                    "description": "The current tier's model, as `provider:modelId`; null when none was resolved",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "start",
+                  "max",
+                  "current",
+                  "escalations",
+                  "model"
+                ],
+                "description": "The run's model tier, from its policy snapshot: null until the run has started."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "currentTier": {
             "anyOf": [
               {
@@ -64011,6 +64132,7 @@
           "policy",
           "stopReason",
           "budget",
+          "tier",
           "currentTier",
           "escalations",
           "cachedInputTokens",
