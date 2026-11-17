@@ -271,7 +271,7 @@ function scriptedAi(scripts: Call[][]) {
 }
 
 function runnerFor(ai: AiService, fabric: FabricClient) {
-  return new GoalRunnerService(app.get(PrismaService), app.get(TasksService), fabric, ai, undefined, undefined, app.get(PolicyResolver), app.get(PolicyModelCheck));
+  return new GoalRunnerService(app.get(PrismaService), app.get(TasksService), fabric, ai, undefined, undefined, undefined, app.get(PolicyResolver), app.get(PolicyModelCheck));
 }
 
 describe('the run snapshot and the runner', () => {
@@ -326,15 +326,15 @@ describe('the run snapshot and the runner', () => {
     expect(await runnerFor(s1.ai, fabric.client).advance(r1.id, alice.userId, null)).toBe('failed');
     expect(await db.run.findFirstOrThrow({ where: { id: r1.id } })).toMatchObject({ error: 'Step budget exhausted', stepCount: 1, policySource: 'run' });
 
-    // The time limit: a run that started two hours ago under a one-minute budget.
+    // The time limit: a run that already worked two active minutes under a one-minute budget (active time, #399).
     const short = await createPolicy(alice.token, 'One minute', spec((s) => { s.budget.maxActiveMinutes = 1; }));
-    const r2 = await db.run.create({ data: { userId: alice.userId, goal: 'g', policyRef: short.id, policySource: 'run', startedAt: new Date(Date.now() - 2 * 3_600_000) } });
+    const r2 = await db.run.create({ data: { userId: alice.userId, goal: 'g', policyRef: short.id, policySource: 'run', activeMs: 2 * 60_000 } });
     const s2 = scriptedAi([[['navigate', { url: 'https://shop.example.test/', reason: 'a' }]]]);
     expect(await runnerFor(s2.ai, fabric.client).advance(r2.id, alice.userId, null)).toBe('failed');
     expect((await db.run.findFirstOrThrow({ where: { id: r2.id } })).error).toBe('Time budget exhausted');
 
-    // Unlimited: more actions than any built-in allows, and an old start, still finish.
-    const r3 = await db.run.create({ data: { userId: alice.userId, goal: 'g', policyRef: 'builtin:unlimited', policySource: 'run', startedAt: new Date(Date.now() - 48 * 3_600_000) } });
+    // Unlimited: more actions than any built-in allows, and 48 h of active time already spent, still finish.
+    const r3 = await db.run.create({ data: { userId: alice.userId, goal: 'g', policyRef: 'builtin:unlimited', policySource: 'run', activeMs: 48 * 3_600_000 } });
     const many: Call[] = Array.from({ length: 70 }, (_, i): Call => ['navigate', { url: `https://shop.example.test/${i}`, reason: 'x' }]);
     const s3 = scriptedAi([many.slice(0, 15), many.slice(15, 30), many.slice(30, 45), many.slice(45, 60), [...many.slice(60), ['finish', { success: true, result: 'ok' }]]]);
     expect(await runnerFor(s3.ai, fabric.client).advance(r3.id, alice.userId, null)).toBe('succeeded');
