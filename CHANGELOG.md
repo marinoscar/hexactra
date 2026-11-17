@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Context efficiency follows the run's policy** (#406).
+  - Settings: `callsPerChunk`, `observationChars`, `screenshotsKept` and `pruneBatch`.
+  - Screenshot window: the model sees the last few screenshots. Old ones are pruned in batches, so the provider's prompt cache keeps hitting, and only their hashes are stored.
+  - Stable prompt: instructions and tool definitions stay byte-identical across runs, and the round input puts its stable parts first.
+  - New metric `app.runs.input_tokens_per_call`.
+  - On a scripted 30-action fixture, the Balanced settings use 18% fewer input tokens than the old fixed settings.
 - **The budget engine enforces every run budget** (#404): actions, model calls, active minutes, input tokens, output tokens and cost. `null` means unlimited.
   - Ceilings: administrators set deployment ceilings in `browserAgentCeilings`, and they clamp every policy. A run's effective budget is fixed in its snapshot.
   - Warning: a run gets one warning per budget at `warnAtPercent`.

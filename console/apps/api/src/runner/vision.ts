@@ -120,16 +120,30 @@ export function describeView(v: ScreenView): string {
   return lines.join('\n');
 }
 
-/** A round's input: the text alone, or the text with the screenshot. */
-export function roundInput(text: string, view: ScreenView | null): RoundInput {
-  if (!view) return text;
+/**
+ * A round's input, stable parts first (#406): `text` (goal, allowed sites, step
+ * log), then the screenshots oldest first with the current one last, then the
+ * volatile tail (what the current screenshot shows, and the budget status).
+ * A prefix that does not change between rounds is what provider prompt caching
+ * matches, so nothing that changes every round goes before an image.
+ *
+ * `views` is the window the caller chose to show: one view, several (the
+ * last is the current one) or none (text only).
+ */
+export function roundInput(text: string, views: ScreenView | ScreenView[] | null, status = ''): RoundInput {
+  const list = views === null ? [] : Array.isArray(views) ? views : [views];
+  if (!list.length) return (status ? `${text}\n\n${status}` : text) as RoundInput;
+  const current = list[list.length - 1]!;
+  const intro = list.length > 1 ? `${text}\n\nScreenshots follow, oldest first; the last one is the current screen.` : text;
+  const tail = [describeView(current), status].filter(Boolean).join('\n\n');
   return [
     {
       type: 'message',
       role: 'user',
       content: [
-        { type: 'text', text: `${text}\n\n${describeView(view)}` },
-        { type: 'image', url: view.dataUrl, detail: 'high' },
+        { type: 'text', text: intro },
+        ...list.map((v) => ({ type: 'image', url: v.dataUrl, detail: 'high' })),
+        { type: 'text', text: tail },
       ],
     },
   ] as RoundInput;

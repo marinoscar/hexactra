@@ -34,8 +34,9 @@ describe('vision helpers', () => {
     const input = roundInput('Goal: x', view) as { type: string; role: string; content: { type: string; url?: string; text?: string; detail?: string }[] }[];
     expect(input).toHaveLength(1);
     expect(input[0]).toMatchObject({ type: 'message', role: 'user' });
-    expect(input[0]!.content[0]!.text).toMatch(/^Goal: x\n\nAttached: a screenshot of the page/);
+    expect(input[0]!.content[0]!.text).toBe('Goal: x');
     expect(input[0]!.content[1]).toEqual({ type: 'image', url: 'data:image/jpeg;base64,QQ==', detail: 'high' });
+    expect(input[0]!.content[2]!.text).toMatch(/^Attached: a screenshot of the page/);
   });
 });
 
