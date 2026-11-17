@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Tasks list page** (#426).
+  - `/tasks` is a paged list: a table on desktop and cards on a phone, with search, filters (scheduled, paused, not scheduled, failing, never run), sort and a policy filter, all kept in the address.
+  - Each task shows its schedule, next run, last run, the last 7 days' outcomes, policy and spend from one request.
+  - The **Scheduled** switch pauses or resumes all of a task's schedules. Run and "Run with…" start a run without leaving the list.
+  - Delete asks first and says how many schedules go with the task. The create and edit form moved to its own pages.
 - **Task create and edit pages** (#427).
   - `/tasks/new` and `/tasks/:id/edit` are one form: the goal, where it runs (machine and browser profile), the agent policy, safety (allowed sites, ask before purchases) and schedules. Save stores the task and its schedules together.
   - "Save and run now" saves, starts a run and opens it. A value the server refuses is shown on its field.
