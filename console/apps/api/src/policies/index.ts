@@ -8,3 +8,5 @@ export { PolicyResolver, type PolicyResolveInput, type ResolvedPolicy } from './
 export { PolicyModelCheck, matchPin, type PinProblem, type ResolvedPin } from './policy-model-check';
 export { POLICY_SOURCES, readSnapshot, runView, summarize, type PolicySource, type RunPolicySnapshot, type RunPolicySummary } from './policy-snapshot';
 export { legacyTaskSpec, isDefaultLimits, type LegacyTaskLimits } from './legacy-task-policy';
+export * from './policy-transfer';
+export { PolicyTransferService, CEILINGS_NAMESPACE } from './policy-transfer.service';
