@@ -12,10 +12,17 @@ import { PrismaService } from '../src/prisma/prisma.service';
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
 
+// No job worker in this app: the policy tools start real runs (run_goal,
+// task_run), and a worker would keep driving them after the app closes.
+// The tests only check what the runs were created with.
+const workerMode = process.env.JOBS_WORKER_MODE;
 beforeAll(async () => {
+  process.env.JOBS_WORKER_MODE = 'off';
   app = await createApp();
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
+  if (workerMode === undefined) delete process.env.JOBS_WORKER_MODE;
+  else process.env.JOBS_WORKER_MODE = workerMode;
 });
 afterAll(async () => {
   await app?.close();
