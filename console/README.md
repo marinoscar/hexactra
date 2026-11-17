@@ -19,6 +19,7 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 | Tasks: saved goals with a profile, an agent policy (budgets and models), optional allowed sites, opt-in confirm-before-purchase ([Create a task](#create-a-task), [A task's page](#a-tasks-page)) | `/tasks`, `/tasks/new`, `/tasks/:id`, `/tasks/:id/edit` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|delete` | `tasks:read` / `tasks:write` |
 | Agent policies: named, versioned bundles of model tiers, budgets (any of them unlimited), stall detection and context settings; four built-ins, a default per user, one per task, schedule or run ([Agent policies](#agent-policies)) | Settings → Browser agent → Agent policies; Administration → Browser agent | `/api/agent-policies` | `hexactra policies`; MCP `policies_*` and `policy_*` tools; SDK `hx.policies` | `agent_policies:read` / `:write` |
 | Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel; the list is paged, filtered and searched on the server, with counts per status; finished runs can be deleted, one, many or everything a filter matches ([docs/runs.md](docs/runs.md)) | `/runs`, `/runs/:id` | `/api/runs`, `GET /api/runs/counts`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel`, `DELETE /api/runs/:id`, `POST /api/runs/delete` | `hexactra runs list\|start\|show\|watch\|cancel` | `runs:read` / `runs:write` / `runs:delete` |
+| Run history: each user's retention rule (keep N days, the newest N per task), enforced nightly; a deployment limit for administrators ([Run history and retention](#run-history-and-retention)) | Settings → Browser agent → Run history; Administration → Browser agent → Run history limit | `GET /api/runs/retention`, `GET /api/runs/retention/preview`, `POST /api/runs/retention/apply`; the `runs` namespace of `/api/user-settings` and `/api/system-settings` | — | `runs:delete`; `system_settings:read` / `:write` for the limit |
 | Inbox: what agents wait for (CAPTCHA, code, sign-in, confirmation); answers resume the run | `/inbox` | `GET /api/inbox`, `POST /api/inbox/:runId/respond` | `hexactra inbox list\|answer RUN --done\|--value\|--choice\|--secret-stdin\|--decline`; TUI **Agent ▸ Inbox** | `runs:read` / `runs:write` |
 | Questions: an agent asks its user a typed question (text, choice, multi-choice, number, confirm, none, takeover; a secret only in a browser session) and waits for the typed answer; the person answers on any channel, the first answer wins ([docs/questions.md](docs/questions.md)) | `/inbox`, `/inbox/q/:id` | `/api/questions`, `POST /api/questions/:id/answer\|cancel\|answer-by-token` | `hexactra questions ask\|list\|show\|answer`; TUI **Agent ▸ Inbox** | `runs:read` / `runs:write` |
 | Live run view: steps over SSE, live screenshot, take over | `/runs/:id` | `GET /api/runs/:id/stream\|screenshot\|viewer` | `hexactra runs watch`; TUI **Agent ▸ Runs** | `runs:read` |
@@ -37,6 +38,35 @@ Run it all on a VPS (console, fabric and an optional browser host in one stack):
 - Live runs are never deleted: a run that is queued, running or waiting for a person must be cancelled first.
 - A filter that matches more than 500 finished runs is deleted by a queue job (`browser.runs.delete`); the request answers `202` with the job id.
 - Deleting runs also removes their cost and stop-reason history from task spend and from alert counts. The AI usage report keeps its own records and is not affected.
+
+### Run history and retention
+
+Run history does not grow without limit: each user has a retention rule, and a nightly job deletes the finished runs that fall outside it. Set it at **Settings → Browser agent → Run history**.
+
+**By default, finished runs are kept for 90 days.** This applies to every user who has not chosen a rule, including users who existed before this feature.
+
+The rule has three limits. A run is deleted when either of the first two says so:
+
+| Limit | Meaning | Default |
+|---|---|---|
+| Keep runs for N days | A finished run is deleted N days after it finished. **Forever** switches this off. | 90 |
+| Keep only the latest N runs of each task | Only the newest N finished runs of each task are kept. Runs started without a task count together as one group. | no limit |
+| Keep failed runs longer | A separate number of days for failed runs. Empty: the same as the first limit. | empty |
+
+What retention never deletes:
+- a live run (queued, running or waiting for a person);
+- a run with an unanswered question;
+- a run that finished less than 24 hours ago. This floor is longer when an enabled alert rule looks further back at runs (its `windowHours`), so retention never empties a window an alert is counting.
+
+How it runs:
+- **Nightly.** The `browser.runs.retention` job is enqueued at 03:20 server time and deletes through the same service as [deleting runs](docs/runs.md#deleting-runs): steps, questions and stored screenshots go with the run.
+- **The first-night notice.** A user who never chose a rule is told once, in a notification, before the default deletes anything. Nothing is deleted for them that night; deletion starts the next night. Saving a rule on the page counts as choosing: no notice is sent.
+- **The preview.** The settings page shows how many runs the rule would delete, their recorded spend and the oldest run that would be kept, before you save.
+- **Apply now.** Applies the saved rule at once, after a confirmation that names the count.
+- **The administrator's limit.** Administration → Browser agent → **Run history limit** sets the most days any user's runs are kept. A longer rule, or Forever, is cut to it when the job runs; the user's page says "Capped at N days by your administrator".
+- **Task spend.** A task's spend covers 30 days. With fewer than 30 days kept, it only reflects the runs that remain.
+
+Operators: [docs/runbooks/run-retention.md](docs/runbooks/run-retention.md). The API: [docs/runs.md](docs/runs.md#retention).
 
 **The goal runner**:
 - It uses the AI slice: feature `browser_agent`, a model with `tools`. Configure a provider at Administration → AI.

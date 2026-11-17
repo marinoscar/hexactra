@@ -1,4 +1,4 @@
-# Runs: list, filter, search, count and delete
+# Runs: list, filter, search, count, delete and retention
 
 How a client reads a user's runs when there are thousands of them, and how it deletes them. Every answer is inside the platform's `{ data }` envelope. The two read routes need the `runs:read` permission; [deleting](#deleting-runs) needs `runs:delete`. A user only ever sees, and deletes, their own runs.
 
@@ -107,6 +107,24 @@ The `browser.runs.delete` job ("Delete runs by filter" under **Administration �
 - Each call writes one line to the API log (`runs.delete user=… mode=single|ids|filter matched=… deleted=… skippedLive=… job=… ms=…`), adds to the `app.runs.deleted` counter (label `mode`) and writes an audit event (`runs.deleted`, or `runs.delete_queued` for a `202`) with the counts and the names of the filter keys. None of them holds goal text, results or step content.
 - If a screenshot cannot be removed from object storage, the run is deleted all the same and the API logs how many objects were left.
 
+## Retention
+
+Each user has a retention rule; a nightly job deletes the finished runs outside it. What the rule means, its defaults and what is never deleted: [README, Run history and retention](../README.md#run-history-and-retention). Operating it: [runbooks/run-retention.md](runbooks/run-retention.md). All three routes need `runs:delete` and only ever touch the caller's runs.
+
+| Call | Answer |
+|---|---|
+| `GET /api/runs/retention` | `200 { keepDays, keepPerTask, keepFailedDays, saved, maxKeepDays, floorHours }` |
+| `GET /api/runs/retention/preview?keepDays=&keepPerTask=&keepFailedDays=` | `200 { wouldDelete, finished, oldestKept, costUsd, maxKeepDays, capped, floorHours }` |
+| `POST /api/runs/retention/apply` | `202 { jobId }` |
+
+- **Reading the rule.** `saved` is `false` while the user never saved one: the values are then the defaults (`keepDays: 90`, the others `null`). `maxKeepDays` is the deployment limit (`null`: none) and `floorHours` the age below which no run is deleted.
+- **Saving the rule.** It is the `runs` namespace of the user's settings: `PATCH /api/user-settings` with `{ "runs": { "keepDays": 30, "keepPerTask": 50, "keepFailedDays": null } }`. `keepDays` and `keepFailedDays` are whole numbers from 1 to 3650 or `null`; `keepPerTask` is 1 to 10000 or `null`. `{ "runs": null }` goes back to the defaults.
+- **The preview.** A limit left empty or out means none. It counts with the query the job uses, applies the deployment limit to the values given (`capped` is `true` when that shortened one) and deletes nothing. `costUsd` is the recorded spend of the runs that would go, `null` when none of them made a model call. `oldestKept` is when the oldest run that would remain finished.
+- **Apply now.** Enqueues `browser.runs.retention.apply` for the caller, which applies their **saved** rule. Sent again while that job is pending, it answers the same `jobId`.
+- **The deployment limit.** The `runs` namespace of the system settings: `PATCH /api/system-settings` with `{ "runs": { "maxKeepDays": 180 } }` (`system_settings:write`).
+
+The nightly job (`browser.runs.retention`, 03:20 server time) reads each user's rule, applies the limit and deletes through `RunDeleteService.deleteByIds` with `mode: 'retention'`, at most 20,000 runs per user per night.
+
 ## Sample data for development
 
 ```bash
@@ -126,3 +144,5 @@ Creates five tasks ("Seed task 1" to "Seed task 5", reused on the next call) and
 `GET /api/runs` is documented with its array answer, so code typed against the earlier contract keeps compiling. The page shape is the `RunPageResponseDto` schema (`components['schemas']['RunPageResponseDto']` in `@hexactra/console-sdk`): cast the data to it when you send `envelope=1`. The counts are `RunCountsResponseDto`.
 
 `POST /api/runs/delete` documents both answers: `RunsDeletedResponseDto` (200) and `RunsDeleteQueuedResponseDto` (202); its body is `DeleteRunsDto`. The CLI and the SDK's helper methods do not wrap the delete routes yet (call them through `hx.api`).
+
+The retention routes answer `RetentionSettingsResponseDto`, `RetentionPreviewResponseDto` and `RetentionApplyResponseDto`. `RunRetentionService` (`apps/api/src/tasks/run-retention.service.ts`, exported by `TasksModule`) holds the one query that decides which runs a rule deletes; `preview` and `apply` both use it.
