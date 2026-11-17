@@ -1,0 +1,812 @@
+[
+  {
+    "name": "run_goal",
+    "title": "Start a run",
+    "scope": "runs:write",
+    "effect": "write",
+    "annotations": {
+      "title": "Start a run",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "6b03fe71b66ab09c",
+    "outputSchema": "0852756c0086ac22"
+  },
+  {
+    "name": "run_status",
+    "title": "Check a run",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "Check a run",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "c0993ec45530a21f",
+    "outputSchema": "e1c2b9ac59b4b2f0"
+  },
+  {
+    "name": "runs_list",
+    "title": "List runs",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "List runs",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "ba6a4bcb152ad3e3",
+    "outputSchema": "83b9b6eca1249eb7"
+  },
+  {
+    "name": "run_cancel",
+    "title": "Stop a run",
+    "scope": "runs:write",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Stop a run",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "50c568c511c93b3c",
+    "outputSchema": "0852756c0086ac22"
+  },
+  {
+    "name": "tasks_list",
+    "title": "List saved tasks",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "List saved tasks",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "b5ceb7c3c697ea95",
+    "outputSchema": "2d7279e0295e958e"
+  },
+  {
+    "name": "task_create",
+    "title": "Save a task",
+    "scope": "tasks:write",
+    "effect": "write",
+    "annotations": {
+      "title": "Save a task",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": "323e8c40a2c0aee4",
+    "outputSchema": "5cb9fa987ad42560"
+  },
+  {
+    "name": "task_update",
+    "title": "Change a task",
+    "scope": "tasks:write",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Change a task",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": "002f97188a7f88b0",
+    "outputSchema": "76f9511d1f795dea"
+  },
+  {
+    "name": "task_run",
+    "title": "Run a saved task",
+    "scope": "runs:write",
+    "effect": "write",
+    "annotations": {
+      "title": "Run a saved task",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "7643257f453f879a",
+    "outputSchema": "0852756c0086ac22"
+  },
+  {
+    "name": "schedule_create",
+    "title": "Schedule a task",
+    "scope": "tasks:write",
+    "effect": "write",
+    "annotations": {
+      "title": "Schedule a task",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": "63804e62224e6738",
+    "outputSchema": "6f724781408fe1ac"
+  },
+  {
+    "name": "schedule_preview",
+    "title": "Check a schedule",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "Check a schedule",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "1055e69dbc16f1b0",
+    "outputSchema": "d34f80ed29b456bf"
+  },
+  {
+    "name": "task_pause",
+    "title": "Pause a task",
+    "scope": "tasks:write",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Pause a task",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "f822a505f1af2ccd",
+    "outputSchema": "fed6afca224d4788"
+  },
+  {
+    "name": "task_resume",
+    "title": "Resume a task",
+    "scope": "tasks:write",
+    "effect": "write",
+    "annotations": {
+      "title": "Resume a task",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "f822a505f1af2ccd",
+    "outputSchema": "fed6afca224d4788"
+  },
+  {
+    "name": "schedules_list",
+    "title": "List schedules",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "List schedules",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "b5ceb7c3c697ea95",
+    "outputSchema": "aa3b57466bb3bcaa"
+  },
+  {
+    "name": "inbox_list",
+    "title": "List waiting questions",
+    "scope": "inbox:read",
+    "effect": "read",
+    "annotations": {
+      "title": "List waiting questions",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "b5ceb7c3c697ea95",
+    "outputSchema": "f75f8248fc5af90d"
+  },
+  {
+    "name": "inbox_answer",
+    "title": "Pass on the user's answer",
+    "scope": "inbox:write",
+    "effect": "write",
+    "annotations": {
+      "title": "Pass on the user's answer",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": "49e3d69fa3fe7bb7",
+    "outputSchema": "f2be54568571da8e"
+  },
+  {
+    "name": "ask_human",
+    "title": "Ask the user a question",
+    "scope": "inbox:write",
+    "effect": "write",
+    "annotations": {
+      "title": "Ask the user a question",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": "27344c871a1ccbec",
+    "outputSchema": "ad618e2e850b79eb"
+  },
+  {
+    "name": "question_status",
+    "title": "Check a question",
+    "scope": "inbox:read",
+    "effect": "read",
+    "annotations": {
+      "title": "Check a question",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "34cc820d1a592623",
+    "outputSchema": "ad618e2e850b79eb"
+  },
+  {
+    "name": "policies_list",
+    "title": "List agent policies",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "List agent policies",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "b5ceb7c3c697ea95",
+    "outputSchema": "32cf1468aff8387c"
+  },
+  {
+    "name": "policy_get",
+    "title": "Read an agent policy",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "Read an agent policy",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "137c4def79c3d9a2",
+    "outputSchema": "a9a525da4ff47120"
+  },
+  {
+    "name": "policy_create",
+    "title": "Create an agent policy",
+    "scope": "policies:write",
+    "effect": "write",
+    "annotations": {
+      "title": "Create an agent policy",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": "d919ccb5fdb7d13f",
+    "outputSchema": "a9a525da4ff47120"
+  },
+  {
+    "name": "policy_update",
+    "title": "Change an agent policy",
+    "scope": "policies:write",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Change an agent policy",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": "4b1976e1ea2eb19b",
+    "outputSchema": "a9a525da4ff47120"
+  },
+  {
+    "name": "policy_set_default",
+    "title": "Set the default agent policy",
+    "scope": "policies:write",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Set the default agent policy",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "2b741baa4e041877",
+    "outputSchema": "7ff197a8daa4203a"
+  },
+  {
+    "name": "policies_export",
+    "title": "Export agent policies",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "Export agent policies",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "323ffac503552234",
+    "outputSchema": null
+  },
+  {
+    "name": "policies_import",
+    "title": "Import agent policies",
+    "scope": "policies:write",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Import agent policies",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": "68e2b4605deb068e",
+    "outputSchema": "bea081bbb146e9b7"
+  },
+  {
+    "name": "hosts_list",
+    "title": "List machines",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "List machines",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "b5ceb7c3c697ea95",
+    "outputSchema": "ef8ffd507f9d277b"
+  },
+  {
+    "name": "browser_open",
+    "title": "Open a browser session",
+    "scope": "browser:drive",
+    "effect": "write",
+    "annotations": {
+      "title": "Open a browser session",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "b8b8aaa46a7434ef",
+    "outputSchema": "4d612fdfdd54ba5d"
+  },
+  {
+    "name": "browser_navigate",
+    "title": "Go to a URL",
+    "scope": "browser:drive",
+    "effect": "write",
+    "annotations": {
+      "title": "Go to a URL",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "37c68962c80db55a",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_elements",
+    "title": "List page elements",
+    "scope": "browser:drive",
+    "effect": "read",
+    "annotations": {
+      "title": "List page elements",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": "02c4cddf8aa6b20b",
+    "outputSchema": "eaa605568a1c99cf"
+  },
+  {
+    "name": "browser_text",
+    "title": "Read page text",
+    "scope": "browser:drive",
+    "effect": "read",
+    "annotations": {
+      "title": "Read page text",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": "d6de17dc13490c3a",
+    "outputSchema": "089372c0864e35dd"
+  },
+  {
+    "name": "browser_click",
+    "title": "Click an element",
+    "scope": "browser:drive",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Click an element",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "e12f08e0d36f970f",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_type",
+    "title": "Type into a field",
+    "scope": "browser:drive",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Type into a field",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "4798ea66e00a10a4",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_press",
+    "title": "Press a key",
+    "scope": "browser:drive",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Press a key",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "8085b31fd9bc92e3",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_scroll",
+    "title": "Scroll the page",
+    "scope": "browser:drive",
+    "effect": "write",
+    "annotations": {
+      "title": "Scroll the page",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "6ac9a6748956508f",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_wait_for",
+    "title": "Wait for an element",
+    "scope": "browser:drive",
+    "effect": "write",
+    "annotations": {
+      "title": "Wait for an element",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "e12f08e0d36f970f",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_back",
+    "title": "Go back",
+    "scope": "browser:drive",
+    "effect": "write",
+    "annotations": {
+      "title": "Go back",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "ba2e117a48151bdb",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_tabs",
+    "title": "List browser tabs",
+    "scope": "browser:drive",
+    "effect": "read",
+    "annotations": {
+      "title": "List browser tabs",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": "ba2e117a48151bdb",
+    "outputSchema": "e2d53c01bbb468c6"
+  },
+  {
+    "name": "browser_screenshot",
+    "title": "Screenshot the page",
+    "scope": "browser:drive",
+    "effect": "read",
+    "annotations": {
+      "title": "Screenshot the page",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": "ebf2b83e38227973",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_evaluate",
+    "title": "Run JavaScript in the page",
+    "scope": "browser:evaluate",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Run JavaScript in the page",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "c511b4b1f4e6f765",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_click_at",
+    "title": "Click at a point",
+    "scope": "browser:drive",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Click at a point",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "2dcf099bf825a9fb",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_hover_at",
+    "title": "Move the mouse",
+    "scope": "browser:drive",
+    "effect": "write",
+    "annotations": {
+      "title": "Move the mouse",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "5ce044153f594589",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_drag",
+    "title": "Drag with the mouse",
+    "scope": "browser:drive",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Drag with the mouse",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "5aab29422bab2cda",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_scroll_at",
+    "title": "Scroll at a point",
+    "scope": "browser:drive",
+    "effect": "write",
+    "annotations": {
+      "title": "Scroll at a point",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "2d505932a595e7a0",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_type_keys",
+    "title": "Type with the keyboard",
+    "scope": "browser:drive",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Type with the keyboard",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "6aa5cd60feb0222d",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_key",
+    "title": "Press a key combination",
+    "scope": "browser:drive",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Press a key combination",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "70780644028ccaa1",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_desktop_screenshot",
+    "title": "Screenshot the desktop",
+    "scope": "desktop:control",
+    "effect": "read",
+    "annotations": {
+      "title": "Screenshot the desktop",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": "ba2e117a48151bdb",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_desktop_click",
+    "title": "Click on the desktop",
+    "scope": "desktop:control",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Click on the desktop",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "6eda8a212cc6d6f9",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_desktop_type",
+    "title": "Type on the desktop",
+    "scope": "desktop:control",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Type on the desktop",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "6aa5cd60feb0222d",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_desktop_key",
+    "title": "Press keys on the desktop",
+    "scope": "desktop:control",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Press keys on the desktop",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "dbc825c5e604957f",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_desktop_scroll",
+    "title": "Scroll on the desktop",
+    "scope": "desktop:control",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Scroll on the desktop",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "d0eda3307cf0c65b",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_desktop_drag",
+    "title": "Drag on the desktop",
+    "scope": "desktop:control",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Drag on the desktop",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "8de8ed0bf5fc111f",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_request_human",
+    "title": "Ask the user for help",
+    "scope": "browser:drive",
+    "effect": "write",
+    "annotations": {
+      "title": "Ask the user for help",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "b8152ae3de6a3d68",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_handoff_status",
+    "title": "Check a help request",
+    "scope": "browser:drive",
+    "effect": "read",
+    "annotations": {
+      "title": "Check a help request",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": "cddd06ff111cbd40",
+    "outputSchema": "32feebba5a6f03e1"
+  },
+  {
+    "name": "browser_type_secret",
+    "title": "Type a secret the user gave",
+    "scope": "browser:drive",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Type a secret the user gave",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": "ab023c0c6d8b6076",
+    "outputSchema": null
+  },
+  {
+    "name": "browser_close",
+    "title": "Close a browser session",
+    "scope": "browser:drive",
+    "effect": "destructive",
+    "annotations": {
+      "title": "Close a browser session",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": "af07dc68dfed55e6",
+    "outputSchema": null
+  }
+]

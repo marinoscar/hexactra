@@ -17,7 +17,7 @@ What differs between them:
 - **Hermes and OpenClaw** expand `${VAR}` in both the URL and the headers, so their recipes need no edit.
 - **Pi** expands `${VAR}` in headers but not in the URL. Replace `https://console.example.test` in `pi.mcp.json` with your console's address.
 - **Timeouts.** All three recipes allow 300 s per call. `run_goal` and `task_run` return at once, but a `browser_*` action waits for the page.
-- **Approvals.** Tools announce MCP `readOnlyHint`. The read-only ones (`run_status`, `runs_list`, `inbox_list`, `hosts_list`, `browser_text`, `browser_screenshot`, …) are marked `readOnlyHint: true`. Every other tool acts, and is marked `readOnlyHint: false`. OpenClaw reads these hints when it decides which calls need your approval; its probe reports tools without hints as needing approval.
+- **Approvals.** Every tool announces all four MCP hints explicitly, plus a `title` (console 1.34.0, #462): `readOnlyHint`, `destructiveHint`, `idempotentHint` and `openWorldHint`. Read tools (`run_status`, `runs_list`, `inbox_list`, `hosts_list`, `browser_text`, `browser_screenshot`, …) are `readOnlyHint: true`. Tools that can lose or irreversibly change something (`run_cancel`, `task_update`, `policy_update`, every click, key press, typing, `browser_evaluate` and desktop input) are `destructiveHint: true`; navigation, scrolling, opening a session, starting a run and asking a question are neither. OpenClaw reads these hints when it decides which calls need your approval, so read tools can run without asking and destructive ones always ask. The full table is in [mcp.md](mcp.md#tools).
 
 ## Which tools to give the agent
 

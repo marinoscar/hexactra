@@ -154,34 +154,68 @@ export function truncateText(text: string, max: number, hint = TRUNCATION_HINT):
   return `${text.slice(0, cut)}${note(text.length - cut)}`;
 }
 
-/** Trim the largest array (or, failing that, string) of a structured result until its JSON fits. */
+type Path = (string | number)[];
+
+/** The largest string or array anywhere in `v`, by JSON size. */
+function largestLeaf(v: unknown, path: Path = []): { path: Path; size: number } | null {
+  let best: { path: Path; size: number } | null = null;
+  const consider = (p: Path, x: unknown) => {
+    const size = JSON.stringify(x)?.length ?? 0;
+    if (!best || size > best.size) best = { path: p, size };
+  };
+  if (typeof v === 'string') consider(path, v);
+  else if (Array.isArray(v)) {
+    consider(path, v);
+    v.forEach((x, i) => {
+      const inner = largestLeaf(x, [...path, i]);
+      if (inner && (!best || inner.size > best.size)) best = inner;
+    });
+  } else if (v !== null && typeof v === 'object') {
+    for (const [k, x] of Object.entries(v)) {
+      const inner = largestLeaf(x, [...path, k]);
+      if (inner && (!best || inner.size > (best as { size: number }).size)) best = inner;
+    }
+  }
+  return best;
+}
+
+function getAt(v: unknown, path: Path): unknown {
+  return path.reduce<unknown>((o, k) => (o as Record<string | number, unknown>)[k], v);
+}
+
+function setAt(v: unknown, path: Path, value: unknown): unknown {
+  if (path.length === 0) return value;
+  const [k, ...rest] = path;
+  if (Array.isArray(v)) return v.map((x, i) => (i === k ? setAt(x, rest, value) : x));
+  return { ...(v as Record<string, unknown>), [k]: setAt((v as Record<string | number, unknown>)[k], rest, value) };
+}
+
+/**
+ * Shrink a structured result until its JSON fits: drop the tail of the
+ * largest list or cut the largest string, wherever it is, and say so
+ * (`truncated: true`; `omitted` counts the items dropped from a top-level list).
+ */
 function fitStructured(value: Record<string, unknown>, max: number): Record<string, unknown> {
   const size = (v: unknown) => JSON.stringify(v).length;
   if (size(value) <= max) return value;
-  const out: Record<string, unknown> = { ...value };
-  const arrays = Object.entries(out).filter(([, v]) => Array.isArray(v)) as [string, unknown[]][];
-  if (arrays.length) {
-    const [key, arr] = arrays.sort((a, b) => size(b[1]) - size(a[1]))[0];
-    let keep = arr.length;
-    let lo = 0;
-    let hi = arr.length;
-    // Binary search for the most items that fit.
-    while (lo < hi) {
-      const mid = Math.ceil((lo + hi) / 2);
-      if (size({ ...out, [key]: arr.slice(0, mid), truncated: true, omitted: arr.length - mid }) <= max) lo = mid;
-      else hi = mid - 1;
-    }
-    keep = lo;
-    const trimmed = { ...out, [key]: arr.slice(0, keep), truncated: true, omitted: arr.length - keep };
-    if (size(trimmed) <= max) return trimmed;
+  let out: Record<string, unknown> = { ...value, truncated: true };
+  let omitted = 0;
+  for (let i = 0; i < 100 && size(out) > max; i++) {
+    const leaf = largestLeaf(out);
+    if (!leaf || leaf.path.length === 0) break;
+    const excess = size(out) - max + 64;
+    const target = getAt(out, leaf.path);
+    if (Array.isArray(target)) {
+      let removed = 0;
+      let n = target.length;
+      while (n > 0 && removed < excess) removed += JSON.stringify(target[--n]).length + 1;
+      if (leaf.path.length === 1) omitted += target.length - n;
+      out = setAt(out, leaf.path, target.slice(0, n)) as Record<string, unknown>;
+    } else if (typeof target === 'string') {
+      out = setAt(out, leaf.path, truncateText(target, Math.max(0, target.length - excess - 120))) as Record<string, unknown>;
+    } else break;
   }
-  const strings = Object.entries(out).filter(([, v]) => typeof v === 'string') as [string, string][];
-  if (strings.length) {
-    const [key, str] = strings.sort((a, b) => b[1].length - a[1].length)[0];
-    const over = size(out) - max;
-    return { ...out, [key]: truncateText(str, Math.max(0, str.length - over - 200)), truncated: true };
-  }
-  return out;
+  return omitted ? { ...out, omitted } : out;
 }
 
 /**

@@ -65,7 +65,7 @@ const CONFLICT_NEXT_STEP: Readonly<Record<string, string>> = {
 };
 
 /** Codes that mean the browser machine could not be reached. */
-const MACHINE_CODES = new Set(['FABRIC_UNREACHABLE', 'NO_BROWSER', 'HOST_COMMAND_FAILED']);
+const MACHINE_CODES = new Set(['FABRIC_UNREACHABLE', 'FABRIC_NOT_CONFIGURED', 'FABRIC_UNAUTHORIZED', 'FABRIC_ERROR', 'NO_BROWSER', 'HOST_COMMAND_FAILED']);
 
 /** A REST message that says nothing useful to a model. */
 function generic(message: string): boolean {
@@ -112,6 +112,10 @@ export function mapApiError(e: McpApiError, tool: string): McpToolResult {
     const [thing, list] = NOT_FOUND_BY_CODE[code] ?? notFoundByTool(tool);
     return errorOutcome(`No ${thing} with that id. Use ${list} to find it.`, code || 'NOT_FOUND', extra);
   }
+  if (MACHINE_CODES.has(code)) {
+    const reason = generic(message) ? 'no browser machine answered' : message.replace(/\.$/, '');
+    return errorOutcome(`Hexactra could not reach a browser machine: ${reason}. The user can check Machines in the console.`, code, extra);
+  }
   if (status === 409 || status === 412) {
     const next = CONFLICT_NEXT_STEP[code];
     const base = generic(message) ? 'The request conflicts with the current state.' : message.replace(/\.?$/, '.');
@@ -121,9 +125,9 @@ export function mapApiError(e: McpApiError, tool: string): McpToolResult {
     const wait = e.retryAfterS ?? retryAfterOf(e.details) ?? 30;
     return errorOutcome(`Too many requests. Wait ${wait} seconds.`, 'RATE_LIMITED', extra);
   }
-  if (status >= 500 || MACHINE_CODES.has(code)) {
+  if (status >= 500) {
     const reason = generic(message) ? 'the server could not complete the request' : message.replace(/\.$/, '');
-    return errorOutcome(`Hexactra could not reach a browser machine: ${reason}. The user can check Machines in the console.`, MACHINE_CODES.has(code) ? code : 'UNAVAILABLE', extra);
+    return errorOutcome(`Hexactra could not reach a browser machine: ${reason}. The user can check Machines in the console.`, 'UNAVAILABLE', extra);
   }
   return errorOutcome(generic(message) ? `The request failed (${status}).` : message, code || `HTTP_${status}`, extra);
 }
