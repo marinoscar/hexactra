@@ -13,6 +13,7 @@ import { policyRefSchema } from '../policies/policies.schemas';
 import { runView } from '../policies/policy-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
 import { TasksService } from '../tasks/tasks.service';
+import { withCost } from '../tasks/run-cost';
 import { enqueueGoalRun } from './goal-runner.jobs';
 import { RunResponseDto } from '../openapi/console.responses';
 
@@ -72,7 +73,7 @@ export class RunsStartController {
       omit: { transcript: true },
     });
     await enqueueGoalRun(this.jobs, { runId: run.id, userId: user.id, orgId: user.activeOrgId ?? null }, 'run_started');
-    return runView(run);
+    return runView(withCost(run));
   }
 
   /** Run an ad-hoc goal (under the user's default agent policy unless `policyId` names one). */
@@ -94,6 +95,6 @@ export class RunsStartController {
       omit: { transcript: true },
     });
     await enqueueGoalRun(this.jobs, { runId: run.id, userId: user.id, orgId: user.activeOrgId ?? null }, 'run_started');
-    return runView(run);
+    return runView(withCost(run));
   }
 }

@@ -1,6 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { AiService, defineTool, type AiDefinedTool, type AiToolLoopResult } from '@marinoscar/platform-api/ai';
 import { Prisma } from '@prisma/client';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { z } from 'zod';
 
 import { FabricClient, FabricError } from '../fabric/fabric.client';
@@ -16,6 +17,11 @@ import { redactActionArgs, redactUrl } from '../tasks/redact';
 import { RunNotifier } from '../tasks/run-notifier';
 import { TasksService } from '../tasks/tasks.service';
 import { BROWSER_AGENT_FEATURE_ID } from './browser-agent.feature';
+import { priceTableOf } from './agent-pricing.settings';
+import { RunUsage, type PriceTable, type UsageDelta } from './cost';
+import { activeElapsedMs } from './active-time';
+import { GOAL_RUN_HOP_MARGIN_MS, GOAL_RUN_MAX_RUNTIME_MS } from './goal-run.enqueue';
+import { RUN_BUDGET_ERRORS } from './run-budget-errors';
 import { actionTarget, runActivity, type ActivityTarget, type RunActivityPhase } from './activity';
 import { ACTION_TIMEOUT_MS, FabricSession, handoffOutcome, type CreatedHandoff } from './fabric-session';
 import { domainAllowed, looksRisky } from './policy';
@@ -41,11 +47,12 @@ export interface RunMemory {
   look?: Screen | null;
 }
 
-export type RunOutcome = 'succeeded' | 'failed' | 'cancelled' | 'waiting_human' | 'requeue';
+/** `continue`: the job is near its runtime limit; the handler queues a new job and the run stays `running`. */
+export type RunOutcome = 'succeeded' | 'failed' | 'cancelled' | 'waiting_human' | 'requeue' | 'continue';
 
 /** Ends a chunk early: the loop is stopped from `onStep`. */
 class StopLoop extends Error {
-  constructor(readonly reason: 'finish' | 'pause' | 'cancel' | 'budget' | 'look') {
+  constructor(readonly reason: 'finish' | 'pause' | 'cancel' | 'budget' | 'look' | 'hop') {
     super(reason);
   }
 }
@@ -158,9 +165,22 @@ export class GoalRunnerService {
     private readonly ai: AiService,
     @Optional() private readonly notifier?: RunNotifier,
     @Optional() private readonly questions?: QuestionsService,
+    @Optional() private readonly systemSettings?: SystemSettingsService,
     @Optional() private readonly policies?: PolicyResolver,
     @Optional() private readonly modelCheck?: PolicyModelCheck,
   ) {}
+
+  /** The admin's price table; empty when unreadable (calls are then unpriced, never free). */
+  private async priceTable(): Promise<PriceTable> {
+    try {
+      return priceTableOf(await this.systemSettings?.getNamespace('agentPricing'));
+    } catch (e) {
+      this.log.warn(`could not read the agent price table: ${e instanceof Error ? e.message : String(e)}`);
+      return {};
+    }
+  }
+  /** The wall clock; tests replace it to pass time without waiting. */
+  clock: () => number = Date.now;
 
   /**
    * The agent policy the run runs under (#401), snapshotted onto the run at its
@@ -216,11 +236,14 @@ export class GoalRunnerService {
    * Returns what the caller (the job) should do next.
    */
   async advance(runId: string, userId: string, orgId: string | null): Promise<RunOutcome> {
+    const jobStartedAt = this.clock();
     const db = this.prisma.forUser({ userId });
     const run = await db.run.findFirst({ where: { id: runId }, include: { task: true } });
     if (!run) return 'failed';
     if (run.status === 'succeeded' || run.status === 'failed' || run.status === 'cancelled') return run.status;
     const session = new FabricSession(this.fabric);
+    // The run row as last written: its active-time fields drive the time budget (#399).
+    let current: { activeMs: number; activeSince: Date | null } = run;
     const memory: RunMemory = (run.transcript as unknown as RunMemory | null) ?? { log: [], chunks: 0 };
 
     if (run.cancelRequested) {
@@ -260,9 +283,12 @@ export class GoalRunnerService {
       } else {
         memory.log.push(`The person did not help (handoff ${h.status}${outcome === 'cancelled' ? ', declined' : ''}). Do not retry the same request; finish if you cannot continue.`);
       }
-      await this.tasks.transition(userId, run.id, 'running', { handoffId: null, transcript: memory as never, activity: runActivity('starting') as never });
+      current = await this.tasks.transition(userId, run.id, 'running', { handoffId: null, transcript: memory as never, activity: runActivity('starting') as never });
+    } else if (run.status === 'running') {
+      // A continuation of this run in a new job (the last one neared its runtime limit): no status change, so its active time stays continuous.
+      this.log.log(`run ${run.id}: continuing in a new job`);
     } else {
-      await this.tasks.transition(userId, run.id, 'running', { activity: runActivity('starting') as never });
+      current = await this.tasks.transition(userId, run.id, 'running', { activity: runActivity('starting') as never });
       await this.notifier?.started?.(userId, run);
     }
 
@@ -293,7 +319,8 @@ export class GoalRunnerService {
     const policy = {
       allowedDomains: run.task?.allowedDomains ?? [],
       maxSteps: budget.maxActions ?? Number.POSITIVE_INFINITY,
-      deadline: budget.maxActiveMinutes === null ? Number.POSITIVE_INFINITY : (run.startedAt ?? new Date()).getTime() + budget.maxActiveMinutes * 60_000,
+      /** The time budget counts active time only, never the wait for a person (#399); null is no limit. */
+      maxActiveMs: budget.maxActiveMinutes === null ? Number.POSITIVE_INFINITY : budget.maxActiveMinutes * 60_000,
       confirmRisky: run.task?.confirmRiskyActions ?? false,
       model: pinned.model,
       provider: pinned.provider,
@@ -301,6 +328,8 @@ export class GoalRunnerService {
     const state = {
       stepCount: run.stepCount,
       stop: null as StopLoop['reason'] | null,
+      /** Which budget ended the run (set with `stop = 'budget'`). */
+      budgetError: RUN_BUDGET_ERRORS.steps as string,
       finished: null as { success: boolean; result: string } | null,
       handoffId: null as string | null,
       handoffExpiresAt: null as Date | null,
@@ -347,6 +376,7 @@ export class GoalRunnerService {
       const type = String(action.type);
       if (state.stepCount >= policy.maxSteps) {
         state.stop = 'budget';
+        state.budgetError = RUN_BUDGET_ERRORS.steps;
         return 'Step budget exhausted.';
       }
       await setActivity('acting', { action, reason, timeoutMs: ACTION_TIMEOUT_MS, target: target ?? actionTarget(action, state.marks.values()) });
@@ -722,9 +752,18 @@ export class GoalRunnerService {
     ];
 
     const goal = run.goal;
+    const timeUp = () => activeElapsedMs(current, this.clock()) > policy.maxActiveMs;
+    // This job hands the run on a little before its lease runs out.
+    const hopDue = () => this.clock() - jobStartedAt > GOAL_RUN_MAX_RUNTIME_MS - GOAL_RUN_HOP_MARGIN_MS;
     const remainingChunks = Math.max(1, Math.ceil(policy.maxSteps / 4));
-    let usage = { input: 0, output: 0 };
+    const prices = await this.priceTable();
+    const used = new RunUsage();
     for (let chunk = 0; chunk < remainingChunks; chunk++) {
+      if (timeUp()) {
+        await this.finish(userId, run.id, sessionId, session, 'failed', { error: RUN_BUDGET_ERRORS.time });
+        return 'failed';
+      }
+      if (hopDue()) return 'continue';
       memory.chunks += 1;
       state.stop = null;
       const stepsBefore = state.stepCount;
@@ -763,8 +802,11 @@ export class GoalRunnerService {
           tools,
           maxSteps: CHUNK_STEPS,
           onStep: (step) => {
-            usage = { input: usage.input + (step.response.usage.inputTokens ?? 0), output: usage.output + (step.response.usage.outputTokens ?? 0) };
-            if (Date.now() > policy.deadline) state.stop = 'budget';
+            used.add(step.response.provider, step.response.model || policy.model, step.response.usage, prices);
+            if (timeUp()) {
+              state.stop = 'budget';
+              state.budgetError = RUN_BUDGET_ERRORS.time;
+            } else if (!state.stop && hopDue()) state.stop = 'hop';
             if (state.stop) throw new StopLoop(state.stop);
           },
         });
@@ -781,12 +823,11 @@ export class GoalRunnerService {
         }
       } catch (e) {
         if (!(e instanceof StopLoop)) {
-          await this.saveMemory(userId, run.id, memory, usage);
+          await this.saveMemory(userId, run.id, memory, used.drain());
           throw e;
         }
       }
-      await this.saveMemory(userId, run.id, memory, usage);
-      usage = { input: 0, output: 0 };
+      await this.saveMemory(userId, run.id, memory, used.drain());
 
       const fresh = await db.run.findFirst({ where: { id: run.id }, select: { cancelRequested: true } });
       if (fresh?.cancelRequested) {
@@ -804,9 +845,10 @@ export class GoalRunnerService {
         return to;
       }
       if (state.stop === 'budget') {
-        await this.finish(userId, run.id, sessionId, session, 'failed', { error: Date.now() > policy.deadline ? 'Time budget exhausted' : 'Step budget exhausted' });
+        await this.finish(userId, run.id, sessionId, session, 'failed', { error: state.budgetError });
         return 'failed';
       }
+      if (state.stop === 'hop') return 'continue';
       if (result && result.stopReason === 'completed') {
         // The model answered without calling finish: take its answer as the result.
         await this.finish(userId, run.id, sessionId, session, 'succeeded', { result: trim(result.final.outputText || 'Done.', 7_900) });
@@ -828,12 +870,22 @@ export class GoalRunnerService {
     }
   }
 
-  private async saveMemory(userId: string, runId: string, memory: RunMemory, usage: { input: number; output: number }) {
+  private async saveMemory(userId: string, runId: string, memory: RunMemory, usage: UsageDelta) {
     memory.log = memory.log.slice(-200);
-    this.tasks.metrics.tokens(usage.input, usage.output);
+    this.tasks.metrics.tokens(usage.inputTokens, usage.outputTokens);
+    this.tasks.metrics.modelCalls(usage.modelCalls);
     await this.prisma.forUser({ userId }).run.updateMany({
       where: { id: runId },
-      data: { transcript: memory as never, inputTokens: { increment: usage.input }, outputTokens: { increment: usage.output } },
+      data: {
+        transcript: memory as never,
+        inputTokens: { increment: usage.inputTokens },
+        outputTokens: { increment: usage.outputTokens },
+        cachedInputTokens: { increment: usage.cachedInputTokens },
+        modelCalls: { increment: usage.modelCalls },
+        costUsd: { increment: usage.costUsd },
+        // Only ever flips to false: one unpriced call makes the whole figure a lower bound.
+        ...(usage.costKnown ? {} : { costKnown: false }),
+      },
     });
   }
 

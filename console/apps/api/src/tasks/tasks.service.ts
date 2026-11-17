@@ -5,10 +5,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { assertTransition, isTerminal, type RunStatus } from './run-status';
 import type { CreateTaskDto, ListRunsDto, UpdateTaskDto } from './tasks.schemas';
 import { FabricClient } from '../fabric/fabric.client';
+import { activeElapsedMs } from '../runner/active-time';
 import { RunMetrics } from './run-metrics';
 import { PoliciesService } from '../policies/policies.service';
 import { isDefaultLimits } from '../policies/legacy-task-policy';
 import { STOP_WAITING, startWaiting } from './reminder-schedule';
+import { NO_SPEND, SPEND_WINDOW_DAYS, withCost, type TaskSpend } from './run-cost';
 
 /** Fields a status change may set. */
 export interface RunPatch {
@@ -41,14 +43,42 @@ export class TasksService {
     return this.prisma.forUser({ userId });
   }
 
-  listTasks(userId: string) {
-    return this.db(userId).task.findMany({ orderBy: { createdAt: 'desc' } });
+  /** What each task spent in the last 30 days (runs created in the window), by task id. */
+  async spendByTask(userId: string, taskIds: string[]): Promise<Map<string, TaskSpend>> {
+    const out = new Map<string, TaskSpend>();
+    if (taskIds.length === 0) return out;
+    const db = this.db(userId);
+    const where = { taskId: { in: taskIds }, createdAt: { gte: new Date(Date.now() - SPEND_WINDOW_DAYS * 86_400_000) } };
+    const [sums, unknown] = await Promise.all([
+      db.run.groupBy({ by: ['taskId'], where, _count: { _all: true }, _sum: { costUsd: true, inputTokens: true, outputTokens: true } }),
+      db.run.groupBy({ by: ['taskId'], where: { ...where, costKnown: false }, _count: { _all: true } }),
+    ]);
+    const unpriced = new Set(unknown.map((g) => g.taskId));
+    for (const g of sums) {
+      if (!g.taskId) continue;
+      out.set(g.taskId, {
+        runs: g._count._all,
+        costUsd: Number(g._sum.costUsd ?? 0),
+        costKnown: !unpriced.has(g.taskId),
+        tokens: (g._sum.inputTokens ?? 0) + (g._sum.outputTokens ?? 0),
+      });
+    }
+    return out;
+  }
+
+  private async withSpend<T extends { id: string }>(userId: string, tasks: T[]): Promise<(T & { spend30d: TaskSpend })[]> {
+    const spend = await this.spendByTask(userId, tasks.map((t) => t.id));
+    return tasks.map((t) => ({ ...t, spend30d: spend.get(t.id) ?? NO_SPEND }));
+  }
+
+  async listTasks(userId: string) {
+    return this.withSpend(userId, await this.db(userId).task.findMany({ orderBy: { createdAt: 'desc' } }));
   }
 
   async getTask(userId: string, id: string) {
     const t = await this.db(userId).task.findFirst({ where: { id } });
     if (!t) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
-    return t;
+    return (await this.withSpend(userId, [t]))[0]!;
   }
 
   /**
@@ -62,7 +92,8 @@ export class TasksService {
     await this.policies?.assertAssignable(userId, policyId);
     const limits = { maxSteps: fields.maxSteps, maxMinutes: fields.maxMinutes, model: fields.model ?? null };
     const policyRef = policyId !== undefined ? policyId : this.policies && !isDefaultLimits(limits) ? await this.policies.ensureLegacyPolicy(userId, fields.name, limits) : null;
-    return this.db(userId).task.create({ data: { ...fields, userId, hostId: fields.hostId ?? null, model: fields.model ?? null, policyRef } });
+    const t = await this.db(userId).task.create({ data: { ...fields, userId, hostId: fields.hostId ?? null, model: fields.model ?? null, policyRef } });
+    return { ...t, spend30d: NO_SPEND };
   }
 
   /** Update a task. A legacy limit in the patch re-derives the task's policy unless `policyId` is also given. */
@@ -92,13 +123,14 @@ export class TasksService {
     if (count === 0) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
   }
 
-  listRuns(userId: string, q: ListRunsDto) {
-    return this.db(userId).run.findMany({
+  async listRuns(userId: string, q: ListRunsDto) {
+    const runs = await this.db(userId).run.findMany({
       where: { ...(q.taskId ? { taskId: q.taskId } : {}), ...(q.status ? { status: q.status } : {}) },
       orderBy: { createdAt: 'desc' },
       take: q.limit,
       omit: { transcript: true },
     });
+    return runs.map(withCost);
   }
 
   async getRun(userId: string, id: string) {
@@ -108,7 +140,7 @@ export class TasksService {
       include: { steps: { orderBy: { seq: 'asc' } } },
     });
     if (!r) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
-    return r;
+    return withCost(r);
   }
 
   /**
@@ -118,7 +150,7 @@ export class TasksService {
   async transition(userId: string, id: string, to: RunStatus, patch: RunPatch = {}) {
     const db = this.db(userId);
     for (let attempt = 0; attempt < 5; attempt++) {
-      const run = await db.run.findFirst({ where: { id }, select: { status: true, startedAt: true, createdAt: true, trigger: true } });
+      const run = await db.run.findFirst({ where: { id }, select: { status: true, startedAt: true, createdAt: true, trigger: true, activeMs: true, activeSince: true } });
       if (!run) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
       assertTransition(run.status as RunStatus, to);
       const now = new Date();
@@ -134,6 +166,9 @@ export class TasksService {
           // Reminders while it waits for its person (run-reminders.ts).
           ...(to === 'waiting_human' ? startWaiting(now, handoffExpiresAt ?? null) : run.status === 'waiting_human' ? STOP_WAITING : {}),
           ...(to === 'running' && !run.startedAt ? { startedAt: now } : {}),
+          // Active time: open a stretch on entering `running`, settle it on leaving (#399).
+          ...(to === 'running' ? { activeSince: now } : {}),
+          ...(run.status === 'running' && to !== 'running' ? { activeMs: activeElapsedMs(run, now.getTime()), activeSince: null } : {}),
           ...(isTerminal(to) ? { finishedAt: now } : {}),
         },
       });
@@ -142,8 +177,12 @@ export class TasksService {
         if (isTerminal(to)) await this.prisma.question.updateMany({ where: { runId: id, status: 'pending' }, data: { status: 'cancelled' } });
         if (to === 'running' && !run.startedAt) this.metrics.started(run.trigger);
         if (to === 'waiting_human') this.metrics.handoff();
-        if (isTerminal(to)) this.metrics.finished(to, run.trigger, (now.getTime() - (run.startedAt ?? run.createdAt).getTime()) / 1000);
-        return db.run.findFirstOrThrow({ where: { id }, omit: { transcript: true } });
+        const saved = await db.run.findFirstOrThrow({ where: { id }, omit: { transcript: true } });
+        if (isTerminal(to)) {
+          this.metrics.finished(to, run.trigger, (now.getTime() - (run.startedAt ?? run.createdAt).getTime()) / 1000);
+          if (saved.modelCalls > 0 && saved.costKnown) this.metrics.cost(to, Number(saved.costUsd));
+        }
+        return withCost(saved);
       }
     }
     throw new ConflictException({ code: 'RUN_BUSY', message: 'The run changed while it was being updated; try again' });

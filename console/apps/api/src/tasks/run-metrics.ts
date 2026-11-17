@@ -47,6 +47,16 @@ export const RUN_METRICS: readonly AppMetricDef[] = [
     description: "Model tokens the goal runner used: the AI cost of browser agents.",
     attributes: { direction: { kind: 'enum', values: ['input', 'output'] } },
   },
+  { key: 'runModelCalls', name: 'app.runs.model_calls', kind: 'counter', unit: '{call}', description: 'Model calls (provider round trips) the goal runner made.' },
+  {
+    key: 'runCost',
+    name: 'app.runs.cost',
+    kind: 'histogram',
+    unit: 'USD',
+    description: 'Model spend of a finished run in USD, from the admin price table. Runs with an unpriced call are left out (their cost is only a lower bound).',
+    buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 25],
+    attributes: { status: { kind: 'enum', values: STATUSES } },
+  },
 ];
 registerAppMetrics(RUN_METRICS);
 
@@ -75,5 +85,14 @@ export class RunMetrics {
   tokens(input: number, output: number): void {
     if (input > 0) this.metrics?.add('runTokens', input, { direction: 'input' });
     if (output > 0) this.metrics?.add('runTokens', output, { direction: 'output' });
+  }
+
+  modelCalls(n: number): void {
+    if (n > 0) this.metrics?.add('runModelCalls', n);
+  }
+
+  /** The spend of a finished run; never a run, task or user id as a label. */
+  cost(status: string, usd: number): void {
+    if (usd >= 0) this.metrics?.record('runCost', usd, { status });
   }
 }

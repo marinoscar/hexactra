@@ -24,6 +24,14 @@ export const taskResponseSchema = z.object({
   confirmRiskyActions: z.boolean(),
   model: z.string().nullable().meta({ deprecated: true }).describe('Deprecated: see `policyId`'),
   policyId: z.string().nullable().describe("The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default"),
+  spend30d: z
+    .object({
+      runs: z.number().int().describe('Runs created in the last 30 days'),
+      costUsd: z.number().describe('USD spent on model calls by those runs; a lower bound while costKnown is false'),
+      costKnown: z.boolean().describe('False when a call of those runs could not be priced (its model has no price)'),
+      tokens: z.number().int().describe('Input plus output tokens'),
+    })
+    .describe("What the task's runs spent in the last 30 days"),
   createdAt: iso,
   updatedAt: iso,
 });
@@ -65,6 +73,10 @@ export const runResponseSchema = z.object({
   inputTokens: z.number().int(),
   outputTokens: z.number().int(),
   policy: policySummarySchema.nullable(),
+  cachedInputTokens: z.number().int().describe('Input tokens the provider served from its cache (part of inputTokens)'),
+  modelCalls: z.number().int().describe('Model calls (provider round trips) made so far'),
+  costUsd: z.number().describe('USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false'),
+  costKnown: z.boolean().describe('False once a call could not be priced because its model has no price: show costUsd as "at least"'),
   createdAt: iso,
   startedAt: iso.nullable(),
   finishedAt: iso.nullable(),

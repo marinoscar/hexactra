@@ -35767,6 +35767,51 @@
               "archiveAfterDays"
             ]
           },
+          "agentPricing": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "const": "USD"
+              },
+              "models": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "maxLength": 240,
+                  "pattern": "^[a-z0-9][a-z0-9_.-]*:\\S.*$"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "inputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    },
+                    "outputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    },
+                    "cachedInputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    }
+                  },
+                  "required": [
+                    "inputPerMTok",
+                    "outputPerMTok"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "currency",
+              "models"
+            ]
+          },
           "storage": {
             "type": "object",
             "properties": {
@@ -36304,6 +36349,7 @@
         "required": [
           "security",
           "notes",
+          "agentPricing",
           "storage",
           "notifications",
           "ai",
@@ -36330,6 +36376,51 @@
             },
             "required": [
               "archiveAfterDays"
+            ]
+          },
+          "agentPricing": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "const": "USD"
+              },
+              "models": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "maxLength": 240,
+                  "pattern": "^[a-z0-9][a-z0-9_.-]*:\\S.*$"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "inputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    },
+                    "outputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    },
+                    "cachedInputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    }
+                  },
+                  "required": [
+                    "inputPerMTok",
+                    "outputPerMTok"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "currency",
+              "models"
             ]
           },
           "storage": {
@@ -36979,6 +37070,47 @@
                 "type": "integer",
                 "minimum": 0,
                 "maximum": 3650
+              }
+            }
+          },
+          "agentPricing": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "const": "USD"
+              },
+              "models": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "maxLength": 240,
+                  "pattern": "^[a-z0-9][a-z0-9_.-]*:\\S.*$"
+                },
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "inputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    },
+                    "outputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    },
+                    "cachedInputPerMTok": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100000
+                    }
+                  },
+                  "required": [
+                    "inputPerMTok",
+                    "outputPerMTok"
+                  ]
+                }
               }
             }
           },
@@ -57720,6 +57852,38 @@
               "null"
             ]
           },
+          "spend30d": {
+            "type": "object",
+            "properties": {
+              "runs": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Runs created in the last 30 days"
+              },
+              "costUsd": {
+                "type": "number",
+                "description": "USD spent on model calls by those runs; a lower bound while costKnown is false"
+              },
+              "costKnown": {
+                "type": "boolean",
+                "description": "False when a call of those runs could not be priced (its model has no price)"
+              },
+              "tokens": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Input plus output tokens"
+              }
+            },
+            "required": [
+              "runs",
+              "costUsd",
+              "costKnown",
+              "tokens"
+            ],
+            "description": "What the task's runs spent in the last 30 days"
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -57743,6 +57907,7 @@
           "confirmRiskyActions",
           "model",
           "policyId",
+          "spend30d",
           "createdAt",
           "updatedAt"
         ]
@@ -58176,6 +58341,26 @@
               }
             ]
           },
+          "cachedInputTokens": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Input tokens the provider served from its cache (part of inputTokens)"
+          },
+          "modelCalls": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Model calls (provider round trips) made so far"
+          },
+          "costUsd": {
+            "type": "number",
+            "description": "USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false"
+          },
+          "costKnown": {
+            "type": "boolean",
+            "description": "False once a call could not be priced because its model has no price: show costUsd as \"at least\""
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -58224,6 +58409,10 @@
           "inputTokens",
           "outputTokens",
           "policy",
+          "cachedInputTokens",
+          "modelCalls",
+          "costUsd",
+          "costKnown",
           "createdAt",
           "startedAt",
           "finishedAt"
@@ -58476,6 +58665,26 @@
               }
             ]
           },
+          "cachedInputTokens": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Input tokens the provider served from its cache (part of inputTokens)"
+          },
+          "modelCalls": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Model calls (provider round trips) made so far"
+          },
+          "costUsd": {
+            "type": "number",
+            "description": "USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false"
+          },
+          "costKnown": {
+            "type": "boolean",
+            "description": "False once a call could not be priced because its model has no price: show costUsd as \"at least\""
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -58620,6 +58829,10 @@
           "inputTokens",
           "outputTokens",
           "policy",
+          "cachedInputTokens",
+          "modelCalls",
+          "costUsd",
+          "costKnown",
           "createdAt",
           "startedAt",
           "finishedAt",

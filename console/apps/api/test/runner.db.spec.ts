@@ -14,7 +14,10 @@ import { HandoffAnswers } from '../src/browser/handoff-answers';
 import { InboxController } from '../src/browser/inbox.controller';
 import { QuestionEvents } from '../src/questions/question-events';
 import { QuestionsService } from '../src/questions/questions.service';
+import { HexactraAlertsService } from '../src/alerts/hexactra-alerts.service';
+import { GoalRunHandler } from '../src/runner/goal-runner.jobs';
 import { TasksService } from '../src/tasks/tasks.service';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
@@ -78,7 +81,7 @@ function fakeFabric() {
 type Call = [name: string, args: Record<string, unknown>];
 
 /** A model that makes the scripted tool calls, one script per runTools call. */
-function scriptedAi(scripts: Call[][]) {
+function scriptedAi(scripts: Call[][], served: { provider: string; model: string; cachedInputTokens?: number } | null = null) {
   const outputs: string[] = [];
   const runTools = jest.fn(async (req: { tools: { tool: { name: string }; execute: (a: unknown, c: unknown) => Promise<unknown> }[]; onStep?: (s: unknown) => void; input: string }) => {
     const script = scripts.shift() ?? [];
@@ -86,7 +89,7 @@ function scriptedAi(scripts: Call[][]) {
     for (const [name, args] of script) {
       const t = req.tools.find((x) => x.tool.name === name)!;
       outputs.push(String(await t.execute(args, { userId: 'u' })));
-      req.onStep?.({ step: ++step, response: { usage: { inputTokens: 10, outputTokens: 5 } }, calls: [] });
+      req.onStep?.({ step: ++step, response: { ...(served ? { provider: served.provider, model: served.model } : {}), usage: { inputTokens: 10, outputTokens: 5, ...(served?.cachedInputTokens ? { cachedInputTokens: served.cachedInputTokens } : {}) } }, calls: [] });
     }
     return { final: { outputText: '' }, steps: [], stopReason: 'steps_exhausted' };
   });
@@ -573,5 +576,162 @@ describe('external agents driving a browser through the console', () => {
     await expect(ctl.act(userId, runId, { action: { type: 'tabs' } })).rejects.toThrow(/stopped this session/);
     expect((await db.run.findFirstOrThrow({ where: { id: runId } })).status).toBe('cancelled');
     expect(fabric.ended()).toBe(1);
+  });
+});
+
+describe('the goal runner prices every model call (E31.2)', () => {
+  const as = (token: string) => ({ authorization: `Bearer ${token}` });
+
+  async function loginWithToken(email: string, role: 'admin' | 'contributor'): Promise<{ token: string; userId: string }> {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/test/login', payload: { email, role } });
+    const token = new URL(String(res.headers.location)).searchParams.get('token')!;
+    const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: as(token) });
+    return { token, userId: me.json<{ data: { id: string } }>().data.id };
+  }
+
+  /** Three calls on `served`, then the run finishes: one scripted round of two tool calls and one more. */
+  async function threeCallRun(email: string, served: { provider: string; model: string; cachedInputTokens?: number }) {
+    const { token, userId } = await loginWithToken(email, 'contributor');
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const task = await db.task.create({ data: { userId, name: 'Priced', goal: 'Look around' } });
+    const run = await db.run.create({ data: { userId, taskId: task.id, goal: task.goal } });
+    const { ai } = scriptedAi(
+      [
+        [
+          ['navigate', { url: 'https://shop.example.test/', reason: 'open' }],
+          ['observe_elements', {}],
+          ['finish', { success: true, result: 'Done' }],
+        ],
+      ],
+      served,
+    );
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fakeFabric().client, ai, undefined, undefined, app.get(SystemSettingsService));
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    return { token, userId, run, task };
+  }
+
+  it('stores the summed calls, tokens and cost for the model that served them, and serves them as numbers', async () => {
+    const admin = await loginWithToken(`pricing-admin-${stamp}@example.test`, 'admin');
+    const patched = await app.inject({
+      method: 'PATCH',
+      url: '/api/system-settings',
+      headers: as(admin.token),
+      payload: { agentPricing: { models: { 'prov-a:model-x': { inputPerMTok: 3, outputPerMTok: 15, cachedInputPerMTok: 0.3 } } } },
+    });
+    expect(patched.statusCode).toBe(200);
+
+    const { token, run, task } = await threeCallRun(`priced-${stamp}@example.test`, { provider: 'prov-a', model: 'model-x', cachedInputTokens: 4 });
+    // 3 calls of 10 input (4 cached) and 5 output tokens: 3 * (6*3 + 4*0.3 + 5*15) / 1e6
+    const res = await app.inject({ method: 'GET', url: `/api/runs/${run.id}`, headers: as(token) });
+    const got = res.json<{ data: Record<string, unknown> }>().data;
+    expect(got).toMatchObject({ modelCalls: 3, inputTokens: 30, outputTokens: 15, cachedInputTokens: 12, costKnown: true });
+    expect(got.costUsd).toBe(0.000282);
+
+    const list = await app.inject({ method: 'GET', url: '/api/runs', headers: as(token) });
+    expect(list.json<{ data: { id: string; costUsd: number }[] }>().data.find((r) => r.id === run.id)?.costUsd).toBe(0.000282);
+    const tasks = await app.inject({ method: 'GET', url: '/api/tasks', headers: as(token) });
+    expect(tasks.json<{ data: { id: string; spend30d: unknown }[] }>().data.find((t) => t.id === task.id)?.spend30d).toEqual({ runs: 1, costUsd: 0.000282, costKnown: true, tokens: 45 });
+
+    // The platform's usage report is priced once the port is bound (`priced: true`).
+    const usage = await app.inject({ method: 'GET', url: '/api/admin/ai/usage', headers: as(admin.token) });
+    expect(usage.statusCode).toBe(200);
+    expect(usage.json<{ data: { priced: boolean } }>().data.priced).toBe(true);
+  });
+
+  it('marks the cost unknown when a call is on a model with no price, and the task spend with it', async () => {
+    const { token, run, task } = await threeCallRun(`unpriced-${stamp}@example.test`, { provider: 'prov-a', model: 'model-unlisted' });
+    const got = (await app.inject({ method: 'GET', url: `/api/runs/${run.id}`, headers: as(token) })).json<{ data: Record<string, unknown> }>().data;
+    expect(got).toMatchObject({ modelCalls: 3, costUsd: 0, costKnown: false });
+    const tasks = await app.inject({ method: 'GET', url: `/api/tasks/${task.id}`, headers: as(token) });
+    expect(tasks.json<{ data: { spend30d: unknown } }>().data.spend30d).toMatchObject({ runs: 1, costUsd: 0, costKnown: false, tokens: 45 });
+  });
+});
+
+describe('the goal runner budgets (#399)', () => {
+  async function setup(email: string, maxMinutes: number) {
+    const userId = await login(email);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const task = await db.task.create({ data: { userId, name: 'Budget', goal: 'Browse', maxMinutes } });
+    const run = await db.run.create({ data: { userId, taskId: task.id, goal: task.goal } });
+    return { userId, prisma, db, run, fabric: fakeFabric() };
+  }
+
+  it('a task made outside the API gets the unified defaults', async () => {
+    const userId = await login(`runner-defaults-${stamp}@example.test`);
+    const task = await app.get(PrismaService).forUser({ userId }).task.create({ data: { userId, name: 'Defaults', goal: 'Browse' } });
+    expect(task).toMatchObject({ maxSteps: 100, maxMinutes: 30 });
+  });
+
+  it('does not count the wait for a person: a run that waited past maxMinutes resumes and finishes', async () => {
+    const { userId, prisma, db, run, fabric } = await setup(`runner-wait-${stamp}@example.test`, 15);
+    const { ai } = scriptedAi([[['request_human', { kind: 'code', prompt: 'Enter the code', input: 'text', choices: null }]], [['finish', { success: true, result: 'Done after the wait' }]]]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai);
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    const waiting = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(waiting.activeSince).toBeNull();
+    // The person answers 20 minutes later: the run started 20 minutes ago by the wall clock.
+    const longAgo = new Date(Date.now() - 20 * 60_000);
+    await db.run.updateMany({ where: { id: run.id }, data: { startedAt: longAgo } });
+    Object.assign([...fabric.handoffs.values()][0]!, { status: 'completed', response: { outcome: 'completed', value: '123', value_withheld: false } });
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({ status: 'succeeded', result: 'Done after the wait', activeSince: null });
+    expect(done.activeMs).toBeLessThan(60_000);
+  });
+
+  it('still stops with "Time budget exhausted" once active time passes maxMinutes, and the alert counts it', async () => {
+    const { userId, prisma, db, run, fabric } = await setup(`runner-time-${stamp}@example.test`, 1);
+    const { ai } = scriptedAi([[['navigate', { url: 'https://example.test/', reason: 'go' }], ['navigate', { url: 'https://example.test/2', reason: 'go' }]]]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai);
+    // Every clock read passes 40 s of active time.
+    let now = Date.now();
+    runner.clock = () => (now += 40_000);
+    expect(await runner.advance(run.id, userId, null)).toBe('failed');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({ status: 'failed', error: 'Time budget exhausted' });
+    const usage = await app.get(HexactraAlertsService, { strict: false }).sources.usage(new Date(Date.now() - 3_600_000));
+    expect(usage.find((u) => u.userId === userId)?.budgetStops).toBe(1);
+  });
+
+  it('hands a long run to a new job near the runtime limit and resumes it without a new browser session', async () => {
+    const { userId, prisma, db, run, fabric } = await setup(`runner-hop-${stamp}@example.test`, 480);
+    const { ai, runTools } = scriptedAi([
+      [['navigate', { url: 'https://example.test/', reason: 'go' }]],
+      [['navigate', { url: 'https://example.test/2', reason: 'go' }]],
+      [['finish', { success: true, result: 'Long run done' }]],
+    ]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai);
+    // The first job's clock jumps 29 minutes during its first model round.
+    let now = Date.now();
+    runner.clock = () => now;
+    runTools.mockImplementationOnce(async (req: { onStep?: (s: unknown) => void }) => {
+      now += 29 * 60_000;
+      req.onStep?.({ step: 1, response: { usage: { inputTokens: 1, outputTokens: 1 } }, calls: [] });
+      return { final: { outputText: '' }, steps: [], stopReason: 'steps_exhausted' };
+    });
+    expect(await runner.advance(run.id, userId, null)).toBe('continue');
+    const mid = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(mid.status).toBe('running');
+    expect(mid.activeSince).not.toBeNull();
+    // The next job (a fresh job clock) carries on from the saved memory and the same session.
+    runner.clock = () => (now += 1_000);
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({ status: 'succeeded', result: 'Long run done' });
+    expect(done.sessionId).toBe(mid.sessionId);
+    const creates = (fabric.client.request as unknown as jest.Mock).mock.calls.filter(([m, p]) => m === 'POST' && p === '/v1/sessions');
+    expect(creates).toHaveLength(1);
+  });
+
+  it('the handler queues the continuation as a new job even though its own job is still active', async () => {
+    const { userId, run } = await setup(`runner-handler-${stamp}@example.test`, 30);
+    const enqueue = jest.fn(async () => undefined);
+    const runner = { advance: jest.fn(async () => 'continue') };
+    const handler = new GoalRunHandler({ register: jest.fn() } as never, runner as never, app.get(PrismaService), { enqueue } as never);
+    await handler.process({ id: 'job-1', orgId: null, payload: { runId: run.id, userId, orgId: null } } as never);
+    expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({ type: 'browser.goal.run', reason: 'run_continued', subjectId: run.id, skipDedup: true, scheduledFor: expect.any(Date) }));
+    expect(handler.profile.maxRuntimeMs).toBe(30 * 60_000);
   });
 });

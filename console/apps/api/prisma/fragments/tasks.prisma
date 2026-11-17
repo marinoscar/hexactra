@@ -40,8 +40,9 @@ model Task {
   hostFallback   Boolean  @default(true) @map("host_fallback")
   /// Hostnames the agent may navigate to (suffix match); empty allows any.
   allowedDomains String[] @default([]) @map("allowed_domains")
-  maxSteps       Int      @default(40) @map("max_steps")
-  maxMinutes     Int      @default(15) @map("max_minutes")
+  /// Defaults mirror TASK_DEFAULTS (tasks/task-defaults.ts); a test keeps them equal (#399).
+  maxSteps       Int      @default(100) @map("max_steps")
+  maxMinutes     Int      @default(30) @map("max_minutes")
   /// Pause for a person before steps that look like a purchase or submission.
   confirmRiskyActions Boolean @default(true) @map("confirm_risky_actions")
   /// AI model id; null uses the user's default.
@@ -88,6 +89,19 @@ model Run {
   activity        Json?
   inputTokens     Int        @default(0) @map("input_tokens")
   outputTokens    Int        @default(0) @map("output_tokens")
+  /// Input tokens the provider served from its cache (a subset of `input_tokens`).
+  cachedInputTokens Int      @default(0) @map("cached_input_tokens")
+  /// Provider round trips the goal runner made (E31.2).
+  modelCalls      Int        @default(0) @map("model_calls")
+  /// USD spent on model calls, from the admin's price table; a lower bound while `cost_known` is false.
+  costUsd         Decimal    @default(0) @map("cost_usd") @db.Decimal(12, 6)
+  /// False once a call could not be priced (its model is not in the price table).
+  costKnown       Boolean    @default(true) @map("cost_known")
+  /// Milliseconds the run has spent in `running`, settled each time it leaves
+  /// that status. Waiting for a person never counts (#399).
+  activeMs        Int        @default(0) @map("active_ms")
+  /// When the run last entered `running`; null while it is not running.
+  activeSince     DateTime?  @map("active_since") @db.Timestamptz
   /// The AI conversation so far, so a run can resume after a handoff.
   /// Never holds secret values (they are typed by the runner, not the model).
   transcript      Json?
