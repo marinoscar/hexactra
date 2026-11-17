@@ -13,6 +13,7 @@ import { balancedSpec } from '../src/policies/builtin-policies';
 import { legacyTaskSpec } from '../src/policies/legacy-task-policy';
 import type { AgentPolicySpec } from '../src/policies/agent-policy.schema';
 import { PolicyModelCheck } from '../src/policies/policy-model-check';
+import { ModelTiersService } from '../src/policies/model-tiers.service';
 import { PolicyResolver } from '../src/policies/policy.resolver';
 import { PrismaService } from '../src/prisma/prisma.service';
 import type { FabricClient } from '../src/fabric/fabric.client';
@@ -270,8 +271,9 @@ function scriptedAi(scripts: Call[][]) {
   return { ai: { forUser: () => ({ runTools }) } as unknown as AiService, runTools };
 }
 
-function runnerFor(ai: AiService, fabric: FabricClient) {
-  return new GoalRunnerService(app.get(PrismaService), app.get(TasksService), fabric, ai, undefined, undefined, undefined, app.get(PolicyResolver), app.get(PolicyModelCheck));
+/** `withTiers` adds the model tier resolver (#403): a run then needs a usable model, which these tests give through the mocked catalogue. */
+function runnerFor(ai: AiService, fabric: FabricClient, withTiers = false) {
+  return new GoalRunnerService(app.get(PrismaService), app.get(TasksService), fabric, ai, undefined, undefined, undefined, app.get(PolicyResolver), app.get(PolicyModelCheck), withTiers ? app.get(ModelTiersService) : undefined);
 }
 
 describe('the run snapshot and the runner', () => {
@@ -438,11 +440,16 @@ describe('the legacy task fields', () => {
     // The task's runs use the policy: its snapshot, its limit and its model.
     const run = await db.run.create({ data: { userId: alice.userId, taskId: legacy.id, goal: 'g' } });
     const { ai, runTools } = scriptedAi([[['finish', { success: true, result: 'ok' }]]]);
-    expect(await runnerFor(ai, fakeFabric().client).advance(run.id, alice.userId, null)).toBe('succeeded');
+    jest
+      .spyOn(app.get(UsableModelsService, { strict: false }), 'listForUser')
+      .mockResolvedValue([{ provider: 'prov-a', modelId: 'model-x', displayName: null, capabilities: { capabilities: ['tools', 'vision_input'], inputModalities: ['text'], outputModalities: ['text'] }, keySource: 'org' }] as never);
+    expect(await runnerFor(ai, fakeFabric().client, true).advance(run.id, alice.userId, null)).toBe('succeeded');
+    jest.restoreAllMocks();
     const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
     expect(done).toMatchObject({ policyRef: l.policyRef, policySource: 'task' });
     expect((done.policySnapshot as { spec: AgentPolicySpec }).spec.budget.maxActions).toBe(250);
-    expect(runTools.mock.calls[0]![0]).toMatchObject({ model: 'model-x' });
+    // The legacy model became the standard pin; the tier resolver places it on its provider.
+    expect(runTools.mock.calls[0]![0]).toMatchObject({ provider: 'prov-a', model: 'model-x' });
   });
 
   it('is safe on an empty database: it converts nothing and fails nothing', async () => {

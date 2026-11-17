@@ -5109,6 +5109,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agent-policies/model-tiers/effective": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `agent_policies:read`. */
+        get: operations["policies_effectiveTiers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-policies/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `agent_policies:read`. */
+        get: operations["policies_export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agent-policies/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `agent_policies:write`. */
+        post: operations["policies_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/agent-policies/{id}": {
         parameters: {
             query?: never;
@@ -6432,6 +6483,9 @@ export interface components {
              * @example POLICY_IS_DEFAULT
              * @example POLICY_VERSION_CONFLICT
              * @example POLICY_SPEC_INVALID
+             * @example POLICY_IMPORT_INVALID
+             * @example POLICY_IMPORT_UNSUPPORTED_VERSION
+             * @example POLICY_IMPORT_TOO_LARGE
              * @example WEBHOOK_NOT_FOUND
              * @example WEBHOOK_DELIVERY_NOT_FOUND
              * @example WEBHOOK_URL_INVALID
@@ -7113,6 +7167,39 @@ export interface components {
             browserAgent?: {
                 /** @description The user's default agent policy: an own policy's UUID or `builtin:<key>`. `null` means `builtin:balanced`. */
                 defaultPolicyRef: string | null;
+                /** @description The user's own model tiers: per tier, any of model, reasoning effort, output cap and fallback model. A field left out uses the deployment default (#403). */
+                tiers?: {
+                    fast?: {
+                        /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                        model?: string | null;
+                        /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                        reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
+                        /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                        maxOutputTokens?: number | null;
+                        /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                        fallbackModel?: string | null;
+                    };
+                    standard?: {
+                        /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                        model?: string | null;
+                        /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                        reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
+                        /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                        maxOutputTokens?: number | null;
+                        /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                        fallbackModel?: string | null;
+                    };
+                    frontier?: {
+                        /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                        model?: string | null;
+                        /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                        reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
+                        /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                        maxOutputTokens?: number | null;
+                        /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                        fallbackModel?: string | null;
+                    };
+                };
             };
             notifications?: {
                 [key: string]: {
@@ -7145,6 +7232,39 @@ export interface components {
             browserAgent?: {
                 /** @description The user's default agent policy: an own policy's UUID or `builtin:<key>`. `null` means `builtin:balanced`. */
                 defaultPolicyRef: string | null;
+                /** @description The user's own model tiers: per tier, any of model, reasoning effort, output cap and fallback model. A field left out uses the deployment default (#403). */
+                tiers?: {
+                    fast?: {
+                        /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                        model?: string | null;
+                        /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                        reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
+                        /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                        maxOutputTokens?: number | null;
+                        /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                        fallbackModel?: string | null;
+                    };
+                    standard?: {
+                        /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                        model?: string | null;
+                        /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                        reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
+                        /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                        maxOutputTokens?: number | null;
+                        /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                        fallbackModel?: string | null;
+                    };
+                    frontier?: {
+                        /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                        model?: string | null;
+                        /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                        reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
+                        /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                        maxOutputTokens?: number | null;
+                        /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                        fallbackModel?: string | null;
+                    };
+                };
             };
             notifications?: {
                 [key: string]: {
@@ -7180,6 +7300,38 @@ export interface components {
             browserAgent?: {
                 /** @description The user's default agent policy: an own policy's UUID or `builtin:<key>`. `null` means `builtin:balanced`. */
                 defaultPolicyRef?: string | null;
+                tiers?: {
+                    fast?: {
+                        /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                        model?: string | null;
+                        /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                        reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
+                        /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                        maxOutputTokens?: number | null;
+                        /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                        fallbackModel?: string | null;
+                    };
+                    standard?: {
+                        /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                        model?: string | null;
+                        /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                        reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
+                        /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                        maxOutputTokens?: number | null;
+                        /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                        fallbackModel?: string | null;
+                    };
+                    frontier?: {
+                        /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                        model?: string | null;
+                        /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                        reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
+                        /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                        maxOutputTokens?: number | null;
+                        /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                        fallbackModel?: string | null;
+                    };
+                } | null;
             } | null;
             notifications?: {
                 [key: string]: {
@@ -7206,6 +7358,39 @@ export interface components {
             };
             notes: {
                 archiveAfterDays: number;
+            };
+            /** @description The three model tiers: Fast (cheap, quick), Standard (everyday) and Frontier (the strongest, used when a run is stuck). */
+            browserAgentTiers: {
+                fast: {
+                    /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                    model: string | null;
+                    /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                    reasoningEffort: ("none" | "low" | "medium" | "high") | null;
+                    /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                    maxOutputTokens: number | null;
+                    /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                    fallbackModel: string | null;
+                };
+                standard: {
+                    /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                    model: string | null;
+                    /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                    reasoningEffort: ("none" | "low" | "medium" | "high") | null;
+                    /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                    maxOutputTokens: number | null;
+                    /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                    fallbackModel: string | null;
+                };
+                frontier: {
+                    /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                    model: string | null;
+                    /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                    reasoningEffort: ("none" | "low" | "medium" | "high") | null;
+                    /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                    maxOutputTokens: number | null;
+                    /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                    fallbackModel: string | null;
+                };
             };
             agentPricing: {
                 /** @constant */
@@ -7371,6 +7556,39 @@ export interface components {
         UpdateSystemSettingsDto: {
             notes?: {
                 archiveAfterDays: number;
+            };
+            /** @description The three model tiers: Fast (cheap, quick), Standard (everyday) and Frontier (the strongest, used when a run is stuck). */
+            browserAgentTiers?: {
+                fast: {
+                    /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                    model: string | null;
+                    /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                    reasoningEffort: ("none" | "low" | "medium" | "high") | null;
+                    /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                    maxOutputTokens: number | null;
+                    /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                    fallbackModel: string | null;
+                };
+                standard: {
+                    /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                    model: string | null;
+                    /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                    reasoningEffort: ("none" | "low" | "medium" | "high") | null;
+                    /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                    maxOutputTokens: number | null;
+                    /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                    fallbackModel: string | null;
+                };
+                frontier: {
+                    /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                    model: string | null;
+                    /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                    reasoningEffort: ("none" | "low" | "medium" | "high") | null;
+                    /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                    maxOutputTokens: number | null;
+                    /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                    fallbackModel: string | null;
+                };
             };
             agentPricing?: {
                 /** @constant */
@@ -7543,6 +7761,38 @@ export interface components {
         PatchSystemSettingsDto: {
             notes?: {
                 archiveAfterDays?: number;
+            };
+            browserAgentTiers?: {
+                fast?: {
+                    /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                    model?: string | null;
+                    /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                    reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
+                    /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                    maxOutputTokens?: number | null;
+                    /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                    fallbackModel?: string | null;
+                };
+                standard?: {
+                    /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                    model?: string | null;
+                    /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                    reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
+                    /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                    maxOutputTokens?: number | null;
+                    /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                    fallbackModel?: string | null;
+                };
+                frontier?: {
+                    /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                    model?: string | null;
+                    /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                    reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
+                    /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                    maxOutputTokens?: number | null;
+                    /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                    fallbackModel?: string | null;
+                };
             };
             agentPricing?: {
                 /** @constant */
@@ -8012,6 +8262,39 @@ export interface components {
                 browserAgent?: {
                     /** @description The user's default agent policy: an own policy's UUID or `builtin:<key>`. `null` means `builtin:balanced`. */
                     defaultPolicyRef: string | null;
+                    /** @description The user's own model tiers: per tier, any of model, reasoning effort, output cap and fallback model. A field left out uses the deployment default (#403). */
+                    tiers?: {
+                        fast?: {
+                            /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                            model?: string | null;
+                            /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                            reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
+                            /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                            maxOutputTokens?: number | null;
+                            /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                            fallbackModel?: string | null;
+                        };
+                        standard?: {
+                            /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                            model?: string | null;
+                            /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                            reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
+                            /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                            maxOutputTokens?: number | null;
+                            /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                            fallbackModel?: string | null;
+                        };
+                        frontier?: {
+                            /** @description `provider:modelId` as the platform's model catalogue names it. `null` means not set: the tier borrows the nearest set tier. */
+                            model?: string | null;
+                            /** @description How hard the model thinks on this tier. `null` uses the provider's default. */
+                            reasoningEffort?: ("none" | "low" | "medium" | "high") | null;
+                            /** @description Most tokens one model reply may have on this tier. `null` uses the provider default. The per-model caps an admin set in the AI settings still apply. */
+                            maxOutputTokens?: number | null;
+                            /** @description Model used instead when the provider errors or rate-limits and the policy allows provider fallback. `null` means none. */
+                            fallbackModel?: string | null;
+                        };
+                    };
                 };
                 notifications?: {
                     [key: string]: {
@@ -11791,6 +12074,247 @@ export interface components {
         SetDefaultPolicyDto: {
             /** @description The new default policy; `null` goes back to `builtin:balanced`. */
             policyId: string | null;
+        };
+        EffectiveTiersResponseDto: {
+            /** @description The policy whose pins were applied: the default one unless `policyId` was given. */
+            policy: {
+                id: string;
+                name: string;
+                /** @enum {string} */
+                startTier: "fast" | "standard" | "frontier";
+                /** @enum {string} */
+                maxTier: "fast" | "standard" | "frontier";
+            };
+            /** @description Per tier: the model and where it came from (pin, user, deployment, fill-down or the platform default), effort, output cap, fallback and capability flags. */
+            tiers: {
+                fast: {
+                    /** @description The model the tier uses, as `provider:modelId` when the catalogue knows it. `null` when none is selected. */
+                    model: string | null;
+                    /** @description The provider id the call goes to; `null` when the catalogue could not place the model. */
+                    provider: string | null;
+                    /** @description The provider's own id of the model; `null` when the catalogue could not place it. */
+                    modelId: string | null;
+                    /** @description Where the model came from: the policy pin, the user, the deployment, another tier (fill-down) or the platform default model. */
+                    modelSource: ("pin" | "user" | "deployment" | "fill_down" | "ai_default") | null;
+                    /** @description For `fill_down`: the tier the model was borrowed from. */
+                    borrowedFrom: ("fast" | "standard" | "frontier") | null;
+                    reasoningEffort: ("none" | "low" | "medium" | "high") | null;
+                    effortSource: ("user" | "deployment") | null;
+                    maxOutputTokens: number | null;
+                    maxOutputTokensSource: ("user" | "deployment") | null;
+                    fallbackModel: string | null;
+                    fallbackProvider: string | null;
+                    fallbackSource: ("user" | "deployment") | null;
+                    /** @description Whether the model accepts images. `false` starts the run without screenshots. `null` when unknown. */
+                    vision: boolean | null;
+                    /** @description Whether the model supports tool calls, which the browser agent needs. `null` when unknown. */
+                    tools: boolean | null;
+                    /** @description Whether the model supports a reasoning effort. When `false` the configured effort is not sent. `null` when unknown. */
+                    reasoning: boolean | null;
+                    /** @description False when the model is not an enabled model the user can call, or lacks tool calls. */
+                    usable: boolean;
+                    /** @description Why the tier is not usable. */
+                    problem: string | null;
+                };
+                standard: {
+                    /** @description The model the tier uses, as `provider:modelId` when the catalogue knows it. `null` when none is selected. */
+                    model: string | null;
+                    /** @description The provider id the call goes to; `null` when the catalogue could not place the model. */
+                    provider: string | null;
+                    /** @description The provider's own id of the model; `null` when the catalogue could not place it. */
+                    modelId: string | null;
+                    /** @description Where the model came from: the policy pin, the user, the deployment, another tier (fill-down) or the platform default model. */
+                    modelSource: ("pin" | "user" | "deployment" | "fill_down" | "ai_default") | null;
+                    /** @description For `fill_down`: the tier the model was borrowed from. */
+                    borrowedFrom: ("fast" | "standard" | "frontier") | null;
+                    reasoningEffort: ("none" | "low" | "medium" | "high") | null;
+                    effortSource: ("user" | "deployment") | null;
+                    maxOutputTokens: number | null;
+                    maxOutputTokensSource: ("user" | "deployment") | null;
+                    fallbackModel: string | null;
+                    fallbackProvider: string | null;
+                    fallbackSource: ("user" | "deployment") | null;
+                    /** @description Whether the model accepts images. `false` starts the run without screenshots. `null` when unknown. */
+                    vision: boolean | null;
+                    /** @description Whether the model supports tool calls, which the browser agent needs. `null` when unknown. */
+                    tools: boolean | null;
+                    /** @description Whether the model supports a reasoning effort. When `false` the configured effort is not sent. `null` when unknown. */
+                    reasoning: boolean | null;
+                    /** @description False when the model is not an enabled model the user can call, or lacks tool calls. */
+                    usable: boolean;
+                    /** @description Why the tier is not usable. */
+                    problem: string | null;
+                };
+                frontier: {
+                    /** @description The model the tier uses, as `provider:modelId` when the catalogue knows it. `null` when none is selected. */
+                    model: string | null;
+                    /** @description The provider id the call goes to; `null` when the catalogue could not place the model. */
+                    provider: string | null;
+                    /** @description The provider's own id of the model; `null` when the catalogue could not place it. */
+                    modelId: string | null;
+                    /** @description Where the model came from: the policy pin, the user, the deployment, another tier (fill-down) or the platform default model. */
+                    modelSource: ("pin" | "user" | "deployment" | "fill_down" | "ai_default") | null;
+                    /** @description For `fill_down`: the tier the model was borrowed from. */
+                    borrowedFrom: ("fast" | "standard" | "frontier") | null;
+                    reasoningEffort: ("none" | "low" | "medium" | "high") | null;
+                    effortSource: ("user" | "deployment") | null;
+                    maxOutputTokens: number | null;
+                    maxOutputTokensSource: ("user" | "deployment") | null;
+                    fallbackModel: string | null;
+                    fallbackProvider: string | null;
+                    fallbackSource: ("user" | "deployment") | null;
+                    /** @description Whether the model accepts images. `false` starts the run without screenshots. `null` when unknown. */
+                    vision: boolean | null;
+                    /** @description Whether the model supports tool calls, which the browser agent needs. `null` when unknown. */
+                    tools: boolean | null;
+                    /** @description Whether the model supports a reasoning effort. When `false` the configured effort is not sent. `null` when unknown. */
+                    reasoning: boolean | null;
+                    /** @description False when the model is not an enabled model the user can call, or lacks tool calls. */
+                    usable: boolean;
+                    /** @description Why the tier is not usable. */
+                    problem: string | null;
+                };
+            };
+        };
+        /** @description A portable set of agent policies: no ids, no user, no versions, no task usage, nothing secret. */
+        PolicyFileDto: {
+            /** @constant */
+            kind: "hexactra.agent-policies";
+            /** @description Version of this file format. A newer version than the deployment reads is refused. */
+            formatVersion: number;
+            /** @description ISO 8601 timestamp of the export. */
+            exportedAt: string;
+            policies: {
+                name: string;
+                description: string | null;
+                /** @description An agent policy: model tiers, budgets, stall detection and context settings. */
+                spec: {
+                    /**
+                     * @description Version of this document format.
+                     * @constant
+                     */
+                    schemaVersion: 1;
+                    /** @description Which models a run uses, and how it moves between tiers. */
+                    models: {
+                        /**
+                         * @description The tier a run starts on.
+                         * @enum {string}
+                         */
+                        startTier: "fast" | "standard" | "frontier";
+                        /**
+                         * @description The highest tier a run may escalate to when it stalls. Never below `startTier`.
+                         * @enum {string}
+                         */
+                        maxTier: "fast" | "standard" | "frontier";
+                        /** @description Use the tier's fallback model when the provider errors or rate-limits. */
+                        allowProviderFallback: boolean;
+                        /** @description Optional per-policy model override per tier. Each pin must name an enabled model that supports tools and vision. */
+                        pins?: {
+                            /** @description Model that replaces the fast tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition. */
+                            fast?: string | null;
+                            /** @description Model that replaces the standard tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition. */
+                            standard?: string | null;
+                            /** @description Model that replaces the frontier tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition. */
+                            frontier?: string | null;
+                        };
+                    };
+                    /** @description What a run may spend. Every limit may be unlimited; stall detection stays on regardless. */
+                    budget: {
+                        /** @description Most browser actions a run may take. `null` means unlimited. */
+                        maxActions: number | null;
+                        /** @description Most model round trips a run may make. `null` means unlimited. */
+                        maxModelCalls: number | null;
+                        /** @description Most active minutes a run may use (time waiting for a person does not count); 7 days at most when set. `null` means unlimited. */
+                        maxActiveMinutes: number | null;
+                        /** @description Most input tokens a run may send. `null` means unlimited. */
+                        maxInputTokens: number | null;
+                        /** @description Most output tokens a run may receive. `null` means unlimited. */
+                        maxOutputTokens: number | null;
+                        /** @description Most a run may cost in US dollars. `null` means unlimited. */
+                        maxCostUsd: number | null;
+                        /** @description Warn the owner when any set budget reaches this percentage. */
+                        warnAtPercent: number;
+                    };
+                    /** @description Stall and loop detection. Always on. */
+                    stall: {
+                        /** @description Failed actions in a row that count as a stall. */
+                        maxConsecutiveFailures: number;
+                        /** @description The same action repeated this many times counts as a stall. */
+                        maxRepeatedAction: number;
+                        /** @description Actions without visible progress that count as a stall. */
+                        noProgressActions: number;
+                        /**
+                         * @description What to do on a stall: nudge the model then escalate a tier, escalate at once, ask a person, or fail the run.
+                         * @enum {string}
+                         */
+                        onStall: "nudge_then_escalate" | "escalate" | "ask_human" | "fail";
+                        /** @description Most tier escalations per run. */
+                        maxEscalations: number;
+                    };
+                    /** @description Context efficiency: how much the model sees each round. */
+                    context: {
+                        /** @description Recent screenshots kept in the model context. */
+                        screenshotsKept: number;
+                        /** @description How many old tool results are pruned together once the context grows. */
+                        pruneBatch: number;
+                        /** @description Model calls per chunk; the model tier only changes between chunks. */
+                        callsPerChunk: number;
+                        /** @description Most characters of one page observation sent to the model. */
+                        observationChars: number;
+                    };
+                };
+            }[];
+        };
+        ImportPoliciesResponseDto: {
+            created: {
+                index: number;
+                id: string;
+                name: string;
+                /** @description The name in the file, when it was renamed. */
+                renamedFrom: string | null;
+            }[];
+            replaced: {
+                index: number;
+                id: string;
+                name: string;
+                version: number;
+            }[];
+            skipped: {
+                index: number;
+                name: string;
+                /** @constant */
+                reason: "name_taken";
+            }[];
+            /** @description A model pin dropped because it is unknown or disabled here; a budget above the deployment ceilings (stored as written, clamped at run time). */
+            warnings: {
+                /** @description Position of the policy in the file, from 0. */
+                index: number;
+                name: string;
+                /** @enum {string} */
+                code: "PIN_DROPPED" | "EXCEEDS_CEILING";
+                message: string;
+            }[];
+            /** @description Always empty on success: an invalid file is a 400. */
+            errors: {
+                index: number;
+                name: string | null;
+                issues: {
+                    path: string;
+                    message: string;
+                }[];
+            }[];
+        };
+        ImportPoliciesDto: {
+            /** @description The exported file, as JSON. At most 100 policies and 256 KB. */
+            file: {
+                [key: string]: unknown;
+            };
+            /**
+             * @description When you already have a policy with the same name: `rename` adds " (2)", " (3)"...; `skip` leaves yours and skips the entry; `replace` overwrites yours and bumps its version.
+             * @default rename
+             * @enum {string}
+             */
+            onConflict?: "rename" | "skip" | "replace";
         };
         CreatePolicyDto: {
             /** @description Unique among the user's policies. */
@@ -29506,6 +30030,167 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["DefaultPolicyResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    policies_effectiveTiers: {
+        parameters: {
+            query?: {
+                /** @description Resolve the tiers for this policy's pins instead of the user's default policy. */
+                policyId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["EffectiveTiersResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    policies_export: {
+        parameters: {
+            query?: {
+                /** @description `all`, or a comma-separated list of policy ids (UUIDs of your own policies, or `builtin:<key>`). Built-ins can be exported as a starting template. */
+                ids?: string;
+                /** @description Keep model pins (the default). `false` strips them, so the file works on any deployment. */
+                includePins?: "true" | "false";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policies as a portable JSON file (not wrapped in the `data` envelope), sent as an attachment `agent-policies-<yyyymmdd>.json`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PolicyFileDto"];
+                        /** @description Present when the endpoint supplies it (pagination) or when the global response interceptor adds it (`{ timestamp }`). Not every response carries one. */
+                        meta?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    policies_import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportPoliciesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ImportPoliciesResponseDto"];
                     };
                 };
             };
