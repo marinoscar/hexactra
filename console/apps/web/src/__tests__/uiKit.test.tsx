@@ -452,6 +452,65 @@ describe('ResponsiveList', () => {
     expect(selection.onToggle).toHaveBeenCalledTimes(2);
     expect(screen.getByText('1 selected')).toBeInTheDocument();
   });
+
+  it('disables the checkbox of an item that cannot be selected, and does not count it towards "all selected"', () => {
+    viewport(1440);
+    const selection = { selected: new Set(['a']), onToggle: vi.fn(), onToggleAll: vi.fn(), disabledReason: (key: string) => (key === 'b' ? 'Cancel it first' : null) };
+    list({ selection });
+    expect(screen.getByRole('checkbox', { name: 'Select Order groceries' })).toBeDisabled();
+    expect(screen.getByLabelText('Cancel it first')).toBeInTheDocument();
+    // Every item that can be selected is: the header checkbox is checked, not indeterminate.
+    expect(screen.getByRole('checkbox', { name: 'Select all' })).toBeChecked();
+  });
+
+  it('lets a marked column grow instead of the first', () => {
+    viewport(1440);
+    list({ columns: [columns[1]!, { ...columns[0]!, grow: true }] });
+    const [steps, name] = screen.getAllByRole('columnheader');
+    expect(name!.style.width || getComputedStyle(name!).width).toBe('100%');
+    expect(getComputedStyle(steps!).width).not.toBe('100%');
+  });
+
+  it('windows a long table: a chunk far from the viewport is one spacer row of its measured height', () => {
+    viewport(1440);
+    const observers: { callback: IntersectionObserverCallback; target: Element | null }[] = [];
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        private readonly entry: { callback: IntersectionObserverCallback; target: Element | null };
+        constructor(callback: IntersectionObserverCallback) {
+          this.entry = { callback, target: null };
+          observers.push(this.entry);
+        }
+        observe(target: Element) {
+          this.entry.target = target;
+        }
+        disconnect() {}
+      },
+    );
+    try {
+      const many = Array.from({ length: 60 }, (_, i) => ({ id: `r${i}`, name: `Row ${i}`, steps: i }));
+      list({ items: many, windowAfter: 50 });
+      expect(observers).toHaveLength(3);
+      expect(screen.getAllByRole('row')).toHaveLength(61);
+      const fire = (index: number, isIntersecting: boolean) =>
+        act(() => observers[index]!.callback([{ isIntersecting, boundingClientRect: { height: 1325 } } as IntersectionObserverEntry], {} as IntersectionObserver));
+      fire(0, false);
+      expect(screen.queryByText('Row 0')).not.toBeInTheDocument();
+      expect(screen.getByText('Row 25')).toBeInTheDocument();
+      expect((observers[0]!.target as HTMLElement).querySelector('tr')).toHaveStyle({ height: '1325px' });
+      fire(0, true);
+      expect(screen.getByText('Row 0')).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('does not window a list at or under the threshold', () => {
+    viewport(1440);
+    const { container } = list({ windowAfter: 50 });
+    expect(container.querySelectorAll('tbody')).toHaveLength(1);
+  });
 });
 
 describe('EmptyState, ErrorBanner and the skeletons', () => {
