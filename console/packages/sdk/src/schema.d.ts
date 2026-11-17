@@ -5396,6 +5396,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete runs: a list of ids, or every finished run that matches a filter
+         * @description Permanent. Send exactly one of `ids` or `filter`. Live runs (queued, running, waiting_human) are never deleted: with `ids` they are listed in `skippedLive`, with `filter` they are not matched. A filter that matches more than 500 finished runs answers 202 and a queue job deletes them. Deleting runs also removes their cost and stop-reason history from task spend and from alert counts.
+         *
+         *     **Requires:** authentication, plus permission `runs:delete`.
+         */
+        post: operations["runsDelete_deleteMany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `runs:read`. */
+        get: operations["runs_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete one finished run
+         * @description Permanent: the run, its steps and its questions. 409 `RUN_LIVE` while the run is queued, running or waiting for a person: cancel it first.
+         *
+         *     **Requires:** authentication, plus permission `runs:delete`.
+         */
+        delete: operations["runsDelete_deleteOne"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs": {
         parameters: {
             query?: never;
@@ -5423,23 +5468,6 @@ export interface paths {
         };
         /** @description **Requires:** authentication, plus permission `runs:read`. */
         get: operations["runs_counts"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/runs/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description **Requires:** authentication, plus permission `runs:read`. */
-        get: operations["runs_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6717,6 +6745,9 @@ export interface components {
              * @example POLICY_IMPORT_TOO_LARGE
              * @example INVALID_FILTER
              * @example INVALID_CURSOR
+             * @example RUN_NOT_FOUND
+             * @example RUN_LIVE
+             * @example COUNT_CHANGED
              * @example INVALID_CRON
              * @example INVALID_TIMEZONE
              * @example CRON_TOO_FREQUENT
@@ -13359,6 +13390,63 @@ export interface components {
                 reason: ("finished" | "budget_actions" | "budget_model_calls" | "budget_active_time" | "budget_input_tokens" | "budget_output_tokens" | "budget_cost" | "stalled" | "cancelled" | "error" | "no_model") | "unknown";
                 count: number;
             }[];
+        };
+        RunsDeleteQueuedResponseDto: {
+            /**
+             * Format: uuid
+             * @description The `browser.runs.delete` job that deletes the runs
+             */
+            jobId: string;
+            /** @description Finished runs that matched when the request was made; runs created later are never deleted by the job */
+            matched: number;
+            /** @description The recorded model spend (USD) of the matched runs; null when none of them made a model call */
+            costUsd: number | null;
+        };
+        RunsDeletedResponseDto: {
+            /** @description Runs deleted, with their steps and questions */
+            deleted: number;
+            /** @description The recorded model spend (USD) of the deleted runs; null when none of them made a model call */
+            costUsd: number | null;
+            /** @description Runs left alone because they are queued, running or waiting for a person: cancel them first */
+            skippedLive: string[];
+            /** @description With `ids`: ids that are not the caller's runs (missing, already deleted, or another user's). Always empty with `filter` */
+            notFound: string[];
+        };
+        DeleteRunsDto: {
+            /** @description The runs to delete: 1 to 500 unique ids. Not together with `filter`. */
+            ids?: string[];
+            /** @description Delete every FINISHED run (succeeded, failed, cancelled) that matches: the same filter as `GET /runs`. A live status in it is ignored, never deleted. Not together with `ids`. `{}` means all finished runs and needs `expectedCount`. */
+            filter?: {
+                /** @description Run status. Any of: queued, running, waiting_human, succeeded, failed, cancelled. Repeat the parameter or separate the values with commas. */
+                status?: string | string[];
+                /**
+                 * @description Shorthand for a status group: `live` = queued, running, waiting_human; `finished` = succeeded, failed, cancelled. Not together with `status`.
+                 * @enum {string}
+                 */
+                state?: "live" | "finished";
+                /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
+                taskId?: "none" | string;
+                /** @description What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas. */
+                trigger?: string | string[];
+                /**
+                 * Format: date-time
+                 * @description Runs created at or after this ISO 8601 date-time (inclusive).
+                 */
+                from?: string;
+                /**
+                 * Format: date-time
+                 * @description Runs created before this ISO 8601 date-time (exclusive).
+                 */
+                to?: string;
+                /** @description Case-insensitive substring of the goal (1 to 200 characters). */
+                q?: string;
+                /** @description Why the run stopped; `budget` is every `budget_*` reason. Any of: finished, budget_actions, budget_model_calls, budget_active_time, budget_input_tokens, budget_output_tokens, budget_cost, stalled, cancelled, error, no_model, budget. Repeat the parameter or separate the values with commas. */
+                stopReason?: string | string[];
+                /** @description Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`. */
+                policyId?: string;
+            };
+            /** @description With `filter`: the number of runs the caller expects to delete (the count it showed). When the real count differs by more than 5 %, nothing is deleted and the answer is 409 `COUNT_CHANGED`. */
+            expectedCount?: number;
         };
         RunListItemResponseDto: {
             /** Format: uuid */
@@ -32038,6 +32126,188 @@ export interface operations {
             };
         };
     };
+    runsDelete_deleteMany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteRunsDto"];
+            };
+        };
+        responses: {
+            /** @description The runs were deleted in the request. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunsDeletedResponseDto"];
+                    };
+                };
+            };
+            /** @description More than 500 finished runs matched the filter: the `browser.runs.delete` job deletes them. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunsDeleteQueuedResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `COUNT_CHANGED`: the matching count is more than 5 % away from `expectedCount`; `details.matched` is the real count. Nothing was deleted. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunDetailResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runsDelete_deleteOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `RUN_NOT_FOUND`: no such run, or it is another user's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `RUN_LIVE`: the run is live. Cancel it first. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
     runs_list: {
         parameters: {
             query?: {
@@ -32197,56 +32467,6 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["RunCountsResponseDto"];
-                    };
-                };
-            };
-            /** @description Unauthorized - Invalid or missing token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Forbidden - Insufficient permissions */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorDto"];
-                };
-            };
-        };
-    };
-    runs_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        data: components["schemas"]["RunDetailResponseDto"];
                     };
                 };
             };

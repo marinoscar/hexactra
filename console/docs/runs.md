@@ -1,6 +1,6 @@
-# Runs: list, filter, search and count
+# Runs: list, filter, search, count and delete
 
-How a client reads a user's runs when there are thousands of them. Every answer is inside the platform's `{ data }` envelope, and both routes need the `runs:read` permission. A user only ever sees their own runs.
+How a client reads a user's runs when there are thousands of them, and how it deletes them. Every answer is inside the platform's `{ data }` envelope. The two read routes need the `runs:read` permission; [deleting](#deleting-runs) needs `runs:delete`. A user only ever sees, and deletes, their own runs.
 
 ## `GET /api/runs`
 
@@ -63,6 +63,50 @@ The number of runs per status, and what they cost, in one query:
 
 It takes the same filter parameters as the list except `status` and `state` (the counts are per status): `taskId`, `trigger`, `from`, `to`, `q`, `stopReason`, `policyId`. `live` is `queued + running + waiting_human`. `costUsd` is the sum over the counted runs, `null` when none of them made a model call; it is a lower bound ("at least") while `costKnown` is false.
 
+## Deleting runs
+
+Deleting is permanent: the run, its steps, its questions and the stored screenshots of its steps. There is no trash and no undo. All three forms need the `runs:delete` permission (contributors and organization admins have it; a viewer does not). It is separate from `runs:write`, so a role can start and answer runs without being able to erase history.
+
+**A live run is never deleted.** A run that is `queued`, `running` or `waiting_human` must be cancelled first (`POST /api/runs/{id}/cancel`). The status is checked again inside the transaction that deletes.
+
+**Deleting runs also removes their cost and stop-reason history from task spend and from alert counts.** A task's `spend30d` and the run-budget, stalled-runs and expensive-run alerts are computed from run rows, so they drop when the rows go. The AI usage report (**Administration → AI Usage**, `/admin/settings/ai/usage`) is not affected: it reads the AI gateway's own records (`ai_usage_events`), never the `runs` table.
+
+| Route | Body | Answer |
+|---|---|---|
+| `DELETE /api/runs/{id}` | none | `204`. `404 RUN_NOT_FOUND` for an id that is not yours (missing or another user's: the two are not told apart). `409 RUN_LIVE` while the run is live. |
+| `POST /api/runs/delete` | `{ "ids": ["…"] }`: 1 to 500 unique ids | `200 { deleted, costUsd, skippedLive, notFound }` |
+| `POST /api/runs/delete` | `{ "filter": { … }, "expectedCount": 120 }` | `200 { deleted, costUsd, skippedLive, notFound }` when at most 500 finished runs match; else `202 { jobId, matched, costUsd }` |
+
+Send exactly one of `ids` or `filter`; neither, both, or an unknown key is a `400`.
+
+- **`ids`.** Live runs are skipped and listed in `skippedLive`; ids that are not your runs are listed in `notFound`. Neither fails the call.
+- **`filter`** is the list's filter: `status`, `state`, `taskId`, `trigger`, `from`, `to`, `q`, `stopReason`, `policyId` ([parameters](#parameters)), as JSON (a list is an array or a comma-separated string). The server always narrows it to the finished statuses (`succeeded`, `failed`, `cancelled`), so it deletes exactly what `GET /api/runs` lists for the same filter with `state=finished`. A live status in the filter is ignored, not an error. A misspelt filter key is a `400`, never ignored.
+- **`expectedCount`** is the number of runs you expect to delete: the count you showed in your confirmation. When the finished runs that match differ from it by more than 5 %, nothing is deleted and the answer is `409 COUNT_CHANGED` with the real count in `details.matched`. Read the count from `GET /api/runs/counts` (the sum of `byStatus.succeeded`, `failed` and `cancelled`).
+- **A filter that selects every finished run** (`{}`, `{ "state": "finished" }` or all three finished statuses with nothing else) is accepted only with `expectedCount`.
+- **`costUsd`** is the recorded model spend of the deleted runs (of the matched runs in a `202`); `null` when none of them made a model call.
+
+```json
+{ "data": { "deleted": 120, "costUsd": 14.2, "skippedLive": [], "notFound": [] } }
+```
+
+### More than 500 runs: a queue job
+
+When a filter matches more than 500 finished runs the request deletes nothing and answers `202`:
+
+```json
+{ "data": { "jobId": "0b0c…", "matched": 1200, "costUsd": 96.4 } }
+```
+
+The `browser.runs.delete` job ("Delete runs by filter" under **Administration → Jobs**) deletes them 200 at a time. It only deletes runs created at or before the request, so a run that starts afterwards is never swept in. If it fails part-way the batches already deleted stay deleted and the retry (three attempts) continues. The same request sent again while the job is pending returns the same `jobId`. To see when it is done, read `GET /api/runs/counts` with the same filter.
+
+### What else changes
+
+- A schedule whose last run was deleted forgets it (`lastRunId` becomes `null`). The deleted run's failure is then not counted towards the schedule's "failing" notice.
+- Notifications that link to a deleted run stay; the run page answers "not found".
+- A policy's usage counts tasks and schedules, not runs: deleting runs neither blocks nor unblocks deleting a policy.
+- Each call writes one line to the API log (`runs.delete user=… mode=single|ids|filter matched=… deleted=… skippedLive=… job=… ms=…`), adds to the `app.runs.deleted` counter (label `mode`) and writes an audit event (`runs.deleted`, or `runs.delete_queued` for a `202`) with the counts and the names of the filter keys. None of them holds goal text, results or step content.
+- If a screenshot cannot be removed from object storage, the run is deleted all the same and the API logs how many objects were left.
+
 ## Sample data for development
 
 ```bash
@@ -75,6 +119,10 @@ Creates five tasks ("Seed task 1" to "Seed task 5", reused on the next call) and
 
 `runFilterSchema` (`apps/api/src/tasks/runs.schemas.ts`) is the one definition of "which runs", and `runWhere(filter)` (`apps/api/src/tasks/runs.query.ts`) turns it into the database condition. Anything that acts on "the runs this filter shows" builds its condition with `runWhere` and runs it through `prisma.forUser({ userId })`, so a list and an action on it cannot disagree.
 
+`RunDeleteService` (`apps/api/src/tasks/run-delete.service.ts`, exported by `TasksModule`) is the one place runs are deleted. `deleteMatching(userId, filter, { createdAtOrBefore?, mode? })` deletes every finished run that matches, with no size limit: call it from a queue job. `deleteByIds(userId, ids, { mode? })` takes any number of ids. Both skip live runs and are safe to repeat. A new table or column that holds a run id must cascade or be cleared there; `apps/api/test/run-relations.spec.ts` fails until it is.
+
 ## In the OpenAPI document and the SDK
 
 `GET /api/runs` is documented with its array answer, so code typed against the earlier contract keeps compiling. The page shape is the `RunPageResponseDto` schema (`components['schemas']['RunPageResponseDto']` in `@hexactra/console-sdk`): cast the data to it when you send `envelope=1`. The counts are `RunCountsResponseDto`.
+
+`POST /api/runs/delete` documents both answers: `RunsDeletedResponseDto` (200) and `RunsDeleteQueuedResponseDto` (202); its body is `DeleteRunsDto`. The CLI and the SDK's helper methods do not wrap the delete routes yet (call them through `hx.api`).
