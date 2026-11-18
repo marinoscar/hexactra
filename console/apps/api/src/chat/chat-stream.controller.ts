@@ -6,6 +6,7 @@ import { Observable } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { toQuestionView, type QuestionView } from '../questions/questions.service';
 import { withCost } from '../tasks/run-cost';
+import { LIVE_RUN_STATUSES } from '../tasks/runs.schemas';
 import './chat.errors';
 import { getChatSchema } from './chat.schemas';
 import type { ChatMessageView } from './chat.service';
@@ -15,6 +16,8 @@ export const CHAT_STREAM_POLL_MS = 1_000;
 export const CHAT_STREAM_HEARTBEAT_MS = 15_000;
 /** Messages per look: a longer backlog arrives over the next looks. */
 const MESSAGES_PER_TICK = 200;
+/** Guidance lines whose state the thread shows. */
+const GUIDANCE_SHOWN = 50;
 
 /** The chat's newest run as the thread shows it: its live columns, never its transcript or policy snapshot. */
 export interface ChatRunView {
@@ -43,6 +46,15 @@ export interface ChatSnapshot {
   run: ChatRunView | null;
   /** The request the run waits on, without a response; null when it waits on none. */
   question: QuestionView | null;
+  /** The owner messages passed to a run of this chat as guidance (#490), the newest fifty. */
+  guidance: ChatGuidanceView[];
+}
+
+/** One guidance line as the thread shows it: which owner message, and what became of it. Not the note. */
+export interface ChatGuidanceView {
+  seq: number;
+  /** `queued` until the agent's next step reads it, then `delivered`; `missed` when the run ended first. */
+  state: 'queued' | 'delivered' | 'missed';
 }
 
 /**
@@ -89,7 +101,10 @@ export class ChatStreamService {
       newest?.status === 'waiting_human'
         ? await db.question.findFirst({ where: { runId: newest.id, status: 'pending', expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' } })
         : null;
+    const guidance = await this.prisma.runGuidance.findMany({ where: { conversationId: c.id }, orderBy: { createdAt: 'desc' }, take: GUIDANCE_SHOWN, select: { messageSeq: true, deliveredAt: true, run: { select: { status: true } } } });
+    const live = new Set<string>(LIVE_RUN_STATUSES);
     return {
+      guidance: guidance.reverse().map((g) => ({ seq: g.messageSeq, state: g.deliveredAt ? ('delivered' as const) : live.has(g.run.status) ? ('queued' as const) : ('missed' as const) })),
       chat: { title: c.title, status: c.status },
       messages: rows.map((m) => ({ id: m.id, seq: m.seq, role: m.role, kind: m.kind, text: m.text, runId: m.runId, meta: m.meta, createdAt: m.createdAt })),
       thinking: c.turnLeaseUntil !== null && c.turnLeaseUntil > new Date(),
@@ -109,6 +124,7 @@ export class ChatStreamService {
  * - `turn`: `{ thinking }`, true while the AI works on its reply.
  * - `run`: the chat's newest run (its live columns), or `null` when it has none.
  * - `question`: the request that run waits on, or `null` once it is answered, cancelled or expired. Never a response.
+ * - `guidance`: `[{ seq, state }]`, the owner messages passed to a run as guidance: `queued`, `delivered` (the agent read it) or `missed` (the run ended first).
  * - `heartbeat`: every 15 s of silence.
  *
  * The stream stays open across runs and ends only when the chat is deleted.
@@ -129,7 +145,7 @@ export class ChatStreamController {
     const from = Math.max(0, Math.floor(Number(afterSeq ?? 0)) || 0);
     return new Observable<MessageEvent>((observer) => {
       let lastSeq = from;
-      const last = { chat: '', turn: '', run: '', question: '' };
+      const last = { chat: '', turn: '', run: '', question: '', guidance: '' };
       let closed = false;
       let sinceBeat = 0;
       let timer: NodeJS.Timeout | undefined;
@@ -156,6 +172,7 @@ export class ChatStreamController {
           // `null` is sent as a value, so the page can tell "no run" from "nothing new".
           state('run', 'run', { run: snap.run });
           state('question', 'question', { question: snap.question });
+          state('guidance', 'guidance', { guidance: snap.guidance });
           if (sent) sinceBeat = 0;
           else if ((sinceBeat += CHAT_STREAM_POLL_MS) >= CHAT_STREAM_HEARTBEAT_MS) {
             observer.next({ type: 'heartbeat', data: {} });

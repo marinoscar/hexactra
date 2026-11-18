@@ -4,7 +4,7 @@ import { keyframes } from '@mui/material/styles';
 
 import { Link as RouterLink } from 'react-router-dom';
 
-import type { ChatMessage, ChatRun, ChatTaskDraft } from '../types/chat';
+import type { ChatGuidanceState, ChatMessage, ChatRun, ChatTaskDraft } from '../types/chat';
 import { formatTime, useProfileTimeZone } from '../ui';
 import { BrowserCard, ResultCard } from './ChatBrowser';
 import { clarifyOptions, type ThreadRow } from './chatThread';
@@ -74,6 +74,13 @@ function DraftCard({ message, onReview }: { message: ChatMessage; onReview?: (dr
   );
 }
 
+/** The line under an owner message that was passed to the working agent (#490). */
+export const GUIDANCE_LABEL: Record<ChatGuidanceState, string> = {
+  queued: 'Queued for the agent',
+  delivered: 'Seen by the agent',
+  missed: 'Not seen: the job had ended',
+};
+
 /** What the run and result cards of a thread need from the page (#487). */
 export interface ThreadCards {
   /** The chat's newest run; the card of that run is live, every other run's card is settled. */
@@ -84,6 +91,8 @@ export interface ThreadCards {
   paneOpen: boolean;
   onOpenBrowser: () => void;
   onCardVisible: (visible: boolean) => void;
+  /** Owner messages passed to a run as guidance, by `seq` (#490): each shows what became of it. */
+  guidance?: ReadonlyMap<number, ChatGuidanceState>;
   /** Start the job of a finished run again; undefined when that is not possible now. */
   onRunAgain?: (result: ChatMessage) => void;
   /** Draft a task from the chat (the result card's button); undefined when the viewer cannot write tasks. */
@@ -123,6 +132,7 @@ export function MessageRow({ message, answerable, onAnswer, cards }: MessageRowP
   }
   const mine = message.role === 'user';
   const options = clarifyOptions(message);
+  const guided = mine ? cards.guidance?.get(message.seq) : undefined;
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: mine ? 'flex-end' : 'flex-start', my: 0.75 }} data-seq={message.seq}>
       {message.kind === 'run' ? (
@@ -155,6 +165,11 @@ export function MessageRow({ message, answerable, onAnswer, cards }: MessageRowP
             {message.text}
           </Typography>
         </Box>
+      )}
+      {guided && (
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.25, mr: 0.5 }} data-guidance={guided}>
+          {GUIDANCE_LABEL[guided]}
+        </Typography>
       )}
       {options.length > 0 && (
         <Stack direction="row" role="group" aria-label="Suggested answers" sx={{ flexWrap: 'wrap', gap: 1, mt: 1, maxWidth: BUBBLE_MAX }}>

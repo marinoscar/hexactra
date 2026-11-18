@@ -61,8 +61,8 @@ describe('GET /chats/:id/stream', () => {
     const chat = await chats.create(alice.userId, {});
     for (const t of ['Book cinema tickets', 'Two seats', 'Row F']) await chats.postUserMessage(alice.userId, chat.id, t);
 
-    const events = await first(alice.userId, chat.id, 7);
-    expect(types(events)).toEqual(['chat', 'message', 'message', 'message', 'turn', 'run', 'question']);
+    const events = await first(alice.userId, chat.id, 8);
+    expect(types(events)).toEqual(['chat', 'message', 'message', 'message', 'turn', 'run', 'question', 'guidance']);
     expect(data(events[0])).toEqual({ title: 'Book cinema tickets', status: 'active' });
     expect(events.slice(1, 4).map((e) => [e.id, data<{ seq: number; text: string }>(e).seq, data<{ text: string }>(e).text])).toEqual([
       ['message-1', 1, 'Book cinema tickets'],
@@ -72,14 +72,15 @@ describe('GET /chats/:id/stream', () => {
     expect(data(events[4])).toEqual({ thinking: false });
     expect(data(events[5])).toEqual({ run: null });
     expect(data(events[6])).toEqual({ question: null });
+    expect(data(events[7])).toEqual({ guidance: [] });
   });
 
   it('replays only what is newer than afterSeq, and still sends the state', async () => {
     const alice = await login('replay');
     const chat = await chats.create(alice.userId, { title: 'Replay' });
     for (const t of ['one', 'two', 'three']) await chats.postUserMessage(alice.userId, chat.id, t);
-    const events = await first(alice.userId, chat.id, 5, 2);
-    expect(types(events)).toEqual(['chat', 'message', 'turn', 'run', 'question']);
+    const events = await first(alice.userId, chat.id, 6, 2);
+    expect(types(events)).toEqual(['chat', 'message', 'turn', 'run', 'question', 'guidance']);
     expect(data<{ seq: number }>(events[1]).seq).toBe(3);
   });
 
@@ -123,6 +124,18 @@ describe('GET /chats/:id/stream', () => {
       await prisma.run.update({ where: { id: run.id }, data: { status: 'running' } });
       await until('question', (d: { question: unknown }) => d.question === null);
       expect(JSON.stringify(seen)).not.toContain('approve');
+
+      // Guidance (#490): queued, then read by the agent. The note itself is not sent.
+      await prisma.runGuidance.create({ data: { runId: run.id, conversationId: chat.id, messageSeq: 1, note: 'Use the 7:30 showing' } });
+      await until('guidance', (d: { guidance: unknown[] }) => d.guidance.length === 1);
+      expect(data(seen.filter((e) => e.type === 'guidance').at(-1))).toEqual({ guidance: [{ seq: 1, state: 'queued' }] });
+      await prisma.runGuidance.updateMany({ where: { runId: run.id }, data: { deliveredAt: new Date() } });
+      await until('guidance', (d: { guidance: Array<{ state: string }> }) => d.guidance[0]?.state === 'delivered');
+      // A line the run never read says so once the run has ended.
+      await prisma.runGuidance.create({ data: { runId: run.id, conversationId: chat.id, messageSeq: 1, note: 'Too late' } });
+      await prisma.run.update({ where: { id: run.id }, data: { status: 'succeeded' } });
+      await until('guidance', (d: { guidance: Array<{ state: string }> }) => d.guidance[1]?.state === 'missed');
+      expect(JSON.stringify(seen)).not.toContain('7:30 showing');
     } finally {
       sub.unsubscribe();
     }
@@ -134,7 +147,7 @@ describe('GET /chats/:id/stream', () => {
     const done = lastValueFrom(stream.stream(alice.userId, chat.id, 0).pipe(toArray()));
     await new Promise((r) => setTimeout(r, 300));
     await chats.remove(alice.userId, chat.id);
-    expect(types(await done)).toEqual(['chat', 'turn', 'run', 'question']);
+    expect(types(await done)).toEqual(['chat', 'turn', 'run', 'question', 'guidance']);
   });
 
   it("completes at once, with no event, for another user's chat (the guard answers 404 before that)", async () => {

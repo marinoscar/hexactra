@@ -97,3 +97,11 @@ export interface ChatDraftState {
 
 /** What a chat's run settings dialog edits. */
 export type ChatSettings = Pick<Chat, 'profile' | 'hostId' | 'hostFallback' | 'policyId' | 'allowedDomains' | 'confirmRiskyActions'>;
+
+/** What became of an owner message passed to a run as guidance (#490): waiting for the agent's next step, read by it, or the run ended first. */
+export type ChatGuidanceState = 'queued' | 'delivered' | 'missed';
+export interface ChatGuidance {
+  /** The `seq` of the owner message. */
+  seq: number;
+  state: ChatGuidanceState;
+}

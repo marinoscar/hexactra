@@ -174,7 +174,7 @@ describe('the draft_task tool', () => {
     const drafts = new ChatTaskDraftService(prisma, writer('{"name":"Cinema tickets","goal":"Book 2 tickets for the 7:30 PM showing."}').ai);
     const outputs: string[] = [];
     const runTools = jest.fn(async (req: { tools: { tool: { name: string }; execute: (a: unknown, c: unknown) => Promise<unknown> }[]; onStep?: (s: unknown) => void }) => {
-      expect(req.tools.map((t) => t.tool.name).sort()).toEqual(['ask_user', 'draft_task', 'start_run', 'stop_run']);
+      expect(req.tools.map((t) => t.tool.name).sort()).toEqual(['ask_user', 'draft_task', 'guide_run', 'start_run', 'stop_run']);
       outputs.push(String(await req.tools.find((t) => t.tool.name === 'draft_task')!.execute({}, { userId: 'u' })));
       req.onStep?.({ step: 1, response: { usage: {} }, calls: [] });
       return { final: { outputText: '' }, steps: [], stopReason: 'steps_exhausted' };
