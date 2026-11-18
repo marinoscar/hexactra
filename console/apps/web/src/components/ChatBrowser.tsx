@@ -12,6 +12,7 @@ import type { ChatMessage, ChatRun } from '../types/chat';
 import type { RunStep } from '../types/runs';
 import { StatusChip, formatCost, isLive, stopReasonLabel } from '../ui';
 import { ActionOverlay, describeActivity, frameCaption, type RunActivity } from './RunActivity';
+import { RunExportButton } from './RunExport';
 import { RunTimeline } from './RunTimeline';
 import { softBudgetNotice } from './runBudget';
 import type { RunFrame } from './useRunFrame';
@@ -360,6 +361,8 @@ export function ResultCard({ message, onRunAgain, onSaveAsTask, saving = false }
               Open run <OpenInNewIcon sx={{ fontSize: 16 }} aria-hidden />
             </Link>
           )}
+          {/* Export (#544): the run's JSON trace or PDF report, beside the link to it. */}
+          {message.runId && <RunExportButton runId={message.runId} variant="text" sx={{ minHeight: { xs: 44, sm: 36 }, borderRadius: 3 }} />}
         </Stack>
       )}
     </Paper>

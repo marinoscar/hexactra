@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState, type ElementType } from 'react';
+import { useCallback, useEffect, useId, useState, type ElementType, type MouseEvent } from 'react';
 import { Alert, Box, Button, Collapse, IconButton, Link, Paper, Stack, Typography, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
+import FileDownloadOutlinedIcon from '@mui/icons-material/FileDownloadOutlined';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import PanToolOutlinedIcon from '@mui/icons-material/PanToolOutlined';
@@ -15,6 +16,7 @@ import { ActionOverlay, frameCaption, RunActivityBar, useNow } from '../componen
 import { RunBudgetMeter, RunHeaderChips, RunStopReason } from '../components/RunBudgetMeter';
 import { runCost } from '../components/runBudget';
 import { runAgain, runAgainQuestionFor } from '../components/runRow';
+import { RunExportButton, RunExportMenu, useRunExport } from '../components/RunExport';
 import { RunTimeline } from '../components/RunTimeline';
 import { withStreamedSteps } from '../components/runTimeline';
 import type { Run, RunStep } from '../types/runs';
@@ -38,10 +40,11 @@ function viewportMinus(prop: 'maxHeight', px: number) {
 }
 
 /** One action of the phone's sticky bar: an icon over a short label, the full label as its accessible name. */
-function BarAction({ label, short, Icon, color, disabled, onClick }: { label: string; short: string; Icon: ElementType; color?: 'error' | 'primary'; disabled?: boolean; onClick: () => void }) {
+function BarAction({ label, short, Icon, color, disabled, onClick, menu }: { label: string; short: string; Icon: ElementType; color?: 'error' | 'primary'; disabled?: boolean; onClick: (e: MouseEvent<HTMLElement>) => void; menu?: { id: string; open: boolean } }) {
   return (
     <Button
       aria-label={label}
+      {...(menu ? { 'aria-haspopup': 'menu' as const, 'aria-controls': menu.open ? menu.id : undefined, 'aria-expanded': menu.open ? ('true' as const) : undefined } : {})}
       color={color ?? 'primary'}
       disabled={disabled}
       onClick={onClick}
@@ -85,6 +88,10 @@ export function RunDetailPage() {
   const [watch, setWatch] = useState(true);
   const [where, setWhere] = useState<RunViewer | null>(null);
   useProfileTimeZone();
+  /** Export (#544): the header's menu from `md` up, the sticky bar's below. */
+  const exporter = useRunExport();
+  const [exportAnchor, setExportAnchor] = useState<HTMLElement | null>(null);
+  const exportMenuId = useId();
   const isWide = useMediaQuery(useTheme().breakpoints.up('lg'));
   const compact = !useBreakpoint().isDesktop;
 
@@ -253,6 +260,11 @@ export function RunDetailPage() {
         <StatusChip status={run.status} size="medium" />
         {/* Who started it (#464): the console, the CLI, a schedule, or an AI app by name. */}
         <StartedByChip run={run} size="medium" />
+        {!compact && (
+          <Box sx={{ ml: 'auto' }}>
+            <RunExportButton runId={run.id} live={isLive} exporter={exporter} />
+          </Box>
+        )}
       </Stack>
     </PageHeader>
   );
@@ -260,6 +272,7 @@ export function RunDetailPage() {
   const chips = (
     <>
       <ErrorBanner error={actionError} onClose={() => setActionError(null)} />
+      <ErrorBanner error={exporter.error} onClose={exporter.clearError} />
       {run.taskId && (
         <Typography variant="body2" sx={{ mb: 1 }}>
           <Link component={RouterLink} to={`/tasks/${run.taskId}`} underline="hover">
@@ -363,7 +376,35 @@ export function RunDetailPage() {
     ) : (
       watch && frameBody
     ));
-  const timeline = <RunTimeline steps={run.steps ?? []} live={isLive} confirmedSeqs={Array.isArray(run.confirmedActions) ? run.confirmedActions.map((c) => c.seq) : []} />;
+  const timeline = (
+    <RunTimeline steps={run.steps ?? []} live={isLive} runId={run.id} fromChat={run.trigger === 'chat'} confirmedSeqs={Array.isArray(run.confirmedActions) ? run.confirmedActions.map((c) => c.seq) : []} />
+  );
+  // Below `md` the sticky bar carries the run's actions and, in its menu, Export.
+  const exportBusy = exporter.busy !== null;
+  const bar = compact && (isLive || exporter.canExport) && (
+    <Paper
+      elevation={6}
+      role="toolbar"
+      aria-label="Run actions"
+      // Sticks above the phone's bottom bar (and the safe area) while the page scrolls; it is the page's last element, so at the end it rests in place.
+      sx={{ position: 'sticky', bottom: aboveBottomBar(8), zIndex: 'speedDial', mt: 2, p: 0.5, display: 'flex', gap: 0.5, borderRadius: 2 }}
+    >
+      {isLive && canCancel && <BarAction label={run.cancelRequested ? 'Cancelling…' : 'Cancel run'} short={run.cancelRequested ? 'Cancelling…' : 'Cancel'} Icon={CancelOutlinedIcon} color="error" disabled={run.cancelRequested} onClick={cancel} />}
+      {isLive && <BarAction label={watch ? 'Stop watching' : 'Watch the browser'} short={watch ? 'Stop watching' : 'Watch'} Icon={watch ? VisibilityOffOutlinedIcon : VisibilityOutlinedIcon} onClick={() => setWatch((w) => !w)} />}
+      {isLive && takeOverHost && <BarAction label={takeOverLabel} short="Take over" Icon={PanToolOutlinedIcon} onClick={takeOver} />}
+      {exporter.canExport && (
+        <BarAction
+          label={exportBusy ? 'Preparing the export…' : 'Export'}
+          short={exportBusy ? 'Preparing…' : 'Export'}
+          Icon={FileDownloadOutlinedIcon}
+          disabled={exportBusy}
+          menu={{ id: exportMenuId, open: Boolean(exportAnchor) }}
+          onClick={(e) => setExportAnchor(e.currentTarget)}
+        />
+      )}
+    </Paper>
+  );
+  const exportMenu = compact && <RunExportMenu id={exportMenuId} anchorEl={exportAnchor} onClose={() => setExportAnchor(null)} exporter={exporter} runId={run.id} live={isLive} />;
 
   if (twoPane) {
     return (
@@ -416,19 +457,8 @@ export function RunDetailPage() {
       )}
       {frame}
       {timeline}
-      {isLive && compact && (
-        <Paper
-          elevation={6}
-          role="toolbar"
-          aria-label="Run actions"
-          // Sticks above the phone's bottom bar (and the safe area) while the page scrolls; it is the page's last element, so at the end it rests in place.
-          sx={{ position: 'sticky', bottom: aboveBottomBar(8), zIndex: 'speedDial', mt: 2, p: 0.5, display: 'flex', gap: 0.5, borderRadius: 2 }}
-        >
-          {canCancel && <BarAction label={run.cancelRequested ? 'Cancelling…' : 'Cancel run'} short={run.cancelRequested ? 'Cancelling…' : 'Cancel'} Icon={CancelOutlinedIcon} color="error" disabled={run.cancelRequested} onClick={cancel} />}
-          <BarAction label={watch ? 'Stop watching' : 'Watch the browser'} short={watch ? 'Stop watching' : 'Watch'} Icon={watch ? VisibilityOffOutlinedIcon : VisibilityOutlinedIcon} onClick={() => setWatch((w) => !w)} />
-          {takeOverHost && <BarAction label={takeOverLabel} short="Take over" Icon={PanToolOutlinedIcon} onClick={takeOver} />}
-        </Paper>
-      )}
+      {bar}
+      {exportMenu}
     </PageContainer>
   );
 }

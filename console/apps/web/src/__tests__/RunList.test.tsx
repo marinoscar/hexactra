@@ -575,12 +575,12 @@ describe('the row menu', () => {
     await screen.findByText('Goal 1');
     await waitFor(() => expect(host.requests.some((r) => r.path === '/agent-policies')).toBe(true));
     fireEvent.click(screen.getByRole('button', { name: 'Actions for Goal 1' }));
-    await waitFor(() => expect(screen.getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Open', 'Run again', 'Run again with…', 'Cancel']));
+    await waitFor(() => expect(screen.getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Open', 'Run again', 'Run again with…', 'Export PDF', 'Export JSON', 'Cancel']));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Cancel' }));
     await waitFor(() => expect(host.requests.some((r) => r.method === 'POST' && r.path === `/runs/${uuid(1)}/cancel`)).toBe(true));
 
     fireEvent.click(screen.getByRole('button', { name: 'Actions for Goal 2' }));
-    await waitFor(() => expect(screen.getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Open', 'Run again', 'Run again with…', 'Delete']));
+    await waitFor(() => expect(screen.getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Open', 'Run again', 'Run again with…', 'Export PDF', 'Export JSON', 'Delete']));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
     fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(host.requests.some((r) => r.method === 'DELETE' && r.path === `/runs/${uuid(2)}`)).toBe(true));
