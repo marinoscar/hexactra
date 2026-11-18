@@ -143,6 +143,11 @@ enum Commands {
         output: Option<PathBuf>,
         #[arg(long)]
         tab: Option<i64>,
+        /// Cover passwords, one-time codes, card and account numbers in the
+        /// page before the picture is taken (fails with mask_unavailable on a
+        /// page that cannot be masked).
+        #[arg(long)]
+        mask: bool,
     },
     /// Print the visible text of the page or an element.
     Text {
@@ -817,8 +822,9 @@ async fn run() -> Result<()> {
             selector: selector.clone(),
             tab_id: *tab,
         },
-        Commands::Screenshot { tab, .. } => RemoteAction::Screenshot {
+        Commands::Screenshot { tab, mask, .. } => RemoteAction::Screenshot {
             marks: false,
+            mask: *mask,
             tab_id: *tab,
         },
         Commands::Text {

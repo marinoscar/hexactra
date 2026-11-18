@@ -151,9 +151,19 @@ pub enum RemoteAction {
     /// in CSS pixels, so its coordinates are the ones `click_at` takes. With
     /// `marks`, interactive elements are boxed and numbered in the image and
     /// the result lists them: `marks: [{ n, selector, x, y, w, h, text }]`.
+    /// With `mask` (#539), the extension covers passwords, one-time codes,
+    /// card, account and routing numbers and the other patterns of
+    /// `packages/contracts/sensitive-patterns.json` with opaque boxes in the
+    /// page *before* the picture is taken, and the result carries `masked`
+    /// (how many boxes). A page it cannot mask fails the action with
+    /// `mask_unavailable`; it never falls back to an unmasked picture. Images,
+    /// canvases and videos are not read (a canvas over half the viewport is
+    /// covered whole). See [`ScreenshotResult`].
     Screenshot {
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         marks: bool,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        mask: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tab_id: Option<i64>,
     },
@@ -684,6 +694,55 @@ pub struct OperationView {
     /// sites since the previous action on this browser (#508).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub navigation_blocked: Vec<BlockedNavigation>,
+}
+
+/// The error code a `mask: true` screenshot fails with when the page cannot be
+/// masked (#539): a page the extension cannot script, a cross-origin frame or
+/// a plugin that fills the viewport, a PDF viewer. The operation's `error`
+/// starts with it (`mask_unavailable: <reason>`); no image is returned.
+pub const MASK_UNAVAILABLE: &str = "mask_unavailable";
+
+/// Most boxes a masked screenshot draws; past it the whole viewport is
+/// covered and `masked` reports this number.
+pub const MAX_MASK_BOXES: u32 = 500;
+
+/// The result of a `screenshot` action as the control plane reports it in
+/// [`OperationView::result`]. The extension sends `data` (base64); the control
+/// plane moves it to the artifact store and puts the handle (`artifact_id`,
+/// `size`, `expires_at`) in its place unless inline bytes were asked for.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScreenshotResult {
+    /// `image/jpeg`.
+    pub mime: String,
+    /// The image, base64 (from the extension, or inline when asked for).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub data: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub artifact_id: Option<Uuid>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tab_id: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    /// Image width in CSS pixels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    /// Image height in CSS pixels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
+    /// With `marks`: the numbered elements, `{ n, selector, tag, role, text, x, y, w, h }`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub marks: Option<Vec<Value>>,
+    /// With `mask`: how many regions were covered before the capture (at most
+    /// 500; at 500 the whole viewport is covered).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub masked: Option<u32>,
 }
 
 /// A top-level navigation the browser refused because its host is not in the
@@ -2087,6 +2146,8 @@ mod tests {
             json!({"type": "type_keys", "text": "hello"}),
             json!({"type": "key", "key": "a", "modifiers": ["ctrl"]}),
             json!({"type": "screenshot", "marks": true}),
+            json!({"type": "screenshot", "mask": true}),
+            json!({"type": "screenshot", "marks": true, "mask": true, "tab_id": 4}),
             json!({"type": "desktop_screenshot"}),
             json!({"type": "desktop_click", "x": 5, "y": 6, "button": "right"}),
             json!({"type": "desktop_move", "x": 5, "y": 6}),
@@ -2106,6 +2167,7 @@ mod tests {
             plain,
             RemoteAction::Screenshot {
                 marks: false,
+                mask: false,
                 tab_id: None
             }
         );
@@ -2113,6 +2175,67 @@ mod tests {
             serde_json::to_value(&plain).unwrap(),
             json!({"type": "screenshot"})
         );
+    }
+
+    // #539: a masked screenshot, its result, and the absence of both.
+    #[test]
+    fn masked_screenshot_round_trips() {
+        let masked: RemoteAction =
+            serde_json::from_value(json!({"type": "screenshot", "mask": true})).unwrap();
+        assert_eq!(
+            masked,
+            RemoteAction::Screenshot {
+                marks: false,
+                mask: true,
+                tab_id: None
+            }
+        );
+        assert!(masked.returns_image());
+        let both = RemoteAction::Screenshot {
+            marks: true,
+            mask: true,
+            tab_id: Some(7),
+        };
+        let v = serde_json::to_value(&both).unwrap();
+        assert_eq!(
+            v,
+            json!({"type": "screenshot", "marks": true, "mask": true, "tab_id": 7})
+        );
+        assert_eq!(serde_json::from_value::<RemoteAction>(v).unwrap(), both);
+        // `mask: false` is the default and is not written.
+        let off: RemoteAction =
+            serde_json::from_value(json!({"type": "screenshot", "mask": false})).unwrap();
+        assert_eq!(
+            serde_json::to_value(&off).unwrap(),
+            json!({"type": "screenshot"})
+        );
+
+        let with = json!({
+            "mime": "image/jpeg",
+            "artifact_id": "7f0c2a34-5f7e-4a7e-9a55-7f8d7f3e8b10",
+            "size": 1234,
+            "expires_at": "2026-11-18T10:00:00Z",
+            "tab_id": 3,
+            "url": "https://example.test/pay",
+            "title": "Pay",
+            "width": 1280,
+            "height": 720,
+            "masked": 4
+        });
+        let r: ScreenshotResult = serde_json::from_value(with.clone()).unwrap();
+        assert_eq!(r.masked, Some(4));
+        assert_eq!(serde_json::to_value(&r).unwrap(), with);
+
+        let without = json!({"mime": "image/jpeg", "data": "AAAA", "width": 10, "height": 10});
+        let r: ScreenshotResult = serde_json::from_value(without.clone()).unwrap();
+        assert_eq!(r.masked, None);
+        assert_eq!(serde_json::to_value(&r).unwrap(), without);
+
+        let with_marks =
+            json!({"mime": "image/jpeg", "data": "AAAA", "marks": [{"n": 1}], "masked": 0});
+        let r: ScreenshotResult = serde_json::from_value(with_marks.clone()).unwrap();
+        assert_eq!(r.masked, Some(0));
+        assert_eq!(serde_json::to_value(&r).unwrap(), with_marks);
     }
 
     #[test]
@@ -2126,6 +2249,7 @@ mod tests {
         assert!(RemoteAction::DesktopScreenshot.returns_image());
         assert!(RemoteAction::Screenshot {
             marks: true,
+            mask: false,
             tab_id: None
         }
         .returns_image());

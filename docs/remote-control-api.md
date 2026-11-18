@@ -233,7 +233,7 @@ Actions are JSON objects tagged by `type`. `tab_id` is optional on tab-scoped ac
 | `type_secret` | `handoff_id`, `selector`, `clear`?, `submit`? | `{}`. Types the answer of a `secret` handoff; see [secrets](#secrets-typed-by-the-fabric) |
 | `press` | `key`, `selector`? | `{}` |
 | `scroll` | `dx`?, `dy`?, `selector`? | `{ x, y }` |
-| `screenshot` | `marks`? | `{ artifact_id, mime, size, expires_at, width, height, url, title }`: fetch the bytes from `GET /v1/artifacts/{artifact_id}` ([artifacts](#artifacts)). The image is in CSS pixels, the coordinates `click_at` takes. With `"marks": true`, interactive elements are boxed and numbered in the image and listed as `marks: [{ n, selector, tag, role, text, x, y, w, h }]` |
+| `screenshot` | `marks`?, `mask`? | `{ artifact_id, mime, size, expires_at, width, height, url, title }`: fetch the bytes from `GET /v1/artifacts/{artifact_id}` ([artifacts](#artifacts)). The image is in CSS pixels, the coordinates `click_at` takes. With `"marks": true`, interactive elements are boxed and numbered in the image and listed as `marks: [{ n, selector, tag, role, text, x, y, w, h }]`. With `"mask": true`, sensitive regions are covered before the capture and the result adds `masked` (see [masked screenshots](#masked-screenshots)) |
 | `text` | `selector`?, `max_chars`? | `{ text, truncated }` |
 | `elements` | `max_elements`? | `{ elements: [{ selector, tag, role, text, ... }] }` |
 | `wait_for` | `selector`, `timeout_ms`? (≤ 60000) | `{}` |
@@ -268,6 +268,19 @@ Policy enforced before an action is queued:
 - Selectors are limited to 2,000 characters, typed text to 100,000, scripts to 200,000, and coordinates to 0–100,000.
 - Logs record the action `type` only, never URLs, selectors or typed text.
 - A `type` action with `"sensitive": true` (CLI: `type --sensitive`) still sends its text to the host, but the operation view reports it as `[secret]`; use it for passwords the caller already holds.
+
+### Masked screenshots
+
+A screenshot kept for a run's trace must not show a password, a one-time code, a card number or an account number in the clear (#539). With `"mask": true` (CLI: `screenshot --mask`), the extension covers them **in the page, before the capture**, so no unmasked image exists on the node, in the fabric or in object storage:
+
+- It adds one fixed-position container (`pointer-events: none`, highest z-index) holding one opaque `#111` box per region (no blur: a blur can be reversed), waits one animation frame, captures, and removes the container in all cases, also when the capture fails.
+- Covered: `input[type=password]`; inputs with `autocomplete` `one-time-code`, `cc-number`, `cc-csc`, `cc-exp*`, `current-password` or `new-password`; inputs whose `name`, `id` or `aria-label` matches `otp|passcode|cvv|cvc|ssn|routing|account.?number|card.?number`; any other text field whose value, and any visible text, matching a pattern of `packages/contracts/sensitive-patterns.json` (the table the console masks run traces with: tokens, URL queries, emails, IBANs, card numbers with the Luhn check, SSNs, routing numbers with the ABA check, account numbers, phone numbers, long digit runs). Text is covered character-exact (only the number, not its paragraph); a label in one table cell is context for the number in the next.
+- Same-origin frames are masked inside. A cross-origin frame or a plugin (a PDF viewer) that is part of the page is covered by one box.
+- Only regions in the viewport are counted. The result's `masked` is the number of boxes; past 500 the whole viewport is covered and `masked` is 500.
+- **Not masked:** text inside images, canvases and videos (there is no OCR). A canvas over half the viewport is covered whole; a smaller one is captured as is.
+- **Fail closed:** if the page cannot be masked (a page the extension cannot script, such as `chrome://` pages; a cross-origin frame or plugin that fills the viewport; the pattern file missing), the action fails with an error starting `mask_unavailable` and returns no image. It never falls back to an unmasked picture.
+- `marks` and `mask` together are allowed: both are drawn and both removed, and the marks' labels are masked as well. Trace captures use `mask` without `marks`; the screenshots the model sees are not masked. `desktop_screenshot` has no page and no `mask`.
+- The handoff rule is unchanged: a masked plain screenshot is taken while a handoff waits, except while it asks for a secret.
 
 ## Artifacts
 

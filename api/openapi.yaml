@@ -2511,10 +2511,20 @@ components:
           in CSS pixels, so its coordinates are the ones `click_at` takes. With
           `marks`, interactive elements are boxed and numbered in the image and
           the result lists them: `marks: [{ n, selector, x, y, w, h, text }]`.
+          With `mask` (#539), the extension covers passwords, one-time codes,
+          card, account and routing numbers and the other patterns of
+          `packages/contracts/sensitive-patterns.json` with opaque boxes in the
+          page *before* the picture is taken, and the result carries `masked`
+          (how many boxes). A page it cannot mask fails the action with
+          `mask_unavailable`; it never falls back to an unmasked picture. Images,
+          canvases and videos are not read (a canvas over half the viewport is
+          covered whole). See [`ScreenshotResult`].
         required:
         - type
         properties:
           marks:
+            type: boolean
+          mask:
             type: boolean
           tab_id:
             type:
@@ -3072,6 +3082,82 @@ components:
           items:
             type: string
           description: The selected option ids for `multi_choice`.
+    ScreenshotResult:
+      type: object
+      description: |-
+        The result of a `screenshot` action as the control plane reports it in
+        [`OperationView::result`]. The extension sends `data` (base64); the control
+        plane moves it to the artifact store and puts the handle (`artifact_id`,
+        `size`, `expires_at`) in its place unless inline bytes were asked for.
+      required:
+      - mime
+      properties:
+        artifact_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        data:
+          type:
+          - string
+          - 'null'
+          description: The image, base64 (from the extension, or inline when asked for).
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        height:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Image height in CSS pixels.
+          minimum: 0
+        marks:
+          type:
+          - array
+          - 'null'
+          items: {}
+          description: 'With `marks`: the numbered elements, `{ n, selector, tag, role, text, x, y, w, h }`.'
+        masked:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: |-
+            With `mask`: how many regions were covered before the capture (at most
+            500; at 500 the whole viewport is covered).
+          minimum: 0
+        mime:
+          type: string
+          description: '`image/jpeg`.'
+        size:
+          type:
+          - integer
+          - 'null'
+          format: int64
+          minimum: 0
+        tab_id:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        title:
+          type:
+          - string
+          - 'null'
+        url:
+          type:
+          - string
+          - 'null'
+        width:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Image width in CSS pixels.
+          minimum: 0
     ServiceTokenList:
       type: object
       required:
