@@ -80,6 +80,7 @@ export const ROUTES = [
   ['settings-agent-policy-edit', '/settings/agent-policies/{policy}'],
   ['settings-agent-model-tiers', '/settings/agent-model-tiers'],
   ['settings-webhooks', '/settings/webhooks'],
+  ['settings-connected-apps', '/settings/connected-apps'],
   ['settings-danger-zone', '/settings/danger-zone'],
   // Administration (the admin hub and its pages).
   ['admin', '/admin/settings'],
@@ -98,8 +99,10 @@ export const ROUTES = [
   ['admin-agent-pricing', '/admin/settings/agent-pricing'],
   ['admin-factory-reset', '/admin/settings/factory-reset'],
   ['admin-run-history', '/admin/settings/run-history'],
+  ['admin-oauth-clients', '/admin/settings/oauth-clients'],
   // Outside the shell.
   ['activate', '/activate'],
+  ['oauth-error', '/oauth/error?code=client_not_allowed&host=client.example.test', { signedOut: true }],
   ['login', '/login', { signedOut: true }],
 ];
 

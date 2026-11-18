@@ -1,14 +1,15 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { Auth, authCredentialOf, type RequestWithAuthCredential } from '@marinoscar/platform-api/identity';
+import { Auth, InProcessDelegation, authCredentialOf, type RequestWithAuthCredential } from '@marinoscar/platform-api/identity';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-import { McpDispatcher } from './mcp.dispatcher';
+import { McpDispatcher, type McpCaller } from './mcp.dispatcher';
 import { MCP_VERSIONS, McpProtocolError, acceptsJson, isAllowedOrigin, requestContext, resolveVersion, type McpHeaders, type RpcMessage } from './mcp.protocol';
 import { RPC, rpcError, type RpcId, type RpcResponse } from './mcp.results';
 
-/** The endpoint, as Fastify sees it (the global `/api` prefix included). */
-export const MCP_PATH = '/api/mcp';
+import { MCP_PATH } from './mcp.path';
+
+export { MCP_PATH };
 
 /**
  * `mcp.allowedOrigins`: browser origins allowed besides the console's own
@@ -107,21 +108,31 @@ function invalid(msg: unknown): RpcResponse | null {
  * `POST /api/mcp`: the Model Context Protocol over Streamable HTTP
  * (stateless, one JSON response per request, never a session), for every
  * revision from 2024-11-05 to 2026-07-28 (mcp.protocol.ts), authenticated
- * like the rest of the API (a personal access token or a session). Every
- * tool calls the console's own REST routes in-process as the caller, so
- * permissions, validation, redaction and run recording are exactly the REST
- * API's. This class is HTTP only: methods are routed by `McpDispatcher`.
+ * like the rest of the API (a session, a personal access token or, from
+ * #459, an OAuth `oat_` token: this path is the protected resource `mcp`, so a
+ * missing or bad credential is a 401 with the platform's `WWW-Authenticate`
+ * challenge). Every tool calls the console's own REST routes in-process as the
+ * caller (`InProcessDelegation`), so permissions (an OAuth token's narrowed
+ * ones included), validation, redaction and run recording are exactly the
+ * REST API's. This class is HTTP only: methods are routed by `McpDispatcher`.
  */
 @ApiTags('MCP')
 @Controller('mcp')
 export class McpController {
-  constructor(private readonly dispatcher: McpDispatcher) {}
+  constructor(
+    private readonly dispatcher: McpDispatcher,
+    private readonly delegation: InProcessDelegation,
+  ) {}
 
   @Post()
   @HttpCode(200)
   @Auth()
   async post(@Req() req: FastifyRequest, @Body() body: unknown, @Res() res: FastifyReply): Promise<void> {
-    const authorization = String(req.headers.authorization ?? '');
+    // Tools call the REST routes in-process as THIS caller, through the platform's
+    // delegation: never by forwarding the Authorization header (an `oat_` token is
+    // confined to /api/mcp and would be refused elsewhere; a delegation keeps the
+    // principal, its credential kind and an OAuth token's narrowed permissions).
+    const caller: McpCaller = (options) => this.delegation.inject(req, options);
     const userAgent = header(req, 'user-agent');
     const credential = authCredentialOf(req as FastifyRequest & RequestWithAuthCredential);
     const headers: McpHeaders = { protocolVersion: header(req, 'mcp-protocol-version'), method: header(req, 'mcp-method'), name: header(req, 'mcp-name') };
@@ -151,7 +162,7 @@ export class McpController {
             const msg = m as RpcMessage;
             try {
               const rctx = requestContext({ protocolVersion: headers.protocolVersion }, msg, credential);
-              return (await this.dispatcher.dispatch(msg, rctx, authorization, userAgent, extra))?.body ?? null;
+              return (await this.dispatcher.dispatch(msg, rctx, caller, userAgent, extra))?.body ?? null;
             } catch (e) {
               if (e instanceof McpProtocolError) return msg.id === undefined ? null : rpcError(idOf(msg) ?? null, e.code, e.message, e.data);
               throw e;
@@ -173,7 +184,7 @@ export class McpController {
       if (e instanceof McpProtocolError) return void (await sendRpc(res, e.httpStatus, rpcError(idOf(msg) ?? null, e.code, e.message, e.data)));
       throw e;
     }
-    const out = await this.dispatcher.dispatch(msg, rctx, authorization, userAgent, extra);
+    const out = await this.dispatcher.dispatch(msg, rctx, caller, userAgent, extra);
     if (out === null) return void (await res.status(202).send());
     await sendRpc(res, out.status, out.body);
   }

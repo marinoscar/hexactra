@@ -7,7 +7,7 @@ import { HttpAdapterHost } from '@nestjs/core';
 import { resolveApiVersion } from '@marinoscar/platform-api/host';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { SpanStatusCode, trace } from '@opentelemetry/api';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, InjectOptions, LightMyRequestResponse } from 'fastify';
 import { z } from 'zod';
 
 import { QuestionEvents } from '../questions/question-events';
@@ -53,6 +53,32 @@ import {
 function header(headers: Record<string, unknown>, name: string): string | undefined {
   const v = headers[name];
   return Array.isArray(v) ? String(v[0]) : v === undefined ? undefined : String(v);
+}
+
+/**
+ * How a tool's REST sub-request reaches the console: the controller passes the
+ * platform's in-process delegation (`InProcessDelegation.inject`), so the
+ * sub-request runs as the caller's principal, with an OAuth token's narrowed
+ * permissions, whatever the credential kind (#459). A string is an
+ * `Authorization` value forwarded as is: only for direct dispatcher calls in
+ * tests, which have no originating HTTP request to delegate from.
+ */
+export type McpCaller = ((options: InjectOptions) => Promise<LightMyRequestResponse>) | string;
+
+/** What the tools are told about the credential (`McpContext.credential`), from the guard's record. */
+export function toolCredential(rctx: Pick<McpRequestContext, 'credential'>): McpContext['credential'] {
+  const c = rctx.credential;
+  if (!c) return undefined;
+  if (c.kind === 'oauth') {
+    return {
+      kind: 'oauth',
+      // The guard always records scopes, client and grant for `oauth`; copied only when present.
+      ...(Array.isArray(c.scopes) ? { scopes: [...c.scopes] } : {}),
+      ...(c.clientId ? { clientId: c.clientId } : {}),
+      ...(c.grantId ? { grantId: c.grantId } : {}),
+    };
+  }
+  return { kind: c.kind as McpCredentialKind };
 }
 
 /** The credential kind of a request as the tools see it (`oauth` from E33.1 on). */
@@ -175,17 +201,20 @@ export class McpDispatcher {
 
   /** How tools reach the console: its REST routes, in-process, as the caller. */
   private toolContext(
-    authorization: string,
-    kind: McpCredentialKind | undefined,
+    caller: McpCaller,
+    credential: McpContext['credential'],
     limits: McpLimits,
     extra: { client?: string; signal?: AbortSignal; elicitation?: McpElicitationContext } = {},
   ): McpContext {
-    const fastify = this.adapter.httpAdapter.getInstance<FastifyInstance>();
+    const send =
+      typeof caller === 'string'
+        ? (options: InjectOptions) => this.adapter.httpAdapter.getInstance<FastifyInstance>().inject({ ...options, headers: { ...options.headers, authorization: caller } })
+        : caller;
     const call = async (method: string, path: string, body?: unknown, extra?: Record<string, string>) =>
-      fastify.inject({
+      send({
         method: method as 'GET',
         url: `/api${path}`,
-        headers: { authorization, ...extra, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
+        headers: { ...extra, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
         ...(body !== undefined ? { payload: JSON.stringify(body) } : {}),
       });
     return {
@@ -216,7 +245,7 @@ export class McpDispatcher {
         if (res.statusCode >= 400) throw new McpApiError(res.statusCode, 'SCREENSHOT_FAILED', 'could not fetch the screenshot', undefined, header(res.headers, 'x-request-id'));
         return { mime: String(res.headers['content-type'] ?? 'application/octet-stream'), data: res.rawPayload };
       },
-      ...(kind ? { credential: { kind } } : {}),
+      ...(credential ? { credential } : {}),
       limits,
       ...(process.env.APP_URL ? { appUrl: process.env.APP_URL } : {}),
       ...(extra.client ? { client: extra.client } : {}),
@@ -232,7 +261,7 @@ export class McpDispatcher {
    * method, the tool name, the revision, the client, the credential kind and
    * whether it failed: never a token, an argument value or a result.
    */
-  async dispatch(msg: RpcMessage, rctx: McpRequestContext, authorization: string, userAgent?: string, extra: DispatchExtra = {}): Promise<DispatchOutcome | null> {
+  async dispatch(msg: RpcMessage, rctx: McpRequestContext, caller: McpCaller, userAgent?: string, extra: DispatchExtra = {}): Promise<DispatchOutcome | null> {
     const method = typeof msg.method === 'string' ? msg.method : '';
     const toolName = method === 'tools/call' ? String((msg.params as { name?: unknown } | undefined)?.name ?? '').slice(0, 64) : undefined;
     const client = clientBucket(rctx.clientInfo?.name ?? userAgent);
@@ -248,7 +277,7 @@ export class McpDispatcher {
       const started = Date.now();
       let isError = false;
       try {
-        const out = await this.route(msg, method, rctx, authorization, { ...extra, client });
+        const out = await this.route(msg, method, rctx, caller, { ...extra, client });
         isError = out !== null && (out.body.error !== undefined || (out.body.result as McpToolResult | undefined)?.isError === true);
         return out;
       } catch (e) {
@@ -267,7 +296,7 @@ export class McpDispatcher {
     });
   }
 
-  private async route(msg: RpcMessage, method: string, rctx: McpRequestContext, authorization: string, extra: DispatchExtra & { client?: string } = {}): Promise<DispatchOutcome | null> {
+  private async route(msg: RpcMessage, method: string, rctx: McpRequestContext, caller: McpCaller, extra: DispatchExtra & { client?: string } = {}): Promise<DispatchOutcome | null> {
     const id = msg.id as RpcId | undefined;
     if (id === undefined) return null; // a notification: nothing to answer
     const { flags } = rctx;
@@ -327,7 +356,7 @@ export class McpDispatcher {
             elicitation.resume = { runId: state.runId, questionId: state.questionId, cursor: state.cursor, ...(response ? { response } : {}) };
           }
         }
-        const work = tool.call(data, this.toolContext(authorization, kind, limits, { client: extra.client, signal: extra.signal, elicitation })).catch((e: unknown) => {
+        const work = tool.call(data, this.toolContext(caller, toolCredential(rctx), limits, { client: extra.client, signal: extra.signal, elicitation })).catch((e: unknown) => {
           if (e instanceof McpApiError) {
             // The original answer stays in the log (with its request id); the model gets a sentence.
             this.log.warn(`mcp tool ${tool.name} failed: ${e.status} ${e.code} ${e.message.slice(0, 300)}${e.requestId ? ` request=${e.requestId}` : ''}`);

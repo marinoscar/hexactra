@@ -45,6 +45,7 @@ import { JOBS_EVENT_BUS, JOBS_METRICS, JobsModule } from '@marinoscar/platform-a
 import { NodeCredentialModule, NodeCredentialService } from '@marinoscar/platform-api/nodes';
 import { SETTINGS_DATA, SETTINGS_PROFILE_IMAGES, SettingsModule } from '@marinoscar/platform-api/settings';
 
+import { MCP_SUGGESTED_CLIENT_HOSTS } from '../mcp/mcp.scopes';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   AppProfileImages,
@@ -123,7 +124,16 @@ export const PLATFORM_MODULES = [
   PlatformHostCoreModule.forRoot(),
   // Sign-in, sessions, tokens, users, the allowlist and organizations, plus
   // the guards and decorators every route uses (`@Auth()`, `@Public()`).
-  IdentityModule.forRoot({ imports: [AppHostModule], enableTestAuth: process.env.NODE_ENV !== 'production' }),
+  // `oauthServer` mounts the platform OAuth server (#459): ChatGPT, Claude and other
+  // hosted AI apps sign in on the console and get a scoped `oat_` token for
+  // `/api/mcp` (scopes and the resource: ../mcp/mcp.oauth.ts). It ships OFF until an
+  // administrator switches it on at /admin/settings/oauth-clients; the hosts are
+  // suggestions shown there, never allowed by default.
+  IdentityModule.forRoot({
+    imports: [AppHostModule],
+    oauthServer: { defaultAllowedClientHosts: [...MCP_SUGGESTED_CLIENT_HOSTS] },
+    enableTestAuth: process.env.NODE_ENV !== 'production',
+  }),
   // `/api/system-settings`, `/api/user-settings`, `/api/org-settings`.
   SettingsModule.forRoot({ imports: [AppHostModule] }),
   // The `nod_` worker-node credential family the identity guard accepts.

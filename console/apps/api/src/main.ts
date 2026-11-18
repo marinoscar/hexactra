@@ -11,8 +11,8 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import { APP_NAME, REPO_URL } from '@app/shared';
 import { verifyEncryptionKeyAtStartup } from '@marinoscar/platform-api/core';
 import { registerRequestSpanAttributes } from '@marinoscar/platform-api/otel-core';
-import { registerPlatformDocs, resolveApiVersion, type PlatformOpenApiOptions } from '@marinoscar/platform-api/host';
-import { verifyTenancyModeAtStartup } from '@marinoscar/platform-api/identity';
+import { buildCorsOptions, isSameOriginOnly, registerPlatformDocs, resolveApiVersion, type PlatformOpenApiOptions } from '@marinoscar/platform-api/host';
+import { OAUTH_PUBLIC_CORS_PATHS, verifyTenancyModeAtStartup } from '@marinoscar/platform-api/identity';
 import { STORAGE_OPTIONS, simpleUploadFileSizeLimit, type ResolvedStorageModuleOptions } from '@marinoscar/platform-api/storage';
 
 import { AppModule } from './app.module';
@@ -34,6 +34,14 @@ export const APP_OPENAPI: PlatformOpenApiOptions = {
  * degrades both to a 503, never the boot). Shared by the boot and the db-tier tests.
  */
 export async function createApp(): Promise<NestFastifyApplication> {
+  // CORS, parsed before anything else so a wildcard or malformed CORS_ORIGIN fails
+  // here with its own message. Same-origin only (no CORS headers) unless
+  // CORS_ORIGIN lists origins. `openPaths`: the OAuth server's token, register and
+  // revoke endpoints and its metadata documents answer ANY origin without
+  // credentials (browser-based MCP clients), even under an allowlist; no other
+  // route is loosened (#459; the platform's oauth-server spec, §3). `/api/mcp`
+  // keeps its own Origin rules (registerMcpTransport, which runs first).
+  const corsOptions = buildCorsOptions(process.env.CORS_ORIGIN, { openPaths: OAUTH_PUBLIC_CORS_PATHS });
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), { bufferLogs: false });
   // Route and caller attributes on the HTTP server span (`http.route`, `app.route.matched`),
   // first so it runs ahead of every other hook. Only when the SDK is installed.
@@ -51,6 +59,8 @@ export async function createApp(): Promise<NestFastifyApplication> {
     });
   }
   app.setGlobalPrefix('api');
+  app.enableCors(corsOptions);
+  if (!isSameOriginOnly(corsOptions)) new Logger('Bootstrap').log(`CORS: allowlist of ${corsOptions.origin.length} origin(s) with credentials`);
   registerPlatformDocs(app, APP_OPENAPI);
   return app;
 }

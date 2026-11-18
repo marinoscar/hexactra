@@ -2,7 +2,7 @@
 // the example on Claude's page), the tool and resource `_meta`, which tools a
 // caller is offered, and the supersession key.
 import { MCP_APP_MIME, MCP_APPS_EXTENSION_ID, MCP_UI_RESOURCES, QUESTION_CARD_URI, RUN_CARD_URI, TASKS_CARD_URI, cardKey, claudeUiDomain, clientSupportsApps, mcpServerUrl, stampHtml, toolUiMeta, uiDomainFor, uiResourceMeta } from '../src/mcp/mcp.apps';
-import { offeredTools, withCardKey } from '../src/mcp/mcp.dispatcher';
+import { offeredTools, toolCredential, withCardKey } from '../src/mcp/mcp.dispatcher';
 import { MCP_SCOPE_IDS, grantedScopes } from '../src/mcp/mcp.scopes';
 import { MCP_TOOLS } from '../src/mcp/mcp.tools';
 
@@ -92,5 +92,16 @@ describe('granted scopes (what a card may show, #467)', () => {
     expect(grantedScopes(undefined)).toEqual([...MCP_SCOPE_IDS]);
     expect(grantedScopes({})).toEqual([...MCP_SCOPE_IDS]);
     expect(grantedScopes({ scopes: ['inbox:write', 'runs:read', 'unknown:scope'] })).toEqual(['runs:read', 'inbox:write']);
+  });
+});
+
+describe('the credential the tools see (#459)', () => {
+  it('carries an OAuth token\'s scopes, client and grant (never the token), and only the kind otherwise', () => {
+    const oauth = { kind: 'oauth' as const, tokenId: 't1', grantId: 'g1', clientId: 'c1', resourceId: 'mcp', scopes: ['runs:read', 'runs:write'] };
+    expect(toolCredential({ credential: oauth })).toEqual({ kind: 'oauth', scopes: ['runs:read', 'runs:write'], clientId: 'c1', grantId: 'g1' });
+    expect(grantedScopes(toolCredential({ credential: oauth }))).toEqual(['runs:read', 'runs:write']);
+    expect(toolCredential({ credential: { kind: 'pat', tokenId: 'p1' } })).toEqual({ kind: 'pat' });
+    expect(toolCredential({ credential: { kind: 'jwt' } })).toEqual({ kind: 'jwt' });
+    expect(toolCredential({ credential: null })).toBeUndefined();
   });
 });

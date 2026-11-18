@@ -12,13 +12,15 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 
-import { MCP_EFFECTS, MCP_SCOPE_IDS } from '../src/mcp/mcp.scopes';
+import { MCP_EFFECTS, MCP_SCOPES, MCP_SCOPE_IDS } from '../src/mcp/mcp.scopes';
 import { MCP_TOOLS, READ_ONLY_TOOLS, toolAnnotations, type McpTool } from '../src/mcp/mcp.tools';
 
 const SNAPSHOT = join(__dirname, '__snapshots__', 'mcp-tools.json');
 const DOC = join(__dirname, '..', '..', '..', 'docs', 'mcp.md');
 const START = '<!-- mcp-tools:start -->';
 const END = '<!-- mcp-tools:end -->';
+const SCOPES_START = '<!-- mcp-scopes:start -->';
+const SCOPES_END = '<!-- mcp-scopes:end -->';
 const UPDATE = process.env.UPDATE_MCP_MANIFEST === '1';
 
 function hash(schema: z.ZodType | undefined): string | null {
@@ -44,6 +46,32 @@ function docTable(): string {
   const yes = (b: boolean) => (b ? 'yes' : 'no');
   const rows = MCP_TOOLS.map((t) => `| \`${t.name}\` | ${t.title} | \`${t.scope}\` | ${t.effect} | ${yes(t.openWorld)} | ${yes(t.idempotent ?? false)} | ${t.output ? 'yes' : 'no'} |`);
   return ['| Tool | Title | Scope | Effect | Open world | Idempotent | Structured output |', '|---|---|---|---|---|---|---|', ...rows].join('\n');
+}
+
+/** The OAuth scope table of docs/mcp.md (#459): scope, consent title, risk, default, tools, permissions. */
+function scopeTable(): string {
+  const rows = MCP_SCOPES.map((s) => {
+    const tools = MCP_TOOLS.filter((t) => t.scope === s.id).map((t) => `\`${t.name}\``).join(', ');
+    return `| \`${s.id}\` | ${s.title} | ${s.risk} | ${s.default ? 'yes' : 'no'} | ${tools} | ${s.permissions.map((p) => `\`${p}\``).join(', ')} |`;
+  });
+  return [
+    '| Scope | Consent page | Risk | Default | Tools | Console permissions |',
+    '|---|---|---|---|---|---|',
+    ...rows,
+    '| `offline_access` | Stay connected without asking again | — | requested by the client | (a refresh token) | none |',
+  ].join('\n');
+}
+
+/** Replace (or, with UPDATE, rewrite) one generated block of docs/mcp.md. */
+function generatedBlock(start: string, end: string, body: string): void {
+  const doc = readFileSync(DOC, 'utf8');
+  const a = doc.indexOf(start);
+  const b = doc.indexOf(end);
+  expect(a).toBeGreaterThanOrEqual(0);
+  expect(b).toBeGreaterThan(a);
+  const block = `${start}\n${body}\n${end}`;
+  if (UPDATE) writeFileSync(DOC, doc.slice(0, a) + block + doc.slice(b + end.length));
+  else expect(doc.slice(a, b + end.length)).toBe(block);
 }
 
 function readJson<T>(path: string, fallback: T): T {
@@ -82,6 +110,21 @@ describe('MCP tool manifest (#462)', () => {
     const table = `${START}\n${docTable()}\n${END}`;
     if (UPDATE) writeFileSync(DOC, doc.slice(0, a) + table + doc.slice(b + END.length));
     else expect(doc.slice(a, b + END.length)).toBe(table);
+  });
+
+  it('generates the OAuth scope table of docs/mcp.md (#459)', () => {
+    generatedBlock(SCOPES_START, SCOPES_END, scopeTable());
+  });
+
+  it('every scope of the registry is one of MCP_SCOPE_IDS, in the same order, and names a tool (#459)', () => {
+    expect(MCP_SCOPES.map((s) => s.id)).toEqual([...MCP_SCOPE_IDS]);
+    for (const s of MCP_SCOPES) {
+      expect([s.id, MCP_TOOLS.some((t) => t.scope === s.id)]).toEqual([s.id, true]);
+      expect([s.id, s.permissions.length > 0]).toEqual([s.id, true]);
+    }
+    // The default consent is delegation only: no browser, desktop or policy change (epic #458, decision 3).
+    expect(MCP_SCOPES.filter((s) => s.default).map((s) => s.id)).toEqual(['runs:read', 'runs:write', 'tasks:write', 'inbox:read', 'inbox:write']);
+    expect(MCP_SCOPES.filter((s) => s.risk === 'high').map((s) => s.id)).toEqual(['browser:evaluate', 'desktop:control', 'policies:write']);
   });
 
   it('every tool: a name of at most 64, a unique title of at most 40, a description of at most 1,024, a scope and one effect', () => {

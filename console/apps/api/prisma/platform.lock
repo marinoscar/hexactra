@@ -1,7 +1,23 @@
 {
   "appMigrations": [
     "20261008180000_add_notes",
-    "20261009205750_add_documents"
+    "20261009205750_add_documents",
+    "20261115060604_add_tasks_runs",
+    "20261115063514_add_task_schedules",
+    "20261115183451_add_run_reminders",
+    "20261115190000_add_questions",
+    "20261115190226_add_action_tokens",
+    "20261116131304_add_viewer_sessions",
+    "20261117010000_add_host_fallback",
+    "20261117020000_add_run_activity",
+    "20261117022639_run_active_time_and_task_defaults",
+    "20261117022724_run_cost_and_model_calls",
+    "20261117022922_agent_policies",
+    "20261117030325_run_stop_reason",
+    "20261117033949_run_tier_escalation",
+    "20261117052226_runs_list_index",
+    "20261118034501_chat_conversations",
+    "20261118041326_chat_turns"
   ],
   "lockVersion": 1,
   "migrations": [
@@ -256,9 +272,15 @@
       "originId": "platform:0042_add_storage_migrations",
       "sha256": "8d37841523a5b4737379df567d5ad3feb37abb0f29dcef416cd34f20167ba181",
       "since": "1.0.0"
+    },
+    {
+      "localDir": "20261118054900_add_oauth_server",
+      "originId": "platform:0043_add_oauth_server",
+      "sha256": "cc1c32e853e0b559f27cdd2049862f3c5d7062a65506207b20fd3c24f1147d3e",
+      "since": "1.0.0"
     }
   ],
-  "platformVersion": "0.1.0-next.25",
+  "platformVersion": "0.1.0-next.35",
   "rlsPolicies": [
     {
       "checkSha256": "83e7bb1689b1bd0427e7061bf085f69c35922ba56bedf6275925f52e58cb440b",

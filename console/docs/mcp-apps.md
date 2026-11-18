@@ -1,6 +1,6 @@
 # MCP Apps: the run, question and tasks cards
 
-When an AI app that renders [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) starts or follows a Hexactra run, the chat shows a **live run card**. The card shows the browser's latest screenshot, what the agent is doing, how much of its budget it has used, a **Stop** button and a link to the run in the console. It updates by itself while the run works. The same file renders in every host that implements the MCP Apps extension. Claude (web, desktop, mobile) and ChatGPT are the targets; they connect once OAuth lands (E33.1), and the real-client checks are in #468.
+When an AI app that renders [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) starts or follows a Hexactra run, the chat shows a **live run card**. The card shows the browser's latest screenshot, what the agent is doing, how much of its budget it has used, a **Stop** button and a link to the run in the console. It updates by itself while the run works. The same file renders in every host that implements the MCP Apps extension. Claude (web, desktop, mobile) and ChatGPT are the targets; they connect with OAuth ([mcp.md, Sign in with OAuth](mcp.md#sign-in-with-oauth-chatgpt-claude)), and the real-client checks are in #468.
 
 Two more cards (#467) use the same foundation: the **question card** answers what an agent is waiting for with one tap in the chat, and the **tasks card** lists the user's saved tasks with Run and Pause. See [The question card](#the-question-card) and [The tasks card](#the-tasks-card).
 
@@ -149,7 +149,7 @@ The server enforces this whatever a widget sends: `question_card_answer` refuses
 
 1. Build the widget and run the API (`npm run dev --workspace=mcp-ui` in one terminal, the dev stack in another).
 2. **Reference host.** The `examples/basic-host` of the ext-apps repository connects to a Streamable HTTP server and renders a tool's UI in its double-iframe sandbox. It sends no `Authorization` header, so put a small local proxy in front of `/api/mcp` that adds `Authorization: Bearer <pat_…>`, and point the host's `SERVERS` at the proxy.
-3. **Real clients** need a public HTTPS URL (a tunnel) and OAuth (E33.1). The recipes and checks are in #468. In Claude Desktop, **Help → Troubleshooting → Enable Developer Mode** gives you developer tools for the card's iframe.
+3. **Real clients** need a public HTTPS URL (a tunnel) and the OAuth server switched on ([mcp.md](mcp.md#sign-in-with-oauth-chatgpt-claude)). The recipes and checks are in #468. In Claude Desktop, **Help → Troubleshooting → Enable Developer Mode** gives you developer tools for the card's iframe.
 
 ## Checked in the reference host
 
