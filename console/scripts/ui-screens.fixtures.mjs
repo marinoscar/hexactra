@@ -15,10 +15,11 @@ export const IDS = {
   question: '55555555-5555-4555-8555-555555555555',
   policy: '66666666-6666-4666-8666-666666666666',
   group: '77777777-7777-4777-8777-777777777777',
+  chat: '88888888-8888-4888-8888-888888888888',
 };
 
 const PERMISSIONS = [
-  'tasks:read', 'tasks:write', 'runs:read', 'runs:write', 'runs:delete', 'fleet:read', 'fleet:write', 'fleet:desktop', 'notes:read', 'notes:write',
+  'chat:read', 'chat:write', 'tasks:read', 'tasks:write', 'runs:read', 'runs:write', 'runs:delete', 'fleet:read', 'fleet:write', 'fleet:desktop', 'notes:read', 'notes:write',
   'agent_policies:read', 'agent_policies:write', 'system_settings:read', 'system_settings:write', 'fabric_config:read', 'fabric_config:write',
   'users:read', 'allowlist:read', 'jobs:read', 'webhooks:read', 'system_webhooks:read', 'alerts:read', 'ai:use', 'ai_config:read', 'storage_config:read',
   'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
@@ -238,6 +239,27 @@ const schedulePreview = (_url, body) => {
   return { valid: true, cron, timezone: body?.timezone ?? 'Etc/UTC', description, next: Array.from({ length: body?.count ?? 5 }, (_, i) => `${iso((i + 1) * 86_400_000).slice(0, 10)}T09:00:00.000Z`), intervalSeconds: 86_400 };
 };
 
+// Chat (#486): a thread with every kind of message, and the list beside it.
+const chatBase = { status: 'active', profile: 'default', hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: true, createdAt: iso(-3 * 86_400_000), updatedAt: iso(-60_000) };
+const chatMessage = (seq, role, kind, text, extra = {}) => ({ id: `99999999-0000-4000-8000-${String(seq).padStart(12, '0')}`, seq, role, kind, text, runId: null, meta: null, createdAt: iso(-(20 - seq) * 60_000 - (seq < 3 ? 86_400_000 : 0)), ...extra });
+const chatMessages = [
+  chatMessage(1, 'user', 'text', 'Book two cinema tickets for the new space film tonight.'),
+  chatMessage(2, 'assistant', 'clarify', 'Which showing would you like?', { meta: { options: ['4:30 PM', '7:30 PM', 'The latest one'] } }),
+  chatMessage(3, 'user', 'text', '7:30 PM, somewhere in the middle of the room please. If the middle rows are full, the row right behind them is fine too.'),
+  chatMessage(4, 'assistant', 'run', 'Book 2 tickets for the 7:30 PM showing of the new space film tonight at the usual cinema, middle rows preferred, otherwise the row right behind them.', { runId: IDS.liveRun }),
+  chatMessage(5, 'assistant', 'result', 'Booked seats F7 and F8 for the 7:30 PM showing. The confirmation is in your email. Total: $28.00.', { runId: IDS.finishedRun, meta: { status: 'succeeded', stopReason: 'finished', costUsd: 0.21, costKnown: true, stepCount: 14 } }),
+  chatMessage(6, 'system', 'text', 'The AI could not answer (rate_limited). Send your message again in a moment.'),
+  chatMessage(7, 'user', 'text', 'Thanks! Can you also check if there is parking nearby?'),
+  chatMessage(8, 'assistant', 'text', 'Yes. I will look it up and tell you the closest car park and its evening price.'),
+];
+const chatRow = (id, title, extra = {}) => ({ ...chatBase, id, title, lastMessageAt: iso(-120_000), preview: { role: 'assistant', kind: 'text', text: 'Yes. I will look it up and tell you the closest car park and its evening price.' }, liveRun: null, ...extra });
+const chatRows = [
+  chatRow(IDS.chat, 'Book two cinema tickets for the new space film tonight', { liveRun: { id: IDS.liveRun, status: 'running' } }),
+  chatRow('88888888-8888-4888-8888-888888888881', 'Compare three well-reviewed travel strollers under $150 and summarise the differences', { lastMessageAt: iso(-3_600_000), preview: { role: 'assistant', kind: 'result', text: 'The Glide Pro is the lightest at 6.1 kg.' } }),
+  chatRow('88888888-8888-4888-8888-888888888882', 'Electricity bill', { lastMessageAt: iso(-2 * 86_400_000), preview: { role: 'user', kind: 'text', text: 'When is it due?' } }),
+  chatRow('88888888-8888-4888-8888-888888888883', '', { lastMessageAt: iso(-9 * 86_400_000), preview: null }),
+];
+
 /** `"<METHOD> <path>"` to the response `data`. A function gets the request URL and its JSON body. */
 export const RESPONSES = {
   'POST /auth/refresh': { accessToken: 'ui-screens-token', expiresIn: 900 },
@@ -271,6 +293,8 @@ export const RESPONSES = {
   [`GET /fleet/hosts/${IDS.host}/takeover`]: null,
   [`POST /fleet/hosts/${IDS.host}/viewer-session`]: { hostId: IDS.host, wsPath: `/viewer/${IDS.host}/websockify`, expiresAt: iso(3_600_000) },
   'POST /fleet/enrollments': { enrollmentToken: 'hxe_placeholder', expiresAt: iso(900_000), command: 'curl -fsSL https://console.example.test/install.sh | sh -s -- agent install --url https://console.example.test --enrollment-token hxe_placeholder_0123456789abcdef --mode unattended' },
+  'GET /chats': (url) => ({ items: url.searchParams.get('status') === 'archived' ? [] : chatRows, nextCursor: null }),
+  [`GET /chats/${IDS.chat}`]: { ...chatBase, id: IDS.chat, title: chatRows[0].title, lastMessageAt: iso(-120_000), messages: chatMessages, hasMore: false, liveRun: null, thinking: true },
   'GET /inbox': [question, confirmation],
   [`GET /questions/${IDS.question}`]: question,
   'GET /agent-policies': policies,
@@ -282,4 +306,4 @@ export const RESPONSES = {
 };
 
 /** The ids a mock run puts in the parameterized routes. */
-export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group };
+export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat };

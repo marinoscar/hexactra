@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chat: the page** (#486, console 1.43.0): `/chat` is a new way to get something done. Say what you want; the assistant replies, asks one clarifying question, or starts a browser run, all in one thread. Details: README, "Chat".
+  - **Thread**: your messages on the right, the assistant's on the left, a day separator, three dots while the assistant works, and a line under the title that says what is happening. A clarifying question shows its suggested answers as chips you tap. A run and its result show as cards with a link to the run (the Browser card with the live view is the next part).
+  - **Composer**: Enter sends on a desktop and Shift+Enter breaks the line; on a phone Enter breaks the line. It stays usable while the assistant works, and what you typed is kept when a send fails.
+  - **New chat**: an empty thread with three examples; the first message creates the chat and names it.
+  - **Chat list**: the last line of each chat, a green dot while its run is live, Active and Archived, and Rename, Archive or Unarchive and Delete on each row and on the open chat.
+  - **Chat settings**: machine, browser profile, agent policy, allowed sites, and confirmation before a purchase (on by default).
+  - **Navigation**: Chat is a destination on the rail. The phone's bottom bar is now Home, Chat, Inbox and More; Tasks and Runs are under More. Without `chat:read` the bar is as it was.
+  - **Widths**: the list beside the thread from 900 px, a drawer from 600 px, two screens on a phone. Only the thread scrolls. Light and dark.
 - **Scope-gated MCP tools and step-up consent for OAuth apps** (#460, E33.2, console 1.42.0): an app signed in with OAuth sees and can call only the tools its consent covers, and asks the user for more when it needs it. Details: `docs/mcp.md`, "What a connected app can do" and "Asking for more".
   - **The gate** (`apps/api/src/mcp/mcp.access.ts`): for an `oat_` token each tool is `allowed` (the token holds its scope and what that scope requires: `browser:evaluate` and `desktop:control` also need `browser:drive`), `needs_scope` (the user's role gives the permissions, so re-consent can add the scope) or `forbidden` (it cannot). Sessions, personal access tokens and device tokens are not gated: their `tools/list`, calls and `instructions` are unchanged, byte for byte.
   - **`tools/list`** gives an OAuth app its callable tools plus, while the new system setting **`mcp.advertiseStepUpTools`** is on (default), the step-up ones, marked "Needs extra permission: the user will be asked to allow it."; `forbidden` tools are never listed. Every tool, for every caller, carries `securitySchemes: [{ type: 'oauth2', scopes }]` (ChatGPT's per-tool auth; the shape is unverified until E33.10).

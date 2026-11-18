@@ -40,7 +40,7 @@
 //          redirected route fails the run)  --list (print the routes and exit)
 //
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
-// `{finishedRun}`, `{host}`, `{question}`, `{policy}` and `{group}` are filled
+// `{finishedRun}`, `{host}`, `{question}`, `{policy}`, `{group}` and `{chat}` are filled
 // in from the account (or the fixtures). The enabled slices' routes are read
 // from apps/web/src/slices/<id>.tsx, so a new slice page needs nothing here.
 //
@@ -59,6 +59,9 @@ const CONSOLE = resolve(HERE, '..');
 /** Every route the audit opens: `[name, path, options?]`. Append to add a page. */
 export const ROUTES = [
   ['home', '/'],
+  ['chat', '/chat'],
+  ['chat-new', '/chat/new'],
+  ['chat-thread', '/chat/{chat}'],
   ['inbox', '/inbox'],
   ['question', '/inbox/q/{question}'],
   ['tasks', '/tasks'],
@@ -169,7 +172,7 @@ async function discoverIds(page) {
       const data = body.data ?? body;
       return Array.isArray(data) ? data : (data.items ?? []);
     };
-    const [runs, tasks, hosts, inbox, policies, groups] = await Promise.all([get('/runs'), get('/tasks'), get('/fleet/hosts'), get('/inbox'), get('/agent-policies'), get('/groups')]);
+    const [runs, tasks, hosts, inbox, policies, groups, chats] = await Promise.all([get('/runs'), get('/tasks'), get('/fleet/hosts'), get('/inbox'), get('/agent-policies'), get('/groups'), get('/chats')]);
     const live = new Set(['queued', 'running', 'waiting_human']);
     return {
       liveRun: runs.find((r) => live.has(r.status))?.id,
@@ -179,6 +182,7 @@ async function discoverIds(page) {
       question: inbox[0]?.questionId,
       policy: (policies.find((p) => !p.builtin) ?? policies[0])?.id,
       group: groups[0]?.id,
+      chat: chats[0]?.id,
     };
   });
 }
