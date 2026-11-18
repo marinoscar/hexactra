@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { handlePushEvent } from '@marinoscar/platform-web/notifications/service-worker';
 import { actionTarget, handleActionClick, withRunRenotify, type ActionClickEvent, type ActionScope } from '../notificationActions';
 
 const RUN = '11111111-1111-4111-8111-111111111111';
@@ -102,5 +103,41 @@ describe('pushed run notifications re-alert', () => {
     expect(show).toHaveBeenNthCalledWith(1, 'Still waiting for you', { tag: `run-${RUN}`, body: 'x', renotify: true });
     expect(show).toHaveBeenNthCalledWith(2, 'Signed in', { tag: 'n1' });
     expect(scope.other).toBe(1);
+  });
+
+  it('keeps native getters and methods working, so a test push is acknowledged', async () => {
+    // Native worker getters (clients, registration) and methods brand-check
+    // `this`: called on a Proxy they throw, as Chrome does ("Illegal invocation").
+    class Clients {
+      #posted: unknown[] = [];
+      readonly posted = this.#posted;
+      async matchAll() {
+        void this.#posted;
+        return [{ url: '/', visibilityState: 'visible', focused: true, postMessage: (m: unknown) => this.#posted.push(m) }];
+      }
+    }
+    class Registration {
+      #shown: string[] = [];
+      readonly shown = this.#shown;
+      async showNotification(title: string) {
+        this.#shown.push(title);
+      }
+    }
+    class Scope {
+      #clients = new Clients();
+      #registration = new Registration();
+      get clients() {
+        return this.#clients;
+      }
+      get registration() {
+        return this.#registration;
+      }
+    }
+    const real = new Scope();
+    const wrapped = withRunRenotify(real as never) as unknown as Scope;
+    const data = { json: () => ({ id: 'push-test-1', title: 'Test', body: 'b', link: '/', test: true }) };
+    await handlePushEvent(wrapped as never, { data } as never);
+    expect(real.registration.shown).toEqual(['Test']);
+    expect(real.clients.posted).toEqual([expect.objectContaining({ type: 'push-test-received', id: 'push-test-1', shown: true })]);
   });
 });
