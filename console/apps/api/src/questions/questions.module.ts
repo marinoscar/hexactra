@@ -12,6 +12,7 @@ import { QuestionEvents } from './question-events';
 import { QuestionsController } from './questions.controller';
 import { QuestionsExpireHandler, QuestionsExpireTask } from './questions.jobs';
 import { QuestionsService } from './questions.service';
+import { TaskRunStarter } from './task-run-starter';
 
 /**
  * The question broker (#288): questions agents ask people, answered from any
@@ -25,6 +26,7 @@ import { QuestionsService } from './questions.service';
   controllers: [QuestionsController, AnswerByTokenController],
   providers: [
     QuestionsService,
+    TaskRunStarter,
     QuestionEvents,
     QuestionsExpireHandler,
     QuestionsExpireTask,
@@ -35,6 +37,6 @@ import { QuestionsService } from './questions.service';
     NotificationsQuestionChannel,
     WebhookQuestionChannel,
   ],
-  exports: [QuestionsService, QuestionEvents, QuestionChannelRegistry],
+  exports: [QuestionsService, TaskRunStarter, QuestionEvents, QuestionChannelRegistry],
 })
 export class QuestionsModule {}

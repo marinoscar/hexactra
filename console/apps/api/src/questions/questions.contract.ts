@@ -4,7 +4,7 @@
 // src/runner/fabric-session.ts.
 import { z } from 'zod';
 
-export const QUESTION_INPUTS = ['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials'] as const;
+export const QUESTION_INPUTS = ['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials', 'form'] as const;
 export type QuestionInputType = (typeof QUESTION_INPUTS)[number];
 
 /**
@@ -77,6 +77,7 @@ const CONSTRAINT_KEYS: Record<QuestionInputType, readonly (keyof QuestionConstra
   takeover: [],
   secret: [],
   credentials: [],
+  form: [],
   confirm: [],
   choice: [],
   text: ['maxLength', 'pattern', 'multiline'],
@@ -137,6 +138,8 @@ function compiles(pattern: string): boolean {
 /** The rules zod's shape cannot say: what each input type allows. */
 function refineSpec(q: z.infer<typeof questionSpecObject>, ctx: z.RefinementCtx): void {
   const issue = (path: string, message: string) => ctx.addIssue({ code: 'custom', path: [path], message });
+  // A form asks for a task run's missing parameters (#552): only the server creates one, never an agent.
+  if (q.input === 'form') issue('input', 'A form is created by the server when a task run is missing values; ask one question at a time');
   if (q.options && q.choices) issue('choices', 'Give options or choices, not both');
   const raw = q.options ?? q.choices;
   const withOptions = q.input === 'choice' || q.input === 'multi_choice';
@@ -200,6 +203,8 @@ export const questionAnswerSchema = z
     secret: z.string().max(TEXT_MAX_LENGTH).optional(),
     /** The person's choice for the question's "remember me" option. */
     remember: z.boolean().optional(),
+    /** form (#552): the value of each field, by key. */
+    fields: z.record(z.string().min(1).max(80), z.union([z.string().max(TEXT_MAX_LENGTH), z.number().finite()])).optional(),
   })
   .strict();
 export type QuestionAnswerInput = z.infer<typeof questionAnswerSchema>;
@@ -212,6 +217,8 @@ export interface NormalizedAnswer {
   /** credentials: the password, forwarded to the fabric and never stored. */
   secret?: string;
   remember?: boolean;
+  /** form (#552): the values by key, before the parameter checks (the run starter applies them). */
+  fields?: Record<string, string>;
 }
 
 /** The stored and returned response. Never carries a secret value. */
@@ -222,6 +229,8 @@ export interface QuestionResponse {
   valueWithheld: boolean;
   /** What the person chose for the "remember me" option, when one was offered. */
   remember?: boolean;
+  /** form (#552): the values given, masked (#538). */
+  fields?: Record<string, string>;
   channel?: string;
   by?: string;
   answeredAt: string;
@@ -265,6 +274,7 @@ export function validateAnswer(q: Pick<QuestionSpec, 'input' | 'options' | 'cons
     return a.value as string;
   };
   if (q.input !== 'multi_choice' && a.values !== undefined) fail(`values is only for multi_choice answers`);
+  if (q.input !== 'form' && a.fields !== undefined) fail('fields is only for a form');
   switch (q.input) {
     case 'none':
     case 'takeover':
@@ -319,6 +329,12 @@ export function validateAnswer(q: Pick<QuestionSpec, 'input' | 'options' | 'cons
       if (v !== 'approve' && v !== 'deny') fail('A confirm answer is approve or deny');
       return { outcome: 'completed', value: v };
     }
+    case 'form': {
+      // The fields are checked against the task's parameter rules by the run starter (#552).
+      if (a.value !== undefined) fail('A form answer uses fields, not value');
+      const f = a.fields ?? fail('A form answer needs fields');
+      return { outcome: 'completed', fields: Object.fromEntries(Object.entries(f).map(([k, v]) => [k, String(v)])) };
+    }
   }
 }
 
@@ -333,6 +349,7 @@ export function toResponse(input: QuestionInputType, a: NormalizedAnswer, meta: 
     ...(a.values !== undefined ? { values: a.values } : {}),
     valueWithheld: withheld,
     ...(a.remember !== undefined ? { remember: a.remember } : {}),
+    ...(a.fields !== undefined ? { fields: a.fields } : {}),
     ...(meta.channel ? { channel: meta.channel } : {}),
     ...(meta.by ? { by: meta.by } : {}),
     answeredAt: meta.answeredAt.toISOString(),

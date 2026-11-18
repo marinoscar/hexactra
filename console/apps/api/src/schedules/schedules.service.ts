@@ -1,13 +1,16 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { RequestWithHeaders } from '@marinoscar/platform-api/core';
 import { JobsService } from '@marinoscar/platform-api/jobs';
+import { Prisma } from '@prisma/client';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import { PoliciesService } from '../policies/policies.service';
 import { policyRefSchema } from '../policies/policies.schemas';
 import { PrismaService } from '../prisma/prisma.service';
-import { enqueueGoalRun } from '../runner/goal-runner.jobs';
+import { TaskRunStarter } from '../questions/task-run-starter';
+import { assertScheduleInputs, scheduleInputs } from '../tasks/task-params';
+import { readParameters, taskInputsField } from '../tasks/task-params.schemas';
 import { FAILING_AFTER } from '../tasks/task-list.schemas';
 import { TaskSchedulesService } from '../tasks/task-schedules.service';
 import { nextFiring, nextFirings, scheduleProblem } from './cron';
@@ -21,6 +24,7 @@ export const createScheduleSchema = z.object({
   enabled: z.boolean().default(true),
   concurrency: z.enum(['skip', 'queue']).default('skip'),
   policyId: policyRefSchema.nullable().optional().describe("Overrides the task's agent policy for scheduled runs; omit or null to follow the task."),
+  inputs: taskInputsField.optional().describe("Preset values for the task's parameters (#552). An enabled schedule needs a value (here, a default or a memory) for every required parameter: 400 `SCHEDULE_INPUTS_MISSING`."),
 });
 export class CreateScheduleDto extends createZodDto(createScheduleSchema) {}
 // No defaults here: zod 4 applies `.default()` inside `.partial()`, which
@@ -31,6 +35,7 @@ export const updateScheduleSchema = z.object({
   enabled: z.boolean().optional(),
   concurrency: z.enum(['skip', 'queue']).optional(),
   policyId: policyRefSchema.nullable().optional().describe("Overrides the task's agent policy for scheduled runs; null follows the task."),
+  inputs: taskInputsField.nullable().optional().describe("Preset values for the task's parameters (#552); null clears them."),
 });
 export class UpdateScheduleDto extends createZodDto(updateScheduleSchema) {}
 
@@ -89,6 +94,7 @@ export class SchedulesService {
     private readonly jobs: JobsService,
     private readonly policies: PoliciesService,
     private readonly taskSchedules: TaskSchedulesService,
+    private readonly starter: TaskRunStarter,
   ) {}
 
   private db(userId: string) {
@@ -118,14 +124,18 @@ export class SchedulesService {
 
   /** Create a schedule. Without `timezone` it gets the owner's profile time zone (#424). */
   async create(userId: string, input: CreateScheduleDto, request?: RequestWithHeaders) {
-    const task = await this.db(userId).task.findFirst({ where: { id: input.taskId }, select: { id: true } });
+    const task = await this.db(userId).task.findFirst({ where: { id: input.taskId }, select: { id: true, parameters: true } });
     if (!task) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
     const timezone = input.timezone ?? (await this.defaults(userId, request)).timezone;
     const next = this.check(input.cron, timezone);
-    const { policyId, ...fields } = input;
+    const { policyId, inputs: rawInputs, ...fields } = input;
+    // Preset parameter values (#552): checked, and an enabled schedule needs every required one.
+    const params = readParameters(task.parameters);
+    const presets = rawInputs ? scheduleInputs(params, rawInputs) : null;
+    if (input.enabled) assertScheduleInputs(params, presets);
     await this.policies.assertAssignable(userId, policyId);
     await this.taskSchedules.assertRoom(userId, input.taskId);
-    return scheduleView(await this.db(userId).taskSchedule.create({ data: { ...fields, timezone, userId, policyRef: policyId ?? null, nextRunAt: input.enabled ? next : null } }));
+    return scheduleView(await this.db(userId).taskSchedule.create({ data: { ...fields, timezone, userId, policyRef: policyId ?? null, nextRunAt: input.enabled ? next : null, ...(presets && Object.keys(presets).length ? { inputs: presets } : {}) } }));
   }
 
   async update(userId: string, id: string, patch: UpdateScheduleDto) {
@@ -136,11 +146,16 @@ export class SchedulesService {
     const timezone = patch.timezone ?? s.timezone;
     const enabled = patch.enabled ?? s.enabled;
     const next = this.check(cron, timezone);
-    const { policyId, ...fields } = patch;
+    const { policyId, inputs: rawInputs, ...fields } = patch;
     await this.policies.assertAssignable(userId, policyId);
+    // Preset parameter values (#552): an enabled schedule needs a value for every required parameter.
+    const task = await db.task.findFirst({ where: { id: s.taskId }, select: { parameters: true } });
+    const params = readParameters(task?.parameters);
+    const presets = rawInputs === undefined ? ((s.inputs as Record<string, string> | null) ?? null) : rawInputs === null ? null : scheduleInputs(params, rawInputs);
+    if (enabled) assertScheduleInputs(params, presets);
     await db.taskSchedule.updateMany({
       where: { id },
-      data: { ...fields, ...(policyId !== undefined ? { policyRef: policyId } : {}), nextRunAt: enabled ? next : null, ...(patch.enabled ? { consecutiveFailures: 0 } : {}) },
+      data: { ...fields, ...(rawInputs !== undefined ? { inputs: presets && Object.keys(presets).length ? presets : Prisma.DbNull } : {}), ...(policyId !== undefined ? { policyRef: policyId } : {}), nextRunAt: enabled ? next : null, ...(patch.enabled ? { consecutiveFailures: 0 } : {}) },
     });
     return scheduleView(await db.taskSchedule.findFirstOrThrow({ where: { id } }));
   }
@@ -190,12 +205,21 @@ export class SchedulesService {
           continue;
         }
       }
-      const run = await this.db(s.userId).run.create({
-        data: { userId: s.userId, taskId: s.taskId, goal: s.task.goal, profile: s.task.profile, hostId: s.task.hostId, hostFallback: s.task.hostFallback, trigger: 'schedule', origin: 'schedule', ...(s.policyRef ? { policyRef: s.policyRef, policySource: 'schedule' as const } : {}) },
-        select: { id: true },
-      });
+      // The task's parameters are filled from the schedule's presets, the defaults and the owner's memories;
+      // a value still missing makes the run wait on one form, and the owner is notified (#552).
+      let run: { id: string };
+      try {
+        ({ run } = await this.starter.start({ id: s.userId, activeOrgId: null }, s.task, {
+          presets: (s.inputs as Record<string, string> | null) ?? null,
+          timeZone: s.timezone,
+          reason: 'schedule',
+          data: { trigger: 'schedule', origin: 'schedule', ...(s.policyRef ? { policyRef: s.policyRef, policySource: 'schedule' as const } : {}) },
+        }));
+      } catch (e) {
+        this.log.warn(`schedule ${s.id}: could not start its run: ${e instanceof Error ? e.message : String(e)}`);
+        continue;
+      }
       await this.prisma.taskSchedule.updateMany({ where: { id: s.id }, data: { lastRunAt: now, lastRunId: run.id } });
-      await enqueueGoalRun(this.jobs, { runId: run.id, userId: s.userId, orgId: null }, 'schedule');
       started += 1;
     }
     if (started || skipped) this.log.log(`schedules: ${started} started, ${skipped} skipped (a run was still live)`);

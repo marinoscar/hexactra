@@ -20,6 +20,8 @@ enum QuestionInput {
   takeover
   /// A sign-in (#527): the username is kept, the password goes to the fabric only.
   credentials
+  /// Several typed fields at once (#552): the missing parameters of a task run, asked before it starts.
+  form
 
   @@map("question_input")
 }
@@ -51,6 +53,8 @@ model Question {
   options          Json?
   /// Input constraints (camelCase, see src/questions/questions.contract.ts).
   constraints      Json?
+  /// `form` (#552): the fields `[{ key, label, type, required, options?, help?, constraints? }]`, at most 20.
+  fields           Json?
   confirmLabel     String?        @map("confirm_label") @db.VarChar(40)
   denyLabel        String?        @map("deny_label") @db.VarChar(40)
   /// low | high, for confirm.

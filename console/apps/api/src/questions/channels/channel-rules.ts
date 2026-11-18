@@ -31,6 +31,8 @@ export interface RuleQuestion {
   options: QuestionOption[] | null;
   confirmLabel?: string | null;
   denyLabel?: string | null;
+  /** form (#552): its fields (a sensitive field needs a signed-in channel). */
+  fields?: { key: string; sensitive?: boolean }[] | null;
 }
 
 /** Whether the answer is public: a channel that does not sign the person in (a webhook) may collect it (packages/shared/question-rules.js). */
@@ -75,12 +77,12 @@ export function channelId(channel: string): string {
 }
 
 /** Whether a question needs a signed-in channel to be answered: a secret, or a confirm that is not low risk (packages/shared/question-rules.js). */
-export function needsSignedIn(q: Pick<RuleQuestion, 'input' | 'risk'>): boolean {
+export function needsSignedIn(q: Pick<RuleQuestion, 'input' | 'risk' | 'fields'>): boolean {
   return sharedNeedsSignedIn(q);
 }
 
 /** Whether `channel` may record this answer to `q`. Declining is allowed everywhere. */
-export function mayAnswerOn(channel: string, q: Pick<RuleQuestion, 'input' | 'risk'>, outcome: 'completed' | 'cancelled' = 'completed'): boolean {
+export function mayAnswerOn(channel: string, q: Pick<RuleQuestion, 'input' | 'risk' | 'fields'>, outcome: 'completed' | 'cancelled' = 'completed'): boolean {
   if (outcome === 'cancelled') return true;
   const rule = CHANNEL_RULES[channelId(channel)];
   return !rule || rule.signedIn || !needsSignedIn(q);

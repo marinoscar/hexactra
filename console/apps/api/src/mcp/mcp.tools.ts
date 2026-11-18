@@ -388,6 +388,37 @@ export const TASKS_LIST_DEFAULT = 50;
 /** The longest goal tasks_list returns (#467: the payload stays small). */
 export const TASKS_LIST_GOAL_CHARS = 200;
 
+/** A task parameter as a tool shows it (#552): never a default's value, only whether one exists. */
+const mcpTaskParameterSchema = z.object({
+  key: z.string().describe('Pass values by this key (or the label) in task_run inputs'),
+  label: z.string(),
+  type: z.enum(['text', 'number', 'money', 'date', 'choice', 'phone', 'email']),
+  required: z.boolean(),
+  options: z.array(z.string()).optional().describe('choice: the allowed values'),
+  help: z.string().optional(),
+  has_default: z.boolean().describe('true: the task has a saved value (or one from a memory), so it need not be passed'),
+  sensitive: z.boolean().optional().describe('true: asked for in the Hexactra console when the run starts; never pass it'),
+});
+
+/** A task's parameters for a tool's answer: the defaults' values removed. */
+function mcpParameters(raw: unknown): z.infer<typeof mcpTaskParameterSchema>[] {
+  return (Array.isArray(raw) ? raw : []).map((p: Record<string, unknown>) => ({
+    key: String(p.key),
+    label: String(p.label ?? p.key),
+    type: (['text', 'number', 'money', 'date', 'choice', 'phone', 'email'].includes(String(p.type)) ? p.type : 'text') as z.infer<typeof mcpTaskParameterSchema>['type'],
+    required: p.required !== false,
+    ...(Array.isArray(p.options) ? { options: p.options as string[] } : {}),
+    ...(typeof p.help === 'string' ? { help: p.help } : {}),
+    has_default: Boolean(p.default),
+    ...(p.sensitive ? { sensitive: true } : {}),
+  }));
+}
+
+/** A task as a tool returns it: its parameters without their defaults' values (#552). */
+function mcpTask<T extends Record<string, unknown>>(t: T): T {
+  return t && 'parameters' in t ? { ...t, parameters: mcpParameters(t.parameters) } : t;
+}
+
 /** One task as tasks_list answers it: its fields, the goal cut short, and the summary facts the tasks card shows. */
 const taskListItemSchema = z.object({
   id: z.uuid(),
@@ -406,6 +437,7 @@ const taskListItemSchema = z.object({
   lastRun: z.object({ id: z.uuid(), status: z.string(), finishedAt: z.string().nullable() }).nullable().describe('The newest run'),
   liveRunId: z.uuid().nullable().describe('A run of the task that is queued, running or waiting for the user'),
   policyName: z.string().nullable().optional(),
+  parameters: z.array(mcpTaskParameterSchema).optional().describe("The goal's {{parameters}} (#552): pass their values in task_run inputs"),
 });
 
 function taskListItem(t: Record<string, unknown>): z.infer<typeof taskListItemSchema> {
@@ -432,6 +464,7 @@ function taskListItem(t: Record<string, unknown>): z.infer<typeof taskListItemSc
     lastRun: s.lastRun ? { id: s.lastRun.id, status: s.lastRun.status, finishedAt: s.lastRun.finishedAt ?? null } : null,
     liveRunId: s.liveRunId ?? null,
     policyName: s.policy?.name ?? null,
+    ...(Array.isArray(t.parameters) && t.parameters.length ? { parameters: mcpParameters(t.parameters) } : {}),
   };
 }
 
@@ -457,7 +490,7 @@ const answerOutputSchema = questionToolSchema.partial().extend({
  */
 async function answerTool(a: Record<string, unknown>, ctx: McpContext, mode: 'relay' | 'app'): Promise<McpToolResult> {
   if (Boolean(a.question_id) === Boolean(a.run_id)) return errorOutcome('Invalid arguments: give question_id or run_id (one of them).', 'INVALID_ARGUMENTS');
-  const body = { outcome: a.outcome, ...(a.value !== undefined ? { value: a.value } : {}), ...(a.values !== undefined ? { values: a.values } : {}) };
+  const body = { outcome: a.outcome, ...(a.value !== undefined ? { value: a.value } : {}), ...(a.values !== undefined ? { values: a.values } : {}), ...(a.fields !== undefined ? { fields: a.fields } : {}) };
   const oauth = viaOf(ctx) === 'oauth';
   let qid = a.question_id ? String(a.question_id) : null;
   if (oauth || mode === 'app') {
@@ -834,7 +867,7 @@ export const MCP_TOOLS: McpTool[] = [
       policy_id: policyIdParam.optional(),
       schedules: z.array(scheduleItem).max(10).optional().describe('Schedules created with the task, each { cron, timezone?, enabled?, policy_id? }.'),
     }),
-    output: taskWithSummarySchema,
+    output: taskWithSummarySchema.extend({ parameters: z.array(mcpTaskParameterSchema).nullable().optional() }),
     scope: 'tasks:write',
     effect: 'write',
     openWorld: false,
@@ -856,7 +889,8 @@ export const MCP_TOOLS: McpTool[] = [
             }
           : {}),
       });
-      return toolOutput({ text: t, structured: t, summary: `Task ${String(t.id)} saved: ${String(t.name)}.` });
+      const v = mcpTask(t);
+      return toolOutput({ text: v, structured: v, summary: `Task ${String(t.id)} saved: ${String(t.name)}.` });
     },
   },
   {
@@ -871,7 +905,7 @@ export const MCP_TOOLS: McpTool[] = [
       allowed_domains: allowedDomains.optional(),
       policy_id: policyIdParam.nullable().optional().describe("The task's agent policy; null makes it follow the user's default policy."),
     }),
-    output: taskResponseSchema,
+    output: taskResponseSchema.extend({ parameters: z.array(mcpTaskParameterSchema).nullable().optional() }),
     scope: 'tasks:write',
     effect: 'destructive',
     openWorld: false,
@@ -883,7 +917,8 @@ export const MCP_TOOLS: McpTool[] = [
         ...(a.allowed_domains !== undefined ? { allowedDomains: a.allowed_domains } : {}),
         ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}),
       });
-      return toolOutput({ text: t, structured: t, summary: `Task ${String(t.id)} updated.` });
+      const v = mcpTask(t);
+      return toolOutput({ text: v, structured: v, summary: `Task ${String(t.id)} updated.` });
     },
   },
   {
@@ -891,28 +926,47 @@ export const MCP_TOOLS: McpTool[] = [
     title: 'Run a saved task',
     description:
       "Start a saved task now with Hexactra's browser agent. Use it to run a task from tasks_list; follow the run with run_wait. " +
-      "Returns the run with its progress block; with wait_s it first waits like run_wait. policy_id runs it under another agent policy for this run only; otherwise the task's or the default policy applies.",
-    input: z.object({ task_id: taskId, policy_id: policyIdParam.optional(), wait_s: startWaitS }),
+      "Returns the run with its progress block; with wait_s it first waits like run_wait. policy_id runs it under another agent policy for this run only; otherwise the task's or the default policy applies. " +
+      "inputs gives values for the task's {{parameters}} (tasks_list lists them), by key or label; a required value still missing is asked of the user in one form before the run starts (answer it with inbox_answer fields, or the user does in Hexactra). Never pass a sensitive parameter.",
+    input: z.object({
+      task_id: taskId,
+      policy_id: policyIdParam.optional(),
+      wait_s: startWaitS,
+      inputs: z.record(z.string().min(1).max(80), z.union([z.string().max(500), z.number()])).optional().describe("Values for the task's parameters, by key or label, e.g. { \"amount\": \"25\" }."),
+    }),
     output: runWithProgressOutput,
     scope: 'runs:write',
     effect: 'write',
     openWorld: true,
     ui: { resourceUri: RUN_CARD_URI },
-    call: (a, ctx) => startAndFollow(ctx, a, () => ctx.api('POST', `/tasks/${String(a.task_id)}/runs`, a.policy_id !== undefined ? { policyId: a.policy_id } : {})),
+    call: (a, ctx) =>
+      startAndFollow(ctx, a, () => ctx.api('POST', `/tasks/${String(a.task_id)}/runs`, { ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}), ...(a.inputs !== undefined ? { inputs: a.inputs } : {}) })),
   },
   {
     name: 'schedule_create',
     title: 'Schedule a task',
     description:
       'Add a schedule to a saved task: a 5-field cron expression, at most every 5 minutes. Use it when the user wants a task to run by itself; check the expression first with schedule_preview. ' +
-      "policy_id makes the scheduled runs use that agent policy instead of the task's.",
-    input: z.object({ task_id: taskId, cron: cronParam, timezone: timezoneParam, policy_id: policyIdParam.optional() }),
+      "policy_id makes the scheduled runs use that agent policy instead of the task's. inputs presets values for the task's {{parameters}}: every required one needs a value here or a default on the task.",
+    input: z.object({
+      task_id: taskId,
+      cron: cronParam,
+      timezone: timezoneParam,
+      policy_id: policyIdParam.optional(),
+      inputs: z.record(z.string().min(1).max(80), z.union([z.string().max(500), z.number()])).optional().describe("Values for the task's parameters on every run of this schedule, by key or label."),
+    }),
     output: scheduleResponseSchema,
     scope: 'tasks:write',
     effect: 'write',
     openWorld: false,
     async call(a, ctx) {
-      const sc = await ctx.api<Record<string, unknown>>('POST', '/schedules', { taskId: a.task_id, cron: a.cron, ...(a.timezone !== undefined ? { timezone: a.timezone } : {}), ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}) });
+      const sc = await ctx.api<Record<string, unknown>>('POST', '/schedules', {
+        taskId: a.task_id,
+        cron: a.cron,
+        ...(a.timezone !== undefined ? { timezone: a.timezone } : {}),
+        ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}),
+        ...(a.inputs !== undefined ? { inputs: a.inputs } : {}),
+      });
       return toolOutput({ text: sc, structured: sc, summary: `Schedule ${String(sc.id)}: ${String(sc.description ?? sc.cron)} (${String(sc.timezone)}).` });
     },
   },
@@ -940,14 +994,14 @@ export const MCP_TOOLS: McpTool[] = [
       'Disable every schedule of a task, so it no longer starts by itself. Use it when the user wants scheduled runs to stop for now (task_resume undoes it). ' +
       'The task can still be started with task_run, and a run that is going finishes. A task without a schedule answers NO_SCHEDULES. Returns the task with its summary.',
     input: z.object({ task_id: taskId }),
-    output: taskWithSummarySchema.extend({ skipped: z.array(z.uuid()) }),
+    output: taskWithSummarySchema.extend({ skipped: z.array(z.uuid()), parameters: z.array(mcpTaskParameterSchema).nullable().optional() }),
     scope: 'tasks:write',
     effect: 'destructive',
     openWorld: false,
     idempotent: true,
     async call(a, ctx) {
       const t = await ctx.api<Record<string, unknown>>('POST', `/tasks/${String(a.task_id)}/schedules/pause`, {});
-      return toolOutput({ text: t, structured: t, summary: `Task ${String(t.id)} paused.` });
+      return toolOutput({ text: mcpTask(t), structured: mcpTask(t), summary: `Task ${String(t.id)} paused.` });
     },
   },
   {
@@ -955,14 +1009,14 @@ export const MCP_TOOLS: McpTool[] = [
     title: 'Resume a task',
     description: 'Enable every schedule of a paused task and compute their next firing. Use it to undo task_pause. Returns the task with its summary.',
     input: z.object({ task_id: taskId }),
-    output: taskWithSummarySchema.extend({ skipped: z.array(z.uuid()) }),
+    output: taskWithSummarySchema.extend({ skipped: z.array(z.uuid()), parameters: z.array(mcpTaskParameterSchema).nullable().optional() }),
     scope: 'tasks:write',
     effect: 'write',
     openWorld: false,
     idempotent: true,
     async call(a, ctx) {
       const t = await ctx.api<Record<string, unknown>>('POST', `/tasks/${String(a.task_id)}/schedules/resume`, {});
-      return toolOutput({ text: t, structured: t, summary: `Task ${String(t.id)} resumed.` });
+      return toolOutput({ text: mcpTask(t), structured: mcpTask(t), summary: `Task ${String(t.id)} resumed.` });
     },
   },
   {
@@ -1004,7 +1058,7 @@ export const MCP_TOOLS: McpTool[] = [
     title: "Pass on the user's answer",
     description:
       "Answer a waiting question with the answer the user gave you in this conversation: only pass on an answer the user actually gave, never one you chose. Name it by question_id (from inbox_list, ask_human or a run's progress) or by run_id. " +
-      'outcome completed with value for text, choice (an option id), number or confirm ("approve" or "deny"); values (option ids) for multi_choice; completed alone for none and takeover; cancelled to decline. ' +
+      'outcome completed with value for text, choice (an option id), number or confirm ("approve" or "deny"); values (option ids) for multi_choice; fields ({ key: value }) for a form (a task run\'s missing values); completed alone for none and takeover; cancelled to decline. ' +
       "A question whose answerable_here is false (a code or password, a takeover, a high-risk confirmation for apps signed in with OAuth) is refused: give the user its how_to_answer link. Returns the run's progress after it; continue with run_wait.",
     input: z.object({
       question_id: id.optional().describe('The question (from inbox_list or ask_human); give this or run_id.'),
@@ -1012,6 +1066,7 @@ export const MCP_TOOLS: McpTool[] = [
       outcome: z.enum(['completed', 'cancelled']).describe('completed answers; cancelled declines.'),
       value: z.union([z.string().max(4096), z.number()]).optional().describe('The answer for text, choice, number and confirm.'),
       values: z.array(z.string().max(64)).max(10).optional().describe('multi_choice: the option ids chosen.'),
+      fields: z.record(z.string().min(1).max(80), z.union([z.string().max(500), z.number()])).optional().describe("form: the user's value for each field, by key."),
     }),
     output: answerOutputSchema,
     scope: 'inbox:write',

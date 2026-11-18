@@ -99,8 +99,14 @@ function answerError(q, answer) {
   }
 }
 
+/** Whether a form (#552) holds a sensitive field. */
+function formHasSensitive(q) {
+  return Array.isArray(q.fields) && q.fields.some((f) => f && f.sensitive === true);
+}
+
 /** Whether the answer is a secret or approves a risky action: only a channel that signs the person in may record it. */
 function needsSignedIn(q) {
+  if (q.input === 'form') return formHasSensitive(q);
   return q.input === 'secret' || q.input === 'credentials' || (q.input === 'confirm' && q.risk !== 'low');
 }
 
@@ -114,6 +120,9 @@ function isPublicAnswer(q) {
       return true;
     case 'confirm':
       return q.risk === 'low';
+    case 'form':
+      // A task run's missing values (#552): public unless a field is sensitive.
+      return !formHasSensitive(q);
     default:
       return false;
   }
@@ -132,6 +141,8 @@ function chatAnswerMode(q) {
   if (q.input === 'secret' || q.input === 'credentials') return 'secret';
   if (q.input === 'takeover') return 'takeover';
   if (q.input === 'none') return 'acknowledge';
+  // A task run's form (#552) is filled in Hexactra, or relayed field by field with inbox_answer.
+  if (q.input === 'form') return 'signed_in';
   if (isPublicAnswer(q)) return 'form';
   return 'signed_in';
 }
@@ -145,6 +156,7 @@ function answerLabel(q, answer) {
   };
   if (q.input === 'secret') return 'A secret (not shown)';
   if (q.input === 'credentials') return 'A sign-in (not shown)';
+  if (q.input === 'form') return 'Provided';
   if (Array.isArray(answer.values)) return answer.values.map(label).join(', ');
   if (answer.value === undefined || answer.value === null) return q.input === 'takeover' ? 'Done' : 'Acknowledged';
   const v = String(answer.value);

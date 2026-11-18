@@ -5,6 +5,7 @@ import { profileNameSchema } from '../fleet/fleet.schemas';
 import { policyRefSchema } from '../policies/policies.schemas';
 import { TASK_DEFAULTS } from './task-defaults';
 import { taskSchedulesField } from './task-list.schemas';
+import { taskParametersField } from './task-params.schemas';
 
 /** A site an agent may visit: a hostname, or `*.` and a hostname. */
 export const domainSchema = z
@@ -27,6 +28,7 @@ const taskFields = {
   confirmRiskyActions: z.boolean(),
   model: z.string().trim().min(1).max(200).nullable().meta({ deprecated: true }).describe('Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy\'s `models.pins.standard`.'),
   policyId: policyRefSchema.nullable().describe("The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."),
+  parameters: taskParametersField,
 };
 
 export const createTaskSchema = z.object({
@@ -42,6 +44,7 @@ export const createTaskSchema = z.object({
   confirmRiskyActions: taskFields.confirmRiskyActions.default(false),
   model: taskFields.model.optional(),
   policyId: taskFields.policyId.optional(),
+  parameters: taskFields.parameters.optional(),
   schedules: taskSchedulesField.optional(),
 });
 export class CreateTaskDto extends createZodDto(createTaskSchema) {}

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { AiError, AiService, defineTool, type AiDefinedTool } from '@marinoscar/platform-api/ai';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 import type { Conversation } from '@prisma/client';
@@ -7,6 +7,8 @@ import { z } from 'zod';
 import { readConfirmedActions } from '../runner/confirmed-actions';
 import { PrismaService } from '../prisma/prisma.service';
 import { enqueueGoalRun } from '../runner/goal-run.enqueue';
+import { TaskRunStarter } from '../questions/task-run-starter';
+import { maskRunGoal } from '../tasks/task-params';
 import { LIVE_RUN_STATUSES } from '../tasks/runs.schemas';
 import { TasksService } from '../tasks/tasks.service';
 import { CHAT_ORCHESTRATOR_FEATURE_ID } from './chat-orchestrator.feature';
@@ -40,6 +42,7 @@ export const CHAT_INSTRUCTIONS = [
   '- Never say something was done, found, bought or sent unless a run result in the conversation says so.',
   '- When the previous job carried out a step the owner confirmed (a payment, an order, a message sent: its result says "The step you confirmed was carried out"), call ask_user before starting a job that would repeat that step, unless the owner\'s newest message already says to repeat it knowing it was done.',
   '- When the owner asks to save this as a task (to reuse it, repeat it or schedule it), call draft_task. Do not write the task yourself.',
+  '- When the owner asks to run one of their saved tasks ("send Paula 25 with my Zelle task"), call run_task with the task\'s name and the values the owner gave for its parameters. Missing values are asked for in one form in the chat: do not ask for them yourself.',
   '- For small talk, or a question about a result that is already in the conversation, answer in plain text, briefly.',
 ].join('\n');
 
@@ -68,6 +71,7 @@ export class ChatTurnService {
     private readonly jobs: JobsService,
     private readonly ai: AiService,
     private readonly drafts?: ChatTaskDraftService,
+    @Optional() private readonly starter?: TaskRunStarter,
   ) {}
 
   async run(conversationId: string, userId: string, orgId: string | null): Promise<ChatTurnOutcome> {
@@ -130,6 +134,22 @@ export class ChatTurnService {
     return ['Conversation, oldest first:', ...rows.reverse().map(line), '', live ? `State: a run of this chat is live (${live.status}).` : 'State: no run is live.'].join('\n');
   }
 
+  /** A saved task by id or name (exact, then the only one whose name contains it), or why none fits (#552). */
+  private async findTask(userId: string, ref: string) {
+    const db = this.prisma.forUser({ userId });
+    const want = ref.trim();
+    if (/^[0-9a-f-]{36}$/i.test(want)) {
+      const t = await db.task.findFirst({ where: { id: want } });
+      if (t) return t;
+    }
+    const exact = await db.task.findMany({ where: { name: { equals: want, mode: 'insensitive' } }, take: 2 });
+    if (exact.length === 1) return exact[0]!;
+    const like = exact.length ? exact : await db.task.findMany({ where: { name: { contains: want, mode: 'insensitive' } }, take: 5 });
+    if (like.length === 1) return like[0]!;
+    if (like.length === 0) return `No saved task is called "${want}". Ask the owner which task, or start_run with a complete goal.`;
+    return `Several tasks match "${want}": ${like.map((t) => t.name).join('; ')}. Ask the owner which one.`;
+  }
+
   private async answer(c: Conversation, userId: string, orgId: string | null): Promise<void> {
     const state = { done: false, wrote: false, stopped: false };
     const tools: AiDefinedTool[] = [
@@ -175,6 +195,42 @@ export class ChatTurnService {
           return 'Started. The owner watches it in the chat.';
         },
       }),
+      ...(this.starter
+        ? [
+            defineTool({
+              name: 'run_task',
+              description:
+                "Run one of the owner's saved tasks by its name or id, with values for its {{parameters}} the owner gave in the conversation (name and value each). Values the task still needs are asked for in one form in the chat. Never include a secret.",
+              parameters: z.object({
+                task: z.string().min(1).max(200),
+                inputs: z.array(z.object({ name: z.string().min(1).max(80), value: z.string().max(500) })).max(20).nullable(),
+              }),
+              execute: async ({ task, inputs }) => {
+                if (state.done) return 'Already handled this turn.';
+                if (await this.liveRun(userId, c.id)) return 'Refused: a run of this chat is still live. Guide it with guide_run, wait for it to end, or stop it with stop_run.';
+                const found = await this.findTask(userId, task);
+                if (typeof found === 'string') return found;
+                const given = Object.fromEntries((inputs ?? []).map((i) => [i.name, i.value]));
+                let started;
+                try {
+                  started = await this.starter!.start({ id: userId, activeOrgId: orgId }, found, {
+                    inputs: given,
+                    reason: 'run_started',
+                    data: { conversationId: c.id, trigger: 'chat', origin: 'web', ...(c.policyRef ? { policyRef: c.policyRef, policySource: 'run' as const } : {}) },
+                  });
+                } catch (e) {
+                  const r = e instanceof BadRequestException ? (e.getResponse() as { message?: string }) : null;
+                  if (r) return `Refused: ${String(r.message ?? 'invalid values')}. Fix the values or leave them out to have them asked for.`;
+                  throw e;
+                }
+                const run = started.run;
+                await this.chats.append(c.id, { role: 'assistant', kind: 'run', text: maskRunGoal(run.goal), runId: run.id });
+                state.done = state.wrote = true;
+                return started.formQuestionId ? 'Started; the owner fills in the missing values in the chat.' : 'Started. The owner watches it in the chat.';
+              },
+            }),
+          ]
+        : []),
       defineTool({
         name: 'guide_run',
         description: "Pass an instruction from the owner to the chat's live run. The browser agent reads it at its next step. Only while a run is live. Never a secret.",

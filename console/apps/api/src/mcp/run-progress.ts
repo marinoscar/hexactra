@@ -148,6 +148,9 @@ export function answerableHere(q: Pick<ProgressQuestion, 'input' | 'risk'>, via:
       return true;
     case 'confirm':
       return q.risk === 'low' || via === 'pat';
+    case 'form':
+      // A task run's missing values (#552): never sensitive (a sensitive parameter is asked as a secret in the console).
+      return true;
     default:
       return false;
   }

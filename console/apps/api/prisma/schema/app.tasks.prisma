@@ -89,6 +89,9 @@ model Task {
   /// Text, not a foreign key: built-ins are not rows (validated in the service).
   /// `max_steps`, `max_minutes` and `model` above are deprecated: readable for one release.
   policyRef      String?  @map("policy_ref") @db.VarChar(64)
+  /// The goal's `{{Name}}` parameters (#552): `[{ key, label, type, required, options?, help?, default?, constraints?, sensitive? }]`,
+  /// one per placeholder in order of appearance (src/tasks/task-params.ts). Null or empty: the goal has none.
+  parameters     Json?
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -196,6 +199,9 @@ model Run {
   /// Steps the owner confirmed that the run then carried out (#540): `[{ seq, prompt, action, at }]`,
   /// at most 20, the prompt cut to 300 characters and masked. Never a typed value or a secret.
   confirmedActions Json?         @map("confirmed_actions")
+  /// The task parameter values the run was started with (#552): `{ values: { key: { value, source } }, sensitive: [{ key, label }] }`,
+  /// source `provided` | `default` | `memory` | `asked` | `schedule`. Never a `sensitive` value (asked as a secret, typed by the fabric).
+  inputs           Json?
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   task         Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)

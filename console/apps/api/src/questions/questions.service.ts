@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 import { Prisma, type Question } from '@prisma/client';
 
@@ -8,6 +8,8 @@ import { enqueueGoalRun } from '../runner/goal-run.enqueue';
 import { FabricSession, handoffOutcome, type CreatedHandoff, type FabricHandoff } from '../runner/fabric-session';
 import { CHANNEL_RULES, channelId, mayAnswerOn } from './channels/channel-rules';
 import { QuestionEvents, type QuestionEventType } from './question-events';
+import { TaskRunStarter } from './task-run-starter';
+import type { FormField } from '../tasks/task-params';
 import {
   holdsSecret,
   AnswerInvalidError,
@@ -56,6 +58,8 @@ export interface QuestionView {
   risk: 'low' | 'high' | null;
   /** credentials and secret: the site's "remember me" option, in the page's words (#527). */
   rememberLabel: string | null;
+  /** form (#552): the missing parameters of a task run, asked at once before it starts. */
+  fields: FormField[] | null;
   status: QuestionStatusType;
   response: QuestionResponse | null;
   pageTitle: string | null;
@@ -94,6 +98,7 @@ export function toQuestionView(q: Question): QuestionView {
     denyLabel: q.denyLabel,
     risk: (q.risk as 'low' | 'high' | null) ?? null,
     rememberLabel: q.rememberLabel,
+    fields: (q.fields as unknown as FormField[] | null) ?? null,
     status: q.status,
     response: (q.response as unknown as QuestionResponse | null) ?? null,
     pageTitle: q.pageTitle,
@@ -131,6 +136,7 @@ export class QuestionsService {
     private readonly fabric: FabricClient,
     private readonly jobs: JobsService,
     private readonly events: QuestionEvents,
+    @Optional() private readonly starter?: TaskRunStarter,
   ) {}
 
   private db(userId: string) {
@@ -361,6 +367,11 @@ export class QuestionsService {
   async answerRun(actor: QuestionActor, runId: string, input: QuestionAnswerInput, opts: { channel?: string; expectHandoffId?: string } = {}): Promise<QuestionView> {
     const run = await this.db(actor.id).run.findFirst({ where: { id: runId }, select: { status: true, handoffId: true } });
     if (!run) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
+    // A task run waiting for its values (#552) waits on a form, not a handoff.
+    if (run.status === 'waiting_human' && !run.handoffId && !opts.expectHandoffId) {
+      const form = await this.db(actor.id).question.findFirst({ where: { runId, input: 'form', status: 'pending' }, orderBy: { createdAt: 'desc' } });
+      if (form) return this.answerQuestion(actor, form, input, opts.channel ?? 'inbox');
+    }
     if (run.status !== 'waiting_human' || !run.handoffId || (opts.expectHandoffId && run.handoffId !== opts.expectHandoffId)) {
       throw new ConflictException({ code: 'NOT_WAITING', message: 'This run is not waiting for you' });
     }
@@ -373,7 +384,7 @@ export class QuestionsService {
       throw new ConflictException({ code: q.status === 'expired' ? 'QUESTION_EXPIRED' : 'ALREADY_ANSWERED', message: q.status === 'expired' ? 'This question expired' : 'This question was already answered' });
     }
     // The channel rules (channels/channel-rules.ts): a channel that does not sign the person in never sends a secret or approves a high-risk confirm.
-    if (!mayAnswerOn(channel, { input: q.input, risk: q.risk }, input.outcome ?? 'completed')) {
+    if (!mayAnswerOn(channel, { input: q.input, risk: q.risk, fields: (q.fields as unknown as FormField[] | null) ?? null }, input.outcome ?? 'completed')) {
       const where = CHANNEL_RULES[channelId(channel)]?.label ?? channel;
       throw new ForbiddenException({
         code: 'CHANNEL_NOT_ALLOWED',
@@ -389,6 +400,13 @@ export class QuestionsService {
     } catch (e) {
       if (e instanceof AnswerInvalidError) throw new BadRequestException({ code: 'INVALID_ANSWER', message: e.message });
       throw e;
+    }
+    // A form's values are checked with the task's parameter rules before the answer is recorded (#552).
+    let formValues: Record<string, string> | null = null;
+    if (q.input === 'form' && answer.outcome === 'completed') {
+      if (!this.starter) throw new BadRequestException({ code: 'INVALID_ANSWER', message: 'Forms cannot be answered here' });
+      formValues = await this.starter.checkForm(actor.id, q, answer.fields ?? {});
+      answer = { ...answer, fields: this.starter.maskedFields(formValues) };
     }
     const now = new Date();
     const by = `user:${actor.id}`;
@@ -433,7 +451,11 @@ export class QuestionsService {
     const done = (await db.question.findFirst({ where: { id: q.id } }))!;
     this.log.log(`question ${q.id}: ${status} via ${channel}`);
     await this.emit(status === 'answered' ? 'question.answered' : 'question.cancelled', done, channel);
-    await this.resumeRun(actor, done);
+    if (done.input === 'form') {
+      // The run starts with its values, or ends: nothing was provided (#552).
+      if (formValues) await this.starter?.complete(actor, done, formValues);
+      else await this.starter?.abandon(actor.id, done.runId);
+    } else await this.resumeRun(actor, done);
     return toQuestionView(done);
   }
 
@@ -499,6 +521,8 @@ export class QuestionsService {
       n += 1;
       if (q.handoffId && opts.withdraw) await new FabricSession(this.fabric).cancelHandoff(q.handoffId);
       await this.emit('question.expired', { ...q, status: 'expired' });
+      // A task run's unanswered form (#552): the run ends, the values were not provided.
+      if (q.input === 'form') await this.starter?.abandon(q.ownerUserId, q.runId);
     }
     return n;
   }
