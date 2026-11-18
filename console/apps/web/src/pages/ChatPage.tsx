@@ -9,19 +9,32 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Link as RouterLink, useMatch, useNavigate, useParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
+import { BrowserPane } from '../components/ChatBrowser';
 import { ChatComposer } from '../components/ChatComposer';
 import { ChatList, type ChatRowAction } from '../components/ChatList';
-import { ThreadRows, TypingIndicator } from '../components/ChatMessages';
+import { ThreadRows, TypingIndicator, type ThreadCards } from '../components/ChatMessages';
 import { ChatSettingsDialog } from '../components/ChatSettingsDialog';
 import { EXAMPLE_PROMPTS, chatPaths, chatSubtitle, chatTitle, lastSeq, threadRows } from '../components/chatThread';
 import { useChat } from '../components/useChat';
 import { useChatList } from '../components/useChatList';
-import type { Chat, ChatSettings, ChatStatus } from '../types/chat';
-import { EmptyState, ErrorBanner, SAFE_AREA_BOTTOM, toast, useConfirm, useProfileTimeZone } from '../ui';
+import { useNow } from '../components/RunActivity';
+import { useRunFrame } from '../components/useRunFrame';
+import type { Chat, ChatMessage, ChatSettings, ChatStatus } from '../types/chat';
+import { EmptyState, ErrorBanner, SAFE_AREA_BOTTOM, isLive, toast, useConfirm, useProfileTimeZone } from '../ui';
 
 /** How close to the end of the thread counts as "reading the latest" (new messages then keep the view at the end). */
 const NEAR_END_PX = 120;
 const RAIL_WIDTH = 320;
+/** How often the browser's picture is refreshed: in the pane, and in the thread's card. */
+const PANE_FRAME_MS = 2_000;
+const CARD_FRAME_MS = 5_000;
+
+/** Where a person can take over a run's browser (`GET /runs/:id/viewer`). */
+interface RunViewer {
+  hostId: string | null;
+  hostName: string | null;
+  desktop: boolean;
+}
 
 /** How far into the shell's own padding the chat reaches on a phone, top and bottom, so it does not float in a frame. */
 const PHONE_BLEED = 16;
@@ -81,6 +94,8 @@ export function ChatPage() {
   const theme = useTheme();
   const isPhone = useMediaQuery(theme.breakpoints.down('sm'));
   const hasRail = useMediaQuery(theme.breakpoints.up('md'));
+  /** From `lg` (1200 px) the browser has a pane of its own beside the thread. */
+  const hasSidePane = useMediaQuery(theme.breakpoints.up('lg'));
   const timeZone = useProfileTimeZone();
   const canWrite = viewer.hasPermission('chat:write');
 
@@ -104,6 +119,57 @@ export function ChatPage() {
   const [menu, setMenu] = useState<HTMLElement | null>(null);
   const [rename, setRename] = useState<RenameState | null>(null);
   const [settings, setSettings] = useState(false);
+
+  // ---- The browser of the chat's live run (#487) ----
+  const run = state.run;
+  const liveRun = run && isLive(run.status) ? run : null;
+  const liveRunId = liveRun?.id ?? null;
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [cardVisible, setCardVisible] = useState(false);
+  const [viewerOf, setViewerOf] = useState<{ runId: string; viewer: RunViewer } | null>(null);
+  const paneOpen = browserOpen && liveRun !== null;
+  /** A secret is being asked for: what is on the screen may show it, so there is no picture. */
+  const frameHidden = (state.question as { input?: string } | null)?.input === 'secret';
+  // One fetch feeds the card and the pane, and only while one of them is on screen.
+  const frame = useRunFrame(liveRunId, !frameHidden && (paneOpen || cardVisible), paneOpen ? PANE_FRAME_MS : CARD_FRAME_MS);
+  const now = useNow(liveRun !== null);
+  // The pane belongs to a live run: it closes when the run ends, and with the chat.
+  useEffect(() => {
+    if (liveRunId === null) setBrowserOpen(false);
+  }, [liveRunId]);
+  useEffect(() => {
+    setBrowserOpen(false);
+    setCardVisible(false);
+  }, [chatId]);
+  // Where the run's browser can be taken over, asked once the pane is open.
+  useEffect(() => {
+    if (!paneOpen || !liveRunId || !viewer.hasPermission('fleet:desktop')) return;
+    let stale = false;
+    api
+      .get<RunViewer>(`/runs/${liveRunId}/viewer`)
+      .then((v) => {
+        if (!stale) setViewerOf({ runId: liveRunId, viewer: v });
+      })
+      .catch(() => undefined);
+    return () => {
+      stale = true;
+    };
+  }, [api, viewer, paneOpen, liveRunId]);
+  const where = viewerOf && viewerOf.runId === liveRunId ? viewerOf.viewer : null;
+  const takeOver = where?.desktop && where.hostId ? { to: `/fleet/hosts/${where.hostId}/desktop`, label: `Take over${where.hostName ? ` on ${where.hostName}` : ''}` } : null;
+  const stopRun = async () => {
+    if (!liveRun) return;
+    const ok = await confirm({ title: 'Stop this run?', body: 'The agent stops after its current step. What it already did is not undone.', confirmLabel: 'Stop', destructive: true });
+    if (!ok) return;
+    try {
+      await api.post(`/runs/${liveRun.id}/cancel`, {});
+      toast('Stopping the run');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not stop the run', 'error');
+    }
+  };
+  const onCardVisible = useCallback((visible: boolean) => setCardVisible(visible), []);
+  const openBrowser = useCallback(() => setBrowserOpen(true), []);
 
   // A different chat: what was typed for the other one does not follow.
   useEffect(() => {
@@ -220,6 +286,13 @@ export function ChatPage() {
     toast('Chat settings saved');
   };
 
+  /** "Run again" on a result: ask for the same job once more, in words the assistant acts on. */
+  const runAgain = (result: ChatMessage) => {
+    const started = [...messages].reverse().find((m) => m.kind === 'run' && m.seq < result.seq && (result.runId === null || m.runId === result.runId || m.runId === null));
+    void send(started ? `Run this again: ${started.text}` : 'Run that again.');
+  };
+  const cards: ThreadCards = { run, frame, frameHidden, now, paneOpen, onOpenBrowser: openBrowser, onCardVisible, onRunAgain: mayType && !sending && liveRun === null ? runAgain : undefined };
+
   const fill = useFillHeight();
   const listPanel = <ChatList list={list} status={status} onStatus={setStatus} selectedId={chatId} canWrite={canWrite} onAction={onAction} onNavigate={() => setDrawer(false)} />;
 
@@ -257,11 +330,15 @@ export function ChatPage() {
     body = (
       <>
         {messages.length === 0 && !state.thinking && <EmptyState title="No messages yet" body={mayType ? 'Say what you want done.' : undefined} />}
-        <ThreadRows rows={rows} answerableSeq={answerableSeq} onAnswer={(text) => void send(text)} />
+        <ThreadRows rows={rows} answerableSeq={answerableSeq} onAnswer={(text) => void send(text)} cards={cards} />
         {state.thinking && <TypingIndicator />}
       </>
     );
   }
+
+  const browserPane = paneOpen && liveRun && (
+    <BrowserPane run={liveRun} frame={frame} frameHidden={frameHidden} now={now} canStop={viewer.hasPermission('runs:write')} onStop={() => void stopRun()} takeOver={takeOver} onClose={() => setBrowserOpen(false)} />
+  );
 
   const thread = (
     <Box component="section" aria-label={isNew ? 'New chat' : chatTitle(chat)} sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -293,6 +370,9 @@ export function ChatPage() {
           </IconButton>
         )}
       </Stack>
+
+      {/* A tablet: the browser is a panel above the thread, which keeps the rest of the height. */}
+      {browserPane && !hasSidePane && !isPhone && <Box sx={{ flex: 'none', height: '48%', minHeight: 260, borderBottom: 1, borderColor: 'divider' }}>{browserPane}</Box>}
 
       <Box sx={{ position: 'relative', flex: 1, minHeight: 0 }}>
         <Box ref={scroller} onScroll={onScroll} role="log" aria-label="Messages" aria-live="polite" sx={{ position: 'absolute', inset: 0, overflowY: 'auto', overscrollBehavior: 'contain', px: { xs: 1.5, sm: 3 }, py: 1.5 }}>
@@ -350,6 +430,12 @@ export function ChatPage() {
     >
       {hasRail && <Box sx={{ width: RAIL_WIDTH, flex: 'none', borderRight: 1, borderColor: 'divider', minHeight: 0 }}>{listPanel}</Box>}
       {showListScreen ? <Box sx={{ flex: 1, minWidth: 0, minHeight: 0 }}>{listPanel}</Box> : thread}
+      {/* A wide window: the browser beside the thread. */}
+      {browserPane && hasSidePane && !showListScreen && <Box sx={{ flex: '0 0 46%', minWidth: 0, maxWidth: 760, borderLeft: 1, borderColor: 'divider', minHeight: 0 }}>{browserPane}</Box>}
+      {/* A phone: the browser takes the screen. */}
+      <Dialog fullScreen open={Boolean(browserPane) && isPhone} onClose={() => setBrowserOpen(false)} slotProps={{ paper: { 'aria-label': 'Browser' } }}>
+        {isPhone && browserPane}
+      </Dialog>
 
       {!hasRail && !isPhone && (
         <Drawer open={drawer} onClose={() => setDrawer(false)} slotProps={{ paper: { sx: { width: RAIL_WIDTH, maxWidth: '85vw' } } }}>

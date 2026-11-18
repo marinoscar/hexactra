@@ -192,7 +192,8 @@ describe('the thread', () => {
         }),
       },
     });
-    expect(await screen.findByText('Started a browser run')).toBeInTheDocument();
+    // The cards themselves are covered in ChatBrowser.test.tsx.
+    expect(await screen.findByRole('article', { name: 'Browser run' })).toHaveTextContent('Book 2 tickets for 7:30 PM');
     expect(screen.getByText('Done')).toBeInTheDocument();
     expect(screen.getByText('Could not finish')).toBeInTheDocument();
     expect(screen.getByText('The AI could not answer (rate_limited).')).toHaveAttribute('role', 'status');

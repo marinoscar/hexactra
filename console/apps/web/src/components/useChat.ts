@@ -28,6 +28,9 @@ export interface ChatState {
   patch: (chat: Chat) => void;
 }
 
+/** A run of which only the id and the status are known yet. */
+const EMPTY_RUN: ChatRun = { id: '', status: 'queued', goal: '', stepCount: 0, activity: null, result: null, error: null, stopReason: null, cancelRequested: false, hostId: null, costUsd: 0, costKnown: true, createdAt: '', startedAt: null, finishedAt: null };
+
 const isStatus = (e: unknown, status: number) => (e as { status?: number } | null)?.status === status;
 
 /**
@@ -71,6 +74,8 @@ export function useChat(id: string | null): ChatState {
         setChat(rest);
         setMessages(first);
         setServerThinking(thinking);
+        // Until the stream's first `run` event: the live run the read named, with what is known of it.
+        if (_live) setRun((prev) => prev ?? { ...EMPTY_RUN, id: _live.id, status: _live.status });
         setLoading(false);
         close = subscribeChat(id, lastSeq(first), (e) => {
           if (stale || e.type === 'open' || e.type === 'heartbeat') return;
