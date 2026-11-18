@@ -14,6 +14,7 @@
 
 import { applyAllowedDomains, currentAllowed, recordBlocked, takeBlocked, urlAllowed, urlHost, type BlockedNavigation } from './site-policy.js';
 import * as cdp from './cdp.js';
+import { MASK_ID, MASK_UNAVAILABLE, MAX_MASK_BOXES, loadSensitivePatterns, maskText, pageClearMask, pageMask, pageNextFrame, type MaskPattern } from './mask.js';
 
 export const NATIVE_HOST_NAME = 'com.hexactra.nativehost';
 
@@ -25,7 +26,7 @@ export type RemoteAction =
   | { type: 'type'; selector: string; text: string; clear?: boolean; submit?: boolean; tab_id?: number }
   | { type: 'press'; key: string; selector?: string; tab_id?: number }
   | { type: 'scroll'; dx?: number; dy?: number; selector?: string; tab_id?: number }
-  | { type: 'screenshot'; marks?: boolean; tab_id?: number }
+  | { type: 'screenshot'; marks?: boolean; mask?: boolean; tab_id?: number }
   | { type: 'evaluate'; script: string; await_promise?: boolean; tab_id?: number }
   | { type: 'click_at'; x: number; y: number; button?: Button; click_count?: number; modifiers?: string[]; tab_id?: number }
   | { type: 'mouse'; op: 'move' | 'down' | 'up'; x: number; y: number; button?: Button; tab_id?: number }
@@ -341,7 +342,7 @@ export const MARKS_ID = '__hexactra_marks__';
  * Box and number the interactive elements in the viewport, for a model that
  * looks at the screenshot; returns them with selectors and CSS-pixel boxes.
  */
-export function pageMarks(max: number, overlayId: string) {
+export function pageMarks(max: number, overlayId: string, hideValues = false) {
   document.getElementById(overlayId)?.remove();
   const query =
     'a[href], button, input:not([type=hidden]), select, textarea, summary, label, [role=button], [role=link], ' +
@@ -420,7 +421,7 @@ export function pageMarks(max: number, overlayId: string) {
       h.getAttribute('aria-label') ||
       (h as HTMLInputElement).placeholder ||
       (h.innerText || '').trim() ||
-      (h as HTMLInputElement).value ||
+      (hideValues ? '' : (h as HTMLInputElement).value) ||
       h.getAttribute('title') ||
       h.getAttribute('alt') ||
       '';
@@ -482,35 +483,77 @@ async function viaCdp<T>(fn: () => Promise<T>): Promise<T> {
 
 const DEFAULT_MAX_MARKS = 120;
 
-async function screenshot(tabId: number | undefined, marks: boolean) {
+type ViewInfo = { width: number; height: number; dpr: number; url?: string; title?: string; marks?: { text?: string }[] };
+
+/**
+ * Capture the visible area of a tab. With `marks`, number the interactive
+ * elements first. With `mask` (#539), cover the sensitive regions first
+ * (mask.ts) and wait one frame so the boxes are painted: the capture never
+ * sees them uncovered. A page that cannot be masked fails with
+ * `mask_unavailable` and no image. Marks and boxes are removed in `finally`.
+ */
+async function screenshot(tabId: number | undefined, marks: boolean, mask: boolean) {
   let tab = await resolveTab(tabId);
-  let info: { width: number; height: number; dpr: number; url?: string; title?: string; marks?: unknown[] } | null = null;
-  try {
-    info = marks ? await inPage(tab.id!, pageMarks, [DEFAULT_MAX_MARKS, MARKS_ID]) : await inPage(tab.id!, pageViewport, []);
-  } catch {
-    // Pages that refuse scripts (chrome://, the web store) are still captured.
+  const unavailable = (e: unknown) =>
+    new ActionError(`${MASK_UNAVAILABLE}: ${(e instanceof Error ? e.message : String(e)).replace(/^mask_unavailable:\s*/, '')}`);
+  let patterns: MaskPattern[] = [];
+  if (mask) {
+    try {
+      patterns = await loadSensitivePatterns();
+    } catch (e) {
+      throw unavailable(e);
+    }
   }
-  let data: string;
+  let info: ViewInfo | null = null;
+  let masked: number | undefined;
   try {
-    if (!cdp.cdpAvailable()) throw new Error('no debugger');
-    data = await cdp.captureViewport(tab.id!);
-  } catch {
-    if (!tab.active) tab = (await chrome.tabs.update(tab.id!, { active: true })) ?? tab;
-    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: 80 });
-    data = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    try {
+      info = marks
+        ? await inPage(tab.id!, pageMarks, [DEFAULT_MAX_MARKS, MARKS_ID, mask])
+        : await inPage(tab.id!, pageViewport, []);
+    } catch (e) {
+      // Pages that refuse scripts (chrome://, the web store) are still
+      // captured, unless the picture must be masked.
+      if (mask) throw unavailable(e);
+    }
+    if (mask) {
+      try {
+        const r = await inPage(tab.id!, pageMask, [patterns, MASK_ID, MAX_MASK_BOXES]);
+        if (typeof (r as { masked?: unknown } | null)?.masked !== 'number') throw new Error('the page did not report what it masked');
+        masked = (r as { masked: number }).masked;
+        await inPage(tab.id!, pageNextFrame, []);
+      } catch (e) {
+        throw unavailable(e);
+      }
+    }
+    let data: string;
+    try {
+      if (!cdp.cdpAvailable()) throw new Error('no debugger');
+      data = await cdp.captureViewport(tab.id!);
+    } catch {
+      if (!tab.active) tab = (await chrome.tabs.update(tab.id!, { active: true })) ?? tab;
+      const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: 80 });
+      data = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    }
+    if (info) data = await toCssPixels(data, info.width, info.height, info.dpr);
+    // Next to a masked picture, the marks' labels are masked too.
+    const markList = marks
+      ? (info?.marks ?? []).map((m) => (mask && typeof m.text === 'string' ? { ...m, text: maskText(m.text, patterns) } : m))
+      : undefined;
+    return {
+      mime: 'image/jpeg',
+      data,
+      tab_id: tab.id,
+      url: info?.url ?? tab.url,
+      title: info?.title ?? tab.title,
+      ...(info ? { width: info.width, height: info.height } : {}),
+      ...(marks ? { marks: markList } : {}),
+      ...(mask ? { masked } : {}),
+    };
   } finally {
+    if (mask) await inPage(tab.id!, pageClearMask, [MASK_ID]).catch(() => undefined);
     if (marks && info) await inPage(tab.id!, pageClearMarks, [MARKS_ID]).catch(() => undefined);
   }
-  if (info) data = await toCssPixels(data, info.width, info.height, info.dpr);
-  return {
-    mime: 'image/jpeg',
-    data,
-    tab_id: tab.id,
-    url: info?.url ?? tab.url,
-    title: info?.title ?? tab.title,
-    ...(info ? { width: info.width, height: info.height } : {}),
-    ...(marks ? { marks: info?.marks ?? [] } : {}),
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -575,7 +618,7 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
       }
     }
     case 'screenshot':
-      return screenshot(action.tab_id, !!action.marks);
+      return screenshot(action.tab_id, !!action.marks, !!action.mask);
     case 'evaluate': {
       const tab = await resolveTab(action.tab_id);
       return viaCdp(() => cdp.evaluate(tab.id!, action.script, !!action.await_promise, answerBudget(deadline)));

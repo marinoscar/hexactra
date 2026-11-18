@@ -9,7 +9,7 @@ The MV3 extension that drives the browser for Hexactra. It works standalone (sid
 - **Trusted input and JavaScript** go through `chrome.debugger` (`src/cdp.ts`, permission `debugger`):
   - `click_at`, `mouse`, `drag`, `scroll_at`, `type_keys`, `key` dispatch `Input.*` events that pages see as `isTrusted`;
   - `evaluate` runs `Runtime.evaluate` in REPL mode, whatever the page's CSP.
-- **Screenshots** are captured with `Page.captureScreenshot` (`captureVisibleTab` as a fallback) and scaled to CSS pixels, so image coordinates are `click_at` coordinates. With `marks`, interactive elements are boxed and numbered for the model, then the overlay is removed.
+- **Screenshots** are captured with `Page.captureScreenshot` (`captureVisibleTab` as a fallback) and scaled to CSS pixels, so image coordinates are `click_at` coordinates. With `marks`, interactive elements are boxed and numbered for the model, then the overlay is removed. With `mask` (#539, `src/mask.ts`), passwords, one-time codes, card and account numbers and the other patterns of `packages/contracts/sensitive-patterns.json` (copied into `dist/` by the build) are covered with opaque boxes before the capture and uncovered after; a page that cannot be masked fails with `mask_unavailable` and no image. Text in images, canvases and videos is not masked (no OCR; a canvas over half the viewport is covered whole). See docs/remote-control-api.md, "Masked screenshots".
 - **Stealth:** no CDP domain is ever `enable`d, and the host agent starts Chrome with `--silent-debugger-extension-api`, so there is no debugging bar.
 - `navigate` and `new_tab` open any URL but `javascript:`.
 
