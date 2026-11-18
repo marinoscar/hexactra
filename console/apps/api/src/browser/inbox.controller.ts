@@ -16,6 +16,10 @@ const respondSchema = z.object({
   value: z.union([z.string().max(4096), z.number().finite()]).optional(),
   /** multi_choice: the chosen option ids. */
   values: z.array(z.string().max(64)).max(10).optional(),
+  /** credentials: the password (passed to the fabric, never stored or logged; the username is `value`). */
+  secret: z.string().max(4096).optional(),
+  /** The person's choice for the question's "remember me" option. */
+  remember: z.boolean().optional(),
 });
 class RespondDto extends createZodDto(respondSchema) {}
 
@@ -38,6 +42,8 @@ export interface InboxItem {
   constraints: QuestionConstraints | null;
   confirmLabel: string | null;
   denyLabel: string | null;
+  /** credentials and secret: the site's "remember me" option, in the page's words (#527). */
+  rememberLabel: string | null;
   risk: 'low' | 'high' | null;
   pageTitle: string | null;
   viewerUrl: string | null;
@@ -81,6 +87,7 @@ export class InboxController {
         constraints: (q.constraints as unknown as QuestionConstraints | null) ?? null,
         confirmLabel: q.confirmLabel,
         denyLabel: q.denyLabel,
+        rememberLabel: q.rememberLabel,
         risk: (q.risk as 'low' | 'high' | null) ?? null,
         pageTitle: q.pageTitle,
         viewerUrl: q.viewerUrl,
@@ -100,7 +107,7 @@ export class InboxController {
     @Param('runId', ParseUUIDPipe) runId: string,
     @Body() body: RespondDto,
   ): Promise<{ ok: true }> {
-    await this.answers.answer(user, runId, body.outcome, body.value, undefined, { ...(body.values ? { values: body.values } : {}), channel: 'inbox' });
+    await this.answers.answer(user, runId, body.outcome, body.value, undefined, { ...(body.values ? { values: body.values } : {}), ...(body.secret !== undefined ? { secret: body.secret } : {}), ...(body.remember !== undefined ? { remember: body.remember } : {}), channel: 'inbox' });
     return { ok: true };
   }
 }

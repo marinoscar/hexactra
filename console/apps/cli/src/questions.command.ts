@@ -79,7 +79,8 @@ interface AskFlags {
 
 /** The `POST /api/questions` body the `questions ask` flags give. */
 export function askBody(o: AskFlags): Record<string, unknown> {
-  if (!(QUESTION_INPUTS as readonly string[]).includes(o.input)) throw new Error(`--input is one of ${QUESTION_INPUTS.filter((i) => i !== 'secret').join(', ')}`);
+  if (!(QUESTION_INPUTS as readonly string[]).includes(o.input)) throw new Error(`--input is one of ${QUESTION_INPUTS.filter((i) => i !== 'secret' && i !== 'credentials').join(', ')}`);
+  if (o.input === 'credentials') throw new Error('A sign-in is only asked inside a browser session (its password is typed there, never stored); the CLI does not ask for one.');
   if (o.input === 'secret') throw new Error('A secret is only asked inside a browser session (it is typed there, never stored); the CLI does not ask for one.');
   const constraints = {
     ...(o.min !== undefined ? { min: o.min } : {}),

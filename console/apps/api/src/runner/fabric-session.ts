@@ -17,7 +17,7 @@ export interface FabricOperation {
   navigation_blocked?: Array<{ host: string; at: string }>;
 }
 
-export type FabricHandoffInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover';
+export type FabricHandoffInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover' | 'credentials';
 
 /** The answer as the fabric reports it (`HandoffView.response`, snake_case). */
 export interface FabricHandoffResponse {
@@ -25,8 +25,10 @@ export interface FabricHandoffResponse {
   outcome?: 'completed' | 'cancelled';
   value?: string;
   values?: string[];
-  /** A secret: the value exists but is never returned; a `type_secret` action types it, once. */
+  /** A secret (or a sign-in's password): it exists but is never returned; a `type_secret` action types it, once. */
   value_withheld?: boolean;
+  /** The person's choice for the question's "remember me" option (#527). */
+  remember?: boolean;
   channel?: string;
   by?: string;
   answered_at?: string;
@@ -43,6 +45,8 @@ export interface FabricHandoff {
   choices?: (string | { id: string; label: string; description?: string })[];
   page?: { url?: string; title?: string };
   viewer_url?: string;
+  /** The site's "remember me" option offered with the question (#527). */
+  remember?: { label: string };
   created_at?: string;
   expires_at?: string;
   resolved_at?: string;
@@ -77,6 +81,8 @@ export interface HandoffRequest {
   confirmLabel?: string | null;
   denyLabel?: string | null;
   risk?: 'low' | 'high' | null;
+  /** credentials and secret: the site's "remember me" option, in the page's words (#527). */
+  rememberLabel?: string | null;
   timeoutMs?: number;
 }
 
@@ -124,6 +130,7 @@ export function handoffBody(req: HandoffRequest): Record<string, unknown> {
     ...(req.confirmLabel ? { confirm_label: req.confirmLabel } : {}),
     ...(req.denyLabel ? { deny_label: req.denyLabel } : {}),
     ...(req.risk ? { risk: req.risk } : {}),
+    ...(req.rememberLabel ? { remember: { label: req.rememberLabel } } : {}),
     timeout_ms: req.timeoutMs,
   };
 }
@@ -189,12 +196,15 @@ export class FabricSession {
   }
 
   /** Answer a handoff with the console's service token, as `answeredBy` (e.g. `user:<id>`). */
-  async respond(id: string, answer: { outcome: 'completed' | 'cancelled'; value?: string; values?: string[]; channel?: string; answeredBy?: string }): Promise<void> {
+  async respond(id: string, answer: { outcome: 'completed' | 'cancelled'; value?: string; values?: string[]; secret?: string; remember?: boolean; channel?: string; answeredBy?: string }): Promise<void> {
     await this.fabric.request('POST', `/v1/handoffs/${id}/respond`, {
       body: {
         outcome: answer.outcome,
         ...(answer.value !== undefined ? { value: answer.value } : {}),
         ...(answer.values !== undefined ? { values: answer.values } : {}),
+        // A sign-in's password travels in this call only (#527).
+        ...(answer.secret !== undefined ? { secret: answer.secret } : {}),
+        ...(answer.remember !== undefined ? { remember: answer.remember } : {}),
         ...(answer.channel ? { channel: answer.channel } : {}),
         ...(answer.answeredBy ? { answered_by: answer.answeredBy } : {}),
       },

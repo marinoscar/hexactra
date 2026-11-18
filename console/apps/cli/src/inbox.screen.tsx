@@ -19,6 +19,8 @@ function hint(item: InboxItem, armed: boolean): string {
       return 'press an option number · x decline';
     case 'multi_choice':
       return 'numbers toggle · enter send · x decline';
+    case 'credentials':
+      return 'a sign-in: answer it in the web app (chat or Inbox) · x decline';
     case 'confirm':
       return armed ? `press y again to ${item.confirmLabel ?? 'approve'} (high risk) · any other key cancels` : `y ${item.confirmLabel ?? 'approve'} · n ${item.denyLabel ?? 'deny'} · x decline`;
     default:
@@ -85,6 +87,11 @@ export function InboxScreen({ onDone }: TuiScreenProps): ReactNode {
     if (key.upArrow) return (setSelected((i) => Math.max(0, i - 1)), reset());
     if (key.downArrow) return (setSelected((i) => Math.min(Math.max(0, list.length - 1), i + 1)), reset());
     if (!item) return;
+    // A sign-in (#527) is answered in the web app, where its password field is; here it can only be declined.
+    if (item.input === 'credentials') {
+      if (input === 'x') send(item, { outcome: 'cancelled' });
+      return;
+    }
     if (TYPED.has(item.input)) {
       if (key.return) return typed ? send(item, { outcome: 'completed', value: typed }) : undefined;
       if (key.backspace || key.delete) return setTyped((t) => t.slice(0, -1));

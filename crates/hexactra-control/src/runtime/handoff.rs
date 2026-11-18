@@ -14,8 +14,8 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use hexactra_core::remote::{
-    CreateHandoffRequest, HandoffInput, HandoffOutcome, HandoffResponse, HandoffRisk,
-    HandoffStatus, HandoffView, RemoteSessionStatus, RespondHandoffRequest,
+    CreateHandoffRequest, HandoffInput, HandoffOutcome, HandoffRemember, HandoffResponse,
+    HandoffRisk, HandoffStatus, HandoffView, RemoteSessionStatus, RespondHandoffRequest,
     DEFAULT_HANDOFF_TIMEOUT_MS, MAX_HANDOFF_ANSWERED_BY, MAX_HANDOFF_VALUE,
 };
 use sha2::{Digest, Sha256};
@@ -160,7 +160,7 @@ impl RuntimeStore {
         inner
             .handoffs
             .get(&id)
-            .is_some_and(|h| h.view.input == HandoffInput::Secret)
+            .is_some_and(|h| h.view.input.holds_secret())
     }
 
     pub(super) fn cancel_session_handoffs(
@@ -228,6 +228,9 @@ impl RuntimeStore {
                     None
                 },
                 page: req.page,
+                remember: req.remember.map(|r| HandoffRemember {
+                    label: r.label.trim().to_string(),
+                }),
                 status: HandoffStatus::Pending,
                 created_at: now,
                 expires_at: now + chrono::Duration::milliseconds(timeout as i64),
@@ -404,6 +407,7 @@ impl RuntimeStore {
                 value: None,
                 values: None,
                 value_withheld: false,
+                remember: None,
                 channel,
                 by: Some(by),
                 answered_at: Some(now),
@@ -416,16 +420,51 @@ impl RuntimeStore {
                             "value longer than {MAX_HANDOFF_VALUE} characters"
                         )));
                     }
+                    if req.remember.is_some() && h.view.remember.is_none() {
+                        return Err(StoreError::Invalid(
+                            "this handoff offered no remember option".into(),
+                        ));
+                    }
+                    // The password of a sign-in, apart from the username.
+                    let password = match (h.view.input, req.secret) {
+                        (HandoffInput::Credentials, Some(p)) if !p.is_empty() => {
+                            if p.chars().count() > h.view.constraints.text_max_length() {
+                                return Err(StoreError::Invalid(format!(
+                                    "password longer than {} characters",
+                                    h.view.constraints.text_max_length()
+                                )));
+                            }
+                            Some(Zeroizing::new(p))
+                        }
+                        (HandoffInput::Credentials, _) => {
+                            return Err(StoreError::Invalid(
+                                "this handoff needs a password (secret)".into(),
+                            ))
+                        }
+                        (_, Some(_)) => {
+                            return Err(StoreError::Invalid(
+                                "secret is only accepted for input \"credentials\"".into(),
+                            ))
+                        }
+                        (_, None) => None,
+                    };
                     let answer = h
                         .view
                         .check_answer(req.value, req.values)
                         .map_err(|e| StoreError::Invalid(e.0))?;
-                    if h.view.input == HandoffInput::Secret {
-                        h.secret = answer.value.map(|v| HeldSecret {
-                            value: Zeroizing::new(v),
-                            expires_at: now
-                                + chrono::Duration::from_std(SECRET_TTL).unwrap_or_default(),
-                        });
+                    response.remember = req.remember;
+                    let held = |value| HeldSecret {
+                        value,
+                        expires_at: now
+                            + chrono::Duration::from_std(SECRET_TTL).unwrap_or_default(),
+                    };
+                    if let Some(p) = password {
+                        // The username is not a secret: it is returned like a text answer.
+                        h.secret = Some(held(p));
+                        response.value = answer.value;
+                        response.value_withheld = true;
+                    } else if h.view.input == HandoffInput::Secret {
+                        h.secret = answer.value.map(|v| held(Zeroizing::new(v)));
                         response.value_withheld = true;
                     } else {
                         response.value = answer.value;
@@ -497,7 +536,7 @@ impl RuntimeStore {
                 "the handoff belongs to another session".into(),
             ));
         }
-        if h.view.input != HandoffInput::Secret {
+        if !h.view.input.holds_secret() {
             return Err(StoreError::Unprocessable(
                 "handoff_not_secret",
                 "the handoff did not ask for a secret".into(),
@@ -744,6 +783,165 @@ mod tests {
             s.enqueue(sess, RemoteAction::Tabs, Duration::from_secs(1)),
             Err(StoreError::TakeoverActive(_))
         ));
+    }
+
+    fn sign_in(remember: Option<&str>) -> CreateHandoffRequest {
+        let mut r = CreateHandoffRequest::new(
+            HandoffKind::Login,
+            "Sign in to Example Bank",
+            HandoffInput::Credentials,
+        );
+        r.remember = remember.map(|l| HandoffRemember { label: l.into() });
+        r
+    }
+
+    fn signed_in(user: &str, given: Option<&str>, remember: Option<bool>) -> RespondHandoffRequest {
+        RespondHandoffRequest {
+            outcome: HandoffOutcome::Completed,
+            value: Some(user.into()),
+            secret: given.map(str::to_string),
+            remember,
+            ..Default::default()
+        }
+    }
+
+    // #527: one answer carries the username, which is returned, and the
+    // password, which is held and typed like a secret, never returned.
+    #[tokio::test]
+    async fn a_sign_in_returns_the_username_and_types_the_password_once() {
+        let (s, sess) = setup();
+        let host = s.get_session(sess).unwrap().host_id;
+        let mut events = s.subscribe_events();
+        let (h, _) = s
+            .create_handoff(sess, sign_in(Some("  Keep me signed in  ")))
+            .unwrap();
+        assert_eq!(h.remember.as_ref().unwrap().label, "Keep me signed in");
+        // No picture of the page while it is asked for.
+        assert!(matches!(
+            s.enqueue(sess, shot(), Duration::from_secs(1)),
+            Err(StoreError::HandoffPending(_))
+        ));
+        let view = s
+            .respond_handoff(
+                h.id,
+                Responder::Operator,
+                signed_in(" oscar ", Some("x9-424243"), Some(true)),
+            )
+            .unwrap();
+        let resp = view.response.clone().unwrap();
+        assert_eq!(resp.value.as_deref(), Some("oscar"));
+        assert!(resp.value_withheld);
+        assert_eq!(resp.remember, Some(true));
+        // Not in a read, nor in an event.
+        for shown in [
+            serde_json::to_string(&s.get_handoff(h.id).unwrap()).unwrap(),
+            serde_json::to_string(&events.recv().await.unwrap().handoff).unwrap(),
+            serde_json::to_string(&events.recv().await.unwrap().handoff).unwrap(),
+        ] {
+            assert!(!shown.contains("x9-424243"), "{shown}");
+        }
+        // The password is typed once, by the host.
+        s.enqueue(sess, type_secret(h.id), Duration::from_secs(5))
+            .unwrap();
+        assert!(matches!(
+            s.enqueue(sess, type_secret(h.id), Duration::from_secs(5)),
+            Err(StoreError::SecretUnavailable(_))
+        ));
+        let Some(HostWork::Operation(op)) = s
+            .next_work(host, true, false, Duration::from_millis(50))
+            .await
+            .unwrap()
+        else {
+            panic!("no work");
+        };
+        assert!(
+            matches!(&op.action, RemoteAction::Type { text, sensitive: true, .. } if text == "x9-424243")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_sign_in_answer_is_checked() {
+        let (s, sess) = setup();
+        let bad = |req: RespondHandoffRequest, offered: Option<&str>| {
+            let (h, _) = s.create_handoff(sess, sign_in(offered)).unwrap();
+            let refused = matches!(
+                s.respond_handoff(h.id, Responder::Operator, req),
+                Err(StoreError::Invalid(_))
+            );
+            // Free the session for the next question.
+            let _ = s.respond_handoff(
+                h.id,
+                Responder::Operator,
+                RespondHandoffRequest {
+                    outcome: HandoffOutcome::Cancelled,
+                    ..Default::default()
+                },
+            );
+            refused
+        };
+        // No password, an empty one, no username, a two-line username.
+        assert!(bad(signed_in("oscar", None, None), None));
+        assert!(bad(signed_in("oscar", Some(""), None), None));
+        assert!(bad(signed_in("", Some("x9-424243"), None), None));
+        assert!(bad(signed_in("os\ncar", Some("x9-424243"), None), None));
+        // A remember choice the question did not offer.
+        assert!(bad(signed_in("oscar", Some("x9-424243"), Some(true)), None));
+        // Without a choice the page's box is left as it was: none is recorded.
+        let (h, _) = s
+            .create_handoff(sess, sign_in(Some("Remember me")))
+            .unwrap();
+        let v = s
+            .respond_handoff(
+                h.id,
+                Responder::Operator,
+                signed_in("oscar", Some("x9-424243"), None),
+            )
+            .unwrap();
+        assert_eq!(v.response.unwrap().remember, None);
+        // Declining needs neither value.
+        let (h, _) = s.create_handoff(sess, sign_in(None)).unwrap();
+        let v = s
+            .respond_handoff(
+                h.id,
+                Responder::Operator,
+                RespondHandoffRequest {
+                    outcome: HandoffOutcome::Cancelled,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(v.status, HandoffStatus::Cancelled);
+        // A password on another kind of question is refused.
+        let (h, _) = s.create_handoff(sess, req(HandoffInput::Text)).unwrap();
+        assert!(matches!(
+            s.respond_handoff(
+                h.id,
+                Responder::Operator,
+                RespondHandoffRequest {
+                    secret: Some("x9-424243".into()),
+                    ..answer(Some("hi"), None)
+                }
+            ),
+            Err(StoreError::Invalid(_))
+        ));
+    }
+
+    #[test]
+    fn remember_is_offered_only_with_a_secret_and_in_one_short_line() {
+        let ok = |input, label: &str| {
+            let mut r = CreateHandoffRequest::new(HandoffKind::Login, "p", input);
+            r.remember = Some(HandoffRemember {
+                label: label.into(),
+            });
+            r.validate().is_ok()
+        };
+        assert!(ok(HandoffInput::Credentials, "Remember me"));
+        assert!(ok(HandoffInput::Secret, "Trust this device"));
+        assert!(!ok(HandoffInput::Text, "Remember me"));
+        assert!(!ok(HandoffInput::Confirm, "Remember me"));
+        assert!(!ok(HandoffInput::Credentials, "   "));
+        assert!(!ok(HandoffInput::Credentials, &"x".repeat(81)));
+        assert!(!ok(HandoffInput::Credentials, "Remember\nme"));
     }
 
     fn answered_secret(s: &RuntimeStore, sess: Uuid, value: &str) -> Uuid {

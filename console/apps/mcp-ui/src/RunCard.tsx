@@ -40,7 +40,7 @@ export interface RunCardProps {
 /** Merge a newer snapshot over the last one: a bare progress block keeps the run and the last picture. */
 function merge(prev: Snapshot | null, next: Snapshot): Snapshot {
   if (!prev || prev.progress.run_id !== next.progress.run_id) return next;
-  const hidden = next.progress.screenshot === 'hidden' || next.progress.question?.input === 'secret';
+  const hidden = next.progress.screenshot === 'hidden' || (next.progress.question?.input === 'secret' || next.progress.question?.input === 'credentials');
   return {
     progress: next.progress,
     run: next.run ?? prev.run,
@@ -254,7 +254,7 @@ export function RunCard({ host, pollerOptions, channelFactory, isVisible }: RunC
   const consoleUrl = safeUrl(p.console_url);
   const elapsed = terminal || state === 'queued' ? p.elapsed_s : p.elapsed_s + Math.max(0, Math.floor((now - snapAt) / 1000));
   const ago = shotAt !== null ? Math.max(0, Math.round((now - shotAt) / 1000)) : null;
-  const hideShot = p.screenshot === 'hidden' || p.question?.input === 'secret';
+  const hideShot = p.screenshot === 'hidden' || (p.question?.input === 'secret' || p.question?.input === 'credentials');
   // Opened by the call that started the run (not by a call that only follows one).
   const startedHere = toolName !== undefined && toolName !== 'run_status' && toolName !== 'run_wait' && toolName !== 'run_card_poll';
   const question = p.needs_human ? p.question : undefined;
@@ -316,7 +316,7 @@ export function RunCard({ host, pollerOptions, channelFactory, isVisible }: RunC
             />
           ) : null}
           <div className="row">
-            {question.answerable_here && !inlineForm && question.input !== 'secret' ? (
+            {question.answerable_here && !inlineForm && question.input !== 'secret' && question.input !== 'credentials' ? (
               <button type="button" className="btn" disabled={superseded} onClick={() => void host.sendMessage('Ask me the question my Hexactra run is waiting on, so I can answer it here.').catch(() => setNotice('Answer it in the chat.'))}>
                 Answer in the chat
               </button>

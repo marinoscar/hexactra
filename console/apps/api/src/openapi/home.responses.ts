@@ -15,7 +15,7 @@ const homeQuestionSchema = z.object({
   questionId: z.uuid(),
   runId: z.uuid().nullable().describe('Null for a free-standing question'),
   kind: z.string().describe('Why it is asked: captcha, code, passkey, login, confirmation or other'),
-  input: z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover']),
+  input: z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials']),
   prompt: z.string().describe('At most 300 characters'),
   risk: z.enum(['low', 'high']).nullable().describe('Of a `confirm` question'),
   expiresAt: iso,

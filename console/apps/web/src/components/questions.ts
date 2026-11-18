@@ -2,7 +2,7 @@
 // GET /api/inbox; apps/api/src/questions/questions.contract.ts).
 import { answerLabel } from '@app/shared/question-rules';
 
-export type QuestionInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover';
+export type QuestionInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover' | 'credentials';
 
 export interface QuestionOption {
   id: string;
@@ -32,6 +32,8 @@ export interface AskedQuestion {
   denyLabel: string | null;
   risk: 'low' | 'high' | null;
   viewerUrl: string | null;
+  /** credentials and secret: the site's "remember me" option, in the page's words (#527). */
+  rememberLabel?: string | null;
 }
 
 export interface QuestionResponse {
@@ -39,6 +41,8 @@ export interface QuestionResponse {
   value?: string;
   values?: string[];
   valueWithheld: boolean;
+  /** What the person chose for the "remember me" option, when one was offered. */
+  remember?: boolean;
   channel?: string;
   by?: string;
   answeredAt: string;
@@ -83,6 +87,10 @@ export interface AnswerBody {
   outcome: 'completed' | 'cancelled';
   value?: string;
   values?: string[];
+  /** credentials: the password (the username is `value`). Sent once, never kept. */
+  secret?: string;
+  /** The choice for the question's "remember me" option. */
+  remember?: boolean;
 }
 
 export const KIND_LABEL: Record<string, string> = {

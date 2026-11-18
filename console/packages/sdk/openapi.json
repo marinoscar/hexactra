@@ -73981,7 +73981,8 @@
               "multi_choice",
               "number",
               "confirm",
-              "takeover"
+              "takeover",
+              "credentials"
             ]
           },
           "kind": {
@@ -74089,6 +74090,13 @@
               }
             ]
           },
+          "rememberLabel": {
+            "description": "credentials and secret: the site's \"remember me\" option, in the page's words",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -74111,7 +74119,7 @@
                     ]
                   },
                   "value": {
-                    "description": "Never present for a secret",
+                    "description": "Never present for a secret; for a sign-in (credentials), the username",
                     "type": "string"
                   },
                   "values": {
@@ -74122,7 +74130,11 @@
                   },
                   "valueWithheld": {
                     "type": "boolean",
-                    "description": "True for a secret: the value went to the browser, single use, and is never returned"
+                    "description": "True for a secret and a sign-in: the secret or password went to the browser, single use, and is never returned"
+                  },
+                  "remember": {
+                    "description": "The person's choice for the question's \"remember me\" option",
+                    "type": "boolean"
                   },
                   "channel": {
                     "type": "string"
@@ -74230,6 +74242,7 @@
           "confirmLabel",
           "denyLabel",
           "risk",
+          "rememberLabel",
           "status",
           "response",
           "pageTitle",
@@ -74253,7 +74266,8 @@
               "multi_choice",
               "number",
               "confirm",
-              "takeover"
+              "takeover",
+              "credentials"
             ]
           },
           "kind": {
@@ -74404,6 +74418,11 @@
               "high"
             ]
           },
+          "rememberLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
           "timeoutMs": {
             "type": "integer",
             "minimum": 10000,
@@ -74449,6 +74468,13 @@
               "type": "string",
               "maxLength": 64
             }
+          },
+          "secret": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "remember": {
+            "type": "boolean"
           },
           "channel": {
             "type": "string",
@@ -74497,6 +74523,13 @@
               "type": "string",
               "maxLength": 64
             }
+          },
+          "secret": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "remember": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -74616,7 +74649,8 @@
               "multi_choice",
               "number",
               "confirm",
-              "takeover"
+              "takeover",
+              "credentials"
             ]
           },
           "kind": {
@@ -74766,6 +74800,11 @@
               "high"
             ]
           },
+          "rememberLabel": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
           "timeoutMs": {
             "type": "integer",
             "minimum": 10000,
@@ -74857,7 +74896,8 @@
               "multi_choice",
               "number",
               "confirm",
-              "takeover"
+              "takeover",
+              "credentials"
             ]
           },
           "choices": {
@@ -74965,6 +75005,13 @@
               }
             ]
           },
+          "rememberLabel": {
+            "description": "credentials and secret: the site's \"remember me\" option, in the page's words",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "pageTitle": {
             "type": [
               "string",
@@ -75002,6 +75049,7 @@
           "confirmLabel",
           "denyLabel",
           "risk",
+          "rememberLabel",
           "pageTitle",
           "viewerUrl",
           "createdAt",
@@ -75048,6 +75096,13 @@
               "type": "string",
               "maxLength": 64
             }
+          },
+          "secret": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "remember": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -75474,7 +75529,8 @@
                             "multi_choice",
                             "number",
                             "confirm",
-                            "takeover"
+                            "takeover",
+                            "credentials"
                           ]
                         },
                         "prompt": {

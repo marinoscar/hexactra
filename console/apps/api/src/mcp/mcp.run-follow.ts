@@ -53,7 +53,7 @@ export async function readRunState(ctx: McpContext, runId: string): Promise<RunS
   const pending = (Array.isArray(raw) ? raw : []).filter((q): q is NonNullable<RunState['question']> => q !== null && typeof q === 'object' && (q as { status?: unknown }).status === 'pending');
   // The question the run waits on (its handoff's) first, else the newest.
   const handoff = typeof run.handoffId === 'string' ? pending.find((q) => q.handoffId === run.handoffId) : undefined;
-  return { run, question: handoff ?? pending[0] ?? null, secretOpen: pending.some((q) => q.input === 'secret') };
+  return { run, question: handoff ?? pending[0] ?? null, secretOpen: pending.some((q) => q.input === 'secret' || q.input === 'credentials') };
 }
 
 /** What a wait observed. */

@@ -57,7 +57,7 @@ When the agent needs you, the request is a card in the thread, not only an Inbox
 
 - **Approval** (`confirm`): the page it is about, **Review**, and Deny / Allow. A high-risk approval asks twice and needs a signed-in web session.
 - **Code or password** (`secret`): a masked field in the card, and "Enter it in the browser myself" (take over).
-- **Sign-in** (#524): the agent is told that signing in is its job. It asks for the username (`kind: login`, `input: text`, a card titled "Sign-in needed"), types it, asks for the password (`kind: login`, `input: secret`), types it through the handoff, and asks for a code the same way. It asks for a takeover only for a passkey, a puzzle it cannot pass, or after you declined to give a credential. These are instructions to a model: a model can still choose otherwise.
+- **Sign-in** (#524, #527): the agent is told that signing in is its job. It asks for the username and password in one request (`kind: login`, `input: credentials`, a card titled "Sign-in needed"), types the username, types the password through the handoff, and asks for a code as a `secret` card. When the page offers "Remember me" or "Trust this device", the card shows it, ticked by default, and the agent sets the page's box as you chose. It asks for a takeover only for a passkey, a puzzle it cannot pass, or after you declined to sign in. These are instructions to a model: a model can still choose otherwise.
 - **Choice, text, number**: the same form the Inbox uses.
 
 The Inbox still lists a chat run's request, with **Answer in chat**. Scheduled, API and MCP runs use the Inbox as before.

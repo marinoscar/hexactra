@@ -20,15 +20,15 @@ export function requestTitle(q: Pick<Question, 'input' | 'kind'>): string {
   if (q.input === 'confirm' || q.kind === 'confirmation') return 'Approval needed';
   if (q.input === 'secret') return `${secretLabel(q.kind)} needed`;
   if (q.input === 'takeover') return 'Your help is needed in the browser';
-  // The first step of a sign-in the agent does itself (#524).
-  if (q.input === 'text' && q.kind === 'login') return 'Sign-in needed';
+  // A sign-in the agent does itself (#524, #527).
+  if (q.input === 'credentials' || (q.input === 'text' && q.kind === 'login')) return 'Sign-in needed';
   return 'A question for you';
 }
 function RequestIcon({ q }: { q: Pick<Question, 'input' | 'kind'> }) {
   if (q.input === 'confirm' || q.kind === 'confirmation') return <VerifiedUserOutlinedIcon color="primary" aria-hidden />;
   if (q.input === 'secret') return <KeyOutlinedIcon color="primary" aria-hidden />;
   if (q.input === 'takeover') return <PanToolOutlinedIcon color="primary" aria-hidden />;
-  if (q.input === 'text' && q.kind === 'login') return <KeyOutlinedIcon color="primary" aria-hidden />;
+  if (q.input === 'credentials' || (q.input === 'text' && q.kind === 'login')) return <KeyOutlinedIcon color="primary" aria-hidden />;
   return <HelpOutlineIcon color="primary" aria-hidden />;
 }
 
@@ -38,7 +38,8 @@ function RequestIcon({ q }: { q: Pick<Question, 'input' | 'kind'> }) {
  */
 export function settledText(q: Pick<Question, 'input'>, answer: AnswerBody): string {
   if (answer.outcome === 'cancelled') return 'Declined';
-  if (q.input === 'secret') return 'Provided';
+  // Never the value; whether the site was asked to remember it, when that was offered.
+  if (q.input === 'secret' || q.input === 'credentials') return answer.remember ? 'Provided · Remembered on this device' : 'Provided';
   if (q.input === 'confirm') return answer.value === 'approve' ? 'Allowed' : 'Denied';
   if (q.input === 'takeover' || q.input === 'none') return 'Done';
   return 'Sent';

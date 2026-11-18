@@ -9,6 +9,7 @@ import { FabricSession, handoffOutcome, type CreatedHandoff, type FabricHandoff 
 import { CHANNEL_RULES, channelId, mayAnswerOn } from './channels/channel-rules';
 import { QuestionEvents, type QuestionEventType } from './question-events';
 import {
+  holdsSecret,
   AnswerInvalidError,
   QUESTION_INPUTS,
   QUESTION_KINDS,
@@ -53,6 +54,8 @@ export interface QuestionView {
   confirmLabel: string | null;
   denyLabel: string | null;
   risk: 'low' | 'high' | null;
+  /** credentials and secret: the site's "remember me" option, in the page's words (#527). */
+  rememberLabel: string | null;
   status: QuestionStatusType;
   response: QuestionResponse | null;
   pageTitle: string | null;
@@ -90,6 +93,7 @@ export function toQuestionView(q: Question): QuestionView {
     confirmLabel: q.confirmLabel,
     denyLabel: q.denyLabel,
     risk: (q.risk as 'low' | 'high' | null) ?? null,
+    rememberLabel: q.rememberLabel,
     status: q.status,
     response: (q.response as unknown as QuestionResponse | null) ?? null,
     pageTitle: q.pageTitle,
@@ -153,8 +157,8 @@ export class QuestionsService {
    * by `mirrorHandoff`).
    */
   async create(owner: QuestionActor, spec: QuestionSpec, opts: { askedBy: string; runId?: string | null; fabricSessionId?: string | null; client?: QuestionClient | null }): Promise<QuestionView> {
-    if (spec.input === 'secret' && !opts.runId && !opts.fabricSessionId) {
-      throw new BadRequestException({ code: 'SECRET_NEEDS_BROWSER', message: 'A secret question must belong to a browser session (it is typed there, never stored)' });
+    if (holdsSecret(spec.input) && !opts.runId && !opts.fabricSessionId) {
+      throw new BadRequestException({ code: 'SECRET_NEEDS_BROWSER', message: 'A secret or sign-in question must belong to a browser session (it is typed there, never stored)' });
     }
     if (opts.runId) {
       const run = await this.db(owner.id).run.findFirst({ where: { id: opts.runId }, select: { id: true } });
@@ -185,6 +189,7 @@ export class QuestionsService {
       confirmLabel: spec.confirmLabel,
       denyLabel: spec.denyLabel,
       risk: spec.risk,
+      rememberLabel: spec.rememberLabel,
     };
   }
 
@@ -255,6 +260,7 @@ export class QuestionsService {
           prompt: (h.prompt ?? '').slice(0, 2000) || 'The agent needs you.',
           options: options ? (options as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
           pageTitle: h.page?.title?.slice(0, 500) ?? null,
+          rememberLabel: h.remember?.label?.slice(0, 80) ?? null,
           viewerUrl: h.viewer_url ?? (await this.desktopLink(h.session_id ?? null)),
           status: h.status === 'pending' ? 'pending' : h.status === 'expired' ? 'expired' : handoffOutcome(h) === 'cancelled' ? 'cancelled' : 'answered',
           expiresAt: Number.isNaN(expires.getTime()) ? new Date(Date.now() + QUESTION_TIMEOUT.defaultMs) : expires,
@@ -371,13 +377,13 @@ export class QuestionsService {
       const where = CHANNEL_RULES[channelId(channel)]?.label ?? channel;
       throw new ForbiddenException({
         code: 'CHANNEL_NOT_ALLOWED',
-        message: `${q.input === 'secret' ? 'A code or password' : 'A high-risk confirmation'} cannot be answered from ${where}: answer it in the Hexactra inbox, signed in`,
+        message: `${q.input === 'credentials' ? 'A sign-in' : q.input === 'secret' ? 'A code or password' : 'A high-risk confirmation'} cannot be answered from ${where}: answer it in the Hexactra inbox, signed in`,
       });
     }
     let answer;
     try {
       answer = validateAnswer(
-        { input: q.input as QuestionInputType, options: (q.options as unknown as QuestionOption[] | null) ?? null, constraints: (q.constraints as unknown as QuestionConstraints | null) ?? null },
+        { input: q.input as QuestionInputType, options: (q.options as unknown as QuestionOption[] | null) ?? null, constraints: (q.constraints as unknown as QuestionConstraints | null) ?? null, rememberLabel: q.rememberLabel },
         input,
       );
     } catch (e) {
@@ -403,7 +409,7 @@ export class QuestionsService {
       const session = new FabricSession(this.fabric);
       try {
         // The secret (if any) travels in this call only: never stored or logged.
-        await session.respond(q.handoffId, { outcome: answer.outcome, value: answer.value, values: answer.values, channel, answeredBy: by });
+        await session.respond(q.handoffId, { outcome: answer.outcome, value: answer.value, values: answer.values, secret: answer.secret, remember: answer.remember, channel, answeredBy: by });
       } catch (e) {
         const release = () =>
           db.question.updateMany({
@@ -458,7 +464,8 @@ export class QuestionsService {
         outcome,
         ...(h.response?.value !== undefined && q.input !== 'secret' ? { value: h.response.value } : {}),
         ...(h.response?.values !== undefined ? { values: h.response.values } : {}),
-        valueWithheld: q.input === 'secret' && outcome === 'completed',
+        valueWithheld: holdsSecret(q.input) && outcome === 'completed',
+        ...(typeof h.response?.remember === 'boolean' ? { remember: h.response.remember } : {}),
         ...(h.response?.channel ? { channel: h.response.channel } : {}),
         ...(h.response?.by ? { by: h.response.by } : {}),
         answeredAt: answeredAt.toISOString(),

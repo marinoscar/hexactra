@@ -226,6 +226,7 @@ mod tests {
                 risk: None,
                 timeout_ms: None,
                 page: None,
+                remember: None,
             };
             // An answered secret handoff: its value must not be persisted.
             let (a, at) = store
@@ -239,6 +240,22 @@ mod tests {
                     RespondHandoffRequest {
                         outcome: HandoffOutcome::Completed,
                         value: Some("987654".into()),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+            // An answered sign-in (#527): its password must not be persisted either.
+            let (c, ct) = store
+                .create_handoff(s.id, req(HandoffInput::Credentials))
+                .unwrap();
+            store
+                .respond_handoff(
+                    c.id,
+                    super::super::handoff::Responder::Token(&ct),
+                    RespondHandoffRequest {
+                        outcome: HandoffOutcome::Completed,
+                        value: Some("oscar".into()),
+                        secret: Some("x9-424243".into()),
                         ..Default::default()
                     },
                 )
@@ -263,6 +280,7 @@ mod tests {
             let text = String::from_utf8_lossy(&raw);
             for secret in [
                 "987654",
+                "x9-424243",
                 service_token.as_str(),
                 host_token.as_str(),
                 response_token.as_str(),

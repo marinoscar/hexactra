@@ -101,7 +101,7 @@ function answerError(q, answer) {
 
 /** Whether the answer is a secret or approves a risky action: only a channel that signs the person in may record it. */
 function needsSignedIn(q) {
-  return q.input === 'secret' || (q.input === 'confirm' && q.risk !== 'low');
+  return q.input === 'secret' || q.input === 'credentials' || (q.input === 'confirm' && q.risk !== 'low');
 }
 
 /** Whether the answer is public: a channel that does not sign the person in (a webhook, a chat) may collect it. */
@@ -125,11 +125,11 @@ function isPublicAnswer(q) {
  * - `form`: a typed form (choice, multi_choice, text, number, low-risk confirm);
  * - `acknowledge`: one button (`none`);
  * - `signed_in`: a high-risk confirmation, approved only in Hexactra;
- * - `secret`: a code or password, entered only in Hexactra;
+ * - `secret`: a code, a password or a sign-in (`credentials`), entered only in Hexactra;
  * - `takeover`: done in the browser itself (the desktop viewer).
  */
 function chatAnswerMode(q) {
-  if (q.input === 'secret') return 'secret';
+  if (q.input === 'secret' || q.input === 'credentials') return 'secret';
   if (q.input === 'takeover') return 'takeover';
   if (q.input === 'none') return 'acknowledge';
   if (isPublicAnswer(q)) return 'form';
@@ -144,6 +144,7 @@ function answerLabel(q, answer) {
     return o ? o.label : id;
   };
   if (q.input === 'secret') return 'A secret (not shown)';
+  if (q.input === 'credentials') return 'A sign-in (not shown)';
   if (Array.isArray(answer.values)) return answer.values.map(label).join(', ');
   if (answer.value === undefined || answer.value === null) return q.input === 'takeover' ? 'Done' : 'Acknowledged';
   const v = String(answer.value);

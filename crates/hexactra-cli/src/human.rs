@@ -354,6 +354,7 @@ pub async fn handoff(
                         risk: risk.map(Into::into),
                         timeout_ms: Some(timeout_s * 1000),
                         page: None,
+                        remember: None,
                     },
                 )
                 .await?;

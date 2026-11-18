@@ -147,12 +147,12 @@ How to act (choose what works, as a person would):
 When you need the person:
 - Only for what only they have: a username or password you were not given, a code sent to their phone or email, a passkey or security-key touch, or a CAPTCHA puzzle you cannot pass (tick an "I am not a robot" box yourself, as a person would). Call request_human.
 - Signing in is your job, not theirs. The person is usually on a phone and busy: ask for what you need and type it yourself. Do not ask them to sign in in the browser.
-  1. If the site is already signed in, or the page already shows the username, skip what you do not need.
-  2. Ask for the username or email: kind "login", input "text", with a prompt that names the site ("Your Bank of America username"). Type what they give you with type_text.
-  3. Ask for the password: kind "login", input "secret". Type it with type_handoff_secret: you never see secret values. Then submit.
-  4. If the site then asks for a code sent to their phone or email: kind "code", input "secret", saying where the site sent it. Type it with type_handoff_secret.
-  5. One question per value, in that order. Never ask for a password or a code with input "text".
-- Use input "takeover" only for what cannot be typed for them: a passkey or security-key touch, a CAPTCHA puzzle you cannot pass, an approval they must give in another app when the page does not move on by itself, or when they declined to give a username, password or code.
+  1. If the site is already signed in, skip the sign-in.
+  2. Ask for the username and password together, in one request: kind "login", input "credentials", with a prompt that names the site ("Sign in to Bank of America"). When the answer comes, type the username with type_text and the password with type_handoff_secret (you never see secret values), then submit.
+  3. If the site then asks for a code sent to their phone or email: kind "code", input "secret", saying where the site sent it. Type it with type_handoff_secret.
+  4. If the sign-in page or the code page offers to remember the sign-in or the device ("Remember me", "Keep me signed in", "Trust this device"), pass its words as remember_label. The person decides; you then tick or untick that box as they chose before you submit. Without their answer, leave the box as it is.
+  5. Never ask for a password or a code with input "text". If the site shows the username and the password on separate pages, still ask once with "credentials" and type each on its page.
+- Use input "takeover" only for what cannot be typed for them: a passkey or security-key touch, a CAPTCHA puzzle you cannot pass, an approval they must give in another app when the page does not move on by itself, or when they declined to sign in.
 - If a click is refused because the task asks for confirmation before purchases, call request_human with kind "confirmation", then try again.
 
 When done, or when the goal is impossible, call finish with a short, factual result.`;
@@ -172,6 +172,8 @@ export interface RequestHumanArgs {
   confirm_label?: string | null;
   deny_label?: string | null;
   risk?: 'low' | 'high' | null;
+  /** credentials and secret: the words of the page's "remember me" option, when it has one (#527). */
+  remember_label?: string | null;
 }
 
 const CONSTRAINT_FROM_MODEL = {
@@ -207,15 +209,26 @@ export function requestHumanSpec(a: RequestHumanArgs): Record<string, unknown> {
     ...(a.input === 'confirm' && a.confirm_label ? { confirmLabel: a.confirm_label } : {}),
     ...(a.input === 'confirm' && a.deny_label ? { denyLabel: a.deny_label } : {}),
     ...(a.input === 'confirm' && a.risk ? { risk: a.risk } : {}),
+    // The page's words, cut to the fabric's limit; only where a person types a secret.
+    ...((a.input === 'credentials' || a.input === 'secret') && a.remember_label?.trim() ? { rememberLabel: a.remember_label.trim().replace(/\s+/g, ' ').slice(0, 80) } : {}),
   };
 }
 
 /** What the model reads after a person answered (never a secret). */
-export function answerLine(a: { input: string; kind: string; value?: string; values?: string[]; options: QuestionOption[] | null; unit: string | null }): string {
+export function answerLine(a: { input: string; kind: string; value?: string; values?: string[]; options: QuestionOption[] | null; unit: string | null; rememberLabel?: string | null; remember?: boolean }): string {
   const label = (id: string) => (a.options ?? []).find((o) => o.id === id)?.label ?? id;
+  // The person's choice for the site's "remember me" option (#527). Without one, the page's box is left as it is.
+  const remember =
+    a.rememberLabel && a.remember !== undefined
+      ? a.remember
+        ? ` The person chose to tick "${trim(a.rememberLabel, 80)}": make sure that box is ticked before you submit.`
+        : ` The person chose not to tick "${trim(a.rememberLabel, 80)}": make sure that box is unticked before you submit.`
+      : '';
   switch (a.input) {
     case 'secret':
-      return 'The person provided the secret. Type it with type_handoff_secret(selector).';
+      return `The person provided the secret. Type it with type_handoff_secret(selector).${remember}`;
+    case 'credentials':
+      return `The person gave the sign-in. Type the username "${trim(a.value ?? '', 200)}" with type_text into the username field, then type the password with type_handoff_secret(selector) into the password field, then submit.${remember}`;
     case 'confirm':
       return a.value === 'approve' ? 'The person approved.' : 'The person denied it. Do not do it; finish if you cannot continue another way.';
     case 'choice':
@@ -412,7 +425,7 @@ export class GoalRunnerService {
       if (h.status === 'pending') return 'waiting_human';
       await this.questions?.reconcileHandoff(h);
       // The answer as the broker recorded it (labels of choices), else as the fabric reports it.
-      const q = await db.question.findFirst({ where: { handoffId: h.id }, select: { response: true, options: true, constraints: true, input: true } });
+      const q = await db.question.findFirst({ where: { handoffId: h.id }, select: { response: true, options: true, constraints: true, input: true, rememberLabel: true } });
       const resp = (q?.response as unknown as QuestionResponse | null) ?? null;
       const outcome = resp?.outcome ?? handoffOutcome(h);
       if (h.status === 'completed' && outcome === 'completed') {
@@ -423,8 +436,10 @@ export class GoalRunnerService {
           values: resp?.values ?? h.response?.values,
           options: (q?.options as unknown as QuestionOption[] | null) ?? null,
           unit: (q?.constraints as unknown as QuestionConstraints | null)?.unit ?? null,
+          rememberLabel: q?.rememberLabel ?? h.remember?.label ?? null,
+          remember: resp?.remember ?? h.response?.remember,
         });
-        if (h.input === 'secret') memory.secretHandoffId = h.id;
+        if (h.input === 'secret' || h.input === 'credentials') memory.secretHandoffId = h.id;
         if (h.input === 'confirm' && (resp?.value ?? h.response?.value) === 'approve' && h.kind === 'confirmation') memory.confirmationGranted = true;
         if (h.kind === 'confirmation' && h.input !== 'confirm') memory.confirmationGranted = true;
         memory.log.push(line);
@@ -697,6 +712,7 @@ export class GoalRunnerService {
           confirmLabel: spec.confirmLabel,
           denyLabel: spec.denyLabel,
           risk: spec.risk,
+          rememberLabel: spec.rememberLabel,
         });
         state.handoffId = created.id;
         state.handoffExpiresAt = created.expiresAt;
@@ -934,15 +950,15 @@ export class GoalRunnerService {
         name: 'request_human',
         description:
           'Ask the person for what only they have: a username, a password, a one-time code, a passkey touch, a CAPTCHA, a choice, a number, or a confirmation before an irreversible step. ' +
-          'For a sign-in, ask for the username (kind login, input text), then the password (kind login, input secret), then any code (kind code, input secret), and type each yourself; do not ask the person to sign in in the browser. ' +
-          'input: none (they do something, then press Done), text, secret (a code or password; type it with type_handoff_secret), choice (one of options), ' +
+          'For a sign-in, ask once for the username and password (kind login, input credentials), then any code (kind code, input secret), and type each yourself; do not ask the person to sign in in the browser. ' +
+          'input: none (they do something, then press Done), text, secret (a code or password; type it with type_handoff_secret), credentials (a username, typed with type_text, and a password, typed with type_handoff_secret), choice (one of options), ' +
           'multi_choice (several of options), number (with constraints min/max/step/unit), confirm (approve or deny; risk "high" by default), ' +
           'takeover (they take over the browser, then press Done: only for a passkey, a CAPTCHA you cannot pass, or when they declined to give a credential). ' +
           'Set the fields that do not apply to null. The run pauses until they answer.',
         parameters: z.object({
           kind: z.enum(['captcha', 'code', 'passkey', 'login', 'confirmation', 'other']),
           prompt: z.string().min(1).max(1500),
-          input: z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover']),
+          input: z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials']),
           /** Bare option labels (each its own id); or use `options`. */
           choices: z.array(z.string().max(100)).max(10).nullable(),
           options: z.array(z.object({ id: z.string().max(64), label: z.string().max(100), description: z.string().max(200).nullable() })).max(10).nullable(),
@@ -962,6 +978,8 @@ export class GoalRunnerService {
           confirm_label: z.string().max(40).nullable(),
           deny_label: z.string().max(40).nullable(),
           risk: z.enum(['low', 'high']).nullable(),
+          /** credentials and secret: the words of the page's "remember me" option, or null. */
+          remember_label: z.string().max(200).nullable(),
         }),
         execute: async (args) => {
           const started = Date.now();

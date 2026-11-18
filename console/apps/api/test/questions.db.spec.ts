@@ -231,6 +231,37 @@ describe('browser-bound questions', () => {
     expect(enqueued.filter((j) => j.subjectId === run.id)).toEqual([]);
   });
 
+  it('forwards a sign-in to the fabric: the username is kept, the password is not, and the remember choice is recorded (#527)', async () => {
+    const a = await login(`q-signin-${stamp}@example.test`);
+    const db = prisma.forUser({ userId: a.userId });
+    const hid = randomUUID();
+    handoffs.set(hid, { id: hid, status: 'pending', input: 'credentials', kind: 'login', prompt: 'Sign in', choices: [] });
+    const run = await db.run.create({ data: { userId: a.userId, goal: 'Read the balance', trigger: 'external', status: 'waiting_human', handoffId: hid, sessionId: randomUUID() } });
+    const q = await questions.mirrorHandoff(
+      { id: a.userId },
+      questions.parseSpec({ input: 'credentials', kind: 'login', prompt: 'Sign in to Example Bank', rememberLabel: 'Keep me signed in' }),
+      { id: hid, viewerUrl: null, pageTitle: null, expiresAt: null },
+      { askedBy: 'agent:x', runId: run.id, fabricSessionId: run.sessionId },
+    );
+    expect(q).toMatchObject({ input: 'credentials', rememberLabel: 'Keep me signed in' });
+
+    // Not from a channel that does not sign the person in; not without a password.
+    const viaWebhook = await app.inject({ method: 'POST', url: `/api/questions/${q.id}/answer`, headers: as(a.token), payload: { value: 'oscar', secret: SECRET, channel: 'webhook' } });
+    expect(viaWebhook.statusCode).toBe(403);
+    expect(viaWebhook.json<{ message: string }>().message).toMatch(/^A sign-in cannot be answered from a webhook receiver/);
+    const noPassword = await app.inject({ method: 'POST', url: `/api/questions/${q.id}/answer`, headers: as(a.token), payload: { value: 'oscar', channel: 'web' } });
+    expect(noPassword.statusCode).toBe(400);
+
+    const res = await app.inject({ method: 'POST', url: `/api/questions/${q.id}/answer`, headers: as(a.token), payload: { value: 'oscar', secret: SECRET, remember: true, channel: 'web' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain(SECRET);
+    expect(data<View>(res).response).toMatchObject({ outcome: 'completed', value: 'oscar', valueWithheld: true, remember: true, channel: 'web' });
+    expect(calls).toContainEqual(['POST', `/v1/handoffs/${hid}/respond`, { outcome: 'completed', value: 'oscar', secret: SECRET, remember: true, channel: 'web', answered_by: `user:${a.userId}` }]);
+    const row = await prisma.question.findUniqueOrThrow({ where: { id: q.id } });
+    expect(JSON.stringify(row)).not.toContain(SECRET);
+    expect((await app.inject({ method: 'GET', url: `/api/questions/${q.id}`, headers: as(a.token) })).body).not.toContain(SECRET);
+  });
+
   it('a run handoff answered through the questions API resumes the run', async () => {
     const a = await login(`q-run-${stamp}@example.test`);
     const db = prisma.forUser({ userId: a.userId });

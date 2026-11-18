@@ -1,5 +1,5 @@
 /** The input types of a typed question (the REST contract, E26). */
-export type QuestionInputType = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover';
+export type QuestionInputType = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover' | 'credentials';
 
 export interface RuleOption {
   id: string;

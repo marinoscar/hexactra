@@ -435,7 +435,7 @@ function taskListItem(t: Record<string, unknown>): z.infer<typeof taskListItemSc
 
 /** Why a question cannot be answered from a chat, in words. */
 function notHereReason(q: Pick<QuestionView, 'input'>): string {
-  return q.input === 'secret' ? 'a code or password is never passed through a chat' : q.input === 'confirm' ? 'a high-risk confirmation needs the user signed in to Hexactra' : 'it is done in the browser itself';
+  return q.input === 'credentials' ? 'a sign-in is never passed through a chat' : q.input === 'secret' ? 'a code or password is never passed through a chat' : q.input === 'confirm' ? 'a high-risk confirmation needs the user signed in to Hexactra' : 'it is done in the browser itself';
 }
 
 /** The answer output of inbox_answer and question_card_answer (the outputSchema). */

@@ -21,6 +21,7 @@ Every question has an **owner** (the user it is asked of), an **asker** (`user:<
 | `takeover` | Nothing: they take over the browser, then press Done | | `outcome` |
 | `text` | A line or paragraph of text | `maxLength` (≤ 4096), `pattern` (whole-answer regex), `multiline` | `value` |
 | `secret` | A code or password (browser-bound only) | | `valueWithheld: true`, never the value |
+| `credentials` | A sign-in: a username (`value`) and a password (`secret`), in one answer (browser-bound only, #527) | | `value`: the username; `valueWithheld: true`, never the password |
 | `choice` | One option | 1-10 `options`, each a label or `{ id, label, description? }` | `value`: the option id |
 | `multi_choice` | Several options | `options`, `minSelections`, `maxSelections` | `values`: option ids |
 | `number` | A number | `min`, `max`, `step`, `unit` | `value`: a canonical decimal string (`"7.5"`) |
@@ -29,6 +30,10 @@ Every question has an **owner** (the user it is asked of), an **asker** (`user:<
 `kind` says why it is asked (`captcha`, `code`, `passkey`, `login`, `confirmation`, `other`). Declining is `outcome: "cancelled"` for any type.
 
 A response is `{ outcome, value?, values?, valueWithheld, channel?, by?, answeredAt }`. `by` is the signed-in answerer (`user:<id>`); a webhook answer is recorded as its owner on channel `webhook`. **The first answer wins**: a later one is a 409, whichever channel it comes from.
+
+### "Remember me" (#527)
+
+A `credentials` or `secret` question may carry `rememberLabel`: the words of the site's own option to remember the sign-in or the device ("Keep me signed in", "Trust this device"), at most 80 characters. The form shows it as a checkbox, **ticked by default**, and the answer's `remember` records the choice. The agent then ticks or unticks that box on the page before it submits. With no answer for it, the box is left as the page had it. The site does the remembering, in the run's browser profile; Hexactra stores no password.
 
 ## Channels
 
@@ -39,7 +44,7 @@ A question is delivered on every registered channel and withdrawn from all of th
 | `choice`, `multi_choice`, `text`, `number` | Yes | A two-option `choice` gets one button per option; the rest open the question | Yes | Yes | Yes (a form in the AI app) | Yes (the card's form) |
 | `confirm`, `risk: low` | Yes | Approve and Deny buttons | Yes | Yes | Yes (a yes/no field) | Yes (two buttons) |
 | `confirm`, `risk: high` | Yes (signed in) | Opens the question | No: the payload carries no token | No: the inbox link | Never asked | No: the inbox link |
-| `secret` | Yes, on the question's protected page | A link only | A link only | No: the inbox link | Never asked (no URL mode either) | No: the inbox link |
+| `secret`, `credentials` | Yes, on the question's protected page | A link only | A link only (a sign-in's webhook carries neither the username nor the password) | No: the inbox link | Never asked (no URL mode either) | No: the inbox link |
 | `none`, `takeover` | Yes | Opens the question | No | No: the inbox link | Never asked | `none`: Done; `takeover`: a link to the viewer |
 
 The rule table is code: `CHANNEL_RULES` in `apps/api/src/questions/channels/channel-rules.ts`, by channel id (`mcp-oauth.claude` is the `mcp-oauth` channel from a Claude client). `QuestionsService` refuses, with `403`, a secret or the approval of a high-risk confirm from a channel that is not signed in (`notification`, `webhook`, `mcp-oauth`, `mcp-elicitation`, `mcp-app`); declining is allowed from anywhere. The web, Android, CLI, TUI, inbox, REST and `mcp` (a personal access token) channels are signed in.
@@ -69,6 +74,7 @@ A run started from a chat ([chat.md](chat.md)) asks in that chat: its request is
 | `text` | A text field, or a text area when `multiline` | Label "Your answer", always above the field. The error is on the left of the helper line and the "120 / 500" counter on the right |
 | `number` | A number field with the `unit` at its end | Decimal keypad on a phone; no native spinner |
 | `secret` | A field with a show/hide button | See below |
+| `credentials` | "Username or email" and "Password" in one form, then "Sign in" | The password field lets the phone's password manager fill a saved sign-in (`autocomplete="current-password"`); the browser may then offer to save it for the console's address, which you can decline |
 | `choice`, `multi_choice` | Full-width rows, at least 44 px tall, the whole row clickable | More than 8 options scroll inside a box; the buttons stay outside it. `multi_choice` says "2 of 3 selected" |
 | `confirm` | The `confirmLabel` and `denyLabel` buttons | `risk: high` (the default) asks "Are you sure?" as a second step |
 | `takeover` | "Open the browser", then "Done" | "Open the browser" is the main button until it has been pressed once |

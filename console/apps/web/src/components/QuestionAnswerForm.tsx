@@ -110,7 +110,10 @@ export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disab
   const [shown, setShown] = useState(shownByDefault);
   const [confirming, setConfirming] = useState(false);
   const [opened, setOpened] = useState(false);
-  const isSecret = q.input === 'secret';
+  // The site's "remember me" option (#527): ticked by default, the person unticks it.
+  const [remember, setRemember] = useState(true);
+  const isSecret = q.input === 'secret' || q.input === 'credentials';
+  const rememberAnswer = q.rememberLabel ? { remember } : {};
   const options = q.options ?? [];
   const c = q.constraints;
   const bounds = selectionBounds(c, options.length);
@@ -162,7 +165,16 @@ export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disab
         const v = secret;
         setSecret('');
         setShown(false);
-        send({ outcome: 'completed', value: v });
+        send({ outcome: 'completed', value: v, ...rememberAnswer });
+        return;
+      }
+      case 'credentials': {
+        if (!value.trim() || !secret) return;
+        // The password leaves the form's state before it is sent, as a secret does.
+        const v = secret;
+        setSecret('');
+        setShown(false);
+        send({ outcome: 'completed', value: value.trim(), secret: v, ...rememberAnswer });
         return;
       }
       default:
@@ -223,6 +235,63 @@ export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disab
       </>,
     );
   }
+
+  /**
+   * A masked field. `code`: a one-time code (shown by default, the phone's
+   * code autofill); `hidden`: a password the browser must not save or fill;
+   * `sign-in`: a site's password, which the phone's password manager may fill
+   * (#527).
+   */
+  const secretField = (label: string, mode: 'code' | 'hidden' | 'sign-in') => (
+    <TextField
+      fullWidth
+      label={label}
+      type={shown ? 'text' : 'password'}
+      value={secret}
+      onChange={(e) => setSecret(e.target.value)}
+      disabled={disabled}
+      helperText={SECRET_HELP}
+      slotProps={{
+        // Always above the field: an autofilled or pasted value can never sit under the label.
+        inputLabel: { shrink: true },
+        htmlInput: {
+          // `new-password` is the value Chrome honours to stop autofill and save prompts; a code is a one-time code; a sign-in lets the password manager fill it.
+          autoComplete: mode === 'code' ? 'one-time-code' : mode === 'sign-in' ? 'current-password' : 'new-password',
+          inputMode: mode === 'code' && digitsOnly(c?.pattern) ? 'numeric' : 'text',
+          spellCheck: false,
+          autoCapitalize: 'none',
+          autoCorrect: 'off',
+          // Password managers: do not offer to save or fill a code or a one-off password.
+          ...(mode === 'sign-in' ? {} : { 'data-1p-ignore': 'true', 'data-lpignore': 'true' }),
+        },
+        input: {
+          endAdornment: (
+            <InputAdornment position="end">
+              <IconButton
+                aria-label={shown ? 'Hide value' : 'Show value'}
+                aria-pressed={shown}
+                edge="end"
+                disabled={disabled}
+                onClick={() => setShown((v) => !v)}
+                // The field keeps its focus and caret.
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                {shown ? <VisibilityOffOutlined /> : <VisibilityOutlined />}
+              </IconButton>
+            </InputAdornment>
+          ),
+        },
+      }}
+    />
+  );
+  // The site's own words, as plain text (#527).
+  const rememberField = q.rememberLabel ? (
+    <FormControlLabel
+      sx={{ mt: q.input === 'secret' ? 1 : 0, alignItems: 'flex-start', '& .MuiCheckbox-root': { pt: 0.5 } }}
+      control={<Checkbox checked={remember} onChange={(e) => setRemember(e.target.checked)} disabled={disabled} />}
+      label={<Typography variant="body2" sx={{ pt: 0.75, overflowWrap: 'anywhere' }}>{q.rememberLabel}</Typography>}
+    />
+  ) : null;
 
   let field: ReactNode = null;
   let ready = true;
@@ -330,54 +399,34 @@ export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disab
         />
       );
       break;
-    case 'secret': {
+    case 'secret':
       ready = Boolean(secret);
-      const code = q.kind === 'code';
       field = (
-        <TextField
-          fullWidth
-          label={secretLabel(q.kind)}
-          type={shown ? 'text' : 'password'}
-          value={secret}
-          onChange={(e) => setSecret(e.target.value)}
-          disabled={disabled}
-          helperText={SECRET_HELP}
-          slotProps={{
-            // Always above the field: an autofilled or pasted value can never sit under the label.
-            inputLabel: { shrink: true },
-            htmlInput: {
-              // `new-password` is the value Chrome honours to stop autofill and save prompts; a code is a one-time code.
-              autoComplete: code ? 'one-time-code' : 'new-password',
-              inputMode: code && digitsOnly(c?.pattern) ? 'numeric' : 'text',
-              spellCheck: false,
-              autoCapitalize: 'none',
-              autoCorrect: 'off',
-              // Password managers: do not offer to save or fill this.
-              'data-1p-ignore': 'true',
-              'data-lpignore': 'true',
-            },
-            input: {
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton
-                    aria-label={shown ? 'Hide value' : 'Show value'}
-                    aria-pressed={shown}
-                    edge="end"
-                    disabled={disabled}
-                    onClick={() => setShown((s) => !s)}
-                    // The field keeps its focus and caret.
-                    onMouseDown={(e) => e.preventDefault()}
-                  >
-                    {shown ? <VisibilityOffOutlined /> : <VisibilityOutlined />}
-                  </IconButton>
-                </InputAdornment>
-              ),
-            },
-          }}
-        />
+        <>
+          {secretField(secretLabel(q.kind), q.kind === 'code' ? 'code' : 'hidden')}
+          {rememberField}
+        </>
       );
       break;
-    }
+    case 'credentials':
+      ready = value.trim() !== '' && Boolean(secret);
+      primaryLabel = 'Sign in';
+      field = (
+        <Stack spacing={2}>
+          <TextField
+            fullWidth
+            label="Username or email"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            disabled={disabled}
+            slotProps={{ inputLabel: { shrink: true }, htmlInput: { autoComplete: 'username', autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false, maxLength: 4096 } }}
+          />
+          {secretField('Password', 'sign-in')}
+          {/* In a box: the stack's spacing would otherwise cancel the checkbox's alignment with the fields. */}
+          {rememberField && <Box>{rememberField}</Box>}
+        </Stack>
+      );
+      break;
     case 'takeover':
       primaryLabel = 'Done';
       field = (

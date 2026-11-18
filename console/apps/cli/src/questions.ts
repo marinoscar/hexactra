@@ -1,7 +1,7 @@
 import type { ApiClient } from '@marinoscar/platform-cli/api-client';
 
 /** The input types (apps/api/src/questions/questions.contract.ts). */
-export const QUESTION_INPUTS = ['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover'] as const;
+export const QUESTION_INPUTS = ['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials'] as const;
 export type QuestionInput = (typeof QUESTION_INPUTS)[number];
 
 export interface QuestionOption {
@@ -68,6 +68,8 @@ export function flagFor(input: string): string {
   switch (input) {
     case 'secret':
       return '--secret-stdin';
+    case 'credentials':
+      return '--decline (a sign-in is answered in the web app)';
     case 'text':
     case 'number':
       return '--value';
@@ -90,6 +92,7 @@ export async function answerFromFlags(o: AnswerFlags, input: string, readSecret:
   const given = (['value', 'values', 'choice', 'approve', 'deny', 'done', 'decline', 'secretStdin'] as const).filter((k) => o[k] !== undefined && o[k] !== false);
   if (given.length > 1) throw new Error(`Give one answer, not ${given.map((k) => `--${k === 'secretStdin' ? 'secret-stdin' : k}`).join(' and ')}.`);
   if (o.decline) return { outcome: 'cancelled' };
+  if (input === 'credentials') throw new Error('A sign-in is answered in the web app (chat or Inbox), where its password field is; the CLI can only --decline it.');
   if (o.secretStdin) {
     const v = await readSecret();
     if (!v) throw new Error('No secret on stdin.');
