@@ -633,12 +633,15 @@ mod tests {
         release.await.unwrap();
     }
 
-    #[tokio::test]
+    // Paused time: the clock moves only when the runtime sleeps, so "no time
+    // passed" means exactly "no retry sleep ran", however slow the machine is.
+    // (A wall-clock bound here failed on a busy CI runner, #493.)
+    #[tokio::test(start_paused = true)]
     async fn spawn_fails_at_once_for_other_errors() {
-        let started = std::time::Instant::now();
+        let started = tokio::time::Instant::now();
         let mut cmd = tokio::process::Command::new("/nonexistent/x11vnc");
         let e = spawn_retrying_busy(&mut cmd).await.unwrap_err();
         assert_eq!(e.kind(), std::io::ErrorKind::NotFound);
-        assert!(started.elapsed() < Duration::from_millis(15));
+        assert_eq!(started.elapsed(), Duration::ZERO);
     }
 }
