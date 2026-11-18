@@ -327,10 +327,10 @@ export function ResultCard({ message, onRunAgain, onSaveAsTask, saving = false }
       component="article"
       aria-label="Result"
       data-tone={confirmedEnd ? 'warning' : undefined}
-      sx={{ p: 1.5, width: '100%', maxWidth: CARD_MAX, borderRadius: 3, bgcolor: 'background.paper', ...(confirmedEnd ? { borderColor: 'warning.main' } : {}) }}
+      sx={{ p: 1.5, width: '100%', maxWidth: CARD_MAX, borderRadius: 3, bgcolor: 'background.paper', ...(confirmedEnd ? { border: 1, borderColor: 'warning.main', borderLeftWidth: 4 } : {}) }}
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1, flexWrap: 'wrap', rowGap: 0.5 }}>
-        <Typography variant="subtitle2" component="p" sx={{ flex: 1, minWidth: 0 }} color={confirmedEnd ? 'warning.main' : undefined}>
+        <Typography variant="subtitle2" component="p" sx={{ flex: 1, minWidth: 0, ...(confirmedEnd ? { color: 'warning.main' } : {}) }}>
           {confirmedEnd ? 'Ended after a confirmed step' : (RESULT_TITLE[status] ?? 'Finished')}
         </Typography>
         {status && <StatusChip status={status} size="small" />}
