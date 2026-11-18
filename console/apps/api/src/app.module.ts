@@ -48,10 +48,10 @@ import { PrismaModule } from './prisma/prisma.service';
     FabricModule,
     FleetModule,
     PoliciesModule,
-    // Saved approvals (#554): rules the owner can see, narrow, pause and revoke.
-    ApprovalsModule,
     // Memories (#551): the owner's saved facts.
     MemoriesModule,
+    // Saved approvals (#554): rules the owner can see, narrow, pause and revoke.
+    ApprovalsModule,
     // Connected AI apps (#464): the request's client context and the per-app limits (global).
     ConnectedAppsModule,
     TasksModule,
