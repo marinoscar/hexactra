@@ -9,7 +9,7 @@
 # Needs network access to npm (npx downloads the pinned Inspector once).
 set -euo pipefail
 
-INSPECTOR_VERSION=2.13.0
+INSPECTOR_VERSION=2.15.0
 url=${MCP_URL:-http://localhost:3535/api/mcp}
 : "${HEXACTRA_TOKEN:?set HEXACTRA_TOKEN to a personal access token (pat_...)}"
 
