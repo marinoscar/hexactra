@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { readConfirmedActions, withConfirmedLead } from '../runner/confirmed-actions';
+import { STEP_QUESTION_SELECT, stepView } from './run-trace.view';
 import { assertTransition, isTerminal, type RunStatus } from './run-status';
 import type { CreateTaskDto, UpdateTaskDto } from './tasks.schemas';
 import { FabricClient } from '../fabric/fabric.client';
@@ -160,10 +161,11 @@ export class TasksService {
     const r = await this.db(userId).run.findFirst({
       where: { id },
       omit: { transcript: true },
-      include: { steps: { orderBy: { seq: 'asc' } } },
+      include: { steps: { orderBy: { seq: 'asc' }, include: { question: { select: STEP_QUESTION_SELECT } } } },
     });
     if (!r) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
-    return withCost({ ...r, confirmedActions: readConfirmedActions(r.confirmedActions) });
+    // Steps carry the masked question and whether they have a trace picture, never its object key (#541).
+    return withCost({ ...r, steps: r.steps.map(stepView), confirmedActions: readConfirmedActions(r.confirmedActions) });
   }
 
   /**

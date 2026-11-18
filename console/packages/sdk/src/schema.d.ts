@@ -6485,6 +6485,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{id}/steps/{seq}/screenshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `runs:read`. */
+        get: operations["runLive_stepScreenshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{id}/viewer": {
         parameters: {
             query?: never;
@@ -15346,7 +15363,7 @@ export interface components {
                 /** Format: uuid */
                 runId: string;
                 seq: number;
-                /** @description action | handoff | finish | error | note | routing (a tier change or provider fallback, with `args` { from, to, reason }; not an action) */
+                /** @description action | handoff | finish | error | note | routing (a tier change or provider fallback, with `args` { from, to, reason }; not an action) | guidance (an owner message from the chat, masked; not an action) | end (the closing step with the final screen; not an action). A `handoff` step with `action: "answered"` is the owner's answer (not an action). */
                 kind: string;
                 action: string | null;
                 /** @description Redacted: typed text is its length, URLs lose their query */
@@ -15356,7 +15373,40 @@ export interface components {
                 ok: boolean;
                 summary: string;
                 reasoning: string | null;
-                screenshotKey: string | null;
+                /** @description The step has a masked trace screenshot (#541): `GET /runs/{id}/steps/{seq}/screenshot` */
+                hasScreenshot: boolean;
+                /** @description The key moment the step records a screen for */
+                screenshotMoment: ("question" | "before_confirmed" | "after_confirmed" | "failure" | "final") | null;
+                /** @description How many regions the extension masked in the picture */
+                screenshotMasked: number | null;
+                /** @description Why a key moment has no picture */
+                screenshotNote: ("unavailable" | "masked_failed" | "no_storage" | "capped") | null;
+                /** @description The question the step asked or answered */
+                questionId: string | null;
+                /** @description The question this step asked or answered, masked (#541); null for any other step */
+                question: {
+                    /** Format: uuid */
+                    id: string;
+                    kind: string;
+                    input: string;
+                    /** @description Masked */
+                    prompt: string;
+                    /** @description Labels masked */
+                    options: {
+                        id: string;
+                        label: string;
+                    }[] | null;
+                    risk: string | null;
+                    status: string;
+                    answer: {
+                        outcome: string;
+                        /** @description Masked; absent when the value is withheld (a secret, a sign-in) */
+                        value?: string;
+                        valueWithheld: boolean;
+                        channel: string | null;
+                        answeredAt: string | null;
+                    } | null;
+                } | null;
                 durationMs: number | null;
                 /** @description ISO 8601 timestamp */
                 createdAt: string;
@@ -37340,6 +37390,47 @@ export interface operations {
             header?: never;
             path: {
                 id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runLive_stepScreenshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                seq: number;
             };
             cookie?: never;
         };

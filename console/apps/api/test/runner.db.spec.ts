@@ -1409,3 +1409,198 @@ describe('a step the owner confirmed (#540)', () => {
     expect(done.result).toBe('Sent.');
   });
 });
+
+describe('the run trace (#541)', () => {
+  const PROMPT = 'Pressing Pay sends $10 from card 4111 1111 1111 1111 to Person A. May I send it?';
+  const JPEG = Buffer.from('fake-jpeg-bytes');
+
+  /** A fabric whose masked screenshots answer with an image (or fail as told), and a store that keeps what it is given. */
+  function traced(opts: { failMask?: string } = {}) {
+    const fabric = fakeFabric();
+    const masked: Record<string, unknown>[] = [];
+    const base = fabric.request.getMockImplementation()!;
+    fabric.request.mockImplementation((async (method: string, path: string, o: { body?: Record<string, unknown> } = {}) => {
+      const action = o.body?.action as Record<string, unknown> | undefined;
+      if (method === 'POST' && path.endsWith('/actions') && action?.type === 'screenshot' && action.mask === true) {
+        masked.push(action);
+        if (opts.failMask) return { id: 'op', state: 'failed', error: opts.failMask };
+        return { id: 'op', state: 'succeeded', result: { data: JPEG.toString('base64'), mime: 'image/jpeg', masked: 3 } };
+      }
+      return base(method, path, o);
+    }) as never);
+    const objects = new Map<string, Buffer>();
+    const store = {
+      put: jest.fn(async (key: string, bytes: Buffer) => void objects.set(key, bytes)),
+      get: jest.fn(async (key: string) => (objects.has(key) ? { bytes: objects.get(key)!, contentType: 'image/jpeg' } : null)),
+      delete: jest.fn(async (key: string) => void objects.delete(key)),
+    };
+    return { fabric, masked, store, objects };
+  }
+
+  async function taskRun(label: string, columns: Record<string, unknown> = {}) {
+    const userId = await login(`trace-${label}-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const task = await db.task.create({ data: { userId, name: 'Pay', goal: 'Send the payment', confirmRiskyActions: true } });
+    const run = await db.run.create({ data: { userId, taskId: task.id, goal: task.goal, ...columns } });
+    return { userId, prisma, db, run };
+  }
+  const stepsOf = (prisma: PrismaService, runId: string) => prisma.runStep.findMany({ where: { runId }, orderBy: { seq: 'asc' } });
+
+  it('keeps masked pictures at the question, after the confirmed action and at the end; captures are not actions', async () => {
+    const { userId, prisma, db, run } = await taskRun('confirm');
+    const t = traced();
+    const { ai } = scriptedAi([
+      [
+        ['click', { selector: '#pay', reason: 'pay now' }],
+        ['request_human', { kind: 'confirmation', prompt: PROMPT, input: 'none', choices: null }],
+      ],
+      [['click', { selector: '#pay', reason: 'pay now' }], ['finish', { success: true, result: 'Sent.' }]],
+    ]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), t.fabric.client, ai, undefined, app.get(QuestionsService), undefined, undefined, undefined, undefined, t.store);
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    const h = [...t.fabric.handoffs.values()].at(-1)!;
+    Object.assign(h, { status: 'completed', response: { outcome: 'completed', value_withheld: false } });
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+
+    const steps = await stepsOf(prisma, run.id);
+    const shots = steps.filter((x) => x.screenshotKey).map((x) => [x.kind, x.action, x.screenshotMoment, x.screenshotMasked]);
+    expect(shots).toEqual([
+      ['handoff', null, 'before_confirmed', 3],
+      ['action', 'click', 'after_confirmed', 3],
+      ['end', null, 'final', 3],
+    ]);
+    for (const x of steps.filter((y) => y.screenshotKey)) expect(x.screenshotKey).toBe(`runs/${userId}/${run.id}/${x.seq}-${x.screenshotMoment}.jpg`);
+    expect([...t.objects.keys()].sort()).toEqual(steps.filter((y) => y.screenshotKey).map((y) => y.screenshotKey).sort());
+    // Every trace capture asked the extension to mask, and never drew marks.
+    expect(t.masked.length).toBe(3);
+    for (const a of t.masked) expect(a).toEqual({ type: 'screenshot', mask: true });
+    // The handoff step links its question; the answer is its own step; neither these nor the end are actions.
+    const asked = steps.find((x) => x.kind === 'handoff' && x.action === null)!;
+    expect(asked.questionId).toEqual(expect.any(String));
+    const answered = steps.find((x) => x.action === 'answered')!;
+    expect(answered).toMatchObject({ kind: 'handoff', summary: 'The owner allowed it', questionId: asked.questionId });
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    const actions = steps.filter((x) => ['action', 'handoff', 'finish'].includes(x.kind) && x.action !== 'answered');
+    expect(done.stepCount).toBe(actions.length);
+  });
+
+  it('a secret request takes no picture and its answer step never holds the value', async () => {
+    const { userId, prisma, db, run } = await taskRun('secret');
+    const t = traced();
+    const { ai } = scriptedAi([
+      [['request_human', { kind: 'code', prompt: 'Enter the code sent to your phone', input: 'secret', choices: null }]],
+      [['finish', { success: true, result: 'In.' }]],
+    ]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), t.fabric.client, ai, undefined, app.get(QuestionsService), undefined, undefined, undefined, undefined, t.store);
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    expect(t.masked).toHaveLength(0);
+    const h = [...t.fabric.handoffs.values()].at(-1)!;
+    Object.assign(h, { status: 'completed', response: { outcome: 'completed', value_withheld: true } });
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    const steps = await stepsOf(prisma, run.id);
+    expect(steps.find((x) => x.kind === 'handoff' && x.action === null)!.screenshotKey).toBeNull();
+    expect(steps.find((x) => x.action === 'answered')!.summary).toBe('The owner provided it');
+    const view = await app.get(TasksService).getRun(userId, run.id);
+    const q = (view.steps as { question: { answer: { valueWithheld: boolean; value?: string } | null } | null }[]).find((x) => x.question)!.question!;
+    expect(q.answer?.valueWithheld ?? true).toBe(true);
+    expect(q.answer?.value).toBeUndefined();
+    expect(JSON.stringify(await db.run.findFirstOrThrow({ where: { id: run.id }, include: { steps: true } }))).not.toContain(SECRET);
+  });
+
+  it('a capture that cannot be masked leaves the run going and says why on the step', async () => {
+    const { userId, prisma, run } = await taskRun('mask-fails');
+    const t = traced({ failMask: 'mask_unavailable: a cross-origin frame fills the viewport' });
+    const { ai } = scriptedAi([[['finish', { success: true, result: 'Done.' }]]]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), t.fabric.client, ai, undefined, undefined, undefined, undefined, undefined, undefined, t.store);
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    const end = (await stepsOf(prisma, run.id)).find((x) => x.kind === 'end')!;
+    expect(end).toMatchObject({ screenshotKey: null, screenshotMoment: 'final', screenshotNote: 'masked_failed' });
+    expect(t.store.put).not.toHaveBeenCalled();
+  });
+
+  it('without storage: no trace screenshot is asked for, and the run, its steps and questions are recorded', async () => {
+    const { userId, prisma, run } = await taskRun('no-storage');
+    const t = traced();
+    const { ai } = scriptedAi([[['click', { selector: '#x', reason: 'go' }], ['finish', { success: true, result: 'Done.' }]]]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), t.fabric.client, ai);
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    expect(t.masked).toHaveLength(0);
+    const steps = await stepsOf(prisma, run.id);
+    expect(steps.map((x) => x.kind)).toEqual(['action', 'finish', 'end']);
+    expect(steps.at(-1)).toMatchObject({ screenshotNote: 'no_storage', screenshotKey: null });
+  });
+
+  it('records chat guidance as masked guidance steps, not actions', async () => {
+    const userId = await login(`trace-guidance-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const chat = await db.conversation.create({ data: { userId, title: 'Pay' } });
+    const run = await db.run.create({ data: { userId, conversationId: chat.id, trigger: 'chat', goal: 'Pay the bill' } });
+    await prisma.runGuidance.create({ data: { runId: run.id, conversationId: chat.id, messageSeq: 1, note: 'Use the account 123456789 ending in checking' } });
+    const { ai } = scriptedAi([[['finish', { success: true, result: 'Paid.' }]]]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fakeFabric().client, ai);
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    const steps = await stepsOf(prisma, run.id);
+    const g = steps.find((x) => x.kind === 'guidance')!;
+    expect(g.summary).toMatch(/^The owner added: Use the account/);
+    expect(g.summary).not.toContain('123456789');
+    expect((await db.run.findFirstOrThrow({ where: { id: run.id } })).stepCount).toBe(1);
+  });
+
+  it('past the cap keeps only the confirmed-action and final pictures', async () => {
+    const { userId, prisma, run } = await taskRun('cap', { transcript: { log: [], chunks: 0, traceShots: 40 } });
+    const t = traced();
+    const { ai } = scriptedAi([
+      [
+        ['click', { selector: '#pay', reason: 'pay now' }],
+        ['request_human', { kind: 'confirmation', prompt: PROMPT, input: 'none', choices: null }],
+      ],
+      [['request_human', { kind: 'other', prompt: 'Which account?', input: 'text', choices: null }]],
+    ]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), t.fabric.client, ai, undefined, undefined, undefined, undefined, undefined, undefined, t.store);
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    Object.assign([...t.fabric.handoffs.values()].at(-1)!, { status: 'completed', response: { outcome: 'completed', value_withheld: false } });
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    const steps = await stepsOf(prisma, run.id);
+    const handoffs = steps.filter((x) => x.kind === 'handoff' && x.action === null);
+    // The confirmation's picture is kept past the cap; a plain question's is not.
+    expect(handoffs.map((x) => [x.screenshotMoment, x.screenshotNote, Boolean(x.screenshotKey)])).toEqual([
+      ['before_confirmed', null, true],
+      ['question', 'capped', false],
+    ]);
+  });
+
+  it('serves a step picture to its owner only', async () => {
+    const { userId, prisma, run } = await taskRun('route');
+    const t = traced();
+    const { ai } = scriptedAi([[['finish', { success: true, result: 'Done.' }]]]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), t.fabric.client, ai, undefined, undefined, undefined, undefined, undefined, undefined, t.store);
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    const end = (await stepsOf(prisma, run.id)).find((x) => x.kind === 'end')!;
+    const live = app.get(RunLiveController) as unknown as { artifacts?: unknown };
+    const before = live.artifacts;
+    live.artifacts = t.store;
+    try {
+      const token = async (email: string) => new URL(String((await app.inject({ method: 'POST', url: '/api/auth/test/login', payload: { email, role: 'contributor' } })).headers.location)).searchParams.get('token')!;
+      const mine = await token(`trace-route-${stamp}@example.test`);
+      const other = await token(`trace-route-other-${stamp}@example.test`);
+      const get = (tk: string, seq: number) => app.inject({ method: 'GET', url: `/api/runs/${run.id}/steps/${seq}/screenshot`, headers: { authorization: `Bearer ${tk}` } });
+      const ok = await get(mine, end.seq);
+      expect(ok.statusCode).toBe(200);
+      expect(ok.headers['content-type']).toBe('image/jpeg');
+      expect(ok.headers['cache-control']).toBe('private, max-age=3600');
+      expect(ok.rawPayload.equals(JPEG)).toBe(true);
+      expect((await get(other, end.seq)).statusCode).toBe(404);
+      expect((await get(mine, 999)).statusCode).toBe(404);
+      expect((await get(mine, end.seq - 1)).statusCode).toBe(404);
+      // The run view: hasScreenshot, never the key.
+      const view = await app.inject({ method: 'GET', url: `/api/runs/${run.id}`, headers: { authorization: `Bearer ${mine}` } });
+      const steps = view.json<{ data: { steps: Record<string, unknown>[] } }>().data.steps;
+      expect(steps.at(-1)).toMatchObject({ kind: 'end', hasScreenshot: true, screenshotMoment: 'final' });
+      expect(JSON.stringify(steps)).not.toContain('screenshotKey');
+    } finally {
+      live.artifacts = before;
+    }
+  });
+});

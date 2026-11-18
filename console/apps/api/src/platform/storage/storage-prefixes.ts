@@ -17,5 +17,14 @@ export const NOTE_ATTACHMENTS_KEY_PREFIX: StorageKeyPrefixDef = {
   description: 'Files attached to a note, under note-attachments/<userId>/',
 };
 
+/** The masked trace screenshots of a run (#541), `runs/<userId>/<runId>/<seq>-<moment>.jpg`. Removed with the run. */
+export const RUN_TRACE_KEY_PREFIX: StorageKeyPrefixDef = {
+  id: 'run-traces',
+  prefix: 'runs/',
+  owner: 'runs',
+  scope: 'user',
+  description: 'Masked screenshots of the key moments of a run, under runs/<userId>/<runId>/',
+};
+
 /** Every prefix this app adds. Append here. */
-export const APP_STORAGE_KEY_PREFIXES: readonly StorageKeyPrefixDef[] = [NOTE_ATTACHMENTS_KEY_PREFIX];
+export const APP_STORAGE_KEY_PREFIXES: readonly StorageKeyPrefixDef[] = [NOTE_ATTACHMENTS_KEY_PREFIX, RUN_TRACE_KEY_PREFIX];

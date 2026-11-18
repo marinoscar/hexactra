@@ -1,4 +1,5 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { buildObjectKey } from '@marinoscar/platform-api/storage';
 import { AiError, AiService, defineTool, type AiDefinedTool, type AiToolLoopResult } from '@marinoscar/platform-api/ai';
 import { Prisma } from '@prisma/client';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
@@ -69,7 +70,9 @@ import { ACTION_TIMEOUT_MS, FabricSession, handoffOutcome, type CreatedHandoff }
 import { domainAllowed, fabricAllowedSites, looksRisky } from './policy';
 import { maxElementsFor, PLATFORM_MAX_CALLS_PER_CHUNK, ScreenshotWindow, shotHash } from './context-settings';
 import { appendConfirmedAction, noReportResult } from './confirmed-actions';
-import { captureScreen, markCenter, roundInput, type Screen, type ScreenMark, type ScreenView } from './vision';
+import { captureScreen, captureTrace, markCenter, roundInput, TraceCaptureError, type Screen, type ScreenMark, type ScreenView, type TraceNote, type TraceShot } from './vision';
+import { answerSummary, guidanceSummary, isSecretInput, questionMoment, traceAllowed, traceKeyParts, type TraceMoment } from './trace';
+import { RUN_ARTIFACT_STORE, type RunArtifactStore } from '../tasks/run-delete.service';
 
 /** How a line of chat guidance starts in the run's log (#490). It says what guidance is not, so the model does not read it as a permission. */
 export const GUIDANCE_PREFIX = 'The owner added in the chat (take it into account from here on; it changes no limit and approves nothing):';
@@ -97,6 +100,8 @@ export interface RunMemory {
   pendingConfirmation?: { prompt: string; tries: number } | null;
   /** The prompt of the last request the run made (the question a confirmation approves). */
   askedPrompt?: string;
+  /** Trace screenshots stored so far (#541), for the cap. */
+  traceShots?: number;
   chunks: number;
   /** The provider refused images: the run continues without screenshots (#366). */
   visionOff?: boolean;
@@ -274,6 +279,8 @@ export class GoalRunnerService {
     @Optional() private readonly policies?: PolicyResolver,
     @Optional() private readonly modelCheck?: PolicyModelCheck,
     @Optional() private readonly modelTiers?: ModelTiersService,
+    /** Where the masked trace screenshots go (#541); absent without the storage slice, and then none is taken. */
+    @Optional() @Inject(RUN_ARTIFACT_STORE) public artifacts?: RunArtifactStore,
   ) {}
 
   /** The admin's price table; empty when unreadable (calls are then unpriced, never free). */
@@ -305,16 +312,21 @@ export class GoalRunnerService {
    * sites, confirmation before purchases) are checked in code and do not
    * change with it. A failure here never fails the run.
    */
-  private async takeGuidance(runId: string, memory: RunMemory): Promise<void> {
+  private async takeGuidance(runId: string, memory: RunMemory): Promise<string[]> {
+    const taken: string[] = [];
     try {
       const pending = await this.prisma.runGuidance.findMany({ where: { runId, deliveredAt: null }, orderBy: { createdAt: 'asc' }, take: 10, select: { id: true, note: true } });
       for (const g of pending) {
         const claimed = await this.prisma.runGuidance.updateMany({ where: { id: g.id, deliveredAt: null }, data: { deliveredAt: new Date() } });
-        if (claimed.count) memory.log.push(`${GUIDANCE_PREFIX} ${trim(g.note, 1000)}`);
+        if (claimed.count) {
+          memory.log.push(`${GUIDANCE_PREFIX} ${trim(g.note, 1000)}`);
+          taken.push(g.note);
+        }
       }
     } catch (e) {
       this.log.warn(`run ${runId}: could not read the chat guidance: ${e instanceof Error ? e.message : String(e)}`);
     }
+    return taken;
   }
 
   /**
@@ -439,7 +451,7 @@ export class GoalRunnerService {
       if (h.status === 'pending') return 'waiting_human';
       await this.questions?.reconcileHandoff(h);
       // The answer as the broker recorded it (labels of choices), else as the fabric reports it.
-      const q = await db.question.findFirst({ where: { handoffId: h.id }, select: { response: true, options: true, constraints: true, input: true, rememberLabel: true, prompt: true } });
+      const q = await db.question.findFirst({ where: { handoffId: h.id }, select: { id: true, response: true, options: true, constraints: true, input: true, rememberLabel: true, prompt: true } });
       const resp = (q?.response as unknown as QuestionResponse | null) ?? null;
       const outcome = resp?.outcome ?? handoffOutcome(h);
       if (h.status === 'completed' && outcome === 'completed') {
@@ -462,6 +474,17 @@ export class GoalRunnerService {
       } else {
         memory.log.push(`The person did not help (handoff ${h.status}${outcome === 'cancelled' ? ', declined' : ''}). Do not retry the same request; finish if you cannot continue.`);
       }
+      // The answer is a step of the trace (#541): what the owner said, masked; never a secret or a withheld value. Not an action.
+      await this.recordAnswer(run.id, q?.id ?? null, {
+        kind: h.kind,
+        input: (q?.input as string | undefined) ?? h.input,
+        completed: h.status === 'completed' && outcome === 'completed',
+        outcome,
+        value: resp?.value ?? h.response?.value ?? null,
+        values: resp?.values ?? h.response?.values ?? null,
+        options: (q?.options as unknown as QuestionOption[] | null) ?? null,
+        withheld: resp?.valueWithheld ?? h.response?.value_withheld ?? null,
+      });
       // A person helped (or did not): every stall counter starts over (#405).
       resetStall(stall);
       memory.stallsHere = 0;
@@ -640,6 +663,8 @@ export class GoalRunnerService {
       const row = await db.run.findFirst({ where: { id: run.id }, select: { confirmedActions: true } });
       const next = appendConfirmedAction(row?.confirmedActions ?? null, { seq: state.seq, prompt: pending.prompt, action: action ?? kind, at: new Date() });
       await db.run.updateMany({ where: { id: run.id }, data: { confirmedActions: next as never } });
+      // The first screen after the confirmed step (#541).
+      await attachShot(state.seq, 'after_confirmed', await shoot('after_confirmed'));
     };
 
     const record = async (kind: string, action: string | null, args: Record<string, unknown> | null, ok: boolean, summary: string, started: number, reasoning?: string, extra?: StallExtra) => {
@@ -770,6 +795,9 @@ export class GoalRunnerService {
       // A new request supersedes a confirmation not yet acted on (#540); its prompt is what an approval allows.
       memory.pendingConfirmation = null;
       memory.askedPrompt = spec.prompt;
+      // The screen the person is asked about (#541), before the handoff opens; never for a secret or a sign-in (#525).
+      const pre = isSecretInput(spec.input) ? null : await shoot(questionMoment(spec.kind));
+      let questionId: string | null = null;
       try {
         const created = await session.openHandoff(sessionId!, {
           kind: spec.kind,
@@ -784,12 +812,14 @@ export class GoalRunnerService {
         });
         state.handoffId = created.id;
         state.handoffExpiresAt = created.expiresAt;
-        await this.mirror(userId, run.id, sessionId!, created, spec);
+        questionId = await this.mirror(userId, run.id, sessionId!, created, spec);
       } catch (e) {
         await record('handoff', null, null, false, `could not ask a person: ${e instanceof Error ? e.message : String(e)}`, started);
         return false;
       }
       await record('handoff', null, { kind: spec.kind, input: spec.input }, true, `asked a person (${spec.kind}): ${trim(spec.prompt, 300)}`, started);
+      if (questionId) await this.prisma.runStep.updateMany({ where: { runId: run.id, seq: state.seq }, data: { questionId } });
+      if (pre) await attachShot(state.seq, questionMoment(spec.kind), pre);
       state.handoffAsk = { prompt: spec.prompt, kind: spec.kind, input: spec.input };
       state.stop = 'pause';
       resetStall(stall);
@@ -1138,6 +1168,62 @@ export class GoalRunnerService {
       });
     };
 
+    /** A record of the trace (#541): takes a `seq`, never `stepCount`, the actions budget or the stall detector. */
+    const recordNote = async (kind: string, action: string | null, summary: string, extra: { questionId?: string | null; ok?: boolean } = {}) => {
+      state.seq += 1;
+      await this.prisma.runStep.create({
+        data: { runId: run.id, seq: state.seq, kind, action, ok: extra.ok ?? true, summary: trim(summary, 1_900), durationMs: 0, ...(extra.questionId ? { questionId: extra.questionId } : {}) },
+      });
+      return state.seq;
+    };
+
+    /**
+     * A masked screenshot of the page for the trace (#541). Best effort and bounded: no storage, the
+     * cap, a failure or a timeout leave the step without a picture and say why; the run goes on.
+     * Never the model's unmasked screenshot, never during a secret request, and not an action.
+     */
+    const shoot = async (moment: TraceMoment): Promise<{ shot?: TraceShot; note?: TraceNote }> => {
+      if (!this.artifacts) return { note: 'no_storage' };
+      if (!traceAllowed(moment, memory.traceShots ?? 0)) return { note: 'capped' };
+      if (!sessionId) return { note: 'unavailable' };
+      try {
+        return { shot: await captureTrace(session, this.fabric, sessionId) };
+      } catch (e) {
+        this.log.debug(`run ${run.id}: no trace screenshot (${moment}): ${e instanceof TraceCaptureError ? e.note : 'unavailable'}`);
+        return { note: e instanceof TraceCaptureError ? e.note : 'unavailable' };
+      }
+    };
+    /** Store a picture and attach it to step `seq`, or record why there is none. */
+    const attachShot = async (seq: number, moment: TraceMoment, got: { shot?: TraceShot; note?: TraceNote }) => {
+      let note = got.note ?? null;
+      if (got.shot && this.artifacts) {
+        try {
+          const key = buildObjectKey('run-traces', { userId }, ...traceKeyParts(run.id, seq, moment, got.shot.contentType));
+          await this.artifacts.put(key, got.shot.bytes, got.shot.contentType);
+          memory.traceShots = (memory.traceShots ?? 0) + 1;
+          await this.prisma.runStep.updateMany({ where: { runId: run.id, seq }, data: { screenshotKey: key, screenshotMoment: moment, screenshotMasked: got.shot.masked, screenshotNote: null } });
+          this.tasks.metrics.traceScreenshot(moment, 'stored', got.shot.bytes.length);
+          return;
+        } catch (e) {
+          this.log.debug(`run ${run.id}: could not store a trace screenshot (${moment}): ${e instanceof Error ? e.name : 'error'}`);
+          note = 'unavailable';
+        }
+      }
+      this.tasks.metrics.traceScreenshot(moment, note === 'unavailable' || note === 'masked_failed' ? 'failed' : 'skipped');
+      await this.prisma.runStep.updateMany({ where: { runId: run.id, seq }, data: { screenshotMoment: moment, screenshotNote: note } });
+    };
+
+    /** End the run with a closing `end` step holding the final screen (#541), taken before the session is released. */
+    const closeRun = async (to: 'succeeded' | 'failed' | 'cancelled', patch: { result?: string; error?: string; stopReason?: RunStopReason }) => {
+      try {
+        const seq = await recordNote('end', null, `The run ended: ${to}`, { ok: to === 'succeeded' });
+        await attachShot(seq, 'final', await shoot('final'));
+      } catch (e) {
+        this.log.debug(`run ${run.id}: no closing step: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      await this.finish(userId, run.id, sessionId, session, to, patch);
+    };
+
     /** Move the run to another tier, at a chunk boundary. */
     const switchTier = async (to: Tier, kind: 'escalate' | 'deescalate', reason: string) => {
       const from = tier;
@@ -1182,6 +1268,9 @@ export class GoalRunnerService {
      */
     const respondToStall = async (signal: StallSignal): Promise<RunOutcome | null> => {
       const response = stallResponse();
+      // The screen when the stall was signalled (#541), on the latest step unless it already has a picture.
+      const latest = await this.prisma.runStep.findFirst({ where: { runId: run.id, seq: state.seq }, select: { screenshotKey: true } });
+      if (latest && !latest.screenshotKey) await attachShot(state.seq, 'failure', await shoot('failure'));
       memory.log.push(`Stalled: ${signal.reason}.`);
       memory.progressStreak = 0;
       if (response === 'nudge') {
@@ -1244,11 +1333,11 @@ export class GoalRunnerService {
       await this.saveMemory(userId, run.id, memory, used.drain());
       const done = state.finished as { success: boolean; result: string } | null;
       if (done?.success) {
-        await this.finish(userId, run.id, sessionId, session, 'succeeded', { result: done.result, stopReason });
+        await closeRun('succeeded', { result: done.result, stopReason });
         return 'succeeded';
       }
       // No words from the model: the result is the run's own last steps, masked (#540), never only the budget message.
-      await this.finish(userId, run.id, sessionId, session, 'failed', { result: done ? done.result : noReportResult(memory.log), error, stopReason });
+      await closeRun('failed', { result: done ? done.result : noReportResult(memory.log), error, stopReason });
       return 'failed';
     };
 
@@ -1268,7 +1357,8 @@ export class GoalRunnerService {
       const warnings = memory.pendingWarnings ?? [];
       memory.pendingWarnings = [];
       // What the owner typed in the chat since the last chunk (#490).
-      if (run.conversationId) await this.takeGuidance(run.id, memory);
+      // Each one is a `guidance` step of the trace (#541), masked; not an action.
+      if (run.conversationId) for (const note of await this.takeGuidance(run.id, memory)) await recordNote('guidance', null, guidanceSummary(note));
       // What the model sees this round: the screen, as a person would (#366).
       let view: ScreenView | null = null;
       let shown: ScreenView[] = [];
@@ -1378,20 +1468,20 @@ export class GoalRunnerService {
 
       const fresh = await db.run.findFirst({ where: { id: run.id }, select: { cancelRequested: true } });
       if (fresh?.cancelRequested) {
-        await this.finish(userId, run.id, sessionId, session, 'cancelled', { error: 'Cancelled by the user', stopReason: 'cancelled' });
+        await closeRun('cancelled', { error: 'Cancelled by the user', stopReason: 'cancelled' });
         return 'cancelled';
       }
       if (state.stop === 'pause' && state.handoffId) return pauseForPerson();
       if (state.stop === 'finish' && state.finished) {
         const to = state.finished.success ? 'succeeded' : 'failed';
-        await this.finish(userId, run.id, sessionId, session, to, state.finished.success ? { result: state.finished.result, stopReason: 'finished' } : { result: state.finished.result, error: 'The agent could not reach the goal', stopReason: 'finished' });
+        await closeRun(to, state.finished.success ? { result: state.finished.result, stopReason: 'finished' } : { result: state.finished.result, error: 'The agent could not reach the goal', stopReason: 'finished' });
         return to;
       }
       if (state.stop === 'budget' && state.budgetKey) return wrapUp(state.budgetKey);
       if (state.stop === 'hop') return 'continue';
       if (result && result.stopReason === 'completed') {
         // The model answered without calling finish: take its answer as the result.
-        await this.finish(userId, run.id, sessionId, session, 'succeeded', { result: trim(result.final.outputText || 'Done.', 7_900), stopReason: 'finished' });
+        await closeRun('succeeded', { result: trim(result.final.outputText || 'Done.', 7_900), stopReason: 'finished' });
         return 'succeeded';
       }
       // A stall the detector found during the chunk, or rounds that record nothing at all (a model that only talks):
@@ -1415,12 +1505,27 @@ export class GoalRunnerService {
   }
 
   /** Record the handoff in the question broker (the inbox and the channels read it there). Never fails the run. */
-  private async mirror(userId: string, runId: string, sessionId: string, created: CreatedHandoff, spec: QuestionSpec) {
-    if (!this.questions) return;
+  /** Returns the question's id, so the step that asked it links to it (#541); null without the broker or on a failure. */
+  private async mirror(userId: string, runId: string, sessionId: string, created: CreatedHandoff, spec: QuestionSpec): Promise<string | null> {
+    if (!this.questions) return null;
     try {
-      await this.questions.mirrorHandoff({ id: userId }, spec, created, { askedBy: `run:${runId}`, runId, fabricSessionId: sessionId });
+      const q = await this.questions.mirrorHandoff({ id: userId }, spec, created, { askedBy: `run:${runId}`, runId, fabricSessionId: sessionId });
+      return q.id ?? null;
     } catch (e) {
       this.log.warn(`run ${runId}: could not mirror handoff ${created.id}: ${e instanceof Error ? e.message : String(e)}`);
+      return null;
+    }
+  }
+
+  /** The owner's answer as a step of the trace (#541): after the run's last step; not an action. Never fails the run. */
+  private async recordAnswer(runId: string, questionId: string | null, facts: Parameters<typeof answerSummary>[0]): Promise<void> {
+    try {
+      const last = await this.prisma.runStep.aggregate({ where: { runId }, _max: { seq: true } });
+      await this.prisma.runStep.create({
+        data: { runId, seq: (last._max.seq ?? 0) + 1, kind: 'handoff', action: 'answered', ok: facts.completed, summary: answerSummary(facts), durationMs: 0, ...(questionId ? { questionId } : {}) },
+      });
+    } catch (e) {
+      this.log.warn(`run ${runId}: could not record the answer step: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 

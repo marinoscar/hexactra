@@ -7,7 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Every run keeps a trace** (#541, console 1.58.0): the questions it asked and the answers given (`handoff` steps with `action: "answered"`), the owner's chat guidance (`guidance` steps), a closing `end` step, and masked screenshots of the key moments (asked, before and after a confirmed step, a stall, the end) in object storage. `GET /api/runs/{id}` steps gain `hasScreenshot`, `screenshotMoment`, `screenshotMasked`, `screenshotNote`, `questionId` and a masked `question`; the picture is `GET /api/runs/{id}/steps/{seq}/screenshot`. Needs the fabric and the extension of #539 for pictures. Docs: `docs/runs.md` ("What a run records").
+
 ### Changed
+
+- **`screenshotKey` is no longer returned on run steps** (#541). It was never set; a step now says `hasScreenshot` and the picture is served by its own route.
 
 - **Platform 0.1.0-next.39: a client's connections on the OAuth clients page** (#535, console 1.55.2). Administration → OAuth clients → a client → **Details** now lists every user's connection to that client (scopes, organization, connected, last used, active or revoked with the reason) and revokes one after a confirmation, next to the existing **Disconnect** on External AI apps. Also from the platform: a deterministic storage conformance check and a longer registry wait in its releases.
 

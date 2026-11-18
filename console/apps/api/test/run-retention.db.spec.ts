@@ -11,6 +11,7 @@ import type { Prisma } from '@prisma/client';
 import { createApp } from '../src/main';
 import { RUN_RETENTION_NOTICE_EVENT } from '../src/platform/notifications/hexactra.notifications';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { RunDeleteService } from '../src/tasks/run-delete.service';
 import { RunRetentionDoctorCheck } from '../src/tasks/run-retention.doctor-check';
 import { RunRetentionApplyHandler, RunRetentionHandler } from '../src/tasks/run-retention.job';
 import { RUNS_RETENTION_APPLY_JOB, RUNS_RETENTION_AUDIT_ACTION, RUNS_RETENTION_JOB, RunRetentionService } from '../src/tasks/run-retention.service';
@@ -204,6 +205,37 @@ describe('the rule', () => {
     const row = await prisma.userSettings.findUniqueOrThrow({ where: { userId: user.userId } });
     await prisma.userSettings.update({ where: { userId: user.userId }, data: { value: { ...(row.value as object), runs: { keepDays: 'soon', keepPerTask: 5, keepFailedDays: -1, noticeSentAt: 'yesterday' } } } });
     expect(await retention.userRetention(user.userId)).toEqual({ limits: { keepDays: 90, keepPerTask: 5, keepFailedDays: null }, noticeSentAt: null });
+  });
+});
+
+describe('trace screenshots (#541)', () => {
+  it('the nightly rule removes the stored pictures of the runs it deletes; a storage failure still deletes the run', async () => {
+    const service = app.get(RunDeleteService, { strict: false }) as unknown as { store?: unknown };
+    const before = service.store;
+    const store = { delete: jest.fn(async (_key: string) => undefined), put: jest.fn(), get: jest.fn() };
+    service.store = store;
+    try {
+      const user = await login('trace-shots');
+      await save(user, { keepDays: 30 });
+      const old = await run(user.userId, 40 * DAY);
+      const failing = await run(user.userId, 41 * DAY);
+      const young = await run(user.userId, 2 * DAY);
+      await prisma.runStep.createMany({
+        data: [
+          { runId: old, seq: 1, kind: 'end', screenshotKey: `runs/${user.userId}/${old}/1-final.jpg`, screenshotMoment: 'final' },
+          { runId: failing, seq: 1, kind: 'end', screenshotKey: `runs/${user.userId}/${failing}/1-final.jpg`, screenshotMoment: 'final' },
+          { runId: young, seq: 1, kind: 'end', screenshotKey: `runs/${user.userId}/${young}/1-final.jpg`, screenshotMoment: 'final' },
+        ],
+      });
+      store.delete.mockImplementation(async (key: string) => {
+        if (key.includes(failing)) throw new Error('storage unavailable');
+      });
+      await nightly();
+      expect(store.delete.mock.calls.map((c) => c[0]).sort()).toEqual([`runs/${user.userId}/${failing}/1-final.jpg`, `runs/${user.userId}/${old}/1-final.jpg`].sort());
+      expect(await left([old, failing, young])).toEqual(new Set([young]));
+    } finally {
+      service.store = before;
+    }
   });
 });
 

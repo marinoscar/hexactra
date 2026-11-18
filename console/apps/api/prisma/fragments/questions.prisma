@@ -75,6 +75,8 @@ model Question {
 
   owner User @relation("QuestionOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
   run   Run? @relation(fields: [runId], references: [id], onDelete: Cascade)
+  /// The run steps that asked or answered it (#541).
+  steps RunStep[]
 
   @@index([ownerUserId, status, createdAt])
   @@index([status, expiresAt])

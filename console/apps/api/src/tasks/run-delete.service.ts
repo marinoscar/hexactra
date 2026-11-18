@@ -44,6 +44,10 @@ export interface RunsDeletePayload {
  */
 export const RUN_ARTIFACT_STORE = Symbol('RUN_ARTIFACT_STORE');
 export interface RunArtifactStore {
+  /** Store one object (a masked trace screenshot, #541). */
+  put(key: string, bytes: Buffer, contentType: string): Promise<void>;
+  /** Read one object back; null when it is not there. */
+  get(key: string): Promise<{ bytes: Buffer; contentType: string } | null>;
   delete(key: string): Promise<void>;
 }
 

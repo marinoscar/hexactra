@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import { Module, type DynamicModule, type Provider } from '@nestjs/common';
 
 import { FabricModule } from '../fabric/fabric.module';
@@ -10,6 +11,7 @@ import { RunsDeleteHandler } from './run-delete.job';
 import { RUN_ARTIFACT_STORE, RunDeleteService, type RunArtifactStore } from './run-delete.service';
 import { ActionTokenStore } from './action-token-store';
 import { RunRetentionController } from './run-retention.controller';
+import { RunTraceDoctorCheck } from './run-trace.doctor-check';
 import { RunRetentionDoctorCheck } from './run-retention.doctor-check';
 import { RunRetentionApplyHandler, RunRetentionHandler, RunRetentionTask } from './run-retention.job';
 import { RunRetentionService } from './run-retention.service';
@@ -38,7 +40,18 @@ function runArtifactStore(): { imports: DynamicModule['imports']; providers: Pro
     providers: [
       {
         provide: RUN_ARTIFACT_STORE,
-        useFactory: (provider: import('@marinoscar/platform-api/storage').StorageProvider): RunArtifactStore => ({ delete: (key) => provider.delete(key) }),
+        useFactory: (provider: import('@marinoscar/platform-api/storage').StorageProvider): RunArtifactStore => ({
+          put: async (key, bytes, contentType) => {
+            await provider.upload(key, Readable.from([bytes]), { mimeType: contentType, contentLength: bytes.length });
+          },
+          get: async (key) => {
+            if (!(await provider.exists(key))) return null;
+            const chunks: Buffer[] = [];
+            for await (const c of await provider.download(key)) chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c as Uint8Array));
+            return { bytes: Buffer.concat(chunks), contentType: key.endsWith('.png') ? 'image/png' : 'image/jpeg' };
+          },
+          delete: (key) => provider.delete(key),
+        }),
         inject: [storage.STORAGE_PROVIDER],
       },
     ],
@@ -51,7 +64,7 @@ const artifacts = runArtifactStore();
   imports: [FabricModule, PoliciesModule, ...(artifacts.imports ?? [])],
   // RunsDeleteController and RunRetentionController first: their fixed paths are declared before any `:id` route.
   controllers: [TasksController, TaskSchedulesController, RunsDeleteController, RunRetentionController, RunsController],
-  providers: [TasksService, RunsQueryService, RunDeleteService, RunsDeleteHandler, RunRetentionService, RunRetentionHandler, RunRetentionApplyHandler, RunRetentionTask, RunRetentionDoctorCheck, ...artifacts.providers, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, RunEvents, RunEndHooks, ActionTokenStore, RunActionTokens, RunReminders, RunRemindHandler, RunRemindTask],
-  exports: [TasksService, RunsQueryService, RunDeleteService, RunRetentionService, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, RunEvents, RunEndHooks, ActionTokenStore, RunActionTokens, RunReminders],
+  providers: [TasksService, RunsQueryService, RunDeleteService, RunsDeleteHandler, RunRetentionService, RunRetentionHandler, RunRetentionApplyHandler, RunRetentionTask, RunRetentionDoctorCheck, RunTraceDoctorCheck, ...artifacts.providers, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, RunEvents, RunEndHooks, ActionTokenStore, RunActionTokens, RunReminders, RunRemindHandler, RunRemindTask],
+  exports: [...(artifacts.providers.length ? [RUN_ARTIFACT_STORE] : []), TasksService, RunsQueryService, RunDeleteService, RunRetentionService, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, RunEvents, RunEndHooks, ActionTokenStore, RunActionTokens, RunReminders],
 })
 export class TasksModule {}

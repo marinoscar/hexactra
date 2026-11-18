@@ -601,6 +601,8 @@ For code: the list is `RunList` (`apps/web/src/components/RunList.tsx`) over the
 
 Run history does not grow without limit: each user has a retention rule, and a nightly job deletes the finished runs that fall outside it. Set it at **Settings → Browser agent → Run history**.
 
+**What a run keeps, and storage sizing.** Each run records its steps, the questions it asked and the answers given, the owner's chat guidance, and masked screenshots of its key moments (#541, [docs/runs.md](docs/runs.md#what-a-run-records)): 5 to 15 images per run, at most 40, about 150 kB each, in object storage under `runs/<userId>/<runId>/`. Plan about 1.5 MB of storage per run kept (1,000 kept runs ≈ 1.5 GB). Without the storage slice no image is taken and everything else is still recorded. Images go with their run.
+
 | On a desktop | On a phone |
 |---|---|
 | ![Settings, Run history: the three limits, the preview of what would be deleted, Save and Apply now, on a desktop](docs/images/run-history-desktop.png) | ![Settings, Run history: the three limits, the preview of what would be deleted, Save and Apply now, on a phone](docs/images/run-history-phone.png) |
