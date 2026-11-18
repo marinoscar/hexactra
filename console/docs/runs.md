@@ -1,4 +1,4 @@
-# Runs: list, filter, search, count, delete and retention
+# Runs: list, filter, search, count, delete, export and retention
 
 How a client reads a user's runs when there are thousands of them, and how it deletes them. Every answer is inside the platform's `{ data }` envelope. The two read routes need the `runs:read` permission; [deleting](#deleting-runs) needs `runs:delete`. A user only ever sees, and deletes, their own runs.
 
@@ -203,6 +203,51 @@ The table above is generated from the pattern table; after changing a pattern (a
 cd console/apps/api && UPDATE_MASK_DOCS=1 npx jest --config ./test/jest.config.js mask
 node scripts/gen-sensitive-patterns.mjs   # from the repository root
 ```
+
+## Exporting a run
+
+One JSON file holds everything about a run that is safe to share (#542): for your own records, or to hand to a developer or a coding agent when something went wrong. It is always masked; there is no unmasked export, for any role.
+
+```
+GET /api/runs/{id}/export?format=json&screenshots=embed|none
+```
+
+- **Permission** `runs:read`, the owner only: `404 RUN_NOT_FOUND` for a run that is not yours, exactly as for one that does not exist.
+- **Answer** the file itself, not the `{ data }` envelope: `Content-Type: application/json`, `Content-Disposition: attachment; filename="hexactra-run-<first 8 of id>-<yyyymmdd>.json"`, `Cache-Control: no-store`.
+- **`screenshots=embed`** (the default) puts each stored trace picture in `steps[].screenshot.data` as base64; the pictures are already masked ([What a run records](#what-a-run-records)). **`screenshots=none`** keeps the picture facts (`moment`, `masked`, `note`, `contentType`) and leaves the images out.
+- **Size.** A file over 50 MB answers `413 EXPORT_TOO_LARGE`: export it again with `screenshots=none`.
+- **Rate limit.** 10 exports a minute per user; the next answers `429 EXPORT_RATE_LIMITED` with `details.retryAfterS`.
+- **A live run** (queued, running, waiting for you) exports what it has so far, with `partial: true`.
+- **Recorded.** The audit event `runs.exported` (`runId`, `format`, `screenshots`, `bytes`, `partial`), the counter `app.runs.exported` (labels `format`, `screenshots`) and one log line `runs.export user=… run=… format=json screenshots=… bytes=… ms=…`. None of them carries the goal, the result or any step text.
+
+The same file from the other clients: `hexactra runs export <id> [--no-screenshots] [-o <file>]` (writes the console's file name in the current directory and prints the path and size), `hx.runs.export(id, { screenshots })` in the SDK (example: `packages/sdk/src/examples/run-export.ts`), and the MCP tool `run_export` (below).
+
+### The file
+
+`type: "hexactra.run-trace"`, `formatVersion: 1`. Its JSON Schema is `packages/sdk/run-trace.schema.json`, generated from the API's zod schema (`apps/api/src/tasks/run-trace.schemas.ts`); `apps/api/test/run-trace-export.spec.ts` fails when the two differ (`UPDATE_RUN_TRACE_SCHEMA=1` rewrites it), and `apps/api/test/run-export.db.spec.ts` validates a real export against it.
+
+| Key | What it holds |
+|---|---|
+| `exportedAt`, `partial`, `console.version` | When, whether the run was live, and which console wrote it |
+| `masking` | `applied: true`, the pattern table's `patternsVersion`, and `hits`: how many matches of each pattern were masked (patterns with none are left out) |
+| `run` | `id`, `goal`, `status`, `stopReason`, `result`, `error`, `trigger`, `origin`, `client` (the AI app's name, never its grant), `taskId`, `taskName`, `conversationId`, `profile`, `host: { id, name }`, the three times, `confirmedActions` (#540) and `usage` (steps, model calls, tokens, cost, active time) |
+| `policy` | The agent policy as snapshotted at the run's start: `id`, `name`, `version`, `builtin`, `source`, `spec` |
+| `budget` | The run budget: effective limits, use, percent, source, enforcement, `over` |
+| `models` | The tiers the run used, in order, with their model; `calls` is the run's model calls when it used one tier, `null` when it used several (calls are counted per run) |
+| `steps` | Every step: `seq`, `at`, `kind`, `action`, `args`, `ok`, `summary`, `reasoning`, `durationMs`, `question` (the question it asked or answered, with the answer's outcome, channel and time) and `screenshot` (`moment`, `masked`, `note`, `contentType`, `bytes`, and `data` with `screenshots=embed`) |
+| `chat` | The messages of the run's conversation (a chat run): `seq`, `role`, `kind`, `text`, `at`; the newest 1,000. Empty for any other run |
+
+**Masked at export time.** Every string in the file goes through `maskValue` ([What is masked](#what-is-masked)) when the file is built, so a run recorded before masking existed is masked too. Step arguments are the stored, already redacted ones, masked again.
+
+**Never in the file:** `runs.transcript` (the model's working memory), any token or cookie, the value of a `secret` or `credentials` answer or of a withheld answer, the grant or the limits of an AI app (#464), a screenshot's object key, another user's data, and the node's enrollment data (the host is its id and name only).
+
+### From an AI assistant: `run_export`
+
+The MCP tool `run_export` (title "Export a run's trace", scope `runs:read`, read-only) returns the same file **without images** as structured content. To fit the tool result size limit ([mcp.md](mcp.md)), it first sets every step's `reasoning` to `null`, then leaves out the oldest steps, and only once no step is left the oldest chat messages, and says so: `truncated: true` and `truncation: { reasoningDropped, stepsOmitted, chatOmitted }`. The result is marked untrusted (step summaries and the result come from web pages) and passes the same secret redaction as every tool.
+
+### For code in this repository
+
+`RunTraceService.build(userId, runId, { screenshots, maxBytes? })` (`apps/api/src/tasks/run-trace.service.ts`, exported by `TasksModule`) is the one builder of the trace: the JSON file here and the PDF report read it. It returns a `RunTrace` (`run-trace.schemas.ts`), reads the run through `prisma.forUser`, and refuses with `413 EXPORT_TOO_LARGE` as soon as the embedded images pass `maxBytes`. `exportJson` adds the rate limit, the audit event, the counter and the log line.
 
 ## Sample data for development
 
