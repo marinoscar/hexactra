@@ -453,7 +453,8 @@ describe('HomePage: quiet, new and restricted accounts', () => {
     const second = mount(() => current);
     expect(await screen.findByTestId('home-quick-start')).toBeInTheDocument();
     expect(screen.queryByTestId('home-get-started')).toBeNull();
-    expect(window.localStorage.getItem(HOME_ONBOARDED_KEY)).toBe('1');
+    // The page records it in an effect, a render after the dashboard is on screen (#502).
+    await waitFor(() => expect(window.localStorage.getItem(HOME_ONBOARDED_KEY)).toBe('1'));
     second.unmount();
 
     // Every run deleted later: still the dashboard.
