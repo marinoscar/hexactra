@@ -1,3 +1,4 @@
+import { RunInputs } from '../taskParams/RunInputs';
 import { useCallback, useEffect, useState, type ElementType } from 'react';
 import { Alert, Box, Button, Collapse, IconButton, Link, Paper, Stack, Typography, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -272,6 +273,7 @@ export function RunDetailPage() {
         </Typography>
       )}
       <RunHeaderChips policy={run.policy} tier={run.tier} />
+      <RunInputs inputs={run.inputs} />
     </>
   );
   // A typed stop reason (#404) says why in one line; older runs keep the plain result and error.

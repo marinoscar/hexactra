@@ -2,6 +2,8 @@ import type { RunBudget } from '../components/runBudget';
 // A chat and its messages, as the API returns them (`chatResponseSchema` and
 // friends in apps/api/src/openapi/chat.responses.ts) and as the chat's event
 // stream sends them (apps/api/src/chat/chat-stream.controller.ts).
+import type { TaskParameter } from '@app/shared/task-params';
+
 import type { RunActivity } from '../components/RunActivity';
 import type { RunStatus, RunStopReason } from './runs';
 
@@ -90,6 +92,8 @@ export interface ChatTaskDraft {
   policyId: string | null;
   allowedDomains: string[];
   confirmRiskyActions: boolean;
+  /** The goal's parameters the draft proposes (#556); absent in drafts from before. */
+  parameters?: TaskParameter[];
 }
 
 /** What the chat hands to `/tasks/new` in the router's state: the draft to review, and the chat to tell once it is saved. */

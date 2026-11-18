@@ -6,7 +6,7 @@ import type { AiService } from '@marinoscar/platform-api/ai';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 
 import { ChatResults } from '../src/chat/chat-results.service';
-import { ChatTaskDraftService, TASK_DRAFT_INSTRUCTIONS, parseDraft } from '../src/chat/chat-task-draft.service';
+import { ChatTaskDraftService, TASK_DRAFT_INSTRUCTIONS, draftDefinitions, parseDraft } from '../src/chat/chat-task-draft.service';
 import { ChatTurnService } from '../src/chat/chat-turn.service';
 import { ChatService } from '../src/chat/chat.service';
 import { createApp } from '../src/main';
@@ -87,6 +87,8 @@ describe('the task draft the AI writes', () => {
       policyId: 'builtin:economy',
       allowedDomains: ['cinema.example.test'],
       confirmRiskyActions: true,
+      // Nothing in it varies between runs: no parameters.
+      parameters: [],
     });
     expect(model.features).toEqual([{ feature: 'chat_orchestrator', orgId: 'org-1' }]);
     expect(model.asked[0]!.instructions).toBe(TASK_DRAFT_INSTRUCTIONS);
@@ -134,12 +136,78 @@ describe('the task draft the AI writes', () => {
     expect(long.goal).toHaveLength(4000);
   });
 
+  it('the Zelle chat drafts three placeholders: the amount asked each time, the phone and the account defaulted (#556)', async () => {
+    const alice = await login('zelle');
+    const chat = await chats.create(alice.userId, { title: 'Zelle', confirmRiskyActions: true });
+    await chats.postUserMessage(alice.userId, chat.id, 'Send my wife $10 with Zelle from my Bank of America checking');
+    await chats.append(chat.id, { role: 'assistant', kind: 'clarify', text: 'Which phone does she use for Zelle, and which checking account?' });
+    await chats.postUserMessage(alice.userId, chat.id, '555-010-6020, the checking ending in 0659');
+    const run = await prisma.run.create({ data: { userId: alice.userId, conversationId: chat.id, trigger: 'chat', goal: 'Send $10 today to 555-010-6020 using Zelle on my Bank of America account, checking ending in 0659', status: 'succeeded', result: 'Sent.' } });
+    await chats.append(chat.id, { role: 'assistant', kind: 'result', text: 'Sent.', runId: run.id, meta: { status: 'succeeded' } });
+    const goal = 'Send {{Amount}} today to {{Recipient phone}} using Zelle on my Bank of America account using the checking account ending in {{Account last 4}}';
+    const model = writer(
+      JSON.stringify({
+        name: 'Zelle to my wife',
+        goal,
+        parameters: [
+          { name: 'Amount', type: 'money' },
+          { name: 'Recipient phone', type: 'phone', default: '555-010-6020', memory: 'My wife', attribute: 'phone' },
+          { name: 'Account last 4', type: 'text', default: '0659' },
+        ],
+      }),
+    );
+    const draft = await new ChatTaskDraftService(prisma, model.ai).draft(alice.userId, chat.id, null);
+    expect(draft.goal).toBe(goal);
+    // No memory of that label exists for this owner, so the phone keeps the fixed value from the conversation.
+    expect(draft.parameters).toEqual([
+      { key: 'amount', label: 'Amount', type: 'money', required: true },
+      { key: 'recipient_phone', label: 'Recipient phone', type: 'phone', required: true, default: { value: '555-010-6020' } },
+      { key: 'account_last_4', label: 'Account last 4', type: 'text', required: true, default: { value: '0659' } },
+    ]);
+    expect(model.asked[0]!.instructions).toMatch(/becomes a placeholder \{\{Name\}\}/);
+    // The draft saved nothing: the owner reviews it in the task form.
+    expect(await prisma.task.count({ where: { userId: alice.userId } })).toBe(0);
+  });
+
+  it('a draft whose parameters do not pass the checks keeps the placeholders, then none (#556)', async () => {
+    const alice = await login('badparams');
+    const { chat } = await finishedChat(alice);
+    // A default that is no amount: the placeholder stays, asked every time.
+    const bad = await new ChatTaskDraftService(prisma, writer(JSON.stringify({ name: 'n', goal: 'Pay {{Amount}}', parameters: [{ name: 'Amount', type: 'money', default: 'ten dollars' }] })).ai).draft(alice.userId, chat.id, null);
+    expect(bad.parameters).toEqual([{ key: 'amount', label: 'Amount', type: 'money', required: true }]);
+    // A malformed goal: no parameters; the owner sees the problem in the form.
+    const broken = await new ChatTaskDraftService(prisma, writer(JSON.stringify({ name: 'n', goal: 'Pay {{Amount', parameters: [{ name: 'Amount', type: 'money' }] })).ai).draft(alice.userId, chat.id, null);
+    expect(broken.parameters).toEqual([]);
+  });
+
+  it('a memory default needs a memory of that label holding that value (#556)', () => {
+    const memories = [{ id: '88888888-8888-4888-8888-888888888888', label: 'My wife', attributes: ['name', 'phone'] }];
+    const goal = 'Call {{Phone}} and {{Email}}';
+    expect(
+      draftDefinitions(goal, [
+        { name: 'Phone', type: 'phone', memory: 'my wife', attribute: 'Phone' },
+        { name: 'Email', type: 'email', memory: 'My wife', attribute: 'email', default: 'a@example.test' },
+      ], memories),
+    ).toEqual([
+      { key: 'phone', label: 'Phone', type: 'phone', required: true, default: { memory: { id: memories[0]!.id, attribute: 'phone' } } },
+      { key: 'email', label: 'Email', type: 'email', required: true, default: { value: 'a@example.test' } },
+    ]);
+  });
+
   it('reads the JSON out of an answer with a code fence or words around it', () => {
     expect(parseDraft('```json\n{"name":"A","goal":"Do it"}\n```')).toEqual({ name: 'A', goal: 'Do it' });
     expect(parseDraft('Here: {"goal":" Do it "} done')).toEqual({ name: '', goal: 'Do it' });
     expect(parseDraft('{"goal":""}')).toBeNull();
     expect(parseDraft('{not json}')).toBeNull();
     expect(parseDraft('nothing')).toBeNull();
+    expect(parseDraft('{"goal":"Pay {{Amount}}","parameters":[{"name":"Amount","type":"money"},{"name":"","type":"text"},{"name":"X","type":"weird"}]}')).toEqual({
+      name: '',
+      goal: 'Pay {{Amount}}',
+      parameters: [
+        { name: 'Amount', type: 'money' },
+        { name: 'X', type: 'text' },
+      ],
+    });
   });
 });
 
@@ -186,7 +254,7 @@ describe('the draft_task tool', () => {
     expect(outputs).toEqual(['Drafted. The owner reviews and saves it from the chat.']);
     const last = await prisma.chatMessage.findFirstOrThrow({ where: { conversationId: chat.id }, orderBy: { seq: 'desc' } });
     expect(last).toMatchObject({ role: 'assistant', kind: 'task_draft', text: 'Book 2 tickets for the 7:30 PM showing.' });
-    expect(last.meta).toEqual({ name: 'Cinema tickets', goal: 'Book 2 tickets for the 7:30 PM showing.', profile: 'home', hostId: null, hostFallback: false, policyId: 'builtin:economy', allowedDomains: ['cinema.example.test'], confirmRiskyActions: true });
+    expect(last.meta).toEqual({ name: 'Cinema tickets', goal: 'Book 2 tickets for the 7:30 PM showing.', profile: 'home', hostId: null, hostFallback: false, policyId: 'builtin:economy', allowedDomains: ['cinema.example.test'], confirmRiskyActions: true, parameters: [] });
   });
 });
 

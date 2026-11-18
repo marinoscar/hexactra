@@ -34,6 +34,11 @@ import { usePolicyCatalog } from '../policies/usePolicyCatalog';
 import type { ScheduleDraft } from '../schedule/draft';
 import { useSchedulePreview } from '../schedule/useSchedulePreview';
 import { createTask, deleteTask, replaceTaskSchedules, updateTask } from '../taskForm/api';
+import { GoalField } from '../taskParams/GoalField';
+import { previewGoal, syncParameters, type TaskParameter } from '../taskParams/model';
+import { ParametersSection } from '../taskParams/ParametersSection';
+import { useRunInputs } from '../taskParams/RunInputsDialog';
+import { useMemoryOptions } from '../taskParams/useMemoryOptions';
 import { useLeaveGuard } from '../taskForm/useLeaveGuard';
 import {
   GOAL_MAX,
@@ -45,6 +50,7 @@ import {
   mapApiError,
   newFormSchedule,
   patchBody,
+  savedParameters,
   scheduleItems,
   schedulesChanged,
   validateValues,
@@ -102,7 +108,7 @@ function initialState(initial: TaskFormValues): FormState {
   return { fields, rows: schedules.map(toRow), initial, errors: {}, banner: null, saving: null };
 }
 
-const FIELD_ORDER = ['name', 'goal', 'hostId', 'profile', 'policyId', 'allowedDomains'];
+const FIELD_ORDER = ['name', 'goal', 'parameters', 'hostId', 'profile', 'policyId', 'allowedDomains'];
 
 function Section({ title, id, children, anchor }: { title: string; id: string; children: ReactNode; anchor?: string }) {
   return (
@@ -156,6 +162,8 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
   const canFleet = viewer.hasPermission('fleet:read');
   const canPickPolicy = viewer.hasPermission('agent_policies:read');
   const catalog = usePolicyCatalog();
+  const memories = useMemoryOptions();
+  const runInputs = useRunInputs();
 
   const [form, setForm] = useState<FormState>(() => initialState(initial));
   const update = (change: Partial<FormState>) => setForm((f) => ({ ...f, ...change }));
@@ -178,6 +186,8 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
     return next;
   };
   const [tipsOpen, setTipsOpen] = useState(false);
+  // The parameters whose placeholder the last goal edit removed, and the goal before it (Undo puts it back, #556).
+  const [removal, setRemoval] = useState<{ goal: string; labels: string[] } | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
 
   // The machines to choose from. Without fleet:read, or when the request fails, the pickers
@@ -204,10 +214,31 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
   const policy = sendPolicy ? catalog.byId(shownPolicyId ?? catalog.defaultId) : undefined;
   const scheduleCatalog = sendPolicy ? catalog : undefined;
 
+  const synced = useMemo(() => syncParameters(fields.goal, fields.parameters), [fields.goal, fields.parameters]);
+  const parameters = synced.parameters;
+  /** A new goal: rows follow its placeholders; a removed one can be undone. */
+  const setGoal = (goal: string) => {
+    const before = syncParameters(fields.goal, fields.parameters).parameters;
+    const after = syncParameters(goal, fields.parameters);
+    const gone = before.filter((p) => !after.parameters.some((q) => q.key === p.key));
+    // New placeholders get a definition the form keeps (so a row edit sticks); old ones are kept for Undo until Save.
+    const known = new Set(fields.parameters.map((p) => p.key));
+    const added = after.parameters.filter((p) => !known.has(p.key));
+    setFields({ goal, ...(added.length ? { parameters: [...fields.parameters, ...added] } : {}) });
+    if (gone.length) setRemoval({ goal: fields.goal, labels: gone.map((p) => p.label) });
+  };
+  const setParameter = (key: string, next: TaskParameter) =>
+    setForm((f) => {
+      const { [`param:${key}`]: _gone, parameters: _section, ...rest } = f.errors;
+      const exists = f.fields.parameters.some((p) => p.key === key);
+      const list = exists ? f.fields.parameters.map((p) => (p.key === key ? next : p)) : [...f.fields.parameters, next];
+      return { ...f, fields: { ...f.fields, parameters: list }, errors: rest };
+    });
+
   const values: TaskFormValues = useMemo(() => ({ ...fields, schedules: rows.filter((r) => !r.removed).map((r) => r.draft) }), [fields, rows]);
   const dirty = isDirty(values, form.initial);
   const local = validateValues(values, { checkProfile: true });
-  const required = Boolean(fields.name.trim() && fields.goal.trim());
+  const required = Boolean(fields.name.trim() && fields.goal.trim()) && synced.errors.length === 0;
   const blocked = saving !== null || !required || Boolean(local.profile) || Boolean(local.allowedDomains) || invalid.size > 0 || (mode === 'edit' && !dirty);
   const busy = saving !== null;
   const activeRows = rows.filter((r) => !r.removed);
@@ -238,14 +269,15 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
     for (const [field, message] of Object.entries(mapped.fields)) {
       const index = /^schedules\[(\d+)\]$/.exec(field);
       const row = index ? sent[Number(index[1])] : undefined;
-      if (row) {
+      if (field.startsWith('param:')) next[field] = message;
+      else if (row) {
         next[`schedule:${row.key}`] = message;
         opened.push(row.key);
       } else if (index) next.schedules = message;
       else next[field] = message;
     }
     if (opened.length > 0) setOpen((o) => new Set([...o, ...opened]));
-    const first = FIELD_ORDER.find((f) => f in next) ?? Object.keys(next)[0];
+    const first = FIELD_ORDER.find((f) => f in next) ?? Object.keys(next).find((k) => k.startsWith('param:')) ?? Object.keys(next)[0];
     const text = error instanceof Error && error.message ? error.message : fallback;
     update({ saving: null, errors: next, banner: prefix ? `${prefix}${text}` : mapped.banner });
     if (first) setFocusField(first);
@@ -288,8 +320,9 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
     toast(mode === 'create' ? 'Task created' : 'Task saved');
     if (andRun) {
       try {
-        const run = await runTaskWith(api, id);
-        return navigate(`/runs/${run.id}`);
+        // Values still missing are asked for first (#556); Cancel leaves the saved task on its page.
+        const run = await runInputs.ask({ id, name: fields.name.trim(), parameters: savedParameters(fields) }, (inputs) => runTaskWith(api, id, undefined, inputs));
+        if (run) return navigate(`/runs/${run.id}`);
       } catch (e) {
         toast(`The task was saved, but the run could not be started: ${e instanceof Error && e.message ? e.message : 'try again from the task'}`, 'error');
       }
@@ -381,27 +414,50 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
             />
           </Box>
           <Box data-field="goal">
-            <TextField
-              label="Goal"
+            <GoalField
               value={fields.goal}
-              onChange={(e) => setFields({ goal: e.target.value })}
+              onChange={setGoal}
               required
-              fullWidth
-              multiline
-              minRows={4}
               disabled={busy}
-              error={Boolean(goalError)}
+              error={goalError}
+              maxLength={GOAL_MAX}
               helperText={
                 <Box component="span" sx={{ display: 'flex', gap: 2, justifyContent: 'space-between' }}>
-                  <span>{goalError ?? GOAL_HELP}</span>
+                  <span>{GOAL_HELP}</span>
                   <Box component="span" sx={{ flexShrink: 0 }}>
                     {fields.goal.length} / {GOAL_MAX}
                   </Box>
                 </Box>
               }
-              slotProps={{ htmlInput: { maxLength: GOAL_MAX } }}
             />
+            {parameters.length > 0 && synced.errors.length === 0 && (
+              <Typography variant="body2" color="text.secondary" aria-label="Goal preview" sx={{ mt: 1, overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+                Preview: {previewGoal(fields.goal, parameters)}
+              </Typography>
+            )}
           </Box>
+          {removal && (
+            <Alert
+              severity="info"
+              role="status"
+              onClose={() => setRemoval(null)}
+              action={
+                <Button
+                  color="inherit"
+                  size="small"
+                  disabled={busy}
+                  onClick={() => {
+                    setFields({ goal: removal.goal });
+                    setRemoval(null);
+                  }}
+                >
+                  Undo
+                </Button>
+              }
+            >
+              {removal.labels.length === 1 ? `Parameter “${removal.labels[0]}” removed.` : `Parameters ${removal.labels.map((l) => `“${l}”`).join(', ')} removed.`}
+            </Alert>
+          )}
           <Box>
             <Button size="small" onClick={() => setTipsOpen((o) => !o)} aria-expanded={tipsOpen} aria-controls={`${uid}-tips`} sx={MIN_TAP}>
               Tips
@@ -415,6 +471,23 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
             </Collapse>
           </Box>
         </Section>
+
+        {parameters.length > 0 && (
+          <Section title="Parameters" id={`${uid}-params`} anchor="parameters">
+            {errors.parameters && (
+              <Alert severity="error" role="alert" data-field="parameters" tabIndex={-1}>
+                {errors.parameters}
+              </Alert>
+            )}
+            <ParametersSection
+              parameters={parameters}
+              onChange={setParameter}
+              memories={memories}
+              errors={Object.fromEntries(Object.entries(errors).filter(([k]) => k.startsWith('param:')).map(([k, v]) => [k.slice(6), v]))}
+              disabled={busy}
+            />
+          </Section>
+        )}
 
         <Section title="Where it runs" id={`${uid}-where`}>
           <Box data-field="hostId">
@@ -546,6 +619,7 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
                       profileTimezone={profileTimezone}
                       catalog={scheduleCatalog}
                       taskPolicyId={shownPolicyId}
+                      parameters={parameters}
                     />
                   )}
                 </Stack>
@@ -591,6 +665,7 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
         )}
       </Stack>
 
+      {runInputs.dialog}
       {isPhone && (
         // Fixed above the shell's bottom navigation; last in the form, so the focus order ends here.
         <Paper

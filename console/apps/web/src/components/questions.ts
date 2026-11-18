@@ -2,7 +2,19 @@
 // GET /api/inbox; apps/api/src/questions/questions.contract.ts).
 import { answerLabel } from '@app/shared/question-rules';
 
-export type QuestionInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover' | 'credentials';
+export type QuestionInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover' | 'credentials' | 'form';
+
+/** A field of a `form` question (#552): one missing value of a task run, asked before it starts. */
+export interface FormField {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'money' | 'date' | 'choice' | 'phone' | 'email';
+  required: boolean;
+  options?: string[];
+  help?: string;
+  constraints?: { min?: number; max?: number; maxLength?: number; pattern?: string };
+  sensitive?: boolean;
+}
 
 export interface QuestionOption {
   id: string;
@@ -34,6 +46,8 @@ export interface AskedQuestion {
   viewerUrl: string | null;
   /** credentials and secret: the site's "remember me" option, in the page's words (#527). */
   rememberLabel?: string | null;
+  /** form (#552): the values to fill. */
+  fields?: FormField[] | null;
 }
 
 export interface QuestionResponse {
@@ -43,6 +57,8 @@ export interface QuestionResponse {
   valueWithheld: boolean;
   /** What the person chose for the "remember me" option, when one was offered. */
   remember?: boolean;
+  /** form (#552): the values given, masked. */
+  fields?: Record<string, string>;
   channel?: string;
   by?: string;
   answeredAt: string;
@@ -91,6 +107,8 @@ export interface AnswerBody {
   secret?: string;
   /** The choice for the question's "remember me" option. */
   remember?: boolean;
+  /** form (#552): the value of each field, by key. */
+  fields?: Record<string, string>;
 }
 
 export const KIND_LABEL: Record<string, string> = {
@@ -113,13 +131,14 @@ export function askerText(askedBy: string): string {
 }
 
 /** The final state of a settled question, in words (a secret is never shown). */
-export function answerText(q: Pick<Question, 'status' | 'response' | 'input' | 'options' | 'constraints' | 'confirmLabel' | 'denyLabel'>): string {
+export function answerText(q: Pick<Question, 'status' | 'response' | 'input' | 'options' | 'constraints' | 'confirmLabel' | 'denyLabel'> & { fields?: FormField[] | null }): string {
   if (q.status === 'pending') return 'Waiting for an answer';
   if (q.status === 'expired') return 'This question expired before anyone answered.';
   const r = q.response;
   const via = r?.channel ? ` (from ${r.channel})` : '';
   if (!r || r.outcome === 'cancelled') return `Declined${via}.`;
   if (r.valueWithheld) return `Answered${via}. The secret went to the agent and is not shown.`;
+  if (q.input === 'form') return `Provided${via}${formAnswerText(q.fields, r.fields)}`;
   const words = answerLabel(q, r);
   if (r.values) return `Answered${via}: ${words}`;
   if (r.value !== undefined) {
@@ -158,4 +177,13 @@ export function remaining(iso: string, now: number): string {
   if (h) return `${h} h ${String(m).padStart(2, '0')} min`;
   if (m) return `${m} min ${String(sec).padStart(2, '0')} s`;
   return `${sec} s`;
+}
+
+/** A form's given values in words, already masked by the API: ": Amount: 25 · Date: 2026-11-18" (a full stop when none). */
+export function formAnswerText(fields: readonly Pick<FormField, 'key' | 'label' | 'sensitive'>[] | null | undefined, given: Record<string, string> | undefined): string {
+  if (!given) return '.';
+  const parts = Object.entries(given)
+    .filter(([key]) => !fields?.find((f) => f.key === key)?.sensitive)
+    .map(([key, v]) => `${fields?.find((f) => f.key === key)?.label ?? key}: ${v}`);
+  return parts.length ? `: ${parts.join(' · ')}` : '.';
 }

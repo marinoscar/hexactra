@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 
 import { numberError, numberHint, selectionBounds, selectionHelp, selectionOk, textError } from '@app/shared/question-rules';
 
+import { FormQuestion } from '../taskParams/FormQuestion';
 import { digitsOnly, secretLabel, type AnswerBody, type AskedQuestion, type QuestionOption } from './questions';
 
 export interface QuestionAnswerFormProps {
@@ -100,7 +101,13 @@ function OptionsBox({ count, children }: { count: number; children: ReactNode })
  * dropped before `onSubmit` is called, and showing it only changes the
  * input's `type`.
  */
-export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disabled: off, busy = false }: QuestionAnswerFormProps) {
+export function QuestionAnswerForm(props: QuestionAnswerFormProps) {
+  // A task run's missing values (#552, #556): its own form of typed fields, one Send.
+  if (props.question.input === 'form') return <FormQuestion fields={props.question.fields ?? []} onSubmit={props.onSubmit} disabled={props.disabled} busy={props.busy} />;
+  return <SingleAnswerForm {...props} />;
+}
+
+function SingleAnswerForm({ question: q, onSubmit, onOpenBrowser, disabled: off, busy = false }: QuestionAnswerFormProps) {
   const disabled = Boolean(off) || busy;
   const [value, setValue] = useState('');
   const [picked, setPicked] = useState<string[]>([]);

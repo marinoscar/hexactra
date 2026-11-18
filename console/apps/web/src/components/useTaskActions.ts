@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { deleteTaskBody } from './taskList';
 import { runTaskWith } from '../policies/api';
 import { deleteTask } from '../taskForm/api';
+import { issuesByKey } from '../taskParams/model';
 import type { Task, TaskSchedulesChanged, TaskSummary } from '../types/tasks';
 import { useConfirm } from '../ui';
 
@@ -15,6 +16,8 @@ export class TaskActionError extends Error {
   constructor(
     message: string,
     readonly gone: boolean,
+    /** A parameter value the API refused, by key (#556): the run dialog shows each on its field. */
+    readonly issues: Record<string, string> | null = null,
   ) {
     super(message);
     this.name = 'TaskActionError';
@@ -27,7 +30,7 @@ export const TASK_GONE = 'This task no longer exists';
 function failure(e: unknown, what: string, task: TaskRef): TaskActionError {
   if (isPlatformApiError(e) && e.status === 404) return new TaskActionError(`${TASK_GONE}: “${task.name}”.`, true);
   const reason = e instanceof Error && e.message ? `: ${e.message}` : '';
-  return new TaskActionError(`Could not ${what} “${task.name}”${reason}`, false);
+  return new TaskActionError(`Could not ${what} “${task.name}”${reason}`, false, issuesByKey(e));
 }
 
 export interface TaskActions {
@@ -37,8 +40,8 @@ export interface TaskActions {
    * Resolves to the task with its new summary.
    */
   setScheduled: (task: TaskRef, on: boolean) => Promise<TaskSchedulesChanged>;
-  /** Start a run now, under `policyId` for this run only (the task's policy when omitted). */
-  run: (task: TaskRef, policyId?: string) => Promise<{ id: string }>;
+  /** Start a run now, under `policyId` for this run only (the task's policy when omitted), with values for its parameters (#556). */
+  run: (task: TaskRef, policyId?: string, inputs?: Record<string, string>) => Promise<{ id: string }>;
   /** Asks before starting a second run of a task that is already running. Resolves to whether to go on. */
   confirmRunAgain: (task: TaskRef) => Promise<boolean>;
   /** Asks, then deletes the task. Resolves to false when the person cancelled. */
@@ -60,8 +63,8 @@ export function useTaskActions(): TaskActions {
         api.post<TaskSchedulesChanged>(`/tasks/${task.id}/schedules/${on ? 'resume' : 'pause'}`, {}).catch((e: unknown) => {
           throw failure(e, on ? 'resume the schedule of' : 'pause the schedule of', task);
         }),
-      run: (task, policyId) =>
-        runTaskWith(api, task.id, policyId).catch((e: unknown) => {
+      run: (task, policyId, inputs) =>
+        runTaskWith(api, task.id, policyId, inputs).catch((e: unknown) => {
           throw failure(e, 'start a run of', task);
         }),
       confirmRunAgain: (task) => confirm({ title: `Run “${task.name}” again?`, body: 'This task is already running. Start another run?', confirmLabel: 'Run again' }),

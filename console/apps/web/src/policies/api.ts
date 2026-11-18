@@ -161,9 +161,9 @@ export async function getCeilings(api: PlatformApiClient, canReadSystemSettings:
 
 // ---- Runs ("Run with...") ----
 
-/** Run a saved task now, under `policyId` for this run only (or its usual policy when omitted). */
-export function runTaskWith(api: PlatformApiClient, taskId: string, policyId?: string): Promise<{ id: string }> {
-  return api.post<{ id: string }>(`/tasks/${taskId}/runs`, policyId ? { policyId } : {});
+/** Run a saved task now, under `policyId` for this run only (or its usual policy when omitted), with values for its parameters (#552). */
+export function runTaskWith(api: PlatformApiClient, taskId: string, policyId?: string, inputs?: Record<string, string>): Promise<{ id: string }> {
+  return api.post<{ id: string }>(`/tasks/${taskId}/runs`, { ...(policyId ? { policyId } : {}), ...(inputs && Object.keys(inputs).length ? { inputs } : {}) });
 }
 
 // ---- Browser helpers ----
