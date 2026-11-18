@@ -130,7 +130,7 @@ export class RunRetentionService {
       ), marked AS (
         SELECT k.id, k.ended_at, k.cost_usd, k.model_calls,
                (k.ended_at < ${floor}::timestamptz
-                AND NOT EXISTS (SELECT 1 FROM questions q WHERE q.run_id = k.id AND q.status = 'pending')
+                AND NOT EXISTS (SELECT 1 FROM questions q WHERE q.run_id = k.id AND q.status = 'pending' AND q.blocking)
                 AND ((${rule.keepPerTask}::int IS NOT NULL AND k.rn > ${rule.keepPerTask}::int)
                   OR (k.status = 'failed' AND ${failedCutoff}::timestamptz IS NOT NULL AND k.ended_at < ${failedCutoff}::timestamptz)
                   OR (k.status <> 'failed' AND ${cutoff}::timestamptz IS NOT NULL AND k.ended_at < ${cutoff}::timestamptz))) AS doomed

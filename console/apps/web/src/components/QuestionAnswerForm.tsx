@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 
 import { numberError, numberHint, selectionBounds, selectionHelp, selectionOk, textError } from '@app/shared/question-rules';
 
+import { MemoryProposalForm } from './MemoryProposalForm';
 import { digitsOnly, secretLabel, type AnswerBody, type AskedQuestion, type QuestionOption } from './questions';
 import { NO_REMEMBER, RememberRuleField, amountError, rememberRuleOf, type RememberRuleState } from './RememberRuleField';
 
@@ -106,7 +107,15 @@ function OptionsBox({ count, children }: { count: number; children: ReactNode })
  * dropped before `onSubmit` is called, and showing it only changes the
  * input's `type`.
  */
-export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disabled: off, busy = false, allowRemember = true }: QuestionAnswerFormProps) {
+export function QuestionAnswerForm(props: QuestionAnswerFormProps) {
+  // A memory the agent proposes (#553): its own card, Save or Not now.
+  if (props.question.input === 'memory') {
+    return props.question.proposal ? <MemoryProposalForm proposal={props.question.proposal} onSubmit={props.onSubmit} disabled={props.disabled} busy={props.busy} /> : null;
+  }
+  return <TypedAnswerForm {...props} />;
+}
+
+function TypedAnswerForm({ question: q, onSubmit, onOpenBrowser, disabled: off, busy = false, allowRemember = true }: QuestionAnswerFormProps) {
   const disabled = Boolean(off) || busy;
   const [value, setValue] = useState('');
   const [picked, setPicked] = useState<string[]>([]);

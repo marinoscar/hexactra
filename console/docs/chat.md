@@ -111,6 +111,10 @@ When the agent asks you to confirm an irreversible step (a payment, an order, a 
 
 A chat run's notifications (the request, its reminders, "Run finished") open the chat at the run instead of the Inbox; their buttons (Approve, Stop run, Remind me in 15 min) work as before. The service worker shows no notification for a chat that is open and in front in a focused window.
 
+## Memories (#553)
+
+The chat reads your saved memories (people, accounts, preferences) before the thread, and puts the facts a job needs into the run's goal: "send my wife $10" starts a run without asking who she is. When no memory covers a person or an account the job needs, it asks once, for everything at once. After you give such a fact, it may propose remembering it: a **Remember this?** card in the thread (Save, or Not now); nothing is saved without you. A proposal never pauses a run. **Suggest memories** in Chat settings turns proposals off (a setting of yours, for every chat). Details: [memories.md](memories.md#how-the-agent-uses-them-553).
+
 ## Save as task
 
 On a run that succeeded, the result card has **Save as task** (needs `tasks:write`); you can also ask in words. The assistant writes a name and a standalone goal from the conversation (`POST /api/chats/:id/task-draft`). Machine, profile, policy and limits are copied from the chat's settings. Nothing is saved until you press Save in the task form, which opens prefilled; the draft travels in the page's navigation state, not in the URL. With no usable model answer, the draft is the goal of the chat's newest run. The chat then shows "Saved as the task …" with a link.

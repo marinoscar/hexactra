@@ -146,6 +146,7 @@ export const runResponseSchema = z.object({
       }),
     )
     .describe('Steps the owner confirmed that the run then carried out (#540), oldest first; empty when none. "Run again" asks before repeating such a run.'),
+  memoryIds: z.array(z.uuid()).describe('The owner\'s memories this run used (#553): the ones its goal names. A deleted memory leaves its id.'),
   createdAt: iso,
   startedAt: iso.nullable(),
   finishedAt: iso.nullable(),
@@ -227,9 +228,25 @@ export const runStepResponseSchema = z.object({
   durationMs: z.number().int().nullable(),
   createdAt: iso,
 });
-export class RunDetailResponseDto extends createZodDto(runResponseSchema.extend({ steps: z.array(runStepResponseSchema) })) {}
+export class RunDetailResponseDto extends createZodDto(
+  runResponseSchema.extend({
+    steps: z.array(runStepResponseSchema),
+    memories: z
+      .array(z.object({ id: z.uuid(), label: z.string(), status: z.enum(['active', 'superseded', 'archived']) }))
+      .describe('The memories of `memoryIds` that still exist, with their labels (#553): the run page says "Used: …"'),
+  }),
+) {}
 
-const questionInput = z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials']);
+const questionInput = z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials', 'memory']).describe('`memory` (#553): a memory the agent proposes; only the server creates one');
+const memoryProposal = z
+  .object({
+    kind: z.enum(['person', 'account', 'preference', 'fact']),
+    label: z.string(),
+    aliases: z.array(z.string()),
+    attributes: z.record(z.string(), z.string()),
+    supersedes: z.uuid().nullable().describe('The active memory whose values this would replace'),
+  })
+  .describe('memory (#553): the proposed memory');
 const questionOption = z.object({ id: z.string(), label: z.string(), description: z.string().optional() });
 const questionConstraints = z.object({
   maxLength: z.number().int().optional(),
@@ -257,6 +274,7 @@ export const questionAnswerResponseSchema = z.object({
   valueWithheld: z.boolean().describe('True for a secret and a sign-in: the secret or password went to the browser, single use, and is never returned'),
   remember: z.boolean().optional().describe('The person\'s choice for the question\'s "remember me" option'),
   ruleId: z.uuid().optional().describe('The saved approval this answer created or found ("Don\'t ask again", #555)'),
+  memoryId: z.uuid().optional().describe('memory (#553): the memory the approved proposal saved'),
   channel: z.string().optional(),
   by: z.string().optional().describe('Who answered, e.g. user:<id>'),
   answeredAt: iso,
@@ -292,6 +310,9 @@ export const questionResponseSchema = z.object({
   expiresAt: iso,
   answeredAt: iso.nullable(),
   client: runClientSchema.nullable().describe('The AI app that asked; null when no app did'),
+  blocking: z.boolean().describe('False for a question no run waits on: a memory proposal (#553)'),
+  proposal: memoryProposal.nullable(),
+  conversationId: z.uuid().nullable().describe('The chat a memory proposal came from (#553)'),
 });
 export class QuestionResponseDto extends createZodDto(questionResponseSchema) {}
 
@@ -321,6 +342,8 @@ export const inboxItemResponseSchema = z.object({
   viewerUrl: z.string().nullable(),
   createdAt: iso,
   expiresAt: iso,
+  blocking: z.boolean().describe('False for a memory proposal (#553): no run waits on it; the Inbox lists it in its own group'),
+  proposal: memoryProposal.nullable(),
 });
 export class InboxItemResponseDto extends createZodDto(inboxItemResponseSchema) {}
 

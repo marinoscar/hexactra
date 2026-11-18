@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Optional, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { ApiTags } from '@nestjs/swagger';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
@@ -8,7 +8,8 @@ import { z } from 'zod';
 import { HandoffAnswers } from './handoff-answers';
 import { InboxItemResponseDto, OkResponseDto } from '../openapi/console.responses';
 import { QuestionsService } from '../questions/questions.service';
-import type { QuestionConstraints, QuestionInputType, QuestionOption, QuestionRememberable } from '../questions/questions.contract';
+import type { MemoryProposal, QuestionConstraints, QuestionInputType, QuestionOption, QuestionRememberable } from '../questions/questions.contract';
+import { RequestClientService } from '../connected-apps/request-client';
 
 const respondSchema = z.object({
   outcome: z.enum(['completed', 'cancelled']),
@@ -51,6 +52,10 @@ export interface InboxItem {
   viewerUrl: string | null;
   createdAt: string;
   expiresAt: string;
+  /** False for a memory proposal (#553): no run waits on it. */
+  blocking: boolean;
+  /** memory (#553): the proposed memory. */
+  proposal: MemoryProposal | null;
 }
 
 /**
@@ -65,13 +70,16 @@ export class InboxController {
   constructor(
     private readonly questions: QuestionsService,
     private readonly answers: HandoffAnswers,
+    @Optional() private readonly clients?: RequestClientService,
   ) {}
 
   @Get()
   @ApiDataResponse(InboxItemResponseDto, { isArray: true })
   @Auth({ permissions: ['runs:read'] })
-  async list(@CurrentUser('id') userId: string): Promise<InboxItem[]> {
-    const rows = await this.questions.pendingWithRuns(userId);
+  async list(@CurrentUser('id') userId: string, @Req() req?: object): Promise<InboxItem[]> {
+    // An MCP client (an AI app, or the console's own MCP tools) never sees a memory proposal (#553).
+    const hideMemory = (await this.clients?.resolve(req))?.origin === 'mcp';
+    const rows = (await this.questions.pendingWithRuns(userId)).filter((q) => !(hideMemory && q.input === 'memory'));
     return rows.map((q) => {
       const options = (q.options as unknown as QuestionOption[] | null) ?? null;
       return {
@@ -96,6 +104,8 @@ export class InboxController {
         viewerUrl: q.viewerUrl,
         createdAt: q.createdAt.toISOString(),
         expiresAt: q.expiresAt.toISOString(),
+        blocking: q.blocking,
+        proposal: q.input === 'memory' ? ((q.proposal as unknown as MemoryProposal | null) ?? null) : null,
       };
     });
   }

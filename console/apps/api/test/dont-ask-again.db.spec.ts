@@ -115,7 +115,7 @@ describe('"Don\'t ask again" (#555)', () => {
   const brokers = new WeakMap<object, QuestionsService>();
   const brokerOf = (fabric: ReturnType<typeof fakeFabric>) => {
     let b = brokers.get(fabric);
-    if (!b) brokers.set(fabric, (b = new QuestionsService(prisma, fabric.client, { enqueue: async () => undefined } as never, new QuestionEvents(), approvals)));
+    if (!b) brokers.set(fabric, (b = new QuestionsService(prisma, fabric.client, { enqueue: async () => undefined } as never, new QuestionEvents(), undefined, approvals)));
     return b;
   };
   /** Questions answered with a fabric that answers every handoff (for questions whose run is not driven here). */

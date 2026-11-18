@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 
 import { ApprovalsModule } from '../approvals/approvals.module';
 import { FabricModule } from '../fabric/fabric.module';
+import { MemoriesModule } from '../memories/memories.module';
+import { MemoryProposals } from '../memories/memory-proposals.service';
 import { TasksModule } from '../tasks/tasks.module';
 import { AnswerByTokenController } from './channels/answer-by-token.controller';
 import { InboxQuestionChannel } from './channels/inbox.channel';
@@ -22,10 +24,11 @@ import { QuestionsService } from './questions.service';
  * `QuestionChannelRegistry`) hear `QuestionEvents` through the dispatcher.
  */
 @Module({
-  imports: [FabricModule, TasksModule, ApprovalsModule],
+  imports: [FabricModule, TasksModule, MemoriesModule, ApprovalsModule],
   controllers: [QuestionsController, AnswerByTokenController],
   providers: [
     QuestionsService,
+    MemoryProposals,
     QuestionEvents,
     QuestionsExpireHandler,
     QuestionsExpireTask,
@@ -36,6 +39,6 @@ import { QuestionsService } from './questions.service';
     NotificationsQuestionChannel,
     WebhookQuestionChannel,
   ],
-  exports: [QuestionsService, QuestionEvents, QuestionChannelRegistry],
+  exports: [QuestionsService, QuestionEvents, QuestionChannelRegistry, MemoryProposals],
 })
 export class QuestionsModule {}

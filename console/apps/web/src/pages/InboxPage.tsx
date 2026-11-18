@@ -1,5 +1,5 @@
 import InboxOutlinedIcon from '@mui/icons-material/InboxOutlined';
-import { Alert, Box } from '@mui/material';
+import { Alert, Box, Typography } from '@mui/material';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
@@ -103,7 +103,10 @@ export function InboxPage() {
 
   // The focused request first; everything else in the order the person already sees.
   const ordered = useMemo(() => [...(items ?? [])].sort((a, b) => Number(focused(b)) - Number(focused(a))), [items, focused]);
-  const waiting = ordered.filter((i) => !settled.has(i.questionId)).length;
+  // Requests a run waits on first; the agent's memory suggestions (#553) below, in their own quiet group.
+  const requests = ordered.filter((i) => i.blocking !== false);
+  const suggestions = ordered.filter((i) => i.blocking === false);
+  const waiting = requests.filter((i) => !settled.has(i.questionId)).length;
   // One clock for every card's countdown.
   const now = useNow(ordered.length > 0);
 
@@ -121,7 +124,7 @@ export function InboxPage() {
         </Alert>
       )}
       <Box aria-label="Requests" sx={{ minWidth: 0 }}>
-        {ordered.map((item) => (
+        {requests.map((item) => (
           <QuestionCard
             key={item.questionId}
             variant="list"
@@ -136,6 +139,29 @@ export function InboxPage() {
           />
         ))}
       </Box>
+      {suggestions.length > 0 && (
+        <Box component="section" aria-label="Suggestions" sx={{ minWidth: 0, mt: requests.length ? 3 : 0 }}>
+          <Typography variant="overline" component="h2" color="text.secondary">
+            Suggestions
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Things the agent offers to remember. Nothing waits on them: answer when you like.
+          </Typography>
+          {suggestions.map((item) => (
+            <QuestionCard
+              key={item.questionId}
+              variant="list"
+              question={inboxItemToCard(item)}
+              now={now}
+              canAnswer={canAnswer}
+              focused={focused(item)}
+              isNew={fresh.has(item.questionId)}
+              onAnswer={(answer) => respond(item, answer)}
+              onLeft={() => left(item.questionId)}
+            />
+          ))}
+        </Box>
+      )}
     </PageContainer>
   );
 }

@@ -9,6 +9,7 @@ import { formatTime, useProfileTimeZone } from '../ui';
 import { BrowserCard, ResultCard } from './ChatBrowser';
 import { clarifyOptions, type ThreadRow } from './chatThread';
 import type { RunFrame } from './useRunFrame';
+import { MemoryProposalCard } from './MemoryProposalCard';
 
 const BUBBLE_MAX = { xs: '88%', sm: '76%' } as const;
 
@@ -150,6 +151,8 @@ export function MessageRow({ message, answerable, onAnswer, cards }: MessageRowP
         <ResultCard message={message} onRunAgain={cards.onRunAgain ? () => cards.onRunAgain?.(message) : undefined} onSaveAsTask={cards.onSaveAsTask} saving={cards.savingTask} />
       ) : message.kind === 'task_draft' ? (
         <DraftCard message={message} onReview={cards.onReviewDraft} />
+      ) : message.kind === 'memory' && typeof (message.meta as { questionId?: unknown } | null)?.questionId === 'string' ? (
+        <MemoryProposalCard questionId={(message.meta as { questionId: string }).questionId} />
       ) : (
         <Box
           sx={{

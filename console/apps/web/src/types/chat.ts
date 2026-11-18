@@ -7,7 +7,7 @@ import type { RunStatus, RunStopReason } from './runs';
 
 export type ChatStatus = 'active' | 'archived';
 export type ChatMessageRole = 'user' | 'assistant' | 'system';
-export type ChatMessageKind = 'text' | 'clarify' | 'run' | 'result' | 'task_draft';
+export type ChatMessageKind = 'text' | 'clarify' | 'run' | 'result' | 'task_draft' | 'memory';
 
 export interface Chat {
   id: string;

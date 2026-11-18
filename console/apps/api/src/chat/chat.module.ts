@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 
 import { ApprovalsModule } from '../approvals/approvals.module';
 import { AiModule } from '../platform/ai/ai.config';
+import { MemoriesModule } from '../memories/memories.module';
 import { PoliciesModule } from '../policies/policies.module';
+import { QuestionsModule } from '../questions/questions.module';
 import { TasksModule } from '../tasks/tasks.module';
 import { ChatOwnerGuard, ChatStreamController, ChatStreamService } from './chat-stream.controller';
 import { ChatTaskDraftService } from './chat-task-draft.service';
@@ -18,7 +20,7 @@ import { ChatService } from './chat.service';
  * slice (its configured AiModule); the job queue is global.
  */
 @Module({
-  imports: [AiModule, TasksModule, PoliciesModule, ApprovalsModule],
+  imports: [AiModule, TasksModule, PoliciesModule, QuestionsModule, MemoriesModule, ApprovalsModule],
   // ChatStreamController first: its fixed `:id/stream` path is declared before the `:id` routes.
   controllers: [ChatStreamController, ChatController],
   providers: [ChatOwnerGuard, ChatStreamService, ChatTaskDraftService, ChatService, ChatResults, ChatTurnService, ChatTurnQueue, ChatTurnHandler],

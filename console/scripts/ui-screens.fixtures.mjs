@@ -85,6 +85,9 @@ const liveRun = run(IDS.liveRun, 'running', {
 const finishedRun = run(IDS.finishedRun, 'failed', {
   stopReason: 'budget_cost', result: 'Compared 3 of 5 fares; the cheapest so far is 120 on the 9:00 departure.', error: 'Cost budget exhausted',
   finishedAt: iso(-60_000), budget: { ...budget, used: { ...budget.used, cost: 2.01 }, percent: { ...budget.percent, cost: 100.5 } },
+  // The memories its goal used (#553): the run page says "Used: …".
+  memoryIds: ['aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaaa'],
+  memories: [{ id: 'aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaaa', label: 'My partner', status: 'active' }, { id: 'aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaaa', label: 'Checking account', status: 'active' }],
 });
 /** A chat run over its soft action limit that still finished (#537). */
 const chatRun = run(IDS.chatRun, 'succeeded', {
@@ -151,6 +154,14 @@ const confirmation = {
   constraints: null, confirmLabel: 'Book it', denyLabel: 'Do not book', risk: 'high',
   // "Don't ask again" (#555): what the server says the approval would remember.
   rememberable: { kind: 'gate', host: 'example.com', category: 'purchase', matchKey: 'Book it', summary: "Press 'Book it' on example.com", scopes: ['everywhere', 'this_task'] },
+};
+
+/** A memory the agent proposes (#553): a quiet, non-blocking request, in the chat and the Inbox. */
+const memoryProposal = {
+  ...question, questionId: '5555555a-5555-4555-8555-555555555555', id: '5555555a-5555-4555-8555-555555555555', runId: null, goal: 'The agent suggests remembering something.', handoffId: null,
+  askedBy: `chat:${IDS.chat}`, browserBound: false, prompt: 'The agent suggests remembering something.', pageTitle: null, kind: 'memory', input: 'memory', constraints: null,
+  expiresAt: iso(7 * 86_400_000), blocking: false, conversationId: IDS.chat,
+  proposal: { kind: 'person', label: 'My partner', aliases: ['partner'], attributes: { name: 'Person B', phone: '555-010-6020', relation: 'partner' }, supersedes: null },
 };
 
 const hosts = [
@@ -350,6 +361,8 @@ const chatMessages = [
   chatMessage(7, 'user', 'text', '7:30 PM, somewhere in the middle of the room please. If the middle rows are full, the row right behind them is fine too.'),
   // The live run: its Browser card shows the run's picture (the mocked screenshot).
   chatMessage(8, 'assistant', 'run', 'Book 2 tickets for the 7:30 PM showing of the new space film tonight at the usual cinema, middle rows preferred, otherwise the row right behind them.', { runId: IDS.liveRun }),
+  // The agent offers to remember a person the owner named (#553): the "Remember this?" card.
+  chatMessage(9, 'assistant', 'memory', 'Suggested remembering: My partner', { meta: { questionId: memoryProposal.id } }),
 ];
 const chatRow = (id, title, extra = {}) => ({ ...chatBase, id, title, lastMessageAt: iso(-120_000), preview: { role: 'assistant', kind: 'run', text: 'Book 2 tickets for the 7:30 PM showing of the new space film tonight.' }, liveRun: null, ...extra });
 const chatRows = [
@@ -414,8 +427,9 @@ export const RESPONSES = {
   'POST /fleet/enrollments': { enrollmentToken: 'hxe_placeholder', expiresAt: iso(900_000), command: 'curl -fsSL https://console.example.test/install.sh | sh -s -- agent install --url https://console.example.test --enrollment-token hxe_placeholder_0123456789abcdef --mode unattended' },
   'GET /chats': (url) => ({ items: url.searchParams.get('status') === 'archived' ? [] : chatRows, nextCursor: null }),
   [`GET /chats/${IDS.chat}`]: { ...chatBase, id: IDS.chat, title: chatRows[0].title, lastMessageAt: iso(-120_000), messages: chatMessages, hasMore: false, liveRun: { id: IDS.liveRun, status: 'running' }, thinking: false },
-  'GET /inbox': [question, confirmation],
+  'GET /inbox': [question, confirmation, memoryProposal],
   [`GET /questions/${IDS.question}`]: question,
+  [`GET /questions/${memoryProposal.id}`]: memoryProposal,
   'GET /agent-policies': policies,
   [`GET /agent-policies/${IDS.policy}`]: policies[2],
   'GET /agent-policies/default': { policyId: 'builtin:balanced' },

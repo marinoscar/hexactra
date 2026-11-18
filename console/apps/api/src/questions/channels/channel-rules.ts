@@ -79,8 +79,17 @@ export function needsSignedIn(q: Pick<RuleQuestion, 'input' | 'risk'>): boolean 
   return sharedNeedsSignedIn(q);
 }
 
-/** Whether `channel` may record this answer to `q`. Declining is allowed everywhere. */
+/**
+ * The only channels a memory proposal (#553) is answered on, saved or declined:
+ * the signed-in web app (its chat card, the Inbox, the question page) and the
+ * Android app. A notification, a webhook, the CLI, the REST API under another
+ * name, an MCP client or a hosted AI app never answers one (nor reads its values).
+ */
+export const MEMORY_ANSWER_CHANNELS: readonly string[] = ['web', 'android_app', 'inbox'];
+
+/** Whether `channel` may record this answer to `q`. Declining is allowed everywhere, but for a memory proposal. */
 export function mayAnswerOn(channel: string, q: Pick<RuleQuestion, 'input' | 'risk'>, outcome: 'completed' | 'cancelled' = 'completed'): boolean {
+  if (q.input === 'memory') return MEMORY_ANSWER_CHANNELS.includes(channelId(channel));
   if (outcome === 'cancelled') return true;
   const rule = CHANNEL_RULES[channelId(channel)];
   return !rule || rule.signedIn || !needsSignedIn(q);
