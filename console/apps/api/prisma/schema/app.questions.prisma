@@ -59,6 +59,9 @@ model Question {
   risk             String?        @db.VarChar(8)
   /// credentials and secret: the site's "remember me" option in the page's words (#527).
   rememberLabel    String?        @map("remember_label") @db.VarChar(80)
+  /// The commitment the server's confirmation gate stopped (#550): `{ host, category, label }`. Set by the
+  /// server only, from the clicked element and the page the fabric reports; never from model text.
+  gate             Json?
   /// The page the agent was on (browser-bound), for display.
   pageTitle        String?        @map("page_title") @db.VarChar(500)
   /// The fabric's viewer of the host's browser, when it has one.

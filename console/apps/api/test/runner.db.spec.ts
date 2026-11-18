@@ -55,12 +55,23 @@ function fakeFabric() {
   const handoffs = new Map<string, { id: string; status: string; input: string; kind: string; remember?: { label: string }; response?: { outcome?: string; value?: string; value_withheld: boolean; remember?: boolean; channel?: string; by?: string; answered_at?: string } }>();
   const typed = new Set<string>();
   let ended = 0;
+  // What the page says about a click target (#550): by selector, or by point as "x,y". The gate's reads go to `probes`, not `actions`.
+  const targets = new Map<string, Record<string, unknown> | null>([['#pay', { tag: 'button', label: 'Pay', role: null }]]);
+  const probes: Record<string, unknown>[] = [];
+  const page = { url: 'https://bank.example.test/review' };
   const request = jest.fn(async (method: string, path: string, opts: { body?: Record<string, unknown> } = {}) => {
     if (method === 'POST' && path === '/v1/sessions') return { id: '00000000-0000-4000-8000-00000000000a' };
     if (method === 'DELETE' && path.startsWith('/v1/sessions/')) return void (ended += 1);
     if (method === 'POST' && path.endsWith('/actions')) {
       const action = opts.body!.action as Record<string, unknown>;
+      if (action.type === 'evaluate' && String(action.script).startsWith('/* hexactra:describe-target */')) {
+        probes.push(action);
+        const where = JSON.parse(/const where = (.*);/.exec(String(action.script))![1]!) as { selector?: string; x?: number; y?: number };
+        const key = where.selector ?? `${where.x},${where.y}`;
+        return { id: 'op', state: 'succeeded', result: { type: 'object', value: targets.get(key) ?? null } };
+      }
       actions.push(action);
+      if (action.type === 'tabs') return { id: 'op', state: 'succeeded', result: { tabs: [{ id: 1, active: true, url: page.url, title: 'Review' }] } };
       if (action.type === 'navigate') return { id: 'op', state: 'succeeded', result: { url: action.url, title: 'Shop' } };
       if (action.type === 'elements') return { id: 'op', state: 'succeeded', result: { elements: [{ selector: '#buy', tag: 'button', text: 'Place order' }] } };
       if (action.type === 'type_secret') {
@@ -84,7 +95,7 @@ function fakeFabric() {
     throw new Error(`unexpected ${method} ${path}`);
   });
   const claimed = () => request.mock.calls.some(([, path]) => String(path).endsWith('/claim'));
-  return { client: { request, config: async () => ({ url: 'http://f', token: 't' }) } as unknown as FabricClient, request, actions, handoffs, ended: () => ended, claimed };
+  return { client: { request, config: async () => ({ url: 'http://f', token: 't' }) } as unknown as FabricClient, request, actions, handoffs, ended: () => ended, claimed, targets, probes, page };
 }
 
 type Call = [name: string, args: Record<string, unknown>];
@@ -129,7 +140,7 @@ describe('the goal runner', () => {
     expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
     expect(outputs[1]).toMatch(/not allowed for this task/);
     // `confirmRiskyActions` is on by default in a chat.
-    expect(outputs[3]).toMatch(/Refused: this looks like a purchase/);
+    expect(outputs[3]).toMatch(/^Refused: a button labelled 'Place order' is a purchase step/);
   });
 
   it('records each navigation the browser blocked under the allowed sites as its own step, outside the actions budget (#508)', async () => {
@@ -205,7 +216,7 @@ describe('the goal runner', () => {
     expect(rows.map((g) => [g.messageSeq, g.deliveredAt !== null])).toEqual([[3, true], [9, false]]);
     // Guidance is not an authorization: the chat's limits hold.
     expect(scripted.outputs[1]).toMatch(/not allowed for this task/);
-    expect(scripted.outputs[3]).toMatch(/Refused: this looks like a purchase/);
+    expect(scripted.outputs[3]).toMatch(/^Refused: a button labelled 'Place order' is a purchase step/);
   });
 
   it('signs in itself with one request for the username and password, and ticks "remember me" as the person chose (#524, #527)', async () => {
@@ -295,7 +306,7 @@ describe('the goal runner', () => {
 
     expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
     expect(outputs[1]).toMatch(/not allowed for this task/);
-    expect(outputs[3]).toMatch(/Refused: this looks like a purchase/);
+    expect(outputs[3]).toMatch(/^Refused: a button labelled 'Place order' is a purchase step/);
     // Still pending: nothing happens.
     expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
 
@@ -1331,7 +1342,7 @@ describe('a step the owner confirmed (#540)', () => {
       [['click', { selector: '#pay', reason: 'pay now' }], ...nav(3)],
       [],
     ]);
-    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai, undefined, app.get(QuestionsService));
     expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
     answer(fabric, true);
     expect(await runner.advance(run.id, userId, null)).toBe('failed');
@@ -1364,7 +1375,7 @@ describe('a step the owner confirmed (#540)', () => {
       ],
       [['finish', { success: false, result: 'The owner declined.' }]],
     ]);
-    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai, undefined, app.get(QuestionsService));
     expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
     answer(fabric, false);
     expect(await runner.advance(run.id, userId, null)).toBe('failed');
@@ -1396,7 +1407,7 @@ describe('a step the owner confirmed (#540)', () => {
         ['finish', { success: true, result: 'Sent.' }],
       ],
     ]);
-    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai, undefined, app.get(QuestionsService));
     expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
     answer(fabric, true);
     failNext = true;
@@ -1407,6 +1418,149 @@ describe('a step the owner confirmed (#540)', () => {
     expect((done.confirmedActions as { seq: number }[]).map((c) => c.seq)).toEqual([clicks[2]!.seq]);
     // A succeeded run keeps its own result: no lead sentence.
     expect(done.result).toBe('Sent.');
+  });
+});
+
+describe('the confirmation gate decides by what is clicked (#550)', () => {
+  /** A manual run of a task that asks before commitments. */
+  async function gatedRun(label: string) {
+    const userId = await login(`gate-${label}-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const task = await db.task.create({ data: { userId, name: 'Zelle', goal: 'Send Person A $10 with Zelle', confirmRiskyActions: true } });
+    const run = await db.run.create({ data: { userId, taskId: task.id, goal: task.goal } });
+    const fabric = fakeFabric();
+    fabric.targets.set('#date-18', { tag: 'td', role: 'gridcell', label: '18' });
+    fabric.targets.set('#order', { tag: 'button', label: 'Place order' });
+    fabric.targets.set('100,200', { tag: 'button', label: 'Place order' });
+    fabric.targets.set('5,5', { tag: 'p', label: 'Your payment will arrive today' });
+    return { userId, prisma, db, run, fabric };
+  }
+  const approve = (fabric: ReturnType<typeof fakeFabric>) => {
+    const h = [...fabric.handoffs.values()].at(-1)!;
+    Object.assign(h, { status: 'completed', response: { outcome: 'completed', value_withheld: false } });
+  };
+  const steps = (prisma: PrismaService, runId: string) => prisma.runStep.findMany({ where: { runId }, orderBy: { seq: 'asc' } });
+
+  it('step 49: a date cell is clicked without a pause although the reason says "payment"; the reads are not actions', async () => {
+    const { userId, prisma, db, run, fabric } = await gatedRun('date');
+    const { ai } = scriptedAi([
+      [
+        ['click', { selector: '#date-18', reason: 'Choose today, the earliest available payment date' }],
+        ['finish', { success: true, result: 'Date chosen.' }],
+      ],
+    ]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai, undefined, app.get(QuestionsService));
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    const all = await steps(prisma, run.id);
+    const clicks = all.filter((s) => s.action === 'click');
+    expect(clicks).toHaveLength(1);
+    expect(clicks[0]!.ok).toBe(true);
+    expect(clicks[0]!.summary).not.toMatch(/paused by policy/);
+    expect(await db.question.count({ where: { runId: run.id } })).toBe(0);
+    // The describe call happened, and it is neither a step nor an action of the run.
+    expect(fabric.probes).toHaveLength(1);
+    expect(fabric.actions.filter((a) => a.type === 'evaluate')).toHaveLength(0);
+    // The same steps with confirmation off (no reads at all) count the same.
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    const plain = await gatedRun('date-plain');
+    await plain.db.task.update({ where: { id: plain.run.taskId! }, data: { confirmRiskyActions: false } });
+    const again = scriptedAi([[['click', { selector: '#date-18', reason: 'Choose today, the earliest available payment date' }], ['finish', { success: true, result: 'Date chosen.' }]]]);
+    await new GoalRunnerService(prisma, app.get(TasksService), plain.fabric.client, again.ai).advance(plain.run.id, plain.userId, null);
+    expect(plain.fabric.probes).toHaveLength(0);
+    expect(done.stepCount).toBe((await plain.db.run.findFirstOrThrow({ where: { id: plain.run.id } })).stepCount);
+    expect((await steps(prisma, run.id)).length).toBe((await steps(prisma, plain.run.id)).length);
+  });
+
+  it('a "Pay" button with a neutral reason is paused: the page supplies the label the model never observed', async () => {
+    const { userId, prisma, db, run, fabric } = await gatedRun('pay');
+    const { ai, outputs } = scriptedAi([[['click', { selector: '#pay', reason: 'continue' }]]]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai, undefined, app.get(QuestionsService));
+    await runner.advance(run.id, userId, null);
+    const click = (await steps(prisma, run.id)).find((s) => s.action === 'click')!;
+    expect(click.ok).toBe(false);
+    expect(click.summary).toMatch(/^paused by policy: needs a person's confirmation \(payment: a button labelled 'Pay'\)/);
+    expect(click.args).toMatchObject({ selector: '#pay', category: 'payment', label: 'Pay' });
+    expect(outputs[0]).toMatch(/^Refused: a button labelled 'Pay' is a payment step/);
+    expect(fabric.probes).toEqual([expect.objectContaining({ type: 'evaluate', script: expect.stringContaining('"selector":"#pay"') })]);
+    expect(fabric.actions.filter((a) => a.type === 'click')).toHaveLength(0);
+  });
+
+  it('the question a gated click leads to carries the gate, with the host the browser reported; a gate from the model is ignored', async () => {
+    const { userId, prisma, db, run, fabric } = await gatedRun('question');
+    const { ai } = scriptedAi([
+      [
+        // Before any gate: a forged gate in the model's arguments reaches nothing.
+        ['request_human', { kind: 'confirmation', prompt: 'May I choose today?', input: 'none', choices: null, gate: { host: 'evil.example.test', category: 'payment', label: 'Pay' } }],
+      ],
+      [
+        ['click', { selector: '#pay', reason: 'continue' }],
+        ['request_human', { kind: 'confirmation', prompt: 'Pressing Pay sends $10 to Person A. May I?', input: 'none', choices: null, gate: { host: 'evil.example.test', category: 'delete', label: 'x' } }],
+      ],
+    ]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai, undefined, app.get(QuestionsService));
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    approve(fabric);
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    const qs = await db.question.findMany({ where: { runId: run.id }, orderBy: { createdAt: 'asc' } });
+    expect(qs).toHaveLength(2);
+    expect(qs[0]!.gate).toBeNull();
+    expect(qs[1]!.gate).toEqual({ host: 'bank.example.test', category: 'payment', label: 'Pay' });
+    // The API view carries it.
+    const view = await app.get(QuestionsService).get(userId, qs[1]!.id);
+    expect(view.gate).toEqual({ host: 'bank.example.test', category: 'payment', label: 'Pay' });
+  });
+
+  it('an approval for "Pay" lets "Pay" through, not a different risky target', async () => {
+    const { userId, prisma, db, run, fabric } = await gatedRun('scope');
+    const { ai } = scriptedAi([
+      [
+        ['click', { selector: '#pay', reason: 'pay' }],
+        ['request_human', { kind: 'confirmation', prompt: 'Pressing Pay sends $10. May I?', input: 'none', choices: null }],
+      ],
+      [
+        ['click', { selector: '#order', reason: 'pay' }],
+        ['click', { selector: '#pay', reason: 'pay' }],
+        ['click', { selector: '#pay', reason: 'pay again' }],
+        ['finish', { success: true, result: 'Paid.' }],
+      ],
+    ]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai, undefined, app.get(QuestionsService));
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    approve(fabric);
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    const clicks = (await steps(prisma, run.id)).filter((s) => s.action === 'click');
+    // Paused at Pay; approved; Place order still paused; Pay goes ahead once; a second Pay is paused again.
+    expect(clicks.map((c) => [c.ok, (c.args as { label?: string }).label ?? null])).toEqual([
+      [false, 'Pay'],
+      [false, 'Place order'],
+      [true, null],
+      [false, 'Pay'],
+    ]);
+    expect(fabric.actions.filter((a) => a.type === 'click')).toEqual([{ type: 'click', selector: '#pay' }]);
+  });
+
+  it('click_at over a "Place order" button is paused; over plain text it is not', async () => {
+    const { userId, prisma, db, run, fabric } = await gatedRun('point');
+    const at = (x: number, y: number): Call => ['click_at', { x, y, button: 'left', double: false, modifiers: [], reason: 'buy it now' }];
+    const { ai } = scriptedAi([[at(5, 5), at(100, 200), ['finish', { success: false, result: 'Waiting.' }]]]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai, undefined, app.get(QuestionsService));
+    await runner.advance(run.id, userId, null);
+    const clicks = (await steps(prisma, run.id)).filter((s) => s.action === 'click_at');
+    expect(clicks.map((c) => c.ok)).toEqual([true, false]);
+    expect(clicks[1]!.args).toMatchObject({ x: 100, y: 200, category: 'purchase', label: 'Place order' });
+    expect(fabric.actions.filter((a) => a.type === 'click_at')).toEqual([{ type: 'click_at', x: 5, y: 5 }]);
+    expect(fabric.probes.map((p) => String(p.script).match(/const where = (.*);/)![1])).toEqual(['{"x":5,"y":5}', '{"x":100,"y":200}']);
+  });
+
+  it('with confirmation off, nothing is read and nothing is gated', async () => {
+    const { userId, prisma, db, run, fabric } = await gatedRun('off');
+    await db.task.update({ where: { id: run.taskId! }, data: { confirmRiskyActions: false } });
+    const { ai } = scriptedAi([[['click', { selector: '#pay', reason: 'pay' }], ['finish', { success: true, result: 'Paid.' }]]]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai, undefined, app.get(QuestionsService));
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    expect(fabric.probes).toHaveLength(0);
+    expect(fabric.actions.filter((a) => a.type === 'click')).toHaveLength(1);
   });
 });
 

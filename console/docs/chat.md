@@ -99,6 +99,7 @@ When the agent asks you to confirm an irreversible step (a payment, an order, a 
 - **A follow-up knows.** The next job's context says the previous job carried out a confirmed step, and the assistant asks you before starting a job that would repeat it.
 - **A wrap-up without words.** When a stopped run's last model call reports nothing, its result is "Stopped before the agent could report. Last steps: …" with the last five steps, masked, instead of only the stop message.
 - **API.** `GET /api/runs/{id}` carries `confirmedActions` (the list); a list row carries the count. The run page marks the step "Confirmed by you".
+- **Keep or share it.** The result card has **Export** beside **Open run**: the run's masked JSON trace or its PDF report ([docs/runs.md](runs.md#exporting-a-run)). Turn screenshots off before sharing it outside.
 
 ## Steering and follow-ups
 

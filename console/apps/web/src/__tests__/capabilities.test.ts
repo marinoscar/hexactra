@@ -18,7 +18,7 @@ const declared = new Set([...routeSources.matchAll(/<Route\s+path="([^"]+)"/g)].
 if (/<Route\s+index\b/.test(routeSources)) declared.add('/');
 // The pages, their components (the task list's hook and actions), the live stream, the agent policy client (src/policies/api.ts
 // holds every policy call), the schedule editor's preview hook, the task form's client (src/taskForm/api.ts) and the memories client (src/memories/api.ts).
-const calls = [...tsx('pages'), ...tsx('components'), ...tsx('policies'), ...tsx('schedule'), ...tsx('taskForm'), ...tsx('memories'), read('live.ts')].join('\n');
+const calls = [...tsx('pages'), ...tsx('components'), ...tsx('policies'), ...tsx('schedule'), ...tsx('taskForm'), ...tsx('memories'), read('live.ts'), read('api.ts')].join('\n');
 
 /** `/api/runs/{id}/cancel` → a pattern for the call `` `/runs/${...}/cancel` `` or `'/runs'`. */
 function callPattern(op: string): RegExp {

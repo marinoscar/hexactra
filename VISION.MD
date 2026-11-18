@@ -751,7 +751,7 @@ Nodes reach the console over its authenticated HTTPS endpoint (only the host pro
 
 ### 13.5 Audit is not telemetry
 
-Every sensitive authorization, takeover, secret request completion (metadata only), action invocation, state transition, and credential-provider use should have an independently durable audit record. Audit capture is not optional just because telemetry export is turned off.
+Every sensitive authorization, takeover, secret request completion (metadata only), action invocation, state transition, and credential-provider use should have an independently durable audit record. Audit capture is not optional just because telemetry export is turned off. The console's run trace (Section 26.8) is a masked record for people to read and export; it does not replace the audit record.
 
 ---
 
@@ -1571,7 +1571,7 @@ A run's models and limits come from an **agent policy**: a named, versioned, per
 
 - **Four built-ins, read-only:** Economy, **Balanced** (the default), Thorough and Unlimited. A person duplicates one to edit a copy, picks one default, and may assign a policy to a task or schedule, or to a single run ("Run with..."). Policies move between people and deployments as a JSON file (`hexactra.agent-policies`) that carries no ids, user or secret.
 - **Model tiers, not model names.** A policy starts on a tier (`fast`, `standard`, `frontier`) and may escalate to a stronger one, up to its highest tier. Each tier is a model, a reasoning effort, an output cap and an optional fallback model, defined once per deployment and overridable per user; a policy may pin a model to a tier. The model changes only between chunks, so provider prompt caching holds.
-- **Six budgets, each optionally unlimited:** actions, model calls, active minutes (time waiting for a person never counts), input tokens, output tokens and cost in US dollars, priced from a table the administrator maintains. A budget set to `null` is unlimited. The administrator may set **ceilings** that no policy can exceed, which also cap an unlimited policy. A used-up budget ends the run after one wrap-up call, and the run records a typed `stop_reason`.
+- **Six budgets, each optionally unlimited:** actions, model calls, active minutes (time waiting for a person never counts), input tokens, output tokens and cost in US dollars, priced from a table the administrator maintains. A budget set to `null` is unlimited. The administrator may set **ceilings** that no policy can exceed, which also cap an unlimited policy. A used-up budget ends the run after one wrap-up call, and the run records a typed `stop_reason`. **A run a chat starts is the exception (epic #536):** its owner is in the conversation, answers the agent's questions and can press Stop, so its budgets are soft: counted, shown and warned about near and over the limit, never enforced. Runs no person is watching (schedules, tasks, the API, MCP) keep hard budgets.
 - **Stall detection is always on**, even for an unlimited policy: repeated failures, a repeated action, no visible progress, or rounds with no action nudge the model, escalate a tier, ask a person or end the run as `stalled`, as the policy says.
 - **Context settings** (screenshots kept, calls per chunk, observation size, prune batch) bound how much the model re-reads each round.
 - **A snapshot per run.** The policy, the effective budget and the resolved tiers are written onto the run when it starts and never change, so editing a policy never alters a run in flight.
@@ -1599,6 +1599,16 @@ The console has a second way to start work, next to Task → Run: a chat (`/chat
 - **A web surface.** The CLI, TUI and MCP have no chat, by recorded decision (Section 26.2): a hosted AI app is already a chat and shows the run and question cards in its own thread.
 
 Not included: video streaming, one browser session kept open across a chat's runs, several runs of one chat at once, and chat apps as channels (#293).
+
+### 26.8 Runs you can trust and replay (epic #536)
+
+- **A confirmed step is remembered.** When the owner approves an irreversible step (a payment, an order) and the run then does not succeed, the result says the confirmed step was carried out, and "Run again" asks before it repeats the job.
+- **Every run keeps a trace:** its steps, the questions it asked and the answers given (never a secret's value), the owner's guidance from the chat, and screenshots of the key moments (asked, before and after a confirmed step, a stall, the end).
+- **Masked always.** Trace screenshots are masked in the page by the extension before the picture is taken, so no unmasked trace image exists; text is masked on every read and export by one pattern table (cards, IBANs, SSNs, routing and account numbers, emails, phones, tokens). Masking is pattern-based: a name or a balance is not a pattern, and reports say "masked", never "anonymised".
+- **Export.** The owner downloads a run as a JSON trace file or a PDF report. There is no unmasked export, for any role.
+- **Not the audit trail.** The trace is a masked record for people. The durable, sanitized Execution Events remain the audit trail (Section 13.5).
+
+Detail: `console/docs/runs.md` and `console/docs/chat.md`.
 
 ## 27. Human emulator: full powers (epic #366)
 

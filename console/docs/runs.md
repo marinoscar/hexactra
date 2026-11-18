@@ -148,6 +148,16 @@ Each user has a retention rule; a nightly job deletes the finished runs outside 
 
 The nightly job (`browser.runs.retention`, 03:20 server time) reads each user's rule, applies the limit and deletes through `RunDeleteService.deleteByIds` with `mode: 'retention'`, at most 20,000 runs per user per night.
 
+## The run trace (epic #536)
+
+The sections below are one chapter: what a run records and when it keeps a picture ([What a run records](#what-a-run-records)), how the run page shows it ([The run page](#the-run-page)), what is masked and what is not ([What is masked](#what-is-masked)), the file and its route ([Exporting a run](#exporting-a-run)), the PDF ([The PDF report](#the-pdf-report)), and how it all is removed ([Retention](#retention); pictures go with their run). In short:
+
+- **Masked always.** Screenshots are masked in the page before they are taken (the extension, `screenshot` with `mask: true`); text is masked when it is read and exported. There is no unmasked image and no unmasked export, for any role.
+- **Not masked:** names, addresses, balances and amounts (they are not patterns), and anything inside an image, a canvas or a video that is not a recognised field or text pattern. Reports say "masked", never "anonymised"; export **without screenshots** before sharing a trace outside.
+- **Never recorded or exported:** a secret's or a sign-in's value, the model's working memory (`runs.transcript`), tokens, an AI app's grant or limits, object keys.
+- **Storage:** 5 to 15 pictures per run, at most 40, about 150 kB each (≈ 1.5 MB per run kept).
+- **The trace is not the audit trail.** The durable audit events stay that ([VISION.MD §13.5](../../VISION.MD)).
+
 ## What a run records
 
 Every run keeps a trace a person can follow afterwards (#541): its steps (`run_steps`), the questions it asked and the answers given, the owner's guidance from the chat, and **masked screenshots of the key moments**. `GET /api/runs/{id}` returns it; the run's live stream sends the same step fields.
@@ -170,6 +180,23 @@ Every run keeps a trace a person can follow afterwards (#541): its steps (`run_s
 - **Where.** Object storage, key `runs/<userId>/<runId>/<seq>-<moment>.jpg` (prefix `run-traces`), about 150 kB each. Steps return `hasScreenshot` and `screenshotMoment`, never the key. The picture: `GET /api/runs/{id}/steps/{seq}/screenshot` (`runs:read`, the owner only: `404` for another user's run, a missing step or a step without a picture; `Cache-Control: private, max-age=3600`).
 - **Removed with the run** by a delete and by the nightly retention; a storage failure never keeps a run.
 - **Metrics.** `app.runs.trace_screenshots` (labels `moment`, `result`: `stored`, `skipped`, `failed`) and `app.runs.trace_screenshot_bytes`. The Doctor's `runs.trace_storage` warns when storage is off. No image, key or prompt text is ever logged.
+
+## The run page
+
+The console shows the trace on the run's page (#544; README, "A run's page"): each question with its full masked prompt, its kind and the answer line built from `question.answer` (the outcome, where it was given from `channel`, the time, and how long the agent waited since the question step), the `guidance` steps as "You added: …", the "Confirmed by you" marker from `confirmedActions`, and a lazy thumbnail per step with `hasScreenshot`, fetched with the session from `GET /api/runs/{id}/steps/{seq}/screenshot` and shown through an object URL. A lightbox pages through the run's pictures; a **Pictures** filter keeps only those steps. The captions per `screenshotMoment`:
+
+| `screenshotMoment` | Caption |
+|---|---|
+| `question`, `before_confirmed` | The screen when the agent asked |
+| `after_confirmed` | After the confirmed step |
+| `failure` | When it stopped |
+| `final` | Final screen |
+
+**Export.** The run page, the chat's result card and the run list download `GET /api/runs/{id}/export?format=json|pdf&screenshots=embed|none` (PDF also `paper=a4|letter`, from the browser's locale) through the signed-in client, as a blob saved under the name of `Content-Disposition`. "Include screenshots" is remembered per browser (`localStorage`, `hexactra.runs.exportScreenshots`); `413 EXPORT_TOO_LARGE` shows the server's message and suggests turning it off. In the Android app the console runs in Chrome (a Trusted Web Activity, no WebView), so the download goes to Chrome's own download manager.
+
+| The Export menu on a phone |
+|---|
+| ![The Export menu opened from the run page's sticky bar on a phone: PDF report, JSON trace, Include screenshots and the note](images/run-export-phone.png) |
 
 ## What is masked
 
