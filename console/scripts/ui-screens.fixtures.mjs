@@ -26,6 +26,7 @@ const PERMISSIONS = [
   'users:read', 'allowlist:read', 'jobs:read', 'webhooks:read', 'system_webhooks:read', 'alerts:read', 'ai:use', 'ai_config:read', 'storage_config:read',
   'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
   'connected_apps:read', 'connected_apps:write', 'oauth_clients:read', 'oauth_clients:write',
+  'memories:read', 'memories:write',
 ];
 
 const limits = { maxActions: 60, maxModelCalls: 120, maxActiveMinutes: 20, maxInputTokens: null, maxOutputTokens: null, maxCostUsd: 2 };
@@ -311,6 +312,17 @@ const chatRows = [
 ];
 
 /** `"<METHOD> <path>"` to the response `data`. A function gets the request URL and its JSON body. */
+const memory = (id, kind, label, attributes, extra = {}) => ({
+  id, kind, label, aliases: [], attributes, note: null, status: 'active', source: 'owner', sourceRunId: null, sourceConversationId: null,
+  supersededById: null, lastUsedAt: null, createdAt: '2026-11-10T09:00:00.000Z', updatedAt: '2026-11-10T09:00:00.000Z', ...extra,
+});
+const memories = [
+  memory('a1000000-0000-4000-8000-000000000001', 'person', 'My wife', { name: 'Person A', phone: '555-010-6020', relation: 'wife' }, { aliases: ['wife', 'person a'], lastUsedAt: '2026-11-17T18:00:00.000Z' }),
+  memory('a1000000-0000-4000-8000-000000000002', 'account', 'Checking account', { bank: 'Bank of Example', ending: '0659' }, { source: 'agent_proposed', sourceConversationId: IDS.chat, note: 'The account the household bills are paid from; a longer note that has to wrap on a narrow phone screen.' }),
+  memory('a1000000-0000-4000-8000-000000000003', 'preference', 'Seat', { seat: 'aisle', class: 'economy' }),
+  memory('a1000000-0000-4000-8000-000000000004', 'fact', 'Old address', { city: 'Example City' }, { status: 'archived' }),
+];
+
 export const RESPONSES = {
   'POST /auth/refresh': { accessToken: 'ui-screens-token', expiresIn: 900 },
   'GET /auth/providers': { providers: [{ name: 'google', enabled: true }] },
@@ -354,6 +366,8 @@ export const RESPONSES = {
   'GET /agent-policies/model-tiers/effective': { policy: null, tiers: { fast: effectiveTier('provider-a:model-small'), standard: effectiveTier('provider-a:model-mid'), frontier: effectiveTier('provider-a:model-large-2026') } },
   'GET /fabric/connection': { url: 'http://fabric-control:8787', tokenSet: true, source: 'settings', updatedAt: iso(-86_400_000) },
   'GET /connected-apps': connectedApps,
+  // Memories (#551): a person, an account suggested by the agent, a preference and an archived fact.
+  'GET /memories': (url) => (url.searchParams.get('status') === 'all' ? memories : memories.filter((m) => m.status === 'active')),
   'GET /connected-apps/preflight': preflight,
   [`GET /connected-apps/${IDS.app}`]: connectedApps[0],
   'GET /notes': [{ id: 'note-1', title: 'A first note', body: '', archived: false }, { id: 'note-2', title: 'A note with a long title that has to wrap on a narrow phone screen', body: '', archived: true }],
