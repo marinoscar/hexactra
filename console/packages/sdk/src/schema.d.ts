@@ -7573,6 +7573,12 @@ export interface components {
              * @example POLICY_IMPORT_INVALID
              * @example POLICY_IMPORT_UNSUPPORTED_VERSION
              * @example POLICY_IMPORT_TOO_LARGE
+             * @example INVALID_GOAL
+             * @example INVALID_PARAMETERS
+             * @example UNKNOWN_INPUT
+             * @example INVALID_INPUT
+             * @example SENSITIVE_INPUT
+             * @example SCHEDULE_INPUTS_MISSING
              * @example APP_PAUSED
              * @example APP_RUN_LIMIT
              * @example APP_COST_LIMIT
@@ -14186,6 +14192,36 @@ export interface components {
             model: string | null;
             /** @description The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default */
             policyId: string | null;
+            /** @description The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none */
+            parameters: {
+                /** @description The placeholder's key (`Phone Number` → `phone_number`) */
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "choice" | "phone" | "email";
+                required: boolean;
+                /** @description choice: the options */
+                options?: string[];
+                help?: string;
+                /** @description A fixed value, or an attribute of one of the owner's memories resolved when the task runs */
+                default?: {
+                    value: string;
+                } | {
+                    memory: {
+                        /** Format: uuid */
+                        id: string;
+                        attribute: string;
+                    };
+                };
+                constraints?: {
+                    min?: number;
+                    max?: number;
+                    maxLength?: number;
+                    pattern?: string;
+                };
+                /** @description Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model */
+                sensitive?: boolean;
+            }[] | null;
             /** @description What the task's runs spent in the last 30 days */
             spend30d: {
                 /** @description Runs created in the last 30 days */
@@ -14224,6 +14260,10 @@ export interface components {
                     description: string;
                     /** @description Overrides the task's agent policy for this schedule's runs; null follows the task */
                     policyId: string | null;
+                    /** @description Preset values for the task's parameters (#552), by key; null for none */
+                    inputs?: {
+                        [key: string]: string;
+                    } | null;
                 }[];
                 /**
                  * @description `none`: no schedule. `active`: all enabled. `paused`: none enabled. `partial`: some enabled, some not.
@@ -14298,6 +14338,36 @@ export interface components {
                 model: string | null;
                 /** @description The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default */
                 policyId: string | null;
+                /** @description The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none */
+                parameters: {
+                    /** @description The placeholder's key (`Phone Number` → `phone_number`) */
+                    key: string;
+                    label: string;
+                    /** @enum {string} */
+                    type: "text" | "number" | "money" | "date" | "choice" | "phone" | "email";
+                    required: boolean;
+                    /** @description choice: the options */
+                    options?: string[];
+                    help?: string;
+                    /** @description A fixed value, or an attribute of one of the owner's memories resolved when the task runs */
+                    default?: {
+                        value: string;
+                    } | {
+                        memory: {
+                            /** Format: uuid */
+                            id: string;
+                            attribute: string;
+                        };
+                    };
+                    constraints?: {
+                        min?: number;
+                        max?: number;
+                        maxLength?: number;
+                        pattern?: string;
+                    };
+                    /** @description Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model */
+                    sensitive?: boolean;
+                }[] | null;
                 /** @description What the task's runs spent in the last 30 days */
                 spend30d: {
                     /** @description Runs created in the last 30 days */
@@ -14336,6 +14406,10 @@ export interface components {
                         description: string;
                         /** @description Overrides the task's agent policy for this schedule's runs; null follows the task */
                         policyId: string | null;
+                        /** @description Preset values for the task's parameters (#552), by key; null for none */
+                        inputs?: {
+                            [key: string]: string;
+                        } | null;
                     }[];
                     /**
                      * @description `none`: no schedule. `active`: all enabled. `paused`: none enabled. `partial`: some enabled, some not.
@@ -14414,6 +14488,36 @@ export interface components {
             model: string | null;
             /** @description The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default */
             policyId: string | null;
+            /** @description The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none */
+            parameters: {
+                /** @description The placeholder's key (`Phone Number` → `phone_number`) */
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "choice" | "phone" | "email";
+                required: boolean;
+                /** @description choice: the options */
+                options?: string[];
+                help?: string;
+                /** @description A fixed value, or an attribute of one of the owner's memories resolved when the task runs */
+                default?: {
+                    value: string;
+                } | {
+                    memory: {
+                        /** Format: uuid */
+                        id: string;
+                        attribute: string;
+                    };
+                };
+                constraints?: {
+                    min?: number;
+                    max?: number;
+                    maxLength?: number;
+                    pattern?: string;
+                };
+                /** @description Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model */
+                sensitive?: boolean;
+            }[] | null;
             /** @description What the task's runs spent in the last 30 days */
             spend30d: {
                 /** @description Runs created in the last 30 days */
@@ -14452,6 +14556,10 @@ export interface components {
                     description: string;
                     /** @description Overrides the task's agent policy for this schedule's runs; null follows the task */
                     policyId: string | null;
+                    /** @description Preset values for the task's parameters (#552), by key; null for none */
+                    inputs?: {
+                        [key: string]: string;
+                    } | null;
                 }[];
                 /**
                  * @description `none`: no schedule. `active`: all enabled. `paused`: none enabled. `partial`: some enabled, some not.
@@ -14526,6 +14634,42 @@ export interface components {
             model?: string | null;
             /** @description The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy. */
             policyId?: string | null;
+            /** @description Definitions of the goal's `{{Name}}` placeholders. Each placeholder without one gets a required `text` parameter; a definition without a placeholder is dropped. The response lists every parameter. */
+            parameters?: {
+                /** @description The placeholder's key: its name lower-cased, spaces, `_` and `-` as one `_` (`Phone Number` → `phone_number`). */
+                key: string;
+                /** @description What a form shows; defaults to the placeholder's name. */
+                label?: string;
+                /**
+                 * @default text
+                 * @enum {string}
+                 */
+                type?: "text" | "number" | "money" | "date" | "choice" | "phone" | "email";
+                /** @default true */
+                required?: boolean;
+                /** @description choice: 2 to 50 options. */
+                options?: string[];
+                /** @description One line under the field. */
+                help?: string;
+                /** @description A fixed value (`{ value }`) or an attribute of one of your memories (`{ memory: { id, attribute } }`), resolved when the task runs. */
+                default?: {
+                    value: string;
+                } | {
+                    memory: {
+                        /** Format: uuid */
+                        id: string;
+                        attribute: string;
+                    };
+                };
+                constraints?: {
+                    min?: number;
+                    max?: number;
+                    maxLength?: number;
+                    pattern?: string;
+                };
+                /** @description Never stored or shown to the model: asked every time in the signed-in console and typed by the browser. No default; never accepted from the API. */
+                sensitive?: boolean;
+            }[];
             /** @description Schedules created with the task, in the same transaction: one invalid schedule and nothing is created. */
             schedules?: {
                 /** @description A 5-field cron expression that fires at most every 5 minutes, e.g. `0 9 * * 1-5`. */
@@ -14541,6 +14685,10 @@ export interface components {
                 concurrency?: "skip" | "queue";
                 /** @description Overrides the task's agent policy for this schedule's runs; `null` follows the task. Omitted on an existing schedule: unchanged. */
                 policyId?: string | null;
+                /** @description Preset values for the task's parameters (#552), by key or name. An enabled schedule needs a value (here, a default or a memory) for every required parameter: 400 `SCHEDULE_INPUTS_MISSING`. Omitted on an existing schedule: unchanged. */
+                inputs?: {
+                    [key: string]: string | number;
+                } | null;
             }[];
         };
         TaskResponseDto: {
@@ -14573,6 +14721,36 @@ export interface components {
             model: string | null;
             /** @description The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default */
             policyId: string | null;
+            /** @description The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none */
+            parameters: {
+                /** @description The placeholder's key (`Phone Number` → `phone_number`) */
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "choice" | "phone" | "email";
+                required: boolean;
+                /** @description choice: the options */
+                options?: string[];
+                help?: string;
+                /** @description A fixed value, or an attribute of one of the owner's memories resolved when the task runs */
+                default?: {
+                    value: string;
+                } | {
+                    memory: {
+                        /** Format: uuid */
+                        id: string;
+                        attribute: string;
+                    };
+                };
+                constraints?: {
+                    min?: number;
+                    max?: number;
+                    maxLength?: number;
+                    pattern?: string;
+                };
+                /** @description Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model */
+                sensitive?: boolean;
+            }[] | null;
             /** @description What the task's runs spent in the last 30 days */
             spend30d: {
                 /** @description Runs created in the last 30 days */
@@ -14618,6 +14796,42 @@ export interface components {
             model?: string | null;
             /** @description The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy. */
             policyId?: string | null;
+            /** @description Definitions of the goal's `{{Name}}` placeholders. Each placeholder without one gets a required `text` parameter; a definition without a placeholder is dropped. The response lists every parameter. */
+            parameters?: {
+                /** @description The placeholder's key: its name lower-cased, spaces, `_` and `-` as one `_` (`Phone Number` → `phone_number`). */
+                key: string;
+                /** @description What a form shows; defaults to the placeholder's name. */
+                label?: string;
+                /**
+                 * @default text
+                 * @enum {string}
+                 */
+                type?: "text" | "number" | "money" | "date" | "choice" | "phone" | "email";
+                /** @default true */
+                required?: boolean;
+                /** @description choice: 2 to 50 options. */
+                options?: string[];
+                /** @description One line under the field. */
+                help?: string;
+                /** @description A fixed value (`{ value }`) or an attribute of one of your memories (`{ memory: { id, attribute } }`), resolved when the task runs. */
+                default?: {
+                    value: string;
+                } | {
+                    memory: {
+                        /** Format: uuid */
+                        id: string;
+                        attribute: string;
+                    };
+                };
+                constraints?: {
+                    min?: number;
+                    max?: number;
+                    maxLength?: number;
+                    pattern?: string;
+                };
+                /** @description Never stored or shown to the model: asked every time in the signed-in console and typed by the browser. No default; never accepted from the API. */
+                sensitive?: boolean;
+            }[];
         };
         ReplaceTaskSchedulesDto: {
             schedules: {
@@ -14634,6 +14848,10 @@ export interface components {
                 concurrency?: "skip" | "queue";
                 /** @description Overrides the task's agent policy for this schedule's runs; `null` follows the task. Omitted on an existing schedule: unchanged. */
                 policyId?: string | null;
+                /** @description Preset values for the task's parameters (#552), by key or name. An enabled schedule needs a value (here, a default or a memory) for every required parameter: 400 `SCHEDULE_INPUTS_MISSING`. Omitted on an existing schedule: unchanged. */
+                inputs?: {
+                    [key: string]: string | number;
+                } | null;
                 /**
                  * Format: uuid
                  * @description An existing schedule of this task to update. Omitted: a new schedule. This task's schedules that are not listed are deleted.
@@ -14671,6 +14889,36 @@ export interface components {
             model: string | null;
             /** @description The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default */
             policyId: string | null;
+            /** @description The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none */
+            parameters: {
+                /** @description The placeholder's key (`Phone Number` → `phone_number`) */
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "choice" | "phone" | "email";
+                required: boolean;
+                /** @description choice: the options */
+                options?: string[];
+                help?: string;
+                /** @description A fixed value, or an attribute of one of the owner's memories resolved when the task runs */
+                default?: {
+                    value: string;
+                } | {
+                    memory: {
+                        /** Format: uuid */
+                        id: string;
+                        attribute: string;
+                    };
+                };
+                constraints?: {
+                    min?: number;
+                    max?: number;
+                    maxLength?: number;
+                    pattern?: string;
+                };
+                /** @description Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model */
+                sensitive?: boolean;
+            }[] | null;
             /** @description What the task's runs spent in the last 30 days */
             spend30d: {
                 /** @description Runs created in the last 30 days */
@@ -14709,6 +14957,10 @@ export interface components {
                     description: string;
                     /** @description Overrides the task's agent policy for this schedule's runs; null follows the task */
                     policyId: string | null;
+                    /** @description Preset values for the task's parameters (#552), by key; null for none */
+                    inputs?: {
+                        [key: string]: string;
+                    } | null;
                 }[];
                 /**
                  * @description `none`: no schedule. `active`: all enabled. `paused`: none enabled. `partial`: some enabled, some not.
@@ -15041,6 +15293,15 @@ export interface components {
             costKnown: boolean;
             /** @description How many steps the owner confirmed that the run carried out (#540); the steps themselves are on `GET /runs/{id}`. */
             confirmedActions: number;
+            /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
+            inputs?: {
+                key: string;
+                label: string;
+                /** @description Masked like the rest of the run (#538); a sensitive value is never stored: "[provided at run time]" */
+                value: string;
+                /** @enum {string} */
+                source: "provided" | "default" | "memory" | "asked" | "schedule";
+            }[] | null;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -15195,6 +15456,15 @@ export interface components {
                 costKnown: boolean;
                 /** @description How many steps the owner confirmed that the run carried out (#540); the steps themselves are on `GET /runs/{id}`. */
                 confirmedActions: number;
+                /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
+                inputs?: {
+                    key: string;
+                    label: string;
+                    /** @description Masked like the rest of the run (#538); a sensitive value is never stored: "[provided at run time]" */
+                    value: string;
+                    /** @enum {string} */
+                    source: "provided" | "default" | "memory" | "asked" | "schedule";
+                }[] | null;
                 /** @description ISO 8601 timestamp */
                 createdAt: string;
                 startedAt: string | null;
@@ -15659,6 +15929,15 @@ export interface components {
                 /** @description When it was carried out */
                 at: string;
             }[];
+            /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
+            inputs?: {
+                key: string;
+                label: string;
+                /** @description Masked like the rest of the run (#538); a sensitive value is never stored: "[provided at run time]" */
+                value: string;
+                /** @enum {string} */
+                source: "provided" | "default" | "memory" | "asked" | "schedule";
+            }[] | null;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -15872,6 +16151,15 @@ export interface components {
                 /** @description When it was carried out */
                 at: string;
             }[];
+            /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
+            inputs?: {
+                key: string;
+                label: string;
+                /** @description Masked like the rest of the run (#538); a sensitive value is never stored: "[provided at run time]" */
+                value: string;
+                /** @enum {string} */
+                source: "provided" | "default" | "memory" | "asked" | "schedule";
+            }[] | null;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -15886,7 +16174,7 @@ export interface components {
             handoffId: string | null;
             browserBound: boolean;
             /** @enum {string} */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "form";
             kind: string;
             prompt: string;
             options: {
@@ -15910,6 +16198,22 @@ export interface components {
             risk: ("low" | "high") | null;
             /** @description credentials and secret: the site's "remember me" option, in the page's words */
             rememberLabel: string | null;
+            /** @description form (#552): the missing values of a task run, asked at once before it starts; answer with `fields: { key: value }` */
+            fields: {
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "choice" | "phone" | "email";
+                required: boolean;
+                options?: string[];
+                help?: string;
+                constraints?: {
+                    min?: number;
+                    max?: number;
+                    maxLength?: number;
+                    pattern?: string;
+                };
+            }[] | null;
             /** @enum {string} */
             status: "pending" | "answered" | "cancelled" | "expired";
             response: {
@@ -15922,6 +16226,10 @@ export interface components {
                 valueWithheld: boolean;
                 /** @description The person's choice for the question's "remember me" option */
                 remember?: boolean;
+                /** @description form: the values given, masked */
+                fields?: {
+                    [key: string]: string;
+                };
                 channel?: string;
                 /** @description Who answered, e.g. user:<id> */
                 by?: string;
@@ -15947,7 +16255,7 @@ export interface components {
         };
         CreateQuestionDto: {
             /** @enum {string} */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "form";
             /**
              * @default other
              * @enum {string}
@@ -15993,6 +16301,9 @@ export interface components {
             values?: string[];
             secret?: string;
             remember?: boolean;
+            fields?: {
+                [key: string]: string | number;
+            };
             channel?: string;
         };
         /** @default {} */
@@ -16009,6 +16320,9 @@ export interface components {
             values?: string[];
             secret?: string;
             remember?: boolean;
+            fields?: {
+                [key: string]: string | number;
+            };
         };
         OpenDto: {
             /** @default default */
@@ -16035,7 +16349,7 @@ export interface components {
              * @default none
              * @enum {string}
              */
-            input?: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
+            input?: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "form";
             /** @enum {string} */
             kind: "captcha" | "code" | "passkey" | "login" | "confirmation" | "other";
             prompt: string;
@@ -16084,7 +16398,7 @@ export interface components {
             kind: string;
             prompt: string;
             /** @enum {string} */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "form";
             choices: string[];
             options: {
                 id: string;
@@ -16107,6 +16421,22 @@ export interface components {
             risk: ("low" | "high") | null;
             /** @description credentials and secret: the site's "remember me" option, in the page's words */
             rememberLabel: string | null;
+            /** @description form (#552): the fields to fill */
+            fields?: {
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "choice" | "phone" | "email";
+                required: boolean;
+                options?: string[];
+                help?: string;
+                constraints?: {
+                    min?: number;
+                    max?: number;
+                    maxLength?: number;
+                    pattern?: string;
+                };
+            }[] | null;
             pageTitle: string | null;
             viewerUrl: string | null;
             /** @description ISO 8601 timestamp */
@@ -16396,6 +16726,10 @@ export interface components {
         RunTaskDto: {
             /** @description Run under this agent policy for this run only ("Run with..."), instead of the schedule's, the task's or the user's default. */
             policyId?: string;
+            /** @description Values for the task's `{{Name}}` parameters, by key or display name (#552). Unknown names are a 400 `UNKNOWN_INPUT`, invalid values a 400 `INVALID_INPUT` with `details.issues`, a sensitive parameter a 400 `SENSITIVE_INPUT`. A required value still missing after the defaults: the run is created `waiting_human` with one `form` question for every missing value, and starts once it is answered. */
+            inputs?: {
+                [key: string]: string | number;
+            };
         };
         StartRunDto: {
             goal: string;
@@ -16425,6 +16759,10 @@ export interface components {
             consecutiveFailures: number;
             /** @description Overrides the task's agent policy for scheduled runs; null follows the task */
             policyId: string | null;
+            /** @description Preset values for the task's parameters (#552), by key */
+            inputs?: {
+                [key: string]: string;
+            } | null;
             /** @description The expression in words (English, 24-hour), e.g. "Monday to Friday at 09:00" */
             description: string;
             /** @description ISO 8601 timestamp */
@@ -16485,6 +16823,10 @@ export interface components {
             concurrency?: "skip" | "queue";
             /** @description Overrides the task's agent policy for scheduled runs; omit or null to follow the task. */
             policyId?: string | null;
+            /** @description Preset values for the task's parameters (#552). An enabled schedule needs a value (here, a default or a memory) for every required parameter: 400 `SCHEDULE_INPUTS_MISSING`. */
+            inputs?: {
+                [key: string]: string | number;
+            };
         };
         UpdateScheduleDto: {
             cron?: string;
@@ -16494,6 +16836,10 @@ export interface components {
             concurrency?: "skip" | "queue";
             /** @description Overrides the task's agent policy for scheduled runs; null follows the task. */
             policyId?: string | null;
+            /** @description Preset values for the task's parameters (#552); null clears them. */
+            inputs?: {
+                [key: string]: string | number;
+            } | null;
         };
         ChatPageResponseDto: {
             items: {

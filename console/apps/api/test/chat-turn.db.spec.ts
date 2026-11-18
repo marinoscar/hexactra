@@ -14,6 +14,9 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { GOAL_RUN_JOB } from '../src/runner/goal-run.enqueue';
 import { RunEndHooks } from '../src/tasks/run-end-hooks';
 import { TasksService } from '../src/tasks/tasks.service';
+import { TaskSchedulesService } from '../src/tasks/task-schedules.service';
+import { QuestionEvents } from '../src/questions/question-events';
+import { TaskRunStarter } from '../src/questions/task-run-starter';
 
 let app: NestFastifyApplication;
 let prisma: PrismaService;
@@ -135,6 +138,44 @@ describe('a turn', () => {
     // The goal runner's job was queued for the run.
     expect(await prisma.job.count({ where: { type: GOAL_RUN_JOB, subjectId: run!.id } })).toBe(1);
     expect((await chats.get(alice.userId, id)).liveRun).toEqual({ id: run!.id, status: 'queued' });
+  });
+
+  it("runs a saved task by name with the owner's value; a missing value becomes the form in the thread (#552)", async () => {
+    const alice = await login('runtask');
+    const task = await prisma.forUser({ userId: alice.userId }).task.create({
+      data: {
+        userId: alice.userId,
+        name: 'Zelle to a friend',
+        goal: 'Send ${{Amount}} to {{Phone}}',
+        parameters: [
+          { key: 'amount', label: 'Amount', type: 'money', required: true },
+          { key: 'phone', label: 'Phone', type: 'phone', required: true, default: { value: '555-010-6020' } },
+        ],
+      },
+    });
+    const starter = new TaskRunStarter(prisma, { enqueue: async () => undefined } as never, new QuestionEvents(), tasks, app.get(TaskSchedulesService, { strict: false }));
+    const withStarter = (ai: AiService) => new ChatTurnService(prisma, chats, results, tasks, app.get(JobsService, { strict: false }), ai, undefined, starter);
+
+    const id = await chatWith(alice, 'Send 25 with my Zelle task');
+    const model = scriptedAi([[['run_task', { task: 'zelle', inputs: [{ name: 'Amount', value: '25' }] }]]]);
+    await withStarter(model.ai).run(id, alice.userId, null);
+    const [run] = await runsOf(id);
+    expect(run).toMatchObject({ taskId: task.id, trigger: 'chat', status: 'queued', goal: 'Send $⟦25⟧ to ⟦555-010-6020⟧' });
+    expect(model.outputs[0]).toBe('Started. The owner watches it in the chat.');
+
+    const id2 = await chatWith(alice, 'Run my Zelle task');
+    const model2 = scriptedAi([[['run_task', { task: 'Zelle to a friend', inputs: null }]]]);
+    await withStarter(model2.ai).run(id2, alice.userId, null);
+    const [waiting] = await runsOf(id2);
+    expect(waiting!.status).toBe('waiting_human');
+    expect(await prisma.question.count({ where: { runId: waiting!.id, input: 'form', status: 'pending' } })).toBe(1);
+    expect(model2.outputs[0]).toMatch(/fills in the missing values/);
+
+    const id3 = await chatWith(alice, 'Run the gym task');
+    const model3 = scriptedAi([[['run_task', { task: 'gym', inputs: null }]]]);
+    await withStarter(model3.ai).run(id3, alice.userId, null);
+    expect(model3.outputs[0]).toMatch(/No saved task is called "gym"/);
+    expect(await runsOf(id3)).toEqual([]);
   });
 
   it('does only one thing per turn: a second tool call after the first is not made', async () => {

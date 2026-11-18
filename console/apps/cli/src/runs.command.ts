@@ -2,10 +2,11 @@ import type { Command } from 'commander';
 import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 
 import { resolveApp, startedBy } from './apps.js';
-import { consoleApi } from './console-api.js';
+import { consoleApi, consoleWebUrl } from './console-api.js';
 import { findHost, type FleetHost } from './fleet.js';
 import { costText, resolvePolicyId, runPolicyLines, type RunPolicyFields } from './policies.js';
 import { countOlderThan, deleteOlderThan, exportRun, parseDays, runsWord, sizeText } from './runs.js';
+import { collectInput, missingParameters, parseInputFlags, promptMissing, type CliTaskParameter } from './task-inputs.js';
 
 /** `--host <name|id>`: "any" lets the fabric choose (#384). */
 async function hostRef(ref: string): Promise<string | null> {
@@ -24,6 +25,8 @@ interface Task {
   goal: string;
   profile: string;
   allowedDomains: string[];
+  /** The goal's `{{parameters}}` (#552). */
+  parameters?: CliTaskParameter[] | null;
   policyId?: string | null;
 }
 interface Step {
@@ -65,6 +68,15 @@ async function confirmed(question: string, yes: boolean | undefined): Promise<bo
   }
 }
 const TERMINAL = new Set(['succeeded', 'failed', 'cancelled']);
+
+/** The console's address for a link, or a placeholder when it cannot be read. */
+function webUrl(): string {
+  try {
+    return consoleWebUrl();
+  } catch {
+    return 'the console';
+  }
+}
 
 /** Print new steps of a run until it ends (or `--watch` is off). */
 async function show(id: string, watch: boolean, asJson: boolean): Promise<void> {
@@ -166,15 +178,25 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
     .command('run <task>')
     .description('Run a task (by id or id prefix); --watch follows it to the end')
     .option('--policy <policy>', 'run under this agent policy for this run only')
+    .option('--input <name=value>', "a value for one of the task's {{parameters}}, by key or name (repeatable)", collectInput, [])
     .option('--watch', 'follow the run')
     .option('--json', 'print JSON')
-    .action(async (ref: string, o: { policy?: string; watch?: boolean; json?: boolean }) => {
+    .action(async (ref: string, o: { policy?: string; input?: string[]; watch?: boolean; json?: boolean }) => {
       const list = await consoleApi().get<Task[]>('/tasks');
       const matches = list.filter((t) => t.id === ref || t.id.startsWith(ref) || t.name === ref);
       if (matches.length !== 1) throw new Error(matches.length ? `"${ref}" matches several tasks; use the id` : `No task matches "${ref}"`);
-      const r = await consoleApi().post<Run>(`/tasks/${matches[0]!.id}/runs`, o.policy ? { policyId: await resolvePolicyId(o.policy) } : {});
+      const task = matches[0]!;
+      const params = task.parameters ?? [];
+      const inputs = parseInputFlags(o.input);
+      // At a terminal, the values still missing are asked for here (#552); a sensitive one never is.
+      if (process.stdin.isTTY && process.stderr.isTTY) Object.assign(inputs, await promptMissing(missingParameters(params, inputs)));
+      const body = { ...(o.policy ? { policyId: await resolvePolicyId(o.policy) } : {}), ...(Object.keys(inputs).length ? { inputs } : {}) };
+      const r = await consoleApi().post<Run>(`/tasks/${task.id}/runs`, body);
       if (o.json && !o.watch) return json(r);
       out(`run ${r.id}`);
+      const sensitive = params.filter((p) => p.sensitive);
+      if (r.status === 'waiting_human') out(`waiting for values: answer it with \`hexactra inbox\` or at ${webUrl()}/inbox`);
+      if (sensitive.length) out(`${sensitive.map((p) => p.label).join(', ')}: asked for in the console when the run starts (${webUrl()}/inbox), never here`);
       if (o.watch) await show(r.id, true, false);
     });
   tasks

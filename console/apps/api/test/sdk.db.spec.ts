@@ -63,6 +63,23 @@ describe('the console SDK', () => {
     });
   });
 
+  it('runs a task with parameters: the amount only, and one form when it is missing (#552)', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/test/login', payload: { email: `sdk-params-${Date.now()}@example.test`, role: 'contributor' } });
+    const token = new URL(String(res.headers.location)).searchParams.get('token')!;
+    const { stdout } = await promisify(execFile)(process.execPath, [resolve(__dirname, '../../../packages/sdk/dist/examples/task-parameters.js')], {
+      env: { ...process.env, HEXACTRA_CONSOLE_URL: base, HEXACTRA_TOKEN: token },
+      timeout: 60_000,
+    });
+    const out = JSON.parse(stdout.trim().split('\n').pop()!) as Record<string, unknown>;
+    expect(out).toMatchObject({
+      parameters: ['amount', 'phone_number', 'account_last_4'],
+      startedInputs: ['amount:provided', 'phone_number:default', 'account_last_4:default'],
+      waitingStatus: 'waiting_human',
+      formFields: ['amount'],
+      refused: 400,
+    });
+  });
+
   it('round-trips agent policies: create, update, export, import and run under one', async () => {
     const res = await app.inject({ method: 'POST', url: '/api/auth/test/login', payload: { email: `sdk-pol-${Date.now()}@example.test`, role: 'contributor' } });
     const token = new URL(String(res.headers.location)).searchParams.get('token')!;

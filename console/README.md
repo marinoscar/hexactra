@@ -531,6 +531,8 @@ A task is created at `/tasks/new` and changed at `/tasks/:id/edit`. Both are one
    - **Ask me before purchases and other irreversible steps**: the agent pauses and asks in your Inbox.
 5. **Schedule.** **Add a schedule** opens the [schedule editor](#schedules) in the form (up to 10 per task). Schedules are saved with the task: a new task and its schedules are created together, and on an existing task an added, changed or removed schedule takes effect only when you save. A removed schedule shows "will be removed when you save" with **Undo**.
 
+**Tasks with parameters.** A goal can hold named blanks: `Send ${{Amount}} today to {{Phone Number}} using Zelle … ending in {{Account Last 4 Digits}}`. Each `{{Name}}` becomes a parameter with a type (text, number, money, date, choice, phone, email), a default (a value, or one of your memories) and optionally *sensitive* (asked every time, typed by the browser, never stored). Give `Phone Number` and `Account Last 4 Digits` defaults and running the task asks one thing: the amount. Every missing value is asked at once, in one form, before the browser opens; schedules keep their own values. The rules, the API and the CLI (`hexactra tasks run Zelle --input amount=25`) are in [docs/api-tasks-runs.md, "Tasks with parameters"](docs/api-tasks-runs.md#tasks-with-parameters).
+
 - **Save and run now** (with `runs:write`) saves, starts a run and opens it.
 - A value the server refuses is shown on its field, and the form scrolls to it.
 - Leaving the page with unsaved changes asks first.
