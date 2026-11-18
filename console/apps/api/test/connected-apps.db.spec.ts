@@ -358,6 +358,20 @@ describe('the AI apps routes (#464)', () => {
       await setOAuth({ enabled: true });
     }
   });
+
+  it('the preflight for Claude Code: claude.ai while client metadata documents are on, loopback when they are off (#468)', async () => {
+    const member = await login(`apps-pre-cc-${stamp}@example.test`);
+    const claudeCode = async () => (await api(member.token, 'GET', '/connected-apps/preflight')).json().data.clients.find((c: { id: string }) => c.id === 'claude-code');
+    try {
+      expect(await claudeCode()).toMatchObject({ allowed: false, hosts: ['claude.ai'], detail: expect.stringMatching(/claude\.ai/) });
+      await setOAuth({ allowedClientHosts: [HOST, 'claude.ai'] });
+      expect(await claudeCode()).toMatchObject({ allowed: true, hosts: ['claude.ai'], detail: 'Claude Code may connect.' });
+      await setOAuth({ clientIdMetadataDocuments: false, allowedClientHosts: [HOST] });
+      expect(await claudeCode()).toMatchObject({ allowed: true, hosts: ['loopback'] });
+    } finally {
+      await setOAuth({ clientIdMetadataDocuments: true, allowedClientHosts: [HOST] });
+    }
+  });
 });
 
 describe('notifications (#464)', () => {

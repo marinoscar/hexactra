@@ -1,6 +1,6 @@
 # Agent frameworks: Hermes Agent, OpenClaw, Pi
 
-Recipes for connecting three agent frameworks to the console's MCP server ([mcp.md](mcp.md)). Each recipe is a file in [recipes/](recipes/). CI hands each file, unchanged, to that framework's own CLI, which connects to a live console and lists its tools (`apps/api/test/agent-clients.db.spec.ts`).
+Recipes for connecting three agent frameworks to the console's MCP server ([mcp.md](mcp.md)). For ChatGPT, Claude and Claude Code, which sign in with OAuth instead of a token, see [hosted-clients.md](hosted-clients.md). Each recipe is a file in [recipes/](recipes/). CI hands each file, unchanged, to that framework's own CLI, which connects to a live console and lists its tools (`apps/api/test/agent-clients.db.spec.ts`).
 
 Before you start, for each framework:
 1. Create a console user for it, with the **contributor** role (see [mcp.md](mcp.md#connect)).

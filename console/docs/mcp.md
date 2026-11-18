@@ -7,7 +7,7 @@ Any MCP client (an agent framework, an IDE assistant, a script) can use Hexactra
 | Transport | Endpoint | Credential |
 |---|---|---|
 | Streamable HTTP (stateless, JSON responses) | `POST https://<console>/api/mcp` | `Authorization: Bearer pat_…` (a personal access token: Settings → Access tokens, or `hexactra login`) |
-| Streamable HTTP, OAuth (ChatGPT, Claude, Claude Code) | `https://<console>/api/mcp` | Sign in on the console; no token to copy. The client discovers the console's sign-in from the `401` and asks you which scopes to allow ([Sign in with OAuth](#sign-in-with-oauth-chatgpt-claude)) |
+| Streamable HTTP, OAuth (ChatGPT, Claude, Claude Code) | `https://<console>/api/mcp` | Sign in on the console; no token to copy. The client discovers the console's sign-in from the `401` and asks you which scopes to allow ([Sign in with OAuth](#sign-in-with-oauth-chatgpt-claude); step-by-step recipes per client: [hosted-clients.md](hosted-clients.md)) |
 | stdio | `hexactra mcp serve` | The CLI's login (`hexactra login`, or `HEXACTRA_SERVER_URL` + `HEXACTRA_TOKEN`) |
 
 Example (Claude Code):
@@ -93,7 +93,7 @@ What each OAuth app may do on top of its consent, set by the user per app in **S
 - **Notifications:** `app.connected` when an app connects (its scopes in words, "Not you? Disconnect it", a link to its page) and `app.scope_added` when a step-up adds `browser:drive`, `browser:evaluate`, `desktop:control` or `policies:write`; both are mandatory (the platform's `mandatory` flag is per event, so `app.connected` cannot be switched off for any connection, not only for high-risk scopes). `app.first_run` ("Claude started a run: …") is off by default. They come from the platform event `identity.oauth.grant.created`, whose listener only enqueues the job `connected_apps.grant.notify`.
 - **Disconnect** is the platform's `DELETE /api/oauth/grants/{id}`, from the AI apps page, the platform's Connected apps page or `hexactra apps disconnect`: the same grant, so the pages never disagree.
 
-The "Connect an AI app" guide (`/settings/ai-apps/connect`) checks first whether an app can connect (`GET /api/connected-apps/preflight`: the OAuth server is on, `APP_URL` is a public HTTPS address that answers the discovery documents, by running the platform Doctor checks `oauth.public_url` and `oauth.well_known`, and the hosts of ChatGPT and Claude are allowed), then shows the steps for ChatGPT, Claude, Claude Code and any other MCP client. The steps are in one file, `apps/web/src/content/connect-ai-apps.ts`.
+The "Connect an AI app" guide (`/settings/ai-apps/connect`) checks first whether an app can connect (`GET /api/connected-apps/preflight`: the OAuth server is on, `APP_URL` is a public HTTPS address that answers the discovery documents, by running the platform Doctor checks `oauth.public_url` and `oauth.well_known`, and the hosts of ChatGPT and Claude are allowed), then shows the steps for ChatGPT, Claude, Claude Code and any other MCP client. The steps are in one file, `apps/web/src/content/connect-ai-apps.ts`, which also generates the steps of [hosted-clients.md](hosted-clients.md) (`npm run docs:hosted-clients`; a web test fails when they differ).
 
 ## On the public internet: limits, kill switch, approvals, audit
 
@@ -181,6 +181,8 @@ One span per JSON-RPC message (`mcp <method>`) with `mcp.method`, `mcp.tool.name
 
 ### Smoke test with the MCP Inspector
 
+`scripts/mcp-inspector-smoke.sh` runs the pinned MCP Inspector CLI against a running console: `MCP_URL=https://<console>/api/mcp HEXACTRA_TOKEN=pat_… scripts/mcp-inspector-smoke.sh`. In CI, `apps/api/test/agent-clients.db.spec.ts` runs the Inspector CLI (2.15.0) and Claude Code (2.1.327: `claude mcp add --transport http …`, then `claude mcp list`) against the console with a personal access token; locally, `CLIENT_CLIS_SMOKE=1 npm run test:db --workspace=api -- agent-clients` runs them through `npx` (or `CLAUDE_BIN` / `MCP_INSPECTOR_BIN`) and skips them with the reason logged when they cannot run.
+
 ### Asking for more (step-up)
 
 When the model calls a tool the consent does not cover but the user may allow (the default consent and `browser_open`, say), the console refuses the **whole HTTP request**, before the tool runs:
@@ -198,11 +200,30 @@ cache-control: no-store
 - **What the user sees.** Claude and ChatGPT start a new sign-in on this status and header: the console's consent page lists the app's earlier scopes as already allowed and asks only about the new one(s). Approving gives the app a token with the union, and the grant (Settings → Connected apps) holds it. Declining leaves the app as it was.
 - **A `200` would not work.** A tool error with the same text is only read by the model; a hosted client starts re-consent on an HTTP `403` with `WWW-Authenticate` only.
 - **Batches** (protocol 2025-03-26) that mix an allowed call and one that needs a step-up are refused as a whole with that `403`. Hosted clients send one call per request.
-- **ChatGPT's tool-level form.** ChatGPT also reads `_meta["mcp/www_authenticate"]` on a tool error result. The console sends the HTTP `403` only; whether ChatGPT needs the `_meta` form as well is checked with the real client in E33.10 (#468).
+- **ChatGPT's tool-level form.** ChatGPT also reads `_meta["mcp/www_authenticate"]` on a tool error result. The console sends the HTTP `403` only; whether ChatGPT needs the `_meta` form as well is a line of the manual acceptance run ([hosted-clients-acceptance.md](hosted-clients-acceptance.md)); the scripted client's `tool-level-auth` profile pins today's behaviour.
 - **A token that stops being valid during a call** (the app disconnected while a tool worked) answers the whole request `401` with the `invalid_token` challenge, so the client signs in again.
 - **The instructions follow the consent.** An OAuth app without `browser:drive` gets `instructions` with no "Drive" paragraph, no `browser_*` tool and no "full authority" sentence; with it, the Drive paragraph and the authority sentence, naming JavaScript and the desktop only when `browser:evaluate` or `desktop:control` is usable too.
 
-`scripts/mcp-inspector-smoke.sh` runs the pinned MCP Inspector CLI against a running console: `MCP_URL=https://<console>/api/mcp HEXACTRA_TOKEN=pat_… scripts/mcp-inspector-smoke.sh`.
+
+### Client differences we handle
+
+Hosted clients differ from the specification, and from each other, in small ways that break a connection. Each difference the console handles is listed here with the behaviour, the client, where the fact comes from and the test that pins it. **Observed** means seen with the real client; until the acceptance run ([hosted-clients-acceptance.md](hosted-clients-acceptance.md), recorded on #468) every row about a hosted client is **documented**: taken from the vendor's documentation or the epic's client table. No row makes an authorization decision from `clientInfo` or the user agent (both are unauthenticated); only the presentation rows (MCP Apps) read the client's name. Step-by-step recipes: [hosted-clients.md](hosted-clients.md).
+
+| Behaviour the console has | Client | Source, date | Pinned by |
+|---|---|---|---|
+| The step-up `403` challenge's `scope` lists the scopes already granted **plus** the missing one, because clients do not carry earlier scopes into a new sign-in | Claude, ChatGPT | documented (epic #458), 2026-11 | `test/mcp-oauth.db.spec.ts` ("browser_open with the default consent"), `test/mcp-hosted-client.db.spec.ts` (step 5, every profile) |
+| The step-up signal is the HTTP `403` with `WWW-Authenticate` only, not a tool error: a hosted client starts re-consent on it; per-tool `securitySchemes` is listed for every tool as well | Claude, ChatGPT | documented, 2026-11 (ChatGPT's `_meta["mcp/www_authenticate"]` form is not sent; to be checked in the acceptance run) | `test/mcp-oauth.db.spec.ts`; `test/mcp-hosted-client.db.spec.ts` profile `tool-level-auth` |
+| A client that registers itself on every connection (Dynamic Client Registration) gets the same client back | Claude (when metadata documents are off) | Anthropic connector docs, 2026-11-18 | `test/mcp-hosted-client.db.spec.ts` profile `hosted-dcr` (platform behaviour, asserted here) |
+| A loopback redirect matches on any port, for both `127.0.0.1` and `localhost` | Claude Code | Anthropic connector docs, 2026-11-18 | `test/mcp-hosted-client.db.spec.ts` profile `native-loopback` (platform behaviour, asserted here) |
+| The preflight asks for `claude.ai` (not only loopback) for Claude Code while client metadata documents are on: its `client_id` document is on `claude.ai` | Claude Code | Anthropic connector docs, 2026-11-18 | `test/connected-apps.db.spec.ts` ("the preflight for Claude Code") |
+| An OAuth caller's `run_goal` and `task_run` wait 45 s by default: hosted clients send no `wait_s` | Claude, ChatGPT | documented (epic #458), 2026-11 | `test/mcp-runs.db.spec.ts` ("PAT default 0, OAuth default 45") |
+| Waits stop at 200 s and every OAuth tool call answers by 220 s, under the 240-second tool-call timeout | Claude, ChatGPT | documented (epic #458), 2026-11; the acceptance run measures it | `test/mcp-results.spec.ts` ("time limits"), `test/mcp-hosted-client.db.spec.ts` (step 8) |
+| Result text is cut at 100,000 characters and screenshots at 1 MiB of base64 for OAuth callers (Claude truncates near 150,000) | Claude, ChatGPT | documented (epic #458), 2026-11; the acceptance run measures it | `test/mcp-results.spec.ts` ("limits by credential kind", "screenshots"), `test/mcp-hosted-client.db.spec.ts` (step 4) |
+| A tool linked to a card carries `_meta.ui.resourceUri`, the legacy `ui/resourceUri` and ChatGPT's alias `openai/outputTemplate` (presentation only) | ChatGPT, Claude | documented, 2026-11 | `test/mcp-apps.spec.ts`, `test/mcp-apps.db.spec.ts` |
+| No `domain` is sent for a card until a host's format is verified (presentation only) | Claude, ChatGPT | not yet verified | `test/mcp-apps.spec.ts` (`uiDomainFor`) |
+| A browser-based local client (the MCP Inspector) on `localhost`/`127.0.0.1` gets CORS headers and `www-authenticate` exposed | MCP Inspector | CORS: documented; the Inspector 2.15.0 CLI connecting with a token: observed in the test below, 2026-11-18 | `test/mcp-protocol.db.spec.ts` ("a foreign Origin is 403…"), `test/agent-clients.db.spec.ts` (Inspector CLI) |
+
+The acceptance run adds the facts it observes (registration path, redirect URI, scopes, `resource`, protocol version and `clientInfo` per client) and the largest result and longest call each client accepted; a stricter client changes the constants in `apps/api/src/mcp/mcp.results.ts` and this table together.
 
 ## Tools
 

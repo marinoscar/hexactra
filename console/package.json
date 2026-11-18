@@ -21,6 +21,7 @@
     "platform:infra:sync": "platform-infra sync",
     "platform:check": "npm run db:check --workspace=api && npm run db:compose:check --workspace=api && platform-infra sync --check",
     "rename": "node scripts/rename.mjs",
-    "ui:screens": "node scripts/ui-screens.mjs"
+    "ui:screens": "node scripts/ui-screens.mjs",
+    "docs:hosted-clients": "node scripts/hosted-clients-doc.mjs"
   }
 }

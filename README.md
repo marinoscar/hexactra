@@ -47,6 +47,7 @@
 | **CLI and terminal UI**: `hexactra tasks`, `runs`, `inbox`, `fleet`, ... | [console/apps/cli/README.md](console/apps/cli/README.md) |
 | **REST API**, OpenAPI at `/api/docs`, with a generated TypeScript SDK | `console/packages/sdk` |
 | **MCP** for agent frameworks: `POST /api/mcp` (Streamable HTTP) or `hexactra mcp serve` (stdio) | [console/docs/mcp.md](console/docs/mcp.md), [console/docs/agent-frameworks.md](console/docs/agent-frameworks.md) |
+| **MCP for hosted assistants (ChatGPT, Claude): OAuth, scoped consent, in-chat cards** | [console/docs/hosted-clients.md](console/docs/hosted-clients.md) |
 | **Chrome extension**: the hand inside each browser, and a standalone AI assistant | [apps/chrome-extension/DEMO_GUIDE.md](apps/chrome-extension/DEMO_GUIDE.md) |
 
 `console/packages/shared/capabilities.json` is the parity registry: each surface's tests fail when a capability is missing from it without a recorded reason.

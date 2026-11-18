@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 
 import type { AppPreflight, ConnectClientId, PreflightStatus } from '../aiApps/types';
-import { AGENT_FRAMEWORKS_DOC_URL, CONNECT_GUIDES, stepsFor } from '../content/connect-ai-apps';
+import { AGENT_FRAMEWORKS_DOC_URL, CONNECT_GUIDES, GUIDE_CHECKED, HOSTED_CLIENTS_DOC_URL, stepsFor } from '../content/connect-ai-apps';
 import { CardSkeleton, ErrorBanner, PageContainer, PageHeader, toast } from '../ui';
 
 const STATUS_ICON: Record<PreflightStatus, { Icon: typeof CheckCircleOutlineIcon; color: 'success' | 'warning' | 'error' | 'disabled'; word: string }> = {
@@ -179,9 +179,25 @@ export function ConnectAiAppPage() {
           <Typography variant="body2" color="text.secondary">
             {guide.tryFirst}
           </Typography>
+          <Box component="ul" sx={{ pl: 3, my: 1 }} data-testid="first-prompts">
+            {guide.firstPrompts.map((p) => (
+              <Typography key={p.prompt} component="li" variant="body2" sx={{ mb: 0.5, overflowWrap: 'anywhere' }}>
+                &ldquo;{p.prompt}&rdquo;
+              </Typography>
+            ))}
+          </Box>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
             Signs in from: {guide.signsInFrom}
           </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            Who can add it: {guide.whoCanAdd}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            Steps checked: {GUIDE_CHECKED}.
+          </Typography>
+          <Button component="a" href={HOSTED_CLIENTS_DOC_URL} target="_blank" rel="noopener noreferrer" sx={{ mt: 1, minHeight: 44, px: 0 }}>
+            Full recipe and troubleshooting
+          </Button>
         </Box>
       </Paper>
     </PageContainer>

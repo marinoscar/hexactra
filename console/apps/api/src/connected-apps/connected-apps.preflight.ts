@@ -17,7 +17,7 @@ export const OAUTH_ADMIN_PATH = '/admin/settings/oauth-clients';
 const CACHE_MS = 60_000;
 
 /** The hosts each hosted client's sign-in comes from (Claude's metadata documents and redirect, ChatGPT's redirect). */
-export const CLIENT_HOSTS = { chatgpt: ['chatgpt.com'], claude: ['claude.ai'] } as const;
+export const CLIENT_HOSTS = { chatgpt: ['chatgpt.com'], claude: ['claude.ai'], claudeCode: ['claude.ai'] } as const;
 
 type Status = AppPreflight['checks'][number]['status'];
 
@@ -94,15 +94,21 @@ export class ConnectedAppsPreflight {
     const hostDetail = (name: string, hosts: readonly string[]) =>
       !enabled ? 'Sign-in for AI apps is off.' : hostsAllowed(hosts) ? `${name} may connect.` : ask(`Allow ${hosts.join(' and ')} in Administration → OAuth clients.`);
     const loopback = enabled && settings?.allowLoopbackClients !== false;
+    // Claude Code identifies itself with a client metadata document on claude.ai and is sent back to a
+    // loopback page (Anthropic's connector docs, checked 2026-11-18; #468): while metadata documents are on,
+    // the host to allow is claude.ai. With them off it registers itself, as a loopback client.
+    const claudeCodeByDocument = enabled && settings?.clientIdMetadataDocuments !== false;
     const clients: AppPreflight['clients'] = [
       { id: 'chatgpt', allowed: hostsAllowed(CLIENT_HOSTS.chatgpt), hosts: [...CLIENT_HOSTS.chatgpt], detail: hostDetail('ChatGPT', CLIENT_HOSTS.chatgpt) },
       { id: 'claude', allowed: hostsAllowed(CLIENT_HOSTS.claude), hosts: [...CLIENT_HOSTS.claude], detail: hostDetail('Claude', CLIENT_HOSTS.claude) },
-      {
-        id: 'claude-code',
-        allowed: loopback,
-        hosts: ['loopback'],
-        detail: !enabled ? 'Sign-in for AI apps is off.' : loopback ? 'Claude Code may connect from your computer.' : ask('Allow loopback clients in Administration → OAuth clients.'),
-      },
+      claudeCodeByDocument
+        ? { id: 'claude-code', allowed: hostsAllowed(CLIENT_HOSTS.claudeCode), hosts: [...CLIENT_HOSTS.claudeCode], detail: hostDetail('Claude Code', CLIENT_HOSTS.claudeCode) }
+        : {
+            id: 'claude-code',
+            allowed: loopback,
+            hosts: ['loopback'],
+            detail: !enabled ? 'Sign-in for AI apps is off.' : loopback ? 'Claude Code may connect from your computer.' : ask('Allow loopback clients in Administration → OAuth clients.'),
+          },
       { id: 'other', allowed: null, hosts: [], detail: enabled ? "The app's host must be allowed in Administration → OAuth clients, or use a personal access token." : 'Use a personal access token, or turn on sign-in for AI apps.' },
     ];
 
