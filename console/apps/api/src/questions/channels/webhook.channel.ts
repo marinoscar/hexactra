@@ -12,6 +12,7 @@ import { ActionTokenStore } from '../../tasks/action-token-store';
 import type { QuestionView } from '../questions.service';
 import { isPublicAnswer } from './channel-rules';
 import { QuestionChannelRegistry, type QuestionChannel, type QuestionChannelContext } from './question-channel';
+import { holdsSecret } from '../questions.contract';
 
 /** The header that carries a webhook answer token (never the query string). */
 export const QUESTION_TOKEN_HEADER = 'x-question-token';
@@ -78,10 +79,10 @@ export class WebhookQuestionChannel implements QuestionChannel, OnModuleInit {
     };
   }
 
-  /** The data of how a question ended. A secret question never carries a value. */
+  /** The data of how a question ended. A secret or sign-in question never carries a value (not even a sign-in's username). */
   settledPayload(q: QuestionView): Record<string, unknown> {
     const r = q.response;
-    const secret = q.input === 'secret';
+    const secret = holdsSecret(q.input);
     return {
       question: { id: q.id, input: q.input, kind: q.kind, runId: q.runId },
       status: q.status,

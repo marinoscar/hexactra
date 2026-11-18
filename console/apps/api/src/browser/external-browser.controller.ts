@@ -442,9 +442,11 @@ export class ExternalBrowserController {
     return {
       status: h.status,
       outcome,
+      // A sign-in's username is returned (the agent types it); a secret and a password never are.
       value: h.input === 'secret' ? null : (h.response?.value ?? null),
       values: h.response?.values ?? null,
-      secretAvailable: h.input === 'secret' && h.status === 'completed' && outcome === 'completed',
+      secretAvailable: (h.input === 'secret' || h.input === 'credentials') && h.status === 'completed' && outcome === 'completed',
+      ...(typeof h.response?.remember === 'boolean' ? { remember: h.response.remember } : {}),
     };
   }
 

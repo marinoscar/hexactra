@@ -89,3 +89,37 @@ describe('answers', () => {
     refuse(q, { outcome: 'completed', value: '' });
   });
 });
+
+describe('a sign-in (credentials, #527)', () => {
+  const spec = (extra: Record<string, unknown> = {}) => questionSpecSchema.parse({ input: 'credentials', kind: 'login', prompt: 'Sign in to Example Bank', ...extra });
+
+  it('carries the site\'s "remember me" words, only on a sign-in or a secret', () => {
+    expect(spec({ rememberLabel: '  Keep me signed in ' }).rememberLabel).toBe('Keep me signed in');
+    expect(spec().rememberLabel).toBeNull();
+    expect(questionSpecSchema.parse({ input: 'secret', prompt: 'Code', rememberLabel: 'Trust this device' }).rememberLabel).toBe('Trust this device');
+    expect(questionSpecSchema.safeParse({ input: 'text', prompt: 'Name', rememberLabel: 'Remember me' }).success).toBe(false);
+    expect(questionSpecSchema.safeParse({ input: 'credentials', prompt: 'p', rememberLabel: 'x'.repeat(81) }).success).toBe(false);
+    expect(questionSpecSchema.safeParse({ input: 'credentials', prompt: 'p', rememberLabel: 'Remember\nme' }).success).toBe(false);
+  });
+
+  it('needs a username and a password; the remember choice only when offered', () => {
+    const offered = spec({ rememberLabel: 'Remember me' });
+    expect(validateAnswer(offered, { outcome: 'completed', value: ' oscar ', secret: 'x9-424243', remember: true })).toEqual({ outcome: 'completed', value: 'oscar', secret: 'x9-424243', remember: true });
+    const bad = (q: QuestionSpec, a: Record<string, unknown>) => expect(() => validateAnswer(q, { outcome: 'completed', ...a })).toThrow(AnswerInvalidError);
+    bad(offered, { value: 'oscar' });
+    bad(offered, { value: 'oscar', secret: '' });
+    bad(offered, { value: '  ', secret: 'x9-424243' });
+    bad(offered, { value: 'os\ncar', secret: 'x9-424243' });
+    bad(spec(), { value: 'oscar', secret: 'x9-424243', remember: true });
+    // A password is refused on any other question.
+    bad(questionSpecSchema.parse({ input: 'text', prompt: 'Name' }), { value: 'oscar', secret: 'x9-424243' });
+    expect(validateAnswer(offered, { outcome: 'cancelled' })).toEqual({ outcome: 'cancelled' });
+  });
+
+  it('stores the username and the choice, never the password', () => {
+    const a = validateAnswer(spec({ rememberLabel: 'Remember me' }), { outcome: 'completed', value: 'oscar', secret: 'x9-424243', remember: false });
+    const r = toResponse('credentials', a, { channel: 'web', by: 'user:u', answeredAt: new Date('2026-11-18T00:00:00Z') });
+    expect(r).toEqual({ outcome: 'completed', value: 'oscar', valueWithheld: true, remember: false, channel: 'web', by: 'user:u', answeredAt: '2026-11-18T00:00:00.000Z' });
+    expect(JSON.stringify(r)).not.toContain('x9-424243');
+  });
+});

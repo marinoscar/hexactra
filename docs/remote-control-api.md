@@ -309,11 +309,13 @@ Create body:
 ```
 
 - `kind` is one of `captcha`, `code`, `passkey`, `login`, `confirmation` or `other`.
+- `remember` (`credentials` and `secret` only): `{ "label": "Keep me signed in" }`, the site's option to remember the sign-in or the device, in its own words (1-80 characters). The answer's `remember` (`true` or `false`) is the person's choice and comes back in the response.
 - `input` is one of:
   - `none`: the person acts in the browser and clicks "Done".
   - `takeover`: the person operates the browser themselves, then clicks "Done".
   - `text`: a free-text answer. Constraints: `max_length` (1 to 4096, default 4096), `pattern` (a regex of at most 200 characters the whole answer must match), `multiline` (`false` rejects newlines).
   - `secret`: an answer that is withheld from reads and payloads and typed into the page by the control plane, once ([below](#secrets-typed-by-the-fabric)). Constraint: `max_length`.
+  - `credentials`: a sign-in in one answer. `value` is the username, returned like `text`; `secret` is the password, held and typed like a `secret` answer and never returned. Constraint: `max_length` (each).
   - `choice`: one of `choices`; the answer's `value` is the option id.
   - `multi_choice`: several of `choices`; the answer's `values` are option ids, unique, between `min_selections` (default 1) and `max_selections` (default: all).
   - `number`: a decimal string, returned in canonical form (`02.50` becomes `2.5`). Constraints: `min`, `max`, `step` (the answer is `min`, or 0, plus a multiple of it), `unit` (a label, at most 20 characters).

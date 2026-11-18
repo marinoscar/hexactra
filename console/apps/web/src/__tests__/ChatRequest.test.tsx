@@ -187,6 +187,59 @@ describe('a code or a password', () => {
     expect(field).toHaveAttribute('autocomplete', 'new-password');
   });
 
+  it('asks for a sign-in in one card: username, password and the site\'s "remember me", ticked by default (#527)', async () => {
+    const host = mount();
+    const card = await ask(question({ kind: 'login', input: 'credentials', prompt: 'Sign in to Example Bank', confirmLabel: null, denyLabel: null, risk: null, pageTitle: 'Log in · bank.example.test', rememberLabel: 'Keep me signed in' }));
+    expect(card).toHaveTextContent('Sign-in needed');
+    // No picture of the page while a sign-in is asked for.
+    expect(screen.queryByRole('img', { name: 'The browser right now' })).not.toBeInTheDocument();
+    const user = within(card).getByLabelText('Username or email');
+    const pass = within(card).getByLabelText(/^Password/);
+    expect(user).toHaveAttribute('autocomplete', 'username');
+    expect(pass).toHaveAttribute('type', 'password');
+    // The phone's password manager may fill a site's password here.
+    expect(pass).toHaveAttribute('autocomplete', 'current-password');
+    const remember = within(card).getByRole('checkbox', { name: 'Keep me signed in' });
+    expect(remember).toBeChecked();
+    const signIn = within(card).getByRole('button', { name: 'Sign in' });
+    expect(signIn).toBeDisabled();
+    fireEvent.change(user, { target: { value: ' oscar ' } });
+    expect(signIn).toBeDisabled();
+    fireEvent.change(pass, { target: { value: SECRET } });
+    fireEvent.click(signIn);
+
+    await waitFor(() => expect(sent(host, `/questions/${Q_ID}/answer`)[0]?.body).toEqual({ outcome: 'completed', value: 'oscar', secret: SECRET, remember: true, channel: 'web' }));
+    expect(await screen.findByText('Provided · Remembered on this device')).toBeInTheDocument();
+    // Neither value stays on the page.
+    expect(document.body.innerHTML).not.toContain(SECRET);
+    expect(document.body.innerHTML).not.toContain('oscar');
+    expect(host.requests.filter((r) => JSON.stringify(r.body ?? '').includes(SECRET))).toHaveLength(1);
+  });
+
+  it('sends "remember me" unticked when the person unticks it, and no choice when the site offered none', async () => {
+    const host = mount();
+    let card = await ask(question({ kind: 'login', input: 'credentials', prompt: 'Sign in to Example Bank', confirmLabel: null, denyLabel: null, risk: null, rememberLabel: 'Remember me' }));
+    fireEvent.click(within(card).getByRole('checkbox', { name: 'Remember me' }));
+    fireEvent.change(within(card).getByLabelText('Username or email'), { target: { value: 'oscar' } });
+    fireEvent.change(within(card).getByLabelText(/^Password/), { target: { value: SECRET } });
+    fireEvent.click(within(card).getByRole('button', { name: 'Sign in' }));
+    await waitFor(() => expect(sent(host, `/questions/${Q_ID}/answer`)[0]?.body).toMatchObject({ remember: false }));
+    expect(await screen.findByText('Provided')).toBeInTheDocument();
+
+    emit({ type: 'question', data: { question: null } });
+    card = await ask(question({ id: 'q-2', kind: 'login', input: 'credentials', prompt: 'Sign in to Other Bank', confirmLabel: null, denyLabel: null, risk: null, rememberLabel: null }));
+    expect(within(card).queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('offers "Trust this device" on a code card when the site has it', async () => {
+    const host = mount();
+    const card = await ask(question({ kind: 'code', input: 'secret', prompt: 'Enter the code sent to your phone', confirmLabel: null, denyLabel: null, risk: null, rememberLabel: 'Trust this device' }));
+    expect(within(card).getByRole('checkbox', { name: 'Trust this device' })).toBeChecked();
+    fireEvent.change(within(card).getByLabelText(/Code/), { target: { value: '424242' } });
+    fireEvent.click(within(card).getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sent(host, `/questions/${Q_ID}/answer`)[0]?.body).toEqual({ outcome: 'completed', value: '424242', remember: true, channel: 'web' }));
+  });
+
   it('offers to do the step in the browser instead', async () => {
     mount();
     const card = await ask(code());
@@ -284,6 +337,7 @@ describe('the words of a request', () => {
     expect(requestTitle({ input: 'takeover', kind: 'captcha' })).toBe('Your help is needed in the browser');
     expect(requestTitle({ input: 'text', kind: 'other' })).toBe('A question for you');
     expect(requestTitle({ input: 'text', kind: 'login' })).toBe('Sign-in needed');
+    expect(requestTitle({ input: 'credentials', kind: 'login' })).toBe('Sign-in needed');
   });
 
   it('says how it was answered, and never repeats a secret', () => {

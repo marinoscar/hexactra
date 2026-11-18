@@ -136,7 +136,7 @@ export function ChatPage() {
   const request = liveRun && state.question ? (state.question as Question) : null;
   const requestId = request?.id ?? null;
   /** A secret is being asked for: what is on the screen may show it, so there is no picture. */
-  const frameHidden = request?.input === 'secret';
+  const frameHidden = request?.input === 'secret' || request?.input === 'credentials';
   /** A confirmation shows the page it is about, so its picture is wanted while the request is. */
   const requestWantsFrame = request !== null && (request.input === 'confirm' || request.kind === 'confirmation');
   // One fetch feeds the card and the pane, and only while one of them is on screen.

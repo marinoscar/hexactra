@@ -15470,7 +15470,7 @@ export interface components {
             handoffId: string | null;
             browserBound: boolean;
             /** @enum {string} */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
             kind: string;
             prompt: string;
             options: {
@@ -15492,16 +15492,20 @@ export interface components {
             confirmLabel: string | null;
             denyLabel: string | null;
             risk: ("low" | "high") | null;
+            /** @description credentials and secret: the site's "remember me" option, in the page's words */
+            rememberLabel: string | null;
             /** @enum {string} */
             status: "pending" | "answered" | "cancelled" | "expired";
             response: {
                 /** @enum {string} */
                 outcome: "completed" | "cancelled";
-                /** @description Never present for a secret */
+                /** @description Never present for a secret; for a sign-in (credentials), the username */
                 value?: string;
                 values?: string[];
-                /** @description True for a secret: the value went to the browser, single use, and is never returned */
+                /** @description True for a secret and a sign-in: the secret or password went to the browser, single use, and is never returned */
                 valueWithheld: boolean;
+                /** @description The person's choice for the question's "remember me" option */
+                remember?: boolean;
                 channel?: string;
                 /** @description Who answered, e.g. user:<id> */
                 by?: string;
@@ -15527,7 +15531,7 @@ export interface components {
         };
         CreateQuestionDto: {
             /** @enum {string} */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
             /**
              * @default other
              * @enum {string}
@@ -15559,6 +15563,7 @@ export interface components {
             denyLabel?: string;
             /** @enum {string} */
             risk?: "low" | "high";
+            rememberLabel?: string;
             timeoutMs?: number;
             asker?: string;
         };
@@ -15570,6 +15575,8 @@ export interface components {
             outcome?: "completed" | "cancelled";
             value?: string | number;
             values?: string[];
+            secret?: string;
+            remember?: boolean;
             channel?: string;
         };
         /** @default {} */
@@ -15584,6 +15591,8 @@ export interface components {
             outcome?: "completed" | "cancelled";
             value?: string | number;
             values?: string[];
+            secret?: string;
+            remember?: boolean;
         };
         OpenDto: {
             /** @default default */
@@ -15610,7 +15619,7 @@ export interface components {
              * @default none
              * @enum {string}
              */
-            input?: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover";
+            input?: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
             /** @enum {string} */
             kind: "captcha" | "code" | "passkey" | "login" | "confirmation" | "other";
             prompt: string;
@@ -15639,6 +15648,7 @@ export interface components {
             denyLabel?: string;
             /** @enum {string} */
             risk?: "low" | "high";
+            rememberLabel?: string;
             timeoutMs?: number;
         };
         CloseDto: {
@@ -15658,7 +15668,7 @@ export interface components {
             kind: string;
             prompt: string;
             /** @enum {string} */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
             choices: string[];
             options: {
                 id: string;
@@ -15679,6 +15689,8 @@ export interface components {
             confirmLabel: string | null;
             denyLabel: string | null;
             risk: ("low" | "high") | null;
+            /** @description credentials and secret: the site's "remember me" option, in the page's words */
+            rememberLabel: string | null;
             pageTitle: string | null;
             viewerUrl: string | null;
             /** @description ISO 8601 timestamp */
@@ -15695,6 +15707,8 @@ export interface components {
             outcome: "completed" | "cancelled";
             value?: string | number;
             values?: string[];
+            secret?: string;
+            remember?: boolean;
         };
         NotificationActionDto: {
             token: string;
@@ -15797,7 +15811,7 @@ export interface components {
                     /** @description Why it is asked: captcha, code, passkey, login, confirmation or other */
                     kind: string;
                     /** @enum {string} */
-                    input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover";
+                    input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
                     /** @description At most 300 characters */
                     prompt: string;
                     /** @description Of a `confirm` question */

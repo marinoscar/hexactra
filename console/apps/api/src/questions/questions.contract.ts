@@ -4,8 +4,20 @@
 // src/runner/fabric-session.ts.
 import { z } from 'zod';
 
-export const QUESTION_INPUTS = ['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover'] as const;
+export const QUESTION_INPUTS = ['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials'] as const;
 export type QuestionInputType = (typeof QUESTION_INPUTS)[number];
+
+/**
+ * Inputs whose answer holds a secret the fabric keeps and types, never
+ * returned: `secret` (a code or password) and `credentials` (a sign-in: its
+ * username is returned, its password is not, #527).
+ */
+export function holdsSecret(input: string): boolean {
+  return input === 'secret' || input === 'credentials';
+}
+
+/** The longest "remember me" label a question carries (the fabric's limit). */
+export const REMEMBER_LABEL_MAX = 80;
 
 /** Why a question is asked. */
 export const QUESTION_KINDS = ['captcha', 'code', 'passkey', 'login', 'confirmation', 'other'] as const;
@@ -64,6 +76,7 @@ const CONSTRAINT_KEYS: Record<QuestionInputType, readonly (keyof QuestionConstra
   none: [],
   takeover: [],
   secret: [],
+  credentials: [],
   confirm: [],
   choice: [],
   text: ['maxLength', 'pattern', 'multiline'],
@@ -83,6 +96,14 @@ export const questionSpecObject = z.object({
   confirmLabel: z.string().trim().min(1).max(40).optional(),
   denyLabel: z.string().trim().min(1).max(40).optional(),
   risk: z.enum(['low', 'high']).optional(),
+  /** credentials and secret: the site's "remember me" option, in the page's words (#527); the person ticks it or not. */
+  rememberLabel: z
+    .string()
+    .trim()
+    .min(1)
+    .max(REMEMBER_LABEL_MAX)
+    .refine((v) => !/[\u0000-\u001f\u007f]/.test(v), 'One line of text')
+    .optional(),
   timeoutMs: z.number().int().min(QUESTION_TIMEOUT.minMs).max(QUESTION_TIMEOUT.maxMs).optional(),
 });
 
@@ -96,6 +117,7 @@ export interface QuestionSpec {
   confirmLabel: string | null;
   denyLabel: string | null;
   risk: 'low' | 'high' | null;
+  rememberLabel: string | null;
   timeoutMs: number;
 }
 
@@ -143,6 +165,7 @@ function refineSpec(q: z.infer<typeof questionSpecObject>, ctx: z.RefinementCtx)
     if (q.confirmLabel !== undefined || q.denyLabel !== undefined) issue('confirmLabel', 'confirmLabel and denyLabel are only allowed with confirm');
     if (q.risk !== undefined) issue('risk', 'risk is only allowed with confirm');
   }
+  if (q.rememberLabel !== undefined && !holdsSecret(q.input)) issue('rememberLabel', 'rememberLabel is only allowed with credentials or secret');
 }
 
 /** Validates and normalises a question. */
@@ -159,6 +182,7 @@ export const questionSpecSchema = questionSpecObject.superRefine(refineSpec).tra
       confirmLabel: q.confirmLabel ?? null,
       denyLabel: q.denyLabel ?? null,
       risk: q.input === 'confirm' ? (q.risk ?? 'high') : null,
+      rememberLabel: q.rememberLabel ?? null,
       timeoutMs: q.timeoutMs ?? QUESTION_TIMEOUT.defaultMs,
     };
   },
@@ -172,6 +196,10 @@ export const questionAnswerSchema = z
     value: z.union([z.string().max(TEXT_MAX_LENGTH), z.number().finite()]).optional(),
     /** multi_choice: option ids. */
     values: z.array(z.string().max(64)).max(MAX_OPTIONS).optional(),
+    /** credentials: the password (the username is `value`). Sent to the fabric only, never stored. */
+    secret: z.string().max(TEXT_MAX_LENGTH).optional(),
+    /** The person's choice for the question's "remember me" option. */
+    remember: z.boolean().optional(),
   })
   .strict();
 export type QuestionAnswerInput = z.infer<typeof questionAnswerSchema>;
@@ -181,6 +209,9 @@ export interface NormalizedAnswer {
   outcome: QuestionOutcome;
   value?: string;
   values?: string[];
+  /** credentials: the password, forwarded to the fabric and never stored. */
+  secret?: string;
+  remember?: boolean;
 }
 
 /** The stored and returned response. Never carries a secret value. */
@@ -189,6 +220,8 @@ export interface QuestionResponse {
   value?: string;
   values?: string[];
   valueWithheld: boolean;
+  /** What the person chose for the "remember me" option, when one was offered. */
+  remember?: boolean;
   channel?: string;
   by?: string;
   answeredAt: string;
@@ -217,8 +250,11 @@ function onStep(value: number, base: number, step: number): boolean {
  * `AnswerInvalidError` with a message the person can act on. A declined
  * question (`cancelled`) carries no value.
  */
-export function validateAnswer(q: Pick<QuestionSpec, 'input' | 'options' | 'constraints'>, a: QuestionAnswerInput): NormalizedAnswer {
+export function validateAnswer(q: Pick<QuestionSpec, 'input' | 'options' | 'constraints'> & { rememberLabel?: string | null }, a: QuestionAnswerInput): NormalizedAnswer {
   if (a.outcome === 'cancelled') return { outcome: 'cancelled' };
+  if (a.secret !== undefined && q.input !== 'credentials') throw new AnswerInvalidError('secret is only for a sign-in (credentials)');
+  if (a.remember !== undefined && !q.rememberLabel) throw new AnswerInvalidError('This question offered no "remember me" option');
+  const remember = a.remember !== undefined ? { remember: a.remember } : {};
   const fail = (m: string): never => {
     throw new AnswerInvalidError(m);
   };
@@ -237,7 +273,14 @@ export function validateAnswer(q: Pick<QuestionSpec, 'input' | 'options' | 'cons
     case 'secret': {
       const v = str();
       if (v.length === 0) fail('The secret is empty');
-      return { outcome: 'completed', value: v };
+      return { outcome: 'completed', value: v, ...remember };
+    }
+    case 'credentials': {
+      const user = str().trim();
+      if (user.length === 0) fail('The username is empty');
+      if (/[\r\n]/.test(user)) fail('The username must be one line');
+      if (!a.secret) fail('The password is empty');
+      return { outcome: 'completed', value: user, secret: a.secret, ...remember };
     }
     case 'text': {
       const v = str();
@@ -281,12 +324,15 @@ export function validateAnswer(q: Pick<QuestionSpec, 'input' | 'options' | 'cons
 
 /** The response a question stores and returns: a secret value is withheld. */
 export function toResponse(input: QuestionInputType, a: NormalizedAnswer, meta: { channel?: string; by?: string; answeredAt: Date }): QuestionResponse {
-  const withheld = input === 'secret' && a.outcome === 'completed';
+  const withheld = holdsSecret(input) && a.outcome === 'completed';
+  // A sign-in's username is not a secret: it is kept, its password never is.
+  const keepValue = a.value !== undefined && input !== 'secret';
   return {
     outcome: a.outcome,
-    ...(a.value !== undefined && !withheld ? { value: a.value } : {}),
+    ...(keepValue ? { value: a.value } : {}),
     ...(a.values !== undefined ? { values: a.values } : {}),
     valueWithheld: withheld,
+    ...(a.remember !== undefined ? { remember: a.remember } : {}),
     ...(meta.channel ? { channel: meta.channel } : {}),
     ...(meta.by ? { by: meta.by } : {}),
     answeredAt: meta.answeredAt.toISOString(),

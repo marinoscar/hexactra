@@ -185,7 +185,7 @@ export const runStepResponseSchema = z.object({
 });
 export class RunDetailResponseDto extends createZodDto(runResponseSchema.extend({ steps: z.array(runStepResponseSchema) })) {}
 
-const questionInput = z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover']);
+const questionInput = z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials']);
 const questionOption = z.object({ id: z.string(), label: z.string(), description: z.string().optional() });
 const questionConstraints = z.object({
   maxLength: z.number().int().optional(),
@@ -200,9 +200,10 @@ const questionConstraints = z.object({
 });
 export const questionAnswerResponseSchema = z.object({
   outcome: z.enum(['completed', 'cancelled']),
-  value: z.string().optional().describe('Never present for a secret'),
+  value: z.string().optional().describe('Never present for a secret; for a sign-in (credentials), the username'),
   values: z.array(z.string()).optional(),
-  valueWithheld: z.boolean().describe('True for a secret: the value went to the browser, single use, and is never returned'),
+  valueWithheld: z.boolean().describe('True for a secret and a sign-in: the secret or password went to the browser, single use, and is never returned'),
+  remember: z.boolean().optional().describe('The person\'s choice for the question\'s "remember me" option'),
   channel: z.string().optional(),
   by: z.string().optional().describe('Who answered, e.g. user:<id>'),
   answeredAt: iso,
@@ -222,6 +223,7 @@ export const questionResponseSchema = z.object({
   confirmLabel: z.string().nullable(),
   denyLabel: z.string().nullable(),
   risk: z.enum(['low', 'high']).nullable(),
+  rememberLabel: z.string().nullable().describe('credentials and secret: the site\'s "remember me" option, in the page\'s words'),
   status: z.enum(['pending', 'answered', 'cancelled', 'expired']),
   response: questionAnswerResponseSchema.nullable(),
   pageTitle: z.string().nullable(),
@@ -251,6 +253,7 @@ export const inboxItemResponseSchema = z.object({
   confirmLabel: z.string().nullable(),
   denyLabel: z.string().nullable(),
   risk: z.enum(['low', 'high']).nullable(),
+  rememberLabel: z.string().nullable().describe('credentials and secret: the site\'s "remember me" option, in the page\'s words'),
   pageTitle: z.string().nullable(),
   viewerUrl: z.string().nullable(),
   createdAt: iso,

@@ -1144,12 +1144,22 @@ pub enum HandoffInput {
     Confirm,
     /// The human takes over the browser and marks the handoff done.
     Takeover,
+    /// A sign-in: a username (`value`, returned like `text`) and a password
+    /// (`secret`, held and typed like a `secret` answer, never returned)
+    /// in one answer (`constraints`: `max_length`, for each).
+    Credentials,
 }
 
 impl HandoffInput {
     /// True for inputs answered with `choices`.
     pub fn has_choices(self) -> bool {
         matches!(self, HandoffInput::Choice | HandoffInput::MultiChoice)
+    }
+
+    /// True for inputs whose answer holds a secret the control plane keeps
+    /// and types (`secret`, `credentials`), never returns.
+    pub fn holds_secret(self) -> bool {
+        matches!(self, HandoffInput::Secret | HandoffInput::Credentials)
     }
 
     /// True for inputs answered without any value (`none`, `takeover`).
@@ -1167,6 +1177,7 @@ impl HandoffInput {
             HandoffInput::Number => "number",
             HandoffInput::Confirm => "confirm",
             HandoffInput::Takeover => "takeover",
+            HandoffInput::Credentials => "credentials",
         }
     }
 }
@@ -1394,6 +1405,19 @@ pub fn compile_handoff_pattern(pattern: &str) -> Result<regex::Regex, ActionVali
         .map_err(|e| ActionValidationError(format!("pattern is not a valid regex: {e}")))
 }
 
+/// The site's offer to remember a sign-in or a device ("Remember me",
+/// "Trust this device"), shown with the question so the person decides.
+/// Only on `credentials` and `secret` questions.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HandoffRemember {
+    /// The option's words as the page shows them (1-80 characters).
+    pub label: String,
+}
+
+/// Longest `remember.label`.
+pub const MAX_REMEMBER_LABEL: usize = 80;
+
 /// `POST /v1/sessions/{id}/handoffs`
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1423,6 +1447,10 @@ pub struct CreateHandoffRequest {
     pub timeout_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub page: Option<HandoffPage>,
+    /// `credentials` and `secret`: the site's "remember me" option, for the
+    /// person to tick or not; the answer's `remember` says what they chose.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remember: Option<HandoffRemember>,
 }
 
 impl CreateHandoffRequest {
@@ -1439,6 +1467,7 @@ impl CreateHandoffRequest {
             risk: None,
             timeout_ms: None,
             page: None,
+            remember: None,
         }
     }
 
@@ -1451,6 +1480,23 @@ impl CreateHandoffRequest {
         self.validate_choices()?;
         self.validate_constraints()?;
         self.validate_confirm()?;
+        if let Some(r) = &self.remember {
+            if !self.input.holds_secret() {
+                return invalid(format!(
+                    "remember applies to input \"credentials\" or \"secret\", not \"{}\"",
+                    self.input.name()
+                ));
+            }
+            let n = r.label.trim().chars().count();
+            if n == 0 || n > MAX_REMEMBER_LABEL {
+                return invalid(format!(
+                    "remember.label must be 1-{MAX_REMEMBER_LABEL} characters"
+                ));
+            }
+            if r.label.chars().any(char::is_control) {
+                return invalid("remember.label must be one line of text");
+            }
+        }
         if let Some(t) = self.timeout_ms {
             if !(MIN_HANDOFF_TIMEOUT_MS..=MAX_HANDOFF_TIMEOUT_MS).contains(&t) {
                 return invalid(format!(
@@ -1524,7 +1570,7 @@ impl CreateHandoffRequest {
         let c = &self.constraints;
         let allowed: &[&str] = match self.input {
             HandoffInput::Text => &["max_length", "pattern", "multiline"],
-            HandoffInput::Secret => &["max_length"],
+            HandoffInput::Secret | HandoffInput::Credentials => &["max_length"],
             HandoffInput::Number => &["min", "max", "step", "unit"],
             HandoffInput::MultiChoice => &["min_selections", "max_selections"],
             _ => &[],
@@ -1613,11 +1659,15 @@ pub struct HandoffResponse {
     /// The selected option ids for `multi_choice`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub values: Option<Vec<String>>,
-    /// True for `secret` inputs: the value is never returned. Type it into
+    /// True for `secret` inputs (and the password of `credentials`): the
+    /// value is never returned. Type it into
     /// the page with a `type_secret` action naming this handoff; the
     /// control plane consumes it once.
     #[serde(default)]
     pub value_withheld: bool,
+    /// What the person chose for the question's `remember` option.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remember: Option<bool>,
     /// Which channel answered (free-form label, e.g. "slack", "web-form").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel: Option<String>,
@@ -1671,6 +1721,9 @@ pub struct HandoffView {
     /// solve a CAPTCHA or approve a passkey in the remote browser.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub viewer_url: Option<String>,
+    /// The site's "remember me" option offered with the question.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remember: Option<HandoffRemember>,
 }
 
 /// A validated answer to a handoff's question.
@@ -1756,6 +1809,19 @@ impl HandoffView {
                     if !compile_handoff_pattern(p)?.is_match(&v) {
                         return invalid("value does not match the required format");
                     }
+                }
+                v
+            }
+            HandoffInput::Credentials => {
+                let v = value.ok_or_else(|| need("a username"))?;
+                if v.chars().count() > c.text_max_length() {
+                    return invalid(format!(
+                        "username longer than {} characters",
+                        c.text_max_length()
+                    ));
+                }
+                if v.contains(['\n', '\r']) {
+                    return invalid("username must be a single line");
                 }
                 v
             }
@@ -1846,12 +1912,21 @@ pub struct RespondHandoffRequest {
     #[serde(default)]
     pub outcome: HandoffOutcome,
     /// The answer for `text`, `secret`, `choice` (option id), `number`
-    /// (decimal string) and `confirm` (`approve` or `deny`).
+    /// (decimal string) and `confirm` (`approve` or `deny`); the username
+    /// for `credentials`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
     /// The selected option ids for `multi_choice`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub values: Option<Vec<String>>,
+    /// `credentials`: the password. Held and typed like a `secret` answer,
+    /// never returned. Refused for any other input.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secret: Option<String>,
+    /// The person's choice for the question's `remember` option. Refused
+    /// when the question offered none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remember: Option<bool>,
     /// The handoff's response token (alternatively sent as the
     /// `X-Hexactra-Response-Token` header). Not needed with the API token.
     #[serde(default, skip_serializing_if = "Option::is_none")]

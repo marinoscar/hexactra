@@ -159,6 +159,7 @@ async fn stream_replay_filter_and_scope() {
                 risk: None,
                 timeout_ms: None,
                 page: None,
+                remember: None,
             },
         )
         .await

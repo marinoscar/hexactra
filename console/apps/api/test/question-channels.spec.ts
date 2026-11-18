@@ -42,6 +42,7 @@ function view(over: Partial<QuestionView>): QuestionView {
     confirmLabel: null,
     denyLabel: null,
     risk: null,
+    rememberLabel: null,
     status: 'pending',
     response: null,
     pageTitle: null,
@@ -65,6 +66,7 @@ const CASES: Record<string, QuestionView> = {
   secret: view({ input: 'secret', runId: '55555555-5555-4555-8555-555555555555' }),
   takeover: view({ input: 'takeover' }),
   none: view({ input: 'none' }),
+  credentials: view({ input: 'credentials', kind: 'login', runId: '55555555-5555-4555-8555-555555555555', rememberLabel: 'Keep me signed in' }),
 };
 
 beforeAll(() => {
@@ -100,7 +102,7 @@ describe('channel rules', () => {
   it('are the shared answer rules the web form and the MCP Apps widgets read (packages/shared/question-rules.js)', () => {
     for (const q of Object.values(CASES)) expect(isPublicAnswer(q)).toBe(sharedRules.isPublicAnswer(q));
     expect(Object.entries(CASES).map(([k, q]) => [k, sharedRules.chatAnswerMode(q)])).toEqual(
-      Object.keys(CASES).map((k) => [k, k === 'secret' ? 'secret' : k === 'takeover' ? 'takeover' : k === 'none' ? 'acknowledge' : k === 'highConfirm' ? 'signed_in' : 'form']),
+      Object.keys(CASES).map((k) => [k, k === 'secret' || k === 'credentials' ? 'secret' : k === 'takeover' ? 'takeover' : k === 'none' ? 'acknowledge' : k === 'highConfirm' ? 'signed_in' : 'form']),
     );
   });
 
@@ -111,6 +113,26 @@ describe('channel rules', () => {
     expect(mayAnswerOn('mcp-app', CASES.highConfirm!)).toBe(false);
     // A signed-in channel still may.
     expect(mayAnswerOn('web', CASES.highConfirm!)).toBe(true);
+  });
+});
+
+describe('a sign-in (credentials, #527)', () => {
+  it('is answered only where a secret is: signed in to the console, never by a link channel or an AI app; declining always', () => {
+    for (const where of ['web', 'inbox', 'chat']) expect(mayAnswerOn(where, CASES.credentials!)).toBe(true);
+    for (const where of ['notification', 'webhook', 'mcp-oauth.claude', 'mcp-elicitation.chatgpt', 'mcp-app.claude']) {
+      expect(mayAnswerOn(where, CASES.credentials!)).toBe(false);
+      expect(mayAnswerOn(where, CASES.credentials!, 'cancelled')).toBe(true);
+    }
+    expect(isPublicAnswer(CASES.credentials!)).toBe(false);
+    expect(quickAnswers(CASES.credentials!)).toBeNull();
+  });
+
+  it('a settled sign-in sends a webhook neither the username nor the password', () => {
+    const done = view({ input: 'credentials', status: 'answered', response: { outcome: 'completed', value: 'oscar', valueWithheld: true, remember: true, answeredAt: new Date().toISOString() } });
+    const out = new WebhookQuestionChannel(new QuestionChannelRegistry(), config, store).settledPayload(done);
+    expect(questionSettledWebhookSchema.safeParse(out).success).toBe(true);
+    expect(out).toMatchObject({ valueWithheld: true });
+    expect(JSON.stringify(out)).not.toContain('oscar');
   });
 });
 

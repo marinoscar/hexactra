@@ -60,6 +60,7 @@ fn code_request() -> CreateHandoffRequest {
         risk: None,
         timeout_ms: None,
         page: None,
+        remember: None,
     }
 }
 
@@ -183,6 +184,7 @@ async fn html_form_flow_for_link_channels() {
                 risk: None,
                 timeout_ms: None,
                 page: None,
+                remember: None,
             },
         )
         .await
@@ -590,6 +592,93 @@ async fn html_form_renders_every_input_type() {
         .unwrap();
     assert!(html.contains(r#"step="any""#));
     client.cancel_handoff(c.handoff.id).await.unwrap();
+}
+
+// #527: the fallback answer page asks for a sign-in in one form, with the
+// site's "remember me" ticked by default.
+#[tokio::test]
+async fn html_form_asks_for_a_sign_in_and_the_remember_choice() {
+    let (url, client, session) = start().await;
+    let http = reqwest::Client::new();
+    let page = |c: &hexactra_core::remote::CreateHandoffResponse| {
+        format!("{url}{}?token={}", c.respond_path, c.response_token)
+    };
+    let c = client
+        .create_handoff(
+            session,
+            &request(
+                "credentials",
+                json!({"remember": {"label": "Keep me <signed> in"}}),
+            ),
+        )
+        .await
+        .unwrap();
+    let html = http
+        .get(page(&c))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    for n in [
+        r#"name="value" required"#,
+        r#"autocomplete="username""#,
+        r#"name="secret" type="password""#,
+        r#"autocomplete="new-password""#,
+        r#"<input type="hidden" name="remember" value="false">"#,
+        r#"name="remember" value="true" checked"#,
+        "Keep me &lt;signed&gt; in",
+    ] {
+        assert!(html.contains(n), "missing {n} in {html}");
+    }
+    assert!(!html.contains("<script"));
+
+    // Unticked: the browser sends only the hidden `false`.
+    let body = format!(
+        "token={}&value=oscar&secret=x9-424243&remember=false&outcome=completed",
+        c.response_token
+    );
+    let r = http
+        .post(format!("{url}{}", c.respond_path))
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(body)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 200);
+    let read = client.handoff(c.handoff.id, None).await.unwrap();
+    let resp = read.response.clone().unwrap();
+    assert_eq!(resp.value.as_deref(), Some("oscar"));
+    assert!(resp.value_withheld);
+    assert_eq!(resp.remember, Some(false));
+    assert!(!serde_json::to_string(&read).unwrap().contains("x9-424243"));
+
+    // Ticked: both fields arrive, and `true` wins.
+    let c = client
+        .create_handoff(
+            session,
+            &request("credentials", json!({"remember": {"label": "Remember me"}})),
+        )
+        .await
+        .unwrap();
+    let body = format!(
+        "token={}&value=oscar&secret=x9-424243&remember=false&remember=true&outcome=completed",
+        c.response_token
+    );
+    http.post(format!("{url}{}", c.respond_path))
+        .header("content-type", "application/x-www-form-urlencoded")
+        .body(body)
+        .send()
+        .await
+        .unwrap();
+    let resp = client
+        .handoff(c.handoff.id, None)
+        .await
+        .unwrap()
+        .response
+        .unwrap();
+    assert_eq!(resp.remember, Some(true));
 }
 
 #[tokio::test]

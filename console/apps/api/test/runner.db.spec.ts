@@ -52,7 +52,7 @@ async function login(email: string): Promise<string> {
 function fakeFabric() {
   const actions: Record<string, unknown>[] = [];
   // The fabric's real handoff view (crates/hexactra-core/src/remote.rs `HandoffView`).
-  const handoffs = new Map<string, { id: string; status: string; input: string; kind: string; response?: { outcome?: string; value?: string; value_withheld: boolean; channel?: string; by?: string; answered_at?: string } }>();
+  const handoffs = new Map<string, { id: string; status: string; input: string; kind: string; remember?: { label: string }; response?: { outcome?: string; value?: string; value_withheld: boolean; remember?: boolean; channel?: string; by?: string; answered_at?: string } }>();
   const typed = new Set<string>();
   let ended = 0;
   const request = jest.fn(async (method: string, path: string, opts: { body?: Record<string, unknown> } = {}) => {
@@ -66,7 +66,7 @@ function fakeFabric() {
       if (action.type === 'type_secret') {
         // The fabric types the answer itself, once; the console only names the handoff.
         const h = handoffs.get(String(action.handoff_id));
-        if (!h || h.input !== 'secret' || h.status !== 'completed' || typed.has(h.id)) throw new FabricError('api', 'secret_unavailable', 409, 'secret_unavailable');
+        if (!h || (h.input !== 'secret' && h.input !== 'credentials') || h.status !== 'completed' || typed.has(h.id)) throw new FabricError('api', 'secret_unavailable', 409, 'secret_unavailable');
         typed.add(h.id);
         return { id: 'op', state: 'succeeded', result: {} };
       }
@@ -75,7 +75,7 @@ function fakeFabric() {
     if (method === 'POST' && path.endsWith('/handoffs')) {
       // Unique per run of the suite: the question broker mirrors handoffs by id.
       const id = randomUUID();
-      handoffs.set(id, { id, status: 'pending', input: String(opts.body!.input), kind: String(opts.body!.kind) });
+      handoffs.set(id, { id, status: 'pending', input: String(opts.body!.input), kind: String(opts.body!.kind), ...(opts.body!.remember ? { remember: opts.body!.remember as { label: string } } : {}) });
       return { handoff: { id } };
     }
     if (method === 'GET' && path.startsWith('/v1/handoffs/')) return handoffs.get(path.split('/')[3]!);
@@ -84,7 +84,7 @@ function fakeFabric() {
     throw new Error(`unexpected ${method} ${path}`);
   });
   const claimed = () => request.mock.calls.some(([, path]) => String(path).endsWith('/claim'));
-  return { client: { request, config: async () => ({ url: 'http://f', token: 't' }) } as unknown as FabricClient, actions, handoffs, ended: () => ended, claimed };
+  return { client: { request, config: async () => ({ url: 'http://f', token: 't' }) } as unknown as FabricClient, request, actions, handoffs, ended: () => ended, claimed };
 }
 
 type Call = [name: string, args: Record<string, unknown>];
@@ -208,7 +208,7 @@ describe('the goal runner', () => {
     expect(scripted.outputs[3]).toMatch(/Refused: this looks like a purchase/);
   });
 
-  it('signs in itself: asks for the username as text and the password as a secret, and types both (#524)', async () => {
+  it('signs in itself with one request for the username and password, and ticks "remember me" as the person chose (#524, #527)', async () => {
     const userId = await login(`runner-signin-${stamp}@example.test`);
     const prisma = app.get(PrismaService);
     const db = prisma.forUser({ userId });
@@ -218,13 +218,11 @@ describe('the goal runner', () => {
     const scripted = scriptedAi([
       [
         ['navigate', { url: 'https://bank.example.test/login', reason: 'open the bank' }],
-        ['request_human', { kind: 'login', prompt: 'Your Example Bank username', input: 'text', choices: null }],
+        ['request_human', { kind: 'login', prompt: 'Sign in to Example Bank', input: 'credentials', choices: null, remember_label: 'Keep me signed in' }],
       ],
       [
         ['type_text', { selector: '#user', text: 'oscar', submit: false, reason: 'the username' }],
-        ['request_human', { kind: 'login', prompt: 'Your Example Bank password', input: 'secret', choices: null }],
-      ],
-      [
+        ['click', { selector: '#remember', reason: 'tick Keep me signed in, as the person chose' }],
         ['type_handoff_secret', { selector: '#pass', submit: true }],
         ['finish', { success: true, result: 'The balance is $1,204.' }],
       ],
@@ -234,31 +232,30 @@ describe('the goal runner', () => {
     const runTools = jest.fn(async (req: Parameters<typeof inner>[0]) => (inputs.push(JSON.stringify(req.input)), inner(req)));
     const asked: string[][] = [];
     const notifier = { needsYou: async (_u: string, _r: unknown, prompt: string, kind: string) => void asked.push([kind, prompt]), finished: async () => undefined };
-    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, { forUser: () => ({ runTools }) } as unknown as AiService, notifier as never);
+    const questions = new QuestionsService(prisma, fabric.client, { enqueue: async () => undefined } as never, new QuestionEvents());
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, { forUser: () => ({ runTools }) } as unknown as AiService, notifier as never, questions);
 
     expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
-    const [user] = [...fabric.handoffs.values()];
-    expect(user).toMatchObject({ input: 'text', kind: 'login' });
-    Object.assign(user!, { status: 'completed', response: { outcome: 'completed', value: 'oscar', value_withheld: false, channel: 'web', by: `user:${userId}`, answered_at: new Date().toISOString() } });
+    // One request, with the page's "remember me" words; mirrored for the chat and the Inbox.
+    const [signIn] = [...fabric.handoffs.values()];
+    expect(signIn).toMatchObject({ input: 'credentials', kind: 'login' });
+    const created = fabric.request.mock.calls.find(([m, path]: unknown[]) => m === 'POST' && String(path).endsWith('/handoffs'))!;
+    expect((created[2] as { body: Record<string, unknown> }).body).toMatchObject({ input: 'credentials', remember: { label: 'Keep me signed in' } });
+    expect(await db.question.findFirst({ where: { handoffId: signIn!.id } })).toMatchObject({ input: 'credentials', rememberLabel: 'Keep me signed in' });
 
-    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
-    const pass = [...fabric.handoffs.values()][1]!;
-    expect(pass).toMatchObject({ input: 'secret', kind: 'login' });
-    // The fabric holds the password; the console is told only that one was given.
-    Object.assign(pass, { status: 'completed', response: { outcome: 'completed', value_withheld: true, channel: 'web', by: `user:${userId}`, answered_at: new Date().toISOString() } });
+    // The fabric returns the username and withholds the password.
+    Object.assign(signIn!, { status: 'completed', response: { outcome: 'completed', value: 'oscar', value_withheld: true, remember: true, channel: 'web', by: `user:${userId}`, answered_at: new Date().toISOString() } });
     expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
 
-    // No takeover was asked for: two questions, both answered from the chat or the Inbox.
-    expect(asked).toEqual([['login', 'Your Example Bank username'], ['login', 'Your Example Bank password']]);
+    expect(asked).toEqual([['login', 'Sign in to Example Bank']]);
+    // The model is told the username to type and the person's choice, never a password.
+    expect(inputs[1]).toContain('Type the username \\"oscar\\" with type_text');
+    expect(inputs[1]).toContain('chose to tick \\"Keep me signed in\\"');
     expect(fabric.actions).toContainEqual(expect.objectContaining({ type: 'type', selector: '#user', text: 'oscar' }));
-    expect(fabric.actions).toContainEqual({ type: 'type_secret', handoff_id: pass.id, selector: '#pass', clear: true, submit: true });
+    expect(fabric.actions.filter((a) => a.type === 'type_secret')).toEqual([{ type: 'type_secret', handoff_id: signIn!.id, selector: '#pass', clear: true, submit: true }]);
     expect(fabric.claimed()).toBe(false);
-    // The model was given the username it has to type, and never the password.
-    expect(inputs[1]).toContain('oscar');
-    // The console is never handed the password (the fabric withholds it), so there is nothing of it to store or to show a model:
-    // the only action about it names the handoff, and the model is told only that one was given.
-    expect(fabric.actions.filter((a) => a.type === 'type_secret')).toEqual([{ type: 'type_secret', handoff_id: pass.id, selector: '#pass', clear: true, submit: true }]);
-    expect(inputs[2]).not.toContain('"value"');
+    const q = await db.question.findFirstOrThrow({ where: { handoffId: signIn!.id } });
+    expect(q.response).toMatchObject({ outcome: 'completed', value: 'oscar', valueWithheld: true, remember: true });
     const done = await db.run.findFirstOrThrow({ where: { id: run.id }, include: { steps: true } });
     expect(done).toMatchObject({ status: 'succeeded', result: 'The balance is $1,204.' });
   });

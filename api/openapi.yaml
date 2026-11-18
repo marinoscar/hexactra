@@ -1340,6 +1340,13 @@ components:
         prompt:
           type: string
           description: What the human should do, in plain words.
+        remember:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/HandoffRemember'
+            description: |-
+              `credentials` and `secret`: the site's "remember me" option, for the
+              person to tick or not; the answer's `remember` says what they chose.
         risk:
           oneOf:
           - type: 'null'
@@ -1744,6 +1751,7 @@ components:
       - number
       - confirm
       - takeover
+      - credentials
     HandoffKind:
       type: string
       description: Why the agent needs a human.
@@ -1781,6 +1789,18 @@ components:
           type:
           - string
           - 'null'
+    HandoffRemember:
+      type: object
+      description: |-
+        The site's offer to remember a sign-in or a device ("Remember me",
+        "Trust this device"), shown with the question so the person decides.
+        Only on `credentials` and `secret` questions.
+      required:
+      - label
+      properties:
+        label:
+          type: string
+          description: The option's words as the page shows them (1-80 characters).
     HandoffResponse:
       type: object
       description: The human's answer as visible to readers.
@@ -1807,6 +1827,11 @@ components:
           description: |-
             `completed`, or `cancelled` when the human declined. A `deny` on a
             `confirm` question is a completed answer.
+        remember:
+          type:
+          - boolean
+          - 'null'
+          description: What the person chose for the question's `remember` option.
         value:
           type:
           - string
@@ -1817,7 +1842,8 @@ components:
         value_withheld:
           type: boolean
           description: |-
-            True for `secret` inputs: the value is never returned. Type it into
+            True for `secret` inputs (and the password of `credentials`): the
+            value is never returned. Type it into
             the page with a `type_secret` action naming this handoff; the
             control plane consumes it once.
         values:
@@ -1895,6 +1921,11 @@ components:
           description: Profile of the session's browser.
         prompt:
           type: string
+        remember:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/HandoffRemember'
+            description: The site's "remember me" option offered with the question.
         resolved_at:
           type:
           - string
@@ -3005,6 +3036,13 @@ components:
           description: Label of the answering channel, for the record.
         outcome:
           $ref: '#/components/schemas/HandoffOutcome'
+        remember:
+          type:
+          - boolean
+          - 'null'
+          description: |-
+            The person's choice for the question's `remember` option. Refused
+            when the question offered none.
         response_token:
           type:
           - string
@@ -3012,13 +3050,21 @@ components:
           description: |-
             The handoff's response token (alternatively sent as the
             `X-Hexactra-Response-Token` header). Not needed with the API token.
+        secret:
+          type:
+          - string
+          - 'null'
+          description: |-
+            `credentials`: the password. Held and typed like a `secret` answer,
+            never returned. Refused for any other input.
         value:
           type:
           - string
           - 'null'
           description: |-
             The answer for `text`, `secret`, `choice` (option id), `number`
-            (decimal string) and `confirm` (`approve` or `deny`).
+            (decimal string) and `confirm` (`approve` or `deny`); the username
+            for `credentials`.
         values:
           type:
           - array

@@ -20,12 +20,18 @@ export class HandoffAnswers {
     outcome: 'completed' | 'cancelled',
     value?: QuestionAnswerInput['value'],
     expectHandoffId?: string,
-    extra: { values?: string[]; channel?: string } = {},
+    extra: { values?: string[]; secret?: string; remember?: boolean; channel?: string } = {},
   ): Promise<void> {
     await this.questions.answerRun(
       user,
       runId,
-      { outcome, ...(value !== undefined ? { value } : {}), ...(extra.values ? { values: extra.values } : {}) },
+      {
+        outcome,
+        ...(value !== undefined ? { value } : {}),
+        ...(extra.values ? { values: extra.values } : {}),
+        ...(extra.secret !== undefined ? { secret: extra.secret } : {}),
+        ...(extra.remember !== undefined ? { remember: extra.remember } : {}),
+      },
       { channel: extra.channel ?? 'inbox', ...(expectHandoffId ? { expectHandoffId } : {}) },
     );
   }

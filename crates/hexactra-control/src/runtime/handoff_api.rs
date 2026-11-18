@@ -207,14 +207,17 @@ fn bearer(headers: &HeaderMap) -> Option<&str> {
         .and_then(|v| v.strip_prefix("Bearer "))
 }
 
-/// An HTML form submission: `token`, `outcome`, `value`, and `values`
-/// repeated once per checked box.
+/// An HTML form submission: `token`, `outcome`, `value`, `values` repeated
+/// once per checked box, `secret` (a sign-in's password) and `remember`
+/// (`false` from a hidden field, then `true` when the box is ticked).
 #[derive(Default)]
 struct FormBody {
     token: Option<String>,
     outcome: Option<String>,
     value: Option<String>,
     values: Vec<String>,
+    secret: Option<String>,
+    remember: Option<bool>,
 }
 
 impl FormBody {
@@ -227,6 +230,8 @@ impl FormBody {
                 "outcome" => f.outcome = Some(v),
                 "value" => f.value = Some(v),
                 "values" => f.values.push(v),
+                "secret" => f.secret = Some(v),
+                "remember" => f.remember = Some(f.remember == Some(true) || v == "true"),
                 _ => {}
             }
         }
@@ -269,6 +274,8 @@ async fn respond(
                 outcome,
                 value: f.value,
                 values: Some(f.values),
+                secret: f.secret,
+                remember: f.remember,
                 response_token: None,
                 channel: Some("web-form".into()),
                 answered_by: None,
@@ -444,6 +451,20 @@ async fn form(
     html(StatusCode::OK, "Hexactra needs you", &body)
 }
 
+/// The site's "remember me" option as a checkbox, ticked by default: the
+/// hidden field sends `false` when it is unticked.
+fn remember_field(h: &HandoffView) -> String {
+    h.remember
+        .as_ref()
+        .map(|r| {
+            format!(
+                r#"<input type="hidden" name="remember" value="false"><label class=opt><input type="checkbox" name="remember" value="true" checked><span>{}</span></label>"#,
+                esc(&r.label)
+            )
+        })
+        .unwrap_or_default()
+}
+
 /// Format a number constraint for an HTML attribute.
 fn num(v: f64) -> String {
     format!("{v}")
@@ -477,7 +498,14 @@ fn question_field(h: &HandoffView) -> String {
             }
         }
         HandoffInput::Secret => format!(
-            r#"<label>Code<input name="value" type="password" required maxlength="{max_length}" autocomplete="one-time-code" inputmode="text"></label>"#
+            r#"<label>Code<input name="value" type="password" required maxlength="{max_length}" autocomplete="one-time-code" inputmode="text"></label>{remember}"#,
+            remember = remember_field(h)
+        ),
+        // `new-password`: the browser does not offer to save the site's password under this address.
+        HandoffInput::Credentials => format!(
+            r#"<label>Username or email<input name="value" required maxlength="{max_length}" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
+<label>Password<input name="secret" type="password" required maxlength="{max_length}" autocomplete="new-password"></label>{remember}"#,
+            remember = remember_field(h)
         ),
         HandoffInput::Number => {
             let mut attrs = String::new();
