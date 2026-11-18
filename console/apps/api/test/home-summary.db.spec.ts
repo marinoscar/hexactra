@@ -348,11 +348,9 @@ describe('GET /api/home/summary: a busy account', () => {
       try {
         const out = await home.summary({ userId, permissions: ALL, timezone: 'Europe/Madrid' });
         expect(out.liveRuns).not.toBeNull();
-        // Only the summary's own statements: background workers (the job queue, notifications,
-        // settings reads, the event bus) run on the same driver and are never part of it.
-        const background = /\b(jobs?|job_[a-z_]+|notifications?|notification_[a-z_]+|system_settings|user_settings|org_settings|pg_notify|listen|unlisten|pg_try_advisory[a-z_]*|_prisma_migrations)\b/i;
-        const sql = (c: unknown[]) => String(typeof c[0] === 'string' ? c[0] : (c[0] as { text?: string } | undefined)?.text ?? '');
-        return spy.mock.calls.filter((c) => !background.test(sql(c))).length;
+        // Only the summary's own statements: each binds the user's id. Background work on the same
+        // pool (the job queue, other suites' workers, the event bus) never binds this user's id.
+        return spy.mock.calls.filter((c) => JSON.stringify(c).includes(userId)).length;
       } finally {
         spy.mockRestore();
       }
