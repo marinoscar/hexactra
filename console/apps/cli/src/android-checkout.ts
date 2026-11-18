@@ -5,6 +5,8 @@ import { CLI_NAME } from '@app/shared';
 import { envVar } from '@marinoscar/platform-cli';
 import type { Command } from 'commander';
 
+import { stageSdkDownloadNearSdk } from './android-sdk-staging.js';
+
 // =============================================================================
 // Where the Android app is, and whether it can be built (#478)
 // =============================================================================
@@ -166,6 +168,15 @@ export function withAndroidPreflight(register: (program: Command) => void): (pro
   return (program) => {
     register(program);
     const group = program.commands.find((command) => command.name() === 'android');
-    group?.hook('preAction', (_this, action) => androidPreflight(subcommandUnder(group, action)));
+    group?.hook('preAction', (_this, action) => {
+      const subcommand = subcommandUnder(group, action);
+      androidPreflight(subcommand);
+      // `doctor --fix` downloads the SDK: keep its staging on the SDK's filesystem (#480).
+      const options = action.opts<{ fix?: boolean; dryRun?: boolean }>();
+      if (subcommand === 'doctor' && options.fix === true && options.dryRun !== true) {
+        const cleanup = stageSdkDownloadNearSdk();
+        if (cleanup !== undefined) process.once('exit', cleanup);
+      }
+    });
   };
 }

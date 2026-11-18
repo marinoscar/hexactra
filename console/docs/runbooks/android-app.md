@@ -113,4 +113,5 @@ Signed release builds in CI are an owner step. See section 9 of the platform run
 | No push on the phone | Notifications are off for the app, or the event's `android_app` channel is off in your preferences | Settings → Notifications in the console; Android settings → Apps → Hexactra Console → Notifications |
 | `... is not inside the hexactra repository` | The command ran outside the clone | Run it from the clone (its root or `console/`), or set `HEXACTRA_REPO_ROOT` to the clone |
 | `The console's dependencies are not installed`, or Gradle's `platform-core not found` | `npm ci` was never run in `console/` of this clone | `cd console && npm ci`, then run the command again |
+| `EXDEV: cross-device link not permitted` during `android doctor --fix` | An older CLI staged the SDK download in `/tmp`, on another filesystem than the SDK | Update the CLI. It stages inside the SDK directory when the two differ, and says so |
 | `409 RELEASE_VERSION_EXISTS` | That `versionCode` is already published | `hexactra android version --bump patch`, then rebuild |
