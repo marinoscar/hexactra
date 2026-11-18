@@ -35,6 +35,8 @@ export type RunsDeleted = Schema<'RunsDeletedResponseDto'> | Schema<'RunsDeleteQ
 export type SchedulePreview = Schema<'SchedulePreviewResponseDto'>;
 /** The portable file `policies.export` returns and `policies.import` takes. */
 export type AgentPolicyFile = Schema<'PolicyFileDto'>;
+/** A run trace file (`hexactra.run-trace`, formatVersion 1): what `runs.export` returns. Its JSON Schema is `run-trace.schema.json` in this package. */
+export type RunTrace = Schema<'RunTraceDto'>;
 /** What to do on a name clash when importing. */
 export type PolicyConflictMode = 'rename' | 'skip' | 'replace';
 
@@ -118,6 +120,12 @@ export interface RunsClient {
    * filter matches. More than 500 matches answer with a `jobId`: a queue job deletes them. Needs `runs:delete`.
    */
   deleteMany(body: { ids: string[] } | { filter: RunFilter; expectedCount?: number }): Promise<RunsDeleted>;
+  /**
+   * One run as a masked trace file (`GET /api/runs/{id}/export`): the run, its policy, budget, steps with their questions
+   * and answers, the trace screenshots (base64; `screenshots: 'none'` leaves them out) and its chat. Needs `runs:read`.
+   * 413 `EXPORT_TOO_LARGE` over 50 MB with screenshots; 429 `EXPORT_RATE_LIMITED` past 10 a minute.
+   */
+  export(id: string, options?: { screenshots?: 'embed' | 'none' }): Promise<RunTrace>;
 }
 
 export interface SchedulesClient {
@@ -177,6 +185,8 @@ export function createConsoleClient(options: ConsoleClientOptions): ConsoleClien
       await data(api.DELETE('/api/runs/{id}', { params: { path: { id } } }));
     },
     deleteMany: (body) => data(api.POST('/api/runs/delete', { body })) as never,
+    // The file is not wrapped in `{ data }`: `data()` passes it through as it is.
+    export: (id, o) => data(api.GET('/api/runs/{id}/export', { params: { path: { id }, query: { format: 'json', screenshots: o?.screenshots ?? 'embed' } } } as never)) as Promise<RunTrace>,
   };
   const schedules: SchedulesClient = {
     preview: (body) => data(api.POST('/api/schedules/preview', { body })) as never,

@@ -6030,6 +6030,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export a run as a JSON trace file
+         * @description A `hexactra.run-trace` file (`formatVersion` 1): the run, its policy, budget and models, every step with its question and answer, the masked trace screenshots (`screenshots=embed`, the default; `none` leaves the images out) and the messages of its chat. Every string is masked (`masking.hits` counts what was); there is no unmasked export. Never the transcript, a token, a withheld answer or an AI app's grant. A live run exports with `partial: true`. 404 `RUN_NOT_FOUND` for a run that is not yours; 413 `EXPORT_TOO_LARGE` over 50 MB (use `screenshots=none`); 429 `EXPORT_RATE_LIMITED` past 10 exports a minute.
+         *
+         *     **Requires:** authentication, plus permission `runs:read`.
+         */
+        get: operations["runs_export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{id}/cancel": {
         parameters: {
             query?: never;
@@ -7551,11 +7573,19 @@ export interface components {
              * @example POLICY_IMPORT_INVALID
              * @example POLICY_IMPORT_UNSUPPORTED_VERSION
              * @example POLICY_IMPORT_TOO_LARGE
+             * @example APP_PAUSED
+             * @example APP_RUN_LIMIT
+             * @example APP_COST_LIMIT
+             * @example APP_POLICY_NOT_ALLOWED
+             * @example APP_DOMAIN_NOT_ALLOWED
+             * @example APP_NOT_FOUND
              * @example INVALID_FILTER
              * @example INVALID_CURSOR
              * @example RUN_NOT_FOUND
              * @example RUN_LIVE
              * @example COUNT_CHANGED
+             * @example EXPORT_TOO_LARGE
+             * @example EXPORT_RATE_LIMITED
              * @example INVALID_CRON
              * @example INVALID_TIMEZONE
              * @example CRON_TOO_FREQUENT
@@ -7563,12 +7593,6 @@ export interface components {
              * @example INVALID_TASK_CURSOR
              * @example SCHEDULE_LIMIT
              * @example NO_SCHEDULES
-             * @example APP_PAUSED
-             * @example APP_RUN_LIMIT
-             * @example APP_COST_LIMIT
-             * @example APP_POLICY_NOT_ALLOWED
-             * @example APP_DOMAIN_NOT_ALLOWED
-             * @example APP_NOT_FOUND
              * @example CONFIRMATION_REQUIRED
              * @example CONFIRMATION_PENDING
              * @example CONFIRMATION_DENIED
@@ -8716,10 +8740,6 @@ export interface components {
                 jwtAccessTtlMinutes: number;
                 refreshTtlDays: number;
             };
-            runs: {
-                /** @description The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling. */
-                maxKeepDays: number | null;
-            };
             mcp: {
                 elicitation: boolean;
                 advertiseStepUpTools: boolean;
@@ -8734,6 +8754,10 @@ export interface components {
                 sensitiveHosts?: string[];
                 /** @enum {string} */
                 stepUpForm?: "auto" | "http" | "tool";
+            };
+            runs: {
+                /** @description The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling. */
+                maxKeepDays: number | null;
             };
             notes: {
                 archiveAfterDays: number;
@@ -8946,10 +8970,6 @@ export interface components {
             version: number;
         };
         UpdateSystemSettingsDto: {
-            runs?: {
-                /** @description The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling. */
-                maxKeepDays: number | null;
-            };
             mcp?: {
                 elicitation: boolean;
                 advertiseStepUpTools: boolean;
@@ -8964,6 +8984,10 @@ export interface components {
                 sensitiveHosts?: string[];
                 /** @enum {string} */
                 stepUpForm?: "auto" | "http" | "tool";
+            };
+            runs?: {
+                /** @description The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling. */
+                maxKeepDays: number | null;
             };
             notes?: {
                 archiveAfterDays: number;
@@ -9183,10 +9207,6 @@ export interface components {
             };
         };
         PatchSystemSettingsDto: {
-            runs?: {
-                /** @description The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling. */
-                maxKeepDays?: number | null;
-            };
             mcp?: {
                 elicitation?: boolean;
                 advertiseStepUpTools?: boolean;
@@ -9201,6 +9221,10 @@ export interface components {
                 sensitiveHosts?: string[];
                 /** @enum {string} */
                 stepUpForm?: "auto" | "http" | "tool";
+            };
+            runs?: {
+                /** @description The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling. */
+                maxKeepDays?: number | null;
             };
             notes?: {
                 archiveAfterDays?: number;
@@ -15198,6 +15222,288 @@ export interface components {
             costUsd: number | null;
             /** @description False when a matching run had a call that could not be priced */
             costKnown: boolean;
+        };
+        /** @description A run trace file: everything about a run that is safe to share, masked. Never the transcript, a token, a withheld answer or an AI app's grant or limits. */
+        RunTraceDto: {
+            /** @constant */
+            type: "hexactra.run-trace";
+            /**
+             * @description Version of this file format
+             * @constant
+             */
+            formatVersion: 1;
+            /** @description ISO 8601 timestamp */
+            exportedAt: string;
+            /** @description True for a run that was live (queued, running, waiting for its person) when it was exported */
+            partial: boolean;
+            console: {
+                /** @description The console version that wrote the file */
+                version: string;
+            };
+            masking: {
+                /**
+                 * @description Always true: there is no unmasked export
+                 * @constant
+                 */
+                applied: true;
+                /** @description Version of the sensitive-text pattern table (docs/runs.md, "What is masked") */
+                patternsVersion: number;
+                /** @description How many matches of each pattern the export masked; patterns with none are left out */
+                hits: {
+                    [key: string]: number;
+                };
+            };
+            run: {
+                /** Format: uuid */
+                id: string;
+                goal: string;
+                /** @enum {string} */
+                status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
+                stopReason: ("finished" | "budget_actions" | "budget_model_calls" | "budget_active_time" | "budget_input_tokens" | "budget_output_tokens" | "budget_cost" | "stalled" | "cancelled" | "error" | "no_model") | null;
+                result: string | null;
+                error: string | null;
+                /** @enum {string} */
+                trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
+                /**
+                 * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
+                 * @enum {string}
+                 */
+                origin: "web" | "android" | "cli" | "api" | "mcp" | "schedule" | "system";
+                client: {
+                    /** @description The OAuth client id; null for an unverified MCP client name */
+                    id: string | null;
+                    /** @description The display name at the time the run started */
+                    name: string | null;
+                    /** @description False: a name an MCP client gave itself over a personal access token */
+                    verified: boolean;
+                } | null;
+                taskId: string | null;
+                taskName: string | null;
+                conversationId: string | null;
+                profile: string;
+                /** @description The machine the run used; `name` null when the fabric could not be asked */
+                host: {
+                    /** Format: uuid */
+                    id: string;
+                    name: string | null;
+                } | null;
+                /** @description ISO 8601 timestamp */
+                createdAt: string;
+                startedAt: string | null;
+                finishedAt: string | null;
+                /** @description Steps the owner confirmed that the run carried out (#540) */
+                confirmedActions: {
+                    seq: number;
+                    prompt: string;
+                    action: string;
+                    /** @description ISO 8601 timestamp */
+                    at: string;
+                }[];
+                /** @description What the run used */
+                usage: {
+                    stepCount: number;
+                    modelCalls: number;
+                    inputTokens: number;
+                    outputTokens: number;
+                    cachedInputTokens: number;
+                    /** @description A lower bound while costKnown is false */
+                    costUsd: number;
+                    costKnown: boolean;
+                    /** @description Time spent working, waits for a person excluded */
+                    activeMs: number;
+                };
+            };
+            /** @description The agent policy the run ran under, as snapshotted at its start; null before its first step */
+            policy: {
+                id: string;
+                name: string;
+                version: number;
+                builtin: boolean;
+                source: ("run" | "schedule" | "task" | "user_default" | "system_default") | null;
+                /** @description An agent policy: model tiers, budgets, stall detection and context settings. */
+                spec: {
+                    /**
+                     * @description Version of this document format.
+                     * @constant
+                     */
+                    schemaVersion: 1;
+                    /** @description Which models a run uses, and how it moves between tiers. */
+                    models: {
+                        /**
+                         * @description The tier a run starts on.
+                         * @enum {string}
+                         */
+                        startTier: "fast" | "standard" | "frontier";
+                        /**
+                         * @description The highest tier a run may escalate to when it stalls. Never below `startTier`.
+                         * @enum {string}
+                         */
+                        maxTier: "fast" | "standard" | "frontier";
+                        /** @description Use the tier's fallback model when the provider errors or rate-limits. */
+                        allowProviderFallback: boolean;
+                        /** @description Optional per-policy model override per tier. Each pin must name an enabled model that supports tools and vision. */
+                        pins?: {
+                            /** @description Model that replaces the fast tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition. */
+                            fast?: string | null;
+                            /** @description Model that replaces the standard tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition. */
+                            standard?: string | null;
+                            /** @description Model that replaces the frontier tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition. */
+                            frontier?: string | null;
+                        };
+                    };
+                    /** @description What a run may spend. Every limit may be unlimited; stall detection stays on regardless. Chat runs show these limits but are not stopped by them. */
+                    budget: {
+                        /** @description Most browser actions a run may take. `null` means unlimited. */
+                        maxActions: number | null;
+                        /** @description Most model round trips a run may make. `null` means unlimited. */
+                        maxModelCalls: number | null;
+                        /** @description Most active minutes a run may use (time waiting for a person does not count); 7 days at most when set. `null` means unlimited. */
+                        maxActiveMinutes: number | null;
+                        /** @description Most input tokens a run may send. `null` means unlimited. */
+                        maxInputTokens: number | null;
+                        /** @description Most output tokens a run may receive. `null` means unlimited. */
+                        maxOutputTokens: number | null;
+                        /** @description Most a run may cost in US dollars. `null` means unlimited. */
+                        maxCostUsd: number | null;
+                        /** @description Warn the owner when any set budget reaches this percentage. */
+                        warnAtPercent: number;
+                    };
+                    /** @description Stall and loop detection. Always on. */
+                    stall: {
+                        /** @description Failed actions in a row that count as a stall. */
+                        maxConsecutiveFailures: number;
+                        /** @description The same action repeated this many times counts as a stall. */
+                        maxRepeatedAction: number;
+                        /** @description Actions without visible progress that count as a stall. */
+                        noProgressActions: number;
+                        /**
+                         * @description What to do on a stall: nudge the model then escalate a tier, escalate at once, ask a person, or fail the run.
+                         * @enum {string}
+                         */
+                        onStall: "nudge_then_escalate" | "escalate" | "ask_human" | "fail";
+                        /** @description Most tier escalations per run. */
+                        maxEscalations: number;
+                    };
+                    /** @description Context efficiency: how much the model sees each round. */
+                    context: {
+                        /** @description Recent screenshots kept in the model context. */
+                        screenshotsKept: number;
+                        /** @description How many old tool results are pruned together once the context grows. */
+                        pruneBatch: number;
+                        /** @description Model calls per chunk; the model tier only changes between chunks. */
+                        callsPerChunk: number;
+                        /** @description Most characters of one page observation sent to the model. */
+                        observationChars: number;
+                    };
+                };
+            } | null;
+            budget: {
+                /** @description The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD. */
+                effective: {
+                    actions: number | null;
+                    modelCalls: number | null;
+                    activeMinutes: number | null;
+                    inputTokens: number | null;
+                    outputTokens: number | null;
+                    cost: number | null;
+                    warnAtPercent: number;
+                };
+                /** @description What the run has used so far, in the same units (active time includes the stretch in progress). */
+                used: {
+                    [key: string]: number;
+                };
+                /** @description Percent of each limit used, one decimal; `null` for an unlimited budget. */
+                percent: {
+                    [key: string]: number | null;
+                };
+                /** @description Where each limit came from: the `policy`, or the deployment `ceiling` that clamped it. `null` when unlimited. */
+                source: {
+                    [key: string]: ("policy" | "ceiling") | null;
+                };
+                /** @description False when a call could not be priced: `used.cost` is then "at least". */
+                costKnown: boolean;
+                /**
+                 * @description `hard`: a used-up budget ends the run. `soft`: a chat run (trigger `chat`), whose owner is present: its limits are shown and warned about, never enforced (#537).
+                 * @enum {string}
+                 */
+                enforcement: "hard" | "soft";
+                /** @description The budgets at or over their limit, in check order. A soft-budget run keeps working past them. */
+                over: ("actions" | "modelCalls" | "activeMinutes" | "inputTokens" | "outputTokens" | "cost")[];
+            } | null;
+            /** @description The tiers the run used, in order, with their models */
+            models: {
+                /** @enum {string} */
+                tier: "fast" | "standard" | "frontier";
+                model: string | null;
+                /** @description Model calls on this tier; null when the run used several tiers (calls are counted per run) */
+                calls: number | null;
+            }[];
+            steps: {
+                seq: number;
+                /** @description ISO 8601 timestamp */
+                at: string;
+                /** @description action | handoff | finish | error | note | routing | guidance | end (see `GET /runs/{id}`) */
+                kind: string;
+                action: string | null;
+                /** @description The stored, redacted arguments, masked again */
+                args: {
+                    [key: string]: unknown;
+                } | null;
+                ok: boolean;
+                /** @description Masked */
+                summary: string;
+                /** @description The model's own words, masked */
+                reasoning: string | null;
+                durationMs: number | null;
+                /** @description The question this step asked or answered, masked (#541); null for any other step */
+                question: {
+                    /** Format: uuid */
+                    id: string;
+                    kind: string;
+                    input: string;
+                    /** @description Masked */
+                    prompt: string;
+                    /** @description Labels masked */
+                    options: {
+                        id: string;
+                        label: string;
+                    }[] | null;
+                    risk: string | null;
+                    status: string;
+                    answer: {
+                        outcome: string;
+                        /** @description Masked; absent when the value is withheld (a secret, a sign-in) */
+                        value?: string;
+                        valueWithheld: boolean;
+                        channel: string | null;
+                        answeredAt: string | null;
+                    } | null;
+                } | null;
+                screenshot: {
+                    /** @description The key moment the picture records */
+                    moment: ("question" | "before_confirmed" | "after_confirmed" | "failure" | "final") | null;
+                    /** @description How many regions the extension masked in the picture */
+                    masked: number | null;
+                    /** @description Why a key moment has no picture; null when it has one */
+                    note: ("unavailable" | "masked_failed" | "no_storage" | "capped") | null;
+                    /** @description `image/jpeg` or `image/png`; null without a picture */
+                    contentType: string | null;
+                    /** @description Size of the stored image; null with `screenshots=none` or when it could not be read */
+                    bytes: number | null;
+                    /** @description The masked image, base64. Only with `screenshots=embed`. */
+                    data?: string;
+                } | null;
+            }[];
+            /** @description The messages of the run's conversation (a chat run); empty for any other run */
+            chat: {
+                seq: number;
+                /** @enum {string} */
+                role: "user" | "assistant" | "system";
+                kind: string;
+                text: string;
+                /** @description ISO 8601 timestamp */
+                at: string;
+            }[];
         };
         RunDetailResponseDto: {
             /** Format: uuid */
@@ -36129,6 +36435,66 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["RunCountsResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    runs_export: {
+        parameters: {
+            query?: {
+                /** @description `json` (the only format of this route; the PDF report is its own route). */
+                format?: "json";
+                /** @description `embed` (the default) puts each masked trace picture in `steps[].screenshot.data` as base64; `none` keeps the picture facts and leaves the images out (a much smaller file). */
+                screenshots?: "embed" | "none";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run trace file (not wrapped in the `data` envelope), sent as an attachment `hexactra-run-<first 8 of id>-<yyyymmdd>.json`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RunTraceDto"];
+                        /** @description Present when the endpoint supplies it (pagination) or when the global response interceptor adds it (`{ timestamp }`). Not every response carries one. */
+                        meta?: {
+                            [key: string]: unknown;
+                        };
                     };
                 };
             };

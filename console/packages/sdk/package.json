@@ -14,7 +14,8 @@
   },
   "files": [
     "dist",
-    "openapi.json"
+    "openapi.json",
+    "run-trace.schema.json"
   ],
   "scripts": {
     "generate": "npx --yes openapi-typescript@7.13.0 --default-non-nullable=false ./openapi.json -o ./src/schema.d.ts",

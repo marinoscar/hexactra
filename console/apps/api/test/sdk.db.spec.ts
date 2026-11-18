@@ -3,8 +3,9 @@
 //    with UPDATE_SDK_OPENAPI=1, then `npm run generate --workspace=@hexactra/console-sdk`);
 // 2. the SDK's example runs end to end against a real listening API.
 import { execFile } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 
@@ -76,5 +77,22 @@ describe('the console SDK', () => {
     // The runs exist under the policies the example named.
     const runs = (await (await fetch(`${base}/api/runs`, { headers: { authorization: `Bearer ${token}` } })).json()) as { data: { id: string }[] };
     expect(runs.data.map((r) => r.id)).toEqual(expect.arrayContaining([String(out.runId), String(out.taskRunId)]));
+  });
+
+  it('exports a run as its trace file (#542), written where the example runs', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/auth/test/login', payload: { email: `sdk-export-${Date.now()}@example.test`, role: 'contributor' } });
+    const token = new URL(String(res.headers.location)).searchParams.get('token')!;
+    const cwd = mkdtempSync(join(tmpdir(), 'sdk-export-'));
+    const { stdout } = await promisify(execFile)(process.execPath, [resolve(__dirname, '../../../packages/sdk/dist/examples/run-export.js')], {
+      env: { ...process.env, HEXACTRA_CONSOLE_URL: base, HEXACTRA_TOKEN: token },
+      cwd,
+      timeout: 60_000,
+    });
+    const out = JSON.parse(stdout.trim().split('\n').pop()!) as { runId: string; file: string; type: string; formatVersion: number; steps: number };
+    expect(out).toMatchObject({ type: 'hexactra.run-trace', formatVersion: 1 });
+    expect(out.file).toBe(`hexactra-run-${out.runId.slice(0, 8)}-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.json`);
+    const file = JSON.parse(readFileSync(join(cwd, out.file), 'utf8')) as { run: { id: string } };
+    expect(file.run.id).toBe(out.runId);
+    expect(stdout).not.toContain(token);
   });
 });
