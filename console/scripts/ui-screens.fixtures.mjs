@@ -13,6 +13,7 @@ export const IDS = {
   liveRun: '33333331-3333-4333-8333-333333333333',
   finishedRun: '33333334-3333-4333-8333-333333333333',
   chatRun: '33333335-3333-4333-8333-333333333333',
+  traceRun: '33333336-3333-4333-8333-333333333333',
   question: '55555555-5555-4555-8555-555555555555',
   policy: '66666666-6666-4666-8666-666666666666',
   group: '77777777-7777-4777-8777-777777777777',
@@ -89,6 +90,51 @@ const chatRun = run(IDS.chatRun, 'succeeded', {
   trigger: 'chat', taskId: null, stopReason: 'finished', result: 'Sent the payment and checked it shows as completed.', finishedAt: iso(-30_000), stepCount: 64,
   budget: { ...budget, used: { ...budget.used, actions: 64 }, percent: { ...budget.percent, actions: 106.7 }, enforcement: 'soft', over: ['actions'] },
 });
+/**
+ * A chat run's trace (#544): two questions with their answers, the owner's guidance, a confirmed
+ * step and five masked key-moment pictures (drawn by ui-screens.mjs from TRACE_FRAMES).
+ */
+const traceQ1 = '5555555a-5555-4555-8555-555555555555';
+const traceQ2 = '5555555b-5555-4555-8555-555555555555';
+const traceStep = (seq, kind, action, summary, extra = {}) => ({
+  ...step(seq, kind, action, summary), hasScreenshot: false, screenshotMoment: null, screenshotMasked: null, screenshotNote: null, questionId: null, question: null, ...extra,
+});
+const confirmQuestion = {
+  id: traceQ1, kind: 'confirmation', input: 'confirm', risk: 'high', status: 'answered', options: null,
+  prompt: 'Pay $42.00 to Example Utilities from the checking account ending 0659? The bill covers October and November; the payment is sent today and cannot be cancelled once it is processed.',
+  answer: { outcome: 'completed', value: 'approve', valueWithheld: false, channel: 'web', answeredAt: iso(-540_000 + 38_000) },
+};
+const signInQuestion = {
+  id: traceQ2, kind: 'login', input: 'credentials', risk: null, status: 'answered', options: null,
+  prompt: 'Sign in to bills.example.test to see the latest bill.',
+  answer: { outcome: 'completed', valueWithheld: true, channel: 'cli', answeredAt: iso(-585_000) },
+};
+const traceSteps = [
+  traceStep(1, 'action', 'navigate', 'Opened https://bills.example.test/account'),
+  traceStep(2, 'handoff', 'ask', 'Sign in to bills.example.test to see the latest bill.', { questionId: traceQ2, question: signInQuestion, hasScreenshot: true, screenshotMoment: 'question', screenshotMasked: 1 }),
+  traceStep(3, 'handoff', 'answered', 'The owner provided the sign-in', { questionId: traceQ2, question: signInQuestion }),
+  traceStep(4, 'observe', 'text', 'Read the bill'),
+  traceStep(5, 'guidance', null, 'The owner added: pay it from checking, not the card'),
+  traceStep(6, 'handoff', 'confirm', confirmQuestion.prompt.slice(0, 120), { questionId: traceQ1, question: confirmQuestion, hasScreenshot: true, screenshotMoment: 'before_confirmed', screenshotMasked: 2 }),
+  traceStep(7, 'handoff', 'answered', 'The owner allowed it', { questionId: traceQ1, question: confirmQuestion }),
+  traceStep(8, 'action', 'click', 'Clicked "Pay $42.00"', { hasScreenshot: true, screenshotMoment: 'after_confirmed', screenshotMasked: 2 }),
+  traceStep(9, 'action', 'click', 'The receipt link did not respond', { ok: false, hasScreenshot: true, screenshotMoment: 'failure', screenshotMasked: 0 }),
+  traceStep(10, 'end', null, 'The run ended', { hasScreenshot: true, screenshotMoment: 'final', screenshotMasked: 2 }),
+];
+const traceRun = run(IDS.traceRun, 'succeeded', {
+  trigger: 'chat', taskId: null, goal: 'Pay the electricity bill from the checking account', profile: 'default',
+  stopReason: 'finished', result: 'Paid $42.00 to Example Utilities; the confirmation number is on the final screen.', finishedAt: iso(-480_000),
+  stepCount: 7, steps: traceSteps, budget: null, costUsd: 0.38,
+  confirmedActions: [{ seq: 8, prompt: 'Pay $42.00 to Example Utilities from the checking account ending 0659?', action: 'click', at: iso(-530_000) }],
+});
+/** The placeholder pictures of the trace run, by step: a title, a header colour and the masked boxes. */
+export const TRACE_FRAMES = {
+  2: { title: 'bills.example.test: sign in', header: '#00695c', masks: [[400, 360, 480, 60]] },
+  6: { title: 'bills.example.test: pay $42.00?', header: '#3949ab', masks: [[120, 250, 300, 40], [700, 250, 300, 40]] },
+  8: { title: 'bills.example.test: payment sent', header: '#2e7d32', masks: [[120, 250, 300, 40], [120, 370, 240, 40]] },
+  9: { title: 'bills.example.test: receipt', header: '#c62828', masks: [] },
+  10: { title: 'bills.example.test: done', header: '#455a64', masks: [[120, 250, 300, 40], [120, 490, 260, 40]] },
+};
 const runs = [liveRun, run('33333332-3333-4333-8333-333333333333', 'waiting_human'), run('33333333-3333-4333-8333-333333333333', 'succeeded', { stopReason: 'finished', result: 'Held the 9:00 fare.' }), finishedRun]
   .map(({ steps: _steps, ...rest }) => rest);
 
@@ -346,6 +392,7 @@ export const RESPONSES = {
   [`GET /runs/${IDS.liveRun}/viewer`]: { hostId: IDS.host, hostName: 'mini-pc', desktop: true },
   [`GET /runs/${IDS.finishedRun}`]: finishedRun,
   [`GET /runs/${IDS.chatRun}`]: chatRun,
+  [`GET /runs/${IDS.traceRun}`]: traceRun,
   'GET /fleet/hosts': hosts,
   [`GET /fleet/hosts/${IDS.host}`]: hosts[0],
   [`GET /fleet/hosts/${IDS.host}/takeover`]: null,
@@ -369,4 +416,4 @@ export const RESPONSES = {
 };
 
 /** The ids a mock run puts in the parameterized routes. */
-export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app };
+export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app };

@@ -40,9 +40,13 @@
 //          redirected route fails the run)  --list (print the routes and exit)
 //
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
-// `{finishedRun}`, `{chatRun}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}` and `{app}` are filled
+// `{finishedRun}`, `{chatRun}`, `{traceRun}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}` and `{app}` are filled
 // in from the account (or the fixtures). The enabled slices' routes are read
 // from apps/web/src/slices/<id>.tsx, so a new slice page needs nothing here.
+// A route's options may carry `action: async (page) => …`, run once the page
+// has settled and before the check, to open what needs a press (a dialog, a
+// menu): the screenshot and the overflow check then include it. `viewport: true`
+// saves the window as it is seen (an open dialog) instead of the full page.
 //
 // Playwright is the one already on the machine (`require('playwright')`); this
 // script never installs a browser.
@@ -73,6 +77,11 @@ export const ROUTES = [
   ['run-finished', '/runs/{finishedRun}'],
   // A chat run that went over its (soft) usual limit and finished (#537).
   ['run-chat-over-limit', '/runs/{chatRun}'],
+  // A run's trace (#544): questions with their answers, guidance, a confirmed step and five pictures;
+  // then its lightbox and its Export menu (on a phone, in the sticky bar).
+  ['run-trace', '/runs/{traceRun}', { action: loadPictures }],
+  ['run-trace-lightbox', '/runs/{traceRun}', { action: openLightbox, viewport: true }],
+  ['run-trace-export', '/runs/{traceRun}', { action: openExportMenu, viewport: true }],
   ['fleet', '/fleet'],
   ['desktop', '/fleet/hosts/{host}/desktop'],
   ['notes', '/notes'],
@@ -92,7 +101,13 @@ export const ROUTES = [
   ['settings-ai-apps-connect', '/settings/ai-apps/connect'],
   // Saved approvals (#554): the page, and its "Add a limit" dialog.
   ['settings-approvals', '/settings/approvals'],
-  ['settings-approvals-limit', '/settings/approvals', { clicks: [{ role: 'button', name: /^More for Press 'Pay'/ }, { role: 'menuitem', name: 'Add a limit' }] }],
+  ['settings-approvals-limit', '/settings/approvals', {
+    action: async (page) => {
+      await page.getByRole('button', { name: /^More for Press 'Pay'/ }).first().click({ timeout: 5_000 });
+      await page.getByRole('menuitem', { name: 'Add a limit' }).click({ timeout: 5_000 });
+      await page.waitForTimeout(400);
+    },
+  }],
   ['settings-danger-zone', '/settings/danger-zone'],
   // Administration (the admin hub and its pages).
   ['admin', '/admin/settings'],
@@ -118,6 +133,32 @@ export const ROUTES = [
   ['oauth-error', '/oauth/error?code=client_not_allowed&host=client.example.test', { signedOut: true }],
   ['login', '/login', { signedOut: true }],
 ];
+
+/** `run-trace`: scroll through the page so every lazy picture loads, then back to the top. */
+async function loadPictures(page) {
+  await page.evaluate(async () => {
+    for (let y = 0; y < document.documentElement.scrollHeight; y += window.innerHeight / 2) {
+      window.scrollTo(0, y);
+      await new Promise((r) => setTimeout(r, 120));
+    }
+    window.scrollTo(0, 0);
+  });
+  await page.waitForTimeout(500);
+}
+
+/** `run-trace-lightbox`: press the first picture of the run and wait for its dialog. */
+async function openLightbox(page) {
+  await page.getByRole('button', { name: /^Open the picture/ }).first().click();
+  await page.getByRole('dialog').waitFor({ timeout: 10_000 });
+  await page.waitForTimeout(400);
+}
+
+/** `run-trace-export`: open the Export menu (the header's from md up, the sticky bar's below). */
+async function openExportMenu(page) {
+  await page.getByRole('button', { name: 'Export', exact: true }).first().click();
+  await page.getByRole('menu').waitFor({ timeout: 10_000 });
+  await page.waitForTimeout(300);
+}
 
 const DEFAULT_WIDTHS = [360, 390, 768, 1024, 1440];
 const DEFAULT_SCHEMES = ['light', 'dark'];
@@ -188,6 +229,8 @@ async function discoverIds(page) {
       liveRun: runs.find((r) => live.has(r.status))?.id,
       finishedRun: runs.find((r) => !live.has(r.status))?.id,
       chatRun: (runs.find((r) => r.trigger === 'chat' && r.budget?.over?.length) ?? runs.find((r) => r.trigger === 'chat'))?.id,
+      // The trace routes open the first finished run; whether it has pictures depends on the account.
+      traceRun: runs.find((r) => !live.has(r.status))?.id,
       task: tasks[0]?.id,
       host: (hosts.find((h) => h.desktop && h.online) ?? hosts[0])?.id,
       question: inbox[0]?.questionId,
@@ -239,24 +282,31 @@ async function main() {
   const fixtures = args.mock ? await import('./ui-screens.fixtures.mjs') : null;
   const unmocked = new Set();
   let frame = null;
+  /** The trace's pictures (#544), one per step, each a different placeholder page with masked boxes. */
+  const traceFrames = new Map();
   if (fixtures) {
-    // A 1280 x 720 frame for the live run's screenshot, drawn by the browser (no binary in the repository).
+    // 1280 x 800 placeholder frames drawn by the browser (no binary in the repository).
     const page = await browser.newPage();
-    const dataUrl = await page.evaluate(() => {
-      const canvas = Object.assign(document.createElement('canvas'), { width: 1280, height: 720 });
-      const g = canvas.getContext('2d');
-      g.fillStyle = '#e8eaf6';
-      g.fillRect(0, 0, 1280, 720);
-      g.fillStyle = '#3949ab';
-      g.fillRect(0, 0, 1280, 64);
-      g.fillStyle = '#9fa8da';
-      for (let i = 0; i < 5; i++) g.fillRect(80, 120 + i * 110, 1120, 80);
-      g.fillStyle = '#1a237e';
-      g.font = '28px sans-serif';
-      g.fillText('flights.example.test: a placeholder page', 24, 42);
-      return canvas.toDataURL('image/png');
-    });
-    frame = Buffer.from(dataUrl.split(',')[1], 'base64');
+    const draw = (spec) =>
+      page.evaluate(({ title, header, masks }) => {
+        const canvas = Object.assign(document.createElement('canvas'), { width: 1280, height: 800 });
+        const g = canvas.getContext('2d');
+        g.fillStyle = '#e8eaf6';
+        g.fillRect(0, 0, 1280, 800);
+        g.fillStyle = header;
+        g.fillRect(0, 0, 1280, 64);
+        g.fillStyle = '#9fa8da';
+        for (let i = 0; i < 5; i++) g.fillRect(80, 120 + i * 120, 1120, 84);
+        g.fillStyle = '#212121';
+        for (const [x, y, w, h] of masks) g.fillRect(x, y, w, h);
+        g.fillStyle = '#ffffff';
+        g.font = '28px sans-serif';
+        g.fillText(title, 24, 42);
+        return canvas.toDataURL('image/png');
+      }, spec);
+    const png = (dataUrl) => Buffer.from(dataUrl.split(',')[1], 'base64');
+    frame = png(await draw({ title: 'flights.example.test: a placeholder page', header: '#3949ab', masks: [] }));
+    for (const [seq, spec] of Object.entries(fixtures.TRACE_FRAMES ?? {})) traceFrames.set(Number(seq), png(await draw(spec)));
     await page.close();
   }
 
@@ -266,6 +316,8 @@ async function main() {
     const path = url.pathname.replace(/^\/api/, '');
     const key = `${request.method()} ${path}`;
     if (/^GET \/runs\/[^/]+\/screenshot$/.test(key)) return route.fulfill({ contentType: 'image/png', body: frame });
+    const traceShot = /^GET \/runs\/[^/]+\/steps\/(\d+)\/screenshot$/.exec(key);
+    if (traceShot) return route.fulfill({ contentType: 'image/png', body: traceFrames.get(Number(traceShot[1])) ?? frame });
     if (/\/stream$/.test(path) || request.headers().accept?.includes('text/event-stream')) return route.abort();
     if (key in fixtures.RESPONSES) {
       // A function answers by the request (its query, its JSON body): a list that is an array or a page, a preview of what was sent.
@@ -340,13 +392,9 @@ async function main() {
             note(name, width, 'redirected');
             continue;
           }
-          // `clicks`: open a menu, then a dialog, by role and accessible name, before the picture.
-          for (const step of options.clicks ?? []) {
-            await page.getByRole(step.role, { name: step.name }).first().click({ timeout: 5_000 });
-            await page.waitForTimeout(400);
-          }
+          if (options.action) await options.action(page, width);
           const size = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth }));
-          await page.screenshot({ path: join(args.out, `${name}-${width}-${scheme}.png`), fullPage: true });
+          await page.screenshot({ path: join(args.out, `${name}-${width}-${scheme}.png`), fullPage: !options.viewport });
           checked++;
           if (size.scroll > size.inner) {
             note(name, width, 'overflow');
