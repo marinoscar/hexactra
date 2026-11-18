@@ -44,6 +44,19 @@ export const chatListItemResponseSchema = chatResponseSchema.extend({
   liveRun,
 });
 
+/** `POST /chats/:id/task-draft`: a task drafted from the chat, in the shape `POST /tasks` takes. */
+export const chatTaskDraftResponseSchema = z.object({
+  name: z.string().describe('A short name the AI wrote, or the chat\'s title'),
+  goal: z.string().describe("A standalone instruction written from the conversation; the chat's newest run goal when no model answered. Never a secret."),
+  profile: z.string(),
+  hostId: z.uuid().nullable(),
+  hostFallback: z.boolean(),
+  policyId: z.string().nullable(),
+  allowedDomains: z.array(z.string()),
+  confirmRiskyActions: z.boolean(),
+});
+export class ChatTaskDraftResponseDto extends createZodDto(chatTaskDraftResponseSchema) {}
+
 /** `GET /chats`: one page of chats. */
 export const chatPageResponseSchema = z.object({
   items: z.array(chatListItemResponseSchema),

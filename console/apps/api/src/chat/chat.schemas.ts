@@ -65,6 +65,12 @@ export const postMessageSchema = z.object({
   text: z.string().trim().min(1).max(CHAT_MESSAGE_MAX).describe('What the owner wrote. Never a password or a code: the agent asks for those through a request.'),
 });
 
+/** `POST /chats/:id/task-link`: the task that was saved from the chat. */
+export const linkTaskSchema = z.object({
+  taskId: z.uuid().describe('A task of the caller, saved from this chat.'),
+});
+
+export class LinkTaskDto extends createZodDto(linkTaskSchema) {}
 export class ListChatsDto extends createZodDto(listChatsSchema) {}
 export class CreateChatDto extends createZodDto(createChatSchema) {}
 export class UpdateChatDto extends createZodDto(updateChatSchema) {}

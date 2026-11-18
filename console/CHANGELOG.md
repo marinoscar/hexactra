@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chat: save a chat as a task** (#489, console 1.46.0). Details: README, "Chat".
+  - **Save as task** on the result card of a run that succeeded, and by asking in words ("save this as a task"), which puts a draft card in the thread with **Review and save**. Both need `tasks:write`.
+  - **The draft**: the assistant writes a short name and a standalone goal from the whole conversation; the machine, profile, agent policy, allowed sites and purchase confirmation come from the chat. `POST /chats/:id/task-draft` returns it and saves nothing. With no model, or an answer that is not a draft, it is the goal of the chat's newest run.
+  - **Review before saving**: the task form opens prefilled (the draft travels in the page's state, not in the URL). After the save the thread gets a line that links to the task (`POST /chats/:id/task-link`).
+  - **Secrets**: the draft is written from chat messages only, never from a request's answer.
+  - The orchestrator gains the tool `draft_task`.
 - **Chat: the agent's requests are answered in the thread** (#488, console 1.45.0). Details: README, "Chat".
   - **Request cards**: an approval (the page it is about, Review, Deny / Allow, twice for a high-risk one), a code or a password (masked field, or do the step in the browser), a choice, a takeover, each with the time left. They use the Inbox's answer form and the `web` channel, so the same rules apply.
   - **After an answer** the card is one line: "Allowed", "Denied", "Provided", "Sent", "Declined". A request that ends elsewhere says so in its place. A secret is never kept by the page or shown again.

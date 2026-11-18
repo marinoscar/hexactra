@@ -246,7 +246,8 @@ const chatMessages = [
   chatMessage(1, 'user', 'text', 'Order the usual groceries for Saturday morning.'),
   chatMessage(2, 'assistant', 'run', 'Order the usual weekly groceries for delivery on Saturday morning.', { runId: IDS.finishedRun }),
   chatMessage(3, 'assistant', 'result', 'Ordered 14 items for delivery on Saturday between 9 and 11 AM. Total: $86.40.', { runId: IDS.finishedRun, meta: { status: 'succeeded', stopReason: 'finished', costUsd: 0.21, costKnown: true, stepCount: 14 } }),
-  chatMessage(4, 'system', 'text', 'The AI could not answer (rate_limited). Send your message again in a moment.'),
+  // Saved from the chat (#489): the line links to the task.
+  chatMessage(4, 'system', 'text', 'Saved as the task "Weekly groceries".', { meta: { taskId: IDS.task } }),
   chatMessage(5, 'user', 'text', 'Book two cinema tickets for the new space film tonight.'),
   chatMessage(6, 'assistant', 'clarify', 'Which showing would you like?', { meta: { options: ['4:30 PM', '7:30 PM', 'The latest one'] } }),
   chatMessage(7, 'user', 'text', '7:30 PM, somewhere in the middle of the room please. If the middle rows are full, the row right behind them is fine too.'),

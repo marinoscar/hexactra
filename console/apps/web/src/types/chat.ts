@@ -77,5 +77,23 @@ export interface ChatRun {
   finishedAt: string | null;
 }
 
+/** A task drafted from a chat (`POST /chats/:id/task-draft`, and the `meta` of a `task_draft` message). */
+export interface ChatTaskDraft {
+  name: string;
+  goal: string;
+  profile: string;
+  hostId: string | null;
+  hostFallback: boolean;
+  policyId: string | null;
+  allowedDomains: string[];
+  confirmRiskyActions: boolean;
+}
+
+/** What the chat hands to `/tasks/new` in the router's state: the draft to review, and the chat to tell once it is saved. */
+export interface ChatDraftState {
+  chatDraft: ChatTaskDraft;
+  chatId: string;
+}
+
 /** What a chat's run settings dialog edits. */
 export type ChatSettings = Pick<Chat, 'profile' | 'hostId' | 'hostFallback' | 'policyId' | 'allowedDomains' | 'confirmRiskyActions'>;

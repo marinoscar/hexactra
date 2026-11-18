@@ -65,6 +65,8 @@ export interface TaskFormProps {
   savedSchedules?: readonly (ScheduleSummaryData & { id: string })[];
   /** Where Cancel goes. */
   cancelTo: string;
+  /** Called once a new task was created, before the form leaves (a chat is told its draft was saved). Its failure never fails the save. */
+  onCreated?: (taskId: string) => void | Promise<void>;
 }
 
 /** Where the form goes after a save (the task's page, #428). */
@@ -143,7 +145,7 @@ function DraftSummary({ draft, saved, catalog, profileTimezone }: { draft: Sched
  * `maxSteps`, `maxMinutes` or `model`; `policyId` goes only when the viewer
  * may read agent policies. Needs a `ConfirmProvider` and a router above it.
  */
-export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo }: TaskFormProps) {
+export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCreated }: TaskFormProps) {
   const { api, viewer } = usePlatformHost();
   const navigate = useNavigate();
   const confirm = useConfirm();
@@ -260,6 +262,8 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo }: Ta
       } catch (e) {
         return fail(e, 'Could not create the task', sent);
       }
+      // The task exists: whoever asked to hear about it is told, and cannot undo the save by failing.
+      await Promise.resolve(onCreated?.(id)).catch(() => undefined);
     } else {
       const { schedules: initialSchedules, ...initialFields } = form.initial;
       const patch = patchBody(fields, initialFields, { sendPolicy });

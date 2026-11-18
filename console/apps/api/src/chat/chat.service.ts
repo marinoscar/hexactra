@@ -226,6 +226,16 @@ export class ChatService {
     return this.append(c.id, { role: 'user', kind: 'text', text }, { title: c.title === '' ? titleFromMessage(text) : undefined });
   }
 
+  /** A task was saved from the chat: say so in the thread, once per task, with the task's id for the link. */
+  async linkTask(userId: string, id: string, taskId: string): Promise<ChatMessageView> {
+    const c = await this.owned(userId, id);
+    const task = await this.db(userId).task.findFirst({ where: { id: taskId }, select: { id: true, name: true } });
+    if (!task) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
+    const there = await this.prisma.chatMessage.findFirst({ where: { conversationId: c.id, role: 'system', meta: { path: ['taskId'], equals: task.id } } });
+    if (there) return messageView(there);
+    return this.append(c.id, { role: 'system', kind: 'text', text: `Saved as the task "${task.name}".`, meta: { taskId: task.id } });
+  }
+
   /**
    * Append a message with the conversation's next `seq`. The counter is bumped
    * by the same UPDATE that reserves the number, under the row's lock, so

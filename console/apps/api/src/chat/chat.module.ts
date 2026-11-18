@@ -4,6 +4,7 @@ import { AiModule } from '../platform/ai/ai.config';
 import { PoliciesModule } from '../policies/policies.module';
 import { TasksModule } from '../tasks/tasks.module';
 import { ChatOwnerGuard, ChatStreamController, ChatStreamService } from './chat-stream.controller';
+import { ChatTaskDraftService } from './chat-task-draft.service';
 import { ChatResults } from './chat-results.service';
 import { ChatTurnHandler, ChatTurnQueue } from './chat-turn.job';
 import { ChatTurnService } from './chat-turn.service';
@@ -19,7 +20,7 @@ import { ChatService } from './chat.service';
   imports: [AiModule, TasksModule, PoliciesModule],
   // ChatStreamController first: its fixed `:id/stream` path is declared before the `:id` routes.
   controllers: [ChatStreamController, ChatController],
-  providers: [ChatOwnerGuard, ChatStreamService, ChatService, ChatResults, ChatTurnService, ChatTurnQueue, ChatTurnHandler],
-  exports: [ChatService, ChatTurnService, ChatResults],
+  providers: [ChatOwnerGuard, ChatStreamService, ChatTaskDraftService, ChatService, ChatResults, ChatTurnService, ChatTurnQueue, ChatTurnHandler],
+  exports: [ChatService, ChatTurnService, ChatResults, ChatTaskDraftService],
 })
 export class ChatModule {}
