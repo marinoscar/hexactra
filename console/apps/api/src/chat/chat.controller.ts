@@ -6,6 +6,7 @@ import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { ChatDetailResponseDto, ChatMessageResponseDto, ChatPageResponseDto, ChatResponseDto } from '../openapi/chat.responses';
 import { CreateChatDto, GetChatDto, ListChatsDto, PostMessageDto, UpdateChatDto } from './chat.schemas';
 import { ChatService } from './chat.service';
+import { ChatTurnQueue } from './chat-turn.job';
 
 interface Principal {
   id: string;
@@ -20,7 +21,10 @@ interface Principal {
 @ApiTags('Chats')
 @Controller('chats')
 export class ChatController {
-  constructor(private readonly chats: ChatService) {}
+  constructor(
+    private readonly chats: ChatService,
+    private readonly turns: ChatTurnQueue,
+  ) {}
 
   /** One page of chats, most recently active first: `{ items, nextCursor }`. Rows carry a preview, never the messages. */
   @Get()
@@ -61,11 +65,13 @@ export class ChatController {
     await this.chats.remove(user.id, id, { orgId: user.activeOrgId ?? null });
   }
 
-  /** Send a message. 409 `CHAT_ARCHIVED` on an archived chat. */
+  /** Send a message. The AI's answer arrives as later messages (a `chat.turn` job). 409 `CHAT_ARCHIVED` on an archived chat. */
   @Post(':id/messages')
   @ApiDataResponse(ChatMessageResponseDto)
   @Auth({ permissions: ['chat:write'] })
-  post(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Body() body: PostMessageDto) {
-    return this.chats.postUserMessage(userId, id, body.text);
+  async post(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string, @Body() body: PostMessageDto) {
+    const message = await this.chats.postUserMessage(user.id, id, body.text);
+    await this.turns.request(id, user.id, user.activeOrgId ?? null);
+    return message;
   }
 }

@@ -6,6 +6,7 @@ import { assertTransition, isTerminal, type RunStatus } from './run-status';
 import type { CreateTaskDto, UpdateTaskDto } from './tasks.schemas';
 import { FabricClient } from '../fabric/fabric.client';
 import { activeElapsedMs } from '../runner/active-time';
+import { RunEndHooks } from './run-end-hooks';
 import { RunEvents } from './run-events';
 import { RunMetrics } from './run-metrics';
 import { PoliciesService } from '../policies/policies.service';
@@ -45,6 +46,7 @@ export class TasksService {
     @Optional() private readonly policies?: PoliciesService,
     @Optional() private readonly taskSchedules?: TaskSchedulesService,
     @Optional() readonly events?: RunEvents,
+    @Optional() readonly endHooks?: RunEndHooks,
   ) {}
 
   /** Tell waiters (MCP `run_wait`) that a run recorded a step; after the write. Never fails. */
@@ -203,6 +205,8 @@ export class TasksService {
         if (isTerminal(to)) {
           this.metrics.finished(to, run.trigger, (now.getTime() - (run.startedAt ?? run.createdAt).getTime()) / 1000);
           if (saved.modelCalls > 0 && saved.costKnown) this.metrics.cost(to, Number(saved.costUsd));
+          // After the write: whoever follows the run's end (a chat writes the result into its thread).
+          await this.endHooks?.fire(userId, id);
         }
         return withCost(saved);
       }

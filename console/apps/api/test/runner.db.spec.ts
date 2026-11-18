@@ -106,6 +106,32 @@ function scriptedAi(scripts: Call[][], served: { provider: string; model: string
 }
 
 describe('the goal runner', () => {
+  it("runs a chat's run under the chat's opt-ins: its allowed sites, and confirmation before a purchase", async () => {
+    const userId = await login(`runner-chat-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const chat = await db.conversation.create({ data: { userId, title: 'Order', allowedDomains: ['shop.example.test'] } });
+    const run = await db.run.create({ data: { userId, conversationId: chat.id, trigger: 'chat', goal: 'Buy the item' } });
+
+    const fabric = fakeFabric();
+    const { ai, outputs } = scriptedAi([
+      [
+        ['navigate', { url: 'https://shop.example.test/item', reason: 'open the shop' }],
+        ['navigate', { url: 'https://elsewhere.example.test/', reason: 'detour' }],
+        ['observe_elements', {}],
+        ['click', { selector: '#buy', reason: 'buy it' }],
+        ['request_human', { kind: 'confirmation', prompt: 'Place the order for 1 item?', input: 'none', choices: null }],
+      ],
+    ]);
+    const notifier = { needsYou: async () => undefined, finished: async () => undefined };
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai, notifier as never);
+
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    expect(outputs[1]).toMatch(/not allowed for this task/);
+    // `confirmRiskyActions` is on by default in a chat.
+    expect(outputs[3]).toMatch(/Refused: this looks like a purchase/);
+  });
+
   it('enforces policy, pauses for a confirmation and a secret, types the secret without storing it, and finishes', async () => {
     const userId = await login(`runner-${stamp}@example.test`);
     const prisma = app.get(PrismaService);

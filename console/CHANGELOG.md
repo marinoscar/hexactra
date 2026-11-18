@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chats: the turn engine** (#484, console 1.39.0): a message posted to a chat now gets an answer. Still no page; the chat page follows in #486.
+  - **What a turn does**: a `chat.turn` job reads the thread and does one thing: replies in plain text, asks one clarifying question (a `clarify` message, with up to four suggested answers in `meta.options`), or starts a browser run for the job (a `run` message). A run it starts is an ordinary run with the trigger `chat`, on the chat's profile, machine and agent policy.
+  - **AI feature `chat_orchestrator`** ("Chat: understand the request and start browser runs"), next to `browser_agent` under Administration → AI. It does not drive a browser, so a small, fast model is enough. With no model set up, the thread says so.
+  - **The result in the thread**: when a chat's run ends, a `result` message says how (the result, the error, or that it was stopped), with `meta { status, stopReason, costUsd, costKnown, stepCount }`. It is written once.
+  - **One run per chat at a time**: a second run is refused while one is live. "Stop" in the chat cancels the live run.
+  - **Opt-ins on a chat**, as on a task: `allowedDomains` (empty: any site) and `confirmRiskyActions` (on by default in a chat), set with `POST /chats` and `PATCH /chats/:id`. The goal runner applies them to the chat's runs.
+  - **`GET /chats/:id`** adds `thinking`: true while the AI is working on its reply.
+  - **Secrets**: the model is shown chat messages only, never a question's answer, and has no tool that takes a secret. A failure is worded for the owner without the provider's message.
 - **Chats: the data model and API** (#483, console 1.38.0): the first part of the console chat (epic #482). No page yet; the chat page follows in #486.
   - **Model**: `conversations` (title, status `active` or `archived`, and the run settings a task has: profile, machine, fallback, agent policy) and `chat_messages` (`seq` per chat; role `user`, `assistant` or `system`; kind `text`, `clarify`, `run`, `result` or `task_draft`). A message never holds a secret.
   - **Routes** under `/api/chats`: `GET /chats` (one page, most recently active first, `status=active|archived`, each row with a one-line preview and the live run, never the messages), `POST /chats`, `GET /chats/:id` (messages oldest first; `afterSeq` returns only newer ones), `PATCH /chats/:id` (rename, archive or unarchive, run settings), `DELETE /chats/:id` (the chat, its messages and its finished runs; `409 CHAT_RUN_LIVE` while a run of it is live) and `POST /chats/:id/messages` (`409 CHAT_ARCHIVED` on an archived chat). An untitled chat takes its title from its first message.

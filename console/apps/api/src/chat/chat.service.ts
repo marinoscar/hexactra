@@ -17,6 +17,8 @@ export interface ChatView {
   hostId: string | null;
   hostFallback: boolean;
   policyId: string | null;
+  allowedDomains: string[];
+  confirmRiskyActions: boolean;
   lastMessageAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -50,6 +52,8 @@ export interface ChatDetail extends ChatView {
   /** True when the thread has more messages after the last one returned. */
   hasMore: boolean;
   liveRun: ChatLiveRun | null;
+  /** True while a turn is working on its reply (the conversation's lease is held). */
+  thinking: boolean;
 }
 
 /** A message to append: what the turn engine (#484) and the routes write. */
@@ -73,7 +77,7 @@ export function titleFromMessage(text: string): string {
 }
 
 function view(c: Conversation): ChatView {
-  return { id: c.id, title: c.title, status: c.status, profile: c.profile, hostId: c.hostId, hostFallback: c.hostFallback, policyId: c.policyRef, lastMessageAt: c.lastMessageAt, createdAt: c.createdAt, updatedAt: c.updatedAt };
+  return { id: c.id, title: c.title, status: c.status, profile: c.profile, hostId: c.hostId, hostFallback: c.hostFallback, policyId: c.policyRef, allowedDomains: c.allowedDomains, confirmRiskyActions: c.confirmRiskyActions, lastMessageAt: c.lastMessageAt, createdAt: c.createdAt, updatedAt: c.updatedAt };
 }
 function messageView(m: ChatMessage): ChatMessageView {
   return { id: m.id, seq: m.seq, role: m.role, kind: m.kind, text: m.text, runId: m.runId, meta: m.meta, createdAt: m.createdAt };
@@ -170,6 +174,8 @@ export class ChatService {
         ...(input.hostId !== undefined ? { hostId: input.hostId } : {}),
         ...(input.hostFallback !== undefined ? { hostFallback: input.hostFallback } : {}),
         ...(input.policyId !== undefined ? { policyRef: input.policyId } : {}),
+        ...(input.allowedDomains !== undefined ? { allowedDomains: input.allowedDomains } : {}),
+        ...(input.confirmRiskyActions !== undefined ? { confirmRiskyActions: input.confirmRiskyActions } : {}),
       },
     });
     return view(c);
@@ -182,7 +188,7 @@ export class ChatService {
       this.prisma.chatMessage.findMany({ where: { conversationId: c.id, seq: { gt: afterSeq } }, orderBy: { seq: 'asc' }, take: CHAT_MESSAGES_MAX + 1 }),
       this.liveRuns(userId, [c.id]),
     ]);
-    return { ...view(c), messages: rows.slice(0, CHAT_MESSAGES_MAX).map(messageView), hasMore: rows.length > CHAT_MESSAGES_MAX, liveRun: live.get(c.id) ?? null };
+    return { ...view(c), messages: rows.slice(0, CHAT_MESSAGES_MAX).map(messageView), hasMore: rows.length > CHAT_MESSAGES_MAX, liveRun: live.get(c.id) ?? null, thinking: c.turnLeaseUntil !== null && c.turnLeaseUntil > new Date() };
   }
 
   async update(userId: string, id: string, patch: UpdateChatDto): Promise<ChatView> {
@@ -225,10 +231,23 @@ export class ChatService {
    * by the same UPDATE that reserves the number, under the row's lock, so
    * concurrent appends never share a `seq`. The caller has already established
    * that the conversation is the user's.
+   *
+   * `onceForRun`: write the message only if the conversation has none of its
+   * kind for its run yet (a run's result is written once, whoever notices the
+   * run ended). Checked under the same row lock; answers null when it exists.
    */
-  async append(conversationId: string, message: NewChatMessage, opts: { title?: string } = {}): Promise<ChatMessageView> {
+  async append(conversationId: string, message: NewChatMessage, opts?: { title?: string }): Promise<ChatMessageView>;
+  async append(conversationId: string, message: NewChatMessage, opts: { title?: string; onceForRun: true }): Promise<ChatMessageView | null>;
+  async append(conversationId: string, message: NewChatMessage, opts: { title?: string; onceForRun?: boolean } = {}): Promise<ChatMessageView | null> {
     const row = await this.prisma.$transaction(async (tx) => {
       const now = new Date();
+      if (opts.onceForRun && message.runId) {
+        // Take the conversation's row lock first, so two writers of the same result queue up here.
+        // (A no-op UPDATE: it locks the row like SELECT ... FOR UPDATE, without raw SQL.)
+        await tx.conversation.update({ where: { id: conversationId }, data: { nextSeq: { increment: 0 } }, select: { id: true } });
+        const there = await tx.chatMessage.count({ where: { conversationId, runId: message.runId, kind: message.kind ?? 'text' } });
+        if (there > 0) return null;
+      }
       const c = await tx.conversation.update({
         where: { id: conversationId },
         data: { nextSeq: { increment: 1 }, lastMessageAt: now, ...(opts.title ? { title: opts.title } : {}) },
@@ -247,6 +266,6 @@ export class ChatService {
         },
       });
     });
-    return messageView(row);
+    return row ? messageView(row) : null;
   }
 }

@@ -334,7 +334,7 @@ export class GoalRunnerService {
   async advance(runId: string, userId: string, orgId: string | null): Promise<RunOutcome> {
     const jobStartedAt = this.clock();
     const db = this.prisma.forUser({ userId });
-    const run = await db.run.findFirst({ where: { id: runId }, include: { task: true } });
+    const run = await db.run.findFirst({ where: { id: runId }, include: { task: true, conversation: { select: { allowedDomains: true, confirmRiskyActions: true } } } });
     if (!run) return 'failed';
     if (run.status === 'succeeded' || run.status === 'failed' || run.status === 'cancelled') return run.status;
     const session = new FabricSession(this.fabric);
@@ -448,8 +448,9 @@ export class GoalRunnerService {
     const ctx = snapshot.spec.context;
     const shotWindow = new ScreenshotWindow(ctx.screenshotsKept, ctx.pruneBatch);
     const policy = {
-      allowedDomains: run.task?.allowedDomains ?? [],
-      confirmRisky: run.task?.confirmRiskyActions ?? false,
+      // The opt-ins of the run's task, or of the chat that started it (#484); an ad-hoc run has none.
+      allowedDomains: run.task?.allowedDomains ?? run.conversation?.allowedDomains ?? [],
+      confirmRisky: run.task?.confirmRiskyActions ?? run.conversation?.confirmRiskyActions ?? false,
     };
     // Routing steps (#405) take a `seq` but are not actions: the sequence runs ahead of `stepCount` by their number.
     const lastSeq = await this.prisma.runStep.aggregate({ where: { runId: run.id }, _max: { seq: true } });

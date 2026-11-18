@@ -13,10 +13,15 @@ let prisma: PrismaService;
 let chats: ChatService;
 const stamp = `${Date.now()}`;
 
+// No job worker in this app: a posted message queues a `chat.turn` job (#484) that this suite does not run.
+const workerMode = process.env.JOBS_WORKER_MODE;
 beforeAll(async () => {
+  process.env.JOBS_WORKER_MODE = 'off';
   app = await createApp();
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
+  if (workerMode === undefined) delete process.env.JOBS_WORKER_MODE;
+  else process.env.JOBS_WORKER_MODE = workerMode;
   prisma = app.get(PrismaService);
   chats = app.get(ChatService, { strict: false });
   // No object storage in this test: a deleted run has no screenshots to remove.
@@ -89,13 +94,15 @@ describe('POST /chats and GET /chats/:id', () => {
     const alice = await login('create');
     const made = await call<Chat>(alice, 'POST', '/chats', {});
     expect(made.statusCode).toBe(201);
-    expect(made.data).toMatchObject({ title: '', status: 'active', profile: 'default', hostId: null, hostFallback: true, policyId: null });
+    expect(made.data).toMatchObject({ title: '', status: 'active', profile: 'default', hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: true });
+    expect(made.data).not.toHaveProperty('answeredSeq');
+    expect(made.data).not.toHaveProperty('turnLeaseUntil');
     expect(made.data).not.toHaveProperty('userId');
     expect(made.data).not.toHaveProperty('nextSeq');
 
     const read = await call<Detail>(alice, 'GET', `/chats/${made.data.id}`);
     expect(read.statusCode).toBe(200);
-    expect(read.data).toMatchObject({ id: made.data.id, messages: [], hasMore: false, liveRun: null });
+    expect(read.data).toMatchObject({ id: made.data.id, messages: [], hasMore: false, liveRun: null, thinking: false });
   });
 
   it('keeps the run settings it is given and refuses a policy that is not the caller\'s', async () => {
@@ -223,6 +230,9 @@ describe('PATCH /chats/:id', () => {
     expect(renamed.statusCode).toBe(200);
     expect(renamed.data).toMatchObject({ title: 'Weekly shop', profile: 'home', policyId: 'builtin:economy' });
     expect((await call<Chat>(alice, 'PATCH', `/chats/${chat.id}`, { policyId: null })).data.policyId).toBeNull();
+    const limited = await call<Chat & { allowedDomains: string[]; confirmRiskyActions: boolean }>(alice, 'PATCH', `/chats/${chat.id}`, { allowedDomains: ['Shop.Example.test', '*.example.test'], confirmRiskyActions: false });
+    expect(limited.data).toMatchObject({ allowedDomains: ['shop.example.test', '*.example.test'], confirmRiskyActions: false });
+    expect((await call(alice, 'PATCH', `/chats/${chat.id}`, { allowedDomains: ['not a host'] })).statusCode).toBe(400);
 
     expect((await call<Chat>(alice, 'PATCH', `/chats/${chat.id}`, { status: 'archived' })).data.status).toBe('archived');
     const refused = await say(alice, chat.id, 'Still there?');
