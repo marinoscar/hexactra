@@ -12,7 +12,7 @@
       "openWorldHint": true
     },
     "inputSchema": "598c2026b404ec09",
-    "outputSchema": "fe774b3db4967336"
+    "outputSchema": "16980ac51e22a4ab"
   },
   {
     "name": "run_status",
@@ -27,7 +27,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ccc45f61684b506f",
-    "outputSchema": "868220c4a7214653"
+    "outputSchema": "e8f4bb63c5c683a6"
   },
   {
     "name": "run_wait",
@@ -42,7 +42,7 @@
       "openWorldHint": false
     },
     "inputSchema": "a15cb892c5955d1e",
-    "outputSchema": "5b7c97be9f8e4916"
+    "outputSchema": "f8866183d5b82f93"
   },
   {
     "name": "runs_list",
@@ -72,7 +72,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "fe774b3db4967336"
+    "outputSchema": "16980ac51e22a4ab"
   },
   {
     "name": "tasks_list",
@@ -86,8 +86,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchema": "b5ceb7c3c697ea95",
-    "outputSchema": "2d7279e0295e958e"
+    "inputSchema": "59f41b1e4f9a07f3",
+    "outputSchema": "3c98963655410835"
   },
   {
     "name": "task_create",
@@ -132,7 +132,7 @@
       "openWorldHint": true
     },
     "inputSchema": "9d76478a6c60541f",
-    "outputSchema": "fe774b3db4967336"
+    "outputSchema": "16980ac51e22a4ab"
   },
   {
     "name": "schedule_create",
@@ -222,7 +222,7 @@
       "openWorldHint": false
     },
     "inputSchema": "b5ceb7c3c697ea95",
-    "outputSchema": "f75f8248fc5af90d"
+    "outputSchema": "efc2845e6ddeea04"
   },
   {
     "name": "inbox_answer",
@@ -237,7 +237,7 @@
       "openWorldHint": false
     },
     "inputSchema": "49e3d69fa3fe7bb7",
-    "outputSchema": "7a944fcc6d061af7"
+    "outputSchema": "ae9ed5c9bdf639e1"
   },
   {
     "name": "ask_human",
@@ -252,7 +252,7 @@
       "openWorldHint": false
     },
     "inputSchema": "27344c871a1ccbec",
-    "outputSchema": "ad618e2e850b79eb"
+    "outputSchema": "73220c09353c8e52"
   },
   {
     "name": "question_status",
@@ -267,7 +267,7 @@
       "openWorldHint": false
     },
     "inputSchema": "34cc820d1a592623",
-    "outputSchema": "ad618e2e850b79eb"
+    "outputSchema": "73220c09353c8e52"
   },
   {
     "name": "policies_list",
@@ -837,6 +837,21 @@
       "openWorldHint": false
     },
     "inputSchema": "5b0d5bd2f2456d07",
-    "outputSchema": "fe774b3db4967336"
+    "outputSchema": "16980ac51e22a4ab"
+  },
+  {
+    "name": "question_card_answer",
+    "title": "Answer from the question card",
+    "scope": "inbox:write",
+    "effect": "write",
+    "annotations": {
+      "title": "Answer from the question card",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": "58d3555a5ec2c48e",
+    "outputSchema": "ae9ed5c9bdf639e1"
   }
 ]

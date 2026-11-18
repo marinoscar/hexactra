@@ -137,6 +137,7 @@ Every tool, as `tools/list` announces it (generated from the registry by `apps/a
 | `browser_type_secret` | Type a secret the user gave | `browser:drive` | destructive | yes | no | no |
 | `browser_close` | Close a browser session | `browser:drive` | destructive | yes | yes | no |
 | `run_card_poll` | Refresh a run card | `runs:read` | read | no | yes | yes |
+| `question_card_answer` | Answer from the question card | `inbox:write` | write | no | no | yes |
 <!-- mcp-tools:end -->
 
 **Rules the server gives every client (`instructions`):**
