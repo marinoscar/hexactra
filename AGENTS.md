@@ -24,6 +24,8 @@ pnpm install --frozen-lockfile && pnpm build
 pnpm --filter @hexactra/sdk --filter @hexactra/chrome-extension test
 python3 scripts/ci/validate-contracts.py
 cd console && npm ci && npm run platform:check && npm run typecheck && npm test && npm run build   # Node 24
+cd console/apps/api && UPDATE_MCP_MANIFEST=1 npx jest --config ./test/jest.config.js mcp-manifest   # regenerate the MCP tool and scope tables in console/docs/mcp.md (a deliberate change)
+cd console && npm run docs:hosted-clients   # regenerate the client steps in console/docs/hosted-clients.md
 GITHUB_TOKEN=... node scripts/link-github-subissues.mjs --check   # dry run of sub-issue linking
 ```
 
@@ -104,7 +106,7 @@ A portable, self-hostable computer-use runtime letting authorized AI agents oper
 - runs any JavaScript in the page;
 - drives the node's OS desktop.
 
-Don't add restrictions that only limit the agent. Limits are per-task opt-ins (allowed sites, purchase confirmation).
+Don't add restrictions that only limit the agent. Limits are per-task opt-ins (allowed sites, purchase confirmation). Hosted MCP clients (ChatGPT, Claude) authenticate with OAuth and scoped consent; personal access tokens keep full authority. Never add an MCP tool without a scope, an effect and a title (`console/AGENTS.md`, "MCP tools").
 
 Browsers run on **nodes**: the primary node is a machine on the owner's residential network (sites block datacenter IPs), connected outbound over HTTPS to the console, in unattended mode (its own GPU-backed virtual desktop, nobody logged in) or attended mode (the person's own desktop and Chrome), never headless (docs/nodes.md, epic #333). The Chrome extension must also work **standalone** as an AI browser assistant (built-in chat, provider/model settings, OpenAI-compatible providers) without a Hexactra server — a v1 requirement (§25).
 

@@ -1,0 +1,57 @@
+# Directory readiness: what a ChatGPT or Claude directory listing would still need
+
+This page is an audit, not a submission. Each owner adds their own console to ChatGPT or Claude as a **custom connector** today ([hosted-clients.md](hosted-clients.md)). A listing in a vendor's directory would make Hexactra discoverable and installable by name. This page records which of the vendors' published rules the console already meets, with the evidence, and what is missing. Nothing here is scheduled: the follow-up issue (filed by E33.11, `post-v1`) needs decisions from the owner first (a demo console, where public documentation lives, and the listing's scope).
+
+## What was read, and when
+
+| Source | Read | Result |
+|---|---|---|
+| Claude: [connector pre-submission checklist](https://claude.com/docs/connectors/building/review-criteria.md) (review criteria) | 2026-11-18 | Read in full |
+| Claude: [submit a connector](https://claude.com/docs/connectors/building/submission.md) | 2026-11-18 | Read in full |
+| Claude: [directory vs custom connectors](https://claude.com/docs/connectors/building/directory-vs-custom.md) | 2026-11-18 | Read in full |
+| OpenAI: [app submission guidelines](https://developers.openai.com/apps-sdk/app-submission-guidelines) | 2026-11-18 | **Not reachable** from the session that wrote this page (`developers.openai.com` did not resolve). Every ChatGPT row below rests on the epic's notes (#458) and third-party write-ups, and is marked *verify*. Re-read OpenAI's page before any ChatGPT submission. |
+
+Rules change: repeat the reading, and update this table, when the follow-up issue is picked up.
+
+## Checklist
+
+Status: **done** (the console meets it and a test or file shows it), **partly**, **missing**, **verify** (depends on a page that could not be read).
+
+| Requirement | Status | Evidence |
+|---|---|---|
+| Every tool has a `title` and correct hints: `readOnlyHint` or `destructiveHint` (Claude); `readOnlyHint`, `destructiveHint` and `openWorldHint` all explicit (ChatGPT) | **done** (ChatGPT: *verify*) | `toolAnnotations()` in `apps/api/src/mcp/mcp.tools.ts` writes every hint explicitly from the tool's `effect`; `test/mcp-manifest.spec.ts` ("derives every hint explicitly from the effect", "every tool: a name of at most 64, a unique title…"); the generated table in [mcp.md](mcp.md#tools) |
+| No tool mixes read and write (Claude rejects a catch-all `api_request`) | **done** | Every tool has exactly one `effect` (`read`, `write` or `destructive`); `test/mcp-manifest.spec.ts` ("classifies the tools by the rules of #462"). No tool takes a method or a free path. |
+| Names are at most 64 characters; descriptions are narrow and accurate, and give no instructions beyond the tool's function | **partly** | Names: `test/mcp-manifest.spec.ts` (`^[a-z][a-z0-9_]{0,63}$`); descriptions at most 1,024 characters. To review before a submission: the server-level `instructions` (rules for the model: "act with the user's full authority", "ask the person only for…") are behavioural guidance outside any tool description, and step-up tools end with "Needs extra permission: the user will be asked to allow it." A reviewer may read either as steering. Decide whether a listed connector sends `instructions` at all, or a shorter set. |
+| Actionable errors; never a generic 500 text | **done** | [mcp.md, Errors](mcp.md#errors); `test/mcp-contract.db.spec.ts` ("the error table, from real REST answers"); `test/mcp-oauth.db.spec.ts` (step-up `403`) |
+| Results are reasonably sized | **done** | Result text capped at 100,000 characters and screenshots at 1 MiB of base64 for OAuth callers, paged large tools (`browser_text`, `browser_elements`, `run_status`); `test/mcp-results.spec.ts` ("limits by credential kind", "screenshots", "time limits"). The limits are documented, not yet measured on the live clients (#513). |
+| OAuth with client metadata documents or dynamic client registration, PKCE, refresh tokens, correct callback URLs | **done** for the scripted client; **verify** on live clients | `test/mcp-hosted-client.db.spec.ts` (profiles `hosted-cimd`, `hosted-dcr`, `native-loopback`, `stateless`, `tool-level-auth`: discovery, consent, refresh, refresh-token reuse, disconnect); redirects `https://claude.ai/api/mcp/auth_callback` and `https://chatgpt.com/connector_platform_oauth_redirect` as documented in [hosted-clients.md](hosted-clients.md). Live acceptance is [hosted-clients-acceptance.md](hosted-clients-acceptance.md) (#513). |
+| The server calls only first-party APIs | **done** | Every tool calls the console's own REST routes in-process, as the narrowed principal (architecture in [mcp.md](mcp.md)); the console's server domain is the owner's own. No tool proxies a third party's API. Browsing the web is the product: it is performed by the owner's own machines, not by the MCP server calling a foreign API. State this in the data-handling step of the portal. |
+| No collection of conversation data beyond what a tool needs; no reading of the assistant's memory, chat history or files | **done** | The audit trail stores one sanitized row per tool call, with a fixed field list and never typed text, a script or a result ([mcp.md, Activity](mcp.md#activity-the-audit-trail)); `test/mcp-public-exposure.db.spec.ts`. No tool asks for conversation content; the cards call only the tools their bundle names ([mcp-apps.md](mcp-apps.md#security)). |
+| Per-customer URL model: every owner runs their own console at their own URL | **missing** (a decision) | Claude: a listing whose users connect to different URLs ("URL pattern" or "Multiple URLs") **can be published only once it has the Verified label**, and Anthropic-held OAuth client credentials cannot be used with a URL pattern ([directory-vs-custom](https://claude.com/docs/connectors/building/directory-vs-custom.md#per-tenant-urls)). The listing would use a URL pattern and Verified review (a reviewer asks for test access). A supported alternative from the same page: list a connector with safe defaults and give enterprise customers a separate custom-connector URL. ChatGPT: *verify*. |
+| Public documentation, privacy policy, support contact, test account with sample data, screenshots | **missing** | Documentation exists as files in this repository ([hosted-clients.md](hosted-clients.md), [mcp.md](mcp.md)) but there is no public site. Missing: a public documentation URL; a privacy policy (the product stores nothing for a vendor, but the policy must say so; Claude lists a missing policy as an immediate rejection for local connectors, and the portal asks for a URL for every listing); a support contact; a demo console with sample data and a test user for the reviewer (placeholder data only); an icon; for an MCP App, 3 to 5 PNG screenshots at least 1000 px wide, cropped to the response (the run, question and tasks cards in [images](images/) are a start; they need a public demo console behind them); a listing description. Allowed link URIs (to skip Claude's confirmation on "Open in Hexactra") cannot be declared for a per-owner origin: the dialog stays ([mcp-apps.md, Limitations](mcp-apps.md#limitations-found)). |
+| Domain verification or a challenge file, if required | **verify** | Claude's pages read on 2026-11-18 name none for a connector; the portal asks for the server URL and checks it by connecting. OpenAI's page was not reachable: check whether a domain challenge is required. |
+| Authentication shape the vendors' clients start from | **done** | The `401` with `WWW-Authenticate: Bearer resource_metadata=…` and the step-up `403` ([mcp.md](mcp.md#asking-for-more-step-up)); discovery documents at the site root (`infra/nginx/app.d/locations/oauth-server.conf`). |
+| Use-case restrictions | **partly**, see the analysis below | The directories restrict some categories (Claude: transferring money, cryptocurrency or other financial assets; generating images, video or audio with AI models). |
+
+## Use-case analysis
+
+Claude's review criteria refuse connectors that **transfer money, cryptocurrency or other financial assets** and ones that **generate images, video or audio through AI models**. OpenAI's guidelines also restrict categories; their page was not reachable, so what follows is the Claude rule only.
+
+Hexactra is a general browser agent: it does what a person at the machine can do ([VISION §27](../../VISION.MD)). It does not generate media. It can pay, buy, book and send, because a person at a browser can. A listing has to say plainly how that is handled. The capabilities, from least to most exposed:
+
+| Capability (scope) | Fits a listing? | Why |
+|---|---|---|
+| See runs, tasks, schedules, machines (`runs:read`); questions (`inbox:read`) | Yes | Reads the owner's own Hexactra records |
+| Hand goals to Hexactra's own agent, follow runs, answer its questions, manage tasks and schedules (the default scopes) | **Realistic first submission, with a stated gate** | The runner works under the owner's policy, allowed sites and "Ask me before purchases" (on by default for an app, `confirmPurchases`); a purchase or submission waits for the owner in their own console. Money movement is not excluded by the tool surface, only gated by the owner. The listing must say "this connector may complete purchases the owner confirms" or exclude them (see below). |
+| Drive a browser directly (`browser:drive`) | Not in a first listing | A catch-all of low-level actions, including typing and clicking on any page, with the owner's sign-ins. The sensitive-action approvals (password and payment fields, sensitive sites, the desktop) wait for the owner, but the tools themselves can reach a bank page. |
+| JavaScript in pages (`browser:evaluate`), the OS desktop (`desktop:control`), agent policies (`policies:write`) | No | High risk. Keep these as custom-connector scopes only |
+
+**Recommendation.** The realistic first submission is a **delegate-only listing**: the default scopes only, with the step-up tools (`browser:*`, `desktop:control`, `policies:write`) removed from the listed server (`mcp.advertiseStepUpTools` off hides them from `tools/list`; limiting the listed client's consent to the default scopes still has to be designed and checked against the platform's client registration), and with money movement handled in one of two ways, chosen by the owner:
+1. State in the listing that the connector never completes a payment on its own (the runner's purchase confirmation is on by default for an app and the owner's Sensitive sites list applies; the owner can relax the first per app, so the listing must describe the default), so a payment always ends in the owner's own console; or
+2. Add a per-client "never purchase" guard (it does not exist today: a seam in the console, not the platform) so the runner stops before any payment step.
+
+Owners who want more keep adding their console as a custom connector, as today. Claude supports exactly this split (a listing with safe defaults plus a separate custom connector for elevated permissions); its cards then show as Unverified.
+
+## What to file
+
+One issue, `post-v1`, not scheduled: **Directory listings for the Hexactra connector (ChatGPT and Claude)**. Its checklist is the **missing**, **partly** and **verify** rows above; it begins by asking the owner for the three decisions (a public demo console, where documentation and the privacy policy are hosted, and the listing's scope: the delegate-only recommendation above). Do not start it before they are made.

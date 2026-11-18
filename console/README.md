@@ -61,6 +61,37 @@ Run it all on a VPS (console, fabric and an optional browser host in one stack):
 
 The CLI's commands use the login from `hexactra login`, or `HEXACTRA_SERVER_URL` and `HEXACTRA_TOKEN`. Install it with one `curl | bash` line; the terminal UI groups its screens into Agent, Worker, Server, Developer and Account; the guide, with screenshots, is [apps/cli/README.md](apps/cli/README.md).
 
+## Use Hexactra from ChatGPT, Claude and other assistants
+
+Add your console's URL to ChatGPT or Claude (web, desktop, phone) or Claude Code. The assistant signs in on **your** console, you choose what it may do, and from then on you can say "book me a table for Friday" and watch the browser work inside the chat, answer its questions there and stop it at any time. Nobody copies a token. Agent frameworks (Hermes Agent, OpenClaw, Pi) keep using personal access tokens.
+
+**What you get**
+- **Delegate by default.** The default consent lets the assistant hand goals to your Hexactra agent, follow runs, manage tasks and schedules, and relay the agent's questions. It is not offered a single browser tool.
+- **Drive by opt-in.** Controlling a browser step by step, running JavaScript, controlling the desktop and changing agent policies are separate boxes on the consent page. If the assistant needs one later it asks again (a step-up).
+- **Visible and revocable.** Every run says **Started by** the app; **Settings → AI apps** pauses, limits or disconnects it; an administrator can cut every external app off with one switch.
+- **In the chat.** Apps that render MCP Apps show a live run card (screenshot, activity, budget, **Stop**), a question card and a tasks card.
+
+![The live run card in a chat: the browser's latest screenshot, what the agent is doing, its budget, Stop and a link to the console](docs/images/mcp-run-card.png)
+
+**Quick start (about a minute, once the console is public)**
+1. **Before anything:** the console is on a public HTTPS address (`APP_URL` is that address; [the runbook](docs/runbooks/public-exposure.md) has the three supported shapes), and an administrator has turned on Administration → **OAuth clients** and allowed the client's host (`claude.ai` for Claude and Claude Code, `chatgpt.com` for ChatGPT).
+2. **Check:** Settings → **AI apps** → **Connect an AI app** runs a preflight and shows the steps for your assistant.
+3. **Add the connector** with the URL `https://<console>/api/mcp` (Claude: Customize → Connectors → Add custom connector; ChatGPT: a custom MCP server in developer mode; Claude Code: `claude mcp add --transport http hexactra https://<console>/api/mcp`).
+4. **Sign in and consent** on your console: the page names the app and the host it signs in from, with the default boxes ticked.
+5. **Ask:** "Use Hexactra to open example.test and tell me the page title." The run card appears; **Stop** ends it.
+
+| Read | For |
+|---|---|
+| [docs/hosted-clients.md](docs/hosted-clients.md) | The recipe for each client, what to tick, pausing and disconnecting, troubleshooting |
+| [docs/mcp.md](docs/mcp.md) | The reference: connect, scopes and tools, protocol revisions, results and limits, following a run, questions, step-up, per-app limits, errors |
+| [docs/mcp-apps.md](docs/mcp-apps.md) | The in-chat cards |
+| [docs/security-hosted-clients.md](docs/security-hosted-clients.md) | The threat model |
+| [docs/runbooks/public-exposure.md](docs/runbooks/public-exposure.md) | Putting the console on the internet safely |
+| [docs/agent-frameworks.md](docs/agent-frameworks.md) | Hermes Agent, OpenClaw and Pi with a personal access token |
+| [docs/parity.md](docs/parity.md), [docs/directory-readiness.md](docs/directory-readiness.md) | Which client does what; what a ChatGPT or Claude directory listing would still need |
+
+The recipes were written from the vendors' published documentation and a scripted client that runs in CI; they are not yet verified on the live ChatGPT and Claude apps ([docs/hosted-clients-acceptance.md](docs/hosted-clients-acceptance.md)).
+
 ## Agent policies
 
 An **agent policy** says which models a run may use and how much it may spend. It is a named, versioned, personal bundle. The spec is `console/apps/api/src/policies/agent-policy.schema.ts`, the single source of truth: the API, the OpenAPI document, the built-ins, the run snapshot, the export file and the web editor all derive from it, and every field carries its own description.
