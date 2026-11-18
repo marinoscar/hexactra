@@ -20,6 +20,12 @@ What each client can do with the capabilities of epic E33 (#458): connected apps
 |---|---|---|---|---|---|---|---|
 | Export a run as a masked JSON trace file or a PDF report (`runs.export`, #542, #543, [runs.md](runs.md#exporting-a-run)) | **Implemented.** `GET /api/runs/{id}/export?format=json\|pdf&screenshots=embed\|none&paper=a4\|letter` | **Implemented.** `run_export` (read-only, `runs:read`): the trace without images, cut to the result size limit and saying so in `truncated` | **Implemented.** `hexactra runs export <id> [--pdf] [--paper letter] [--no-screenshots] [-o <file>]` | **Not offered, because** the TUI is for watching and answering; the CLI writes the file | **Implemented.** `hx.runs.export(id, { screenshots })`; the file's JSON Schema is `run-trace.schema.json` in the package | **Not yet:** the Export button on the run page is E35.8 | Through the web app, with the web page |
 
+## What saved approvals added (E36)
+
+| Capability (registry id) | REST | MCP | CLI | TUI | SDK | Web | Android |
+|---|---|---|---|---|---|---|---|
+| Saved approvals: list, narrow, disable, delete, Pause all (`approvals.list`, `approvals.manage`, #554, [approvals.md](approvals.md)) | **Implemented.** `GET /api/approval-rules`, `GET\|PATCH\|DELETE /api/approval-rules/{id}`, `PUT /api/approval-rules/paused`; **no route creates a rule** | **Not offered, because** a hosted AI app must never read, create or change the owner's standing approvals (a test fails if a tool appears) | **Not offered, because** rules are reviewed beside the requests that make them; no command may create or widen one | **Not offered, because** the TUI is for watching and answering | Typed through `hx.api` | **Implemented.** Settings → Saved approvals (`/settings/approvals`) | Through the web app |
+
 ## The Android column
 
 The Android app opens the console in a Trusted Web Activity, so every page above is there.

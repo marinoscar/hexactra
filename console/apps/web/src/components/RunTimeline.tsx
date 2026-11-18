@@ -6,6 +6,9 @@ import SwapVertIcon from '@mui/icons-material/SwapVert';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import { Box, Chip, Collapse, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Paper, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 
+import { Link as RouterLink } from 'react-router-dom';
+
+import { savedApprovalHref } from '../approvals/types';
 import { routingRow } from './runRouting';
 import { formatStepDuration, groupSteps, type TimelineOrder, type TimelineStep } from './runTimeline';
 
@@ -61,8 +64,16 @@ function RoutingStepRow({ step, label, direction }: { step: RunTimelineStep; lab
 /** The steps the owner confirmed (#540), by `seq`: marked "Confirmed by you" in the timeline. */
 const ConfirmedContext = createContext<ReadonlySet<number>>(new Set());
 
+/** The saved approval that let a step go ahead (#555 records `args.approval.ruleId`), or null. */
+export function approvalRuleOf(step: Pick<RunTimelineStep, 'args'>): string | null {
+  const approval = step.args?.approval;
+  const id = approval && typeof approval === 'object' ? (approval as { ruleId?: unknown }).ruleId : null;
+  return typeof id === 'string' && id ? id : null;
+}
+
 function StepRow({ step, repeats, nested }: { step: RunTimelineStep; repeats: number; nested?: boolean }) {
   const confirmed = useContext(ConfirmedContext).has(step.seq);
+  const ruleId = approvalRuleOf(step);
   const routing = routingRow(step);
   if (routing) return <RoutingStepRow step={step} label={routing.label} direction={routing.direction} />;
   return (
@@ -79,6 +90,19 @@ function StepRow({ step, repeats, nested }: { step: RunTimelineStep; repeats: nu
         sx={{ minWidth: 0 }}
       />
       {confirmed && <Chip size="small" color="warning" variant="outlined" label="Confirmed by you" data-testid={`confirmed-${step.seq}`} sx={{ ml: 1, mt: 0.5, flexShrink: 0 }} />}
+      {ruleId && (
+        <Chip
+          size="small"
+          color="warning"
+          variant="outlined"
+          clickable
+          component={RouterLink}
+          to={savedApprovalHref(ruleId)}
+          label="Allowed by a saved approval"
+          data-testid={`saved-approval-${step.seq}`}
+          sx={{ ml: 1, mt: 0.5, flexShrink: 0 }}
+        />
+      )}
     </ListItem>
   );
 }

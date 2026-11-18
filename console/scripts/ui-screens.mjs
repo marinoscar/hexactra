@@ -90,6 +90,9 @@ export const ROUTES = [
   ['settings-ai-apps', '/settings/ai-apps'],
   ['settings-ai-app', '/settings/ai-apps/{app}'],
   ['settings-ai-apps-connect', '/settings/ai-apps/connect'],
+  // Saved approvals (#554): the page, and its "Add a limit" dialog.
+  ['settings-approvals', '/settings/approvals'],
+  ['settings-approvals-limit', '/settings/approvals', { clicks: [{ role: 'button', name: /^More for Press 'Pay'/ }, { role: 'menuitem', name: 'Add a limit' }] }],
   ['settings-danger-zone', '/settings/danger-zone'],
   // Administration (the admin hub and its pages).
   ['admin', '/admin/settings'],
@@ -336,6 +339,11 @@ async function main() {
             // The app has no such route (yet), or the account may not open it: it was sent elsewhere.
             note(name, width, 'redirected');
             continue;
+          }
+          // `clicks`: open a menu, then a dialog, by role and accessible name, before the picture.
+          for (const step of options.clicks ?? []) {
+            await page.getByRole(step.role, { name: step.name }).first().click({ timeout: 5_000 });
+            await page.waitForTimeout(400);
           }
           const size = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth }));
           await page.screenshot({ path: join(args.out, `${name}-${width}-${scheme}.png`), fullPage: true });
