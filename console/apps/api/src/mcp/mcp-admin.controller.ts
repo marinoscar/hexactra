@@ -2,7 +2,7 @@ import { Controller, Delete, Get, HttpCode, NotFoundException, Optional, Param, 
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
-import { Auth, CurrentUser, OAUTH_AUDIT_ACTIONS, OAuthGrantService, OAuthServerSettingsReader } from '@marinoscar/platform-api/identity';
+import { Auth, CurrentUser, OAuthGrantService, OAuthServerSettingsReader } from '@marinoscar/platform-api/identity';
 
 import { scopeViews } from '../connected-apps/connected-apps.service';
 import { clientLabel, friendlyAppName } from '../connected-apps/request-client';
@@ -139,10 +139,9 @@ export class McpAdminController {
   async disconnect(@CurrentUser('id') adminId: string, @Param('grantId', ParseUUIDPipe) grantId: string): Promise<void> {
     const grant = await this.prisma.oAuthGrant.findFirst({ where: { id: grantId, revokedAt: null } });
     if (!grant || !this.grants) throw new NotFoundException({ code: 'GRANT_NOT_FOUND', message: 'No active grant with that id' });
-    const revoked = await this.grants.revokeGrant({ id: grant.id, userId: grant.userId, orgId: grant.orgId, clientId: grant.clientId, resource: grant.resource }, 'admin', {
-      audit: { action: OAUTH_AUDIT_ACTIONS.GRANT_REVOKE, actorUserId: adminId, meta: { clientId: grant.clientId, by: 'admin' } },
-    });
-    if (!revoked) throw new NotFoundException({ code: 'GRANT_NOT_FOUND', message: 'No active grant with that id' });
+    // The platform's admin revoke (EnterpriseAppBase #1195): `revoked_reason: admin`, every token of the grant,
+    // the `oauth:grant.revoke` audit with the administrator as actor, and the `identity.oauth.grant.revoked` event.
+    await this.grants.revokeGrantAsAdmin(grant.id, adminId);
     await this.activity.record({ userId: grant.userId, orgId: grant.orgId, event: 'admin_disconnect', credentialKind: 'jwt', clientId: grant.clientId, grantId: grant.id, outcome: 'ok', detail: { by: 'admin' } });
   }
 }

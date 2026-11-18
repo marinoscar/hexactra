@@ -14,7 +14,7 @@
 // The user's own permissions are the request graph's WITHOUT the token's
 // narrowing (`userPermissionsOf`). Pure: no I/O, and an unknown scope string
 // in a token is ignored, never thrown on.
-import { currentTenancyMode, resolveEffectiveAccess } from '@marinoscar/platform-api/identity';
+import { userPermissionsOf as platformUserPermissionsOf } from '@marinoscar/platform-api/identity';
 
 import { mcpScope, scopeWithRequirements, MCP_SCOPE_IDS, type McpScope } from './mcp.scopes';
 
@@ -88,18 +88,14 @@ export function challengeScopes(credential: GateCredential | null | undefined, m
 
 /**
  * The permissions the request's USER holds, without an `oat_` token's
- * narrowing: what re-consent could add. The platform computes the same set in
- * its own step-up (`permissionsWithoutOAuthNarrowing`, not exported from
- * `@marinoscar/platform-api/identity`); this reads the request's user graph
- * through the exported `resolveEffectiveAccess` with the narrowing shadowed on
- * a prototype-linked view, exactly as the platform does. `undefined` when the
- * request carries no user graph.
+ * narrowing: what re-consent could add. The platform's stable seam
+ * (`userPermissionsOf` of `@marinoscar/platform-api/identity`, EnterpriseAppBase
+ * #1194). `undefined` when the request carries no user graph.
  */
 export function userPermissionsOf(user: unknown): string[] | undefined {
   if (!user || typeof user !== 'object' || !Array.isArray((user as { userRoles?: unknown }).userRoles)) return undefined;
   try {
-    const wide = Object.create(user as object, { oauthNarrowing: { value: undefined } }) as Parameters<typeof resolveEffectiveAccess>[0];
-    return resolveEffectiveAccess(wide, currentTenancyMode()).permissions;
+    return [...platformUserPermissionsOf({ user })];
   } catch {
     return undefined;
   }
