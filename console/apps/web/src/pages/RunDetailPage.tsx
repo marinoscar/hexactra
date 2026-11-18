@@ -14,7 +14,7 @@ import { fetchRunScreenshot, subscribeRun } from '../live';
 import { ActionOverlay, frameCaption, RunActivityBar, useNow } from '../components/RunActivity';
 import { RunBudgetMeter, RunHeaderChips, RunStopReason } from '../components/RunBudgetMeter';
 import { runCost } from '../components/runBudget';
-import { runAgain } from '../components/runRow';
+import { runAgain, runAgainQuestionFor } from '../components/runRow';
 import { RunTimeline } from '../components/RunTimeline';
 import { withStreamedSteps } from '../components/runTimeline';
 import type { Run, RunStep } from '../types/runs';
@@ -136,6 +136,9 @@ export function RunDetailPage() {
   /** Run again (#423): the same task or goal; the policy only when it was chosen for this run. */
   const again = async () => {
     if (!run) return;
+    // A run that carried out a step its owner confirmed asks first (#540): it may do it twice.
+    const question = runAgainQuestionFor(run);
+    if (question && !(await confirm(question))) return;
     try {
       const started = await runAgain(api, run);
       navigate(`/runs/${started.id}`);
@@ -360,7 +363,7 @@ export function RunDetailPage() {
     ) : (
       watch && frameBody
     ));
-  const timeline = <RunTimeline steps={run.steps ?? []} live={isLive} />;
+  const timeline = <RunTimeline steps={run.steps ?? []} live={isLive} confirmedSeqs={Array.isArray(run.confirmedActions) ? run.confirmedActions.map((c) => c.seq) : []} />;
 
   if (twoPane) {
     return (

@@ -9,7 +9,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { Link as RouterLink, useMatch, useNavigate, useParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
-import { BrowserPane } from '../components/ChatBrowser';
+import { BrowserPane, confirmedPromptOf } from '../components/ChatBrowser';
+import { runAgainQuestion } from '../components/runRow';
 import { ChatComposer } from '../components/ChatComposer';
 import { ChatRequestCard, RequestSettled, settledText, type RequestResult } from '../components/ChatRequest';
 import { ChatList, type ChatRowAction } from '../components/ChatList';
@@ -332,8 +333,16 @@ export function ChatPage() {
   };
 
   /** "Run again" on a result: ask for the same job once more, in words the assistant acts on. */
-  const runAgain = (result: ChatMessage) => {
+  const runAgain = async (result: ChatMessage) => {
     const started = [...messages].reverse().find((m) => m.kind === 'run' && m.seq < result.seq && (result.runId === null || m.runId === result.runId || m.runId === null));
+    // A run that carried out a step the owner confirmed asks first (#540); the words then tell the assistant the owner knows.
+    const count = Number((result.meta as { confirmedActions?: unknown } | null)?.confirmedActions ?? 0);
+    const question = runAgainQuestion(count, confirmedPromptOf(result.text));
+    if (question) {
+      if (!(await confirm(question))) return;
+      void send(started ? `Run this again, knowing the step I confirmed was already carried out: ${started.text}` : 'Run that again, knowing the step I confirmed was already carried out.');
+      return;
+    }
     void send(started ? `Run this again: ${started.text}` : 'Run that again.');
   };
   // ---- Save the chat as a task (#489): the AI drafts it, the owner reviews it in the task form. ----

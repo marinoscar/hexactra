@@ -287,6 +287,18 @@ interface ResultMeta {
   costUsd?: number;
   costKnown?: boolean;
   stepCount?: number;
+  /** Steps the owner confirmed that the run carried out (#540). */
+  confirmedActions?: number;
+}
+
+/** The step a result's lead sentence names (#540), for the "Run again" question; null when it names none. */
+export function confirmedPromptOf(text: string): string | null {
+  return /^The step you confirmed was carried out \(step \d+: '(.+?)'\)/.exec(text)?.[1] ?? null;
+}
+
+/** A run that carried out a confirmed step and did not succeed (#540): never "Could not finish". */
+export function endedAfterConfirmed(meta: { status?: string; confirmedActions?: number }): boolean {
+  return (meta.confirmedActions ?? 0) > 0 && meta.status !== 'succeeded';
 }
 
 const RESULT_TITLE: Record<string, string> = { succeeded: 'Done', failed: 'Could not finish', cancelled: 'Stopped' };
@@ -307,12 +319,19 @@ export function ResultCard({ message, onRunAgain, onSaveAsTask, saving = false }
   const status = meta.status ?? '';
   const cost = formatCost(meta.costUsd, meta.costKnown ?? true);
   const reason = status !== 'succeeded' && meta.stopReason && meta.stopReason !== 'finished' && meta.stopReason !== 'cancelled' && meta.stopReason !== 'error' ? stopReasonLabel(meta.stopReason) : null;
+  const confirmedEnd = endedAfterConfirmed(meta);
   const facts = [reason ? `Stopped: ${reason}` : null, typeof meta.stepCount === 'number' && meta.stepCount > 0 ? `${meta.stepCount} ${meta.stepCount === 1 ? 'step' : 'steps'}` : null, cost].filter(Boolean);
   return (
-    <Paper variant="outlined" component="article" aria-label="Result" sx={{ p: 1.5, width: '100%', maxWidth: CARD_MAX, borderRadius: 3, bgcolor: 'background.paper' }}>
+    <Paper
+      variant="outlined"
+      component="article"
+      aria-label="Result"
+      data-tone={confirmedEnd ? 'warning' : undefined}
+      sx={{ p: 1.5, width: '100%', maxWidth: CARD_MAX, borderRadius: 3, bgcolor: 'background.paper', ...(confirmedEnd ? { borderColor: 'warning.main' } : {}) }}
+    >
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1, flexWrap: 'wrap', rowGap: 0.5 }}>
-        <Typography variant="subtitle2" component="p" sx={{ flex: 1, minWidth: 0 }}>
-          {RESULT_TITLE[status] ?? 'Finished'}
+        <Typography variant="subtitle2" component="p" sx={{ flex: 1, minWidth: 0 }} color={confirmedEnd ? 'warning.main' : undefined}>
+          {confirmedEnd ? 'Ended after a confirmed step' : (RESULT_TITLE[status] ?? 'Finished')}
         </Typography>
         {status && <StatusChip status={status} size="small" />}
       </Stack>
