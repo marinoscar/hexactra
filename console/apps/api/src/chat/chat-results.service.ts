@@ -2,6 +2,7 @@ import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/com
 import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { readConfirmedActions } from '../runner/confirmed-actions';
 import { RunEndHooks } from '../tasks/run-end-hooks';
 import { TERMINAL_RUN_STATUSES } from '../tasks/run-status';
 import { ChatService } from './chat.service';
@@ -9,8 +10,10 @@ import { ChatService } from './chat.service';
 const RESULT_TEXT_MAX = 8000;
 
 /** What the thread says when a run ended without words of its own. */
-function resultText(run: { status: string; result: string | null; error: string | null }): string {
+function resultText(run: { status: string; result: string | null; error: string | null; confirmedActions?: unknown }): string {
   if (run.status === 'succeeded') return run.result?.trim() || 'Done.';
+  // A confirmed step was carried out (#540): the result leads with it, so it is what the thread shows.
+  if (readConfirmedActions(run.confirmedActions).length && run.result?.trim()) return [run.result.trim(), run.error?.trim()].filter(Boolean).join('\n\n');
   if (run.status === 'cancelled') return run.error?.trim() || 'Stopped.';
   return run.error?.trim() || run.result?.trim() || 'The run failed.';
 }
@@ -43,10 +46,10 @@ export class ChatResults implements OnModuleInit, OnModuleDestroy {
   async recordRunEnd(userId: string, runId: string): Promise<void> {
     const run = await this.prisma.forUser({ userId }).run.findFirst({
       where: { id: runId, conversationId: { not: null }, status: { in: [...TERMINAL_RUN_STATUSES] } },
-      select: { id: true, conversationId: true, status: true, result: true, error: true, stopReason: true, costUsd: true, costKnown: true, stepCount: true },
+      select: { id: true, conversationId: true, status: true, result: true, error: true, stopReason: true, costUsd: true, costKnown: true, stepCount: true, confirmedActions: true },
     });
     if (!run?.conversationId) return;
-    const meta: Prisma.InputJsonObject = { status: run.status, stopReason: run.stopReason, costUsd: Number(run.costUsd), costKnown: run.costKnown, stepCount: run.stepCount };
+    const meta: Prisma.InputJsonObject = { status: run.status, stopReason: run.stopReason, costUsd: Number(run.costUsd), costKnown: run.costKnown, stepCount: run.stepCount, confirmedActions: readConfirmedActions(run.confirmedActions).length };
     await this.chats.append(run.conversationId, { role: 'assistant', kind: 'result', text: resultText(run).slice(0, RESULT_TEXT_MAX), runId: run.id, meta }, { onceForRun: true });
   }
 

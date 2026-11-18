@@ -1018,7 +1018,10 @@ describe('the goal runner enforces budgets (#404)', () => {
     const { ai, runTools } = scriptedAi([nav(2), []]);
     expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('failed');
     expect(runTools).toHaveBeenCalledTimes(2);
-    expect(await db.run.findFirstOrThrow({ where: { id: run.id } })).toMatchObject({ status: 'failed', stopReason: 'budget_model_calls', error: 'Model call budget exhausted', result: null });
+    const ended = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(ended).toMatchObject({ status: 'failed', stopReason: 'budget_model_calls', error: 'Model call budget exhausted' });
+    // No words from the model (#540): the result is the run's own last steps, not only the budget message.
+    expect(ended.result).toMatch(/^Stopped before the agent could report\. Last steps:\n1\. navigate /);
   });
 
   it('a wrap-up that fails at the provider still ends the run on the budget', async () => {
@@ -1293,5 +1296,116 @@ describe('the goal runner enforces budgets (#404)', () => {
     const usage = await app.get(HexactraAlertsService, { strict: false }).sources.usage(new Date(Date.now() - 3_600_000));
     // The new reason and the legacy string count; an error that merely says so, a stall and a success do not.
     expect(usage.find((u) => u.userId === userId)?.budgetStops).toBe(2);
+  });
+});
+
+describe('a step the owner confirmed (#540)', () => {
+  const CARD = '4111 1111 1111 1111';
+  const PROMPT = `Pressing Pay sends $10 from card ${CARD} to Person A and cannot be canceled. May I send it?`;
+  const nav = (n: number): Call[] => Array.from({ length: n }, (_, i): Call => ['navigate', { url: `https://bank.example.test/${i}`, reason: 'check' }]);
+
+  /** A manual run of a task that asks before a purchase, under a hard action budget. */
+  async function confirmRun(label: string, maxActions: number) {
+    const userId = await login(`confirmed-${label}-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const task = await db.task.create({ data: { userId, name: 'Pay', goal: 'Send the payment', confirmRiskyActions: true } });
+    const run = await db.run.create({
+      data: { userId, taskId: task.id, goal: task.goal, policyRef: 'builtin:balanced', policyVersion: 1, policySource: 'system_default', policySnapshot: snapshotWith({ maxActions }) as never },
+    });
+    return { userId, prisma, db, run, fabric: fakeFabric() };
+  }
+  const answer = (fabric: ReturnType<typeof fakeFabric>, approve: boolean) => {
+    const h = [...fabric.handoffs.values()].at(-1)!;
+    Object.assign(h, approve ? { status: 'completed', response: { outcome: 'completed', value_withheld: false } } : { status: 'cancelled', response: { outcome: 'cancelled', value_withheld: false } });
+  };
+
+  it('stores the approved, carried-out action (masked prompt) and leads the failed result with it', async () => {
+    const { userId, prisma, db, run, fabric } = await confirmRun('stored', 4);
+    const { ai } = scriptedAi([
+      [
+        ['click', { selector: '#pay', reason: 'pay now' }],
+        ['request_human', { kind: 'confirmation', prompt: PROMPT, input: 'none', choices: null }],
+      ],
+      // The confirmed click, then checking the result until the hard budget stops the run; the wrap-up says nothing.
+      [['click', { selector: '#pay', reason: 'pay now' }], ...nav(3)],
+      [],
+    ]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai);
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    answer(fabric, true);
+    expect(await runner.advance(run.id, userId, null)).toBe('failed');
+
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id }, include: { steps: { orderBy: { seq: 'asc' } } } });
+    expect(done.stopReason).toBe('budget_actions');
+    const confirmed = done.confirmedActions as { seq: number; prompt: string; action: string; at: string }[];
+    expect(confirmed).toHaveLength(1);
+    const clicks = done.steps.filter((st) => st.action === 'click');
+    // The policy-paused attempt is not the confirmed action; the second click is.
+    expect(clicks[0]!.summary).toMatch(/^paused by policy/);
+    expect(confirmed[0]).toMatchObject({ seq: clicks[1]!.seq, action: 'click', at: expect.any(String) });
+    expect(confirmed[0]!.prompt).toContain('•••• 1111');
+    expect(JSON.stringify(done.confirmedActions)).not.toContain(CARD);
+    expect(JSON.stringify(done.confirmedActions)).not.toContain('4111111111111111');
+    expect(done.result).toMatch(new RegExp(`^The step you confirmed was carried out \\(step ${clicks[1]!.seq}: 'Pressing Pay`));
+    expect(done.result).toContain('Check before you run it again.');
+    expect(done.result).toContain('Stopped before the agent could report.');
+    // The API: the full run carries the list.
+    const view = await app.get(TasksService).getRun(userId, run.id);
+    expect(view.confirmedActions).toHaveLength(1);
+  });
+
+  it('a denied confirmation stores nothing', async () => {
+    const { userId, prisma, db, run, fabric } = await confirmRun('denied', 6);
+    const { ai } = scriptedAi([
+      [
+        ['click', { selector: '#pay', reason: 'pay now' }],
+        ['request_human', { kind: 'confirmation', prompt: PROMPT, input: 'none', choices: null }],
+      ],
+      [['finish', { success: false, result: 'The owner declined.' }]],
+    ]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai);
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    answer(fabric, false);
+    expect(await runner.advance(run.id, userId, null)).toBe('failed');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(done.confirmedActions).toBeNull();
+    expect(done.result).toBe('The owner declined.');
+  });
+
+  it('a failed click followed by a successful retry records the retry', async () => {
+    const { userId, prisma, db, run, fabric } = await confirmRun('retry', 20);
+    let failNext = false;
+    const base = fabric.request.getMockImplementation()!;
+    fabric.request.mockImplementation(async (method: string, path: string, opts: { body?: Record<string, unknown> } = {}) => {
+      const action = opts.body?.action as { type?: string } | undefined;
+      if (failNext && method === 'POST' && path.endsWith('/actions') && action?.type === 'click') {
+        failNext = false;
+        throw new FabricError('api', 'element_not_found', 404, 'element_not_found');
+      }
+      return base(method, path, opts);
+    });
+    const { ai } = scriptedAi([
+      [
+        ['click', { selector: '#pay', reason: 'pay now' }],
+        ['request_human', { kind: 'confirmation', prompt: PROMPT, input: 'none', choices: null }],
+      ],
+      [
+        ['click', { selector: '#pay', reason: 'pay now' }],
+        ['click', { selector: '#pay', reason: 'pay now' }],
+        ['finish', { success: true, result: 'Sent.' }],
+      ],
+    ]);
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, ai);
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    answer(fabric, true);
+    failNext = true;
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id }, include: { steps: { orderBy: { seq: 'asc' } } } });
+    const clicks = done.steps.filter((st) => st.action === 'click');
+    expect(clicks.map((c) => c.ok)).toEqual([false, false, true]);
+    expect((done.confirmedActions as { seq: number }[]).map((c) => c.seq)).toEqual([clicks[2]!.seq]);
+    // A succeeded run keeps its own result: no lead sentence.
+    expect(done.result).toBe('Sent.');
   });
 });

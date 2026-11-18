@@ -68,6 +68,7 @@ import { actionTarget, runActivity, type ActivityTarget, type RunActivityPhase }
 import { ACTION_TIMEOUT_MS, FabricSession, handoffOutcome, type CreatedHandoff } from './fabric-session';
 import { domainAllowed, fabricAllowedSites, looksRisky } from './policy';
 import { maxElementsFor, PLATFORM_MAX_CALLS_PER_CHUNK, ScreenshotWindow, shotHash } from './context-settings';
+import { appendConfirmedAction, noReportResult } from './confirmed-actions';
 import { captureScreen, markCenter, roundInput, type Screen, type ScreenMark, type ScreenView } from './vision';
 
 /** How a line of chat guidance starts in the run's log (#490). It says what guidance is not, so the model does not read it as a permission. */
@@ -88,6 +89,14 @@ export interface RunMemory {
   secretHandoffId?: string | null;
   /** A person approved one risky action. */
   confirmationGranted?: boolean;
+  /**
+   * The approved confirmation (#540), until the action it allowed is carried out: the next
+   * successful action is recorded in `runs.confirmed_actions`. `tries` counts failed actions;
+   * five, or a new handoff, clear it.
+   */
+  pendingConfirmation?: { prompt: string; tries: number } | null;
+  /** The prompt of the last request the run made (the question a confirmation approves). */
+  askedPrompt?: string;
   chunks: number;
   /** The provider refused images: the run continues without screenshots (#366). */
   visionOff?: boolean;
@@ -430,7 +439,7 @@ export class GoalRunnerService {
       if (h.status === 'pending') return 'waiting_human';
       await this.questions?.reconcileHandoff(h);
       // The answer as the broker recorded it (labels of choices), else as the fabric reports it.
-      const q = await db.question.findFirst({ where: { handoffId: h.id }, select: { response: true, options: true, constraints: true, input: true, rememberLabel: true } });
+      const q = await db.question.findFirst({ where: { handoffId: h.id }, select: { response: true, options: true, constraints: true, input: true, rememberLabel: true, prompt: true } });
       const resp = (q?.response as unknown as QuestionResponse | null) ?? null;
       const outcome = resp?.outcome ?? handoffOutcome(h);
       if (h.status === 'completed' && outcome === 'completed') {
@@ -447,6 +456,8 @@ export class GoalRunnerService {
         if (h.input === 'secret' || h.input === 'credentials') memory.secretHandoffId = h.id;
         if (h.input === 'confirm' && (resp?.value ?? h.response?.value) === 'approve' && h.kind === 'confirmation') memory.confirmationGranted = true;
         if (h.kind === 'confirmation' && h.input !== 'confirm') memory.confirmationGranted = true;
+        // The step the person allowed (#540): the next successful action is recorded as carried out.
+        if (h.kind === 'confirmation' && memory.confirmationGranted) memory.pendingConfirmation = { prompt: q?.prompt ?? memory.askedPrompt ?? '', tries: 0 };
         memory.log.push(line);
       } else {
         memory.log.push(`The person did not help (handoff ${h.status}${outcome === 'cancelled' ? ', declined' : ''}). Do not retry the same request; finish if you cannot continue.`);
@@ -612,6 +623,25 @@ export class GoalRunnerService {
       }
     };
 
+    /**
+     * After an approved confirmation (#540): the first successful action is the one the person
+     * allowed. A policy-paused attempt is not; a failed action keeps the marker (the agent retries);
+     * five failures clear it. Only the masked prompt and the action's name are stored.
+     */
+    const noteConfirmed = async (kind: string, action: string | null, ok: boolean, summary: string) => {
+      const pending = memory.pendingConfirmation;
+      if (!pending || kind !== 'action' || summary.startsWith('paused by policy')) return;
+      if (!ok) {
+        pending.tries += 1;
+        if (pending.tries >= 5) memory.pendingConfirmation = null;
+        return;
+      }
+      memory.pendingConfirmation = null;
+      const row = await db.run.findFirst({ where: { id: run.id }, select: { confirmedActions: true } });
+      const next = appendConfirmedAction(row?.confirmedActions ?? null, { seq: state.seq, prompt: pending.prompt, action: action ?? kind, at: new Date() });
+      await db.run.updateMany({ where: { id: run.id }, data: { confirmedActions: next as never } });
+    };
+
     const record = async (kind: string, action: string | null, args: Record<string, unknown> | null, ok: boolean, summary: string, started: number, reasoning?: string, extra?: StallExtra) => {
       state.stepCount += 1;
       state.seq += 1;
@@ -632,6 +662,7 @@ export class GoalRunnerService {
         },
       });
       await db.run.updateMany({ where: { id: run.id }, data: { stepCount: state.stepCount } });
+      await noteConfirmed(kind, action, ok, summary);
       await this.tasks.stepRecorded?.(run.userId, run.id, state.stepCount);
       memory.log.push(`${state.stepCount}. ${action ?? kind}${args ? ` ${JSON.stringify(redactActionArgs(action ?? '', args))}` : ''} → ${ok ? 'ok' : 'FAILED'}: ${trim(summary, 300)}`);
     };
@@ -736,6 +767,9 @@ export class GoalRunnerService {
     const askPerson = async (asked: QuestionSpec, started: number): Promise<boolean> => {
       // A confirmation of a run an AI app started names the app (#465), so the person sees where it came from.
       const spec = withAppOrigin(asked, run);
+      // A new request supersedes a confirmation not yet acted on (#540); its prompt is what an approval allows.
+      memory.pendingConfirmation = null;
+      memory.askedPrompt = spec.prompt;
       try {
         const created = await session.openHandoff(sessionId!, {
           kind: spec.kind,
@@ -799,7 +833,8 @@ export class GoalRunnerService {
             return 'Refused: this looks like a purchase, payment or irreversible submission. Call request_human with kind "confirmation" describing exactly what will happen, then try again.';
           }
           const out = await act({ type: 'click', selector }, reason);
-          if (looksRisky(selector, state.labels.get(selector), reason)) memory.confirmationGranted = false;
+          // A failed attempt did not carry the step out: the approval stands for the retry (#540).
+          if (looksRisky(selector, state.labels.get(selector), reason) && !memory.pendingConfirmation) memory.confirmationGranted = false;
           return out;
         },
       }),
@@ -864,7 +899,8 @@ export class GoalRunnerService {
           }
           const { x, y } = markCenter(mark);
           const out = await act({ type: 'click_at', x, y, ...(double ? { click_count: 2 } : {}) }, reason, { x: mark.x, y: mark.y, w: mark.w, h: mark.h });
-          if (looksRisky(mark.selector, mark.text, reason)) memory.confirmationGranted = false;
+          // A failed attempt did not carry the step out: the approval stands for the retry (#540).
+          if (looksRisky(mark.selector, mark.text, reason) && !memory.pendingConfirmation) memory.confirmationGranted = false;
           return out;
         },
       }),
@@ -885,7 +921,8 @@ export class GoalRunnerService {
             return 'Refused: this looks like a purchase, payment or irreversible submission. Call request_human with kind "confirmation" describing exactly what will happen, then try again.';
           }
           const out = await act({ type: 'click_at', x, y, ...(button !== 'left' ? { button } : {}), ...(double ? { click_count: 2 } : {}), ...(modifiers.length ? { modifiers } : {}) }, reason);
-          if (looksRisky(reason)) memory.confirmationGranted = false;
+          // A failed attempt did not carry the step out: the approval stands for the retry (#540).
+          if (looksRisky(reason) && !memory.pendingConfirmation) memory.confirmationGranted = false;
           return out;
         },
       }),
@@ -1210,7 +1247,8 @@ export class GoalRunnerService {
         await this.finish(userId, run.id, sessionId, session, 'succeeded', { result: done.result, stopReason });
         return 'succeeded';
       }
-      await this.finish(userId, run.id, sessionId, session, 'failed', { ...(done ? { result: done.result } : {}), error, stopReason });
+      // No words from the model: the result is the run's own last steps, masked (#540), never only the budget message.
+      await this.finish(userId, run.id, sessionId, session, 'failed', { result: done ? done.result : noReportResult(memory.log), error, stopReason });
       return 'failed';
     };
 
@@ -1416,6 +1454,7 @@ export class GoalRunnerService {
     if (sessionId) await session.end(sessionId);
     const done = await this.tasks.transition(userId, runId, to, patch);
     this.log.log(`run ${runId}: ${to}`);
-    await this.notifier?.finished(userId, done, to, patch.result ?? patch.error);
+    // The saved result: it leads with a confirmed step the run carried out (#540).
+    await this.notifier?.finished(userId, done, to, done.result ?? patch.error);
   }
 }

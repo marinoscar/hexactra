@@ -193,6 +193,9 @@ model Run {
   /// The per-app limits that applied when the run started (ConnectedAppSettings, #464); null when none did.
   /// Copied into the policy snapshot at the first advance.
   appLimits        Json?         @map("app_limits")
+  /// Steps the owner confirmed that the run then carried out (#540): `[{ seq, prompt, action, at }]`,
+  /// at most 20, the prompt cut to 300 characters and masked. Never a typed value or a secret.
+  confirmedActions Json?         @map("confirmed_actions")
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   task         Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)

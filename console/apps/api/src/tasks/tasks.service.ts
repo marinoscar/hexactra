@@ -2,6 +2,7 @@ import { ConflictException, Injectable, NotFoundException, Optional } from '@nes
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { readConfirmedActions, withConfirmedLead } from '../runner/confirmed-actions';
 import { assertTransition, isTerminal, type RunStatus } from './run-status';
 import type { CreateTaskDto, UpdateTaskDto } from './tasks.schemas';
 import { FabricClient } from '../fabric/fabric.client';
@@ -162,7 +163,7 @@ export class TasksService {
       include: { steps: { orderBy: { seq: 'asc' } } },
     });
     if (!r) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
-    return withCost(r);
+    return withCost({ ...r, confirmedActions: readConfirmedActions(r.confirmedActions) });
   }
 
   /**
@@ -172,11 +173,17 @@ export class TasksService {
   async transition(userId: string, id: string, to: RunStatus, patch: RunPatch = {}) {
     const db = this.db(userId);
     for (let attempt = 0; attempt < 5; attempt++) {
-      const run = await db.run.findFirst({ where: { id }, select: { status: true, startedAt: true, createdAt: true, trigger: true, activeMs: true, activeSince: true } });
+      const run = await db.run.findFirst({ where: { id }, select: { status: true, startedAt: true, createdAt: true, trigger: true, activeMs: true, activeSince: true, result: true, confirmedActions: true } });
       if (!run) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
       assertTransition(run.status as RunStatus, to);
       const now = new Date();
       const { handoffExpiresAt, ...fields } = patch;
+      // A run that carried out a step its owner confirmed and then did not succeed says so first (#540),
+      // whatever ended it (a budget, a stall, Stop, a lost node, an error).
+      if (isTerminal(to) && to !== 'succeeded') {
+        const confirmed = readConfirmedActions(run.confirmedActions);
+        if (confirmed.length) fields.result = withConfirmedLead(fields.result ?? run.result ?? '', confirmed, to).slice(0, 8000);
+      }
       // Compare-and-set on the old status, so two writers cannot both win.
       const { count } = await db.run.updateMany({
         where: { id, status: run.status },

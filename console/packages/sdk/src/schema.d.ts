@@ -14998,6 +14998,8 @@ export interface components {
             costUsd: number;
             /** @description False once a call could not be priced because its model has no price: show costUsd as "at least" */
             costKnown: boolean;
+            /** @description How many steps the owner confirmed that the run carried out (#540); the steps themselves are on `GET /runs/{id}`. */
+            confirmedActions: number;
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -15150,6 +15152,8 @@ export interface components {
                 costUsd: number;
                 /** @description False once a call could not be priced because its model has no price: show costUsd as "at least" */
                 costKnown: boolean;
+                /** @description How many steps the owner confirmed that the run carried out (#540); the steps themselves are on `GET /runs/{id}`. */
+                confirmedActions: number;
                 /** @description ISO 8601 timestamp */
                 createdAt: string;
                 startedAt: string | null;
@@ -15321,6 +15325,17 @@ export interface components {
             costUsd: number;
             /** @description False once a call could not be priced because its model has no price: show costUsd as "at least" */
             costKnown: boolean;
+            /** @description Steps the owner confirmed that the run then carried out (#540), oldest first; empty when none. "Run again" asks before repeating such a run. */
+            confirmedActions: {
+                /** @description The step's sequence number */
+                seq: number;
+                /** @description The question the owner approved, at most 300 characters, masked */
+                prompt: string;
+                /** @description The action carried out (click, click_at, key, …) */
+                action: string;
+                /** @description When it was carried out */
+                at: string;
+            }[];
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -15490,6 +15505,17 @@ export interface components {
             costUsd: number;
             /** @description False once a call could not be priced because its model has no price: show costUsd as "at least" */
             costKnown: boolean;
+            /** @description Steps the owner confirmed that the run then carried out (#540), oldest first; empty when none. "Run again" asks before repeating such a run. */
+            confirmedActions: {
+                /** @description The step's sequence number */
+                seq: number;
+                /** @description The question the owner approved, at most 300 characters, masked */
+                prompt: string;
+                /** @description The action carried out (click, click_at, key, …) */
+                action: string;
+                /** @description When it was carried out */
+                at: string;
+            }[];
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
