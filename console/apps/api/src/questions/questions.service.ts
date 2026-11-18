@@ -19,6 +19,7 @@ import {
   toResponse,
   validateAnswer,
   type QuestionAnswerInput,
+  type QuestionGate,
   type QuestionConstraints,
   type QuestionInputType,
   type QuestionOption,
@@ -56,6 +57,8 @@ export interface QuestionView {
   risk: 'low' | 'high' | null;
   /** credentials and secret: the site's "remember me" option, in the page's words (#527). */
   rememberLabel: string | null;
+  /** The commitment the server's confirmation gate stopped (#550), set by the server only; null otherwise. */
+  gate: QuestionGate | null;
   status: QuestionStatusType;
   response: QuestionResponse | null;
   pageTitle: string | null;
@@ -94,6 +97,7 @@ export function toQuestionView(q: Question): QuestionView {
     denyLabel: q.denyLabel,
     risk: (q.risk as 'low' | 'high' | null) ?? null,
     rememberLabel: q.rememberLabel,
+    gate: (q.gate as unknown as QuestionGate | null) ?? null,
     status: q.status,
     response: (q.response as unknown as QuestionResponse | null) ?? null,
     pageTitle: q.pageTitle,
@@ -190,6 +194,7 @@ export class QuestionsService {
       denyLabel: spec.denyLabel,
       risk: spec.risk,
       rememberLabel: spec.rememberLabel,
+      gate: spec.gate ? (spec.gate as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
     };
   }
 

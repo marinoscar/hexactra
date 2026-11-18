@@ -15910,6 +15910,12 @@ export interface components {
             risk: ("low" | "high") | null;
             /** @description credentials and secret: the site's "remember me" option, in the page's words */
             rememberLabel: string | null;
+            /** @description The commitment the confirmation gate stopped (#550): the page host the browser reported, the category and the element label. Set by the server only. */
+            gate: {
+                host: string | null;
+                category: string;
+                label: string | null;
+            } | null;
             /** @enum {string} */
             status: "pending" | "answered" | "cancelled" | "expired";
             response: {

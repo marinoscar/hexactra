@@ -75999,6 +75999,39 @@
               "null"
             ]
           },
+          "gate": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "host",
+                  "category",
+                  "label"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The commitment the confirmation gate stopped (#550): the page host the browser reported, the category and the element label. Set by the server only."
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -76145,6 +76178,7 @@
           "denyLabel",
           "risk",
           "rememberLabel",
+          "gate",
           "status",
           "response",
           "pageTitle",

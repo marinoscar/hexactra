@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The confirmation gate decides by what is clicked, not by the model's words** (#550, console 1.61.1). With "Ask me before purchases" on, a click is stopped only when its target commits something (a button, submit input, link or menu item labelled "Pay", "Send money", "Place your order", "Confirm transfer", "Delete account", …, or a submit button whose form posts to a commit path), read from the page through the fabric; the model's `reason` and the selector are no longer inputs, so choosing a date "for the payment" no longer asks. The paused step stores `{ category, label }`, the confirmation that follows carries a server-set `gate: { host, category, label }` (new on question views), and an approval lets through that target only. Docs: `docs/questions.md` ("The confirmation gate").
 - **`screenshotKey` is no longer returned on run steps** (#541). It was never set; a step now says `hasScreenshot` and the picture is served by its own route.
 
 - **Platform 0.1.0-next.39: a client's connections on the OAuth clients page** (#535, console 1.55.2). Administration → OAuth clients → a client → **Details** now lists every user's connection to that client (scopes, organization, connected, last used, active or revoked with the reason) and revokes one after a confirmation, next to the existing **Disconnect** on External AI apps. Also from the platform: a deterministic storage conformance check and a longer registry wait in its releases.

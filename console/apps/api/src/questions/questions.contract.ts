@@ -119,6 +119,18 @@ export interface QuestionSpec {
   risk: 'low' | 'high' | null;
   rememberLabel: string | null;
   timeoutMs: number;
+  /**
+   * The commitment the server's confirmation gate stopped (#550). Set by the runner only, after the
+   * request is parsed: `questionSpecSchema` has no such field, so one sent by a model or an API caller is dropped.
+   */
+  gate?: QuestionGate | null;
+}
+
+/** What the confirmation gate stopped (#550): the page's host (from the fabric), the commitment's category, the element's label. */
+export interface QuestionGate {
+  host: string | null;
+  category: string;
+  label: string | null;
 }
 
 export function normalizeOptions(options: readonly QuestionOptionInput[]): QuestionOption[] {
