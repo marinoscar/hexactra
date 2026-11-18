@@ -1,8 +1,8 @@
 // The OAuth server's web side in the console (E33.1, #459): the consent and
 // error routes render the platform pages from the REAL app root (only the
 // sign-in gate and the network are stubbed), the consent page shows the
-// console's scope titles with an icon each (a warning icon on the two
-// high-risk scopes), and both OAuth cards arrive through the spread identity
+// console's scope titles with an icon each (never a warning icon: the
+// platform marks high-risk scopes itself, #460), and both OAuth cards arrive through the spread identity
 // sections with the platform's permission strings.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -82,10 +82,9 @@ describe('OAuth routes (#459)', () => {
     expect((await screen.findAllByText(/assistant\.example\.test/, {}, { timeout: 8000 })).length).toBeGreaterThan(0);
     for (const s of API_SCOPE_TITLES) expect(screen.getByText(s.title)).toBeInTheDocument();
     for (const id of API_SCOPE_IDS) expect(screen.getByTestId(`scope-icon-${id}`)).toBeInTheDocument();
-    // The two high-risk scopes that act outside the agent's own runner carry a warning icon.
-    expect(screen.getByTestId('scope-icon-browser:evaluate').getAttribute('class')).toMatch(/colorWarning/);
-    expect(screen.getByTestId('scope-icon-desktop:control').getAttribute('class')).toMatch(/colorWarning/);
-    expect(screen.getByTestId('scope-icon-runs:read').getAttribute('class')).not.toMatch(/colorWarning/);
+    // The console's icons say what a scope is about; the platform adds its own warning to high-risk scopes,
+    // so none of the console's icons is a warning one (it would show twice).
+    for (const id of API_SCOPE_IDS) expect(screen.getByTestId(`scope-icon-${id}`).getAttribute('class')).not.toMatch(/colorWarning/);
   }, 15_000);
 
   it('/oauth/error renders the public error page, echoing nothing from the query', async () => {
@@ -107,8 +106,12 @@ describe('the consent page scope icons', () => {
     expect(API_SCOPE_TITLES.map((s) => s.id)).toEqual(API_SCOPE_IDS);
   });
 
-  it('give warning icons to browser:evaluate and desktop:control only, and none to an unknown scope', () => {
-    expect(Object.entries(MCP_SCOPE_ICONS).filter(([, v]) => v.warning).map(([k]) => k).sort()).toEqual(['browser:evaluate', 'desktop:control']);
+  it('are never warning icons, are distinct per scope, and an unknown scope gets none', () => {
+    const icons = Object.values(MCP_SCOPE_ICONS).map((v) => v.Icon);
+    expect(new Set(icons).size).toBe(icons.length);
+    for (const [id, node] of Object.keys(MCP_SCOPE_ICONS).map((k) => [k, mcpScopeIcon(k)] as const)) {
+      expect([id, (node as { props: { color: string } }).props.color]).toEqual([id, 'action']);
+    }
     expect(mcpScopeIcon('offline_access')).toBeNull();
   });
 });

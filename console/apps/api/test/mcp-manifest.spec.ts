@@ -48,17 +48,18 @@ function docTable(): string {
   return ['| Tool | Title | Scope | Effect | Open world | Idempotent | Structured output |', '|---|---|---|---|---|---|---|', ...rows].join('\n');
 }
 
-/** The OAuth scope table of docs/mcp.md (#459): scope, consent title, risk, default, tools, permissions. */
+/** The OAuth scope table of docs/mcp.md, "What a connected app can do" (#459, #460): scope, consent title, risk, default, required scopes, tools, permissions. */
 function scopeTable(): string {
   const rows = MCP_SCOPES.map((s) => {
     const tools = MCP_TOOLS.filter((t) => t.scope === s.id).map((t) => `\`${t.name}\``).join(', ');
-    return `| \`${s.id}\` | ${s.title} | ${s.risk} | ${s.default ? 'yes' : 'no'} | ${tools} | ${s.permissions.map((p) => `\`${p}\``).join(', ')} |`;
+    const needs = s.requires?.length ? s.requires.map((r) => `\`${r}\``).join(', ') : '—';
+    return `| \`${s.id}\` | ${s.title} | ${s.risk} | ${s.default ? 'yes' : 'no'} | ${needs} | ${tools} | ${s.permissions.map((p) => `\`${p}\``).join(', ')} |`;
   });
   return [
-    '| Scope | Consent page | Risk | Default | Tools | Console permissions |',
-    '|---|---|---|---|---|---|',
+    '| Scope | Consent page | Risk | Default | Also needs | Tools | Console permissions |',
+    '|---|---|---|---|---|---|---|',
     ...rows,
-    '| `offline_access` | Stay connected without asking again | — | requested by the client | (a refresh token) | none |',
+    '| `offline_access` | Stay connected without asking again | — | requested by the client | — | (a refresh token) | none |',
   ].join('\n');
 }
 

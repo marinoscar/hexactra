@@ -8384,6 +8384,7 @@ export interface components {
             };
             mcp: {
                 elicitation: boolean;
+                advertiseStepUpTools: boolean;
             };
             notes: {
                 archiveAfterDays: number;
@@ -8602,6 +8603,7 @@ export interface components {
             };
             mcp?: {
                 elicitation: boolean;
+                advertiseStepUpTools: boolean;
             };
             notes?: {
                 archiveAfterDays: number;
@@ -8827,6 +8829,7 @@ export interface components {
             };
             mcp?: {
                 elicitation?: boolean;
+                advertiseStepUpTools?: boolean;
             };
             notes?: {
                 archiveAfterDays?: number;
