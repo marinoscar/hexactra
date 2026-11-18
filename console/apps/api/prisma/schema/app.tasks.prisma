@@ -199,6 +199,7 @@ model Run {
   conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   steps        RunStep[]
   chatMessages ChatMessage[]
+  guidance     RunGuidance[]
 
   // composed from app:questions.prisma
   questions Question[]

@@ -38,7 +38,7 @@ export async function fetchRunScreenshot(id: string): Promise<string | null> {
 }
 
 /** The events of `GET /api/chats/:id/stream` (#485), or `open` on every (re)connect. */
-export const CHAT_STREAM_EVENTS = ['chat', 'message', 'turn', 'run', 'question', 'heartbeat'] as const;
+export const CHAT_STREAM_EVENTS = ['chat', 'message', 'turn', 'run', 'question', 'guidance', 'heartbeat'] as const;
 export type ChatStreamEventType = (typeof CHAT_STREAM_EVENTS)[number];
 export type ChatStreamEvent = { type: 'open' } | { type: ChatStreamEventType; data: unknown };
 

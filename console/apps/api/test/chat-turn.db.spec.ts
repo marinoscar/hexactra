@@ -186,6 +186,67 @@ describe('a turn', () => {
   });
 });
 
+describe('steering a live run and following up (#490)', () => {
+  it('queues guidance for the live run, tied to the owner message, without a reply or a second run', async () => {
+    const alice = await login('guide');
+    const id = await chatWith(alice, 'Book two cinema tickets for tonight');
+    const model = scriptedAi([[['start_run', { goal: 'Book two tickets for tonight.' }]], [['guide_run', { note: '  Use the 7:30 PM showing instead.  ' }]], { say: 'Noted.' }]);
+    const turns = engine(model.ai);
+    await turns.run(id, alice.userId, null);
+    const said = await chats.postUserMessage(alice.userId, id, 'Use the 7:30 showing instead');
+    await turns.run(id, alice.userId, null);
+
+    const [run] = await runsOf(id);
+    const rows = await prisma.runGuidance.findMany({ where: { conversationId: id } });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ runId: run!.id, messageSeq: said.seq, note: 'Use the 7:30 PM showing instead.', deliveredAt: null });
+    expect(model.outputs[1]).toMatch(/^Queued/);
+    expect(await runsOf(id)).toHaveLength(1);
+    // The owner's own message carries the state: no assistant line is added.
+    expect((await thread(id)).map((m) => [m.role, m.kind])).toEqual([['user', 'text'], ['assistant', 'run'], ['user', 'text']]);
+
+    // The next turn's model sees that the message was already passed on.
+    await chats.postUserMessage(alice.userId, id, 'Thanks');
+    await turns.run(id, alice.userId, null);
+    expect(model.inputs[2]).toContain('[user] Use the 7:30 showing instead [already passed to the run with guide_run]');
+    expect(model.inputs[2]).not.toContain('[user] Thanks [already');
+  });
+
+  it('refuses guidance when no run is live, and the owner gets words', async () => {
+    const alice = await login('guide-late');
+    const id = await chatWith(alice, 'Check the fare to Lisbon');
+    const turns = engine(scriptedAi([[['start_run', { goal: 'Check the fare to Lisbon.' }]]]).ai);
+    await turns.run(id, alice.userId, null);
+    const [run] = await runsOf(id);
+    await tasks.transition(alice.userId, run!.id, 'running');
+    await tasks.transition(alice.userId, run!.id, 'succeeded', { result: 'The fare is $420.' });
+
+    await chats.postUserMessage(alice.userId, id, 'Make it business class');
+    const late = scriptedAi([[['guide_run', { note: 'Business class.' }]]]);
+    await engine(late.ai).run(id, alice.userId, null);
+    expect(late.outputs[0]).toMatch(/^Refused: no run of this chat is live/);
+    expect(await prisma.runGuidance.count({ where: { conversationId: id } })).toBe(0);
+    expect((await thread(id)).at(-1)).toMatchObject({ role: 'assistant', kind: 'text' });
+  });
+
+  it('starts a follow-up with the earlier goal and result as context, on the same profile', async () => {
+    const alice = await login('follow-up');
+    const id = await chatWith(alice, 'Check the fare to Lisbon', { profile: 'travel' });
+    await engine(scriptedAi([[['start_run', { goal: 'Check the fare to Lisbon on 3 May.' }]]]).ai).run(id, alice.userId, null);
+    const [first] = await runsOf(id);
+    // A chat's first job has no context.
+    expect(first!.transcript).toBeNull();
+    await tasks.transition(alice.userId, first!.id, 'running');
+    await tasks.transition(alice.userId, first!.id, 'succeeded', { result: 'The cheapest fare is $420 with TAP.' });
+
+    await chats.postUserMessage(alice.userId, id, 'Now book it');
+    await engine(scriptedAi([[['start_run', { goal: 'Book that fare.' }]]]).ai).run(id, alice.userId, null);
+    const [, second] = await runsOf(id);
+    expect(second).toMatchObject({ goal: 'Book that fare.', profile: 'travel', trigger: 'chat', status: 'queued' });
+    expect(second!.transcript).toEqual({ log: [], chunks: 0, context: 'Previous job: Check the fare to Lisbon on 3 May.\nIt succeeded: The cheapest fare is $420 with TAP.' });
+  });
+});
+
 describe('the result of a chat run', () => {
   async function started(name: string) {
     const alice = await login(name);
@@ -315,7 +376,7 @@ describe('what the model is shown', () => {
     const model = scriptedAi([{ say: 'Hi.' }]);
     await engine(model.ai).run(id, alice.userId, null);
     const req = model.runTools.mock.calls[0]![0];
-    expect(req.tools.map((t) => t.tool.name).sort()).toEqual(['ask_user', 'start_run', 'stop_run']);
+    expect(req.tools.map((t) => t.tool.name).sort()).toEqual(['ask_user', 'guide_run', 'start_run', 'stop_run']);
     expect(req.instructions).toMatch(/Never ask for a password, a code, a card number/);
   });
 

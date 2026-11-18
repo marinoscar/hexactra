@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { subscribeChat } from '../live';
-import type { Chat, ChatDetail, ChatMessage, ChatRun } from '../types/chat';
+import type { Chat, ChatDetail, ChatGuidance, ChatMessage, ChatRun } from '../types/chat';
 import { lastSeq, mergeMessages } from './chatThread';
 
 /** How long the page shows "thinking" after a message was sent and nothing came back (a lost event must not leave the dots forever). */
@@ -22,6 +22,8 @@ export interface ChatState {
   run: ChatRun | null;
   /** The request that run waits on (its shape is the questions API's); null when it waits on none. */
   question: unknown;
+  /** Owner messages passed to a run as guidance, and what became of each (#490). */
+  guidance: ChatGuidance[];
   /** Send a message. Rejects with the API's error. */
   send: (text: string) => Promise<void>;
   /** Merge a change the page made itself (a rename, an archive, new settings). */
@@ -51,6 +53,7 @@ export function useChat(id: string | null): ChatState {
   const [awaiting, setAwaiting] = useState<number | null>(null);
   const [run, setRun] = useState<ChatRun | null>(null);
   const [question, setQuestion] = useState<unknown>(null);
+  const [guidance, setGuidance] = useState<ChatGuidance[]>([]);
   const awaitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -62,6 +65,7 @@ export function useChat(id: string | null): ChatState {
     setAwaiting(null);
     setRun(null);
     setQuestion(null);
+    setGuidance([]);
     setLoading(id !== null);
     if (id === null) return;
     let stale = false;
@@ -84,6 +88,7 @@ export function useChat(id: string | null): ChatState {
           else if (e.type === 'turn') setServerThinking(Boolean((e.data as { thinking?: boolean }).thinking));
           else if (e.type === 'run') setRun((e.data as { run: ChatRun | null }).run);
           else if (e.type === 'question') setQuestion((e.data as { question: unknown }).question);
+          else if (e.type === 'guidance') setGuidance((e.data as { guidance?: ChatGuidance[] }).guidance ?? []);
         });
       } catch (e) {
         if (stale) return;
@@ -101,8 +106,9 @@ export function useChat(id: string | null): ChatState {
 
   // Whatever arrives after the sent message (a reply, a question, a run, an error line) ends the wait.
   useEffect(() => {
-    if (awaiting !== null && messages.some((m) => m.seq > awaiting && m.role !== 'user')) setAwaiting(null);
-  }, [messages, awaiting]);
+    // A message passed to the run as guidance gets no reply: its own "Queued" line is the answer.
+    if (awaiting !== null && (messages.some((m) => m.seq > awaiting && m.role !== 'user') || guidance.some((g) => g.seq === awaiting))) setAwaiting(null);
+  }, [messages, guidance, awaiting]);
   useEffect(() => {
     if (awaitTimer.current) clearTimeout(awaitTimer.current);
     awaitTimer.current = awaiting === null ? null : setTimeout(() => setAwaiting(null), CHAT_AWAIT_MS);
@@ -123,5 +129,5 @@ export function useChat(id: string | null): ChatState {
 
   const patch = useCallback((next: Chat) => setChat(next), []);
 
-  return { chat, messages, loading, notFound, error, thinking: serverThinking || awaiting !== null, run, question, send, patch };
+  return { chat, messages, loading, notFound, error, thinking: serverThinking || awaiting !== null, run, question, guidance, send, patch };
 }

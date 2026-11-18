@@ -1,8 +1,10 @@
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
-import { Box, Chip, Divider, Paper, Stack, Typography } from '@mui/material';
+import { Box, Button, Chip, Divider, Link, Paper, Stack, Typography } from '@mui/material';
 import { keyframes } from '@mui/material/styles';
 
-import type { ChatMessage, ChatRun } from '../types/chat';
+import { Link as RouterLink } from 'react-router-dom';
+
+import type { ChatGuidanceState, ChatMessage, ChatRun, ChatTaskDraft } from '../types/chat';
 import { formatTime, useProfileTimeZone } from '../ui';
 import { BrowserCard, ResultCard } from './ChatBrowser';
 import { clarifyOptions, type ThreadRow } from './chatThread';
@@ -31,22 +33,53 @@ function Stamp({ iso, align }: { iso: string; align: 'left' | 'right' }) {
   );
 }
 
-/** A task the AI drafted, until its own card (#489): what it is. */
-function DraftRow({ message }: { message: ChatMessage }) {
+/** The task a `task_draft` message carries, when its `meta` is one. */
+export function draftOf(message: Pick<ChatMessage, 'kind' | 'meta' | 'text'>): ChatTaskDraft | null {
+  if (message.kind !== 'task_draft') return null;
+  const meta = message.meta as Partial<ChatTaskDraft> | null;
+  const goal = typeof meta?.goal === 'string' && meta.goal.trim() ? meta.goal : message.text;
+  if (!goal.trim()) return null;
+  return {
+    name: typeof meta?.name === 'string' ? meta.name : '',
+    goal,
+    profile: typeof meta?.profile === 'string' ? meta.profile : 'default',
+    hostId: typeof meta?.hostId === 'string' ? meta.hostId : null,
+    hostFallback: meta?.hostFallback !== false,
+    policyId: typeof meta?.policyId === 'string' ? meta.policyId : null,
+    allowedDomains: Array.isArray(meta?.allowedDomains) ? meta.allowedDomains.filter((d): d is string => typeof d === 'string') : [],
+    confirmRiskyActions: meta?.confirmRiskyActions === true,
+  };
+}
+
+/** A task the assistant drafted from the chat (#489): its name, its goal, and the way to review and save it. */
+function DraftCard({ message, onReview }: { message: ChatMessage; onReview?: (draft: ChatTaskDraft) => void }) {
+  const draft = draftOf(message);
   return (
-    <Paper variant="outlined" sx={{ p: 1.5, maxWidth: BUBBLE_MAX, borderRadius: 3, bgcolor: 'background.paper' }}>
+    <Paper variant="outlined" component="article" aria-label="Task draft" sx={{ p: 1.5, width: '100%', maxWidth: { xs: '100%', sm: 440 }, borderRadius: 3, bgcolor: 'background.paper' }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
         <TaskAltIcon fontSize="small" color="primary" aria-hidden />
         <Typography variant="subtitle2" component="p">
-          Drafted a task
+          {draft?.name || 'A task from this chat'}
         </Typography>
       </Stack>
       <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-        {message.text}
+        {draft?.goal ?? message.text}
       </Typography>
+      {draft && onReview && (
+        <Button variant="contained" onClick={() => onReview(draft)} sx={{ mt: 1.5, minHeight: { xs: 44, sm: 36 }, borderRadius: 3 }}>
+          Review and save
+        </Button>
+      )}
     </Paper>
   );
 }
+
+/** The line under an owner message that was passed to the working agent (#490). */
+export const GUIDANCE_LABEL: Record<ChatGuidanceState, string> = {
+  queued: 'Queued for the agent',
+  delivered: 'Seen by the agent',
+  missed: 'Not seen: the job had ended',
+};
 
 /** What the run and result cards of a thread need from the page (#487). */
 export interface ThreadCards {
@@ -58,8 +91,16 @@ export interface ThreadCards {
   paneOpen: boolean;
   onOpenBrowser: () => void;
   onCardVisible: (visible: boolean) => void;
+  /** Owner messages passed to a run as guidance, by `seq` (#490): each shows what became of it. */
+  guidance?: ReadonlyMap<number, ChatGuidanceState>;
   /** Start the job of a finished run again; undefined when that is not possible now. */
   onRunAgain?: (result: ChatMessage) => void;
+  /** Draft a task from the chat (the result card's button); undefined when the viewer cannot write tasks. */
+  onSaveAsTask?: () => void;
+  /** A draft is being written. */
+  savingTask?: boolean;
+  /** Open a drafted task in the task form; undefined when the viewer cannot write tasks. */
+  onReviewDraft?: (draft: ChatTaskDraft) => void;
 }
 
 export interface MessageRowProps {
@@ -73,14 +114,25 @@ export interface MessageRowProps {
 /** One message of the thread: the owner's on the right, the assistant's on the left, a system line in the middle. */
 export function MessageRow({ message, answerable, onAnswer, cards }: MessageRowProps) {
   if (message.role === 'system') {
+    // "Saved as the task …" carries the task's id (#489): the line links to it.
+    const taskId = (message.meta as { taskId?: unknown } | null)?.taskId;
     return (
       <Typography role="status" variant="body2" color="text.secondary" sx={{ textAlign: 'center', my: 1, px: 2, overflowWrap: 'anywhere' }}>
         {message.text}
+        {typeof taskId === 'string' && (
+          <>
+            {' '}
+            <Link component={RouterLink} to={`/tasks/${taskId}`}>
+              Open the task
+            </Link>
+          </>
+        )}
       </Typography>
     );
   }
   const mine = message.role === 'user';
   const options = clarifyOptions(message);
+  const guided = mine ? cards.guidance?.get(message.seq) : undefined;
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: mine ? 'flex-end' : 'flex-start', my: 0.75 }} data-seq={message.seq}>
       {message.kind === 'run' ? (
@@ -95,9 +147,9 @@ export function MessageRow({ message, answerable, onAnswer, cards }: MessageRowP
           onVisible={cards.onCardVisible}
         />
       ) : message.kind === 'result' ? (
-        <ResultCard message={message} onRunAgain={cards.onRunAgain ? () => cards.onRunAgain?.(message) : undefined} />
+        <ResultCard message={message} onRunAgain={cards.onRunAgain ? () => cards.onRunAgain?.(message) : undefined} onSaveAsTask={cards.onSaveAsTask} saving={cards.savingTask} />
       ) : message.kind === 'task_draft' ? (
-        <DraftRow message={message} />
+        <DraftCard message={message} onReview={cards.onReviewDraft} />
       ) : (
         <Box
           sx={{
@@ -113,6 +165,11 @@ export function MessageRow({ message, answerable, onAnswer, cards }: MessageRowP
             {message.text}
           </Typography>
         </Box>
+      )}
+      {guided && (
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.25, mr: 0.5 }} data-guidance={guided}>
+          {GUIDANCE_LABEL[guided]}
+        </Typography>
       )}
       {options.length > 0 && (
         <Stack direction="row" role="group" aria-label="Suggested answers" sx={{ flexWrap: 'wrap', gap: 1, mt: 1, maxWidth: BUBBLE_MAX }}>

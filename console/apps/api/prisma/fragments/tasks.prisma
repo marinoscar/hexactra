@@ -193,6 +193,7 @@ model Run {
   conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
   steps        RunStep[]
   chatMessages ChatMessage[]
+  guidance     RunGuidance[]
 
   @@index([userId, createdAt])
   /// The runs list filtered by status, newest first (#420).

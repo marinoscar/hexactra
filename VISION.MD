@@ -1528,6 +1528,7 @@ The Phase 2 extension milestone in Section 19 must therefore include **Side Pane
   - identity, roles and personal access tokens;
   - tasks, runs and steps;
   - the server-side AI goal runner;
+  - the chat (Section 26.7);
   - schedules, the handoff Inbox, notifications (web, email, Web Push and the Android app), outbound webhooks and alerts;
   - telemetry, the Doctor checks, and fleet management.
 
@@ -1581,6 +1582,23 @@ Detail, the settings and the API: `console/README.md`, "Agent policies".
 Status: shipped in epic #398 (E31). Not offered: policies shared across an organization (a JSON file is the sharing path), and a per-request model classifier (routing is escalate-on-stall).
 
 ---
+
+### 26.7 Chat (epic #482)
+
+**Status: implemented in `console/` and covered by automated tests; not yet run end to end on a deployed stack with a real model, a real node and a phone (#510).**
+
+The console has a second way to start work, next to Task → Run: a chat (`/chat`, `console/docs/chat.md`).
+
+- **A front door, not a second agent.** The owner types what they want. A light orchestrator turn (a queue job, its own AI feature, no browser) replies, asks at most one clarifying question, or starts a run. That run is an ordinary run (trigger `chat`): the same goal runner, agent policy, budgets, steps and audit trail.
+- **The work shows in the thread.** A Browser card follows the run and opens the live view, with Stop and Take over. When the run ends, its result is a message.
+- **Requests are answered in the thread.** An approval or a code is a card in the chat; it is the same question, under the same channel rules, as in the Inbox (Section 11.3). The Inbox keeps the requests of scheduled, API and MCP runs.
+- **Secrets stay out.** A code typed into a card goes to the fabric handoff (Section 11.6). It is not stored in a chat message and reaches no model; the orchestrator reads chat messages only.
+- **Limits are the owner's.** A chat carries the same opt-ins as a task (allowed sites, confirmation before purchases, on by default in a chat). The orchestrator cannot set them, and what the owner types to a working run is advice in its log, not a permission.
+- **Steering and follow-ups.** A message typed while a run works is read by the runner at its next chunk. A request after a run has ended starts a new run on the same profile, told how the last one ended.
+- **A chat can become a task.** The AI drafts a name and a standalone goal; the owner reviews and saves it in the task form.
+- **A web surface.** The CLI, TUI and MCP have no chat, by recorded decision (Section 26.2): a hosted AI app is already a chat and shows the run and question cards in its own thread.
+
+Not included: video streaming, one browser session kept open across a chat's runs, several runs of one chat at once, and chat apps as channels (#293).
 
 ## 27. Human emulator: full powers (epic #366)
 

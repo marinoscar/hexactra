@@ -821,7 +821,7 @@
     },
     {
       "id": "chats.manage",
-      "description": "Chats: threads in which the owner asks for something and the agent answers; list, create, read with messages, post a message, rename, archive and delete (with the chat's runs); an open chat follows one event stream (new messages, the AI working, its run, the request the run waits on)",
+      "description": "Chats: threads in which the owner asks for something and the agent answers; list, create, read with messages, post a message, rename, archive and delete (with the chat's runs); an open chat follows one event stream (new messages, the AI working, its run, the request the run waits on); a chat can be saved as a task: the AI drafts it and the owner reviews it in the task form",
       "rest": [
         "GET /api/chats",
         "POST /api/chats",
@@ -829,7 +829,9 @@
         "PATCH /api/chats/{id}",
         "DELETE /api/chats/{id}",
         "POST /api/chats/{id}/messages",
-        "GET /api/chats/{id}/stream"
+        "GET /api/chats/{id}/stream",
+        "POST /api/chats/{id}/task-draft",
+        "POST /api/chats/{id}/task-link"
       ],
       "cli": {
         "none": "A chat is a conversation surface of the web app; the CLI starts a job with `runs start` and answers with `inbox answer`"

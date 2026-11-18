@@ -6504,6 +6504,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chats/{id}/task-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permissions `chat:read` and `tasks:write`. */
+        post: operations["chat_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chats/{id}/task-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permissions `chat:write` and `tasks:read`. */
+        post: operations["chat_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webhooks/events": {
         parameters: {
             query?: never;
@@ -15933,6 +15967,25 @@ export interface components {
         PostMessageDto: {
             /** @description What the owner wrote. Never a password or a code: the agent asks for those through a request. */
             text: string;
+        };
+        ChatTaskDraftResponseDto: {
+            /** @description A short name the AI wrote, or the chat's title */
+            name: string;
+            /** @description A standalone instruction written from the conversation; the chat's newest run goal when no model answered. Never a secret. */
+            goal: string;
+            profile: string;
+            hostId: string | null;
+            hostFallback: boolean;
+            policyId: string | null;
+            allowedDomains: string[];
+            confirmRiskyActions: boolean;
+        };
+        LinkTaskDto: {
+            /**
+             * Format: uuid
+             * @description A task of the caller, saved from this chat.
+             */
+            taskId: string;
         };
         WebhookEventCatalogDto: {
             items: {
@@ -37215,6 +37268,110 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PostMessageDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChatMessageResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    chat_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChatTaskDraftResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    chat_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkTaskDto"];
             };
         };
         responses: {

@@ -22,7 +22,7 @@ import { isSettledError, type AnswerBody, type Question } from '../components/qu
 import { useOpenViewer } from '../components/useOpenViewer';
 import { useNow } from '../components/RunActivity';
 import { useRunFrame } from '../components/useRunFrame';
-import type { Chat, ChatMessage, ChatSettings, ChatStatus } from '../types/chat';
+import type { Chat, ChatDraftState, ChatMessage, ChatSettings, ChatStatus, ChatTaskDraft } from '../types/chat';
 import { EmptyState, ErrorBanner, SAFE_AREA_BOTTOM, isLive, toast, useConfirm, useProfileTimeZone } from '../ui';
 
 /** How close to the end of the thread counts as "reading the latest" (new messages then keep the view at the end). */
@@ -126,6 +126,7 @@ export function ChatPage() {
   // ---- The browser of the chat's live run (#487) ----
   const run = state.run;
   const liveRun = run && isLive(run.status) ? run : null;
+  const guidance = useMemo(() => new Map(state.guidance.map((g) => [g.seq, g.state])), [state.guidance]);
   const liveRunId = liveRun?.id ?? null;
   const [browserOpen, setBrowserOpen] = useState(false);
   const [cardVisible, setCardVisible] = useState(false);
@@ -335,7 +336,38 @@ export function ChatPage() {
     const started = [...messages].reverse().find((m) => m.kind === 'run' && m.seq < result.seq && (result.runId === null || m.runId === result.runId || m.runId === null));
     void send(started ? `Run this again: ${started.text}` : 'Run that again.');
   };
-  const cards: ThreadCards = { run, frame, frameHidden, now, paneOpen, onOpenBrowser: openBrowser, onCardVisible, onRunAgain: mayType && !sending && liveRun === null ? runAgain : undefined };
+  // ---- Save the chat as a task (#489): the AI drafts it, the owner reviews it in the task form. ----
+  const canSaveTask = viewer.hasPermission('tasks:write') && chatId !== null;
+  const [savingTask, setSavingTask] = useState(false);
+  /** The draft travels in the router's state, never in the URL. */
+  const reviewDraft = (draft: ChatTaskDraft) => {
+    if (chatId) navigate('/tasks/new', { state: { chatDraft: draft, chatId } satisfies ChatDraftState });
+  };
+  const saveAsTask = async () => {
+    if (!chatId || savingTask) return;
+    setSavingTask(true);
+    try {
+      reviewDraft(await api.post<ChatTaskDraft>(`/chats/${chatId}/task-draft`, {}));
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not draft the task', 'error');
+    } finally {
+      setSavingTask(false);
+    }
+  };
+  const cards: ThreadCards = {
+    run,
+    guidance,
+    frame,
+    frameHidden,
+    now,
+    paneOpen,
+    onOpenBrowser: openBrowser,
+    onCardVisible,
+    onRunAgain: mayType && !sending && liveRun === null ? runAgain : undefined,
+    onSaveAsTask: canSaveTask ? () => void saveAsTask() : undefined,
+    savingTask,
+    onReviewDraft: canSaveTask ? reviewDraft : undefined,
+  };
 
   const fill = useFillHeight();
   const listPanel = <ChatList list={list} status={status} onStatus={setStatus} selectedId={chatId} canWrite={canWrite} onAction={onAction} onNavigate={() => setDrawer(false)} />;
@@ -464,7 +496,7 @@ export function ChatPage() {
                 This chat is archived. It is read-only.
               </Alert>
             ) : (
-              canWrite && <ChatComposer value={draft} onChange={setDraft} onSend={() => void send(draft)} busy={sending} enterSends={!isPhone} autoFocus={!isPhone} placeholder={isNew ? 'What should I do?' : 'Message'} />
+              canWrite && <ChatComposer value={draft} onChange={setDraft} onSend={() => void send(draft)} busy={sending} enterSends={!isPhone} autoFocus={!isPhone} placeholder={isNew ? 'What should I do?' : liveRun ? 'Add something for the agent' : 'Message'} />
             )}
           </Box>
         </Box>

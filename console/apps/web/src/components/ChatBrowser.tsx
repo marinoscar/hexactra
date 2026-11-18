@@ -275,10 +275,14 @@ export interface ResultCardProps {
   message: ChatMessage;
   /** Start the same job again; undefined hides the button (nothing to repeat, a run is live, or the viewer cannot write). */
   onRunAgain?: () => void;
+  /** Draft a task from the chat and open it for review (#489); undefined hides the button (the viewer cannot write tasks). */
+  onSaveAsTask?: () => void;
+  /** The draft is being written: the button shows it and cannot be pressed twice. */
+  saving?: boolean;
 }
 
 /** How a run ended, in the thread (#487): the result or the reason, what it cost, and what to do next. */
-export function ResultCard({ message, onRunAgain }: ResultCardProps) {
+export function ResultCard({ message, onRunAgain, onSaveAsTask, saving = false }: ResultCardProps) {
   const meta = (message.meta ?? {}) as ResultMeta;
   const status = meta.status ?? '';
   const cost = formatCost(meta.costUsd, meta.costKnown ?? true);
@@ -300,8 +304,13 @@ export function ResultCard({ message, onRunAgain }: ResultCardProps) {
           {facts.join(' · ')}
         </Typography>
       )}
-      {(onRunAgain || message.runId) && (
+      {(onRunAgain || onSaveAsTask || message.runId) && (
         <Stack direction="row" useFlexGap sx={{ flexWrap: 'wrap', gap: 1, mt: 1.5, alignItems: 'center' }}>
+          {onSaveAsTask && status === 'succeeded' && (
+            <Button variant="contained" onClick={onSaveAsTask} disabled={saving} sx={{ minHeight: { xs: 44, sm: 36 }, borderRadius: 3 }}>
+              {saving ? 'Drafting…' : 'Save as task'}
+            </Button>
+          )}
           {onRunAgain && (
             <Button variant="outlined" onClick={onRunAgain} sx={{ minHeight: { xs: 44, sm: 36 }, borderRadius: 3 }}>
               Run again

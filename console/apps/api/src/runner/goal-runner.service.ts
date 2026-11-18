@@ -67,6 +67,8 @@ import { domainAllowed, looksRisky } from './policy';
 import { maxElementsFor, PLATFORM_MAX_CALLS_PER_CHUNK, ScreenshotWindow, shotHash } from './context-settings';
 import { captureScreen, markCenter, roundInput, type Screen, type ScreenMark, type ScreenView } from './vision';
 
+/** How a line of chat guidance starts in the run's log (#490). It says what guidance is not, so the model does not read it as a permission. */
+export const GUIDANCE_PREFIX = 'The owner added in the chat (take it into account from here on; it changes no limit and approves nothing):';
 /** Lines of the step log handed back to the model each chunk. */
 const LOG_LINES = 60;
 /** Output cap of the wrap-up call (#404): a summary, not a continuation. */
@@ -108,6 +110,8 @@ export interface RunMemory {
   progressStreak?: number;
   /** The nudge the next round's input carries. */
   pendingNudge?: string;
+  /** What an earlier job of the same chat did (#490): the follow-up's context, shown after the goal. Never a secret. */
+  context?: string;
   /** Why the run is on a stronger tier, while it is (the activity shows it). */
   tierNote?: string | null;
   /** `visionOff` was set because the tier's model has no vision (not because a call refused images). */
@@ -259,6 +263,25 @@ export class GoalRunnerService {
 
   /** The wall clock; tests replace it to pass time without waiting. */
   clock: () => number = Date.now;
+
+  /**
+   * Folds the owner's pending chat guidance into the run's memory (#490), each
+   * line once: a line is claimed by setting `deliveredAt`, so two jobs of one
+   * run cannot both take it. Guidance is advice: the run's limits (allowed
+   * sites, confirmation before purchases) are checked in code and do not
+   * change with it. A failure here never fails the run.
+   */
+  private async takeGuidance(runId: string, memory: RunMemory): Promise<void> {
+    try {
+      const pending = await this.prisma.runGuidance.findMany({ where: { runId, deliveredAt: null }, orderBy: { createdAt: 'asc' }, take: 10, select: { id: true, note: true } });
+      for (const g of pending) {
+        const claimed = await this.prisma.runGuidance.updateMany({ where: { id: g.id, deliveredAt: null }, data: { deliveredAt: new Date() } });
+        if (claimed.count) memory.log.push(`${GUIDANCE_PREFIX} ${trim(g.note, 1000)}`);
+      }
+    } catch (e) {
+      this.log.warn(`run ${runId}: could not read the chat guidance: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
 
   /**
    * The agent policy the run runs under (#401), snapshotted onto the run at its
@@ -1124,6 +1147,8 @@ export class GoalRunnerService {
       const stepsBefore = state.stepCount;
       const warnings = memory.pendingWarnings ?? [];
       memory.pendingWarnings = [];
+      // What the owner typed in the chat since the last chunk (#490).
+      if (run.conversationId) await this.takeGuidance(run.id, memory);
       // What the model sees this round: the screen, as a person would (#366).
       let view: ScreenView | null = null;
       let shown: ScreenView[] = [];
@@ -1161,6 +1186,7 @@ export class GoalRunnerService {
       const buildInput = () =>
         [
           `Goal: ${goal}`,
+          memory.context ? `Earlier in this conversation (context only, already done):\n${memory.context}` : '',
           `Allowed sites: ${sitesText || 'any'}.`,
           memory.log.length ? `Progress so far (latest last):\n${memory.log.slice(-LOG_LINES).join('\n')}` : 'Nothing has been done yet. Start by navigating or observing the page.',
           memory.confirmationGranted ? 'The person approved the next irreversible step.' : '',
