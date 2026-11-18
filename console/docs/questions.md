@@ -31,6 +31,15 @@ Every question has an **owner** (the user it is asked of), an **asker** (`user:<
 
 A response is `{ outcome, value?, values?, valueWithheld, channel?, by?, answeredAt }`. `by` is the signed-in answerer (`user:<id>`); a webhook answer is recorded as its owner on channel `webhook`. **The first answer wins**: a later one is a 409, whichever channel it comes from.
 
+### The confirmation gate (#550)
+
+With "Ask me before purchases" on, the runner stops a click only when **the element clicked** commits something: a button, submit input, link or menu item whose whole label is a commitment ("Pay", "Pay $10.00", "Send money", "Place your order", "Confirm transfer", "Delete account", "Cancel subscription"), or a submit button whose form posts to a commit path (`/payment/submit`, `/checkout/place-order`). The table is `classifyTarget` in `apps/api/src/runner/policy.ts`, with five categories: `payment`, `purchase`, `send`, `delete`, `submit`.
+
+- **Decided by the target, never by the model's words.** The model's `reason` and the selector string are not inputs. The runner reads the element through the fabric (one `evaluate` for `click` and `click_mark`, `elementFromPoint` for `click_at`); these reads are not actions: no step, no budget, no stall count. When the page cannot be asked (a failure, a cross-origin frame), the old word list is matched on the element's label only.
+- **Never risky:** a date cell, an option, a checkbox, a radio, a text field, a tab, an accordion, plain text, and a link or menu item that names a feature ("Send money with Zelle®", "Payment activity"). "Continue", "Next", "Review" and "Cancel" are not commitments. A desktop click (`desktop_click`) has no page element and is never gated.
+- **The step and the question say why.** A paused click's step stores `{ category, label }` in its args and its summary names them. The confirmation the agent then asks carries `gate: { host, category, label }`, set by the server only: the host is the active tab's, as the browser reports it. A `gate` sent by the model or an API caller is dropped.
+- **An approval covers that target only.** Approving the question lets the click on the same category and label on the same host through, once. A different commitment asks again; so does a confirmation the agent asked on its own, before the gate named a target.
+
 ### "Remember me" (#527)
 
 A `credentials` or `secret` question may carry `rememberLabel`: the words of the site's own option to remember the sign-in or the device ("Keep me signed in", "Trust this device"), at most 80 characters. The form shows it as a checkbox, **ticked by default**, and the answer's `remember` records the choice. The agent then ticks or unticks that box on the page before it submits. With no answer for it, the box is left as the page had it. The site does the remembering, in the run's browser profile; Hexactra stores no password.

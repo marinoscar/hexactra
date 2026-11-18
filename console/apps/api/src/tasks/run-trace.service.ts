@@ -13,6 +13,7 @@
 // grant or limits of an AI app, `screenshotKey`, another user's data (the
 // run is read through `prisma.forUser`) and the node's enrollment data (the
 // host is its id and name).
+import { Transform, type Readable } from 'node:stream';
 import { HttpException, HttpStatus, Inject, Injectable, Logger, NotFoundException, Optional, PayloadTooLargeException } from '@nestjs/common';
 import { resolveApiVersion } from '@marinoscar/platform-api/host';
 import type { PatternHits, PatternId } from '@app/shared/sensitive-patterns';
@@ -24,6 +25,7 @@ import { readSnapshot, snapshotBudgetView } from '../policies/policy-snapshot';
 import { readConfirmedActions } from '../runner/confirmed-actions';
 import { PrismaService } from '../prisma/prisma.service';
 import { maskValue, SENSITIVE_PATTERNS_VERSION } from './mask';
+import { buildReportDefinition, renderPdf, type ReportPaper } from './run-report.pdf';
 import { RUN_ARTIFACT_STORE, type RunArtifactStore } from './run-delete.service';
 import { RunMetrics } from './run-metrics';
 import { runClientView } from './run-cost';
@@ -56,6 +58,13 @@ export interface RunExportFile {
   body: string;
   filename: string;
   bytes: number;
+}
+
+/** A rendered PDF report, ready to stream. */
+export interface RunReportFile {
+  stream: Readable;
+  filename: string;
+  partial: boolean;
 }
 
 /** How long the host name lookup may take before the file goes without it. */
@@ -284,15 +293,45 @@ export class RunTraceService {
     if (bytes > maxBytes) throw tooLarge(maxBytes);
     const ms = Date.now() - started;
     this.log.log(`runs.export user=${userId} run=${runId} format=json screenshots=${opts.screenshots} bytes=${bytes} ms=${ms}`);
-    this.metrics.exported('json', opts.screenshots);
+    await this.recordExport(userId, runId, opts.orgId ?? null, { format: 'json', screenshots: opts.screenshots, bytes, partial: trace.partial });
+    return { body, bytes, filename: runExportFilename(runId, opts.now ?? new Date()) };
+  }
+
+  /**
+   * The PDF report of a run (#543), for the route: the same rate limit, trace
+   * (masked once, here), audit event and counter as the JSON file. The PDF is
+   * streamed; the log line is written when the stream ends, with its size.
+   */
+  async exportPdf(userId: string, runId: string, opts: RunTraceOptions & { orgId?: string | null; paper?: ReportPaper }): Promise<RunReportFile> {
+    const started = Date.now();
+    await this.rateLimit(userId);
+    const trace = await this.build(userId, runId, opts);
+    const paper = opts.paper ?? 'a4';
+    let bytes = 0;
+    // Counts what passes without consuming it: the PDF flows only as fast as the response reads it.
+    const stream = new Transform({
+      transform(chunk: Buffer, _enc, done) {
+        bytes += chunk.length;
+        done(null, chunk);
+      },
+    });
+    const pdf = renderPdf(buildReportDefinition(trace, { paper, screenshots: opts.screenshots }));
+    pdf.once('error', (err: Error) => stream.destroy(err));
+    pdf.pipe(stream);
+    stream.once('end', () => this.log.log(`runs.export user=${userId} run=${runId} format=pdf screenshots=${opts.screenshots} paper=${paper} bytes=${bytes} ms=${Date.now() - started}`));
+    stream.once('error', (err: Error) => this.log.warn(`runs.export: the PDF of run ${runId} could not be rendered: ${err.name}`));
+    await this.recordExport(userId, runId, opts.orgId ?? null, { format: 'pdf', screenshots: opts.screenshots, paper, partial: trace.partial });
+    return { stream, filename: runExportFilename(runId, opts.now ?? new Date(), 'pdf'), partial: trace.partial };
+  }
+
+  /** The counter and the audit event `runs.exported`; never goal, result or step text. */
+  private async recordExport(userId: string, runId: string, orgId: string | null, meta: { format: 'json' | 'pdf'; screenshots: RunExportScreenshots; partial: boolean; bytes?: number; paper?: ReportPaper }): Promise<void> {
+    this.metrics.exported(meta.format, meta.screenshots);
     try {
-      await this.prisma.auditEvent.create({
-        data: { actorUserId: userId, action: 'runs.exported', targetType: 'run', targetId: runId, orgId: opts.orgId ?? null, meta: { runId, format: 'json', screenshots: opts.screenshots, bytes, partial: trace.partial } },
-      });
+      await this.prisma.auditEvent.create({ data: { actorUserId: userId, action: 'runs.exported', targetType: 'run', targetId: runId, orgId, meta: { runId, ...meta } } });
     } catch (err) {
       this.log.warn(`runs.export: the audit record could not be written: ${err instanceof Error ? err.name : 'error'}`);
     }
-    return { body, bytes, filename: runExportFilename(runId, opts.now ?? new Date()) };
   }
 
   /** 429 `RATE_LIMITED` past `RUN_EXPORT_RATE_LIMIT` exports in a minute; a limiter that fails lets the export through. */

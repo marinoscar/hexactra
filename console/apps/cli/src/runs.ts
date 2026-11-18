@@ -5,7 +5,7 @@
 import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import type { ApiClient } from '@marinoscar/platform-cli/api-client';
+import { buildUrl, type ApiClient, type FetchLike } from '@marinoscar/platform-cli/api-client';
 
 /** `GET /runs?envelope=1`. */
 export interface RunPage<T> {
@@ -78,10 +78,10 @@ export function sizeText(bytes: number): string {
   return `${bytes} B`;
 }
 
-/** The file name the console suggests (`Content-Disposition`), or `hexactra-run-<first 8 of id>-<yyyymmdd>.json`. */
-export function exportFilename(id: string, disposition: string | null, now: Date = new Date()): string {
+/** The file name the console suggests (`Content-Disposition`), or `hexactra-run-<first 8 of id>-<yyyymmdd>.<ext>`. */
+export function exportFilename(id: string, disposition: string | null, now: Date = new Date(), ext: 'json' | 'pdf' = 'json'): string {
   const named = disposition ? /filename="([^"/\\]+)"/.exec(disposition)?.[1] : undefined;
-  return named ?? `hexactra-run-${id.slice(0, 8)}-${now.toISOString().slice(0, 10).replace(/-/g, '')}.json`;
+  return named ?? `hexactra-run-${id.slice(0, 8)}-${now.toISOString().slice(0, 10).replace(/-/g, '')}.${ext}`;
 }
 
 /**
@@ -106,4 +106,52 @@ export async function exportRun(api: ApiClient, id: string, opts: { screenshots:
   const path = resolve(opts.dir ?? process.cwd(), opts.output ?? exportFilename(id, res.headers.get('content-disposition')));
   writeFileSync(path, text);
   return { path, bytes: Buffer.byteLength(text) };
+}
+
+/** Where and as whom the PDF is fetched: the API root, the token and (in tests) a fake fetch. */
+export interface ReportTarget {
+  apiBaseUrl: string;
+  token: string;
+  fetch?: FetchLike;
+}
+
+/** A clear sentence for an export the console refused, or null to report it as is. */
+function exportError(id: string, status: number, code: string | undefined): string | null {
+  if (status === 404) return `Run ${id} was not found: no run of yours has this id (hexactra runs list shows them).`;
+  if (status === 400) return `"${id}" is not a run id: pass the full id (hexactra runs list --json shows it).`;
+  if (code === 'EXPORT_TOO_LARGE') return `The report of run ${id} would be over 50 MB with its screenshots: export it with --no-screenshots.`;
+  if (code === 'EXPORT_RATE_LIMITED') return 'At most 10 run exports a minute: wait a minute and try again.';
+  return null;
+}
+
+/**
+ * `hexactra runs export <id> --pdf` (#543): the run's PDF report from
+ * `GET /runs/{id}/export?format=pdf`, written to `output` (default: the
+ * console's file name in `dir`). The API client reads JSON only, so this one
+ * request is a plain `fetch` with the same bearer token. On an error no file
+ * is written.
+ */
+export async function exportRunPdf(
+  target: ReportTarget,
+  id: string,
+  opts: { screenshots: boolean; paper?: 'a4' | 'letter'; output?: string; dir?: string },
+): Promise<{ path: string; bytes: number }> {
+  const url = buildUrl(target.apiBaseUrl, `/runs/${encodeURIComponent(id)}/export`, { format: 'pdf', screenshots: opts.screenshots ? 'embed' : 'none', paper: opts.paper ?? 'a4' });
+  const fetchImpl = target.fetch ?? globalThis.fetch;
+  const res = await fetchImpl(url, { headers: { authorization: `Bearer ${target.token}`, accept: 'application/pdf, application/json' }, signal: AbortSignal.timeout(180_000) });
+  if (!res.ok) {
+    let body: { code?: string; message?: string } = {};
+    try {
+      body = (await res.json()) as typeof body;
+    } catch {
+      // not JSON: the status says enough
+    }
+    const message = exportError(id, res.status, body.code) ?? `The console answered ${res.status}${body.message ? `: ${body.message}` : ''}`;
+    throw Object.assign(new Error(message), { status: res.status, code: body.code });
+  }
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (bytes.subarray(0, 5).toString('latin1') !== '%PDF-') throw new Error(`The console did not send a PDF for run ${id}: is the server URL right?`);
+  const path = resolve(opts.dir ?? process.cwd(), opts.output ?? exportFilename(id, res.headers.get('content-disposition'), new Date(), 'pdf'));
+  writeFileSync(path, bytes);
+  return { path, bytes: bytes.length };
 }

@@ -21,6 +21,7 @@ import {
   toResponse,
   validateAnswer,
   type QuestionAnswerInput,
+  type QuestionGate,
   type QuestionConstraints,
   type QuestionInputType,
   type QuestionOption,
@@ -60,6 +61,8 @@ export interface QuestionView {
   rememberLabel: string | null;
   /** form (#552): the missing parameters of a task run, asked at once before it starts. */
   fields: FormField[] | null;
+  /** The commitment the server's confirmation gate stopped (#550), set by the server only; null otherwise. */
+  gate: QuestionGate | null;
   status: QuestionStatusType;
   response: QuestionResponse | null;
   pageTitle: string | null;
@@ -99,6 +102,7 @@ export function toQuestionView(q: Question): QuestionView {
     risk: (q.risk as 'low' | 'high' | null) ?? null,
     rememberLabel: q.rememberLabel,
     fields: (q.fields as unknown as FormField[] | null) ?? null,
+    gate: (q.gate as unknown as QuestionGate | null) ?? null,
     status: q.status,
     response: (q.response as unknown as QuestionResponse | null) ?? null,
     pageTitle: q.pageTitle,
@@ -196,6 +200,7 @@ export class QuestionsService {
       denyLabel: spec.denyLabel,
       risk: spec.risk,
       rememberLabel: spec.rememberLabel,
+      gate: spec.gate ? (spec.gate as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
     };
   }
 

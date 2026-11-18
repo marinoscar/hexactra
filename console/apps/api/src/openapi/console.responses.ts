@@ -310,6 +310,10 @@ export const questionResponseSchema = z.object({
   risk: z.enum(['low', 'high']).nullable(),
   rememberLabel: z.string().nullable().describe('credentials and secret: the site\'s "remember me" option, in the page\'s words'),
   fields: z.array(formFieldResponseSchema).nullable().describe('form (#552): the missing values of a task run, asked at once before it starts; answer with `fields: { key: value }`'),
+  gate: z
+    .object({ host: z.string().nullable(), category: z.string(), label: z.string().nullable() })
+    .nullable()
+    .describe('The commitment the confirmation gate stopped (#550): the page host the browser reported, the category and the element label. Set by the server only.'),
   status: z.enum(['pending', 'answered', 'cancelled', 'expired']),
   response: questionAnswerResponseSchema.nullable(),
   pageTitle: z.string().nullable(),

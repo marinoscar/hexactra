@@ -13,6 +13,7 @@ import { createApp } from '../src/main';
 import { builtinPolicy } from '../src/policies/builtin-policies';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { RunTraceService } from '../src/tasks/run-trace.service';
+import { imageObjects, readPdf } from './helpers/pdf-read';
 import { runTraceValidator } from './helpers/run-trace-schema';
 
 let app: NestFastifyApplication;
@@ -63,6 +64,10 @@ async function login(name: string): Promise<Session> {
   return { token, userId: me.json<{ data: { id: string } }>().data.id };
 }
 const get = (s: Session, url: string) => app.inject({ method: 'GET', url: `/api${url}`, headers: { authorization: `Bearer ${s.token}` } });
+const getPdf = async (s: Session, url: string) => {
+  const res = await get(s, url);
+  return { res, pdf: res.rawPayload };
+};
 
 /** A snapshot of the Balanced policy as the runner writes it at a run's first step. */
 function snapshot(): Prisma.InputJsonValue {
@@ -277,6 +282,70 @@ describe('GET /runs/{id}/export', () => {
   it('is in the OpenAPI document with its query and the file schema', async () => {
     const doc = (await app.inject({ method: 'GET', url: '/api/openapi.json' })).json<{ paths: Record<string, { get?: { parameters?: { name: string }[] } }> }>();
     const op = doc.paths['/api/runs/{id}/export']?.get;
-    expect(op?.parameters?.map((p) => p.name).sort()).toEqual(['format', 'id', 'screenshots']);
+    expect(op?.parameters?.map((p) => p.name).sort()).toEqual(['format', 'id', 'paper', 'screenshots']);
+  });
+});
+
+describe('GET /runs/{id}/export?format=pdf (#543)', () => {
+  it('sends a PDF attachment that holds the goal, the questions, the answers and the footer, and none of the seeded sensitive values', async () => {
+    const user = await login('pdf');
+    const id = await seed(user.userId);
+    const { res, pdf } = await getPdf(user, `/runs/${id}/export?format=pdf`);
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toBe('application/pdf');
+    expect(res.headers['cache-control']).toBe('no-store');
+    const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    expect(res.headers['content-disposition']).toBe(`attachment; filename="hexactra-run-${id.slice(0, 8)}-${day}.pdf"`);
+    const read = readPdf(pdf);
+    const text = read.text.join('\n').replace(/\s+/g, ' ');
+    expect(read.pages).toBeGreaterThanOrEqual(1);
+    expect(read.sizes[0]).toEqual([595.28, 841.89]);
+    expect(read.info).toMatchObject({ Title: 'Run report: Book the cheapest fare', Author: 'Hexactra' });
+    for (const want of ['Book the cheapest fare', 'Pay from account', 'Enter the code from your phone', 'Allowed', 'Provided (not recorded)', 'Sensitive data masked. Not a bank or legal record.', 'Failed: The page did not load', 'You confirmed 1 step']) {
+      expect(text).toContain(want);
+    }
+    for (const value of [CARD, ACCOUNT, EMAIL, TOKEN, SECRET, TRANSCRIPT_MARKER, 'grant-only.example.test', `runs/${user.userId}`]) expect(text).not.toContain(value);
+    // The two stored pictures of the seed are not real images: named in their captions, never embedded.
+    expect(imageObjects(pdf)).toBe(0);
+    expect(text).toContain('the picture could not be read');
+  });
+
+  it('paper=letter changes the page size; a live run prints the partial banner', async () => {
+    const user = await login('pdf-live');
+    const id = await seed(user.userId, 'running');
+    const read = readPdf((await getPdf(user, `/runs/${id}/export?format=pdf&paper=letter&screenshots=none`)).pdf);
+    expect(read.sizes.every(([w, h]) => w === 612 && h === 792)).toBe(true);
+    expect(read.text.join(' ').replace(/\s+/g, ' ')).toContain('Run in progress: partial report');
+    await prisma.run.update({ where: { id }, data: { status: 'cancelled', finishedAt: new Date() } });
+  });
+
+  it("answers 404 RUN_NOT_FOUND for another user's run, and 400 for an unknown paper", async () => {
+    const owner = await login('pdf-owner');
+    const other = await login('pdf-other');
+    const id = await seed(owner.userId);
+    const res = await get(other, `/runs/${id}/export?format=pdf`);
+    expect([res.statusCode, res.json<{ code?: string }>().code]).toEqual([404, 'RUN_NOT_FOUND']);
+    expect((await get(owner, `/runs/${id}/export?format=pdf&paper=a3`)).statusCode).toBe(400);
+  });
+
+  it('writes the audit event with format pdf and the counter; the log line has no goal or step text', async () => {
+    const user = await login('pdf-audit');
+    const id = await seed(user.userId);
+    const metrics = (service as unknown as { metrics: { exported: (...a: unknown[]) => void } }).metrics;
+    const counted = jest.spyOn(metrics, 'exported');
+    logged.length = 0;
+    const { res } = await getPdf(user, `/runs/${id}/export?format=pdf&screenshots=none&paper=letter`);
+    expect(res.statusCode).toBe(200);
+    expect(counted).toHaveBeenCalledWith('pdf', 'none');
+    const events = await prisma.auditEvent.findMany({ where: { actorUserId: user.userId, action: 'runs.exported' } });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ targetType: 'run', targetId: id });
+    expect(events[0]!.meta).toMatchObject({ runId: id, format: 'pdf', screenshots: 'none', paper: 'letter', partial: false });
+    const line = logged.find((l) => l.startsWith('runs.export ') && l.includes('format=pdf'));
+    expect(line).toMatch(new RegExp(`^runs\\.export user=${user.userId} run=${id} format=pdf screenshots=none paper=letter bytes=\\d+ ms=\\d+$`));
+    for (const text of [JSON.stringify(events), ...logged]) {
+      expect(text).not.toContain('Book the cheapest fare');
+      expect(text).not.toContain('Typed card');
+    }
   });
 });

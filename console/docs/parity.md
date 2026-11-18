@@ -18,7 +18,13 @@ What each client can do with the capabilities of epic E33 (#458): connected apps
 
 | Capability (registry id) | REST | MCP | CLI | TUI | SDK | Web | Android |
 |---|---|---|---|---|---|---|---|
-| Export a run as a masked JSON trace file (`runs.export`, #542, [runs.md](runs.md#exporting-a-run)) | **Implemented.** `GET /api/runs/{id}/export?format=json&screenshots=embed\|none` | **Implemented.** `run_export` (read-only, `runs:read`): the trace without images, cut to the result size limit and saying so in `truncated` | **Implemented.** `hexactra runs export <id> [--no-screenshots] [-o <file>]` | **Not offered, because** the TUI is for watching and answering; the CLI writes the file | **Implemented.** `hx.runs.export(id, { screenshots })`; the file's JSON Schema is `run-trace.schema.json` in the package | **Not yet:** the Export button on the run page is E35.8 | Through the web app, with the web page |
+| Export a run as a masked JSON trace file or a PDF report (`runs.export`, #542, #543, [runs.md](runs.md#exporting-a-run)) | **Implemented.** `GET /api/runs/{id}/export?format=json\|pdf&screenshots=embed\|none&paper=a4\|letter` | **Implemented.** `run_export` (read-only, `runs:read`): the trace without images, cut to the result size limit and saying so in `truncated` | **Implemented.** `hexactra runs export <id> [--pdf] [--paper letter] [--no-screenshots] [-o <file>]` | **Not offered, because** the TUI is for watching and answering; the CLI writes the file | **Implemented.** `hx.runs.export(id, { screenshots })`; the file's JSON Schema is `run-trace.schema.json` in the package | **Not yet:** the Export button on the run page is E35.8 | Through the web app, with the web page |
+
+## What memories added (E36)
+
+| Capability (registry id) | REST | MCP | CLI | TUI | SDK | Web | Android |
+|---|---|---|---|---|---|---|---|
+| Memories: list, read, add, edit, supersede, archive, delete, export (`memories.read`, `memories.write`, `memories.delete`, `memories.export`, #551, [memories.md](memories.md)) | **Implemented.** `/api/memories`, `/api/memories/{id}`, `…/supersede`, `…/archive`, `…/unarchive`, `GET /api/memories/export` | **Not offered, because** memories are personal data the owner keeps for their own agent: hosted AI apps cannot read or write them (decision of epic #549). A later tool needs its own scope, effect and title | **Implemented.** `hexactra memories list\|show\|add\|rm\|export` (values from flags, never a prompt) | **Not offered, because** the TUI is for watching and answering | Typed through `hx.api` | **Implemented.** Settings → Browser agent → Memories (`/settings/memories`), avatar menu | Through the web app |
 
 ## The Android column
 

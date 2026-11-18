@@ -25,16 +25,20 @@ export const RUN_EXPORT_RATE_LIMIT = 10;
 /** The most chat messages a file carries (the newest of the run's conversation). */
 export const RUN_TRACE_MAX_CHAT = 1_000;
 
-export const RUN_EXPORT_FORMATS = ['json'] as const;
+export const RUN_EXPORT_FORMATS = ['json', 'pdf'] as const;
+export type RunExportFormat = (typeof RUN_EXPORT_FORMATS)[number];
 export const RUN_EXPORT_SCREENSHOTS = ['embed', 'none'] as const;
 export type RunExportScreenshots = (typeof RUN_EXPORT_SCREENSHOTS)[number];
+/** The paper of the PDF report (#543). */
+export const RUN_EXPORT_PAPERS = ['a4', 'letter'] as const;
 
 export const runExportQuerySchema = z.object({
-  format: z.enum(RUN_EXPORT_FORMATS).default('json').describe('`json` (the only format of this route; the PDF report is its own route).'),
+  format: z.enum(RUN_EXPORT_FORMATS).default('json').describe('`json` (the default): the run trace file. `pdf`: the run report (#543), rendered from the same masked trace.'),
   screenshots: z
     .enum(RUN_EXPORT_SCREENSHOTS)
     .default('embed')
-    .describe('`embed` (the default) puts each masked trace picture in `steps[].screenshot.data` as base64; `none` keeps the picture facts and leaves the images out (a much smaller file).'),
+    .describe('`embed` (the default) puts each masked trace picture in the file (`steps[].screenshot.data` as base64, or in the report after its step); `none` leaves the images out (a much smaller file).'),
+  paper: z.enum(RUN_EXPORT_PAPERS).default('a4').describe('The PDF report\'s paper: `a4` (the default) or `letter`. Ignored for `json`.'),
 });
 export class RunExportQueryDto extends createZodDto(runExportQuerySchema) {}
 
