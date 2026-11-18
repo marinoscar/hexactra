@@ -95,7 +95,7 @@ The list, its filters and cursor, the counts, deleting and retention are in [run
 
 ## Client parity
 
-What each client can do with the capabilities of E32. "No" is a decision, with its reason; nothing here is left for later. The machine-checked form of this table is [packages/shared/capabilities.json](../packages/shared/capabilities.json): each surface's tests fail when a tool or command it names is missing.
+What each client can do with the capabilities of E32. "No" is a decision, with its reason; nothing here is left for later. The capabilities of epic E33 (connected apps, the activity log, the kill switch, the in-chat cards, consent) are in [parity.md](parity.md). The machine-checked form of this table is [packages/shared/capabilities.json](../packages/shared/capabilities.json): each surface's tests fail when a tool or command it names is missing.
 
 | Capability | MCP (`apps/api/src/mcp/mcp.tools.ts`) | CLI and TUI (`apps/cli`) | SDK (`@hexactra/console-sdk`) |
 |---|---|---|---|

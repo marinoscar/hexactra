@@ -57,6 +57,9 @@
 ### Integration
 - [ ] Control plane API responds correctly
 - [ ] MCP tools work
+- [ ] OAuth discovery answers through the public URL (`/.well-known/oauth-protected-resource/api/mcp` and `/.well-known/oauth-authorization-server`; Doctor checks `oauth.public_url`, `oauth.well_known` and `mcp.public_reachability`)
+- [ ] The hosted-client spec is green (`apps/api/test/mcp-hosted-client.db.spec.ts`, the scripted OAuth client)
+- [ ] The widgets are built into the image (`apps/mcp-ui/dist`: `resources/list` lists the run, question and tasks cards)
 - [ ] Native messaging host connects
 - [ ] Chrome extension loads
 

@@ -43,6 +43,22 @@ A run's models and limits come from its agent policy ([README, Agent policies](R
 5. **A policy never widens the task's opt-ins** (allowed sites, confirmation before purchases) and never holds a secret. Built-ins are code in `builtin-policies.ts`: change a value by bumping its `version`.
 6. **The export format is versioned** (`hexactra.agent-policies`, `formatVersion`): a change to the spec that older files cannot satisfy bumps `schemaVersion` and keeps the importer reading the old one.
 
+## MANDATORY: MCP tools
+
+The console is an MCP server (`POST /api/mcp`). Hosted assistants (ChatGPT, Claude) sign in with OAuth and get only the scopes the owner ticked; personal access tokens and sessions keep every tool. Reference: [docs/mcp.md](docs/mcp.md); threat model: [docs/security-hosted-clients.md](docs/security-hosted-clients.md).
+
+1. **One tool registry.** Every tool is an `McpTool` in `apps/api/src/mcp/mcp.tools.ts`; titles, scopes, annotations, schemas and card links are fields of it. Never keep a second list keyed by tool name outside the registry.
+2. **A tool name is permanent.** Never rename or remove one; add. `apps/api/test/mcp-manifest.spec.ts` pins every name, hint and schema hash in `apps/api/test/__snapshots__/mcp-tools.json`.
+3. **Every tool declares `title`, `scope`, `effect` (`read`, `write`, `destructive`) and `openWorld`.** A name is at most 64 characters and a description is narrow and accurate, with no instructions beyond what the tool does. No tool mixes reading and writing. A tool that needs no consent of its own still names the scope that offers it.
+4. **Page-derived text is marked untrusted.** A result that carries text from a web page (page text, element labels, `browser_evaluate` values, tab titles, a run's answer and notes) starts with `UNTRUSTED_NOTICE` and sets `untrusted: true` (`apps/api/src/mcp/mcp.results.ts`).
+5. **No tool returns a secret.** Not a token, a key, a handoff secret or the fabric token. Results pass the redaction in `mcp.redact.ts`, and the secret-egress test walks every tool for a personal access token and an OAuth app.
+6. **Hosted callers never provide a secret.** `browser_type_secret` types what the owner entered on the signed-in console page; `inbox_answer` for an OAuth app refuses a secret and a high-risk confirmation (`answerable_here: false`). A card or tool links the owner to the console for a secret; it never collects one.
+7. **Results respect the limits** (`apps/api/src/mcp/mcp.results.ts`): size, screenshots and the 220 s deadline for OAuth callers. Nothing long-running runs inline: a tool starts a queue job or a run and returns how to follow it (`run_wait`).
+8. **A new tool is checked against the capability registry** (`packages/shared/capabilities.json`; a tool without a REST route behind it gets the route first, because tools call REST in-process) and, if it is new capability, has a row in [docs/parity.md](docs/parity.md).
+9. **A new widget** (`apps/mcp-ui`) calls only the tools its bundle names in `scripts/check-bundle.mjs` (`WIDGETS`), makes no network request of its own, renders every string as text, and has no secret input ([docs/mcp-apps.md](docs/mcp-apps.md)).
+10. **Update the manifest snapshot deliberately.** `UPDATE_MCP_MANIFEST=1 npx jest --config ./test/jest.config.js mcp-manifest` (from `apps/api`) rewrites the snapshot and the generated tables in `docs/mcp.md`; review the diff. Never hand-edit the text between the `mcp-scopes` and `mcp-tools` markers.
+11. **The OAuth server and its scopes are the platform's.** The console only registers scopes and the protected resource (`apps/api/src/mcp/mcp.oauth.ts`, `mcp.scopes.ts`); a missing seam is an EnterpriseAppBase seam request.
+
 ## Platform invariants this app must still respect
 
 The packages enforce these in their own code; your code must not undo them. `apps/api/test/conformance.spec.ts` (`runPlatformConformance()`) checks the first, third and fourth on every `npm test`.

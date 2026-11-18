@@ -522,7 +522,7 @@ Questions are split between the two layers of Section 26:
 - **The first answer wins.** Answering is a conditional update on a still-pending question; a later answer from any channel is refused (409), and the question is withdrawn from every other channel.
 - **Webhook answers** use a single-use answer token issued once per public question and sent in the `questions.question.asked` payload. The receiver posts the answer with the token in the `x-question-token` header; the token is stored only as a SHA-256 digest, answers that one question once before it expires, and is not spent by an invalid answer.
 - **Notification buttons** carry a single-use signed token naming the question and the answers it allows, spent in the database.
-- **Not yet:** chat apps (Slack, Teams, Telegram) are post-v1 channels (#293). MCP elicitation (the server asking the client's user mid-call) is not supported, because the console's MCP transport is stateless; agents ask with `ask_human` and wait (`wait_s`, `question_status`). SMS delivery, email reading and vault integrations remain future (Section 12).
+- **Not yet:** chat apps (Slack, Teams, Telegram) are post-v1 channels (#293). MCP elicitation (the server asking the client's user in a form) is offered on the stateless protocol revision 2026-07-28 only, for a delegated run's public question, and a secret is never elicited; other clients ask with `ask_human` and wait (`wait_s`, `question_status`). SMS delivery, email reading and vault integrations remain future (Section 12).
 
 ### 11.4 HITL state machine
 
@@ -1262,7 +1262,7 @@ Primary upstream implementation references (verify exact versions during impleme
 
 **A. Standalone Chrome extension (local AI assistant, required in v1).** A user installs Hexactra in an already-running Chrome browser, opens the built-in UI, configures an OpenAI-compatible model provider, and types a goal. The extension observes relevant pages, calls the model, interprets typed tool/action requests, and operates authorized tabs. The extension is fully usable without installing the Rust daemon, using a remote host, running MCP, or creating a developer application. It is limited to what a Chrome MV3 extension can access. Local execution does not promise to continue after Chrome closes.
 
-**B. Remote managed computer-use runtime (required in v1).** A remotely running agent or human invokes HTTP/SDK/CLI/MCP against a control service. The Rust daemon starts and maintains a *real graphical, visible (non-headless)* Chrome instance on an unattended Linux host using a chosen persistent Chrome user profile. Clients can submit natural-language goals to Hexactra's managed AI operator, or they can use lower-level browser tools directly. The AI model and the remote agent never get unrestricted OS/browser privileges.
+**B. Remote managed computer-use runtime (required in v1).** A remotely running agent or human invokes HTTP/SDK/CLI/MCP against a control service. The Rust daemon starts and maintains a *real graphical, visible (non-headless)* Chrome instance on an unattended Linux host using a chosen persistent Chrome user profile. Clients can submit natural-language goals to Hexactra's managed AI operator, or they can use lower-level browser tools directly. The AI model and the remote agent never get unrestricted OS/browser privileges. MCP clients are of two kinds: self-hosted frameworks authenticate with a personal access token, and hosted assistants (ChatGPT, Claude) sign in with OAuth and receive only the scopes the owner consents to (Section 27.2).
 
 The same extension code provides the **browser actuator** in both modes. The local AI runner and the managed AI runner must use compatible action/observation/tool contracts and safety rules, even though their runtimes and durability guarantees differ.
 
@@ -1525,7 +1525,7 @@ The Phase 2 extension milestone in Section 19 must therefore include **Side Pane
   - host agents (`hexactra-agent`) that keep a browser per profile on a home node (the primary deployment), a desktop or an optional VPS container, long-polling the control plane over HTTPS with per-host credentials;
   - the extension and native host that act inside each browser.
 - **Hexactra Console** (`console/`) is the single user-facing control point. It is an application on the EnterpriseAppBase platform packages, and it adds:
-  - identity, roles and personal access tokens;
+  - identity, roles, personal access tokens and, for hosted AI apps, an OAuth 2.1 authorization server with per-scope consent and a Connected apps page;
   - tasks, runs and steps;
   - the server-side AI goal runner;
   - the chat (Section 26.7);
@@ -1562,7 +1562,7 @@ The primary browser hosts are **home nodes** on the owner's residential network,
 ### 26.5 What stays open
 
 - A native Android module. The app is a Trusted Web Activity: its notification buttons (Stop run, Approve) are Web Push actions handled by the service worker, which is enough today.
-- Scoped personal access tokens. Until then, a dedicated low-role user per agent framework.
+- Scoped personal access tokens. A personal access token keeps every permission of its user; scopes exist for hosted apps that sign in with OAuth. Until tokens are scoped too, use a dedicated low-role user per agent framework.
 - Windows and macOS hosts (post-v1, Section 19).
 
 ### 26.6 Agent policies (epic #398)

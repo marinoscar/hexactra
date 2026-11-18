@@ -1,6 +1,6 @@
 # MCP Apps: the run, question and tasks cards
 
-When an AI app that renders [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) starts or follows a Hexactra run, the chat shows a **live run card**. The card shows the browser's latest screenshot, what the agent is doing, how much of its budget it has used, a **Stop** button and a link to the run in the console. It updates by itself while the run works. The same file renders in every host that implements the MCP Apps extension. Claude (web, desktop, mobile) and ChatGPT are the targets; they connect with OAuth ([mcp.md, Sign in with OAuth](mcp.md#sign-in-with-oauth-chatgpt-claude)), and the real-client checks are in #468.
+When an AI app that renders [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) starts or follows a Hexactra run, the chat shows a **live run card**. The card shows the browser's latest screenshot, what the agent is doing, how much of its budget it has used, a **Stop** button and a link to the run in the console. It updates by itself while the run works. The same file renders in every host that implements the MCP Apps extension. Claude (web, desktop, mobile) and ChatGPT are the targets; they connect with OAuth ([mcp.md, Sign in with OAuth](mcp.md#sign-in-with-oauth-chatgpt-claude)), and the real-client checks are the live-client run in [hosted-clients-acceptance.md](hosted-clients-acceptance.md) (#513).
 
 Two more cards (#467) use the same foundation: the **question card** answers what an agent is waiting for with one tap in the chat, and the **tasks card** lists the user's saved tasks with Run and Pause. See [The question card](#the-question-card) and [The tasks card](#the-tasks-card).
 
@@ -34,7 +34,7 @@ The card is shown inline only. It embeds no external site, and it does not use t
 | `_meta.ui.domain` | not sent (below) |
 
 - **`initialize` and `server/discover`** advertise `capabilities.resources` (`{ listChanged: false, subscribe: false }`) and the MCP Apps extension: `capabilities.extensions["io.modelcontextprotocol/ui"] = { mimeTypes: ["text/html;profile=mcp-app"] }`.
-- **`resources/list`** lists each card when its widget is built and the caller is offered a tool that links it. Today that is every caller: scopes gate tools from E33.2 on, when `runs:read` or `runs:write` will be needed. On `2026-07-28` the list carries `ttlMs` (5 minutes) and `cacheScope: "private"`.
+- **`resources/list`** lists each card when its widget is built and the caller is offered a tool that links it. A card is listed to an app signed in with OAuth only when its consent offers a tool that links it (`runs:read` or `runs:write` for the run card, `inbox:read` or `inbox:write` for the question card, `runs:read` for the tasks card); personal access tokens and sessions see every built card. On `2026-07-28` the list carries `ttlMs` (5 minutes) and `cacheScope: "private"`.
 - **`resources/read`** needs any credential that `/api/mcp` accepts, because the HTML holds no user data. An unknown URI is not found: `-32602` on `2026-07-28`, `-32002` before.
 - **Tools** that open the card carry `_meta.ui.resourceUri`, the legacy flat key `ui/resourceUri`, and ChatGPT's alias `openai/outputTemplate`, all three set to the card's URI. `tools/list` builds them from the `ui` field of the tool's registry entry (`apps/api/src/mcp/mcp.tools.ts`).
 - **The card's data** is the tool's `structuredContent`: the run with its progress block (#463), or the bare block for `run_wait`. A result that opens a card also carries `card_key: { created_at, seq }` in `structuredContent`, used for supersession (below). The key is not in the text.
@@ -49,7 +49,7 @@ The endpoint is hand-rolled and stateless, so these fields are written directly 
 
 The specification leaves `_meta.ui.domain` to each host, and it is optional. **The console sends none, to any host**: every host then serves the card from its default origin, per conversation. A wrong value is worse than none: Claude shows an error instead of the card when the value does not hash-match the connector URL exactly as the user typed it (a trailing slash, another host name behind a proxy).
 
-The known formulas, kept for #468 to verify against the real clients:
+The known formulas, kept for the live-client run to verify (#513):
 
 | Host | Formula |
 |---|---|
@@ -149,7 +149,7 @@ The server enforces this whatever a widget sends: `question_card_answer` refuses
 
 1. Build the widget and run the API (`npm run dev --workspace=mcp-ui` in one terminal, the dev stack in another).
 2. **Reference host.** The `examples/basic-host` of the ext-apps repository connects to a Streamable HTTP server and renders a tool's UI in its double-iframe sandbox. It sends no `Authorization` header, so put a small local proxy in front of `/api/mcp` that adds `Authorization: Bearer <pat_…>`, and point the host's `SERVERS` at the proxy.
-3. **Real clients** need a public HTTPS URL (a tunnel) and the OAuth server switched on ([mcp.md](mcp.md#sign-in-with-oauth-chatgpt-claude)). The recipes and checks are in #468. In Claude Desktop, **Help → Troubleshooting → Enable Developer Mode** gives you developer tools for the card's iframe.
+3. **Real clients** need a public HTTPS URL (a tunnel) and the OAuth server switched on ([mcp.md](mcp.md#sign-in-with-oauth-chatgpt-claude)). The recipes are in [hosted-clients.md](hosted-clients.md) and the checks in [hosted-clients-acceptance.md](hosted-clients-acceptance.md). In Claude Desktop, **Help → Troubleshooting → Enable Developer Mode** gives you developer tools for the card's iframe.
 
 ## Checked in the reference host
 
@@ -171,8 +171,8 @@ The reference host also found a bug in the run tools' `outputSchema`. The MCP SD
 ## Limitations found
 
 - **External links:** Claude opens a `ui/open-link` without its confirmation dialog only for a Directory connector whose listing declares **Allowed link URIs**. A custom connector always shows the dialog, so the server has no metadata field to declare the console's origin. "Open in Hexactra" shows Claude's confirmation until a listing exists.
-- **ChatGPT** `domain` and app-only tool metadata (`openai/widgetAccessible`, `openai/visibility`) are not sent, because OpenAI's reference pages were not reachable. The standard `_meta.ui.visibility` and the `openai/outputTemplate` alias are sent. #468 checks ChatGPT.
+- **ChatGPT** `domain` and app-only tool metadata (`openai/widgetAccessible`, `openai/visibility`) are not sent, because OpenAI's reference pages were not reachable. The standard `_meta.ui.visibility` and the `openai/outputTemplate` alias are sent. The live-client run checks ChatGPT (#513).
 - **Final screenshot:** a finished run has no live browser, so the card keeps the last screenshot it received. A card opened on an already finished run shows none.
-- **Claude, ChatGPT and mobile** checks (rendering, a 60 s run updating live, Stop, Open in Hexactra; answering a `choice` raised by a delegated run from the question card and seeing the run continue; the "enter it in Hexactra" state of a `secret`) are done in #468 with a public console and OAuth.
+- **Claude, ChatGPT and mobile** checks (rendering, a 60 s run updating live, Stop, Open in Hexactra; answering a `choice` raised by a delegated run from the question card and seeing the run continue; the "enter it in Hexactra" state of a `secret`) need a public console with OAuth and are in the live-client run ([hosted-clients-acceptance.md](hosted-clients-acceptance.md), #513); they are not yet recorded.
 - **The small bridge** is checked against the SDK's host side and the reference host only. If a real host turns out to need something the SDK's `App` does and the bridge does not, the fix is in `src/shared/lite-host.ts` (or the card moves to the SDK when it fits its budget).
 - **Tasks card, Run:** the run started from the card does not open a run card by itself (an app's own tool call is not shown as a tool result); the row shows "Running" with **Watch**, which asks the assistant to show the run.

@@ -147,6 +147,12 @@ The following MCP tools are available:
 - `get_operation_status` - Get operation status
 - `get_health` - Check service health
 
+### The console's MCP endpoint
+
+The tools above are the standalone Rust `hexactra-mcp` server (stdio, against a bare fabric). The Hexactra Console has its own MCP endpoint, `POST /api/mcp` (Streamable HTTP, stateless), with its own tool set: delegating goals (`run_goal`, `run_wait`, `run_status`, `run_cancel`, `task_*`, `schedule_*`), questions (`ask_human`, `inbox_*`), agent policies (`policy_*`), machines (`hosts_list`) and browser driving (`browser_*`, `browser_desktop_*`).
+- **Authentication.** A personal access token (`pat_`) keeps every tool and the user's full authority. Hosted assistants (ChatGPT, Claude) sign in with OAuth 2.1 and receive an `oat_` token limited to the scopes the owner consented to; each tool names the scope that offers it, and a tool outside the consent starts a step-up (`403 insufficient_scope`). The server's OAuth is off until an administrator turns it on.
+- **Contract.** Every tool has a title, a scope, an effect (`read`, `write`, `destructive`) and explicit annotations. The generated tool and scope tables, the protocol revisions, limits and errors are in [console/docs/mcp.md](../console/docs/mcp.md); the OAuth recipes per client are in [console/docs/hosted-clients.md](../console/docs/hosted-clients.md). `api/mcp-schemas.json` describes the standalone server only.
+
 ## Browser Actions
 
 The authoritative list, with fields and results, is [remote-control-api.md, Actions](remote-control-api.md#actions). In short:
