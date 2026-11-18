@@ -6,6 +6,7 @@ import { Prisma } from '@prisma/client';
 import { builtinPolicy } from '../policies/builtin-policies';
 import { POLICY_SOURCES, type PolicySource, type RunPolicySummary } from '../policies/policy-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
+import { readConfirmedActions } from '../runner/confirmed-actions';
 import { readEffectiveBudget, runBudgetView, type RunBudgetView } from '../runner/budget';
 import './runs.errors';
 import { withCost } from './run-cost';
@@ -130,7 +131,7 @@ export class RunsQueryService {
     const items = page.map((row) => {
       const { task, policyRef: _ref, policyVersion: _version, policySource: _source, ...run } = withCost(row);
       const x = extras.get(row.id);
-      return { ...run, taskName: task?.name ?? null, policy: policySummary(x), budget: budgetView(x, row, now) };
+      return { ...run, confirmedActions: readConfirmedActions(row.confirmedActions).length, taskName: task?.name ?? null, policy: policySummary(x), budget: budgetView(x, row, now) };
     });
     const last = page.at(-1);
     const lastTime = last ? extras.get(last.id)?.c : undefined;

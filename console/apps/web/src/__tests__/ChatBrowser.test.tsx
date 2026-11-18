@@ -328,6 +328,33 @@ describe('the result card', () => {
     await waitFor(() => expect(sent(host, 'POST', `/chats/${CHAT_ID}/messages`)[0]?.body).toEqual({ text: `Run this again: ${GOAL}` }));
   });
 
+  it('a run that ended after a confirmed step says so, in the warning tone, and Run again asks first (#540)', async () => {
+    const lead = "The step you confirmed was carried out (step 58: 'Send $10 to Person A?'), but the run ended before it could check the outcome. Check before you run it again.";
+    const host = mount({ chat: finished(result({ text: `${lead}\n\nStep budget exhausted`, meta: { status: 'failed', stopReason: 'budget_actions', costUsd: 0.5, costKnown: true, stepCount: 60, confirmedActions: 1 } })) });
+    const c = await screen.findByRole('article', { name: 'Result' });
+    expect(c).toHaveTextContent('Ended after a confirmed step');
+    expect(c).not.toHaveTextContent('Could not finish');
+    expect(c).toHaveAttribute('data-tone', 'warning');
+    fireEvent.click(within(c).getByRole('button', { name: 'Run again' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent("This run already carried out a step you confirmed: 'Send $10 to Person A?'. Running it again may do it twice.");
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(sent(host, 'POST', `/chats/${CHAT_ID}/messages`)).toHaveLength(0);
+    fireEvent.click(within(c).getByRole('button', { name: 'Run again' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Run again' }));
+    await waitFor(() => expect(sent(host, 'POST', `/chats/${CHAT_ID}/messages`)[0]?.body).toEqual({ text: `Run this again, knowing the step I confirmed was already carried out: ${GOAL}` }));
+  });
+
+  it('a succeeded run with a confirmed step keeps "Done" but still asks before Run again', async () => {
+    const host = mount({ chat: finished(result({ meta: { status: 'succeeded', stopReason: 'finished', costUsd: 0.2, costKnown: true, stepCount: 14, confirmedActions: 1 } })) });
+    const c = await screen.findByRole('article', { name: 'Result' });
+    expect(c).toHaveTextContent('Done');
+    fireEvent.click(within(c).getByRole('button', { name: 'Run again' }));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Run this again?');
+    expect(sent(host, 'POST', `/chats/${CHAT_ID}/messages`)).toHaveLength(0);
+  });
+
   it('has no Run again while a run is live, in an archived chat, or without chat:write', async () => {
     mount({ chat: detail([runMessage(1, OLD_RUN), result({ seq: 2, id: 'm2', runId: OLD_RUN }), runMessage(3)], { liveRun: { id: RUN_ID, status: 'running' } }) });
     expect(within(await screen.findByRole('article', { name: 'Result' })).queryByRole('button', { name: 'Run again' })).not.toBeInTheDocument();

@@ -3,7 +3,7 @@ import type { PlatformApiClient } from '@marinoscar/platform-web/core';
 
 import { runTaskWith } from '../policies/api';
 import type { Run, RunListItem } from '../types/runs';
-import { formatCost, isLive, isTerminal } from '../ui';
+import { formatCost, isLive, isTerminal, type ConfirmOptions } from '../ui';
 
 /** "45 s", "12 min", "2 h 5 min". */
 export function shortDuration(ms: number): string {
@@ -97,4 +97,26 @@ export function runAgain(api: PlatformApiClient, run: RunListItem, policyId?: st
     ...(run.hostId ? { hostId: run.hostId, hostFallback: run.hostFallback ?? true } : {}),
     ...(policy ? { policyId: policy } : {}),
   });
+}
+
+/** How many steps the owner confirmed that a run carried out (#540): a list row has the count, a full run the list. */
+export function confirmedCount(run: Pick<Run, 'confirmedActions'>): number {
+  const c = run.confirmedActions;
+  return typeof c === 'number' ? c : Array.isArray(c) ? c.length : 0;
+}
+
+/**
+ * The question "Run again" asks first for a run that carried out a step its owner confirmed (#540),
+ * succeeded or not; null when it has none. `prompt` names the step when it is known.
+ */
+export function runAgainQuestion(count: number, prompt?: string | null): ConfirmOptions | null {
+  if (count <= 0) return null;
+  const step = prompt ? `a step you confirmed: '${prompt.length > 160 ? `${prompt.slice(0, 159)}…` : prompt}'` : 'a step you confirmed';
+  return { title: 'Run this again?', body: `This run already carried out ${step}. Running it again may do it twice.`, confirmLabel: 'Run again', cancelLabel: 'Cancel' };
+}
+
+/** The same question for a run as the API gives it (the last confirmed step's prompt, when the run carries the list). */
+export function runAgainQuestionFor(run: Pick<Run, 'confirmedActions'>): ConfirmOptions | null {
+  const c = run.confirmedActions;
+  return runAgainQuestion(confirmedCount(run), Array.isArray(c) ? c.at(-1)?.prompt : null);
 }

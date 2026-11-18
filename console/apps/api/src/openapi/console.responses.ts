@@ -136,6 +136,16 @@ export const runResponseSchema = z.object({
   modelCalls: z.number().int().describe('Model calls (provider round trips) made so far'),
   costUsd: z.number().describe('USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false'),
   costKnown: z.boolean().describe('False once a call could not be priced because its model has no price: show costUsd as "at least"'),
+  confirmedActions: z
+    .array(
+      z.object({
+        seq: z.number().int().describe("The step's sequence number"),
+        prompt: z.string().describe('The question the owner approved, at most 300 characters, masked'),
+        action: z.string().describe('The action carried out (click, click_at, key, …)'),
+        at: iso.describe('When it was carried out'),
+      }),
+    )
+    .describe('Steps the owner confirmed that the run then carried out (#540), oldest first; empty when none. "Run again" asks before repeating such a run.'),
   createdAt: iso,
   startedAt: iso.nullable(),
   finishedAt: iso.nullable(),
@@ -146,6 +156,7 @@ export class RunResponseDto extends createZodDto(runResponseSchema) {}
 export const runListItemResponseSchema = runResponseSchema.extend({
   taskName: z.string().nullable().describe("The run's task name; null for a run without a task (ad-hoc, external) or whose task was deleted"),
   budget: runBudgetSchema.nullable().describe('The run budget while the run is live (queued, running, waiting_human); null on a finished run in a list (read it from `GET /runs/{id}`).'),
+  confirmedActions: z.number().int().describe('How many steps the owner confirmed that the run carried out (#540); the steps themselves are on `GET /runs/{id}`.'),
 });
 export class RunListItemResponseDto extends createZodDto(runListItemResponseSchema) {}
 

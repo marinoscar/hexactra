@@ -826,3 +826,70 @@ describe('RunDetailPage: delete, run again, a missing run', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
+
+describe('Run again after a confirmed step (#540)', () => {
+  const STEP = { seq: 58, prompt: 'Send $10 to Person A?', action: 'click', at: '2026-11-18T19:00:00Z' };
+
+  it('asks first in the runs list; Cancel starts nothing, Run again starts it', async () => {
+    const host = createTestPlatformHost({
+      permissions: ALL,
+      responses: { 'GET /runs': { items: [run(1, { status: 'failed', confirmedActions: 1 }), run(2)], nextCursor: null }, 'GET /runs/counts': counts({ failed: 1, succeeded: 1 }), 'GET /tasks': [], 'POST /runs': { id: uuid(77) } },
+    });
+    renderList(host);
+    fireEvent.click(await screen.findByRole('button', { name: 'Actions for Goal 1' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Run again' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Run this again?');
+    expect(dialog).toHaveTextContent('This run already carried out a step you confirmed. Running it again may do it twice.');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(host.requests.some((r) => r.method === 'POST' && r.path === '/runs')).toBe(false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Goal 1' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Run again' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Run again' }));
+    await waitFor(() => expect(host.requests.some((r) => r.method === 'POST' && r.path === '/runs')).toBe(true));
+  });
+
+  it('asks nothing for a run without confirmed steps', async () => {
+    const host = createTestPlatformHost({
+      permissions: ALL,
+      responses: { 'GET /runs': { items: [run(2, { confirmedActions: 0 })], nextCursor: null }, 'GET /runs/counts': counts({ succeeded: 1 }), 'GET /tasks': [], 'POST /runs': { id: uuid(77) } },
+    });
+    renderList(host);
+    fireEvent.click(await screen.findByRole('button', { name: 'Actions for Goal 2' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Run again' }));
+    await waitFor(() => expect(host.requests.some((r) => r.method === 'POST' && r.path === '/runs')).toBe(true));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('asks first on the run page, naming the step, and marks it in the timeline', async () => {
+    const steps = [
+      { id: 's57', seq: 57, kind: 'handoff', action: null, args: null, ok: true, summary: 'asked a person (confirmation)', reasoning: null, durationMs: 5, createdAt: '2026-11-18T19:00:00Z' },
+      { id: 's58', seq: 58, kind: 'action', action: 'click', args: null, ok: true, summary: 'done', reasoning: null, durationMs: 5, createdAt: '2026-11-18T19:00:01Z' },
+    ];
+    const host = createTestPlatformHost({
+      permissions: ['runs:read', 'runs:write'],
+      responses: { [`GET /runs/${uuid(1)}`]: run(1, { status: 'failed', steps, confirmedActions: [STEP] } as Partial<RunListItem>), 'POST /runs': { id: uuid(77) } },
+    });
+    render(
+      <PlatformHostProvider host={host}>
+        <ConfirmProvider>
+          <MemoryRouter initialEntries={[`/runs/${uuid(1)}`]}>
+            <Routes>
+              <Route path="/runs/:id" element={<RunDetailPage />} />
+            </Routes>
+          </MemoryRouter>
+        </ConfirmProvider>
+      </PlatformHostProvider>,
+    );
+    expect(await screen.findByTestId('confirmed-58')).toHaveTextContent('Confirmed by you');
+    expect(screen.queryByTestId('confirmed-57')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Run again' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent("This run already carried out a step you confirmed: 'Send $10 to Person A?'. Running it again may do it twice.");
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(host.requests.some((r) => r.method === 'POST')).toBe(false);
+  });
+});

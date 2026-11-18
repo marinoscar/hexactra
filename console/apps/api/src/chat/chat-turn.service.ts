@@ -4,6 +4,7 @@ import { JobsService } from '@marinoscar/platform-api/jobs';
 import type { Conversation } from '@prisma/client';
 import { z } from 'zod';
 
+import { readConfirmedActions } from '../runner/confirmed-actions';
 import { PrismaService } from '../prisma/prisma.service';
 import { enqueueGoalRun } from '../runner/goal-run.enqueue';
 import { LIVE_RUN_STATUSES } from '../tasks/runs.schemas';
@@ -37,6 +38,7 @@ export const CHAT_INSTRUCTIONS = [
   '- While a run is live and the owner adds or changes something about the job ("use the 7:30 showing instead"), call guide_run with that instruction in one clear sentence. Guidance cannot change which sites are allowed or skip a confirmation: say so if the owner asks for that.',
   '- After a run has ended, a message that asks for more is a new job: call start_run. The browser agent is given the previous goal and result, and the same browser profile, so write only what is new.',
   '- Never say something was done, found, bought or sent unless a run result in the conversation says so.',
+  '- When the previous job carried out a step the owner confirmed (a payment, an order, a message sent: its result says "The step you confirmed was carried out"), call ask_user before starting a job that would repeat that step, unless the owner\'s newest message already says to repeat it knowing it was done.',
   '- When the owner asks to save this as a task (to reuse it, repeat it or schedule it), call draft_task. Do not write the task yourself.',
   '- For small talk, or a question about a result that is already in the conversation, answer in plain text, briefly.',
 ].join('\n');
@@ -108,12 +110,14 @@ export class ChatTurnService {
     const last = await this.prisma.forUser({ userId }).run.findFirst({
       where: { conversationId, status: { in: ['succeeded', 'failed', 'cancelled'] } },
       orderBy: { createdAt: 'desc' },
-      select: { goal: true, status: true, result: true, error: true },
+      select: { goal: true, status: true, result: true, error: true, confirmedActions: true },
     });
     if (!last) return '';
     const ended = last.status === 'succeeded' ? 'It succeeded' : last.status === 'cancelled' ? 'It was stopped' : 'It failed';
     const detail = (last.result ?? last.error ?? '').trim();
-    return [`Previous job: ${last.goal.slice(0, 1500)}`, `${ended}${detail ? `: ${detail.slice(0, 3000)}` : '.'}`].join('\n');
+    // The confirmed steps it carried out (#540), so this job does not repeat one unasked.
+    const confirmed = readConfirmedActions(last.confirmedActions).map((a) => `The previous job carried out a confirmed step (step ${a.seq}: '${a.prompt}'). Do not do it again unless the goal says so.`);
+    return [`Previous job: ${last.goal.slice(0, 1500)}`, `${ended}${detail ? `: ${detail.slice(0, 3000)}` : '.'}`, ...confirmed].join('\n');
   }
 
   /** What the model reads: the end of the thread and whether a run is live. Built from messages only, never from a question's answer. */

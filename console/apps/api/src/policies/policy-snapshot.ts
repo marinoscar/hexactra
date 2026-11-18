@@ -1,6 +1,7 @@
 import type { AgentPolicySpec, Tier } from './agent-policy.schema';
 import { agentPolicySpecSchema } from './agent-policy.schema';
 import { builtinPolicy } from './builtin-policies';
+import { readConfirmedActions } from '../runner/confirmed-actions';
 import { readEffectiveBudget, runBudgetView, type BudgetRunColumns, type EffectiveBudget, type RunBudgetView } from '../runner/budget';
 import type { ResolvedTiers } from './model-tiers.schema';
 import { runTierView, type RunTierColumns, type RunTierView } from './run-tier-view';
@@ -124,7 +125,9 @@ interface RunPolicyColumns extends Partial<BudgetRunColumns>, RunTierColumns {
 export function runView<R extends RunPolicyColumns>(run: R): Omit<R, 'policyRef' | 'policyVersion' | 'policySnapshot' | 'policySource'> & { policy: RunPolicySummary | null; budget: RunBudgetView | null; tier: RunTierView | null } {
   const { policyRef: _r, policyVersion: _v, policySnapshot, policySource: _s, ...rest } = run;
   const snapshot = readSnapshot(policySnapshot);
-  return { ...rest, policy: summarize(snapshot), budget: snapshotBudgetView(snapshot, run), tier: runTierView(snapshot, run) };
+  // A full run carries its confirmed steps as a list (#540), never null; a list row's count passes through.
+  const confirmed = 'confirmedActions' in rest && typeof (rest as { confirmedActions?: unknown }).confirmedActions !== 'number' ? { confirmedActions: readConfirmedActions((rest as { confirmedActions?: unknown }).confirmedActions) } : {};
+  return { ...rest, ...confirmed, policy: summarize(snapshot), budget: snapshotBudgetView(snapshot, run), tier: runTierView(snapshot, run) };
 }
 
 /** The budget view of a run under its snapshot; null without an effective budget or the run's totals. */

@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { createContext, useContext, useMemo, useState } from 'react';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SwapVertIcon from '@mui/icons-material/SwapVert';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
-import { Box, Collapse, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Paper, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { Box, Chip, Collapse, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Paper, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 
 import { routingRow } from './runRouting';
 import { formatStepDuration, groupSteps, type TimelineOrder, type TimelineStep } from './runTimeline';
@@ -58,7 +58,11 @@ function RoutingStepRow({ step, label, direction }: { step: RunTimelineStep; lab
   );
 }
 
+/** The steps the owner confirmed (#540), by `seq`: marked "Confirmed by you" in the timeline. */
+const ConfirmedContext = createContext<ReadonlySet<number>>(new Set());
+
 function StepRow({ step, repeats, nested }: { step: RunTimelineStep; repeats: number; nested?: boolean }) {
+  const confirmed = useContext(ConfirmedContext).has(step.seq);
   const routing = routingRow(step);
   if (routing) return <RoutingStepRow step={step} label={routing.label} direction={routing.direction} />;
   return (
@@ -74,6 +78,7 @@ function StepRow({ step, repeats, nested }: { step: RunTimelineStep; repeats: nu
         slotProps={{ primary: { color: step.ok ? undefined : 'error', sx: { overflowWrap: 'anywhere' } }, secondary: { sx: { overflowWrap: 'anywhere' } } }}
         sx={{ minWidth: 0 }}
       />
+      {confirmed && <Chip size="small" color="warning" variant="outlined" label="Confirmed by you" data-testid={`confirmed-${step.seq}`} sx={{ ml: 1, mt: 0.5, flexShrink: 0 }} />}
     </ListItem>
   );
 }
@@ -112,7 +117,8 @@ function ObservedRow({ steps }: { steps: RunTimelineStep[] }) {
  * toggle, remembered per viewer, flips it), page reads folded together, and
  * failures marked.
  */
-export function RunTimeline({ steps, live }: { steps: RunTimelineStep[]; live: boolean }) {
+export function RunTimeline({ steps, live, confirmedSeqs = [] }: { steps: RunTimelineStep[]; live: boolean; confirmedSeqs?: readonly number[] }) {
+  const confirmed = useMemo(() => new Set(confirmedSeqs), [confirmedSeqs]);
   const [chosen, setChosen] = useState<TimelineOrder | null>(savedOrder);
   const order: TimelineOrder = chosen ?? (live ? 'newest' : 'oldest');
   const rows = groupSteps(steps, order);
@@ -138,9 +144,11 @@ export function RunTimeline({ steps, live }: { steps: RunTimelineStep[]; live: b
         </ToggleButtonGroup>
       </Stack>
       <Paper variant="outlined">
-        <List aria-label="Steps" dense disablePadding>
-          {rows.map((r) => (r.kind === 'observed' ? <ObservedRow key={r.key} steps={r.steps} /> : <StepRow key={r.key} step={r.step} repeats={r.steps.length} />))}
-        </List>
+        <ConfirmedContext.Provider value={confirmed}>
+          <List aria-label="Steps" dense disablePadding>
+            {rows.map((r) => (r.kind === 'observed' ? <ObservedRow key={r.key} steps={r.steps} /> : <StepRow key={r.key} step={r.step} repeats={r.steps.length} />))}
+          </List>
+        </ConfirmedContext.Provider>
       </Paper>
     </Box>
   );

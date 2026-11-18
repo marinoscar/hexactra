@@ -90,6 +90,16 @@ A run a chat starts (`trigger = 'chat'`) is interactive: you are in the conversa
 
 **Known limit.** Soft budgets remove the cost brake in a chat: if a run loops while still "progressing", the warning is the only signal. Watch the card, and press Stop.
 
+## After a step you confirmed
+
+When the agent asks you to confirm an irreversible step (a payment, an order, a message sent) and you approve, the next action that succeeds is recorded as **carried out** (#540): `runs.confirmed_actions`, `[{ seq, prompt, action, at }]`, at most 20, the prompt cut to 300 characters and masked (`maskSensitive`). The policy-paused attempt before the request is not it; a failed attempt keeps the approval for the retry; five failed attempts or a new request clear it.
+
+- **If the run then does not succeed** (a budget, a stall, Stop, a lost node, an error), its result leads with: "The step you confirmed was carried out (step 58: '…'), but the run ended before it could check the outcome. Check before you run it again." The chat's result card reads **Ended after a confirmed step** in the warning colour, never "Could not finish", and its `meta.confirmedActions` holds the count.
+- **Run again asks first**, in the chat, on the run page and in the runs list, for any run with a confirmed step (succeeded or not): "Run this again? This run already carried out a step you confirmed: '…'. Running it again may do it twice."
+- **A follow-up knows.** The next job's context says the previous job carried out a confirmed step, and the assistant asks you before starting a job that would repeat it.
+- **A wrap-up without words.** When a stopped run's last model call reports nothing, its result is "Stopped before the agent could report. Last steps: …" with the last five steps, masked, instead of only the stop message.
+- **API.** `GET /api/runs/{id}` carries `confirmedActions` (the list); a list row carries the count. The run page marks the step "Confirmed by you".
+
 ## Steering and follow-ups
 
 - **While a run is live**, what you type is passed to the working agent (`guide_run` → `run_guidance`). The runner reads pending lines between chunks, each once. Your message shows **Queued for the agent**, then **Seen by the agent**, or **Not seen: the job had ended**. It can take a few actions to land, because a chunk is not interrupted.

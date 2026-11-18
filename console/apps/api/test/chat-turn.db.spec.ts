@@ -278,6 +278,28 @@ describe('the result of a chat run', () => {
     expect(await resultsIn(id)).toMatchObject([{ runId, text: 'provider_unavailable: no model answered', meta: { status: 'failed', stopReason: 'error' } }]);
   });
 
+  it('leads with a confirmed step the failed run carried out, counts it in meta, and the follow-up knows it (#540)', async () => {
+    const { alice, id, runId } = await started('result-confirmed');
+    await tasks.transition(alice.userId, runId, 'running');
+    await prisma.run.update({ where: { id: runId }, data: { confirmedActions: [{ seq: 58, prompt: 'Send a $10 payment to Person A?', action: 'click', at: new Date().toISOString() }] } });
+    await tasks.transition(alice.userId, runId, 'failed', { error: 'Step budget exhausted', stopReason: 'budget_actions' });
+    await results.recordRunEnd(alice.userId, runId);
+    const [message] = await resultsIn(id);
+    expect(message).toMatchObject({ meta: { status: 'failed', stopReason: 'budget_actions', confirmedActions: 1 } });
+    expect(message!.text).toMatch(/^The step you confirmed was carried out \(step 58: 'Send a \$10 payment to Person A\?'\), but the run ended before it could check the outcome\. Check before you run it again\./);
+    expect(message!.text).toContain('Step budget exhausted');
+
+    // "Try again": the orchestrator is told to ask first, and a job it starts anyway knows the step was done.
+    await chats.postUserMessage(alice.userId, id, 'try again');
+    const model = scriptedAi([[['start_run', { goal: 'Check the fare to Lisbon.' }]]]);
+    await engine(model.ai).run(id, alice.userId, null);
+    const req = model.runTools.mock.calls[0]![0] as unknown as { instructions: string };
+    expect(req.instructions).toContain('call ask_user before starting a job that would repeat that step');
+    expect(model.inputs[0]).toContain('The step you confirmed was carried out');
+    const [, second] = await runsOf(id);
+    expect((second!.transcript as { context: string }).context).toContain("The previous job carried out a confirmed step (step 58: 'Send a $10 payment to Person A?'). Do not do it again unless the goal says so.");
+  });
+
   it('is caught up by the next turn when no hook fired', async () => {
     const { alice, id, runId } = await started('result-sync');
     await prisma.run.update({ where: { id: runId }, data: { status: 'succeeded', result: 'Done quietly.', finishedAt: new Date() } });

@@ -71674,6 +71674,12 @@
             "type": "boolean",
             "description": "False once a call could not be priced because its model has no price: show costUsd as \"at least\""
           },
+          "confirmedActions": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "How many steps the owner confirmed that the run carried out (#540); the steps themselves are on `GET /runs/{id}`."
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -71741,6 +71747,7 @@
           "modelCalls",
           "costUsd",
           "costKnown",
+          "confirmedActions",
           "createdAt",
           "startedAt",
           "finishedAt",
@@ -72390,6 +72397,12 @@
                   "type": "boolean",
                   "description": "False once a call could not be priced because its model has no price: show costUsd as \"at least\""
                 },
+                "confirmedActions": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "How many steps the owner confirmed that the run carried out (#540); the steps themselves are on `GET /runs/{id}`."
+                },
                 "createdAt": {
                   "type": "string",
                   "description": "ISO 8601 timestamp"
@@ -72457,6 +72470,7 @@
                 "modelCalls",
                 "costUsd",
                 "costKnown",
+                "confirmedActions",
                 "createdAt",
                 "startedAt",
                 "finishedAt",
@@ -73192,6 +73206,39 @@
             "type": "boolean",
             "description": "False once a call could not be priced because its model has no price: show costUsd as \"at least\""
           },
+          "confirmedActions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "seq": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "The step's sequence number"
+                },
+                "prompt": {
+                  "type": "string",
+                  "description": "The question the owner approved, at most 300 characters, masked"
+                },
+                "action": {
+                  "type": "string",
+                  "description": "The action carried out (click, click_at, key, …)"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "When it was carried out"
+                }
+              },
+              "required": [
+                "seq",
+                "prompt",
+                "action",
+                "at"
+              ]
+            },
+            "description": "Steps the owner confirmed that the run then carried out (#540), oldest first; empty when none. \"Run again\" asks before repeating such a run."
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -73348,6 +73395,7 @@
           "modelCalls",
           "costUsd",
           "costKnown",
+          "confirmedActions",
           "createdAt",
           "startedAt",
           "finishedAt",
@@ -73991,6 +74039,39 @@
             "type": "boolean",
             "description": "False once a call could not be priced because its model has no price: show costUsd as \"at least\""
           },
+          "confirmedActions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "seq": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "The step's sequence number"
+                },
+                "prompt": {
+                  "type": "string",
+                  "description": "The question the owner approved, at most 300 characters, masked"
+                },
+                "action": {
+                  "type": "string",
+                  "description": "The action carried out (click, click_at, key, …)"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "When it was carried out"
+                }
+              },
+              "required": [
+                "seq",
+                "prompt",
+                "action",
+                "at"
+              ]
+            },
+            "description": "Steps the owner confirmed that the run then carried out (#540), oldest first; empty when none. \"Run again\" asks before repeating such a run."
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -74051,6 +74132,7 @@
           "modelCalls",
           "costUsd",
           "costKnown",
+          "confirmedActions",
           "createdAt",
           "startedAt",
           "finishedAt"

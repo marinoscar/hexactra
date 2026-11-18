@@ -75,7 +75,7 @@ import {
   type RunView,
 } from './runFilters';
 import { ORIGIN_LABEL, StartedByChip, appDisplayName } from './StartedByChip';
-import { RUN_MENU_LABEL, rowCost, runAgain, runDuration, runMenuActions, triggerWords, type RunMenuAction } from './runRow';
+import { RUN_MENU_LABEL, rowCost, runAgain, runAgainQuestionFor, runDuration, runMenuActions, triggerWords, type RunMenuAction } from './runRow';
 import { useRunList } from './useRunList';
 
 /** The most ids one `POST /runs/delete` takes. */
@@ -324,6 +324,9 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
   };
 
   const again = async (run: RunListItem, policyId?: string) => {
+    // A run that carried out a step its owner confirmed asks first (#540).
+    const question = runAgainQuestionFor(run);
+    if (question && !(await confirm(question))) return;
     const started = await action.run('again', () => runAgain(api, run, policyId), 'Could not start the run');
     if (started) navigate(`/runs/${started.id}`);
   };

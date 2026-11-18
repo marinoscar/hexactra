@@ -74,6 +74,19 @@ export interface Run {
   startedAt?: string | null;
   finishedAt: string | null;
   steps?: RunStep[];
+  /**
+   * Steps the owner confirmed that the run carried out (#540): the list on `GET /runs/{id}`,
+   * the count on a list row. "Run again" asks before repeating such a run.
+   */
+  confirmedActions?: ConfirmedAction[] | number;
+}
+
+/** One step the owner confirmed that a run carried out (#540). The prompt is masked. */
+export interface ConfirmedAction {
+  seq: number;
+  prompt: string;
+  action: string;
+  at: string;
 }
 
 /** What started a run (`RUN_TRIGGERS` in apps/api/src/tasks/runs.schemas.ts). */
