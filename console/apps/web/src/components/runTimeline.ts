@@ -25,6 +25,8 @@ export interface TimelineStep {
   ok: boolean;
   summary: string;
   durationMs?: number | null;
+  /** A step with a trace picture (#541) is never folded away with the page reads. */
+  hasScreenshot?: boolean;
 }
 
 /** Steps that only look at the page (they change nothing). */
@@ -38,7 +40,7 @@ export type TimelineRow<S extends TimelineStep = TimelineStep> =
   /** Two or more successful observations in a row. */
   | { kind: 'observed'; key: string; steps: S[] };
 
-export const isObservation = (s: TimelineStep) => s.ok && s.action !== null && OBSERVATION_ACTIONS.has(s.action);
+export const isObservation = (s: TimelineStep) => s.ok && !s.hasScreenshot && s.action !== null && OBSERVATION_ACTIONS.has(s.action);
 
 /** Group steps (any order in) into timeline rows, in `order`. */
 export function groupSteps<S extends TimelineStep>(steps: readonly S[], order: TimelineOrder): TimelineRow<S>[] {

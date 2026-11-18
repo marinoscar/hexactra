@@ -574,7 +574,7 @@ What is stored is always a 5-field cron expression, so the CLI, the SDK and MCP 
 - **Search** looks in the goal. **Filters**: task (or "One-off goals"), trigger, started by (Console, CLI, Schedule, any AI app, or one app), a date range (Today, 7, 30 or 90 days, or two dates, cut in your profile time zone), "Stopped by" (Budget, Stalled, Error, No model; on the All and Failed tabs) and policy. On a phone they are behind the **Filters** button.
 - **Every filter is in the URL** (`?view=failed&q=invoice&trigger=schedule&from=2026-11-01`), so a filtered view can be bookmarked or sent, and survives a reload. Active filters show as chips; **Clear all** removes them.
 - **Each run** shows its status (with the reason a failed run stopped), goal, task, trigger, steps, when it started, how long it took, its cost, and what a running one is doing right now. The list refreshes the live runs every 5 seconds while the tab is visible.
-- **The ⋮ menu of a run:** Open, Run again, Run again with… (another policy), Cancel (a live run) and Delete (a finished run). "Run again" keeps the original policy only when it was chosen for that one run. For a run that carried out a step you confirmed (a payment, an order), "Run again" asks first, because it may do it twice ([docs/chat.md](docs/chat.md#after-a-step-you-confirmed)).
+- **The ⋮ menu of a run:** Open, Run again, Run again with… (another policy), Export PDF, Export JSON ([A run's page](#a-runs-page)), Cancel (a live run) and Delete (a finished run). "Run again" keeps the original policy only when it was chosen for that one run. For a run that carried out a step you confirmed (a payment, an order), "Run again" asks first, because it may do it twice ([docs/chat.md](docs/chat.md#after-a-step-you-confirmed)).
 - **New run** (top right) starts a one-off goal: the goal, the browser profile, the machine and the policy. `/runs?new=1` opens the page with this dialog (Home's "More options").
 
 **Deleting runs** needs the `runs:delete` permission (contributors and organization administrators have it).
@@ -586,6 +586,24 @@ What is stored is always a 5-field cron expression, so the CLI, the SDK and MCP 
 A run's steps and answers are deleted with it, and its cost and stop reason leave the task's spend and the alerts. This cannot be undone. A run that is queued, running or waiting for you is never deleted: cancel it first. More than 500 runs are deleted in the background; the page says so and refreshes when it is done. One run can also be deleted from its own page (`/runs/:id`, **Delete**).
 
 For code: the list is `RunList` (`apps/web/src/components/RunList.tsx`) over the `useRunList` hook (`useRunList.ts`); `<RunList scope={{ taskId }} />` is the same list fixed to one task.
+
+### A run's page
+
+`/runs/:id` tells the story of one run without leaving the console (#544): what it did, what it asked you and what you answered, what you added in the chat, and the masked picture of each key moment.
+
+| On a desktop | On a phone |
+|---|---|
+| ![A run's page: the steps with two questions and their answers, the owner's guidance, a confirmed step and the thumbnails of the key moments, on a desktop](docs/images/run-trace-desktop.png) | ![A run's page on a phone, with Export in the sticky bar](docs/images/run-trace-phone.png) |
+
+- **Questions.** A step where the agent asked you shows the full question (masked), a chip for its kind (Confirmation, Sign-in, Code, Choice) and the answer under it: "Allowed · from the chat · 12:41 PM · waited 38 s", "Declined", "Provided (not recorded)" for a code, password or sign-in (the value is never kept), or "Expired". A question still waiting links to its card.
+- **Your guidance.** What you typed in the chat while the run worked reads "You added: …".
+- **Confirmed steps** carry a "Confirmed by you" marker.
+- **Pictures.** A step with a stored picture shows a thumbnail with its moment ("The screen when the agent asked", "After the confirmed step", "When it stopped", "Final screen") and how many areas were masked. Pressing it opens a lightbox: the full picture, previous and next across the run (or the arrow keys), Escape to close, pinch to zoom on a phone. **Pictures** above the steps shows only the steps with one. A picture that cannot be loaded shows a neutral placeholder; a run without stored pictures (recorded before #541, or with storage off) says "This run has no stored pictures."
+- **Export.** The **Export** button (in the header; below 900 px in the sticky bar at the bottom) offers **PDF report** and **JSON trace**, and **Include screenshots** (on by default, remembered in this browser). Sensitive data is masked in both, but pictures can still show personal details: turn them off before sharing a file outside. A live run's file is marked partial. The same Export is on the chat's result card (beside **Open run**) and in a run's ⋮ menu on the Runs page (**Export PDF**, **Export JSON**). It needs `runs:read`; a file too large with its pictures says so and suggests turning them off. The files: [docs/runs.md](docs/runs.md#the-run-page).
+
+![The lightbox: one key moment's masked picture with its caption, step and position, and the previous and next buttons](docs/images/run-trace-lightbox-desktop.png)
+
+For code: the timeline is `RunTimeline` (`apps/web/src/components/RunTimeline.tsx`; `runId` turns on the pictures, `RunPictures.tsx`), its wording is `runTrace.ts`, and Export is `RunExport.tsx` over `exportRun` (`apps/web/src/api.ts`).
 
 ### AI apps
 
@@ -707,9 +725,9 @@ npm run preview --workspace=web -- --port 4173 &
 npm run ui:screens -- --mock --base http://localhost:4173
 ```
 
-The saved sign-in holds your refresh cookie: never commit it. A route that needs an id (a run, a task, a host) takes the first one your account has, and a route with nothing to open is listed as not checked, never as passed (`--strict` makes that a failure). To add a page, append one line to `ROUTES` in the script; the enabled slices' routes are read from `apps/web/src/slices/`.
+The saved sign-in holds your refresh cookie: never commit it. A route that needs an id (a run, a task, a host) takes the first one your account has, and a route with nothing to open is listed as not checked, never as passed (`--strict` makes that a failure). To add a page, append one line to `ROUTES` in the script (an optional `action` presses something first, such as the lightbox and the Export menu of `run-trace-lightbox` and `run-trace-export`); the enabled slices' routes are read from `apps/web/src/slices/`.
 
-In `--mock` mode the answers come from `scripts/ui-screens.fixtures.mjs`, which has data for every page of this app (Home, Inbox, the task list, form and page, the runs list and a run, Fleet, Run history, the agent policy pages). A fixture is a value, or a function of the request when the answer depends on it (a list that is an array or a page, the schedule preview). A packaged page whose endpoint is not mocked renders its empty or error state, and the run lists those endpoints.
+In `--mock` mode the answers come from `scripts/ui-screens.fixtures.mjs`, which has data for every page of this app (Home, Inbox, the task list, form and page, the runs list and a run, a run's trace with five pictures, Fleet, Run history, the agent policy pages). A fixture is a value, or a function of the request when the answer depends on it (a list that is an array or a page, the schedule preview). A packaged page whose endpoint is not mocked renders its empty or error state, and the run lists those endpoints.
 
 **Known overflows, all in packaged (platform) pages**, which this app does not edit: `/admin/settings/users` (below 600 px), `/admin/settings/jobs` (below 900 px), `/admin/settings/broadcasts` and `/admin/settings/db-backup` (below 1200 px). They are reported upstream ([EnterpriseAppBase#1176](https://github.com/marinoscar/EnterpriseAppBase/issues/1176), [#1177](https://github.com/marinoscar/EnterpriseAppBase/issues/1177)); until a platform release fixes them the script exits non-zero on those four routes. Every page of this app passes at the five widths in both themes.
 

@@ -152,7 +152,7 @@ describe('run page below md (live)', () => {
     expect(bar).toHaveStyle({ position: 'sticky' });
     // Take over appears once the run's viewer is known.
     await within(bar).findByRole('button', { name: 'Take over on mini-pc' });
-    expect(within(bar).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Cancel run', 'Stop watching', 'Take over on mini-pc']);
+    expect(within(bar).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Cancel run', 'Stop watching', 'Take over on mini-pc', 'Export']);
     const activity = screen.getByRole('status', { name: 'Now' });
     const meter = screen.getByRole('group', { name: 'Budget' });
     const browser = screen.getByRole('heading', { name: 'Browser' });
@@ -185,11 +185,11 @@ describe('run page below md (live)', () => {
     expect(screen.getByRole('button', { name: 'Show the browser' })).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('a reader without runs:write or fleet:desktop gets only Watch', async () => {
+  it('a reader without runs:write or fleet:desktop gets only Watch and Export', async () => {
     restore = mockViewport(390);
     renderRun(liveRun, ['runs:read']);
     const bar = await screen.findByRole('toolbar', { name: 'Run actions' });
-    expect(within(bar).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Stop watching']);
+    expect(within(bar).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Stop watching', 'Export']);
   });
 });
 

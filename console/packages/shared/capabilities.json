@@ -277,9 +277,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; a file is written with the CLI"
       },
-      "web": {
-        "none": "The Export button on the run page comes with E35.8; until then use the CLI, the SDK or the route"
-      }
+      "web": "/runs/:id"
     },
     {
       "id": "runs.delete",
