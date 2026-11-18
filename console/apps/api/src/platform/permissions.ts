@@ -15,6 +15,7 @@
 import type { PlatformPermissionOptions } from '@marinoscar/platform-api/manifest';
 
 import { CHAT_PERMISSIONS } from '../chat/chat.permissions';
+import { CONNECTED_APPS_PERMISSIONS } from '../connected-apps/connected-apps.permissions';
 import { FABRIC_PERMISSIONS } from '../fabric/fabric.permissions';
 import { FLEET_PERMISSIONS } from '../fleet/fleet.permissions';
 import { NOTES_PERMISSIONS } from '../notes/notes.permissions';
@@ -34,5 +35,5 @@ export const PERMISSION_OPTIONS = {
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? (['webhooks'] as const) : []),
     ...(alertsMounted() ? (['alerts'] as const) : []),
   ],
-  app: { permissions: [NOTES_PERMISSIONS, FABRIC_PERMISSIONS, FLEET_PERMISSIONS, TASKS_PERMISSIONS, POLICIES_PERMISSIONS, CHAT_PERMISSIONS] },
+  app: { permissions: [NOTES_PERMISSIONS, FABRIC_PERMISSIONS, FLEET_PERMISSIONS, TASKS_PERMISSIONS, POLICIES_PERMISSIONS, CHAT_PERMISSIONS, CONNECTED_APPS_PERMISSIONS] },
 } satisfies PlatformPermissionOptions;

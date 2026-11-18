@@ -123,6 +123,9 @@ model User {
   // composed from app:chat.prisma
   conversations Conversation[]
 
+  // composed from app:connected-apps.prisma
+  connectedAppSettings ConnectedAppSettings[]
+
   // composed from app:documents.prisma
   documents Document[]
 

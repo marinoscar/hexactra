@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { policyRefSchema } from '../policies/policies.schemas';
 import { RUN_STOP_REASONS } from '../runner/budget';
+import { RUN_ORIGINS } from '../connected-apps/request-client';
 import { TERMINAL_RUN_STATUSES, type RunStatus } from './run-status';
 
 export const RUN_STATUSES = ['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled'] as const satisfies readonly RunStatus[];
@@ -59,6 +60,8 @@ export const runFilterSchema = z.object({
     .describe('Case-insensitive substring of the goal (1 to 200 characters).'),
   stopReason: listOf(STOP_REASON_FILTERS, 'Why the run stopped; `budget` is every `budget_*` reason.'),
   policyId: policyRefSchema.optional().describe("Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`."),
+  origin: listOf(RUN_ORIGINS, 'Where the run was started from (#464).'),
+  clientId: z.uuid().optional().describe('Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`).'),
 });
 export type RunFilter = z.infer<typeof runFilterSchema>;
 

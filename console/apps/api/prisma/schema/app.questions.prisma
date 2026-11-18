@@ -64,6 +64,11 @@ model Question {
   answeredChannel  String?        @map("answered_channel") @db.VarChar(40)
   answeredAt       DateTime?      @map("answered_at") @db.Timestamptz
   expiresAt        DateTime       @map("expires_at") @db.Timestamptz
+  /// The AI app that asked (#464): its OAuth client, its display name at the time, its grant.
+  /// Set by the server from the request's credential; `client_id` null with a name: an unverified MCP client name.
+  clientId         String?        @map("client_id") @db.Uuid
+  clientName       String?        @map("client_name") @db.VarChar(64)
+  grantId          String?        @map("grant_id") @db.Uuid
   createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz
 

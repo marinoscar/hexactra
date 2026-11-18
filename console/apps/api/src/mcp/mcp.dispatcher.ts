@@ -19,6 +19,7 @@ import { watchRun, type RunEventSource } from './mcp.run-watch';
 import { MCP_DEFAULT_SETTINGS } from './mcp.settings';
 import { LIST_CACHE_SCOPE, LIST_TTL_MS, META, SUPPORTED_VERSIONS, clientBucket, negotiateInitialize, type McpRequestContext, type RpcMessage } from './mcp.protocol';
 import { McpApiError, mapUnknownError } from './mcp.errors';
+import { MCP_CLIENT_HEADER, mcpClientHeaderValue } from '../connected-apps/request-client';
 import {
   RPC,
   errorResult,
@@ -289,8 +290,11 @@ export class McpDispatcher {
     caller: McpCaller,
     credential: McpContext['credential'],
     limits: McpLimits,
-    extra: { client?: string; signal?: AbortSignal; elicitation?: McpElicitationContext } = {},
+    extra: { client?: string; clientName?: string | null; signal?: AbortSignal; elicitation?: McpElicitationContext } = {},
   ): McpContext {
+    // Marks every sub-request as coming from the MCP endpoint, with the client's own name (#464). The REST routes
+    // honour it only on a request the platform's in-process delegation injected (request-client.ts), never over the network.
+    const marker = { [MCP_CLIENT_HEADER]: mcpClientHeaderValue(extra.clientName ?? undefined) };
     const send =
       typeof caller === 'string'
         ? (options: InjectOptions) => this.adapter.httpAdapter.getInstance<FastifyInstance>().inject({ ...options, headers: { ...options.headers, authorization: caller } })
@@ -299,7 +303,7 @@ export class McpDispatcher {
       send({
         method: method as 'GET',
         url: `/api${path}`,
-        headers: { ...extra, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
+        headers: { ...extra, ...marker, ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
         ...(body !== undefined ? { payload: JSON.stringify(body) } : {}),
       });
     return {
@@ -457,7 +461,7 @@ export class McpDispatcher {
         }
         // An OAuth token that stops being valid while the tool works (its grant revoked): the whole request is a 401.
         let tokenGone = false;
-        const work = tool.call(data, this.toolContext(caller, toolCredential(rctx), limits, { client: extra.client, signal: extra.signal, elicitation })).catch((e: unknown) => {
+        const work = tool.call(data, this.toolContext(caller, toolCredential(rctx), limits, { client: extra.client, clientName: rctx.clientInfo?.name ?? (extra.client && extra.client !== 'other' ? extra.client : null), signal: extra.signal, elicitation })).catch((e: unknown) => {
           if (e instanceof McpApiError && e.status === 401 && kind === 'oauth') tokenGone = true;
           if (e instanceof McpApiError) {
             // The original answer stays in the log (with its request id); the model gets a sentence.

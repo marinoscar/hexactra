@@ -35,6 +35,7 @@ import { ALERTS_NOTIFICATIONS } from '@marinoscar/platform-api/alerts';
 import { alertsMounted } from '../alerts/alerts.enabled';
 import { contributions } from '../slices/contributions';
 import { isSliceEnabled } from '../slices/manifest';
+import { CONNECTED_APPS_NOTIFICATIONS } from '../../connected-apps/connected-apps.notifications';
 import { HEXACTRA_NOTIFICATIONS } from './hexactra.notifications';
 import { IDENTITY_NOTIFICATIONS } from './identity.notifications';
 import { NOTES_NOTIFICATIONS } from './notes-archived.notification';
@@ -54,5 +55,7 @@ registerNotifications(NODES_NOTIFICATIONS);
 registerNotifications(contributions().notifications);
 registerNotifications(NOTES_NOTIFICATIONS);
 registerNotifications(HEXACTRA_NOTIFICATIONS);
+// Connected AI apps (#464): connected, a high-risk scope added, the first run.
+registerNotifications(CONNECTED_APPS_NOTIFICATIONS);
 // The alerts slice's two (fired, resolved), to the holders of `alerts:read`.
 if (alertsMounted()) registerNotifications(ALERTS_NOTIFICATIONS);

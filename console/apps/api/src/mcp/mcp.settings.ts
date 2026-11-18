@@ -16,11 +16,18 @@ export const mcpSettingsSchema = z.object({
    * such an app sees only the tools it may call.
    */
   advertiseStepUpTools: z.boolean(),
+  /**
+   * The most live runs and browser sessions one connected AI app may have at
+   * once (#464): a user's per-app setting is clamped to it. 1 to 20.
+   */
+  maxConcurrentRunsPerApp: z.number().int().min(1).max(20).optional(),
+  /** The most runs and sessions one connected AI app may start per day (#464): a user's per-app setting is clamped to it. 1 to 1000. */
+  maxDailyRunsPerApp: z.number().int().min(1).max(1000).optional(),
 });
 export type McpSettings = z.infer<typeof mcpSettingsSchema>;
 export const mcpSettingsPatchSchema = mcpSettingsSchema.partial();
 
-export const MCP_DEFAULT_SETTINGS: McpSettings = { elicitation: true, advertiseStepUpTools: true };
+export const MCP_DEFAULT_SETTINGS: McpSettings = { elicitation: true, advertiseStepUpTools: true, maxConcurrentRunsPerApp: 5, maxDailyRunsPerApp: 200 };
 
 /**
  * `mcp` (Admin, `system_settings:write`): read by the MCP dispatcher when a
@@ -30,7 +37,7 @@ export const MCP_DEFAULT_SETTINGS: McpSettings = { elicitation: true, advertiseS
  */
 export const MCP_SYSTEM_SETTINGS = {
   key: 'mcp',
-  description: "MCP server: whether a run's question is asked through the AI app's own form (elicitation), and whether OAuth apps are shown the tools they need extra permission for.",
+  description: "MCP server: whether a run's question is asked through the AI app's own form (elicitation), whether OAuth apps are shown the tools they need extra permission for, and the ceilings of every connected AI app's limits.",
   storedSchema: mcpSettingsSchema,
   patchSchema: mcpSettingsPatchSchema,
   putSchema: mcpSettingsSchema,
@@ -38,7 +45,8 @@ export const MCP_SYSTEM_SETTINGS = {
   responseSchema: mcpSettingsSchema,
   defaults: MCP_DEFAULT_SETTINGS,
   requiredOnPut: false,
-  merge: (current, patch) => ({ ...current, ...patch }),
+  // A document stored before a field existed reads that field's default.
+  merge: (current, patch) => ({ ...MCP_DEFAULT_SETTINGS, ...current, ...patch }),
 } satisfies SystemSettingsNamespace<'mcp', McpSettings, Partial<McpSettings>>;
 
 registerSystemSettingsNamespaces([MCP_SYSTEM_SETTINGS as unknown as SystemSettingsNamespace]);
