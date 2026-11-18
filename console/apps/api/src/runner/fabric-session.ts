@@ -13,6 +13,8 @@ export interface FabricOperation {
   state: 'queued' | 'dispatched' | 'succeeded' | 'failed' | 'timed_out' | 'cancelled';
   result?: Record<string, unknown>;
   error?: string;
+  /** Top-level navigations the browser blocked under the session's allowed sites since the previous action (#508). */
+  navigation_blocked?: Array<{ host: string; at: string }>;
 }
 
 export type FabricHandoffInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover';

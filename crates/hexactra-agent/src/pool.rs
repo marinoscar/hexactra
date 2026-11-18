@@ -61,8 +61,15 @@ pub struct BrowserPool {
     desktop: Mutex<()>,
 }
 
+/// Desktop input reaches every window on the node, so a session confined to
+/// allowed sites (#508) cannot use it: the browser enforces the sites, the
+/// desktop could not.
+pub const DESKTOP_REFUSED: &str =
+    "this session is confined to allowed sites; desktop actions are not available in it";
+
 fn failure(msg: impl Into<String>) -> OperationResult {
     OperationResult {
+        navigation_blocked: Vec::new(),
         ok: false,
         result: None,
         error: Some(msg.into()),
@@ -213,11 +220,26 @@ impl BrowserPool {
         action: &RemoteAction,
         deadline: DateTime<Utc>,
     ) -> OperationResult {
+        self.execute_in(profile, op_id, action, deadline, &[]).await
+    }
+
+    /// [`Self::execute`] in a session confined to `allowed_domains` (#508).
+    pub async fn execute_in(
+        &self,
+        profile: &str,
+        op_id: Uuid,
+        action: &RemoteAction,
+        deadline: DateTime<Utc>,
+        allowed_domains: &[String],
+    ) -> OperationResult {
         if !valid_profile_name(profile) {
             return failure(format!("invalid profile name {profile:?}"));
         }
         // The node's OS desktop (#366): the agent drives it itself.
         if action.is_desktop() {
+            if !allowed_domains.is_empty() {
+                return failure(DESKTOP_REFUSED);
+            }
             let _desktop = self.desktop.lock().await; // one desktop, one hand
             let left = (deadline - Utc::now())
                 .to_std()
@@ -245,7 +267,9 @@ impl BrowserPool {
         {
             return failure(format!("browser unavailable for profile {profile}: {e:#}"));
         }
-        let r = bridge.execute(op_id, action, deadline).await;
+        let r = bridge
+            .execute_in(op_id, action, deadline, allowed_domains)
+            .await;
         launcher.touch().await;
         if let Some(e) = self.entries.lock().await.get_mut(profile) {
             e.last_used = Instant::now();
@@ -289,6 +313,7 @@ impl BrowserPool {
         };
         match r {
             Ok(v) => OperationResult {
+                navigation_blocked: Vec::new(),
                 ok: true,
                 result: Some(v),
                 error: None,

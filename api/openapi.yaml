@@ -1257,6 +1257,21 @@ components:
           format: int64
           description: How long to wait for a result before the operation times out.
           minimum: 0
+    BlockedNavigation:
+      type: object
+      description: |-
+        A top-level navigation the browser refused because its host is not in the
+        session's allowed sites (#508). Only the host is kept, never the full URL.
+      required:
+      - host
+      - at
+      properties:
+        at:
+          type: string
+          format: date-time
+          description: When the browser blocked it.
+        host:
+          type: string
     ClaimedHandoffValue:
       type: object
       description: |-
@@ -1365,6 +1380,15 @@ components:
       type: object
       description: '`POST /v1/sessions`'
       properties:
+        allowed_domains:
+          type: array
+          items:
+            type: string
+          description: |-
+            Sites the session may load as top-level pages (#508): a listed domain
+            covers its subdomains, an IP literal only itself. Empty: any site.
+            The browser blocks every other top-level navigation, including ones a
+            page starts itself, and reports it as `navigation_blocked`.
         create_profile:
           type: boolean
           description: Allow creating the profile on an on-demand host that does not have it.
@@ -1516,6 +1540,13 @@ components:
       properties:
         action:
           $ref: '#/components/schemas/RemoteAction'
+        allowed_domains:
+          type: array
+          items:
+            type: string
+          description: |-
+            The session's allowed sites (#508); the host hands them to the browser
+            with the action. Empty: any site.
         deadline:
           type: string
           format: date-time
@@ -2192,6 +2223,13 @@ components:
           type:
           - string
           - 'null'
+        navigation_blocked:
+          type: array
+          items:
+            $ref: '#/components/schemas/BlockedNavigation'
+          description: |-
+            Navigations the browser blocked under the session's allowed sites
+            since the previous action (#508).
         ok:
           type: boolean
         result: {}
@@ -2236,6 +2274,13 @@ components:
         id:
           type: string
           format: uuid
+        navigation_blocked:
+          type: array
+          items:
+            $ref: '#/components/schemas/BlockedNavigation'
+          description: |-
+            Top-level navigations the browser blocked under the session's allowed
+            sites since the previous action on this browser (#508).
         result: {}
         session_id:
           type: string
@@ -3024,6 +3069,11 @@ components:
       - status
       - created_at
       properties:
+        allowed_domains:
+          type: array
+          items:
+            type: string
+          description: 'The session''s allowed sites, normalized (#508). Empty: any site.'
         created_at:
           type: string
           format: date-time

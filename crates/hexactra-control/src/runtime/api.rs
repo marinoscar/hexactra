@@ -531,9 +531,13 @@ async fn create_session(
             "label longer than 200 characters".into(),
         ));
     }
-    let session =
-        s.store
-            .create_session_for(req.host_id, req.label, req.profile, req.create_profile)?;
+    let session = s.store.create_session_with(
+        req.host_id,
+        req.label,
+        req.profile,
+        req.create_profile,
+        &req.allowed_domains,
+    )?;
     tracing::info!(session_id = %session.id, host_id = %session.host_id, "session created");
     Ok((StatusCode::CREATED, Json(session)))
 }

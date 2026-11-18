@@ -210,6 +210,7 @@ async fn type_secret_types_the_answer_without_returning_it() {
             host_id,
             op.id,
             &OperationResult {
+                navigation_blocked: Vec::new(),
                 ok: true,
                 result: Some(json!({})),
                 error: None,

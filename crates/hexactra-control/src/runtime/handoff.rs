@@ -707,6 +707,7 @@ mod tests {
             host,
             op.id,
             hexactra_core::remote::OperationResult {
+                navigation_blocked: Vec::new(),
                 ok: true,
                 result: Some(serde_json::json!({})),
                 error: None,

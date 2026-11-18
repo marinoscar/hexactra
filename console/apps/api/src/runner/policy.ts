@@ -26,6 +26,31 @@ export function domainAllowed(rawUrl: string, allowed: readonly string[]): boole
   });
 }
 
+/** A domain no site has: what the fabric gets when two lists leave nothing in common (an empty list means "any site"). */
+export const NO_SITE = 'no-site.invalid';
+
+/**
+ * The allowed sites for the fabric's session request (#508): the task's (or chat's) list narrowed by the AI app's.
+ * The fabric enforces them in the browser, for every top-level navigation, including the ones a page starts itself;
+ * the console still checks each action against both lists. The fabric takes plain domains (a domain covers its
+ * subdomains), so `*.example.test` is sent as `example.test`: the fabric is the backstop, the console the exact rule.
+ * Empty: any site. Two lists with nothing in common give `[NO_SITE]`, never `[]`.
+ */
+export function fabricAllowedSites(task: readonly string[], app: readonly string[]): string[] {
+  const plain = (l: readonly string[]) => [...new Set(l.map((d) => d.trim().toLowerCase().replace(/^\*\./, '')).filter(Boolean))];
+  const a = plain(task);
+  const b = plain(app);
+  if (a.length === 0) return b;
+  if (b.length === 0) return a;
+  const covers = (outer: string, inner: string) => inner === outer || inner.endsWith(`.${outer}`);
+  const out = new Set<string>();
+  for (const x of a) for (const y of b) {
+    if (covers(y, x)) out.add(x);
+    else if (covers(x, y)) out.add(y);
+  }
+  return out.size ? [...out] : [NO_SITE];
+}
+
 const RISKY = /\b(buy|purchase|pay|payment|place[\s_-]*order|checkout|check[\s_-]*out|confirm[\s_-]*(booking|order|purchase|payment)|book[\s_-]*now|subscribe|transfer|send[\s_-]*money|delete[\s_-]*account)\b/i;
 
 /** Whether clicking something with this selector or label looks like it spends money or commits. */

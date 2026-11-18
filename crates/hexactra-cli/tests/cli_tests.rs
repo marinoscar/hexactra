@@ -96,11 +96,13 @@ fn start_stack() -> String {
                 };
                 let result = match op.action {
                     RemoteAction::Navigate { url, .. } => OperationResult {
+                        navigation_blocked: Vec::new(),
                         ok: true,
                         result: Some(json!({"url": url, "title": "Fixture"})),
                         error: None,
                     },
                     RemoteAction::Text { .. } => OperationResult {
+                        navigation_blocked: Vec::new(),
                         ok: true,
                         result: Some(json!({"text": "hello from the page"})),
                         error: None,
@@ -108,16 +110,19 @@ fn start_stack() -> String {
                     // Only the real secret is accepted, so a typed secret
                     // proves the host got the value the CLI never saw.
                     RemoteAction::Type { text, .. } if text == CLI_SECRET => OperationResult {
+                        navigation_blocked: Vec::new(),
                         ok: true,
                         result: Some(json!({})),
                         error: None,
                     },
                     RemoteAction::Screenshot { .. } => OperationResult {
+                        navigation_blocked: Vec::new(),
                         ok: true,
                         result: Some(json!({"mime": "image/jpeg", "data": "/9j/AA=="})),
                         error: None,
                     },
                     _ => OperationResult {
+                        navigation_blocked: Vec::new(),
                         ok: false,
                         result: None,
                         error: Some("no element matches #missing".into()),

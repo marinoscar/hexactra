@@ -64,7 +64,7 @@ import {
 } from './budget';
 import { actionTarget, runActivity, type ActivityTarget, type RunActivityPhase } from './activity';
 import { ACTION_TIMEOUT_MS, FabricSession, handoffOutcome, type CreatedHandoff } from './fabric-session';
-import { domainAllowed, looksRisky } from './policy';
+import { domainAllowed, fabricAllowedSites, looksRisky } from './policy';
 import { maxElementsFor, PLATFORM_MAX_CALLS_PER_CHUNK, ScreenshotWindow, shotHash } from './context-settings';
 import { captureScreen, markCenter, roundInput, type Screen, type ScreenMark, type ScreenView } from './vision';
 
@@ -450,7 +450,9 @@ export class GoalRunnerService {
           memory.log.push(choice.note);
           this.log.log(`run ${run.id}: ${choice.note}`);
         }
-        sessionId = await session.create({ profile: run.profile, hostId: choice.hostId, label: `run ${run.id}` });
+        // The browser enforces the run's allowed sites too (#508), so a page cannot leave them on its own.
+        const sites = fabricAllowedSites(run.task?.allowedDomains ?? run.conversation?.allowedDomains ?? [], readAppLimits(run.appLimits)?.allowedDomains ?? []);
+        sessionId = await session.create({ profile: run.profile, hostId: choice.hostId, label: `run ${run.id}`, allowedDomains: sites });
       } catch (e) {
         await this.finish(userId, run.id, null, session, 'failed', { error: `No browser available: ${e instanceof Error ? e.message : String(e)}`, stopReason: 'error' });
         return 'failed';
@@ -605,10 +607,11 @@ export class GoalRunnerService {
         await record('action', type, action, false, msg, started, reason);
         return `Error: ${msg}`;
       }
+      const blockedNote = await recordBlocked(op.navigation_blocked);
       if (op.state !== 'succeeded') {
         const msg = op.error ?? op.state;
         await record('action', type, action, false, msg, started, reason);
-        return `Failed (${op.state}): ${msg}`;
+        return `Failed (${op.state}): ${msg}${blockedNote}`;
       }
       const result = op.result ?? {};
       let summary = 'done';
@@ -652,7 +655,22 @@ export class GoalRunnerService {
       }
       if (type === 'new_tab') summary = forModel = `opened tab ${String(result.tab_id ?? '?')}`;
       await record('action', type, action, true, summary, started, reason, extra);
-      return forModel;
+      return `${forModel}${blockedNote}`;
+    };
+
+    /**
+     * Navigations the browser blocked under the run's allowed sites (#508), each as its own step. Like a routing
+     * step it takes a `seq`, never `stepCount` or the actions budget. Returns a note for the model, or ''.
+     */
+    const recordBlocked = async (blocked: Array<{ host: string; at: string }> | undefined): Promise<string> => {
+      const hosts = [...new Set((blocked ?? []).map((b) => String(b.host)).filter(Boolean))].slice(0, 10);
+      for (const host of hosts) {
+        state.seq += 1;
+        await this.prisma.runStep.create({
+          data: { runId: run.id, seq: state.seq, kind: 'navigation_blocked', action: null, args: { host } as never, ok: false, summary: trim(`blocked a page on ${host}: not in this run's allowed sites`, 1_900), durationMs: 0 },
+        });
+      }
+      return hosts.length ? `\n(The browser blocked a page on ${hosts.join(', ')}: not in this run's allowed sites.)` : '';
     };
 
     /**

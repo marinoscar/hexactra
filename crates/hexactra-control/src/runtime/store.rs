@@ -580,11 +580,11 @@ impl RuntimeStore {
                         .map(|op| op.view.session_id);
                     if let Some(session_id) = queued_session {
                         {
-                            let profile = inner
+                            let (profile, allowed_domains) = inner
                                 .sessions
                                 .get(&session_id)
-                                .map(|s| s.profile.clone())
-                                .unwrap_or_else(|| DEFAULT_PROFILE.to_string());
+                                .map(|s| (s.profile.clone(), s.allowed_domains.clone()))
+                                .unwrap_or_else(|| (DEFAULT_PROFILE.to_string(), Vec::new()));
                             let op = inner.operations.get_mut(&op_id).expect("checked above");
                             op.view.state = OperationState::Dispatched;
                             let _ = op.tx.send(OperationState::Dispatched);
@@ -596,6 +596,7 @@ impl RuntimeStore {
                                 action: host_action(&op.view.action, op.secret_text.take()),
                                 deadline: op.deadline,
                                 traceparent: op.traceparent.clone(),
+                                allowed_domains,
                             });
                             break;
                         }
@@ -637,6 +638,22 @@ impl RuntimeStore {
         profile: Option<String>,
         create_profile: bool,
     ) -> Result<SessionView, StoreError> {
+        self.create_session_with(host_id, label, profile, create_profile, &[])
+    }
+
+    /// [`Self::create_session_for`] with the session's allowed sites (#508),
+    /// normalized here; an invalid entry is a `400`.
+    pub fn create_session_with(
+        &self,
+        host_id: Option<Uuid>,
+        label: Option<String>,
+        profile: Option<String>,
+        create_profile: bool,
+        allowed_domains: &[String],
+    ) -> Result<SessionView, StoreError> {
+        let allowed_domains =
+            hexactra_core::site_policy::normalize_allowed_domains(allowed_domains)
+                .map_err(StoreError::Invalid)?;
         let profile = profile.unwrap_or_else(|| DEFAULT_PROFILE.to_string());
         if !valid_profile_name(&profile) {
             return Err(StoreError::Invalid(
@@ -732,11 +749,12 @@ impl RuntimeStore {
             label,
             created_at: now,
             ended_at: None,
+            allowed_domains,
         };
         inner.sessions.insert(session.id, session.clone());
         self.log.emit(
             "session.created",
-            json!({ "session_id": session.id, "host_id": session.host_id, "profile": session.profile }),
+            json!({ "session_id": session.id, "host_id": session.host_id, "profile": session.profile, "allowed_domains": session.allowed_domains }),
         );
         Ok(session)
     }
@@ -875,6 +893,7 @@ impl RuntimeStore {
             error: None,
             created_at: now,
             completed_at: None,
+            navigation_blocked: Vec::new(),
         };
         let (tx, rx) = watch::channel(OperationState::Queued);
         inner.operations.insert(
@@ -965,6 +984,17 @@ impl RuntimeStore {
         op.secret_text = None;
         op.view.state = state;
         op.view.result = result.result;
+        if !result.navigation_blocked.is_empty() {
+            // Bounded: the browser reports at most a page of them per action.
+            let blocked: Vec<_> = result.navigation_blocked.into_iter().take(50).collect();
+            for b in &blocked {
+                self.log.emit(
+                    "session.navigation_blocked",
+                    json!({ "session_id": op.view.session_id, "operation_id": op.view.id, "host": b.host, "at": b.at }),
+                );
+            }
+            op.view.navigation_blocked = blocked;
+        }
         if result.ok && op.view.action.returns_image() {
             if let Some(r) = op.view.result.as_mut() {
                 Self::store_screenshot(&self.artifacts, op.view.session_id, r, op.inline_artifacts);
@@ -1310,6 +1340,7 @@ mod tests {
                 h,
                 d.id,
                 OperationResult {
+                    navigation_blocked: Vec::new(),
                     ok: true,
                     result: Some(serde_json::json!({"url": "https://example.test/"})),
                     error: None,
@@ -1330,6 +1361,7 @@ mod tests {
                 h,
                 op.id,
                 OperationResult {
+                    navigation_blocked: Vec::new(),
                     ok: true,
                     result: None,
                     error: None
@@ -1360,6 +1392,54 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn allowed_domains_are_normalized_dispatched_and_blocks_reported() {
+        let s = RuntimeStore::new();
+        let h = s.register_host(None, "h".into(), "0".into());
+        assert!(matches!(
+            s.create_session_with(Some(h), None, None, false, &["*.bad".into()]),
+            Err(StoreError::Invalid(_))
+        ));
+        let sess = s
+            .create_session_with(
+                Some(h),
+                None,
+                None,
+                false,
+                &["Example.COM".into(), "https://example.com/x".into()],
+            )
+            .unwrap();
+        assert_eq!(sess.allowed_domains, vec!["example.com".to_string()]);
+        let (op, _rx) = s.enqueue(sess.id, nav(), Duration::from_secs(5)).unwrap();
+        let d = s
+            .next_operation(h, true, Duration::from_millis(1))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(d.allowed_domains, vec!["example.com".to_string()]);
+        let at = Utc::now();
+        let done = s
+            .complete(
+                h,
+                op.id,
+                OperationResult {
+                    ok: true,
+                    result: None,
+                    error: None,
+                    navigation_blocked: vec![hexactra_core::remote::BlockedNavigation {
+                        host: "evil.test".into(),
+                        at,
+                    }],
+                },
+            )
+            .unwrap();
+        assert_eq!(done.navigation_blocked.len(), 1);
+        assert_eq!(done.navigation_blocked[0].host, "evil.test");
+        // A session without a list dispatches none.
+        let open = s.create_session(Some(h), None).unwrap();
+        assert!(open.allowed_domains.is_empty());
+    }
+
+    #[tokio::test]
     async fn other_host_cannot_report() {
         let s = RuntimeStore::new();
         let h = s.register_host(None, "h".into(), "0".into());
@@ -1375,6 +1455,7 @@ mod tests {
                 other,
                 op.id,
                 OperationResult {
+                    navigation_blocked: Vec::new(),
                     ok: true,
                     result: None,
                     error: None

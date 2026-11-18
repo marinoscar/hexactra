@@ -16,7 +16,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use hexactra_core::bridge::{read_frame, write_frame, MAX_FROM_EXTENSION, MAX_TO_EXTENSION};
-use hexactra_core::remote::{OperationResult, RemoteAction};
+use hexactra_core::remote::{BlockedNavigation, OperationResult, RemoteAction};
 use serde::{Deserialize, Serialize};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::{mpsc, oneshot};
@@ -29,6 +29,9 @@ struct RequestFrame<'a> {
     id: String,
     action: &'a RemoteAction,
     deadline_ms: i64,
+    /// The session's allowed sites (#508). Always sent, so an empty list
+    /// lifts the previous session's confinement on this browser.
+    allowed_domains: &'a [String],
 }
 
 #[derive(Deserialize)]
@@ -45,6 +48,9 @@ struct IncomingFrame {
     error: Option<String>,
     #[serde(default)]
     version: Option<String>,
+    /// Top-level navigations the extension blocked since the last action.
+    #[serde(default)]
+    navigation_blocked: Vec<BlockedNavigation>,
 }
 
 struct Connection {
@@ -82,6 +88,7 @@ pub fn reply_wait(deadline: DateTime<Utc>, now: DateTime<Utc>) -> Duration {
 
 fn failure(msg: impl Into<String>) -> OperationResult {
     OperationResult {
+        navigation_blocked: Vec::new(),
         ok: false,
         result: None,
         error: Some(msg.into()),
@@ -256,6 +263,11 @@ impl BrowserBridge {
                             } else {
                                 Some(msg.error.unwrap_or_else(|| "action failed".into()))
                             },
+                            navigation_blocked: msg
+                                .navigation_blocked
+                                .into_iter()
+                                .take(50)
+                                .collect(),
                         });
                     }
                     None => tracing::debug!(%id, "response for unknown or expired request"),
@@ -324,6 +336,19 @@ impl BrowserBridge {
         action: &RemoteAction,
         deadline: DateTime<Utc>,
     ) -> OperationResult {
+        self.execute_in(op_id, action, deadline, &[]).await
+    }
+
+    /// [`Self::execute`] in a session confined to `allowed_domains` (#508):
+    /// the extension applies the list before the action and keeps it until
+    /// the next one.
+    pub async fn execute_in(
+        &self,
+        op_id: Uuid,
+        action: &RemoteAction,
+        deadline: DateTime<Utc>,
+        allowed_domains: &[String],
+    ) -> OperationResult {
         let grace = (deadline - Utc::now())
             .to_std()
             .unwrap_or(Duration::ZERO)
@@ -335,6 +360,7 @@ impl BrowserBridge {
             id: id.clone(),
             action,
             deadline_ms: deadline.timestamp_millis(),
+            allowed_domains,
         };
         let payload = match serde_json::to_vec(&frame) {
             Ok(p) => p,
@@ -440,6 +466,55 @@ mod tests {
             .await;
         assert!(r.ok, "{:?}", r.error);
         assert_eq!(r.result.unwrap(), json!({"tabs": []}));
+        let _ext = ext_task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn allowed_domains_go_out_and_blocked_navigations_come_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let sock = dir.path().join("b.sock");
+        let b = BrowserBridge::bind(&sock).await.unwrap();
+        let mut ext = fake_extension(&sock).await;
+        wait_connected(&b).await;
+        let ext_task = tokio::spawn(async move {
+            let f = read_frame(&mut ext, 1 << 20).await.unwrap().unwrap();
+            let req: Value = serde_json::from_slice(&f).unwrap();
+            assert_eq!(req["allowed_domains"], json!(["example.com"]));
+            let resp = json!({"type": "response", "id": req["id"], "ok": false,
+                "error": "navigation_blocked: evil.test is not in this session's allowed sites",
+                "navigation_blocked": [{"host": "evil.test", "at": "2026-11-18T10:00:00Z"}]});
+            write_frame(&mut ext, resp.to_string().as_bytes(), 1 << 20)
+                .await
+                .unwrap();
+            // An unconfined action still sends the (empty) list, to lift it.
+            let f = read_frame(&mut ext, 1 << 20).await.unwrap().unwrap();
+            let req: Value = serde_json::from_slice(&f).unwrap();
+            assert_eq!(req["allowed_domains"], json!([]));
+            let resp = json!({"type": "response", "id": req["id"], "ok": true});
+            write_frame(&mut ext, resp.to_string().as_bytes(), 1 << 20)
+                .await
+                .unwrap();
+            ext
+        });
+        let r = b
+            .execute_in(
+                Uuid::new_v4(),
+                &RemoteAction::Tabs,
+                Utc::now() + chrono::Duration::seconds(5),
+                &["example.com".to_string()],
+            )
+            .await;
+        assert!(!r.ok);
+        assert_eq!(r.navigation_blocked.len(), 1);
+        assert_eq!(r.navigation_blocked[0].host, "evil.test");
+        let r = b
+            .execute(
+                Uuid::new_v4(),
+                &RemoteAction::Tabs,
+                Utc::now() + chrono::Duration::seconds(5),
+            )
+            .await;
+        assert!(r.ok && r.navigation_blocked.is_empty());
         let _ext = ext_task.await.unwrap();
     }
 

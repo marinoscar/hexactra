@@ -349,6 +349,10 @@ enum SessionCmd {
         /// Create the profile if no host has it yet (a new, signed-out browser).
         #[arg(long)]
         create: bool,
+        /// Confine the session to this site and its subdomains; repeat for
+        /// several. The browser blocks every other top-level page.
+        #[arg(long = "allow-domain", value_name = "DOMAIN")]
+        allowed_domains: Vec<String>,
     },
     /// List sessions.
     List,
@@ -719,6 +723,7 @@ async fn run() -> Result<()> {
                     host,
                     label,
                     create,
+                    allowed_domains,
                 } => {
                     let s = client
                         .create_session(&CreateSessionRequest {
@@ -726,6 +731,7 @@ async fn run() -> Result<()> {
                             label: label.clone(),
                             profile: Some(cli.profile().to_string()),
                             create_profile: *create,
+                            allowed_domains: allowed_domains.clone(),
                         })
                         .await?;
                     save_current(&s.profile, s.id);

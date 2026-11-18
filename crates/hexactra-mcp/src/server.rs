@@ -422,6 +422,7 @@ impl Server {
                 label: Some("mcp".into()),
                 profile: Some(guard.profile.clone()),
                 create_profile: guard.create,
+                allowed_domains: Vec::new(),
             })
             .await?;
         guard.id = Some(s.id);
@@ -910,6 +911,7 @@ mod tests {
                             host_id,
                             op.id,
                             &OperationResult {
+                                navigation_blocked: Vec::new(),
                                 ok: true,
                                 result: Some(result),
                                 error: None,

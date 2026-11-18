@@ -680,6 +680,20 @@ pub struct OperationView {
     pub created_at: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<DateTime<Utc>>,
+    /// Top-level navigations the browser blocked under the session's allowed
+    /// sites since the previous action on this browser (#508).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub navigation_blocked: Vec<BlockedNavigation>,
+}
+
+/// A top-level navigation the browser refused because its host is not in the
+/// session's allowed sites (#508). Only the host is kept, never the full URL.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BlockedNavigation {
+    pub host: String,
+    /// When the browser blocked it.
+    pub at: DateTime<Utc>,
 }
 
 /// Session status.
@@ -706,6 +720,9 @@ pub struct SessionView {
     pub created_at: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ended_at: Option<DateTime<Utc>>,
+    /// The session's allowed sites, normalized (#508). Empty: any site.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed_domains: Vec<String>,
 }
 
 /// Who opens a remote desktop (from the console: the signed-in person).
@@ -833,6 +850,12 @@ pub struct CreateSessionRequest {
     /// Allow creating the profile on an on-demand host that does not have it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub create_profile: bool,
+    /// Sites the session may load as top-level pages (#508): a listed domain
+    /// covers its subdomains, an IP literal only itself. Empty: any site.
+    /// The browser blocks every other top-level navigation, including ones a
+    /// page starts itself, and reports it as `navigation_blocked`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed_domains: Vec<String>,
 }
 
 /// `POST /v1/sessions/{id}/actions`
@@ -893,6 +916,10 @@ pub struct DispatchedOperation {
     /// W3C trace context of the request that queued the action (#215).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub traceparent: Option<String>,
+    /// The session's allowed sites (#508); the host hands them to the browser
+    /// with the action. Empty: any site.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed_domains: Vec<String>,
 }
 
 /// `POST /v1/operations/{id}/result`
@@ -904,6 +931,10 @@ pub struct OperationResult {
     pub result: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Navigations the browser blocked under the session's allowed sites
+    /// since the previous action (#508).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub navigation_blocked: Vec<BlockedNavigation>,
 }
 
 // ------------------------------------------------------------------------

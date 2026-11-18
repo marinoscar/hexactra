@@ -4,7 +4,7 @@
 import type { FabricClient } from '../src/fabric/fabric.client';
 import type { FabricSession } from '../src/runner/fabric-session';
 import { MCP_TOOLS, READ_ONLY_TOOLS } from '../src/mcp/mcp.tools';
-import { domainAllowed } from '../src/runner/policy';
+import { NO_SITE, domainAllowed, fabricAllowedSites } from '../src/runner/policy';
 import { captureScreen, describeView, markCenter, parseMarks, roundInput, type ScreenView } from '../src/runner/vision';
 import { createTaskSchema } from '../src/tasks/tasks.schemas';
 
@@ -112,5 +112,21 @@ describe('MCP tools for external agents (#366)', () => {
     expect(api).toHaveBeenCalledWith('POST', '/browser/sessions/00000000-0000-4000-8000-000000000001/actions', { action: { type: 'screenshot', marks: true } });
     expect(r.content[0]).toMatchObject({ type: 'image', mimeType: 'image/jpeg' });
     expect(r.content[1]).toMatchObject({ type: 'text' });
+  });
+});
+
+describe('the allowed sites the fabric enforces (#508)', () => {
+  it('sends the one list there is, as plain domains', () => {
+    expect(fabricAllowedSites([], [])).toEqual([]);
+    expect(fabricAllowedSites(['Shop.example.test', '*.cdn.example.test'], [])).toEqual(['shop.example.test', 'cdn.example.test']);
+    expect(fabricAllowedSites([], ['app.example.test'])).toEqual(['app.example.test']);
+  });
+  it("narrows the task's list by the app's", () => {
+    expect(fabricAllowedSites(['example.test'], ['shop.example.test'])).toEqual(['shop.example.test']);
+    expect(fabricAllowedSites(['shop.example.test', 'other.test'], ['example.test'])).toEqual(['shop.example.test']);
+    expect(fabricAllowedSites(['a.test'], ['a.test', 'b.test'])).toEqual(['a.test']);
+  });
+  it('never turns two lists with nothing in common into "any site"', () => {
+    expect(fabricAllowedSites(['a.test'], ['b.test'])).toEqual([NO_SITE]);
   });
 });

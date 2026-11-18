@@ -82,6 +82,7 @@ async fn action_round_trip_through_host() {
             host_id,
             op.id,
             &OperationResult {
+                navigation_blocked: Vec::new(),
                 ok: true,
                 result: Some(json!({"url": "https://example.test/", "title": "Example"})),
                 error: None,
@@ -129,6 +130,7 @@ async fn browser_failure_is_reported_as_failed_state() {
             host_id,
             op.id,
             &OperationResult {
+                navigation_blocked: Vec::new(),
                 ok: false,
                 result: None,
                 error: Some("no element matches #missing".into()),

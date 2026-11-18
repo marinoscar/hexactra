@@ -13,6 +13,7 @@ pub mod experience;
 pub mod policy;
 pub mod profile;
 pub mod remote;
+pub mod site_policy;
 pub mod viewer;
 
 use chrono::{DateTime, Utc};
