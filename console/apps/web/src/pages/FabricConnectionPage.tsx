@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { Alert, Box, Button, Chip, Stack, TextField } from '@mui/material';
+import { Alert, Box, Button, Chip, Collapse, Stack, TextField, Typography } from '@mui/material';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { ErrorBanner, PageContainer, PageHeader } from '../ui';
@@ -23,9 +23,24 @@ export interface FabricConnectionTest {
   error: string | null;
 }
 
+/** The fabric bundled with the console's stack; `hexactra deploy` connects and repairs it (#309). */
+export const BUNDLED_FABRIC_URL = 'http://fabric-control:8787';
+
+/** `managed`: the bundled fabric, kept by deploy; `custom`: another fabric; `missing`: nothing stored. */
+export type FabricConnectionMode = 'managed' | 'custom' | 'missing';
+
+export function connectionMode(view: FabricConnectionView): FabricConnectionMode {
+  if (!view.configured) return 'missing';
+  return view.url?.replace(/\/+$/, '') === BUNDLED_FABRIC_URL ? 'managed' : 'custom';
+}
+
 /**
  * `/admin/settings/fabric`: the Hexactra Fabric control plane this console
  * drives (its URL and an `hxs_` service token). The token is write-only.
+ *
+ * Deploy connects the bundled fabric on its own (#474), so in the managed
+ * case the page shows the status and keeps the form behind "Use a different
+ * fabric…". A custom or missing connection shows the form open.
  */
 export function FabricConnectionPage() {
   const { api, viewer } = usePlatformHost();
@@ -37,16 +52,29 @@ export function FabricConnectionPage() {
   const [saved, setSaved] = useState(false);
   const [test, setTest] = useState<FabricConnectionTest | null>(null);
   const [testing, setTesting] = useState(false);
+  const [editing, setEditing] = useState(false);
+
+  const runTest = useCallback(async () => {
+    setTesting(true);
+    try {
+      setTest(await api.post<FabricConnectionTest>('/fabric/connection/test', {}));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not test the connection');
+    } finally {
+      setTesting(false);
+    }
+  }, [api]);
 
   const load = useCallback(async () => {
     try {
       const v = await api.get<FabricConnectionView>('/fabric/connection');
       setView(v);
       setUrl(v.url ?? '');
+      if (v.configured) void runTest();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load the fabric connection');
     }
-  }, [api]);
+  }, [api, runTest]);
 
   useEffect(() => {
     void load();
@@ -61,21 +89,15 @@ export function FabricConnectionPage() {
       setView(v);
       setToken('');
       setSaved(true);
+      setEditing(false);
+      if (v.configured) void runTest();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save');
     }
   };
 
-  const runTest = async () => {
-    setTesting(true);
-    try {
-      setTest(await api.post<FabricConnectionTest>('/fabric/connection/test', {}));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not test the connection');
-    } finally {
-      setTesting(false);
-    }
-  };
+  const mode = view ? connectionMode(view) : null;
+  const formOpen = mode !== null && (mode !== 'managed' || editing);
 
   return (
     <PageContainer width="narrow">
@@ -89,6 +111,50 @@ export function FabricConnectionPage() {
           Saved.
         </Alert>
       )}
+      {mode === 'managed' && (
+        <Box sx={{ mb: 2 }}>
+          <Stack direction="row" spacing={1} sx={{ mb: 1, flexWrap: 'wrap' }}>
+            <Chip color="primary" label="Managed by deploy" />
+          </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            This console uses its bundled fabric. Deploy connects it and repairs the connection on each deploy update, so there is
+            nothing to set here.
+          </Typography>
+          <Typography variant="body2">
+            <strong>URL:</strong> {view?.url}
+          </Typography>
+          {view?.token?.hint && (
+            <Typography variant="body2">
+              <strong>Service token:</strong> {view.token.hint}
+            </Typography>
+          )}
+          <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: 'wrap', gap: 1 }}>
+            <Button variant="outlined" onClick={() => void runTest()} disabled={testing}>
+              Test connection
+            </Button>
+            {canWrite && !editing && (
+              <Button onClick={() => setEditing(true)}>Use a different fabric…</Button>
+            )}
+          </Stack>
+        </Box>
+      )}
+      {mode === 'custom' && (
+        <Stack spacing={1} sx={{ mb: 2 }}>
+          <Box>
+            <Chip variant="outlined" label="Custom fabric" />
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            Deploy leaves this connection alone. To go back to the bundled fabric, set the URL to {BUNDLED_FABRIC_URL}.
+          </Typography>
+        </Stack>
+      )}
+      {mode === 'missing' && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Not connected. Running deploy update connects the bundled fabric. To use another fabric, enter its URL and an hxs_
+          service token.
+        </Alert>
+      )}
+      <Collapse in={formOpen} unmountOnExit>
       <Box component="form" onSubmit={save}>
         <Stack spacing={2}>
           <TextField
@@ -115,12 +181,17 @@ export function FabricConnectionPage() {
                 Save
               </Button>
             )}
-            <Button variant="outlined" onClick={() => void runTest()} disabled={!view?.configured || testing}>
-              Test connection
-            </Button>
+            {mode === 'managed' ? (
+              <Button onClick={() => setEditing(false)}>Cancel</Button>
+            ) : (
+              <Button variant="outlined" onClick={() => void runTest()} disabled={!view?.configured || testing}>
+                Test connection
+              </Button>
+            )}
           </Stack>
         </Stack>
       </Box>
+      </Collapse>
       {test && (
         <Stack direction="row" spacing={1} sx={{ mt: 3, flexWrap: 'wrap' }} aria-label="Connection test">
           <Chip color={test.reachable ? 'success' : 'error'} label={test.reachable ? `Reachable${test.latencyMs !== null ? ` (${test.latencyMs} ms)` : ''}` : 'Unreachable'} />

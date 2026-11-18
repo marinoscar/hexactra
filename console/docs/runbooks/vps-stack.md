@@ -134,7 +134,7 @@ docker compose $F exec fabric-control hexactra-fabric --url http://127.0.0.1:878
 ```
 
 Then, signed in as admin:
-1. Open **Administration → Fabric connection**.
+1. Open **Administration → Fabric connection**. When the bundled fabric is already set there, the page shows **Managed by deploy**; click **Use a different fabric…** to open the form.
 2. Set the URL to `http://fabric-control:8787` and paste the `hxs_…` token.
 3. Click **Test connection**.
 4. Open **Administration → Doctor**: the `fabric.*` checks must pass.

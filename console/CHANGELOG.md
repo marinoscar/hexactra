@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Fabric connection page** (#474, console 1.36.1): when the console uses its bundled fabric (`http://fabric-control:8787`), **Administration → Fabric connection** shows **Managed by deploy**, the URL, the token hint and the connection status, tested on load. The URL and token form opens with **Use a different fabric…** (`fabric_config:write`). A custom fabric shows the form with a **Custom fabric** chip, and a console with no connection shows the form with a hint to run `deploy update`. The route, permissions, API and Doctor links do not change.
+
 ### Added
 
 - **MCP Apps: the live run card** (#466, console 1.36.0): in AI apps that render MCP Apps (Claude, ChatGPT), `run_goal`, `task_run`, `run_status` and `run_wait` show a live card in the chat. The card has the browser's latest screenshot, the activity line, a budget meter, "Needs you" with Answer in the chat or Open inbox, **Stop** (confirmed inline, then `run_cancel`), **Open in Hexactra**, and on finish the result, duration, cost and **Run again**. Details: `docs/mcp-apps.md`.
