@@ -150,7 +150,7 @@ The nightly job (`browser.runs.retention`, 03:20 server time) reads each user's 
 
 ## The run trace (epic #536)
 
-The sections below are one chapter: what a run records and when it keeps a picture ([What a run records](#what-a-run-records)), what is masked and what is not ([What is masked](#what-is-masked)), the file and its route ([Exporting a run](#exporting-a-run)), the PDF ([The PDF report](#the-pdf-report)), and how it all is removed ([Retention](#retention); pictures go with their run). In short:
+The sections below are one chapter: what a run records and when it keeps a picture ([What a run records](#what-a-run-records)), how the run page shows it ([The run page](#the-run-page)), what is masked and what is not ([What is masked](#what-is-masked)), the file and its route ([Exporting a run](#exporting-a-run)), the PDF ([The PDF report](#the-pdf-report)), and how it all is removed ([Retention](#retention); pictures go with their run). In short:
 
 - **Masked always.** Screenshots are masked in the page before they are taken (the extension, `screenshot` with `mask: true`); text is masked when it is read and exported. There is no unmasked image and no unmasked export, for any role.
 - **Not masked:** names, addresses, balances and amounts (they are not patterns), and anything inside an image, a canvas or a video that is not a recognised field or text pattern. Reports say "masked", never "anonymised"; export **without screenshots** before sharing a trace outside.
