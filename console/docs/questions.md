@@ -52,6 +52,10 @@ The rule table is code: `CHANNEL_RULES` in `apps/api/src/questions/channels/chan
 - **The MCP Apps question card (#467).** In an AI app that renders MCP Apps, the question card (and the run card's "Needs you" banner) shows the typed form and records the click with `question_card_answer` under channel `mcp-app.<client>`. The person answered first-hand, but the card is drawn by the AI app and its calls carry the app's credential, so it is not a sign-in either: public answers and acknowledgements only. The tool also refuses a takeover (it is done in the browser). Details: [mcp-apps.md](mcp-apps.md#what-can-and-cannot-be-answered-in-a-chat).
 - **One copy of the answer rules.** The constraint checks, the selection limits and which inputs need a sign-in are `@app/shared/question-rules` (`packages/shared/question-rules.js`), read by the web form, the MCP Apps widgets and `channel-rules.ts`.
 
+## In a chat
+
+A run started from a chat ([chat.md](chat.md)) asks in that chat: its request is a card in the thread, with the same form as the Inbox and the same route (`POST /api/questions/:id/answer`, channel `web`). The Inbox still lists it, with **Answer in chat**, and its notifications open the chat. Nothing else changes: it is one question, the rules in the table above apply, and a secret typed into the card goes to the fabric, never into a chat message.
+
 ## The web form
 
 `/inbox` lists what is waiting and `/inbox/q/:id` shows one question; both render the same card (`apps/web/src/components/QuestionCard.tsx`) around the same form (`QuestionAnswerForm.tsx`).
