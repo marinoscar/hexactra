@@ -208,6 +208,61 @@ describe('the goal runner', () => {
     expect(scripted.outputs[3]).toMatch(/Refused: this looks like a purchase/);
   });
 
+  it('signs in itself: asks for the username as text and the password as a secret, and types both (#524)', async () => {
+    const userId = await login(`runner-signin-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const run = await db.run.create({ data: { userId, goal: 'Read the balance of my account' } });
+
+    const fabric = fakeFabric();
+    const scripted = scriptedAi([
+      [
+        ['navigate', { url: 'https://bank.example.test/login', reason: 'open the bank' }],
+        ['request_human', { kind: 'login', prompt: 'Your Example Bank username', input: 'text', choices: null }],
+      ],
+      [
+        ['type_text', { selector: '#user', text: 'oscar', submit: false, reason: 'the username' }],
+        ['request_human', { kind: 'login', prompt: 'Your Example Bank password', input: 'secret', choices: null }],
+      ],
+      [
+        ['type_handoff_secret', { selector: '#pass', submit: true }],
+        ['finish', { success: true, result: 'The balance is $1,204.' }],
+      ],
+    ]);
+    const inputs: string[] = [];
+    const inner = scripted.runTools;
+    const runTools = jest.fn(async (req: Parameters<typeof inner>[0]) => (inputs.push(JSON.stringify(req.input)), inner(req)));
+    const asked: string[][] = [];
+    const notifier = { needsYou: async (_u: string, _r: unknown, prompt: string, kind: string) => void asked.push([kind, prompt]), finished: async () => undefined };
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, { forUser: () => ({ runTools }) } as unknown as AiService, notifier as never);
+
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    const [user] = [...fabric.handoffs.values()];
+    expect(user).toMatchObject({ input: 'text', kind: 'login' });
+    Object.assign(user!, { status: 'completed', response: { outcome: 'completed', value: 'oscar', value_withheld: false, channel: 'web', by: `user:${userId}`, answered_at: new Date().toISOString() } });
+
+    expect(await runner.advance(run.id, userId, null)).toBe('waiting_human');
+    const pass = [...fabric.handoffs.values()][1]!;
+    expect(pass).toMatchObject({ input: 'secret', kind: 'login' });
+    // The fabric holds the password; the console is told only that one was given.
+    Object.assign(pass, { status: 'completed', response: { outcome: 'completed', value_withheld: true, channel: 'web', by: `user:${userId}`, answered_at: new Date().toISOString() } });
+    expect(await runner.advance(run.id, userId, null)).toBe('succeeded');
+
+    // No takeover was asked for: two questions, both answered from the chat or the Inbox.
+    expect(asked).toEqual([['login', 'Your Example Bank username'], ['login', 'Your Example Bank password']]);
+    expect(fabric.actions).toContainEqual(expect.objectContaining({ type: 'type', selector: '#user', text: 'oscar' }));
+    expect(fabric.actions).toContainEqual({ type: 'type_secret', handoff_id: pass.id, selector: '#pass', clear: true, submit: true });
+    expect(fabric.claimed()).toBe(false);
+    // The model was given the username it has to type, and never the password.
+    expect(inputs[1]).toContain('oscar');
+    // The console is never handed the password (the fabric withholds it), so there is nothing of it to store or to show a model:
+    // the only action about it names the handoff, and the model is told only that one was given.
+    expect(fabric.actions.filter((a) => a.type === 'type_secret')).toEqual([{ type: 'type_secret', handoff_id: pass.id, selector: '#pass', clear: true, submit: true }]);
+    expect(inputs[2]).not.toContain('"value"');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id }, include: { steps: true } });
+    expect(done).toMatchObject({ status: 'succeeded', result: 'The balance is $1,204.' });
+  });
+
   it('enforces policy, pauses for a confirmation and a secret, types the secret without storing it, and finishes', async () => {
     const userId = await login(`runner-${stamp}@example.test`);
     const prisma = app.get(PrismaService);
