@@ -16,6 +16,7 @@ import { OAUTH_PUBLIC_CORS_PATHS, verifyTenancyModeAtStartup } from '@marinoscar
 import { STORAGE_OPTIONS, simpleUploadFileSizeLimit, type ResolvedStorageModuleOptions } from '@marinoscar/platform-api/storage';
 
 import { AppModule } from './app.module';
+import { describeTrustProxy, parseTrustProxy } from './config/trust-proxy';
 import { registerMcpTransport } from './mcp/mcp.controller';
 import { McpSettingsReader } from './mcp/mcp-settings.reader';
 import { MCP_RATE_LIMITER, McpUnauthenticatedLimit, type McpRateLimiter } from './mcp/mcp.rate-limit';
@@ -45,7 +46,14 @@ export async function createApp(): Promise<NestFastifyApplication> {
   // route is loosened (#459; the platform's oauth-server spec, §3). `/api/mcp`
   // keeps its own Origin rules (registerMcpTransport, which runs first).
   const corsOptions = buildCorsOptions(process.env.CORS_ORIGIN, { openPaths: OAUTH_PUBLIC_CORS_PATHS });
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), { bufferLogs: false });
+  // Which proxies are trusted for the caller's address (`request.ip`), from
+  // TRUST_PROXY (#530): by default loopback and private ranges, so the stack's
+  // nginx forwards the real address and the per-address limits (MCP
+  // unauthenticated, the OAuth server's authorize and register) count each
+  // caller apart. An invalid value throws here, before anything is built.
+  const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter({ trustProxy }), { bufferLogs: false });
+  new Logger('Bootstrap').log(`Trusted proxies: ${describeTrustProxy(trustProxy)}`);
   // Route and caller attributes on the HTTP server span (`http.route`, `app.route.matched`),
   // first so it runs ahead of every other hook. Only when the SDK is installed.
   registerRequestSpanAttributes(app.getHttpAdapter().getInstance(), sdk !== null);

@@ -12,7 +12,7 @@ import { startedByLine, withAppOrigin } from '../src/connected-apps/app-origin';
 import { activityKeepDays, MCP_ACTIVITY_MAX_DAYS } from '../src/mcp/mcp-activity.jobs';
 import { ACTIVITY_GOAL_CHARS, activityDetail, activityTargets } from '../src/mcp/mcp-activity.service';
 import type { McpSettingsReader } from '../src/mcp/mcp-settings.reader';
-import { McpEndpointCheck, McpExposureCheck, McpHighRiskGrantsCheck, McpKillSwitchCheck, McpPublicReachabilityCheck, resourceMetadataUrl } from '../src/mcp/mcp.doctor-checks';
+import { McpEndpointCheck, McpExposureCheck, McpHighRiskGrantsCheck, McpKillSwitchCheck, McpPublicReachabilityCheck, McpTrustProxyCheck, resourceMetadataUrl } from '../src/mcp/mcp.doctor-checks';
 import { isPrivateHost, isPublicHttpsUrl } from '../src/mcp/mcp.public-url';
 import { InMemoryMcpRateLimiter, McpUnauthenticatedLimit, credentialKey, writeCalls } from '../src/mcp/mcp.rate-limit';
 import { REDACTED_TOKEN, redactToolResult, redactTokens } from '../src/mcp/mcp.redact';
@@ -258,5 +258,21 @@ describe('Doctor checks (#465)', () => {
     expect((await new McpHighRiskGrantsCheck(registry, config(''), prisma(0)).run()).status).toBe('pass');
     const warn = await new McpHighRiskGrantsCheck(registry, config(''), prisma(2)).run();
     expect(warn).toMatchObject({ status: 'warn', data: { highRiskGrants: 2, connectedApps: 4 } });
+  });
+
+  it('mcp.trust_proxy (#530): pass when trusting private ranges or a list; warn when off on a public https URL; pass when off on a private one; fail on an invalid value', async () => {
+    const check = (appUrl: string, raw: string | undefined) => {
+      const c = new McpTrustProxyCheck(registry, config(appUrl), oauth(true));
+      c.readEnv = () => raw;
+      return c.run();
+    };
+    expect(await check('https://console.example.test', undefined)).toMatchObject({ status: 'pass', data: { trustProxy: 'loopback,linklocal,uniquelocal' } });
+    expect(await check('https://console.example.test', '172.18.0.0/16')).toMatchObject({ status: 'pass', data: { trustProxy: '172.18.0.0/16' } });
+    const warn = await check('https://console.example.test', 'false');
+    expect(warn).toMatchObject({ status: 'warn', data: { trustProxy: false } });
+    expect(warn.remedy).toMatch(/TRUST_PROXY/);
+    expect(warn.remedy).toMatch(/public-exposure\.md/);
+    expect((await check('http://192.168.1.10:3535', 'false')).status).toBe('pass');
+    expect((await check('https://console.example.test', 'true')).status).toBe('fail');
   });
 });
