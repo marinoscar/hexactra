@@ -1,0 +1,1322 @@
+{
+  "$id": "urn:hexactra:run-trace:1",
+  "title": "Hexactra run trace",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "hexactra.run-trace"
+    },
+    "formatVersion": {
+      "type": "number",
+      "const": 1,
+      "description": "Version of this file format"
+    },
+    "exportedAt": {
+      "type": "string",
+      "description": "ISO 8601 timestamp"
+    },
+    "partial": {
+      "type": "boolean",
+      "description": "True for a run that was live (queued, running, waiting for its person) when it was exported"
+    },
+    "console": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "The console version that wrote the file"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "masking": {
+      "type": "object",
+      "properties": {
+        "applied": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true: there is no unmasked export"
+        },
+        "patternsVersion": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991,
+          "description": "Version of the sensitive-text pattern table (docs/runs.md, \"What is masked\")"
+        },
+        "hits": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "enum": [
+              "token",
+              "urlSecret",
+              "email",
+              "iban",
+              "card",
+              "ssn",
+              "routing",
+              "account",
+              "phone",
+              "digits"
+            ]
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "description": "How many matches of each pattern the export masked; patterns with none are left out"
+        }
+      },
+      "required": [
+        "applied",
+        "patternsVersion",
+        "hits"
+      ],
+      "additionalProperties": false
+    },
+    "run": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "goal": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "waiting_human",
+            "succeeded",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "stopReason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "finished",
+                "budget_actions",
+                "budget_model_calls",
+                "budget_active_time",
+                "budget_input_tokens",
+                "budget_output_tokens",
+                "budget_cost",
+                "stalled",
+                "cancelled",
+                "error",
+                "no_model"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trigger": {
+          "type": "string",
+          "enum": [
+            "manual",
+            "schedule",
+            "api",
+            "mcp",
+            "external",
+            "chat"
+          ]
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "web",
+            "android",
+            "cli",
+            "api",
+            "mcp",
+            "schedule",
+            "system"
+          ],
+          "description": "Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system"
+        },
+        "client": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "description": "The OAuth client id; null for an unverified MCP client name",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "description": "The display name at the time the run started",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "verified": {
+                  "type": "boolean",
+                  "description": "False: a name an MCP client gave itself over a personal access token"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "verified"
+              ],
+              "additionalProperties": false,
+              "description": "The AI app that started the run; null when it was not started by an app"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "taskId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "taskName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "conversationId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profile": {
+          "type": "string"
+        },
+        "host": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The machine the run used; `name` null when the fabric could not be asked"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO 8601 timestamp"
+        },
+        "startedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "ISO 8601 timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "finishedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "ISO 8601 timestamp"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "confirmedActions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "seq": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "prompt": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              }
+            },
+            "required": [
+              "seq",
+              "prompt",
+              "action",
+              "at"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Steps the owner confirmed that the run carried out (#540)"
+        },
+        "usage": {
+          "type": "object",
+          "properties": {
+            "stepCount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "modelCalls": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "inputTokens": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "outputTokens": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "cachedInputTokens": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "costUsd": {
+              "type": "number",
+              "description": "A lower bound while costKnown is false"
+            },
+            "costKnown": {
+              "type": "boolean"
+            },
+            "activeMs": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991,
+              "description": "Time spent working, waits for a person excluded"
+            }
+          },
+          "required": [
+            "stepCount",
+            "modelCalls",
+            "inputTokens",
+            "outputTokens",
+            "cachedInputTokens",
+            "costUsd",
+            "costKnown",
+            "activeMs"
+          ],
+          "additionalProperties": false,
+          "description": "What the run used"
+        }
+      },
+      "required": [
+        "id",
+        "goal",
+        "status",
+        "stopReason",
+        "result",
+        "error",
+        "trigger",
+        "origin",
+        "client",
+        "taskId",
+        "taskName",
+        "conversationId",
+        "profile",
+        "host",
+        "createdAt",
+        "startedAt",
+        "finishedAt",
+        "confirmedActions",
+        "usage"
+      ],
+      "additionalProperties": false
+    },
+    "policy": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "builtin": {
+              "type": "boolean"
+            },
+            "source": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "run",
+                    "schedule",
+                    "task",
+                    "user_default",
+                    "system_default"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "spec": {
+              "type": "object",
+              "properties": {
+                "schemaVersion": {
+                  "type": "number",
+                  "const": 1,
+                  "description": "Version of this document format."
+                },
+                "models": {
+                  "type": "object",
+                  "properties": {
+                    "startTier": {
+                      "type": "string",
+                      "enum": [
+                        "fast",
+                        "standard",
+                        "frontier"
+                      ],
+                      "description": "The tier a run starts on."
+                    },
+                    "maxTier": {
+                      "type": "string",
+                      "enum": [
+                        "fast",
+                        "standard",
+                        "frontier"
+                      ],
+                      "description": "The highest tier a run may escalate to when it stalls. Never below `startTier`."
+                    },
+                    "allowProviderFallback": {
+                      "type": "boolean",
+                      "description": "Use the tier's fallback model when the provider errors or rate-limits."
+                    },
+                    "pins": {
+                      "description": "Optional per-policy model override per tier. Each pin must name an enabled model that supports tools and vision.",
+                      "type": "object",
+                      "properties": {
+                        "fast": {
+                          "description": "Model that replaces the fast tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition.",
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "standard": {
+                          "description": "Model that replaces the standard tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition.",
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "frontier": {
+                          "description": "Model that replaces the frontier tier for runs under this policy: `provider:modelId` or a bare model id. `null` or absent uses the tier's own definition.",
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "maxLength": 200
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "startTier",
+                    "maxTier",
+                    "allowProviderFallback"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Which models a run uses, and how it moves between tiers."
+                },
+                "budget": {
+                  "type": "object",
+                  "properties": {
+                    "maxActions": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100000
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Most browser actions a run may take. `null` means unlimited."
+                    },
+                    "maxModelCalls": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100000
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Most model round trips a run may make. `null` means unlimited."
+                    },
+                    "maxActiveMinutes": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 10080
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Most active minutes a run may use (time waiting for a person does not count); 7 days at most when set. `null` means unlimited."
+                    },
+                    "maxInputTokens": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 1000000000
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Most input tokens a run may send. `null` means unlimited."
+                    },
+                    "maxOutputTokens": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 100000000
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Most output tokens a run may receive. `null` means unlimited."
+                    },
+                    "maxCostUsd": {
+                      "anyOf": [
+                        {
+                          "type": "number",
+                          "exclusiveMinimum": 0,
+                          "maximum": 100000
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "Most a run may cost in US dollars. `null` means unlimited."
+                    },
+                    "warnAtPercent": {
+                      "type": "integer",
+                      "minimum": 10,
+                      "maximum": 95,
+                      "description": "Warn the owner when any set budget reaches this percentage."
+                    }
+                  },
+                  "required": [
+                    "maxActions",
+                    "maxModelCalls",
+                    "maxActiveMinutes",
+                    "maxInputTokens",
+                    "maxOutputTokens",
+                    "maxCostUsd",
+                    "warnAtPercent"
+                  ],
+                  "additionalProperties": false,
+                  "description": "What a run may spend. Every limit may be unlimited; stall detection stays on regardless. Chat runs show these limits but are not stopped by them."
+                },
+                "stall": {
+                  "type": "object",
+                  "properties": {
+                    "maxConsecutiveFailures": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 50,
+                      "description": "Failed actions in a row that count as a stall."
+                    },
+                    "maxRepeatedAction": {
+                      "type": "integer",
+                      "minimum": 2,
+                      "maximum": 50,
+                      "description": "The same action repeated this many times counts as a stall."
+                    },
+                    "noProgressActions": {
+                      "type": "integer",
+                      "minimum": 3,
+                      "maximum": 200,
+                      "description": "Actions without visible progress that count as a stall."
+                    },
+                    "onStall": {
+                      "type": "string",
+                      "enum": [
+                        "nudge_then_escalate",
+                        "escalate",
+                        "ask_human",
+                        "fail"
+                      ],
+                      "description": "What to do on a stall: nudge the model then escalate a tier, escalate at once, ask a person, or fail the run."
+                    },
+                    "maxEscalations": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 10,
+                      "description": "Most tier escalations per run."
+                    }
+                  },
+                  "required": [
+                    "maxConsecutiveFailures",
+                    "maxRepeatedAction",
+                    "noProgressActions",
+                    "onStall",
+                    "maxEscalations"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Stall and loop detection. Always on."
+                },
+                "context": {
+                  "type": "object",
+                  "properties": {
+                    "screenshotsKept": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 5,
+                      "description": "Recent screenshots kept in the model context."
+                    },
+                    "pruneBatch": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 50,
+                      "description": "How many old tool results are pruned together once the context grows."
+                    },
+                    "callsPerChunk": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 20,
+                      "description": "Model calls per chunk; the model tier only changes between chunks."
+                    },
+                    "observationChars": {
+                      "type": "integer",
+                      "minimum": 500,
+                      "maximum": 20000,
+                      "description": "Most characters of one page observation sent to the model."
+                    }
+                  },
+                  "required": [
+                    "screenshotsKept",
+                    "pruneBatch",
+                    "callsPerChunk",
+                    "observationChars"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Context efficiency: how much the model sees each round."
+                }
+              },
+              "required": [
+                "schemaVersion",
+                "models",
+                "budget",
+                "stall",
+                "context"
+              ],
+              "additionalProperties": false,
+              "description": "An agent policy: model tiers, budgets, stall detection and context settings."
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "version",
+            "builtin",
+            "source",
+            "spec"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The agent policy the run ran under, as snapshotted at its start; null before its first step"
+    },
+    "budget": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "effective": {
+              "type": "object",
+              "properties": {
+                "actions": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "modelCalls": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "activeMinutes": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "inputTokens": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "outputTokens": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "cost": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "warnAtPercent": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "actions",
+                "modelCalls",
+                "activeMinutes",
+                "inputTokens",
+                "outputTokens",
+                "cost",
+                "warnAtPercent"
+              ],
+              "additionalProperties": false,
+              "description": "The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD."
+            },
+            "used": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "enum": [
+                  "actions",
+                  "modelCalls",
+                  "activeMinutes",
+                  "inputTokens",
+                  "outputTokens",
+                  "cost"
+                ]
+              },
+              "additionalProperties": {
+                "type": "number"
+              },
+              "required": [
+                "actions",
+                "modelCalls",
+                "activeMinutes",
+                "inputTokens",
+                "outputTokens",
+                "cost"
+              ],
+              "description": "What the run has used so far, in the same units (active time includes the stretch in progress)."
+            },
+            "percent": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "enum": [
+                  "actions",
+                  "modelCalls",
+                  "activeMinutes",
+                  "inputTokens",
+                  "outputTokens",
+                  "cost"
+                ]
+              },
+              "additionalProperties": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "required": [
+                "actions",
+                "modelCalls",
+                "activeMinutes",
+                "inputTokens",
+                "outputTokens",
+                "cost"
+              ],
+              "description": "Percent of each limit used, one decimal; `null` for an unlimited budget."
+            },
+            "source": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "enum": [
+                  "actions",
+                  "modelCalls",
+                  "activeMinutes",
+                  "inputTokens",
+                  "outputTokens",
+                  "cost"
+                ]
+              },
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "policy",
+                      "ceiling"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "required": [
+                "actions",
+                "modelCalls",
+                "activeMinutes",
+                "inputTokens",
+                "outputTokens",
+                "cost"
+              ],
+              "description": "Where each limit came from: the `policy`, or the deployment `ceiling` that clamped it. `null` when unlimited."
+            },
+            "costKnown": {
+              "type": "boolean",
+              "description": "False when a call could not be priced: `used.cost` is then \"at least\"."
+            },
+            "enforcement": {
+              "type": "string",
+              "enum": [
+                "hard",
+                "soft"
+              ],
+              "description": "`hard`: a used-up budget ends the run. `soft`: a chat run (trigger `chat`), whose owner is present: its limits are shown and warned about, never enforced (#537)."
+            },
+            "over": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "actions",
+                  "modelCalls",
+                  "activeMinutes",
+                  "inputTokens",
+                  "outputTokens",
+                  "cost"
+                ]
+              },
+              "description": "The budgets at or over their limit, in check order. A soft-budget run keeps working past them."
+            }
+          },
+          "required": [
+            "effective",
+            "used",
+            "percent",
+            "source",
+            "costKnown",
+            "enforcement",
+            "over"
+          ],
+          "additionalProperties": false,
+          "description": "The run budget: `null` on a run that has not started or that was snapshotted before budgets were enforced."
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tier": {
+            "type": "string",
+            "enum": [
+              "fast",
+              "standard",
+              "frontier"
+            ]
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "calls": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Model calls on this tier; null when the run used several tiers (calls are counted per run)"
+          }
+        },
+        "required": [
+          "tier",
+          "model",
+          "calls"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The tiers the run used, in order, with their models"
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "at": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "kind": {
+            "type": "string",
+            "description": "action | handoff | finish | error | note | routing | guidance | end (see `GET /runs/{id}`)"
+          },
+          "action": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "args": {
+            "anyOf": [
+              {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The stored, redacted arguments, masked again"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": "string",
+            "description": "Masked"
+          },
+          "reasoning": {
+            "description": "The model's own words, masked",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "durationMs": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "input": {
+                    "type": "string"
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "description": "Masked"
+                  },
+                  "options": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "label": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "label"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Labels masked"
+                  },
+                  "risk": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "answer": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "outcome": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "description": "Masked; absent when the value is withheld (a secret, a sign-in)",
+                            "type": "string"
+                          },
+                          "valueWithheld": {
+                            "type": "boolean"
+                          },
+                          "channel": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "answeredAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "outcome",
+                          "valueWithheld",
+                          "channel",
+                          "answeredAt"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "kind",
+                  "input",
+                  "prompt",
+                  "options",
+                  "risk",
+                  "status",
+                  "answer"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The question this step asked or answered, masked (#541); null for any other step"
+          },
+          "screenshot": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "moment": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "question",
+                          "before_confirmed",
+                          "after_confirmed",
+                          "failure",
+                          "final"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The key moment the picture records"
+                  },
+                  "masked": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "How many regions the extension masked in the picture"
+                  },
+                  "note": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "unavailable",
+                          "masked_failed",
+                          "no_storage",
+                          "capped"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Why a key moment has no picture; null when it has one"
+                  },
+                  "contentType": {
+                    "description": "`image/jpeg` or `image/png`; null without a picture",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "bytes": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "Size of the stored image; null with `screenshots=none` or when it could not be read"
+                  },
+                  "data": {
+                    "description": "The masked image, base64. Only with `screenshots=embed`.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "moment",
+                  "masked",
+                  "note",
+                  "contentType",
+                  "bytes"
+                ],
+                "additionalProperties": false,
+                "description": "The masked trace picture of a step (#541); null for a step that records no key moment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "seq",
+          "at",
+          "kind",
+          "action",
+          "args",
+          "ok",
+          "summary",
+          "reasoning",
+          "durationMs",
+          "question",
+          "screenshot"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "chat": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant",
+              "system"
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          }
+        },
+        "required": [
+          "seq",
+          "role",
+          "kind",
+          "text",
+          "at"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The messages of the run's conversation (a chat run); empty for any other run"
+    }
+  },
+  "required": [
+    "type",
+    "formatVersion",
+    "exportedAt",
+    "partial",
+    "console",
+    "masking",
+    "run",
+    "policy",
+    "budget",
+    "models",
+    "steps",
+    "chat"
+  ],
+  "additionalProperties": false,
+  "description": "A run trace file: everything about a run that is safe to share, masked. Never the transcript, a token, a withheld answer or an AI app's grant or limits."
+}

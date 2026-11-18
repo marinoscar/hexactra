@@ -14,6 +14,12 @@ What each client can do with the capabilities of epic E33 (#458): connected apps
 | In-chat cards: run, question and tasks ([mcp-apps.md](mcp-apps.md)) | **Not offered, because** a card is a view of tool results inside the assistant's chat; it calls MCP tools, not REST | **Implemented.** `ui://hexactra/run-card\|question-card\|tasks-card`, app-only tools `run_card_poll` and `question_card_answer` | **Not offered, because** they exist only in a host that renders MCP Apps | Same | Same | **Web-only by nature**: they render in ChatGPT and Claude (web, desktop, mobile), not in the console, whose own pages do the same job | Same as web: in the assistant's own app |
 | Notifications `app.connected`, `app.scope_added`, `app.first_run` | The platform's notification routes | n/a | **Not offered, because** they are for a person's own devices (in-app, email, Web Push, the Android app) | n/a | Typed through `hx.api` | In-app list, email and Web Push | `android_app` channel; the deep link opens `/settings/ai-apps/:clientId` (the link and the app's intent-filter are tested; a device check is #516) |
 
+## What the run trace added (E35)
+
+| Capability (registry id) | REST | MCP | CLI | TUI | SDK | Web | Android |
+|---|---|---|---|---|---|---|---|
+| Export a run as a masked JSON trace file (`runs.export`, #542, [runs.md](runs.md#exporting-a-run)) | **Implemented.** `GET /api/runs/{id}/export?format=json&screenshots=embed\|none` | **Implemented.** `run_export` (read-only, `runs:read`): the trace without images, cut to the result size limit and saying so in `truncated` | **Implemented.** `hexactra runs export <id> [--no-screenshots] [-o <file>]` | **Not offered, because** the TUI is for watching and answering; the CLI writes the file | **Implemented.** `hx.runs.export(id, { screenshots })`; the file's JSON Schema is `run-trace.schema.json` in the package | **Not yet:** the Export button on the run page is E35.8 | Through the web app, with the web page |
+
 ## The Android column
 
 The Android app opens the console in a Trusted Web Activity, so every page above is there.

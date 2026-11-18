@@ -115,6 +115,8 @@ describe('every tool stays within the limits with the largest plausible answer',
         },
       };
     }
+    // The trace file (#542): the run and 2,000 steps with big summaries, arguments and reasoning.
+    if (path.startsWith('/runs/') && path.includes('/export')) return { type: 'hexactra.run-trace', formatVersion: 1, partial: false, masking: { applied: true, patternsVersion: 1, hits: {} }, run: { id: RID, status: 'failed', goal: big, result: big, error: big }, policy: null, budget: null, models: [], steps: Array.from({ length: 2000 }, (_, i) => ({ ...step(i), question: { prompt: big }, screenshot: null })), chat: Array.from({ length: 200 }, (_, i) => ({ seq: i, role: 'user', kind: 'text', text: big, at: 'now' })) };
     if (path.startsWith('/runs/') && method === 'GET') return { ...run(0), steps: Array.from({ length: 2000 }, (_, i) => step(i)) };
     if (path.startsWith('/runs')) return method === 'GET' ? (path.includes('envelope') ? { items: Array.from({ length: 100 }, (_, i) => run(i)), nextCursor: 'c' } : Array.from({ length: 500 }, (_, i) => run(i))) : run(0);
     if (path.startsWith('/questions')) return { id: RID, input: 'text', prompt: big, status: 'answered', expiresAt: 'now', response: { outcome: 'completed', value: 'v'.repeat(4096) } };
@@ -125,7 +127,7 @@ describe('every tool stays within the limits with the largest plausible answer',
     return { id: RID, name: big, goal: big, spec: { x: 'q'.repeat(400_000) }, valid: true, description: big, policyId: 'p', status: 'pending', created: [], replaced: [], skipped: [] };
   }
   const ARGS: Record<string, Record<string, unknown>> = {
-    run_goal: { goal: 'g' }, run_status: { run_id: RID, steps: 50 }, run_wait: { run_id: RID, screenshot: true }, run_card_poll: { run_id: RID, screenshot: true }, runs_list: {}, run_cancel: { run_id: RID }, tasks_list: {}, task_create: { name: 'n', goal: 'g' }, task_update: { task_id: RID }, task_run: { task_id: RID },
+    run_goal: { goal: 'g' }, run_status: { run_id: RID, steps: 50 }, run_wait: { run_id: RID, screenshot: true }, run_card_poll: { run_id: RID, screenshot: true }, runs_list: {}, run_cancel: { run_id: RID }, run_export: { run_id: RID }, tasks_list: {}, task_create: { name: 'n', goal: 'g' }, task_update: { task_id: RID }, task_run: { task_id: RID },
     schedule_create: { task_id: RID, cron: '0 9 * * 1-5' }, schedule_preview: { cron: '0 9 * * 1-5' }, task_pause: { task_id: RID }, task_resume: { task_id: RID }, schedules_list: {}, inbox_list: {},
     inbox_answer: { question_id: RID, outcome: 'completed', value: 'x' }, question_card_answer: { question_id: RID, outcome: 'completed', value: 'x' }, ask_human: { prompt: 'p', input: 'text' }, question_status: { question_id: RID }, policies_list: {}, policy_get: { policy_id: 'builtin:balanced' },
     policy_create: { name: 'n', spec: {} }, policy_update: { policy_id: 'builtin:balanced' }, policy_set_default: { policy_id: null }, policies_export: {}, policies_import: { file: {} }, hosts_list: {}, browser_open: { goal: 'g' },

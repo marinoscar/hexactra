@@ -1,8 +1,11 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
-import { ApiExtraModels, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiExtraModels, ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
+
+import { RunExportQueryDto, RunTraceDto } from './run-trace.schemas';
+import { RunTraceService } from './run-trace.service';
 
 import { CreateTaskDto, UpdateTaskDto } from './tasks.schemas';
 import { ListRunsDto, RunCountsQueryDto } from './runs.schemas';
@@ -107,6 +110,7 @@ export class RunsController {
   constructor(
     private readonly tasks: TasksService,
     private readonly runs: RunsQueryService,
+    private readonly traces: RunTraceService,
   ) {}
 
   /**
@@ -134,6 +138,28 @@ export class RunsController {
   @Auth({ permissions: ['runs:read'] })
   counts(@CurrentUser('id') userId: string, @Query() q: RunCountsQueryDto) {
     return this.runs.counts(userId, q);
+  }
+
+  /**
+   * The run as one masked JSON file (#542), sent as an attachment with `@Res()`.
+   * `:id/export` has two segments, so it never collides with `GET :id`.
+   */
+  @Get(':id/export')
+  @ApiOkResponse({ type: RunTraceDto, description: 'The run trace file (not wrapped in the `data` envelope), sent as an attachment `hexactra-run-<first 8 of id>-<yyyymmdd>.json`.' })
+  @ApiProduces('application/json')
+  @Auth({ permissions: ['runs:read'] })
+  @ApiOperation({
+    summary: 'Export a run as a JSON trace file',
+    description:
+      'A `hexactra.run-trace` file (`formatVersion` 1): the run, its policy, budget and models, every step with its question and answer, the masked trace screenshots (`screenshots=embed`, the default; `none` leaves the images out) and the messages of its chat. Every string is masked (`masking.hits` counts what was); there is no unmasked export. Never the transcript, a token, a withheld answer or an AI app\'s grant. A live run exports with `partial: true`. 404 `RUN_NOT_FOUND` for a run that is not yours; 413 `EXPORT_TOO_LARGE` over 50 MB (use `screenshots=none`); 429 `EXPORT_RATE_LIMITED` past 10 exports a minute.',
+  })
+  async export(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Query() q: RunExportQueryDto, @Res() reply: FastifyReply): Promise<void> {
+    const file = await this.traces.exportJson(userId, id, { screenshots: q.screenshots });
+    await reply
+      .header('content-disposition', `attachment; filename="${file.filename}"`)
+      .header('cache-control', 'no-store')
+      .type('application/json; charset=utf-8')
+      .send(file.body);
   }
 
   @Get(':id')

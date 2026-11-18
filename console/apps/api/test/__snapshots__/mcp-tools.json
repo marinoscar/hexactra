@@ -75,6 +75,21 @@
     "outputSchema": "b644f34ff85f602e"
   },
   {
+    "name": "run_export",
+    "title": "Export a run's trace",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "Export a run's trace",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "50c568c511c93b3c",
+    "outputSchema": "da7a01edbea77987"
+  },
+  {
     "name": "tasks_list",
     "title": "List saved tasks",
     "scope": "runs:read",

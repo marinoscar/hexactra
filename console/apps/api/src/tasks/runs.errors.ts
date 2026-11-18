@@ -8,3 +8,6 @@ registerErrorCode({ code: 'INVALID_CURSOR', status: 400, description: 'The `curs
 registerErrorCode({ code: 'RUN_NOT_FOUND', status: 404, description: "The run does not exist or is not the caller's." });
 registerErrorCode({ code: 'RUN_LIVE', status: 409, description: 'The run is queued, running or waiting for a person: a live run is never deleted. Cancel it first.' });
 registerErrorCode({ code: 'COUNT_CHANGED', status: 409, description: 'The finished runs that match the filter differ by more than 5 % from `expectedCount`; `details.matched` is the real count. Nothing was deleted.' });
+// Exporting a run (#542).
+registerErrorCode({ code: 'EXPORT_TOO_LARGE', status: 413, description: 'The run file would be over 50 MB with its screenshots embedded. Export it with `screenshots=none`.' });
+registerErrorCode({ code: 'EXPORT_RATE_LIMITED', status: 429, description: 'More than 10 run exports in a minute; `details.retryAfterS` says when to try again.' });

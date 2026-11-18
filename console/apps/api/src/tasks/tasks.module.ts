@@ -12,6 +12,7 @@ import { RUN_ARTIFACT_STORE, RunDeleteService, type RunArtifactStore } from './r
 import { ActionTokenStore } from './action-token-store';
 import { RunRetentionController } from './run-retention.controller';
 import { RunTraceDoctorCheck } from './run-trace.doctor-check';
+import { RunTraceService } from './run-trace.service';
 import { RunRetentionDoctorCheck } from './run-retention.doctor-check';
 import { RunRetentionApplyHandler, RunRetentionHandler, RunRetentionTask } from './run-retention.job';
 import { RunRetentionService } from './run-retention.service';
@@ -64,7 +65,7 @@ const artifacts = runArtifactStore();
   imports: [FabricModule, PoliciesModule, ...(artifacts.imports ?? [])],
   // RunsDeleteController and RunRetentionController first: their fixed paths are declared before any `:id` route.
   controllers: [TasksController, TaskSchedulesController, RunsDeleteController, RunRetentionController, RunsController],
-  providers: [TasksService, RunsQueryService, RunDeleteService, RunsDeleteHandler, RunRetentionService, RunRetentionHandler, RunRetentionApplyHandler, RunRetentionTask, RunRetentionDoctorCheck, RunTraceDoctorCheck, ...artifacts.providers, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, RunEvents, RunEndHooks, ActionTokenStore, RunActionTokens, RunReminders, RunRemindHandler, RunRemindTask],
-  exports: [...(artifacts.providers.length ? [RUN_ARTIFACT_STORE] : []), TasksService, RunsQueryService, RunDeleteService, RunRetentionService, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, RunEvents, RunEndHooks, ActionTokenStore, RunActionTokens, RunReminders],
+  providers: [TasksService, RunsQueryService, RunTraceService, RunDeleteService, RunsDeleteHandler, RunRetentionService, RunRetentionHandler, RunRetentionApplyHandler, RunRetentionTask, RunRetentionDoctorCheck, RunTraceDoctorCheck, ...artifacts.providers, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, RunEvents, RunEndHooks, ActionTokenStore, RunActionTokens, RunReminders, RunRemindHandler, RunRemindTask],
+  exports: [...(artifacts.providers.length ? [RUN_ARTIFACT_STORE] : []), TasksService, RunsQueryService, RunTraceService, RunDeleteService, RunRetentionService, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, RunEvents, RunEndHooks, ActionTokenStore, RunActionTokens, RunReminders],
 })
 export class TasksModule {}
