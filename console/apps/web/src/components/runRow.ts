@@ -45,9 +45,9 @@ export function rowCost(run: Pick<Run, 'costUsd' | 'costKnown' | 'modelCalls'>):
   return formatCost(run.costUsd, known);
 }
 
-export type RunMenuAction = 'open' | 'again' | 'againWith' | 'cancel' | 'delete';
+export type RunMenuAction = 'open' | 'again' | 'againWith' | 'exportPdf' | 'exportJson' | 'cancel' | 'delete';
 
-export const RUN_MENU_LABEL: Record<RunMenuAction, string> = { open: 'Open', again: 'Run again', againWith: 'Run again with…', cancel: 'Cancel', delete: 'Delete' };
+export const RUN_MENU_LABEL: Record<RunMenuAction, string> = { open: 'Open', again: 'Run again', againWith: 'Run again with…', exportPdf: 'Export PDF', exportJson: 'Export JSON', cancel: 'Cancel', delete: 'Delete' };
 
 export interface RunMenuPermissions {
   /** `runs:write`. */
@@ -56,11 +56,14 @@ export interface RunMenuPermissions {
   canDelete: boolean;
   /** `agent_policies:read`, with at least one policy to offer. */
   canPickPolicy: boolean;
+  /** `runs:read` and a client that can download: Export PDF and Export JSON (#544). Default false. */
+  canExport?: boolean;
 }
 
 /**
  * The actions of a run, in menu order. Run again is not offered for a run an
- * external agent drove (there is nothing to start); Cancel is for a live run,
+ * external agent drove (there is nothing to start); Export is for any run (a
+ * live one's file is partial); Cancel is for a live run,
  * Delete for a finished one. An action the viewer may not take is absent.
  */
 export function runMenuActions(run: Pick<Run, 'status' | 'trigger'>, p: RunMenuPermissions): RunMenuAction[] {
@@ -69,6 +72,7 @@ export function runMenuActions(run: Pick<Run, 'status' | 'trigger'>, p: RunMenuP
     'open' as const,
     ...(again ? (['again'] as const) : []),
     ...(again && p.canPickPolicy ? (['againWith'] as const) : []),
+    ...(p.canExport ? (['exportPdf', 'exportJson'] as const) : []),
     ...(p.canWrite && isLive(run.status) ? (['cancel'] as const) : []),
     ...(p.canDelete && isTerminal(run.status) ? (['delete'] as const) : []),
   ];
