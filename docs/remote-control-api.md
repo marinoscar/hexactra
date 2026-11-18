@@ -284,7 +284,7 @@ Screenshots do not travel inside operation results. The control plane keeps the 
 
 ## Human handoff
 
-When an agent meets something only its owner can do (a one-time code sent to them, a passkey, a password it was not given, a CAPTCHA puzzle it cannot pass, or a purchase the task asks to confirm), it opens a **handoff**. The session pauses: actions return `409 handoff_pending` until a person answers or the handoff expires.
+When an agent meets something only its owner can do (a one-time code sent to them, a passkey, a password it was not given, a CAPTCHA puzzle it cannot pass, or a purchase the task asks to confirm), it opens a **handoff**. The session pauses: actions return `409 handoff_pending` until a person answers or the handoff expires. The one exception is a plain `screenshot` (without `marks`) or a `desktop_screenshot`: it is still taken, so the person can see the page they are asked about, except while the handoff asks for a secret. The same holds while a person has taken over the desktop.
 
 | Method and path | Auth | Purpose |
 |---|---|---|

@@ -140,7 +140,7 @@ The token is read from `HEXACTRA_API_TOKEN` or `~/.config/hexactra/api-token`. F
 
 Hexactra acts in your real Chrome profile, so sites see your normal browser, cookies and sign-ins. It does **not** try to defeat bot detection. When a site asks for something only you should do, the agent opens a **handoff**:
 
-1. The session pauses. Browser actions return `handoff_pending` until you answer.
+1. The session pauses. Browser actions return `handoff_pending` until you answer. A plain screenshot is still taken, unless a secret is being asked for.
 2. Every webhook channel you registered gets a signed `handoff.created` event. The event holds the prompt, the page, and a single-use link and token to answer with.
 3. You answer from any channel: tap the link and fill in the small form, reply through your bot, or run `hexactra-fabric handoff respond`. For a CAPTCHA or passkey, act in the browser through remote desktop, then tap **I've done it**.
 4. The agent gets the answer (for example the one-time code) and carries on.

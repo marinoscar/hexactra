@@ -8,7 +8,7 @@ An agent asks its user a typed question and waits for a typed answer. The person
 |---|---|---|
 | Asked with | `POST /api/questions`, `hexactra questions ask`, MCP `ask_human` | `POST /api/browser/sessions/:runId/handoffs`, MCP `browser_request_human`, the goal runner's `request_human` |
 | Lives in | The console only (`questions` table) | A fabric handoff on the browser session, mirrored as a console question |
-| Pauses a browser | No | Yes: the session's actions wait until it is answered |
+| Pauses a browser | No | Yes: the session's actions wait until it is answered (a plain screenshot is still taken, except while a secret is asked for) |
 | `secret` | Refused (`SECRET_NEEDS_BROWSER`) | Allowed: the fabric holds the answer and types it with `type_secret` |
 
 Every question has an **owner** (the user it is asked of), an **asker** (`user:<id>`, `agent:<name>` or `run:<id>`) and an expiry (10 s to 24 h; 1 h by default). Only the owner sees or answers it: another user's question is a 404. Each step is recorded: asked, answered (with the channel and `by`), cancelled or expired.

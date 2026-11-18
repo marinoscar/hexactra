@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The browser's picture stays while a run waits for you** (#525, console 1.53.1). The fabric took no screenshot while the agent waited for an answer or a person held the desktop, so the chat's Browser card and an approval's page went blank (for example after switching apps and back). A plain screenshot is now taken in those moments, except while a code or password is being asked for. Needs the fabric redeployed.
+
 ### Documentation
 
 - **Enable it, then use it: ChatGPT, Claude and other assistants** (console 1.52.2). The README chapter "Use Hexactra from ChatGPT, Claude and other assistants" now opens with an eight-step **Enable it** checklist for the deployment owner (public HTTPS and `APP_URL`, the sign-in paths, Administration → OAuth clients, allowed client hosts, shared rate limits for several replicas, External AI apps, allowed sites enforced by the browser, and how to verify) and a six-step **Use it** section for everyone (add the connector, consent, what to ask, see what it did, limit, pause or disconnect). `docs/hosted-clients.md`, `docs/mcp.md`, the public-exposure runbook and the root README point to it and use the console's real labels. The Connect an AI app check for Claude Code now names the platform's setting **Allow apps that run on the person's own computer** instead of the old "Allow loopback clients".
