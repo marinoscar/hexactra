@@ -33202,6 +33202,80 @@
         "description": "**Requires:** authentication, plus permission `runs:read`."
       }
     },
+    "/api/runs/{id}/steps/{seq}/screenshot": {
+      "get": {
+        "operationId": "runLive_stepScreenshot",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "seq",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Runs"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `runs:read`."
+      }
+    },
     "/api/runs/{id}/viewer": {
       "get": {
         "operationId": "runLive_viewer",
@@ -73287,7 +73361,7 @@
                 },
                 "kind": {
                   "type": "string",
-                  "description": "action | handoff | finish | error | note | routing (a tier change or provider fallback, with `args` { from, to, reason }; not an action)"
+                  "description": "action | handoff | finish | error | note | routing (a tier change or provider fallback, with `args` { from, to, reason }; not an action) | guidance (an owner message from the chat, masked; not an action) | end (the closing step with the final screen; not an action). A `handoff` step with `action: \"answered\"` is the owner's answer (not an action)."
                 },
                 "action": {
                   "type": [
@@ -73322,11 +73396,183 @@
                     "null"
                   ]
                 },
-                "screenshotKey": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
+                "hasScreenshot": {
+                  "type": "boolean",
+                  "description": "The step has a masked trace screenshot (#541): `GET /runs/{id}/steps/{seq}/screenshot`"
+                },
+                "screenshotMoment": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "question",
+                        "before_confirmed",
+                        "after_confirmed",
+                        "failure",
+                        "final"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The key moment the step records a screen for"
+                },
+                "screenshotMasked": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "How many regions the extension masked in the picture"
+                },
+                "screenshotNote": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "unavailable",
+                        "masked_failed",
+                        "no_storage",
+                        "capped"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Why a key moment has no picture"
+                },
+                "questionId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The question the step asked or answered"
+                },
+                "question": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "input": {
+                          "type": "string"
+                        },
+                        "prompt": {
+                          "type": "string",
+                          "description": "Masked"
+                        },
+                        "options": {
+                          "anyOf": [
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "id": {
+                                    "type": "string"
+                                  },
+                                  "label": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "id",
+                                  "label"
+                                ]
+                              }
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "Labels masked"
+                        },
+                        "risk": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "answer": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "outcome": {
+                                  "type": "string"
+                                },
+                                "value": {
+                                  "description": "Masked; absent when the value is withheld (a secret, a sign-in)",
+                                  "type": "string"
+                                },
+                                "valueWithheld": {
+                                  "type": "boolean"
+                                },
+                                "channel": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "answeredAt": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "outcome",
+                                "valueWithheld",
+                                "channel",
+                                "answeredAt"
+                              ]
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "input",
+                        "prompt",
+                        "options",
+                        "risk",
+                        "status",
+                        "answer"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The question this step asked or answered, masked (#541); null for any other step"
                 },
                 "durationMs": {
                   "anyOf": [
@@ -73355,7 +73601,12 @@
                 "ok",
                 "summary",
                 "reasoning",
-                "screenshotKey",
+                "hasScreenshot",
+                "screenshotMoment",
+                "screenshotMasked",
+                "screenshotNote",
+                "questionId",
+                "question",
                 "durationMs",
                 "createdAt"
               ]
