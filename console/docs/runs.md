@@ -212,11 +212,13 @@ One JSON file holds everything about a run that is safe to share (#542): for you
 GET /api/runs/{id}/export?format=json&screenshots=embed|none
 ```
 
+(`format=pdf` answers the same run as a PDF report: [The PDF report](#the-pdf-report).)
+
 - **Permission** `runs:read`, the owner only: `404 RUN_NOT_FOUND` for a run that is not yours, exactly as for one that does not exist.
 - **Answer** the file itself, not the `{ data }` envelope: `Content-Type: application/json`, `Content-Disposition: attachment; filename="hexactra-run-<first 8 of id>-<yyyymmdd>.json"`, `Cache-Control: no-store`.
 - **`screenshots=embed`** (the default) puts each stored trace picture in `steps[].screenshot.data` as base64; the pictures are already masked ([What a run records](#what-a-run-records)). **`screenshots=none`** keeps the picture facts (`moment`, `masked`, `note`, `contentType`) and leaves the images out.
 - **Size.** A file over 50 MB answers `413 EXPORT_TOO_LARGE`: export it again with `screenshots=none`.
-- **Rate limit.** 10 exports a minute per user; the next answers `429 EXPORT_RATE_LIMITED` with `details.retryAfterS`.
+- **Rate limit.** 10 exports a minute per user, JSON and PDF together; the next answers `429 EXPORT_RATE_LIMITED` with `details.retryAfterS`.
 - **A live run** (queued, running, waiting for you) exports what it has so far, with `partial: true`.
 - **Recorded.** The audit event `runs.exported` (`runId`, `format`, `screenshots`, `bytes`, `partial`), the counter `app.runs.exported` (labels `format`, `screenshots`) and one log line `runs.export user=… run=… format=json screenshots=… bytes=… ms=…`. None of them carries the goal, the result or any step text.
 
@@ -248,6 +250,36 @@ The MCP tool `run_export` (title "Export a run's trace", scope `runs:read`, read
 ### For code in this repository
 
 `RunTraceService.build(userId, runId, { screenshots, maxBytes? })` (`apps/api/src/tasks/run-trace.service.ts`, exported by `TasksModule`) is the one builder of the trace: the JSON file here and the PDF report read it. It returns a `RunTrace` (`run-trace.schemas.ts`), reads the run through `prisma.forUser`, and refuses with `413 EXPORT_TOO_LARGE` as soon as the embedded images pass `maxBytes`. `exportJson` adds the rate limit, the audit event, the counter and the log line.
+
+## The PDF report
+
+A clean, printable record of one run (#543): what was asked, what the agent did step by step, what it asked you and what you answered, the screens at the key moments, and how it ended. Keep it, or send it to someone. It is masked exactly like the JSON file, always.
+
+```
+GET /api/runs/{id}/export?format=pdf&screenshots=embed|none&paper=a4|letter
+hexactra runs export <id> --pdf [--no-screenshots] [--paper letter] [-o <file>]
+```
+
+![Page 1 of a generated run's report: the cover block, the outcome with the confirmed step, the questions and answers](images/run-report-page1.png)
+
+- **Same route, same rules** as the JSON file: permission `runs:read`, the owner only (`404 RUN_NOT_FOUND` otherwise), the same rate limit, `413 EXPORT_TOO_LARGE` past 50 MB of screenshots, the audit event `runs.exported` (`format: "pdf"`, `screenshots`, `paper`, `partial`), the counter `app.runs.exported` with `format=pdf` and the log line `runs.export user=… run=… format=pdf screenshots=… paper=… bytes=… ms=…` (written when the file has been sent).
+- **Answer** `Content-Type: application/pdf`, `Content-Disposition: attachment; filename="hexactra-run-<first 8 of id>-<yyyymmdd>.pdf"`, `Cache-Control: no-store`, streamed.
+- **One source.** The report is rendered from the masked trace that `RunTraceService.build` returns for the JSON file. There is no second query and no second masking: what the JSON hides, the report hides.
+- **`screenshots=none`** renders the report without any image. **`paper`** is `a4` (the default) or `letter`; margins are 18 mm.
+- **A live run** prints a "Run in progress: partial report" banner at the top.
+
+What it holds, in order:
+
+1. **Cover block** (top of page 1): the Hexactra mark and "Run report", the goal as the title, an outcome chip (Succeeded, Failed, Stopped, Ended after a confirmed step, In progress) and the facts: started, finished, duration (and working time), started from (chat, a task, a schedule, an AI app, the console), node, browser profile, policy and models, steps, model calls and cost ("at least" when part of the run could not be priced).
+2. **Outcome**: the stop reason, the result and the error in full; a boxed note listing every step you confirmed that the run carried out (#540).
+3. **Questions and answers**: every request to you in order, with its time, what was asked, the answer (Allowed, Declined, Provided, the chosen option; a secret or withheld value prints "Provided (not recorded)"), where it was answered (console, notification, inbox) and how long it waited.
+4. **Budget**: used, limit and percent of each budget; a chat run's limits are marked "not enforced (chat run)" (#537).
+5. **Timeline**: every step with its number, time, the step's summary and its duration. Failed steps are red and start with "✗ Failed:", so they read in greyscale too; two or more page observations in a row fold into one line ("54–55. Observed the page (2 steps)"), as on the run page; the agent's stated reason is a smaller "Why:" line; your guidance is a call-out. A key-moment screenshot follows its step with a caption ("Step 57 · the screen when the agent asked for confirmation · 2 areas masked"), scaled to the page width and never split across pages; a key moment without a picture says why in the caption.
+6. **Footer on every page**: the run id (first 8), "Page x of y", the export time and "Sensitive data masked. Not a bank or legal record."
+
+Times are UTC. The PDF's metadata is title "Run report: <goal, 80 characters>" and author "Hexactra" (never your email); text is selectable, and each section is a bookmark in the reader's outline.
+
+**How it is made.** `apps/api/src/tasks/run-report.pdf.ts`: `buildReportDefinition(trace, { paper, screenshots })` is pure and returns the [pdfmake](https://github.com/bpampuch/pdfmake) document (snapshot-tested in `apps/api/test/run-report-pdf.spec.ts`); `renderPdf(definition)` lays it out and returns a stream. pdfmake is pure JavaScript (on pdfkit): no browser in the API image. The font is Inter (the web app's text face; SIL Open Font License 1.1, which allows embedding), vendored in `apps/api/assets/fonts/` with its licence; every URL and local file access is refused at render time, so nothing is fetched. A JPEG wider than 1,600 px is re-encoded at 1,600 px before it is embedded (jpeg-js); a PNG is embedded as stored. A run of 500 steps with 40 pictures renders in about 1.5 s in the test suite (bound: 10 s, 300 MB). Glyphs Inter lacks (for example CJK text copied from a page) print as empty boxes: the report is English only.
 
 ## Sample data for development
 
