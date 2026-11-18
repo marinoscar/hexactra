@@ -33,6 +33,7 @@ project(":platform-core").projectDir = listOf(
     "../../packages/platform-infra/android/platform-core",
 ).map { file(it) }.firstOrNull { it.resolve("build.gradle.kts").isFile }
     ?: throw GradleException(
-        "platform-core not found: run `npm install` at the repository root " +
-            "(node_modules/@marinoscar/platform-infra/android/platform-core).",
+        "platform-core not found: the console's dependencies are not installed. " +
+            "Run `npm ci` in ${file("../..").canonicalPath} " +
+            "(it installs node_modules/@marinoscar/platform-infra/android/platform-core).",
     )

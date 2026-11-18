@@ -72,7 +72,7 @@ export interface Run {
 }
 
 /** What started a run (`RUN_TRIGGERS` in apps/api/src/tasks/runs.schemas.ts). */
-export const RUN_TRIGGERS = ['manual', 'schedule', 'api', 'mcp', 'external'] as const;
+export const RUN_TRIGGERS = ['manual', 'schedule', 'api', 'mcp', 'external', 'chat'] as const;
 export type RunTrigger = (typeof RUN_TRIGGERS)[number];
 
 /** A run in a list (`GET /api/runs?envelope=1`): the run with its task's name; `budget` only while it is live. */

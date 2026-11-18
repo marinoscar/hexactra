@@ -6,7 +6,8 @@ import { policyRefSchema } from '../policies/policies.schemas';
 import { TASK_DEFAULTS } from './task-defaults';
 import { taskSchedulesField } from './task-list.schemas';
 
-const domain = z
+/** A site an agent may visit: a hostname, or `*.` and a hostname. */
+export const domainSchema = z
   .string()
   .trim()
   .toLowerCase()
@@ -18,7 +19,7 @@ const taskFields = {
   profile: profileNameSchema,
   hostId: z.uuid().nullable(),
   hostFallback: z.boolean(),
-  allowedDomains: z.array(domain).max(50),
+  allowedDomains: z.array(domainSchema).max(50),
   // Deprecated by agent policies (#401): still accepted for one release. They map to a
   // derived personal policy named "Task: <name>" and the response carries a `Deprecation` header.
   maxSteps: z.number().int().min(1).max(1000).meta({ deprecated: true }).describe('Deprecated, removed in the release after the one that introduced agent policies: use an agent policy (`policyId`). Maps to the policy\'s `budget.maxActions`.'),

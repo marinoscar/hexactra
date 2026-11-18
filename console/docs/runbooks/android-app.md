@@ -9,6 +9,9 @@ The build, versioning and releases go through the console CLI's `android` group.
 - JDK 17 or newer, and the Android SDK (platform 36, build-tools 36.0.0).
   - `hexactra android doctor` checks both.
   - `hexactra android doctor --fix` installs the SDK pieces. It never installs a JDK.
+- A clone of the repository with the console's dependencies installed: `cd console && npm ci`. The Android build takes the platform's Android library from `console/node_modules`.
+  - Run the `android` commands from the clone: its root, `console/`, or any directory inside. From the root, the CLI says it uses `console/`.
+  - `build` and `release` stop before the version bump when the dependencies are missing, and name the command to run.
 - The console reachable over **https**. The app's launcher binds to the console's host.
 - The `android-app` slice enabled (`packages/shared/slices.json`; it is enabled by default).
 
@@ -108,4 +111,7 @@ Signed release builds in CI are an owner step. See section 9 of the platform run
 |---|---|---|
 | The app shows a browser address bar | Asset links do not verify: the APK's signing key is not the trusted one, or the console is not https | `hexactra android keystore show`, then `hexactra android release` again; check `https://<console>/.well-known/assetlinks.json` |
 | No push on the phone | Notifications are off for the app, or the event's `android_app` channel is off in your preferences | Settings → Notifications in the console; Android settings → Apps → Hexactra Console → Notifications |
+| `... is not inside the hexactra repository` | The command ran outside the clone | Run it from the clone (its root or `console/`), or set `HEXACTRA_REPO_ROOT` to the clone |
+| `The console's dependencies are not installed`, or Gradle's `platform-core not found` | `npm ci` was never run in `console/` of this clone | `cd console && npm ci`, then run the command again |
+| `EXDEV: cross-device link not permitted` during `android doctor --fix` | An older CLI staged the SDK download in `/tmp`, on another filesystem than the SDK | Update the CLI. It stages inside the SDK directory when the two differ, and says so |
 | `409 RELEASE_VERSION_EXISTS` | That `versionCode` is already published | `hexactra android version --bump patch`, then rebuild |
