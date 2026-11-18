@@ -2,10 +2,22 @@ import type { Command } from 'commander';
 import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 
 import { resolveApp, startedBy } from './apps.js';
-import { consoleApi } from './console-api.js';
+import { consoleApi, consoleCredentials } from './console-api.js';
 import { findHost, type FleetHost } from './fleet.js';
 import { costText, resolvePolicyId, runPolicyLines, type RunPolicyFields } from './policies.js';
-import { countOlderThan, deleteOlderThan, exportRun, parseDays, runsWord, sizeText } from './runs.js';
+import { countOlderThan, deleteOlderThan, exportRun, exportRunPdf, parseDays, runsWord, sizeText, type ReportTarget } from './runs.js';
+
+let targetFactory: (() => ReportTarget) | null = null;
+
+/** Tests swap where `runs export --pdf` fetches from (a fake fetch, no real login). */
+export function setReportTargetFactory(next: (() => ReportTarget) | null): void {
+  targetFactory = next;
+}
+
+/** The API root and token of the PDF download: it bypasses the JSON-only API client. */
+function reportTarget(): ReportTarget {
+  return targetFactory ? targetFactory() : consoleCredentials();
+}
 
 /** `--host <name|id>`: "any" lets the fabric choose (#384). */
 async function hostRef(ref: string): Promise<string | null> {
@@ -254,10 +266,18 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
     });
   runs
     .command('export <id>')
-    .description("Write a run's masked JSON trace file (steps, questions and answers, screenshots, chat) for your records or a bug report")
+    .description("Write a run's masked JSON trace file (steps, questions and answers, screenshots, chat), or with --pdf its PDF report, for your records, to share or for a bug report")
+    .option('--pdf', 'write the PDF report instead of the JSON file')
+    .option('--paper <size>', "the PDF report's paper: a4 or letter", 'a4')
     .option('--no-screenshots', 'leave the trace screenshots out (a much smaller file)')
-    .option('-o, --output <file>', 'write to this file (default: hexactra-run-<id>-<date>.json in the current directory)')
-    .action(async (id: string, o: { screenshots: boolean; output?: string }) => {
+    .option('-o, --output <file>', 'write to this file (default: hexactra-run-<id>-<date>.json, or .pdf, in the current directory)')
+    .action(async (id: string, o: { pdf?: boolean; paper: string; screenshots: boolean; output?: string }) => {
+      if (o.pdf) {
+        const paper = o.paper.toLowerCase();
+        if (paper !== 'a4' && paper !== 'letter') throw new Error(`--paper is a4 or letter, not "${o.paper}".`);
+        const file = await exportRunPdf(reportTarget(), id, { screenshots: o.screenshots, paper, ...(o.output ? { output: o.output } : {}) });
+        return out(`wrote ${file.path} (${sizeText(file.bytes)})`);
+      }
       const file = await exportRun(consoleApi(), id, { screenshots: o.screenshots, ...(o.output ? { output: o.output } : {}) });
       out(`wrote ${file.path} (${sizeText(file.bytes)})`);
     });

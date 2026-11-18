@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Query, Req, Res } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
-import { ApiExtraModels, ApiOkResponse, ApiOperation, ApiProduces, ApiTags } from '@nestjs/swagger';
+import { ApiExtraModels, ApiOkResponse, ApiOperation, ApiProduces, ApiTags, getSchemaPath } from '@nestjs/swagger';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 
 import { RunExportQueryDto, RunTraceDto } from './run-trace.schemas';
@@ -141,19 +141,36 @@ export class RunsController {
   }
 
   /**
-   * The run as one masked JSON file (#542), sent as an attachment with `@Res()`.
-   * `:id/export` has two segments, so it never collides with `GET :id`.
+   * The run as one masked JSON file (#542) or a PDF report (#543), sent as an
+   * attachment with `@Res()`. `:id/export` has two segments, so it never
+   * collides with `GET :id`.
    */
   @Get(':id/export')
-  @ApiOkResponse({ type: RunTraceDto, description: 'The run trace file (not wrapped in the `data` envelope), sent as an attachment `hexactra-run-<first 8 of id>-<yyyymmdd>.json`.' })
-  @ApiProduces('application/json')
+  @ApiExtraModels(RunTraceDto)
+  @ApiOkResponse({
+    description: 'The run trace file (`format=json`, not wrapped in the `data` envelope) or the PDF report (`format=pdf`), sent as an attachment `hexactra-run-<first 8 of id>-<yyyymmdd>.json` or `.pdf`.',
+    content: {
+      'application/json': { schema: { $ref: getSchemaPath(RunTraceDto) } },
+      'application/pdf': { schema: { type: 'string', format: 'binary' } },
+    },
+  })
+  @ApiProduces('application/json', 'application/pdf')
   @Auth({ permissions: ['runs:read'] })
   @ApiOperation({
-    summary: 'Export a run as a JSON trace file',
+    summary: 'Export a run as a JSON trace file or a PDF report',
     description:
-      'A `hexactra.run-trace` file (`formatVersion` 1): the run, its policy, budget and models, every step with its question and answer, the masked trace screenshots (`screenshots=embed`, the default; `none` leaves the images out) and the messages of its chat. Every string is masked (`masking.hits` counts what was); there is no unmasked export. Never the transcript, a token, a withheld answer or an AI app\'s grant. A live run exports with `partial: true`. 404 `RUN_NOT_FOUND` for a run that is not yours; 413 `EXPORT_TOO_LARGE` over 50 MB (use `screenshots=none`); 429 `EXPORT_RATE_LIMITED` past 10 exports a minute.',
+      'A `hexactra.run-trace` file (`formatVersion` 1): the run, its policy, budget and models, every step with its question and answer, the masked trace screenshots (`screenshots=embed`, the default; `none` leaves the images out) and the messages of its chat. Every string is masked (`masking.hits` counts what was); there is no unmasked export. Never the transcript, a token, a withheld answer or an AI app\'s grant. A live run exports with `partial: true`. `format=pdf` renders the same masked trace as a PDF report (`application/pdf`; `paper=a4`, the default, or `letter`): the goal and outcome, the confirmed steps, the questions and answers, the budget, the timeline with the key-moment screenshots, and a footer on every page; a live run prints a partial-report banner. 404 `RUN_NOT_FOUND` for a run that is not yours; 413 `EXPORT_TOO_LARGE` over 50 MB of screenshots (use `screenshots=none`); 429 `EXPORT_RATE_LIMITED` past 10 exports a minute (JSON and PDF together).',
   })
   async export(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Query() q: RunExportQueryDto, @Res() reply: FastifyReply): Promise<void> {
+    if (q.format === 'pdf') {
+      const report = await this.traces.exportPdf(userId, id, { screenshots: q.screenshots, paper: q.paper });
+      await reply
+        .header('content-disposition', `attachment; filename="${report.filename}"`)
+        .header('cache-control', 'no-store')
+        .type('application/pdf')
+        .send(report.stream);
+      return;
+    }
     const file = await this.traces.exportJson(userId, id, { screenshots: q.screenshots });
     await reply
       .header('content-disposition', `attachment; filename="${file.filename}"`)

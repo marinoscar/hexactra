@@ -6038,8 +6038,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Export a run as a JSON trace file
-         * @description A `hexactra.run-trace` file (`formatVersion` 1): the run, its policy, budget and models, every step with its question and answer, the masked trace screenshots (`screenshots=embed`, the default; `none` leaves the images out) and the messages of its chat. Every string is masked (`masking.hits` counts what was); there is no unmasked export. Never the transcript, a token, a withheld answer or an AI app's grant. A live run exports with `partial: true`. 404 `RUN_NOT_FOUND` for a run that is not yours; 413 `EXPORT_TOO_LARGE` over 50 MB (use `screenshots=none`); 429 `EXPORT_RATE_LIMITED` past 10 exports a minute.
+         * Export a run as a JSON trace file or a PDF report
+         * @description A `hexactra.run-trace` file (`formatVersion` 1): the run, its policy, budget and models, every step with its question and answer, the masked trace screenshots (`screenshots=embed`, the default; `none` leaves the images out) and the messages of its chat. Every string is masked (`masking.hits` counts what was); there is no unmasked export. Never the transcript, a token, a withheld answer or an AI app's grant. A live run exports with `partial: true`. `format=pdf` renders the same masked trace as a PDF report (`application/pdf`; `paper=a4`, the default, or `letter`): the goal and outcome, the confirmed steps, the questions and answers, the budget, the timeline with the key-moment screenshots, and a footer on every page; a live run prints a partial-report banner. 404 `RUN_NOT_FOUND` for a run that is not yours; 413 `EXPORT_TOO_LARGE` over 50 MB of screenshots (use `screenshots=none`); 429 `EXPORT_RATE_LIMITED` past 10 exports a minute (JSON and PDF together).
          *
          *     **Requires:** authentication, plus permission `runs:read`.
          */
@@ -36476,10 +36476,12 @@ export interface operations {
     runs_export: {
         parameters: {
             query?: {
-                /** @description `json` (the only format of this route; the PDF report is its own route). */
-                format?: "json";
-                /** @description `embed` (the default) puts each masked trace picture in `steps[].screenshot.data` as base64; `none` keeps the picture facts and leaves the images out (a much smaller file). */
+                /** @description `json` (the default): the run trace file. `pdf`: the run report (#543), rendered from the same masked trace. */
+                format?: "json" | "pdf";
+                /** @description `embed` (the default) puts each masked trace picture in the file (`steps[].screenshot.data` as base64, or in the report after its step); `none` leaves the images out (a much smaller file). */
                 screenshots?: "embed" | "none";
+                /** @description The PDF report's paper: `a4` (the default) or `letter`. Ignored for `json`. */
+                paper?: "a4" | "letter";
             };
             header?: never;
             path: {
@@ -36489,7 +36491,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The run trace file (not wrapped in the `data` envelope), sent as an attachment `hexactra-run-<first 8 of id>-<yyyymmdd>.json`. */
+            /** @description The run trace file (`format=json`, not wrapped in the `data` envelope) or the PDF report (`format=pdf`), sent as an attachment `hexactra-run-<first 8 of id>-<yyyymmdd>.json` or `.pdf`. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -36502,6 +36504,7 @@ export interface operations {
                             [key: string]: unknown;
                         };
                     };
+                    "application/pdf": string;
                 };
             };
             /** @description Unauthorized - Invalid or missing token */
@@ -36511,6 +36514,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorDto"];
+                    "application/pdf": components["schemas"]["ErrorDto"];
                 };
             };
             /** @description Forbidden - Insufficient permissions */
@@ -36520,6 +36524,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorDto"];
+                    "application/pdf": components["schemas"]["ErrorDto"];
                 };
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
