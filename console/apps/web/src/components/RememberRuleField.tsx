@@ -16,11 +16,11 @@ export interface RememberRuleState {
   scope: RememberScope;
   /** The amount limit as typed; '' for none. */
   amount: string;
-  /** '' for always, else a number of days. */
-  days: '' | '30' | '7';
+  /** How long the rule lasts: always, or a number of days. */
+  days: 'always' | '30' | '7';
 }
 
-export const NO_REMEMBER: RememberRuleState = { ticked: false, scope: 'everywhere', amount: '', days: '' };
+export const NO_REMEMBER: RememberRuleState = { ticked: false, scope: 'everywhere', amount: '', days: 'always' };
 
 /** Why the amount limit is not a positive amount, or null ('' is no limit). */
 export function amountError(amount: string): string | null {
@@ -39,7 +39,7 @@ export function rememberRuleOf(r: Rememberable | null | undefined, s: RememberRu
     enabled: true,
     ...(s.scope !== 'everywhere' && scopes.includes(s.scope) ? { scope: s.scope } : {}),
     ...(withAmount && s.amount.trim() ? { maxAmount: Number(s.amount.trim()) } : {}),
-    ...(s.days ? { expiresInDays: Number(s.days) } : {}),
+    ...(s.days !== 'always' ? { expiresInDays: Number(s.days) } : {}),
   };
 }
 
@@ -124,7 +124,7 @@ export function RememberRuleField({ rememberable: r, value: s, onChange, disable
                 />
               )}
               <TextField select label="For how long" value={s.days} onChange={(e) => set({ days: e.target.value as RememberRuleState['days'] })} disabled={disabled} slotProps={{ inputLabel: { shrink: true } }} sx={{ maxWidth: 280 }}>
-                <MenuItem value="">Always</MenuItem>
+                <MenuItem value="always">Always</MenuItem>
                 <MenuItem value="30">30 days</MenuItem>
                 <MenuItem value="7">7 days</MenuItem>
               </TextField>

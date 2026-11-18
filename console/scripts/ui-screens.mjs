@@ -105,6 +105,14 @@ export const ROUTES = [
   // Memories (#551): the page, and its add dialog (opened by clicking "Add").
   ['settings-memories', '/settings/memories'],
   ['settings-memories-dialog', '/settings/memories', { click: 'Add' }],
+  // "Don't ask again" (#555): the approval card with the box ticked and the limits open.
+  ['inbox-dont-ask-again', '/inbox', {
+    action: async (page) => {
+      await page.getByRole('checkbox', { name: /^Don't ask again/ }).first().click({ timeout: 5_000 });
+      await page.getByRole('button', { name: 'Limit it' }).first().click({ timeout: 5_000 });
+      await page.waitForTimeout(400);
+    },
+  }],
   // Saved approvals (#554): the page, and its "Add a limit" dialog.
   ['settings-approvals', '/settings/approvals'],
   ['settings-approvals-limit', '/settings/approvals', {
