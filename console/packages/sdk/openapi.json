@@ -1224,7 +1224,7 @@
             }
           },
           "403": {
-            "description": "The credential is a personal access token or a device credential, which cannot switch organization\n\nForbidden - Insufficient permissions",
+            "description": "The credential is a personal access token, a device credential or an OAuth access token, which cannot switch organization\n\nForbidden - Insufficient permissions",
             "content": {
               "application/json": {
                 "schema": {
@@ -3596,6 +3596,1449 @@
         "tags": [
           "Device Authorization"
         ]
+      }
+    },
+    "/api/oauth/.well-known/authorization-server": {
+      "get": {
+        "description": "The RFC 8414 document. Published at the root as `/.well-known/oauth-authorization-server` by the nginx fragment. `issuer` is `APP_URL` without a trailing slash; `registration_endpoint` and `client_id_metadata_document_supported` appear only while their setting is on and a route serves them. 404 while the server is disabled.",
+        "operationId": "oAuthProtocol_metadata",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The metadata document (not enveloped)."
+          },
+          "404": {
+            "description": "The OAuth server is not enabled."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Authorization server metadata",
+        "tags": [
+          "OAuth server"
+        ],
+        "x-raw-response": true
+      }
+    },
+    "/api/oauth/authorize": {
+      "get": {
+        "description": "Validates the request in this order: server enabled, client, redirect URI, `response_type=code`, PKCE `S256`, `resource`, scopes. A disabled server, an unknown client or a bad redirect URI is a 302 to the web error page `/oauth/error?code=...` and NEVER a redirect to `redirect_uri`. From the `response_type` check on, an error is a 302 to `redirect_uri` with `error`, `error_description`, `state` and `iss`. On success: a pending request (10 minutes) and a 302 to `/oauth/consent?request=<id>`. Rate limited per source address (30 per minute).",
+        "operationId": "oAuthProtocol_authorize",
+        "parameters": [
+          {
+            "name": "resource",
+            "required": true,
+            "in": "query",
+            "description": "RFC 8707: the identifier of a registered protected resource.",
+            "schema": {}
+          },
+          {
+            "name": "code_challenge_method",
+            "required": true,
+            "in": "query",
+            "description": "Must be `S256`.",
+            "schema": {}
+          },
+          {
+            "name": "code_challenge",
+            "required": true,
+            "in": "query",
+            "description": "PKCE challenge: BASE64URL(SHA256(verifier)).",
+            "schema": {}
+          },
+          {
+            "name": "state",
+            "required": false,
+            "in": "query",
+            "schema": {}
+          },
+          {
+            "name": "scope",
+            "required": false,
+            "in": "query",
+            "description": "Space-separated scope ids; none means the resource's default scopes.",
+            "schema": {}
+          },
+          {
+            "name": "redirect_uri",
+            "required": true,
+            "in": "query",
+            "description": "Must match a registered redirect URI (loopback ports are ignored).",
+            "schema": {}
+          },
+          {
+            "name": "client_id",
+            "required": true,
+            "in": "query",
+            "schema": {}
+          },
+          {
+            "name": "response_type",
+            "required": true,
+            "in": "query",
+            "description": "Must be `code`.",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to the consent page, the web error page, or the client's redirect URI with an error."
+          },
+          "429": {
+            "description": "Rate limited.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Start an authorization (OAuth 2.1 authorization code with PKCE)",
+        "tags": [
+          "OAuth server"
+        ]
+      }
+    },
+    "/api/oauth/token": {
+      "post": {
+        "description": "Exchanges an authorization code (`grant_type=authorization_code` with `code`, `redirect_uri`, `code_verifier`, `client_id`, optional `resource`) or rotates a refresh token (`grant_type=refresh_token` with `refresh_token`, `client_id`, optional narrower `scope`). The body is `application/x-www-form-urlencoded` ONLY (JSON is `400 invalid_request`), at most 16 KiB. A confidential client authenticates by `client_secret_post` or `client_secret_basic`, per its registration; a failure is `401 invalid_client` with `WWW-Authenticate: Basic`. A refresh token presented again after its rotation is reuse and revokes the grant, except for a 10-second grace window that answers a client retrying a lost response with a new pair. Errors are RFC 6749 JSON, not the platform error body. Rate limited per client id (60 per minute): 429 `temporarily_unavailable` with `Retry-After`.",
+        "operationId": "oAuthProtocol_token",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthTokenRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The tokens (RFC 6749 §5.1), not enveloped. `Cache-Control: no-store`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthTokenResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_request`, `invalid_grant`, `unsupported_grant_type` or `invalid_scope`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorResponseDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`invalid_client`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The OAuth server is not enabled."
+          },
+          "429": {
+            "description": "`temporarily_unavailable`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Token endpoint",
+        "tags": [
+          "OAuth server"
+        ],
+        "x-raw-response": true
+      }
+    },
+    "/api/oauth/register": {
+      "post": {
+        "description": "JSON body with `redirect_uris` (required, at most 10), `client_name`, `client_uri`, `logo_uri`, `token_endpoint_auth_method` (`none` default, `client_secret_post`, `client_secret_basic`), `grant_types`, `response_types`, `application_type` (`web` or `native`) and `scope`; unknown fields are ignored. Redirect URIs are `https:` or loopback `http:` with no fragment and share one host; a custom scheme needs `application_type: native` and a reverse-domain scheme. The host trust policy runs here: a host that is not allowed is `403 invalid_client_metadata`. A public client that registers again with exactly the same redirect URIs, name and host gets the existing client back. `404` while dynamic registration is off or the server is disabled. Rate limited: 10 per hour per source address (`429`). The `client_secret` of a confidential client is returned once and stored hashed.",
+        "operationId": "oAuthProtocol_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthRegistrationRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The registered client (RFC 7591 §3.2.1), not enveloped.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthRegistrationResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`invalid_redirect_uri` or `invalid_client_metadata`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`invalid_client_metadata`: the host is not allowed on this deployment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Dynamic registration is off, or the OAuth server is not enabled."
+          },
+          "429": {
+            "description": "`temporarily_unavailable`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Dynamic client registration (RFC 7591)",
+        "tags": [
+          "OAuth server"
+        ],
+        "x-raw-response": true
+      }
+    },
+    "/api/oauth/revoke": {
+      "post": {
+        "description": "Form fields `token`, optional `token_type_hint`, and client authentication as for the token endpoint. Revoking a refresh token revokes its grant; revoking an access token revokes that token. Always `200` with an empty body, including for an unknown token; `401 invalid_client` when a confidential client fails authentication. Rate limited per client id (60 per minute).",
+        "operationId": "oAuthProtocol_revoke",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "token"
+                ],
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  },
+                  "token_type_hint": {
+                    "type": "string",
+                    "enum": [
+                      "access_token",
+                      "refresh_token"
+                    ]
+                  },
+                  "client_id": {
+                    "type": "string"
+                  },
+                  "client_secret": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Revoked, or nothing to revoke. Empty body."
+          },
+          "401": {
+            "description": "`invalid_client`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The OAuth server is not enabled."
+          },
+          "429": {
+            "description": "`temporarily_unavailable`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthErrorResponseDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Revoke a token (RFC 7009)",
+        "tags": [
+          "OAuth server"
+        ],
+        "x-raw-response": true
+      }
+    },
+    "/api/oauth/.well-known/protected-resource": {
+      "get": {
+        "description": "The RFC 9728 document of the deployment's protected resource when exactly one is registered; `404` when none or several are (use the path form). Published at the root as `/.well-known/oauth-protected-resource`. `404` while the server is disabled.",
+        "operationId": "oAuthResourceMetadata_only",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The metadata document (not enveloped)."
+          },
+          "404": {
+            "description": "The OAuth server is not enabled, or not exactly one resource is registered."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Protected resource metadata (the only resource)",
+        "tags": [
+          "OAuth server"
+        ],
+        "x-raw-response": true
+      }
+    },
+    "/api/oauth/.well-known/protected-resource/{path}": {
+      "get": {
+        "description": "The RFC 9728 document of the resource whose `path` follows `/protected-resource` (for `/api/mcp`: `/api/oauth/.well-known/protected-resource/api/mcp`). `resource` is `APP_URL` + the path exactly; `authorization_servers` has one entry, the issuer. `404` for a path that matches no resource, and while the server is disabled.",
+        "operationId": "oAuthResourceMetadata_forPath",
+        "parameters": [
+          {
+            "name": "path",
+            "required": true,
+            "in": "path",
+            "description": "The resource path without its leading slash (for `/api/mcp`: `api/mcp`).",
+            "schema": {}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The metadata document (not enveloped)."
+          },
+          "404": {
+            "description": "The OAuth server is not enabled, or no resource has that path."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Protected resource metadata for a resource path",
+        "tags": [
+          "OAuth server"
+        ],
+        "x-raw-response": true
+      }
+    },
+    "/api/oauth/requests/{id}": {
+      "get": {
+        "description": "Session credential ONLY (a personal access token, device credential, node credential or OAuth token is 403). Binds the request to the caller on first read; another user later gets 404. Returns the client (host first), the redirect host, the resource, the requested scopes with `grantable`, `required` and `alreadyGranted`, and the organizations the grant may act in (multi-organization mode). 410 when expired or already decided; 404 while the OAuth server is disabled.\n\n**Requires:** authentication only — any signed-in user may call this.",
+        "operationId": "oAuthConsent_read",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What the consent page shows.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OAuthConsentRequestDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "description": "Present when the endpoint supplies it (pagination) or when the global response interceptor adds it (`{ timestamp }`). Not every response carries one.",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a session credential.\n\nForbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown, another user's, or the server is disabled."
+          },
+          "410": {
+            "description": "Expired or already decided."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Read a pending authorization request (consent page)",
+        "tags": [
+          "OAuth server"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": []
+        }
+      }
+    },
+    "/api/oauth/requests/{id}/decision": {
+      "post": {
+        "description": "Session credential ONLY. `approve` grants the ticked scopes (a subset of the requested ones; a scope the user lacks every permission for is not granted) for the chosen organization (an active membership; default the session's), in one transaction: upsert the active grant, insert the authorization code (60 s), mark the request approved. `deny` marks it denied. The response carries `redirectTo`: the client's redirect URI with `code`, `state` and `iss`, or with `error=access_denied`.\n\n**Requires:** authentication only — any signed-in user may call this.",
+        "operationId": "oAuthConsent_decide",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthDecisionRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Where the page navigates next.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OAuthDecisionResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "description": "Present when the endpoint supplies it (pagination) or when the global response interceptor adds it (`{ timestamp }`). Not every response carries one.",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A scope that was not requested, a required scope unticked, or nothing grantable."
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a session credential, or an organization that is not an active membership.\n\nForbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown, another user's, or the server is disabled."
+          },
+          "410": {
+            "description": "Expired or already decided."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Approve or deny a pending authorization request",
+        "tags": [
+          "OAuth server"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": []
+        }
+      }
+    },
+    "/api/oauth/grants": {
+      "get": {
+        "description": "The caller's active grants: client name, host and logo, resource, scopes with titles, dates. Never a token. An OAuth access token is refused (403). 404 while the server is disabled.\n\n**Requires:** authentication only — any signed-in user may call this.",
+        "operationId": "oAuthGrants_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The active grants.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/OAuthGrantViewDto"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "description": "Present when the endpoint supplies it (pagination) or when the global response interceptor adds it (`{ timestamp }`). Not every response carries one.",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "An OAuth access token cannot list grants.\n\nForbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The OAuth server is not enabled."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "List the apps the caller connected",
+        "tags": [
+          "OAuth server"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": []
+        }
+      }
+    },
+    "/api/oauth/grants/{id}": {
+      "delete": {
+        "description": "Revokes the grant and every token of it (`revoked_reason: user`); takes effect on the next request. Audited; emits `identity.oauth.grant.revoked`. 404 for an id that is not the caller's.\n\n**Requires:** authentication only — any signed-in user may call this.",
+        "operationId": "oAuthGrants_revoke",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Revoked."
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "An OAuth access token cannot revoke grants.\n\nForbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not the caller's grant, or the server is disabled."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Disconnect an app",
+        "tags": [
+          "OAuth server"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": []
+        }
+      }
+    },
+    "/api/admin/oauth/clients": {
+      "get": {
+        "description": "Paged: kind, name, host, redirect URIs, active grant count, last used and disabled state. Never a secret.\n\n**Requires:** authentication, plus permission `oauth_clients:read`.",
+        "operationId": "oAuthClientsAdmin_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "default": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "cimd",
+                "dynamic",
+                "registered"
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of clients",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "items",
+                        "total",
+                        "page",
+                        "pageSize",
+                        "totalPages"
+                      ],
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/OAuthClientViewDto"
+                          }
+                        },
+                        "total": {
+                          "type": "integer",
+                          "description": "Total matching rows across all pages.",
+                          "example": 42
+                        },
+                        "page": {
+                          "type": "integer",
+                          "description": "One-based page number.",
+                          "example": 1
+                        },
+                        "pageSize": {
+                          "type": "integer",
+                          "example": 20
+                        },
+                        "totalPages": {
+                          "type": "integer",
+                          "example": 3
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "List OAuth clients (Admin only)",
+        "tags": [
+          "OAuth clients"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "oauth_clients:read"
+          ]
+        }
+      },
+      "post": {
+        "description": "Returns the client id and, for a confidential client, its secret ONCE.\n\n**Requires:** authentication, plus permission `oauth_clients:write`.",
+        "operationId": "oAuthClientsAdmin_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthClientCreateRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The client and its one-time secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OAuthClientWithSecretDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A redirect URI rule was violated."
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Pre-register an OAuth client (Admin only)",
+        "tags": [
+          "OAuth clients"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "oauth_clients:write"
+          ]
+        }
+      }
+    },
+    "/api/admin/oauth/clients/{id}": {
+      "patch": {
+        "description": "`disabled` for any client (disabling revokes its grants with reason `client_disabled`, so its tokens fail on the next call); name and redirect URIs for the `registered` kind only.\n\n**Requires:** authentication, plus permission `oauth_clients:write`.",
+        "operationId": "oAuthClientsAdmin_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthClientPatchRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated client",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OAuthClientViewDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Client not found"
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Disable, enable or edit an OAuth client (Admin only)",
+        "tags": [
+          "OAuth clients"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "oauth_clients:write"
+          ]
+        }
+      },
+      "delete": {
+        "description": "Its grants, codes, tokens and pending requests are deleted with it.\n\n**Requires:** authentication, plus permission `oauth_clients:write`.",
+        "operationId": "oAuthClientsAdmin_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Client deleted"
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Client not found"
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Delete an OAuth client (Admin only)",
+        "tags": [
+          "OAuth clients"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "oauth_clients:write"
+          ]
+        }
+      }
+    },
+    "/api/admin/oauth/clients/{id}/rotate-secret": {
+      "post": {
+        "description": "Returns the new secret ONCE; the old one stops working at once.\n\n**Requires:** authentication, plus permission `oauth_clients:write`.",
+        "operationId": "oAuthClientsAdmin_rotateSecret",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The client and its new secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OAuthClientWithSecretDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A public client has no secret."
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Client not found"
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Rotate a client secret (Admin only)",
+        "tags": [
+          "OAuth clients"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "oauth_clients:write"
+          ]
+        }
+      }
+    },
+    "/api/admin/oauth/refused-hosts": {
+      "get": {
+        "description": "Hosts the client trust policy turned away in the last 30 days, from the `oauth:client.refused` audit rows: host, attempts (one row per host per hour at most) and the latest time. Newest first, at most 100.\n\n**Requires:** authentication, plus permission `oauth_clients:read`.",
+        "operationId": "oAuthAdminHints_refusedHosts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Refused hosts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/OAuthRefusedHostDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "List refused client hosts (Admin only)",
+        "tags": [
+          "OAuth clients"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "oauth_clients:read"
+          ]
+        }
+      }
+    },
+    "/api/admin/oauth/policy": {
+      "get": {
+        "description": "The app's suggested client hosts (`defaultAllowedClientHosts`), offered with \"Add\" on the admin page.\n\n**Requires:** authentication, plus permission `oauth_clients:read`.",
+        "operationId": "oAuthAdminHints_policy",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The policy hints",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OAuthPolicyDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Read the OAuth admin policy hints (Admin only)",
+        "tags": [
+          "OAuth clients"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "oauth_clients:read"
+          ]
+        }
       }
     },
     "/api/auth/test/login": {
@@ -37017,6 +38460,847 @@
           "limit"
         ]
       },
+      "OAuthErrorResponseDto": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "invalid_client",
+              "invalid_grant",
+              "unauthorized_client",
+              "unsupported_grant_type",
+              "unsupported_response_type",
+              "invalid_scope",
+              "invalid_target",
+              "access_denied",
+              "server_error",
+              "temporarily_unavailable",
+              "invalid_redirect_uri",
+              "invalid_client_metadata"
+            ]
+          },
+          "error_description": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "OAuthTokenRequestDto": {
+        "type": "object",
+        "properties": {
+          "grant_type": {
+            "type": "string",
+            "enum": [
+              "authorization_code",
+              "refresh_token"
+            ]
+          },
+          "code": {
+            "description": "authorization_code: the code from the redirect.",
+            "type": "string"
+          },
+          "redirect_uri": {
+            "description": "authorization_code: identical to the authorization request's.",
+            "type": "string"
+          },
+          "code_verifier": {
+            "description": "authorization_code: the PKCE verifier (43 to 128 characters).",
+            "type": "string"
+          },
+          "refresh_token": {
+            "description": "refresh_token: the refresh token.",
+            "type": "string"
+          },
+          "scope": {
+            "description": "refresh_token: a narrower, space-separated scope list.",
+            "type": "string"
+          },
+          "resource": {
+            "description": "authorization_code: the resource, when sent, must equal the authorization request's.",
+            "type": "string"
+          },
+          "client_id": {
+            "description": "The client id (public clients, and client_secret_post).",
+            "type": "string"
+          },
+          "client_secret": {
+            "description": "client_secret_post: the client secret.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "grant_type"
+        ]
+      },
+      "OAuthTokenResponseDto": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string",
+            "const": "Bearer"
+          },
+          "expires_in": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "refresh_token": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in",
+          "scope"
+        ]
+      },
+      "OAuthRegistrationRequestDto": {
+        "type": "object",
+        "properties": {
+          "redirect_uris": {
+            "minItems": 1,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 2000
+            }
+          },
+          "client_name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "client_uri": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "logo_uri": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "token_endpoint_auth_method": {
+            "type": "string",
+            "enum": [
+              "none",
+              "client_secret_post",
+              "client_secret_basic"
+            ]
+          },
+          "grant_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "response_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "application_type": {
+            "type": "string",
+            "enum": [
+              "web",
+              "native"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "redirect_uris"
+        ]
+      },
+      "OAuthRegistrationResponseDto": {
+        "type": "object",
+        "properties": {
+          "client_id": {
+            "type": "string"
+          },
+          "client_secret": {
+            "type": "string"
+          },
+          "client_id_issued_at": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "client_secret_expires_at": {
+            "type": "number",
+            "const": 0
+          },
+          "redirect_uris": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "client_name": {
+            "type": "string"
+          },
+          "token_endpoint_auth_method": {
+            "type": "string",
+            "enum": [
+              "none",
+              "client_secret_post",
+              "client_secret_basic"
+            ]
+          },
+          "grant_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "response_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "application_type": {
+            "type": "string",
+            "enum": [
+              "web",
+              "native"
+            ]
+          },
+          "client_uri": {
+            "type": "string"
+          },
+          "logo_uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "client_id_issued_at",
+          "redirect_uris",
+          "client_name",
+          "token_endpoint_auth_method",
+          "grant_types",
+          "response_types",
+          "application_type"
+        ]
+      },
+      "OAuthConsentRequestDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "client": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "host": {
+                "type": "string"
+              },
+              "logoUri": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "cimd",
+                  "dynamic",
+                  "registered"
+                ]
+              },
+              "firstSeenAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "isNewToDeployment": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "host",
+              "logoUri",
+              "kind",
+              "firstSeenAt",
+              "isNewToDeployment"
+            ]
+          },
+          "redirectHost": {
+            "type": "string",
+            "description": "Where the user goes after deciding."
+          },
+          "isLoopbackRedirect": {
+            "type": "boolean"
+          },
+          "resource": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "risk": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "elevated",
+                    "high"
+                  ]
+                },
+                "grantable": {
+                  "type": "boolean",
+                  "description": "False when the user holds none of the permissions the scope maps to."
+                },
+                "required": {
+                  "type": "boolean",
+                  "description": "A default scope of the resource: it cannot be unticked."
+                },
+                "alreadyGranted": {
+                  "type": "boolean",
+                  "description": "An active grant of this user to this client already holds it."
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "description",
+                "risk",
+                "grantable",
+                "required",
+                "alreadyGranted"
+              ]
+            }
+          },
+          "offlineAccess": {
+            "type": "boolean",
+            "description": "The client asked to stay connected (a refresh token)."
+          },
+          "organizations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "isCurrent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "isCurrent"
+              ]
+            },
+            "description": "The active memberships the grant may act in (multi-organization mode); empty in single mode."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "client",
+          "redirectHost",
+          "isLoopbackRedirect",
+          "resource",
+          "scopes",
+          "offlineAccess",
+          "organizations",
+          "expiresAt"
+        ]
+      },
+      "OAuthDecisionRequestDto": {
+        "type": "object",
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "deny"
+            ],
+            "description": "Whether the user allows or refuses the client."
+          },
+          "scopes": {
+            "description": "The scope ids the user left ticked: a subset of the requested ones. Ignored on deny.",
+            "maxItems": 64,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          "orgId": {
+            "description": "The organization the grant acts in: an active membership. Defaults to the session's active organization.",
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "decision"
+        ]
+      },
+      "OAuthDecisionResponseDto": {
+        "type": "object",
+        "properties": {
+          "redirectTo": {
+            "type": "string",
+            "description": "The client's redirect URI with `code`, `state` and `iss` (approve) or `error=access_denied` (deny). The page navigates there."
+          }
+        },
+        "required": [
+          "redirectTo"
+        ]
+      },
+      "OAuthGrantViewDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "client": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "host": {
+                "type": "string"
+              },
+              "logoUri": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "name",
+              "host",
+              "logoUri"
+            ]
+          },
+          "resource": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "title"
+              ]
+            }
+          },
+          "organization": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "lastUsedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "client",
+          "resource",
+          "scopes",
+          "organization",
+          "createdAt",
+          "lastUsedAt"
+        ]
+      },
+      "OAuthClientViewDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "cimd",
+              "dynamic",
+              "registered"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "redirectUris": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tokenEndpointAuthMethod": {
+            "type": "string",
+            "enum": [
+              "none",
+              "client_secret_post",
+              "client_secret_basic"
+            ]
+          },
+          "activeGrantCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "lastUsedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "disabledAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "disabled": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "kind",
+          "name",
+          "host",
+          "redirectUris",
+          "tokenEndpointAuthMethod",
+          "activeGrantCount",
+          "lastUsedAt",
+          "disabledAt",
+          "disabled",
+          "createdAt"
+        ]
+      },
+      "OAuthClientWithSecretDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "clientId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "cimd",
+              "dynamic",
+              "registered"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "redirectUris": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "tokenEndpointAuthMethod": {
+            "type": "string",
+            "enum": [
+              "none",
+              "client_secret_post",
+              "client_secret_basic"
+            ]
+          },
+          "activeGrantCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "lastUsedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "disabledAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "disabled": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          },
+          "clientSecret": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "clientId",
+          "kind",
+          "name",
+          "host",
+          "redirectUris",
+          "tokenEndpointAuthMethod",
+          "activeGrantCount",
+          "lastUsedAt",
+          "disabledAt",
+          "disabled",
+          "createdAt"
+        ]
+      },
+      "OAuthClientCreateRequestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "redirectUris": {
+            "minItems": 1,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 2000
+            }
+          },
+          "tokenEndpointAuthMethod": {
+            "default": "none",
+            "type": "string",
+            "enum": [
+              "none",
+              "client_secret_post",
+              "client_secret_basic"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "redirectUris"
+        ]
+      },
+      "OAuthClientPatchRequestDto": {
+        "type": "object",
+        "properties": {
+          "disabled": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "redirectUris": {
+            "minItems": 1,
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 2000
+            }
+          }
+        }
+      },
+      "OAuthRefusedHostDto": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "host",
+          "count",
+          "lastSeenAt"
+        ]
+      },
+      "OAuthPolicyDto": {
+        "type": "object",
+        "properties": {
+          "suggestedHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "suggestedHosts"
+        ]
+      },
       "TestLoginDto": {
         "type": "object",
         "properties": {
@@ -39218,6 +41502,70 @@
               "startedById"
             ]
           },
+          "oauthServer": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "accessTokenTtlMinutes": {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 1440
+              },
+              "refreshTokenTtlDays": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 365
+              },
+              "refreshTokenMaxAgeDays": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3650
+              },
+              "alwaysIssueRefreshToken": {
+                "type": "boolean"
+              },
+              "clientIdMetadataDocuments": {
+                "type": "boolean"
+              },
+              "dynamicClientRegistration": {
+                "type": "boolean"
+              },
+              "allowedClientHosts": {
+                "maxItems": 200,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
+                }
+              },
+              "allowAnyClientHost": {
+                "type": "boolean"
+              },
+              "allowLoopbackClients": {
+                "type": "boolean"
+              },
+              "dynamicClientUnusedDays": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 90
+              }
+            },
+            "required": [
+              "enabled",
+              "accessTokenTtlMinutes",
+              "refreshTokenTtlDays",
+              "refreshTokenMaxAgeDays",
+              "alwaysIssueRefreshToken",
+              "clientIdMetadataDocuments",
+              "dynamicClientRegistration",
+              "allowedClientHosts",
+              "allowAnyClientHost",
+              "allowLoopbackClients",
+              "dynamicClientUnusedDays"
+            ]
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time",
@@ -39268,6 +41616,7 @@
           "jobs",
           "retention",
           "maintenance",
+          "oauthServer",
           "updatedAt",
           "updatedBy",
           "version"
@@ -40300,6 +42649,70 @@
               "startedAt",
               "startedById"
             ]
+          },
+          "oauthServer": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "accessTokenTtlMinutes": {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 1440
+              },
+              "refreshTokenTtlDays": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 365
+              },
+              "refreshTokenMaxAgeDays": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3650
+              },
+              "alwaysIssueRefreshToken": {
+                "type": "boolean"
+              },
+              "clientIdMetadataDocuments": {
+                "type": "boolean"
+              },
+              "dynamicClientRegistration": {
+                "type": "boolean"
+              },
+              "allowedClientHosts": {
+                "maxItems": 200,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
+                }
+              },
+              "allowAnyClientHost": {
+                "type": "boolean"
+              },
+              "allowLoopbackClients": {
+                "type": "boolean"
+              },
+              "dynamicClientUnusedDays": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 90
+              }
+            },
+            "required": [
+              "enabled",
+              "accessTokenTtlMinutes",
+              "refreshTokenTtlDays",
+              "refreshTokenMaxAgeDays",
+              "alwaysIssueRefreshToken",
+              "clientIdMetadataDocuments",
+              "dynamicClientRegistration",
+              "allowedClientHosts",
+              "allowAnyClientHost",
+              "allowLoopbackClients",
+              "dynamicClientUnusedDays"
+            ]
           }
         },
         "required": [
@@ -41197,6 +43610,57 @@
                     "type": "null"
                   }
                 ]
+              }
+            }
+          },
+          "oauthServer": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "accessTokenTtlMinutes": {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 1440
+              },
+              "refreshTokenTtlDays": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 365
+              },
+              "refreshTokenMaxAgeDays": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3650
+              },
+              "alwaysIssueRefreshToken": {
+                "type": "boolean"
+              },
+              "clientIdMetadataDocuments": {
+                "type": "boolean"
+              },
+              "dynamicClientRegistration": {
+                "type": "boolean"
+              },
+              "allowedClientHosts": {
+                "maxItems": 200,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
+                }
+              },
+              "allowAnyClientHost": {
+                "type": "boolean"
+              },
+              "allowLoopbackClients": {
+                "type": "boolean"
+              },
+              "dynamicClientUnusedDays": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 90
               }
             }
           }

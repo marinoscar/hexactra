@@ -36,7 +36,8 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
       },
     ],
   },
-  { label: 'Access', cards: [...identityAdminSections.access, ...identityAdminSections.organizations] },
+  // `OAuth clients` (#459: the OAuth server ChatGPT and Claude sign in through) is appended last; the server ships off at run time.
+  { label: 'Access', cards: [...identityAdminSections.access, ...identityAdminSections.organizations, ...identityAdminSections.oauthClients] },
   {
     label: 'Operations',
     cards: [

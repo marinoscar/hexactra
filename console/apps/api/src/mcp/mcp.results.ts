@@ -3,7 +3,7 @@
 // controller answer with. No Nest, no I/O: shared by the tools, the
 // dispatcher and the transport.
 
-/** Which credential admitted the request. `oauth` comes with E33.1 (the platform's `oat_` tokens) and never matches before. */
+/** Which credential admitted the request (the guard's kinds): `oauth` is an app signed in through the platform OAuth server (`oat_`, #459). */
 export type McpCredentialKind = 'jwt' | 'pat' | 'node' | 'oauth';
 
 /** The size and time limits of one request (#462, "Size limits" and "Time limits"). */
@@ -50,7 +50,17 @@ export interface McpContext {
   /** Raw bytes of a GET (screenshots). */
   bytes(path: string): Promise<{ mime: string; data: Buffer }>;
   /** Which credential admitted the request (absent in unit tests: treated as a personal access token). */
-  credential?: { kind: McpCredentialKind; /** The scopes an OAuth token was granted (E33.2); absent: every scope. */ scopes?: readonly string[] };
+  credential?: {
+    kind: McpCredentialKind;
+    /** The scopes an OAuth token was granted; absent (a PAT, a session): every scope. */
+    scopes?: readonly string[];
+    /** An OAuth token's client (`oauth_clients.id`), for attribution (E33.6). */
+    clientId?: string;
+    /** The client's display name, when known (E33.6 resolves it). */
+    clientName?: string;
+    /** An OAuth token's grant (`oauth_grants.id`): the consent it was issued under. */
+    grantId?: string;
+  };
   /** The limits of this request (absent in unit tests: the defaults). */
   limits?: McpLimits;
   /** The console's own URL (`APP_URL`), for links in results; absent: `http://localhost:3535`. */

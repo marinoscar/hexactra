@@ -17,6 +17,9 @@ import { POLICIES_MODEL_OWNERSHIP, POLICIES_USER_OWNED_MODELS } from '../policie
 import { QUESTIONS_MODEL_OWNERSHIP, QUESTIONS_USER_OWNED_MODELS } from '../questions/questions.ownership';
 import { TASKS_MODEL_OWNERSHIP, TASKS_USER_OWNED_MODELS } from '../tasks/tasks.ownership';
 import { PERMISSION_OPTIONS } from './permissions';
+// The OAuth server's MCP scopes and the `/api/mcp` protected resource (#459): registered
+// here, beside the permissions they name, before bootstrap.
+import '../mcp/mcp.oauth';
 
 registerPlatformPermissions(PERMISSION_OPTIONS);
 registerPlatformUserOwnedModels([...APP_USER_OWNED_MODELS, ...TASKS_USER_OWNED_MODELS, ...QUESTIONS_USER_OWNED_MODELS, ...DOCUMENT_USER_OWNED_MODELS, ...POLICIES_USER_OWNED_MODELS]);

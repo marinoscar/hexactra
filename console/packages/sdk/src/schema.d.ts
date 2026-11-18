@@ -758,6 +758,356 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/oauth/.well-known/authorization-server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Authorization server metadata
+         * @description The RFC 8414 document. Published at the root as `/.well-known/oauth-authorization-server` by the nginx fragment. `issuer` is `APP_URL` without a trailing slash; `registration_endpoint` and `client_id_metadata_document_supported` appear only while their setting is on and a route serves them. 404 while the server is disabled.
+         */
+        get: operations["oAuthProtocol_metadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/oauth/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Start an authorization (OAuth 2.1 authorization code with PKCE)
+         * @description Validates the request in this order: server enabled, client, redirect URI, `response_type=code`, PKCE `S256`, `resource`, scopes. A disabled server, an unknown client or a bad redirect URI is a 302 to the web error page `/oauth/error?code=...` and NEVER a redirect to `redirect_uri`. From the `response_type` check on, an error is a 302 to `redirect_uri` with `error`, `error_description`, `state` and `iss`. On success: a pending request (10 minutes) and a 302 to `/oauth/consent?request=<id>`. Rate limited per source address (30 per minute).
+         */
+        get: operations["oAuthProtocol_authorize"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/oauth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Token endpoint
+         * @description Exchanges an authorization code (`grant_type=authorization_code` with `code`, `redirect_uri`, `code_verifier`, `client_id`, optional `resource`) or rotates a refresh token (`grant_type=refresh_token` with `refresh_token`, `client_id`, optional narrower `scope`). The body is `application/x-www-form-urlencoded` ONLY (JSON is `400 invalid_request`), at most 16 KiB. A confidential client authenticates by `client_secret_post` or `client_secret_basic`, per its registration; a failure is `401 invalid_client` with `WWW-Authenticate: Basic`. A refresh token presented again after its rotation is reuse and revokes the grant, except for a 10-second grace window that answers a client retrying a lost response with a new pair. Errors are RFC 6749 JSON, not the platform error body. Rate limited per client id (60 per minute): 429 `temporarily_unavailable` with `Retry-After`.
+         */
+        post: operations["oAuthProtocol_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/oauth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dynamic client registration (RFC 7591)
+         * @description JSON body with `redirect_uris` (required, at most 10), `client_name`, `client_uri`, `logo_uri`, `token_endpoint_auth_method` (`none` default, `client_secret_post`, `client_secret_basic`), `grant_types`, `response_types`, `application_type` (`web` or `native`) and `scope`; unknown fields are ignored. Redirect URIs are `https:` or loopback `http:` with no fragment and share one host; a custom scheme needs `application_type: native` and a reverse-domain scheme. The host trust policy runs here: a host that is not allowed is `403 invalid_client_metadata`. A public client that registers again with exactly the same redirect URIs, name and host gets the existing client back. `404` while dynamic registration is off or the server is disabled. Rate limited: 10 per hour per source address (`429`). The `client_secret` of a confidential client is returned once and stored hashed.
+         */
+        post: operations["oAuthProtocol_register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/oauth/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke a token (RFC 7009)
+         * @description Form fields `token`, optional `token_type_hint`, and client authentication as for the token endpoint. Revoking a refresh token revokes its grant; revoking an access token revokes that token. Always `200` with an empty body, including for an unknown token; `401 invalid_client` when a confidential client fails authentication. Rate limited per client id (60 per minute).
+         */
+        post: operations["oAuthProtocol_revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/oauth/.well-known/protected-resource": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Protected resource metadata (the only resource)
+         * @description The RFC 9728 document of the deployment's protected resource when exactly one is registered; `404` when none or several are (use the path form). Published at the root as `/.well-known/oauth-protected-resource`. `404` while the server is disabled.
+         */
+        get: operations["oAuthResourceMetadata_only"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/oauth/.well-known/protected-resource/{path}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Protected resource metadata for a resource path
+         * @description The RFC 9728 document of the resource whose `path` follows `/protected-resource` (for `/api/mcp`: `/api/oauth/.well-known/protected-resource/api/mcp`). `resource` is `APP_URL` + the path exactly; `authorization_servers` has one entry, the issuer. `404` for a path that matches no resource, and while the server is disabled.
+         */
+        get: operations["oAuthResourceMetadata_forPath"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/oauth/requests/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a pending authorization request (consent page)
+         * @description Session credential ONLY (a personal access token, device credential, node credential or OAuth token is 403). Binds the request to the caller on first read; another user later gets 404. Returns the client (host first), the redirect host, the resource, the requested scopes with `grantable`, `required` and `alreadyGranted`, and the organizations the grant may act in (multi-organization mode). 410 when expired or already decided; 404 while the OAuth server is disabled.
+         *
+         *     **Requires:** authentication only — any signed-in user may call this.
+         */
+        get: operations["oAuthConsent_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/oauth/requests/{id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve or deny a pending authorization request
+         * @description Session credential ONLY. `approve` grants the ticked scopes (a subset of the requested ones; a scope the user lacks every permission for is not granted) for the chosen organization (an active membership; default the session's), in one transaction: upsert the active grant, insert the authorization code (60 s), mark the request approved. `deny` marks it denied. The response carries `redirectTo`: the client's redirect URI with `code`, `state` and `iss`, or with `error=access_denied`.
+         *
+         *     **Requires:** authentication only — any signed-in user may call this.
+         */
+        post: operations["oAuthConsent_decide"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/oauth/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the apps the caller connected
+         * @description The caller's active grants: client name, host and logo, resource, scopes with titles, dates. Never a token. An OAuth access token is refused (403). 404 while the server is disabled.
+         *
+         *     **Requires:** authentication only — any signed-in user may call this.
+         */
+        get: operations["oAuthGrants_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/oauth/grants/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect an app
+         * @description Revokes the grant and every token of it (`revoked_reason: user`); takes effect on the next request. Audited; emits `identity.oauth.grant.revoked`. 404 for an id that is not the caller's.
+         *
+         *     **Requires:** authentication only — any signed-in user may call this.
+         */
+        delete: operations["oAuthGrants_revoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/oauth/clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List OAuth clients (Admin only)
+         * @description Paged: kind, name, host, redirect URIs, active grant count, last used and disabled state. Never a secret.
+         *
+         *     **Requires:** authentication, plus permission `oauth_clients:read`.
+         */
+        get: operations["oAuthClientsAdmin_list"];
+        put?: never;
+        /**
+         * Pre-register an OAuth client (Admin only)
+         * @description Returns the client id and, for a confidential client, its secret ONCE.
+         *
+         *     **Requires:** authentication, plus permission `oauth_clients:write`.
+         */
+        post: operations["oAuthClientsAdmin_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/oauth/clients/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete an OAuth client (Admin only)
+         * @description Its grants, codes, tokens and pending requests are deleted with it.
+         *
+         *     **Requires:** authentication, plus permission `oauth_clients:write`.
+         */
+        delete: operations["oAuthClientsAdmin_remove"];
+        options?: never;
+        head?: never;
+        /**
+         * Disable, enable or edit an OAuth client (Admin only)
+         * @description `disabled` for any client (disabling revokes its grants with reason `client_disabled`, so its tokens fail on the next call); name and redirect URIs for the `registered` kind only.
+         *
+         *     **Requires:** authentication, plus permission `oauth_clients:write`.
+         */
+        patch: operations["oAuthClientsAdmin_update"];
+        trace?: never;
+    };
+    "/api/admin/oauth/clients/{id}/rotate-secret": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate a client secret (Admin only)
+         * @description Returns the new secret ONCE; the old one stops working at once.
+         *
+         *     **Requires:** authentication, plus permission `oauth_clients:write`.
+         */
+        post: operations["oAuthClientsAdmin_rotateSecret"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/oauth/refused-hosts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List refused client hosts (Admin only)
+         * @description Hosts the client trust policy turned away in the last 30 days, from the `oauth:client.refused` audit rows: host, attempts (one row per host per hour at most) and the latest time. Newest first, at most 100.
+         *
+         *     **Requires:** authentication, plus permission `oauth_clients:read`.
+         */
+        get: operations["oAuthAdminHints_refusedHosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/oauth/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the OAuth admin policy hints (Admin only)
+         * @description The app's suggested client hosts (`defaultAllowedClientHosts`), offered with "Add" on the admin page.
+         *
+         *     **Requires:** authentication, plus permission `oauth_clients:read`.
+         */
+        get: operations["oAuthAdminHints_policy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/test/login": {
         parameters: {
             query?: never;
@@ -7501,6 +7851,217 @@ export interface components {
              */
             limit: number;
         };
+        OAuthErrorResponseDto: {
+            /** @enum {string} */
+            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unauthorized_client" | "unsupported_grant_type" | "unsupported_response_type" | "invalid_scope" | "invalid_target" | "access_denied" | "server_error" | "temporarily_unavailable" | "invalid_redirect_uri" | "invalid_client_metadata";
+            error_description?: string;
+        };
+        OAuthTokenRequestDto: {
+            /** @enum {string} */
+            grant_type: "authorization_code" | "refresh_token";
+            /** @description authorization_code: the code from the redirect. */
+            code?: string;
+            /** @description authorization_code: identical to the authorization request's. */
+            redirect_uri?: string;
+            /** @description authorization_code: the PKCE verifier (43 to 128 characters). */
+            code_verifier?: string;
+            /** @description refresh_token: the refresh token. */
+            refresh_token?: string;
+            /** @description refresh_token: a narrower, space-separated scope list. */
+            scope?: string;
+            /** @description authorization_code: the resource, when sent, must equal the authorization request's. */
+            resource?: string;
+            /** @description The client id (public clients, and client_secret_post). */
+            client_id?: string;
+            /** @description client_secret_post: the client secret. */
+            client_secret?: string;
+        };
+        OAuthTokenResponseDto: {
+            access_token: string;
+            /** @constant */
+            token_type: "Bearer";
+            expires_in: number;
+            refresh_token?: string;
+            scope: string;
+        };
+        OAuthRegistrationRequestDto: {
+            redirect_uris: string[];
+            client_name?: string;
+            client_uri?: string;
+            logo_uri?: string;
+            /** @enum {string} */
+            token_endpoint_auth_method?: "none" | "client_secret_post" | "client_secret_basic";
+            grant_types?: string[];
+            response_types?: string[];
+            /** @enum {string} */
+            application_type?: "web" | "native";
+            scope?: string;
+        };
+        OAuthRegistrationResponseDto: {
+            client_id: string;
+            client_secret?: string;
+            client_id_issued_at: number;
+            /** @constant */
+            client_secret_expires_at?: 0;
+            redirect_uris: string[];
+            client_name: string;
+            /** @enum {string} */
+            token_endpoint_auth_method: "none" | "client_secret_post" | "client_secret_basic";
+            grant_types: string[];
+            response_types: string[];
+            /** @enum {string} */
+            application_type: "web" | "native";
+            client_uri?: string;
+            logo_uri?: string;
+        };
+        OAuthConsentRequestDto: {
+            /** Format: uuid */
+            id: string;
+            client: {
+                name: string;
+                host: string;
+                logoUri: string | null;
+                /** @enum {string} */
+                kind: "cimd" | "dynamic" | "registered";
+                /** Format: date-time */
+                firstSeenAt: string;
+                isNewToDeployment: boolean;
+            };
+            /** @description Where the user goes after deciding. */
+            redirectHost: string;
+            isLoopbackRedirect: boolean;
+            resource: {
+                id: string;
+                name: string;
+            };
+            scopes: {
+                id: string;
+                title: string;
+                description: string;
+                /** @enum {string} */
+                risk: "low" | "elevated" | "high";
+                /** @description False when the user holds none of the permissions the scope maps to. */
+                grantable: boolean;
+                /** @description A default scope of the resource: it cannot be unticked. */
+                required: boolean;
+                /** @description An active grant of this user to this client already holds it. */
+                alreadyGranted: boolean;
+            }[];
+            /** @description The client asked to stay connected (a refresh token). */
+            offlineAccess: boolean;
+            /** @description The active memberships the grant may act in (multi-organization mode); empty in single mode. */
+            organizations: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                isCurrent: boolean;
+            }[];
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        OAuthDecisionRequestDto: {
+            /**
+             * @description Whether the user allows or refuses the client.
+             * @enum {string}
+             */
+            decision: "approve" | "deny";
+            /** @description The scope ids the user left ticked: a subset of the requested ones. Ignored on deny. */
+            scopes?: string[];
+            /**
+             * Format: uuid
+             * @description The organization the grant acts in: an active membership. Defaults to the session's active organization.
+             */
+            orgId?: string;
+        };
+        OAuthDecisionResponseDto: {
+            /** @description The client's redirect URI with `code`, `state` and `iss` (approve) or `error=access_denied` (deny). The page navigates there. */
+            redirectTo: string;
+        };
+        OAuthGrantViewDto: {
+            /** Format: uuid */
+            id: string;
+            client: {
+                name: string;
+                host: string;
+                logoUri: string | null;
+            };
+            resource: {
+                id: string | null;
+                name: string;
+            };
+            scopes: {
+                id: string;
+                title: string;
+            }[];
+            organization: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            } | null;
+            /** Format: date-time */
+            createdAt: string;
+            lastUsedAt: string | null;
+        };
+        OAuthClientViewDto: {
+            /** Format: uuid */
+            id: string;
+            clientId: string;
+            /** @enum {string} */
+            kind: "cimd" | "dynamic" | "registered";
+            name: string;
+            host: string;
+            redirectUris: string[];
+            /** @enum {string} */
+            tokenEndpointAuthMethod: "none" | "client_secret_post" | "client_secret_basic";
+            activeGrantCount: number;
+            lastUsedAt: string | null;
+            disabledAt: string | null;
+            disabled: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        OAuthClientWithSecretDto: {
+            /** Format: uuid */
+            id: string;
+            clientId: string;
+            /** @enum {string} */
+            kind: "cimd" | "dynamic" | "registered";
+            name: string;
+            host: string;
+            redirectUris: string[];
+            /** @enum {string} */
+            tokenEndpointAuthMethod: "none" | "client_secret_post" | "client_secret_basic";
+            activeGrantCount: number;
+            lastUsedAt: string | null;
+            disabledAt: string | null;
+            disabled: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            clientSecret?: string;
+        };
+        OAuthClientCreateRequestDto: {
+            name: string;
+            redirectUris: string[];
+            /**
+             * @default none
+             * @enum {string}
+             */
+            tokenEndpointAuthMethod?: "none" | "client_secret_post" | "client_secret_basic";
+        };
+        OAuthClientPatchRequestDto: {
+            disabled?: boolean;
+            name?: string;
+            redirectUris?: string[];
+        };
+        OAuthRefusedHostDto: {
+            host: string;
+            count: number;
+            /** Format: date-time */
+            lastSeenAt: string;
+        };
+        OAuthPolicyDto: {
+            suggestedHosts: string[];
+        };
         TestLoginDto: {
             /** Format: email */
             email: string;
@@ -7937,6 +8498,19 @@ export interface components {
                 startedAt: string | null;
                 startedById: string | null;
             };
+            oauthServer: {
+                enabled: boolean;
+                accessTokenTtlMinutes: number;
+                refreshTokenTtlDays: number;
+                refreshTokenMaxAgeDays: number;
+                alwaysIssueRefreshToken: boolean;
+                clientIdMetadataDocuments: boolean;
+                dynamicClientRegistration: boolean;
+                allowedClientHosts: string[];
+                allowAnyClientHost: boolean;
+                allowLoopbackClients: boolean;
+                dynamicClientUnusedDays: number;
+            };
             /** Format: date-time */
             updatedAt: string;
             updatedBy: {
@@ -8158,6 +8732,19 @@ export interface components {
                 startedAt: string | null;
                 startedById: string | null;
             };
+            oauthServer?: {
+                enabled: boolean;
+                accessTokenTtlMinutes: number;
+                refreshTokenTtlDays: number;
+                refreshTokenMaxAgeDays: number;
+                alwaysIssueRefreshToken: boolean;
+                clientIdMetadataDocuments: boolean;
+                dynamicClientRegistration: boolean;
+                allowedClientHosts: string[];
+                allowAnyClientHost: boolean;
+                allowLoopbackClients: boolean;
+                dynamicClientUnusedDays: number;
+            };
         };
         PatchSystemSettingsDto: {
             runs?: {
@@ -8368,6 +8955,19 @@ export interface components {
                 allowAdmins?: boolean;
                 startedAt?: string | null;
                 startedById?: string | null;
+            };
+            oauthServer?: {
+                enabled?: boolean;
+                accessTokenTtlMinutes?: number;
+                refreshTokenTtlDays?: number;
+                refreshTokenMaxAgeDays?: number;
+                alwaysIssueRefreshToken?: boolean;
+                clientIdMetadataDocuments?: boolean;
+                dynamicClientRegistration?: boolean;
+                allowedClientHosts?: string[];
+                allowAnyClientHost?: boolean;
+                allowLoopbackClients?: boolean;
+                dynamicClientUnusedDays?: number;
             };
         };
         OrgSettingsResponseDto: {
@@ -15805,7 +16405,7 @@ export interface operations {
                 };
             };
             /**
-             * @description The credential is a personal access token or a device credential, which cannot switch organization
+             * @description The credential is a personal access token, a device credential or an OAuth access token, which cannot switch organization
              *
              *     Forbidden - Insufficient permissions
              */
@@ -17313,6 +17913,1046 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthProtocol_metadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The metadata document (not enveloped). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The OAuth server is not enabled. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthProtocol_authorize: {
+        parameters: {
+            query: {
+                /** @description RFC 8707: the identifier of a registered protected resource. */
+                resource: unknown;
+                /** @description Must be `S256`. */
+                code_challenge_method: unknown;
+                /** @description PKCE challenge: BASE64URL(SHA256(verifier)). */
+                code_challenge: unknown;
+                state?: unknown;
+                /** @description Space-separated scope ids; none means the resource's default scopes. */
+                scope?: unknown;
+                /** @description Must match a registered redirect URI (loopback ports are ignored). */
+                redirect_uri: unknown;
+                client_id: unknown;
+                /** @description Must be `code`. */
+                response_type: unknown;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the consent page, the web error page, or the client's redirect URI with an error. */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limited. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorResponseDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthProtocol_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["OAuthTokenRequestDto"];
+            };
+        };
+        responses: {
+            /** @description The tokens (RFC 6749 §5.1), not enveloped. `Cache-Control: no-store`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthTokenResponseDto"];
+                };
+            };
+            /** @description `invalid_request`, `invalid_grant`, `unsupported_grant_type` or `invalid_scope`. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorResponseDto"];
+                };
+            };
+            /** @description `invalid_client`. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorResponseDto"];
+                };
+            };
+            /** @description The OAuth server is not enabled. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `temporarily_unavailable`. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorResponseDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthProtocol_register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthRegistrationRequestDto"];
+            };
+        };
+        responses: {
+            /** @description The registered client (RFC 7591 §3.2.1), not enveloped. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthRegistrationResponseDto"];
+                };
+            };
+            /** @description `invalid_redirect_uri` or `invalid_client_metadata`. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorResponseDto"];
+                };
+            };
+            /** @description `invalid_client_metadata`: the host is not allowed on this deployment. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorResponseDto"];
+                };
+            };
+            /** @description Dynamic registration is off, or the OAuth server is not enabled. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `temporarily_unavailable`. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorResponseDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthProtocol_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": {
+                    token: string;
+                    /** @enum {string} */
+                    token_type_hint?: "access_token" | "refresh_token";
+                    client_id?: string;
+                    client_secret?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Revoked, or nothing to revoke. Empty body. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `invalid_client`. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorResponseDto"];
+                };
+            };
+            /** @description The OAuth server is not enabled. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `temporarily_unavailable`. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorResponseDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthResourceMetadata_only: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The metadata document (not enveloped). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The OAuth server is not enabled, or not exactly one resource is registered. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthResourceMetadata_forPath: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The resource path without its leading slash (for `/api/mcp`: `api/mcp`). */
+                path: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The metadata document (not enveloped). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The OAuth server is not enabled, or no resource has that path. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthConsent_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the consent page shows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["OAuthConsentRequestDto"];
+                        /** @description Present when the endpoint supplies it (pagination) or when the global response interceptor adds it (`{ timestamp }`). Not every response carries one. */
+                        meta?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /**
+             * @description Not a session credential.
+             *
+             *     Forbidden - Insufficient permissions
+             */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Unknown, another user's, or the server is disabled. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Expired or already decided. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthConsent_decide: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthDecisionRequestDto"];
+            };
+        };
+        responses: {
+            /** @description Where the page navigates next. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["OAuthDecisionResponseDto"];
+                        /** @description Present when the endpoint supplies it (pagination) or when the global response interceptor adds it (`{ timestamp }`). Not every response carries one. */
+                        meta?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description A scope that was not requested, a required scope unticked, or nothing grantable. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /**
+             * @description Not a session credential, or an organization that is not an active membership.
+             *
+             *     Forbidden - Insufficient permissions
+             */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Unknown, another user's, or the server is disabled. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Expired or already decided. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthGrants_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The active grants. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["OAuthGrantViewDto"][];
+                        /** @description Present when the endpoint supplies it (pagination) or when the global response interceptor adds it (`{ timestamp }`). Not every response carries one. */
+                        meta?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /**
+             * @description An OAuth access token cannot list grants.
+             *
+             *     Forbidden - Insufficient permissions
+             */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description The OAuth server is not enabled. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthGrants_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /**
+             * @description An OAuth access token cannot revoke grants.
+             *
+             *     Forbidden - Insufficient permissions
+             */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Not the caller's grant, or the server is disabled. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthClientsAdmin_list: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                kind?: "cimd" | "dynamic" | "registered";
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of clients */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            items: components["schemas"]["OAuthClientViewDto"][];
+                            /**
+                             * @description Total matching rows across all pages.
+                             * @example 42
+                             */
+                            total: number;
+                            /**
+                             * @description One-based page number.
+                             * @example 1
+                             */
+                            page: number;
+                            /** @example 20 */
+                            pageSize: number;
+                            /** @example 3 */
+                            totalPages: number;
+                        };
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthClientsAdmin_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthClientCreateRequestDto"];
+            };
+        };
+        responses: {
+            /** @description The client and its one-time secret */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["OAuthClientWithSecretDto"];
+                    };
+                };
+            };
+            /** @description A redirect URI rule was violated. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthClientsAdmin_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Client deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Client not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthClientsAdmin_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthClientPatchRequestDto"];
+            };
+        };
+        responses: {
+            /** @description The updated client */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["OAuthClientViewDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Client not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthClientsAdmin_rotateSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The client and its new secret */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["OAuthClientWithSecretDto"];
+                    };
+                };
+            };
+            /** @description A public client has no secret. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Client not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthAdminHints_refusedHosts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Refused hosts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["OAuthRefusedHostDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthAdminHints_policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policy hints */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["OAuthPolicyDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {

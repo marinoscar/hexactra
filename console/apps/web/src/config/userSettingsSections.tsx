@@ -26,7 +26,8 @@ import { composeSections } from '../slices/sections';
  */
 const CORE_USER_SECTIONS: SettingsSectionDef[] = [
   { label: 'Account', cards: [] },
-  { label: 'Security', cards: [...identityUserSettingsSections.security] },
+  // `Connected apps` (#459: the OAuth grants of ChatGPT, Claude and other AI apps) shows only while the server is on (`feature: 'oauthServer'`).
+  { label: 'Security', cards: [...identityUserSettingsSections.security, ...identityUserSettingsSections.connectedApps] },
   {
     label: 'Notes',
     cards: [

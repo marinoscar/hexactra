@@ -1,18 +1,33 @@
 import { APP_NAME } from '@app/shared';
 import { Box, CircularProgress } from '@mui/material';
-import { Fragment, Suspense, type ComponentType } from 'react';
+import { Fragment, Suspense, type ComponentType, type ReactNode } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { DoctorPage } from '@marinoscar/platform-web/doctor/ui';
 import {
   AuthProvider,
   createIdentityApi,
+  createOAuthServerApi,
   IdentityWebAdaptersProvider,
+  OAuthServerStatusProvider,
   RequireAuth,
   RequirePermission,
+  useOAuthServerFeature,
   useOrgsFeature,
   usePermissions,
 } from '@marinoscar/platform-web/identity/headless';
-import { ActivateDevicePage, AuthCallbackPage, LoginPage, OrganizationPage, OrganizationsPage, UserTokensPage, UsersPage } from '@marinoscar/platform-web/identity/ui';
+import {
+  ActivateDevicePage,
+  AuthCallbackPage,
+  ConnectedAppsPage,
+  LoginPage,
+  OAuthClientsPage,
+  OAuthConsentPage,
+  OAuthErrorPage,
+  OrganizationPage,
+  OrganizationsPage,
+  UserTokensPage,
+  UsersPage,
+} from '@marinoscar/platform-web/identity/ui';
 import { JobInsightsPage, JobsPage } from '@marinoscar/platform-web/jobs/ui';
 import { registerSettingsFeature, useSettingsFeatures } from '@marinoscar/platform-web/settings/headless';
 import { SettingsHub, type SettingsHubProps } from '@marinoscar/platform-web/settings/ui';
@@ -32,6 +47,7 @@ import { AlertsPage } from '@marinoscar/platform-web/alerts/ui';
 
 import { BrandLogo, BrandMark } from './components/BrandLogo';
 import { InboxCountProvider } from './components/InboxCountProvider';
+import { mcpScopeIcon } from './components/McpScopeIcon';
 import { ALERTS_ENABLED, WEBHOOKS_ENABLED } from './config/userSettingsSections';
 import { FabricConnectionPage } from './pages/FabricConnectionPage';
 import { DesktopPage } from './pages/DesktopPage';
@@ -75,6 +91,9 @@ declare module '@marinoscar/platform-web/settings/headless' {
   }
 }
 registerSettingsFeature('orgs', useOrgsFeature);
+// The `oauthServer` feature (#459): the Connected apps card shows only while the
+// OAuth server is on (it ships off; an administrator switches it on in OAuth clients).
+registerSettingsFeature('oauthServer', useOAuthServerFeature);
 
 const spinner = (
   <Box sx={{ display: 'grid', placeItems: 'center', minHeight: '60vh' }}>
@@ -98,7 +117,15 @@ function Gate({ permission, children }: { permission: string; children: ReactEle
  * need the host (the Inbox count behind the navigation badge, the onboarding
  * fetch). Add yours to `src/slices/<id>.tsx`.
  */
-const SHELL_PROVIDERS: readonly ShellProvider[] = [...sliceShellProviders, AppPlatformHost, InboxCountProvider, ...sliceHostedProviders];
+const SHELL_PROVIDERS: readonly ShellProvider[] = [...sliceShellProviders, OAuthServerStatus, AppPlatformHost, InboxCountProvider, ...sliceHostedProviders];
+
+/** One probe per signed-in user of whether the OAuth server is on (the `oauthServer` feature). */
+function OAuthServerStatus({ children }: { children: ReactNode }) {
+  return <OAuthServerStatusProvider api={oauthApi}>{children}</OAuthServerStatusProvider>;
+}
+
+/** The consent page's slots: an icon per MCP scope (a warning icon on the two high-risk ones). */
+const CONSENT_SLOTS = { scopeIcon: mcpScopeIcon };
 
 /** Renders each component of a shell slot (banners, overlays, top-bar actions). */
 function Slot({ components }: { components: readonly ComponentType[] }) {
@@ -178,6 +205,8 @@ export function AppRoutes() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      {/* Where the OAuth server sends a person it cannot send back to the client: no sign-in, no API call. */}
+      <Route path="/oauth/error" element={<OAuthErrorPage />} />
       {/* Slice routes that need no sign-in (the sharing slice's public link page). */}
       {slicePublicRoutes.map((route) => (
         <Route key={route.path} path={`/${route.path}`} element={<Suspense fallback={spinner}>{route.element}</Suspense>} />
@@ -187,6 +216,8 @@ export function AppRoutes() {
             screen, outside the shell. Without it the catch-all sent /activate home. Its
             API client comes from IdentityWebAdaptersProvider below (no shell here). */}
         <Route path="activate" element={<ActivateDevicePage />} />
+        {/* OAuth consent (#459: ChatGPT, Claude): signed in, full screen, outside the shell, like /activate. */}
+        <Route path="oauth/consent" element={<OAuthConsentPage slots={CONSENT_SLOTS} />} />
         <Route element={shell}>
           <Route index element={<HomePage />} />
           <Route path="notes" element={<Gate permission="notes:read"><NotesPage /></Gate>} />
@@ -202,8 +233,10 @@ export function AppRoutes() {
           <Route path="fleet/hosts/:id/desktop" element={<Gate permission="fleet:desktop"><DesktopPage /></Gate>} />
           <Route path="settings" element={<Hub sections={USER_SETTINGS_SECTIONS} hubKey="user-settings-hub" title="Settings" subtitle="Manage your account preferences." />} />
           <Route path="settings/tokens" element={<UserTokensPage />} />
+          <Route path="settings/connected-apps" element={<ConnectedAppsPage />} />
           <Route path="admin/settings" element={<Hub sections={ADMIN_SECTIONS} hubKey="admin-settings-hub" title="Administration" subtitle="Users, background jobs and the health of this deployment." />} />
           <Route path="admin/settings/users" element={<Gate permission="users:read"><UsersPage /></Gate>} />
+          <Route path="admin/settings/oauth-clients" element={<Gate permission="oauth_clients:read"><OAuthClientsPage /></Gate>} />
           <Route path="admin/settings/organization" element={<Gate permission="org_members:read"><OrganizationPage /></Gate>} />
           <Route
             path="admin/settings/organizations"
@@ -258,13 +291,15 @@ function Hub(props: Omit<SettingsHubProps, 'hasPermission' | 'features'>) {
  * platform host would provide it, outside it the page threw "no identity client".
  */
 const identityApi = createIdentityApi(platformApi);
+/** The OAuth pages' client, for the same reason (the consent page renders outside the shell). */
+const oauthApi = createOAuthServerApi(platformApi);
 
 export default function App() {
   return (
     <AuthProvider client={api} onBeforeLogout={beforeLogout}>
       {/* Every packaged time renders in the signed-in user's profile time zone (cleared on sign-out). */}
       <UserTimeZoneSync api={platformApi} />
-      <IdentityWebAdaptersProvider adapters={{ appName: APP_NAME, api: identityApi }}>
+      <IdentityWebAdaptersProvider adapters={{ appName: APP_NAME, api: identityApi, oauthApi }}>
         <AppRoutes />
       </IdentityWebAdaptersProvider>
     </AuthProvider>

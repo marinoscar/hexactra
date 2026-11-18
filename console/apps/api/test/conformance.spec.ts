@@ -153,6 +153,14 @@ runPlatformConformance({
     // (no global JWT guard), one PlatformHostCoreModule, the `{ data }`
     // envelope and the exception filter registered once.
     host: { rootModule: AppModule },
+    // The OAuth server (#459): the MCP scopes name registered permissions, the `/api/mcp`
+    // resource lists only them and owns its prefix alone, an `oat_` token is confined to it
+    // and narrowed, session-only routes refuse it, and its 401 carries the challenge.
+    oauthServer: {
+      rootModule: AppModule,
+      permissions: permissionRegistry.list().map((permission) => permission.id),
+      secretEgress: { skip: 'it needs a real flow and a database: mcp-oauth.db.spec.ts runs checkOAuthSecretEgress over one' },
+    },
     // Every user-owned model has a keep-or-delete decision in src/platform/user-data/user-data.manifest.ts.
     userData: { datamodel: readSchemaDatamodel(join(__dirname, '..', 'prisma', 'schema')) },
     ...sliceSuites(),
