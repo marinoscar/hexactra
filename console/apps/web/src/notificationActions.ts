@@ -112,12 +112,22 @@ export function withRunRenotify<S extends { readonly registration: { showNotific
   const registration = scope.registration as unknown as { showNotification(title: string, options?: ShowOptions): Promise<void> };
   const show = (title: string, options?: ShowOptions) =>
     registration.showNotification(title, options && typeof options.tag === 'string' && options.tag.startsWith('run-') ? { ...options, renotify: true } : options);
+  // Every other member is read from the real object, with the real object as
+  // `this`. The worker's `clients` and `registration` are native getters that
+  // throw "Illegal invocation" when called on a Proxy, and native methods do the
+  // same, so the receiver is never the Proxy and functions are bound. The test
+  // push reads `scope.clients` to post its acknowledgement: with the Proxy as
+  // receiver it threw, and the test reported "not received" although real
+  // pushes (which never read `clients`) were delivered.
+  const forward = <T extends object>(target: T, prop: string | symbol): unknown => {
+    const value = Reflect.get(target, prop, target) as unknown;
+    return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+  };
+  const registrationProxy = new Proxy(registration, { get: (r, p) => (p === 'showNotification' ? show : forward(r, p)) });
   return new Proxy(scope, {
-    get(target, prop, receiver) {
-      if (prop === 'registration') {
-        return new Proxy(registration, { get: (r, p, rr) => (p === 'showNotification' ? show : Reflect.get(r, p, rr)) });
-      }
-      return Reflect.get(target, prop, receiver);
+    get(target, prop) {
+      if (prop === 'registration') return registrationProxy;
+      return forward(target, prop);
     },
   });
 }
