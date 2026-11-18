@@ -31741,7 +31741,7 @@
     },
     "/api/runs/{id}/export": {
       "get": {
-        "description": "A `hexactra.run-trace` file (`formatVersion` 1): the run, its policy, budget and models, every step with its question and answer, the masked trace screenshots (`screenshots=embed`, the default; `none` leaves the images out) and the messages of its chat. Every string is masked (`masking.hits` counts what was); there is no unmasked export. Never the transcript, a token, a withheld answer or an AI app's grant. A live run exports with `partial: true`. 404 `RUN_NOT_FOUND` for a run that is not yours; 413 `EXPORT_TOO_LARGE` over 50 MB (use `screenshots=none`); 429 `EXPORT_RATE_LIMITED` past 10 exports a minute.\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "description": "A `hexactra.run-trace` file (`formatVersion` 1): the run, its policy, budget and models, every step with its question and answer, the masked trace screenshots (`screenshots=embed`, the default; `none` leaves the images out) and the messages of its chat. Every string is masked (`masking.hits` counts what was); there is no unmasked export. Never the transcript, a token, a withheld answer or an AI app's grant. A live run exports with `partial: true`. `format=pdf` renders the same masked trace as a PDF report (`application/pdf`; `paper=a4`, the default, or `letter`): the goal and outcome, the confirmed steps, the questions and answers, the budget, the timeline with the key-moment screenshots, and a footer on every page; a live run prints a partial-report banner. 404 `RUN_NOT_FOUND` for a run that is not yours; 413 `EXPORT_TOO_LARGE` over 50 MB of screenshots (use `screenshots=none`); 429 `EXPORT_RATE_LIMITED` past 10 exports a minute (JSON and PDF together).\n\n**Requires:** authentication, plus permission `runs:read`.",
         "operationId": "runs_export",
         "parameters": [
           {
@@ -31756,12 +31756,13 @@
             "name": "format",
             "required": false,
             "in": "query",
-            "description": "`json` (the only format of this route; the PDF report is its own route).",
+            "description": "`json` (the default): the run trace file. `pdf`: the run report (#543), rendered from the same masked trace.",
             "schema": {
               "default": "json",
               "type": "string",
               "enum": [
-                "json"
+                "json",
+                "pdf"
               ]
             }
           },
@@ -31769,7 +31770,7 @@
             "name": "screenshots",
             "required": false,
             "in": "query",
-            "description": "`embed` (the default) puts each masked trace picture in `steps[].screenshot.data` as base64; `none` keeps the picture facts and leaves the images out (a much smaller file).",
+            "description": "`embed` (the default) puts each masked trace picture in the file (`steps[].screenshot.data` as base64, or in the report after its step); `none` leaves the images out (a much smaller file).",
             "schema": {
               "default": "embed",
               "type": "string",
@@ -31778,11 +31779,25 @@
                 "none"
               ]
             }
+          },
+          {
+            "name": "paper",
+            "required": false,
+            "in": "query",
+            "description": "The PDF report's paper: `a4` (the default) or `letter`. Ignored for `json`.",
+            "schema": {
+              "default": "a4",
+              "type": "string",
+              "enum": [
+                "a4",
+                "letter"
+              ]
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "The run trace file (not wrapped in the `data` envelope), sent as an attachment `hexactra-run-<first 8 of id>-<yyyymmdd>.json`.",
+            "description": "The run trace file (`format=json`, not wrapped in the `data` envelope) or the PDF report (`format=pdf`), sent as an attachment `hexactra-run-<first 8 of id>-<yyyymmdd>.json` or `.pdf`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -31801,6 +31816,12 @@
                     }
                   }
                 }
+              },
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
               }
             }
           },
@@ -31811,6 +31832,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ErrorDto"
                 }
+              },
+              "application/pdf": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
               }
             }
           },
@@ -31818,6 +31844,11 @@
             "description": "Forbidden - Insufficient permissions",
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              },
+              "application/pdf": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorDto"
                 }
@@ -31843,7 +31874,7 @@
             "PAT-auth": []
           }
         ],
-        "summary": "Export a run as a JSON trace file",
+        "summary": "Export a run as a JSON trace file or a PDF report",
         "tags": [
           "Runs"
         ],

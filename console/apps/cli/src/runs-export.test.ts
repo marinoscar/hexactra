@@ -13,8 +13,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { APP_CLI_OPTIONS } from './app.js';
 import { setConsoleApiFactory } from './console-api.js';
-import { runsCommand } from './runs.command.js';
-import { exportFilename, exportRun, sizeText } from './runs.js';
+import { runsCommand, setReportTargetFactory } from './runs.command.js';
+import { exportFilename, exportRun, exportRunPdf, sizeText } from './runs.js';
 
 resetCliForTests();
 createCli(APP_CLI_OPTIONS);
@@ -57,7 +57,10 @@ async function run(...args: string[]): Promise<string> {
   return out;
 }
 
-afterEach(() => setConsoleApiFactory(null));
+afterEach(() => {
+  setConsoleApiFactory(null);
+  setReportTargetFactory(null);
+});
 
 describe('runs export', () => {
   it('writes the file to -o and prints its path and size; embeds the screenshots by default', async () => {
@@ -100,3 +103,60 @@ describe('runs export', () => {
     expect([sizeText(512), sizeText(2048), sizeText(3 * 1024 * 1024)]).toEqual(['512 B', '2 KB', '3.0 MB']);
   });
 });
+
+const PDF = Buffer.from('%PDF-1.7\n% a generated test file\n%%EOF\n');
+
+/** The export route answering a PDF (#543), or a 404 for any other run; the token it was sent. */
+function fakePdf() {
+  const urls: URL[] = [];
+  const auth: (string | null)[] = [];
+  const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input));
+    urls.push(url);
+    auth.push(new Headers(init?.headers).get('authorization'));
+    if (url.pathname !== `/api/runs/${RUN}/export`) {
+      return new Response(JSON.stringify({ statusCode: 404, code: 'RUN_NOT_FOUND', message: 'Run not found' }), { status: 404, headers: { 'content-type': 'application/json' } });
+    }
+    return new Response(PDF, { status: 200, headers: { 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="hexactra-run-66666666-20261118.pdf"' } });
+  });
+  const target = { apiBaseUrl: 'http://console.example.test/api', token: 'pat_test', fetch };
+  setReportTargetFactory(() => target);
+  return { target, urls, auth };
+}
+
+describe('runs export --pdf (#543)', () => {
+  it('writes the PDF as sent, asks for format=pdf with the screenshots and A4 by default, with the token', async () => {
+    const { urls, auth } = fakePdf();
+    const file = join(mkdtempSync(join(tmpdir(), 'hx-export-')), 'report.pdf');
+    const out = await run('runs', 'export', RUN, '--pdf', '-o', file);
+    expect(readFileSync(file).equals(PDF)).toBe(true);
+    expect(out).toMatch(/^wrote .*report\.pdf \(\d+ B\)\n$/);
+    expect(Object.fromEntries(urls[0]!.searchParams)).toEqual({ format: 'pdf', screenshots: 'embed', paper: 'a4' });
+    expect(auth[0]).toBe('Bearer pat_test');
+  });
+
+  it('passes --no-screenshots and --paper letter through', async () => {
+    const { urls } = fakePdf();
+    const file = join(mkdtempSync(join(tmpdir(), 'hx-export-')), 'report.pdf');
+    await run('runs', 'export', RUN, '--pdf', '--no-screenshots', '--paper', 'letter', '-o', file);
+    expect(Object.fromEntries(urls[0]!.searchParams)).toEqual({ format: 'pdf', screenshots: 'none', paper: 'letter' });
+  });
+
+  it('refuses an unknown paper before asking the console', async () => {
+    const { urls } = fakePdf();
+    await expect(run('runs', 'export', RUN, '--pdf', '--paper', 'a3')).rejects.toThrow('--paper is a4 or letter, not "a3".');
+    expect(urls).toHaveLength(0);
+  });
+
+  it("names the file as the console does; a missing run fails clearly and writes nothing", async () => {
+    const { target } = fakePdf();
+    const dir = mkdtempSync(join(tmpdir(), 'hx-export-'));
+    const written = await exportRunPdf(target, RUN, { screenshots: true, dir });
+    expect(written.path).toBe(join(dir, 'hexactra-run-66666666-20261118.pdf'));
+    const other = '77777777-7777-4777-8777-777777777777';
+    await expect(exportRunPdf(target, other, { screenshots: true, dir })).rejects.toThrow(`Run ${other} was not found`);
+    expect(readdirSync(dir)).toEqual(['hexactra-run-66666666-20261118.pdf']);
+    expect(exportFilename(RUN, null, new Date('2026-11-18T00:00:00Z'), 'pdf')).toBe('hexactra-run-66666666-20261118.pdf');
+  });
+});
+
