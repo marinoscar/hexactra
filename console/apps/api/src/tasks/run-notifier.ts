@@ -14,6 +14,8 @@ export interface RunRef {
   goal: string;
   taskId?: string | null;
   trigger?: string;
+  /** The chat that started the run (#488): its notifications lead to the chat, where its requests are answered. */
+  conversationId?: string | null;
 }
 
 /**
@@ -55,6 +57,15 @@ export class RunNotifier {
     return `${(this.config.get<string>('appUrl') ?? '').replace(/\/+$/, '')}${path}`;
   }
 
+  /**
+   * Where the notification leads, as the data the templates read: a run a chat
+   * started (#488) leads to its chat, where its requests are answered and its
+   * result is; any other run to `path`. `key` is the URL the email template uses.
+   */
+  private at(run: RunRef, path: string, key: 'inboxUrl' | 'runUrl'): Record<string, string> {
+    return run.conversationId ? { conversationId: run.conversationId, [key]: this.url(`/chat/${run.conversationId}`) } : { [key]: this.url(path) };
+  }
+
   private async send(event: string, userId: string, data: Record<string, unknown>): Promise<void> {
     if (!this.notifications) return;
     try {
@@ -77,7 +88,7 @@ export class RunNotifier {
       goal: run.goal.slice(0, 300),
       prompt: prompt.slice(0, 1000),
       kind,
-      inboxUrl: this.url('/inbox'),
+      ...this.at(run, '/inbox', 'inboxUrl'),
       ...this.buttons(userId, run, kind, input, canSnooze(expiresAt, new Date())),
     });
     await this.hook(RUN_WAITING_WEBHOOK, userId, { ...this.runData(run, 'waiting_human'), prompt: prompt.slice(0, 1000), kind });
@@ -100,14 +111,14 @@ export class RunNotifier {
       goal: run.goal.slice(0, 300),
       prompt: ask.prompt.slice(0, 1000),
       kind: ask.kind,
-      inboxUrl: this.url('/inbox'),
+      ...this.at(run, '/inbox', 'inboxUrl'),
       ...(left !== null ? { minutesLeft: Math.max(1, Math.round(left)), final: left * 60_000 <= FINAL_WINDOW_MS } : {}),
       ...this.buttons(userId, run, ask.kind, ask.input, canSnooze(when.expiresAt, when.now, when.reminderCount)),
     });
   }
 
   async finished(userId: string, run: RunRef, status: string, result?: string | null): Promise<void> {
-    await this.send(RUN_FINISHED_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), status, result: (result ?? '').slice(0, 500), runUrl: this.url(`/runs/${run.id}`) });
+    await this.send(RUN_FINISHED_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), status, result: (result ?? '').slice(0, 500), ...this.at(run, `/runs/${run.id}`, 'runUrl') });
     await this.hook(RUN_FINISHED_WEBHOOK, userId, { ...this.runData(run, status), result: (result ?? '').slice(0, 2000) || null });
   }
 

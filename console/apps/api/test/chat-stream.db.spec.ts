@@ -152,6 +152,23 @@ describe('GET /chats/:id/stream', () => {
   });
 });
 
+describe('GET /inbox for a chat run (#488)', () => {
+  it("names the chat of a request a chat's run asks, and no chat for any other request", async () => {
+    const alice = await login('inbox');
+    const chat = await chats.create(alice.userId, { title: 'Sign in' });
+    const chatRun = await liveRun(alice.userId, chat.id, { status: 'waiting_human' });
+    const other = await prisma.run.create({ data: { userId: alice.userId, goal: 'A scheduled job', status: 'waiting_human', trigger: 'schedule' } });
+    const inChat = await question(alice.userId, chatRun.id);
+    const elsewhere = await question(alice.userId, other.id);
+
+    const res = await app.inject({ method: 'GET', url: '/api/inbox', headers: { authorization: `Bearer ${alice.token}` } });
+    expect(res.statusCode).toBe(200);
+    const items = res.json<{ data: Array<{ questionId: string; runId: string; conversationId: string | null }> }>().data;
+    expect(items.find((i) => i.questionId === inChat.id)).toMatchObject({ runId: chatRun.id, conversationId: chat.id });
+    expect(items.find((i) => i.questionId === elsewhere.id)).toMatchObject({ runId: other.id, conversationId: null });
+  });
+});
+
 describe('what one look at a chat reads', () => {
   it('never carries a response, and shows a request only while the run waits and the request is pending and unexpired', async () => {
     const alice = await login('snapshot');

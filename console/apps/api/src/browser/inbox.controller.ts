@@ -24,6 +24,8 @@ export interface InboxItem {
   questionId: string;
   /** Null for a free-standing question (answered with POST /api/questions/:id/answer). */
   runId: string | null;
+  /** The chat whose run asks (#488); null for every other request. */
+  conversationId: string | null;
   goal: string;
   handoffId: string | null;
   askedBy: string;
@@ -67,6 +69,7 @@ export class InboxController {
       return {
         questionId: q.id,
         runId: q.runId,
+        conversationId: q.run?.conversationId ?? null,
         goal: q.run?.goal ?? q.prompt.slice(0, 300),
         handoffId: q.handoffId,
         askedBy: q.askedBy,

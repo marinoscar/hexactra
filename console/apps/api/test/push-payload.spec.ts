@@ -105,3 +105,50 @@ describe('push payloads of the console events', () => {
     expect(event(RUN_REMINDER_EVENT).channels).not.toContain('email');
   });
 });
+
+// A run a chat started (#488): its requests are answered in the chat, and its
+// result is in the thread, so that is where its notifications lead.
+describe('notifications of a chat run', () => {
+  const CHAT = '88888888-8888-4888-8888-888888888888';
+  const sent: { event: string; data: Record<string, unknown> }[] = [];
+  const notifications = { notify: async (event: string, _userId: string, payload: Record<string, unknown>) => void sent.push({ event, data: payload }) };
+  const notifier = new RunNotifier({ get: () => 'https://console.example.test/' } as never, notifications as never, undefined as never, undefined as never);
+  const last = () => sent[sent.length - 1]!;
+  const link = (e: { event: string; data: Record<string, unknown> }) => reg(e.event).browserTemplate!(e.data as never).link;
+  beforeEach(() => void (sent.length = 0));
+
+  it('a request leads to the chat, with the run the buttons act on; its email link too', async () => {
+    await notifier.needsYou('user-1', { id: RUN, goal: 'Book two seats', conversationId: CHAT, handoffId: null }, 'Enter the code sent to your phone', 'code', 'secret');
+    expect(last().data).toMatchObject({ runId: RUN, conversationId: CHAT, inboxUrl: `https://console.example.test/chat/${CHAT}` });
+    expect(link(last())).toBe(`/chat/${CHAT}?run=${RUN}`);
+    // With the buttons' token, the link still carries what the service worker reads: `run` and `a`.
+    expect(reg(RUN_NEEDS_YOU_EVENT).browserTemplate!({ ...last().data, actionToken: 'tok.sig' } as never).link).toBe(`/chat/${CHAT}?run=${RUN}&a=tok.sig`);
+    expect(reg(RUN_NEEDS_YOU_EVENT).browserTemplate!({ runId: RUN, conversationId: CHAT } as never).body).toBe('Answer its request in the chat.');
+  });
+
+  it('a reminder leads to the chat', async () => {
+    await notifier.reminder('user-1', { id: RUN, goal: 'Book two seats', conversationId: CHAT, handoffId: null }, { prompt: 'Enter the code', kind: 'code', input: 'secret' }, { expiresAt: null, reminderCount: 0, now: new Date() });
+    expect(last().event).toBe(RUN_REMINDER_EVENT);
+    expect(link(last())).toBe(`/chat/${CHAT}?run=${RUN}`);
+    // One notification per run on the device, whatever page it opens.
+    expect(hexactraPushPayload(event(RUN_REMINDER_EVENT), last().data as never)).toMatchObject({ tag: `run-${RUN}`, urgency: 'high' });
+  });
+
+  it('a finished run leads to the chat, where its result is', async () => {
+    await notifier.finished('user-1', { id: RUN, goal: 'Book two seats', conversationId: CHAT }, 'succeeded', 'Booked F7 and F8');
+    expect(last().data).toMatchObject({ conversationId: CHAT, runUrl: `https://console.example.test/chat/${CHAT}` });
+    expect(link(last())).toBe(`/chat/${CHAT}`);
+  });
+
+  it('every other run still leads to the Inbox and to its own page', async () => {
+    for (const conversationId of [undefined, null]) {
+      await notifier.needsYou('user-1', { id: RUN, goal: 'Find a fare', conversationId, handoffId: null }, 'Enter the code', 'code', 'secret');
+      expect(last().data).not.toHaveProperty('conversationId');
+      expect(last().data).toMatchObject({ inboxUrl: 'https://console.example.test/inbox' });
+      expect(link(last())).toBe(`/inbox?run=${RUN}`);
+      await notifier.finished('user-1', { id: RUN, goal: 'Find a fare', conversationId }, 'failed', 'No fare');
+      expect(last().data).toMatchObject({ runUrl: `https://console.example.test/runs/${RUN}` });
+      expect(link(last())).toBe(`/runs/${RUN}`);
+    }
+  });
+});

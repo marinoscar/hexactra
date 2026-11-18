@@ -15052,6 +15052,8 @@ export interface components {
             /** Format: uuid */
             questionId: string;
             runId: string | null;
+            /** @description The chat whose run asks (#488): the request is answered in that chat. Null for every other request. */
+            conversationId: string | null;
             goal: string;
             handoffId: string | null;
             askedBy: string;

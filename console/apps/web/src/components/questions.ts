@@ -65,6 +65,8 @@ export interface InboxItem extends AskedQuestion {
   questionId: string;
   /** Null for a free-standing question (no browser run). */
   runId: string | null;
+  /** The chat whose run asks (#488): the request is answered there. Null for every other request. */
+  conversationId?: string | null;
   goal: string;
   handoffId: string | null;
   askedBy: string;
