@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Platform 0.1.0-next.39: a client's connections on the OAuth clients page** (#535, console 1.55.2). Administration → OAuth clients → a client → **Details** now lists every user's connection to that client (scopes, organization, connected, last used, active or revoked with the reason) and revokes one after a confirmation, next to the existing **Disconnect** on External AI apps. Also from the platform: a deterministic storage conformance check and a longer registry wait in its releases.
+
 ### Fixed
 
 - **Per-address limits count each caller again behind the stack's nginx** (#530, console 1.54.1). The API built Fastify without `trustProxy`, so every caller reached it from nginx's container address and the unauthenticated MCP limit and the platform OAuth server's authorize and register limits shared one bucket for everyone. New deployment variable `TRUST_PROXY` (`infra/compose/app.env.example`): empty (the default) trusts loopback, link-local and private ranges, `false` trusts no proxy, otherwise a comma-separated list of IPs or CIDRs; `true`, a hop count (Fastify 5 ignores one) or a malformed entry stops the API at boot. New Doctor check `mcp.trust_proxy` warns when it is `false` while `APP_URL` is public HTTPS. Docs: `docs/runbooks/public-exposure.md` section 4, the README "Enable it" checklist, `docs/mcp.md` "Rate limits".

@@ -163,7 +163,7 @@ Every run the app starts shows **Started by** with the app's name in your consol
 | Where | Pause | Disconnect |
 |---|---|---|
 | Your console | Settings → **AI apps** → the app → **Paused**: it cannot start runs or browser sessions; runs already working continue. Switch it off to resume. | Settings → **AI apps** → the app → **Disconnect**. Its next call fails and the client offers to sign in again. |
-| An administrator | Administration → **External AI apps** → **Kill switches**: stop every OAuth app (or every personal access token over MCP) at once; `hexactra mcp disable`. | Administration → **External AI apps** → connected apps → **Disconnect** (any user's app). |
+| An administrator | Administration → **External AI apps** → **Kill switches**: stop every OAuth app (or every personal access token over MCP) at once; `hexactra mcp disable`. | Administration → **External AI apps** → connected apps → **Disconnect** (any user's app), or Administration → **OAuth clients** → the client → **Details** → **Connections** → **Revoke** (one user's connection to that client). |
 | Claude | + → **Connectors** in a chat turns it off for that conversation. | Customize → **Connectors** → Hexactra → **Remove** (or the three-dot menu). |
 | ChatGPT | Switch Hexactra off in the chat's tools menu (*verify on screen*). | Settings → Apps & Connectors → Hexactra → disconnect or delete (*verify on screen*). |
 | Claude Code | — | `claude mcp remove hexactra` |
