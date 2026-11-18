@@ -169,3 +169,23 @@ What agents ask people is in the console's `questions` table ([../questions.md](
 - **Action tokens.** Notification buttons (Stop run, Approve, Remind me, a question's quick answers) and webhook answer tokens are single use, recorded in `action_tokens` as sha256 only. `questions.expire` deletes tokens that expired more than a day ago, so the table stays small; nothing else needs purging. A leaked token answers one question (or acts on one run) once, before it expires, and nothing else.
 - **Webhook answer tokens.** Only questions with a public answer (choice, multi_choice, text, number, a low-risk confirm) get one, in the `answer` block of `questions.question.asked`. To stop webhook answers for a user, remove their webhook endpoints: tokens already sent keep working until their question settles or expires.
 - **Secrets.** A code or password typed into a question is relayed to the fabric and typed into the page by the fabric's `type_secret` action. It is never stored by the console, never returned by an API, and the fabric keeps it in memory for at most 10 minutes. Restoring a backup cannot bring one back.
+
+## 8. External AI apps
+
+ChatGPT, Claude and agent frameworks call the console's MCP endpoint (`/api/mcp`). Putting the console on the internet for them: [public-exposure.md](public-exposure.md); the threat model: [../security-hosted-clients.md](../security-hosted-clients.md).
+
+- **The kill switch.** Administration → **External AI apps** → "AI apps signed in with OAuth" off, or on the box:
+
+  ```bash
+  hexactra mcp status          # the switches, the public URL check, how many apps are connected
+  hexactra mcp disable         # every app signed in with OAuth gets 503 on /api/mcp, within a few seconds
+  hexactra mcp disable --pat   # the same for personal access tokens over MCP (REST with a token still works)
+  hexactra mcp enable [--pat|--all]
+  ```
+
+  It is the `mcp` system settings (`externalAppsEnabled`, `patMcpEnabled`), read through a cache of at most five seconds. The console and personal access tokens on REST are never affected; runs already working keep going (stop them from Runs). Doctor `mcp.kill_switch` reports both switches.
+- **Rate limits.** Same page: requests per minute per connection (120), write calls per app (30), per user (600) and unauthenticated per address (30); refusals are `429` with `Retry-After`, counted by `app.mcp.rate_limited` (Administration → Telemetry). nginx adds a coarse per-address fence (`infra/nginx/app.d/{http,server,locations}/mcp*.conf`). One API process counts in memory; several replicas need a shared limiter ([public-exposure.md, section 4](public-exposure.md#4-the-limits-that-apply)).
+- **Sensitive actions.** When an app signed in with OAuth drives a browser, a secret, a page with a password or payment field, a host on **Sensitive sites**, the desktop or network-reaching JavaScript waits for the owner's approval in their inbox (a high-risk confirm, `system:sensitive-action`). The owner can turn it off per app (Settings → AI apps → the app).
+- **The audit trail** is the table `mcp_activity`: one row per tool call from an OAuth app or a personal access token, and per refusal (kill switch, rate limit, step-up) and limit change. No typed text, script or result. Each user reads theirs on the app's page or `hexactra apps activity`; administrators read everyone's on External AI apps (`mcp_activity:read`, `GET /api/admin/mcp/activity`). The nightly job `mcp.activity.purge` (03:40, Administration → Jobs) deletes rows past the user's run retention (365 days at most); deleting a run keeps its activity rows and clears their run id.
+- **Every user's apps.** External AI apps → **Connected apps** lists every active grant with its user, scopes and last use; **Disconnect** revokes it (`oauth_clients:write`, recorded as `oauth:grant.revoke` by `admin` and in the user's activity). Doctor `mcp.high_risk_grants` counts grants holding `browser:evaluate`, `desktop:control` or `policies:write`.
+- **Doctor.** `mcp.endpoint` (an anonymous call gets the `401` challenge and its metadata document answers), `mcp.public_reachability` (OAuth on but `APP_URL` not public HTTPS), `mcp.exposure` (admin routes answer `200` without a credential through the public URL).

@@ -96,11 +96,13 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
         path: '/admin/settings/run-history',
         permission: 'system_settings:read',
       },
-      // Connected AI apps (#464): the ceilings of every user's per-app limits, the `mcp`
-      // namespace of the system settings document (GET /api/system-settings).
+      // External AI apps (#464, #465): the `mcp` namespace of the system settings document
+      // (GET /api/system-settings): the kill switches, the per-app ceilings and the rate limits,
+      // the sensitive sites; plus every user's connected apps and their activity, gated in the page
+      // (oauth_clients:read, mcp_activity:read). The route stays /admin/settings/ai-app-limits.
       {
-        title: 'AI app limits',
-        description: 'The most runs any connected AI app (ChatGPT, Claude, ...) may have at once and start per day.',
+        title: 'External AI apps',
+        description: 'ChatGPT, Claude and agent frameworks: the kill switch, rate limits and per-app ceilings, sensitive sites, every connected app and what they did.',
         Icon: SmartToyOutlinedIcon,
         path: '/admin/settings/ai-app-limits',
         permission: 'system_settings:read',

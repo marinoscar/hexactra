@@ -1,0 +1,54 @@
+// The audit trail of external AI apps (#465): one sanitized, durable row per
+// `tools/call` from an app signed in with OAuth or a personal access token,
+// and one per refusal the console makes on its own (kill switch, rate limit)
+// and per change of an app's limits. NOT telemetry: OpenTelemetry is not the
+// audit trail. A row never holds typed text, JavaScript source (only its
+// SHA-256 and length), a result, a token or a secret: `detail` holds at most
+// the goal's first 200 characters, a URL's host, a click's selector and a
+// script's digest. Purged with the run retention rule (mcp-activity.purge).
+// Registered in the user-owned data registry (src/mcp/mcp-activity.ownership.ts).
+
+model McpActivity {
+  id             String   @id @default(uuid()) @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  userId         String   @map("user_id") @db.Uuid
+  /// The organization the request acted in, when known. No foreign key: the row is the user's.
+  orgId          String?  @map("org_id") @db.Uuid
+  /// `tool_call`, `step_up`, `rate_limited`, `kill_switch`, `app_settings`, `admin_disconnect`.
+  event          String   @default("tool_call") @db.VarChar(32)
+  /// `oauth` or `pat` (the credentials whose calls are audited); `jwt` for a change made in the console.
+  credentialKind String   @map("credential_kind") @db.VarChar(16)
+  /// `oauth_clients.id` of an OAuth app; null for a personal access token.
+  clientId       String?  @map("client_id") @db.Uuid
+  /// The app's display name, or the MCP `clientInfo.name` a token's client gave (self-asserted).
+  clientName     String?  @map("client_name") @db.VarChar(64)
+  grantId        String?  @map("grant_id") @db.Uuid
+  /// The tool called (a name from the closed registry); null for an event that is not a call.
+  tool           String?  @db.VarChar(64)
+  /// `read`, `write` or `destructive`.
+  effect         String?  @db.VarChar(16)
+  runId          String?  @map("run_id") @db.Uuid
+  taskId         String?  @map("task_id") @db.Uuid
+  /// A browser session (its run id).
+  sessionId      String?  @map("session_id") @db.Uuid
+  questionId     String?  @map("question_id") @db.Uuid
+  /// `ok`, `error`, `still_working`, `confirmation_required`, `refused`.
+  outcome        String   @db.VarChar(32)
+  /// The stable error code of a failed call (`APP_RUN_LIMIT`, `SITE_NOT_ALLOWED`, ...).
+  errorCode      String?  @map("error_code") @db.VarChar(64)
+  durationMs     Int      @default(0) @map("duration_ms")
+  requestId      String?  @map("request_id") @db.VarChar(100)
+  /// Sanitized: `{ goal?: first 200 chars, host?, selector?, scriptSha256?, scriptLength?, keyKind?, changed? }`.
+  detail         Json?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([clientId, createdAt])
+  @@index([createdAt])
+  @@map("mcp_activity")
+}
+
+extend model User {
+  mcpActivity McpActivity[]
+}

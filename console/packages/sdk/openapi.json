@@ -32109,6 +32109,560 @@
         "description": "**Requires:** authentication only — any signed-in user may call this."
       }
     },
+    "/api/connected-apps/activity": {
+      "get": {
+        "description": "Your audit trail of the MCP endpoint, newest first: one row per tool call from an app signed in with OAuth or a personal access token, and per refusal (kill switch, rate limit, step-up) and per change of an app's limits. Sanitized: never typed text, a script or a result. Keyset-paged with `cursor`.\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "operationId": "mcpAdmin_own",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": false,
+            "in": "query",
+            "description": "Only this OAuth app (`oauth_clients.id`)",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "tool",
+            "required": false,
+            "in": "query",
+            "description": "Only this tool, e.g. browser_click",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "effect",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "read",
+                "write",
+                "destructive"
+              ]
+            }
+          },
+          {
+            "name": "outcome",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ok",
+                "error",
+                "still_working",
+                "confirmation_required",
+                "refused"
+              ]
+            }
+          },
+          {
+            "name": "credentialKind",
+            "required": false,
+            "in": "query",
+            "description": "`oauth`: apps signed in with OAuth; `pat`: personal access tokens",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "oauth",
+                "pat",
+                "jwt"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Rows per page (default 50, at most 200)",
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` of the previous page",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ActivityPageResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "What your AI apps did",
+        "tags": [
+          "Connected apps"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "runs:read"
+          ]
+        }
+      }
+    },
+    "/api/admin/mcp/activity": {
+      "get": {
+        "description": "The audit trail of the MCP endpoint for every user, filterable like your own and by user.\n\n**Requires:** authentication, plus permission `mcp_activity:read`.",
+        "operationId": "mcpAdmin_all",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": false,
+            "in": "query",
+            "description": "Only this OAuth app (`oauth_clients.id`)",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "tool",
+            "required": false,
+            "in": "query",
+            "description": "Only this tool, e.g. browser_click",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "effect",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "read",
+                "write",
+                "destructive"
+              ]
+            }
+          },
+          {
+            "name": "outcome",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ok",
+                "error",
+                "still_working",
+                "confirmation_required",
+                "refused"
+              ]
+            }
+          },
+          {
+            "name": "credentialKind",
+            "required": false,
+            "in": "query",
+            "description": "`oauth`: apps signed in with OAuth; `pat`: personal access tokens",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "oauth",
+                "pat",
+                "jwt"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Rows per page (default 50, at most 200)",
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "`nextCursor` of the previous page",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": false,
+            "in": "query",
+            "description": "Only this user",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ActivityPageResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Every user's AI app activity (Admin)",
+        "tags": [
+          "Connected apps"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "mcp_activity:read"
+          ]
+        }
+      }
+    },
+    "/api/admin/mcp/status": {
+      "get": {
+        "description": "The two kill switches, whether the OAuth server is on, whether APP_URL is a public https address, and how many apps are connected.\n\n**Requires:** authentication, plus permission `system_settings:read`.",
+        "operationId": "mcpAdmin_status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/McpStatusResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "External AI apps: status (Admin)",
+        "tags": [
+          "Connected apps"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:read"
+          ]
+        }
+      }
+    },
+    "/api/admin/connected-apps": {
+      "get": {
+        "description": "The active OAuth grants of every user: app, user, scopes, last use and runs in 30 days. Disconnect with DELETE /admin/connected-apps/grants/:grantId.\n\n**Requires:** authentication, plus permission `oauth_clients:read`.",
+        "operationId": "mcpAdmin_apps",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminConnectedAppListResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Every user's connected AI apps (Admin)",
+        "tags": [
+          "Connected apps"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "oauth_clients:read"
+          ]
+        }
+      }
+    },
+    "/api/admin/connected-apps/grants/{grantId}": {
+      "delete": {
+        "description": "Revokes the grant and every token of it (`revoked_reason: admin`): the app is signed out on its next call. The platform audits the revocation (`oauth:grant.revoke`, `by: admin`); the user's AI app activity records it too.\n\n**Requires:** authentication, plus permission `oauth_clients:write`.",
+        "operationId": "mcpAdmin_disconnect",
+        "parameters": [
+          {
+            "name": "grantId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Disconnect a user's AI app (Admin)",
+        "tags": [
+          "Connected apps"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "oauth_clients:write"
+          ]
+        }
+      }
+    },
     "/api/home/summary": {
       "get": {
         "description": "What needs the user, what is running, what runs next, what just happened, the week and the machines. Any signed-in user may call it; a block is built only when the caller holds its permission (`runs:read`: `needsYou`, `liveRuns`, `recentRuns`, `week`; `tasks:read`: `upcoming`; `fleet:read`: `fleet`) and is `null` otherwise, never an empty list. It never carries a question's answer, a secret, a transcript, a policy snapshot, step arguments or a viewer URL. The fleet comes from the fabric with a 1.5 s limit: a fabric that is slow or down answers `fleet.stale: true` with the last hosts read instead of failing the request.\n\n**Requires:** authentication only — any signed-in user may call this.",
@@ -38127,6 +38681,9 @@
               "APP_POLICY_NOT_ALLOWED",
               "APP_DOMAIN_NOT_ALLOWED",
               "APP_NOT_FOUND",
+              "CONFIRMATION_REQUIRED",
+              "CONFIRMATION_PENDING",
+              "CONFIRMATION_DENIED",
               "WEBHOOK_NOT_FOUND",
               "WEBHOOK_DELIVERY_NOT_FOUND",
               "WEBHOOK_URL_INVALID",
@@ -41930,6 +42487,42 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 1000
+              },
+              "externalAppsEnabled": {
+                "type": "boolean"
+              },
+              "patMcpEnabled": {
+                "type": "boolean"
+              },
+              "rateLimitPerCredential": {
+                "type": "integer",
+                "minimum": 10,
+                "maximum": 6000
+              },
+              "rateLimitWritesPerApp": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 600
+              },
+              "rateLimitUnauthenticated": {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 600
+              },
+              "rateLimitPerUser": {
+                "type": "integer",
+                "minimum": 10,
+                "maximum": 20000
+              },
+              "sensitiveHosts": {
+                "maxItems": 200,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 253,
+                  "pattern": "^[a-z0-9.-]+$"
+                }
               }
             },
             "required": [
@@ -42959,6 +43552,42 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 1000
+              },
+              "externalAppsEnabled": {
+                "type": "boolean"
+              },
+              "patMcpEnabled": {
+                "type": "boolean"
+              },
+              "rateLimitPerCredential": {
+                "type": "integer",
+                "minimum": 10,
+                "maximum": 6000
+              },
+              "rateLimitWritesPerApp": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 600
+              },
+              "rateLimitUnauthenticated": {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 600
+              },
+              "rateLimitPerUser": {
+                "type": "integer",
+                "minimum": 10,
+                "maximum": 20000
+              },
+              "sensitiveHosts": {
+                "maxItems": 200,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 253,
+                  "pattern": "^[a-z0-9.-]+$"
+                }
               }
             },
             "required": [
@@ -44067,6 +44696,42 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 1000
+              },
+              "externalAppsEnabled": {
+                "type": "boolean"
+              },
+              "patMcpEnabled": {
+                "type": "boolean"
+              },
+              "rateLimitPerCredential": {
+                "type": "integer",
+                "minimum": 10,
+                "maximum": 6000
+              },
+              "rateLimitWritesPerApp": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 600
+              },
+              "rateLimitUnauthenticated": {
+                "type": "integer",
+                "minimum": 5,
+                "maximum": 600
+              },
+              "rateLimitPerUser": {
+                "type": "integer",
+                "minimum": 10,
+                "maximum": 20000
+              },
+              "sensitiveHosts": {
+                "maxItems": 200,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 253,
+                  "pattern": "^[a-z0-9.-]+$"
+                }
               }
             }
           },
@@ -66664,6 +67329,10 @@
                   "type": "boolean",
                   "description": "Ask before risky steps (purchases, submissions) even when the task does not."
                 },
+                "confirmSensitiveActions": {
+                  "type": "boolean",
+                  "description": "Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins."
+                },
                 "paused": {
                   "type": "boolean",
                   "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -66677,6 +67346,7 @@
                 "dailyRunLimit",
                 "dailyCostLimitUsd",
                 "confirmPurchases",
+                "confirmSensitiveActions",
                 "paused"
               ]
             },
@@ -67021,6 +67691,10 @@
                 "type": "boolean",
                 "description": "Ask before risky steps (purchases, submissions) even when the task does not."
               },
+              "confirmSensitiveActions": {
+                "type": "boolean",
+                "description": "Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins."
+              },
               "paused": {
                 "type": "boolean",
                 "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -67034,6 +67708,7 @@
               "dailyRunLimit",
               "dailyCostLimitUsd",
               "confirmPurchases",
+              "confirmSensitiveActions",
               "paused"
             ]
           },
@@ -67146,6 +67821,10 @@
             "type": "boolean",
             "description": "Ask before risky steps (purchases, submissions) even when the task does not."
           },
+          "confirmSensitiveActions": {
+            "type": "boolean",
+            "description": "Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins."
+          },
           "paused": {
             "type": "boolean",
             "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -67159,6 +67838,7 @@
           "dailyRunLimit",
           "dailyCostLimitUsd",
           "confirmPurchases",
+          "confirmSensitiveActions",
           "paused"
         ]
       },
@@ -67218,6 +67898,9 @@
             ]
           },
           "confirmPurchases": {
+            "type": "boolean"
+          },
+          "confirmSensitiveActions": {
             "type": "boolean"
           },
           "paused": {
@@ -74001,6 +74684,343 @@
           "token",
           "action"
         ]
+      },
+      "ActivityPageResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "userId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "event": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "tool_call",
+                        "step_up",
+                        "rate_limited",
+                        "kill_switch",
+                        "app_settings",
+                        "admin_disconnect"
+                      ]
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "description": "tool_call, step_up, rate_limited, kill_switch, app_settings, admin_disconnect"
+                },
+                "credentialKind": {
+                  "type": "string",
+                  "description": "oauth, pat, or jwt (a change made in the console)"
+                },
+                "clientId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "clientName": {
+                  "description": "The app; for a personal access token the name its MCP client gave (self-asserted)",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "tool": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "effect": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "runId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "taskId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sessionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "questionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "outcome": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "ok",
+                        "error",
+                        "still_working",
+                        "confirmation_required",
+                        "refused"
+                      ]
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "errorCode": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "durationMs": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "requestId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "detail": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string"
+                      },
+                      "additionalProperties": {}
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Sanitized: the goal's first 200 characters, a URL's host, a click's selector, a script's sha256 and length; never typed text, a script or a result"
+                }
+              },
+              "required": [
+                "id",
+                "createdAt",
+                "userId",
+                "event",
+                "credentialKind",
+                "clientId",
+                "clientName",
+                "tool",
+                "effect",
+                "runId",
+                "taskId",
+                "sessionId",
+                "questionId",
+                "outcome",
+                "errorCode",
+                "durationMs",
+                "requestId",
+                "detail"
+              ]
+            }
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "McpStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "externalAppsEnabled": {
+            "type": "boolean",
+            "description": "The kill switch of apps signed in with OAuth (`mcp.externalAppsEnabled`)"
+          },
+          "patMcpEnabled": {
+            "type": "boolean",
+            "description": "The switch of personal access tokens over MCP (`mcp.patMcpEnabled`)"
+          },
+          "oauthEnabled": {
+            "type": "boolean",
+            "description": "Whether the OAuth server is on (Administration → OAuth clients)"
+          },
+          "mcpUrl": {
+            "type": "string",
+            "description": "`<APP_URL>/api/mcp`"
+          },
+          "publicHttps": {
+            "type": "boolean",
+            "description": "Whether APP_URL is an https:// address on a public host name (not loopback, not a private address)"
+          },
+          "connectedApps": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Active OAuth grants to the MCP endpoint, every user"
+          },
+          "connectedUsers": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "highRiskGrants": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Active grants holding browser:evaluate, desktop:control or policies:write"
+          }
+        },
+        "required": [
+          "externalAppsEnabled",
+          "patMcpEnabled",
+          "oauthEnabled",
+          "mcpUrl",
+          "publicHttps",
+          "connectedApps",
+          "connectedUsers",
+          "highRiskGrants"
+        ]
+      },
+      "AdminConnectedAppListResponseDto": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "grantId": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "description": "What Disconnect revokes"
+            },
+            "clientId": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "name": {
+              "type": "string",
+              "description": "The client's host, or its own name for a local app"
+            },
+            "displayName": {
+              "type": "string"
+            },
+            "user": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "displayName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "email",
+                "displayName"
+              ]
+            },
+            "scopes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "A short name: \"Delegate\", \"Tasks\", \"Inbox\", \"Drive browser\", \"JavaScript\", \"Desktop\", \"Policies\"."
+                  },
+                  "consent": {
+                    "type": "string",
+                    "description": "What the consent page said"
+                  },
+                  "risk": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "elevated",
+                      "high"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "label",
+                  "consent",
+                  "risk"
+                ]
+              }
+            },
+            "connectedAt": {
+              "type": "string"
+            },
+            "lastUsedAt": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "runs30d": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "grantId",
+            "clientId",
+            "name",
+            "displayName",
+            "user",
+            "scopes",
+            "connectedAt",
+            "lastUsedAt",
+            "runs30d"
+          ]
+        }
       },
       "HomeSummaryResponseDto": {
         "type": "object",

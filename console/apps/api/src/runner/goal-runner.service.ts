@@ -38,6 +38,7 @@ import { readAppLimits, readSnapshot, type RunPolicySnapshot } from '../policies
 import { PrismaService } from '../prisma/prisma.service';
 import { questionSpecSchema, type QuestionConstraints, type QuestionInputType, type QuestionOption, type QuestionResponse, type QuestionSpec } from '../questions/questions.contract';
 import { QuestionsService } from '../questions/questions.service';
+import { withAppOrigin } from '../connected-apps/app-origin';
 import { redactActionArgs, redactUrl } from '../tasks/redact';
 import { RunNotifier } from '../tasks/run-notifier';
 import { TasksService } from '../tasks/tasks.service';
@@ -658,7 +659,9 @@ export class GoalRunnerService {
      * Open a handoff for a person and pause the run on it: the one path `request_human` and a stall that asks
      * for help share. Every stall counter starts over (#405). False when no person could be asked.
      */
-    const askPerson = async (spec: QuestionSpec, started: number): Promise<boolean> => {
+    const askPerson = async (asked: QuestionSpec, started: number): Promise<boolean> => {
+      // A confirmation of a run an AI app started names the app (#465), so the person sees where it came from.
+      const spec = withAppOrigin(asked, run);
       try {
         const created = await session.openHandoff(sessionId!, {
           kind: spec.kind,

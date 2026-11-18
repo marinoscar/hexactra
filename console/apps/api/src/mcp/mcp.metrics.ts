@@ -8,6 +8,9 @@ import { AppMetricsService } from '@marinoscar/platform-api/host';
 import { registerAppMetrics, type AppMetricDef } from '@marinoscar/platform-api/otel-core';
 
 import { CLIENT_BUCKETS, SUPPORTED_VERSIONS } from './mcp.protocol';
+
+/** The kinds of rate-limit key (mcp.rate-limit.ts), as the metric labels them. */
+const RATE_KEY_KINDS = ['credential', 'writes', 'user', 'unauthenticated'] as const;
 import { MCP_TOOLS } from './mcp.tools';
 
 /** Methods counted by name; anything else is `other`. */
@@ -45,6 +48,17 @@ export const MCP_METRICS: readonly AppMetricDef[] = [
       is_error: { kind: 'enum', values: OUTCOME },
     },
   },
+  {
+    key: 'mcpRateLimited',
+    name: 'app.mcp.rate_limited',
+    kind: 'counter',
+    unit: '{request}',
+    description: 'Requests to /api/mcp refused with 429, by the kind of key that was over its limit and the client bucket (#465).',
+    attributes: {
+      key_kind: { kind: 'enum', values: RATE_KEY_KINDS },
+      client: { kind: 'enum', values: CLIENT_BUCKETS },
+    },
+  },
 ];
 registerAppMetrics(MCP_METRICS);
 
@@ -61,6 +75,10 @@ export class McpMetrics {
       credential: labels.credential,
       is_error: String(labels.isError),
     });
+  }
+
+  rateLimited(labels: { keyKind: string; client: string }): void {
+    this.metrics?.add('mcpRateLimited', 1, { key_kind: labels.keyKind, client: labels.client });
   }
 
   tool(labels: { tool: string; client: string; credential: string; isError: boolean }, seconds: number): void {

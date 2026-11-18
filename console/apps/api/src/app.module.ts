@@ -10,6 +10,7 @@ import configuration from './config/configuration';
 import { BrowserModule } from './browser/browser.module';
 import { FabricModule } from './fabric/fabric.module';
 import { McpModule } from './mcp/mcp.module';
+import { McpSecurityModule } from './mcp/mcp-security.module';
 import { FleetModule } from './fleet/fleet.module';
 import { HomeModule } from './home/home.module';
 import { webhooksModule } from './platform/webhooks/webhooks.config';
@@ -50,6 +51,7 @@ import { PrismaModule } from './prisma/prisma.service';
     TasksModule,
     QuestionsModule,
     BrowserModule,
+    McpSecurityModule,
     McpModule,
     HomeModule,
     // The goal runner needs the AI slice (packages/shared/slices.json).

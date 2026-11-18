@@ -322,6 +322,10 @@ export const RPC = {
   HEADER_MISMATCH: -32020,
   /** 2026-07-28: the request's protocol version is not supported. */
   UNSUPPORTED_PROTOCOL_VERSION: -32022,
+  /** Implementation-defined server error (#465): too many requests; `data.retryAfterS` is the wait. */
+  RATE_LIMITED: -32029,
+  /** Implementation-defined server error (#465): the administrator turned this kind of caller off. */
+  DISABLED: -32030,
 } as const;
 
 export type RpcId = string | number | null;

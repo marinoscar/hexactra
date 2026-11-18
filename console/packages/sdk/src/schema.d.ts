@@ -6258,6 +6258,116 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connected-apps/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What your AI apps did
+         * @description Your audit trail of the MCP endpoint, newest first: one row per tool call from an app signed in with OAuth or a personal access token, and per refusal (kill switch, rate limit, step-up) and per change of an app's limits. Sanitized: never typed text, a script or a result. Keyset-paged with `cursor`.
+         *
+         *     **Requires:** authentication, plus permission `runs:read`.
+         */
+        get: operations["mcpAdmin_own"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/mcp/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every user's AI app activity (Admin)
+         * @description The audit trail of the MCP endpoint for every user, filterable like your own and by user.
+         *
+         *     **Requires:** authentication, plus permission `mcp_activity:read`.
+         */
+        get: operations["mcpAdmin_all"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/mcp/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * External AI apps: status (Admin)
+         * @description The two kill switches, whether the OAuth server is on, whether APP_URL is a public https address, and how many apps are connected.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:read`.
+         */
+        get: operations["mcpAdmin_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/connected-apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every user's connected AI apps (Admin)
+         * @description The active OAuth grants of every user: app, user, scopes, last use and runs in 30 days. Disconnect with DELETE /admin/connected-apps/grants/:grantId.
+         *
+         *     **Requires:** authentication, plus permission `oauth_clients:read`.
+         */
+        get: operations["mcpAdmin_apps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/connected-apps/grants/{grantId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect a user's AI app (Admin)
+         * @description Revokes the grant and every token of it (`revoked_reason: admin`): the app is signed out on its next call. The platform audits the revocation (`oauth:grant.revoke`, `by: admin`); the user's AI app activity records it too.
+         *
+         *     **Requires:** authentication, plus permission `oauth_clients:write`.
+         */
+        delete: operations["mcpAdmin_disconnect"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/home/summary": {
         parameters: {
             query?: never;
@@ -7398,6 +7508,9 @@ export interface components {
              * @example APP_POLICY_NOT_ALLOWED
              * @example APP_DOMAIN_NOT_ALLOWED
              * @example APP_NOT_FOUND
+             * @example CONFIRMATION_REQUIRED
+             * @example CONFIRMATION_PENDING
+             * @example CONFIRMATION_DENIED
              * @example WEBHOOK_NOT_FOUND
              * @example WEBHOOK_DELIVERY_NOT_FOUND
              * @example WEBHOOK_URL_INVALID
@@ -8521,6 +8634,13 @@ export interface components {
                 advertiseStepUpTools: boolean;
                 maxConcurrentRunsPerApp?: number;
                 maxDailyRunsPerApp?: number;
+                externalAppsEnabled?: boolean;
+                patMcpEnabled?: boolean;
+                rateLimitPerCredential?: number;
+                rateLimitWritesPerApp?: number;
+                rateLimitUnauthenticated?: number;
+                rateLimitPerUser?: number;
+                sensitiveHosts?: string[];
             };
             notes: {
                 archiveAfterDays: number;
@@ -8742,6 +8862,13 @@ export interface components {
                 advertiseStepUpTools: boolean;
                 maxConcurrentRunsPerApp?: number;
                 maxDailyRunsPerApp?: number;
+                externalAppsEnabled?: boolean;
+                patMcpEnabled?: boolean;
+                rateLimitPerCredential?: number;
+                rateLimitWritesPerApp?: number;
+                rateLimitUnauthenticated?: number;
+                rateLimitPerUser?: number;
+                sensitiveHosts?: string[];
             };
             notes?: {
                 archiveAfterDays: number;
@@ -8970,6 +9097,13 @@ export interface components {
                 advertiseStepUpTools?: boolean;
                 maxConcurrentRunsPerApp?: number;
                 maxDailyRunsPerApp?: number;
+                externalAppsEnabled?: boolean;
+                patMcpEnabled?: boolean;
+                rateLimitPerCredential?: number;
+                rateLimitWritesPerApp?: number;
+                rateLimitUnauthenticated?: number;
+                rateLimitPerUser?: number;
+                sensitiveHosts?: string[];
             };
             notes?: {
                 archiveAfterDays?: number;
@@ -13762,6 +13896,8 @@ export interface components {
                 dailyCostLimitUsd: number | null;
                 /** @description Ask before risky steps (purchases, submissions) even when the task does not. */
                 confirmPurchases: boolean;
+                /** @description Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins. */
+                confirmSensitiveActions: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
             };
@@ -13853,6 +13989,8 @@ export interface components {
                 dailyCostLimitUsd: number | null;
                 /** @description Ask before risky steps (purchases, submissions) even when the task does not. */
                 confirmPurchases: boolean;
+                /** @description Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins. */
+                confirmSensitiveActions: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
             };
@@ -13881,6 +14019,8 @@ export interface components {
             dailyCostLimitUsd: number | null;
             /** @description Ask before risky steps (purchases, submissions) even when the task does not. */
             confirmPurchases: boolean;
+            /** @description Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins. */
+            confirmSensitiveActions: boolean;
             /** @description Refuse new runs and sessions from this app without disconnecting it. */
             paused: boolean;
         };
@@ -13892,6 +14032,7 @@ export interface components {
             dailyRunLimit?: number;
             dailyCostLimitUsd?: number | null;
             confirmPurchases?: boolean;
+            confirmSensitiveActions?: boolean;
             paused?: boolean;
         };
         TaskDetailResponseDto: {
@@ -15486,6 +15627,84 @@ export interface components {
             /** @enum {string} */
             action: "cancel" | "approve" | "snooze" | "answer-0" | "answer-1";
         };
+        ActivityPageResponseDto: {
+            items: {
+                /** Format: uuid */
+                id: string;
+                createdAt: string;
+                /** Format: uuid */
+                userId: string;
+                /** @description tool_call, step_up, rate_limited, kill_switch, app_settings, admin_disconnect */
+                event: ("tool_call" | "step_up" | "rate_limited" | "kill_switch" | "app_settings" | "admin_disconnect") | string;
+                /** @description oauth, pat, or jwt (a change made in the console) */
+                credentialKind: string;
+                clientId: string | null;
+                /** @description The app; for a personal access token the name its MCP client gave (self-asserted) */
+                clientName: string | null;
+                tool: string | null;
+                effect: string | null;
+                runId: string | null;
+                taskId: string | null;
+                sessionId: string | null;
+                questionId: string | null;
+                outcome: ("ok" | "error" | "still_working" | "confirmation_required" | "refused") | string;
+                errorCode: string | null;
+                durationMs: number;
+                requestId: string | null;
+                /** @description Sanitized: the goal's first 200 characters, a URL's host, a click's selector, a script's sha256 and length; never typed text, a script or a result */
+                detail: {
+                    [key: string]: unknown;
+                } | null;
+            }[];
+            nextCursor: string | null;
+        };
+        McpStatusResponseDto: {
+            /** @description The kill switch of apps signed in with OAuth (`mcp.externalAppsEnabled`) */
+            externalAppsEnabled: boolean;
+            /** @description The switch of personal access tokens over MCP (`mcp.patMcpEnabled`) */
+            patMcpEnabled: boolean;
+            /** @description Whether the OAuth server is on (Administration → OAuth clients) */
+            oauthEnabled: boolean;
+            /** @description `<APP_URL>/api/mcp` */
+            mcpUrl: string;
+            /** @description Whether APP_URL is an https:// address on a public host name (not loopback, not a private address) */
+            publicHttps: boolean;
+            /** @description Active OAuth grants to the MCP endpoint, every user */
+            connectedApps: number;
+            connectedUsers: number;
+            /** @description Active grants holding browser:evaluate, desktop:control or policies:write */
+            highRiskGrants: number;
+        };
+        AdminConnectedAppListResponseDto: {
+            /**
+             * Format: uuid
+             * @description What Disconnect revokes
+             */
+            grantId: string;
+            /** Format: uuid */
+            clientId: string;
+            /** @description The client's host, or its own name for a local app */
+            name: string;
+            displayName: string;
+            user: {
+                /** Format: uuid */
+                id: string;
+                email: string;
+                displayName: string | null;
+            };
+            scopes: {
+                id: string;
+                /** @description A short name: "Delegate", "Tasks", "Inbox", "Drive browser", "JavaScript", "Desktop", "Policies". */
+                label: string;
+                /** @description What the consent page said */
+                consent: string;
+                /** @enum {string} */
+                risk: "low" | "elevated" | "high";
+            }[];
+            connectedAt: string;
+            lastUsedAt: string | null;
+            runs30d: number;
+        }[];
         HomeSummaryResponseDto: {
             /** @description ISO 8601 timestamp */
             generatedAt: string;
@@ -36407,6 +36626,266 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpAdmin_own: {
+        parameters: {
+            query?: {
+                /** @description Only this OAuth app (`oauth_clients.id`) */
+                clientId?: string;
+                /** @description Only this tool, e.g. browser_click */
+                tool?: string;
+                effect?: "read" | "write" | "destructive";
+                outcome?: "ok" | "error" | "still_working" | "confirmation_required" | "refused";
+                /** @description `oauth`: apps signed in with OAuth; `pat`: personal access tokens */
+                credentialKind?: "oauth" | "pat" | "jwt";
+                /** @description Rows per page (default 50, at most 200) */
+                limit?: number;
+                /** @description `nextCursor` of the previous page */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ActivityPageResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpAdmin_all: {
+        parameters: {
+            query?: {
+                /** @description Only this OAuth app (`oauth_clients.id`) */
+                clientId?: string;
+                /** @description Only this tool, e.g. browser_click */
+                tool?: string;
+                effect?: "read" | "write" | "destructive";
+                outcome?: "ok" | "error" | "still_working" | "confirmation_required" | "refused";
+                /** @description `oauth`: apps signed in with OAuth; `pat`: personal access tokens */
+                credentialKind?: "oauth" | "pat" | "jwt";
+                /** @description Rows per page (default 50, at most 200) */
+                limit?: number;
+                /** @description `nextCursor` of the previous page */
+                cursor?: string;
+                /** @description Only this user */
+                userId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ActivityPageResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpAdmin_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["McpStatusResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpAdmin_apps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdminConnectedAppListResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    mcpAdmin_disconnect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                grantId: string;
+            };
             cookie?: never;
         };
         requestBody?: never;

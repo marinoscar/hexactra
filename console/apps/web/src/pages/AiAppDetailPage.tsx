@@ -7,6 +7,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ScopeChips } from '../aiApps/ScopeChips';
 import { draftErrors, draftPatch, toDraft, type AppLimits, type ConnectedApp, type LimitsDraft } from '../aiApps/types';
 import { AllowedSitesInput } from '../components/AllowedSitesInput';
+import { AppActivityList } from '../components/AppActivityList';
 import { RunList } from '../components/RunList';
 import { PolicySelect } from '../policies/PolicySelect';
 import { usePolicyCatalog } from '../policies/usePolicyCatalog';
@@ -16,7 +17,8 @@ import { AppName, usageText } from './AiAppsPage';
 /**
  * `/settings/ai-apps/:clientId` (#464): one AI app. What it may do (its
  * scopes with the consent text), its limits (policy, allowed policies, sites,
- * runs at once, runs and spend per day, confirm purchases), its recent runs,
+ * runs at once, runs and spend per day, confirm purchases, confirm sensitive
+ * browser actions, #465), its activity (the audit trail, #465), its recent runs,
  * Pause, and Disconnect (the platform's `DELETE /api/oauth/grants/:id`, the
  * same grant the "Connected apps" page revokes). A limit only narrows what the
  * app may do: it never widens a task's own allowed sites or confirmation.
@@ -245,6 +247,15 @@ export function AiAppDetailPage() {
             control={<Switch checked={draft.confirmPurchases} disabled={disabled} onChange={(e) => set({ confirmPurchases: e.target.checked })} />}
             label="Always ask me before purchases and other irreversible steps, even when the task does not"
           />
+          <Box>
+            <FormControlLabel
+              control={<Switch checked={draft.confirmSensitiveActions} disabled={disabled} onChange={(e) => set({ confirmSensitiveActions: e.target.checked })} />}
+              label="Ask me before its sensitive browser actions"
+            />
+            <Typography variant="caption" color="text.secondary" component="p" sx={{ ml: { xs: 0, sm: 6 } }}>
+              When it drives a browser itself: typing a code or password you gave, acting on a page with a password or payment field, opening a sensitive site, using the desktop, or running JavaScript that can send data away. You approve in your Hexactra inbox; the app cannot approve for you.
+            </Typography>
+          </Box>
         </Stack>
         {canWrite && (
           <Box sx={{ position: { xs: 'sticky', sm: 'static' }, bottom: aboveBottomBar(0), bgcolor: 'background.paper', pt: 2, display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -260,6 +271,18 @@ export function AiAppDetailPage() {
           </Box>
         )}
       </Paper>
+
+      {canReadRuns && (
+        <Box component="section" aria-labelledby="app-activity-title" sx={{ mb: 3 }}>
+          <Typography id="app-activity-title" variant="h6" component="h2" sx={{ mb: 0.5 }}>
+            Activity
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Every tool call this app made, and what was refused. Never what was typed, a script or a result.
+          </Typography>
+          <AppActivityList path="/connected-apps/activity" clientId={app.clientId} />
+        </Box>
+      )}
 
       {canReadRuns && (
         <Box component="section" aria-labelledby="app-runs-title">

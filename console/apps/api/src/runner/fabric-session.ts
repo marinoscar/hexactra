@@ -136,9 +136,14 @@ export class FabricSession {
     private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
   ) {}
 
-  async create(opts: { profile: string; hostId: string | null; label: string }): Promise<string> {
+  /**
+   * Opens a fabric session. `allowedDomains` (#465): the sites the session
+   * may visit, sent as `allowed_domains` so a fabric that enforces them does
+   * so on its side too; the console checks every navigation itself either way.
+   */
+  async create(opts: { profile: string; hostId: string | null; label: string; allowedDomains?: readonly string[] }): Promise<string> {
     const s = await this.fabric.request<{ id: string }>('POST', '/v1/sessions', {
-      body: { profile: opts.profile, label: opts.label, ...(opts.hostId ? { host_id: opts.hostId } : {}) },
+      body: { profile: opts.profile, label: opts.label, ...(opts.hostId ? { host_id: opts.hostId } : {}), ...(opts.allowedDomains?.length ? { allowed_domains: [...opts.allowedDomains] } : {}) },
     });
     return s.id;
   }

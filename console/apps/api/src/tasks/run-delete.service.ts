@@ -5,7 +5,7 @@
 //
 // What goes with a run: its steps and its questions (foreign keys with ON
 // DELETE CASCADE), the `lastRunId` of a schedule that pointed at it (a plain
-// column, cleared here) and the stored screenshots of its steps (removed after
+// column, cleared here; so are the run and session ids of AI app activity rows, #465) and the stored screenshots of its steps (removed after
 // the commit). Its cost and stop reason go too, so task spend and the alert
 // counts, which are computed from `runs`, drop accordingly.
 import { createHash } from 'node:crypto';
@@ -268,6 +268,11 @@ export class RunDeleteService {
       const goneSet = new Set(goneIds);
       // `last_run_id` is a plain column, not a foreign key: forget the deleted runs.
       if (goneIds.length > 0) await tx.taskSchedule.updateMany({ where: { userId, lastRunId: { in: goneIds } }, data: { lastRunId: null } });
+      // The AI app activity (#465) outlives the run (it is the audit trail): its pointers to the run are forgotten.
+      if (goneIds.length > 0) {
+        await tx.mcpActivity.updateMany({ where: { userId, runId: { in: goneIds } }, data: { runId: null } });
+        await tx.mcpActivity.updateMany({ where: { userId, sessionId: { in: goneIds } }, data: { sessionId: null } });
+      }
       return {
         ids: goneIds,
         costUsd: gone.reduce((sum, r) => sum.plus(r.costUsd), new Prisma.Decimal(0)),

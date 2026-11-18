@@ -195,6 +195,10 @@ CI runs all of the above (`.github/workflows/ci.yml`, `console.yml`), plus the A
 
 Work is tracked in GitHub issues (epics `[EPIC Exx]` with child tasks). Contributor and agent rules: [AGENTS.md](AGENTS.md).
 
+## Security
+
+The agent works with its owner's full powers on the owner's own machines ([VISION.MD §27](VISION.MD)), so the controls are the owner's: Stop, takeover, a durable record of every step, and per-task opt-ins (allowed sites, confirmation before purchases). Hosted assistants (ChatGPT, Claude) connect with OAuth and get only the scopes the owner ticks; on the public internet the console rate limits `/api/mcp`, has one switch that cuts every external app off, asks the owner to approve an app's sensitive browser actions (secrets, password and payment forms, sensitive sites, the desktop, network-reaching JavaScript) where they are signed in, never hands a token to a model, and keeps an audit trail of every app's tool calls. How to expose only what must be public: [console/docs/runbooks/public-exposure.md](console/docs/runbooks/public-exposure.md); the threat model: [console/docs/security-hosted-clients.md](console/docs/security-hosted-clients.md). The fabric's own security: [docs/security.md](docs/security.md).
+
 ## Documentation
 
 | Topic | Read |
@@ -203,6 +207,7 @@ Work is tracked in GitHub issues (epics `[EPIC Exx]` with child tasks). Contribu
 | Console: features, layout, run it locally | [console/README.md](console/README.md) |
 | Console operations, capacity, VPS stack, Android app | [console/docs/runbooks/](console/docs/runbooks/) |
 | MCP and agent-framework recipes | [console/docs/mcp.md](console/docs/mcp.md), [console/docs/agent-frameworks.md](console/docs/agent-frameworks.md) |
+| Hosted AI apps on the public internet: exposure runbook, threat model | [console/docs/runbooks/public-exposure.md](console/docs/runbooks/public-exposure.md), [console/docs/security-hosted-clients.md](console/docs/security-hosted-clients.md) |
 | Fabric: install, operations, API, security, recovery | [docs/installation.md](docs/installation.md), [docs/operations.md](docs/operations.md), [docs/api.md](docs/api.md), [docs/security.md](docs/security.md), [docs/recovery.md](docs/recovery.md) |
 | Fleet orchestration | [docs/fleet-orchestration.md](docs/fleet-orchestration.md) |
 | Deploying hosts (systemd, containers) | [deploy/README.md](deploy/README.md), [docs/container-host.md](docs/container-host.md) |

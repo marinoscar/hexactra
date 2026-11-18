@@ -16,6 +16,7 @@ export const APP_LIMIT_DEFAULTS = {
   dailyRunLimit: 50,
   dailyCostLimitUsd: null,
   confirmPurchases: true,
+  confirmSensitiveActions: true,
   paused: false,
 } as const;
 
@@ -31,6 +32,11 @@ export const appLimitsSchema = z.object({
   dailyRunLimit: z.number().int().describe("Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling)."),
   dailyCostLimitUsd: z.number().nullable().describe('USD per day over this app\'s runs; null: no cost limit.'),
   confirmPurchases: z.boolean().describe('Ask before risky steps (purchases, submissions) even when the task does not.'),
+  confirmSensitiveActions: z
+    .boolean()
+    .describe(
+      "Ask the user before this app's sensitive browser actions when it drives a browser itself (#465): typing a secret, acting on a page with a password or payment field, a host on the deployment's sensitive list, the desktop, and JavaScript that reaches the network or stored sign-ins.",
+    ),
   paused: z.boolean().describe('Refuse new runs and sessions from this app without disconnecting it.'),
 });
 export type AppLimits = z.infer<typeof appLimitsSchema>;
@@ -47,6 +53,7 @@ export const patchAppSettingsSchema = z
     dailyRunLimit: z.number().int().min(1).max(1000),
     dailyCostLimitUsd: z.number().min(0.01).max(10_000).multipleOf(0.01).nullable(),
     confirmPurchases: z.boolean(),
+    confirmSensitiveActions: z.boolean(),
     paused: z.boolean(),
   })
   .partial()

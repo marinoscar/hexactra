@@ -1,9 +1,11 @@
-import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Optional, Post, Req, Res, UseFilters, UseGuards } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Auth, InProcessDelegation, authCredentialOf, type RequestWithAuthCredential } from '@marinoscar/platform-api/identity';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
+import { McpActivityService } from './mcp-activity.service';
 import { userPermissionsOf } from './mcp.access';
+import { McpKillSwitchGuard, McpRateLimitGuard, McpRefusalFilter, type McpUnauthenticatedLimit } from './mcp.rate-limit';
 import { McpDispatcher, stepUpChallenge, stepUpScopes, type DispatchOutcome, type McpCaller } from './mcp.dispatcher';
 import { MCP_VERSIONS, McpProtocolError, acceptsJson, isAllowedOrigin, requestContext, resolveVersion, type McpHeaders, type RpcMessage } from './mcp.protocol';
 import { RPC, rpcError, type RpcId, type RpcResponse } from './mcp.results';
@@ -66,7 +68,7 @@ function sendStepUp(reply: FastifyReply, challenge: string, missing: readonly st
  *   limit, not JSON) → a JSON-RPC error instead of the generic error body.
  * Called once by `createApp`, before the app initialises.
  */
-export function registerMcpTransport(fastify: Pick<FastifyInstance, 'addHook'>, appUrl: string | undefined): void {
+export function registerMcpTransport(fastify: Pick<FastifyInstance, 'addHook'>, appUrl: string | undefined, opts: { unauthenticated?: McpUnauthenticatedLimit } = {}): void {
   fastify.addHook('onRequest', async (req, reply) => {
     if (!isMcpPath(req.url)) return;
     const origin = header(req, 'origin');
@@ -94,6 +96,16 @@ export function registerMcpTransport(fastify: Pick<FastifyInstance, 'addHook'>, 
   fastify.addHook('onSend', async (req, reply, payload) => {
     if (!isMcpPath(req.url) || req.method !== 'POST') return payload;
     const status = reply.statusCode;
+    // The unauthenticated limit (#465): every 401 counts against its source address; over the limit it becomes a 429.
+    if (status === 401 && opts.unauthenticated) {
+      const wait = await opts.unauthenticated.over(req.ip, header(req, 'user-agent'));
+      if (wait !== null) {
+        reply.code(429).header('retry-after', String(wait)).header('content-type', 'application/json');
+        reply.removeHeader('www-authenticate');
+        return JSON.stringify(rpcError(null, RPC.RATE_LIMITED, `Too many unauthenticated requests from this address. Wait ${wait} seconds and try again.`, { retryAfterS: wait }));
+      }
+      return payload;
+    }
     if (status !== 400 && status !== 413 && status !== 415) return payload;
     if (typeof payload === 'string' && payload.includes('"jsonrpc"')) return payload; // our own answer
     reply.header('content-type', 'application/json');
@@ -136,14 +148,18 @@ function invalid(msg: unknown): RpcResponse | null {
  */
 @ApiTags('MCP')
 @Controller('mcp')
+@UseFilters(McpRefusalFilter)
 export class McpController {
   constructor(
     private readonly dispatcher: McpDispatcher,
     private readonly delegation: InProcessDelegation,
+    @Optional() private readonly activity?: McpActivityService,
   ) {}
 
   @Post()
   @HttpCode(200)
+  // After authentication (#465): the kill switches, then the rate limits (a 503 or a 429 with a JSON-RPC body).
+  @UseGuards(McpKillSwitchGuard, McpRateLimitGuard)
   @Auth()
   async post(@Req() req: FastifyRequest, @Body() body: unknown, @Res() res: FastifyReply): Promise<void> {
     // Tools call the REST routes in-process as THIS caller, through the platform's
@@ -159,16 +175,20 @@ export class McpController {
     res.raw.once('close', () => {
       if (!res.raw.writableEnded) gone.abort();
     });
-    const user = (req as FastifyRequest & { user?: { id?: string } }).user;
+    const user = (req as FastifyRequest & { user?: { id?: string; orgId?: string; activeOrgId?: string | null } }).user;
     // An OAuth app is gated by its token's scopes (#460): the user's own permissions tell what step-up could add.
     const userPermissions = credential?.kind === 'oauth' ? userPermissionsOf(user) : undefined;
-    const extra = { userId: user?.id, signal: gone.signal, ...(userPermissions ? { userPermissions } : {}) };
+    const extra = { userId: user?.id, orgId: user?.activeOrgId ?? user?.orgId ?? null, requestId: typeof req.id === 'string' ? req.id : null, signal: gone.signal, ...(userPermissions ? { userPermissions } : {}) };
     const principal = userPermissions ? { permissions: userPermissions } : undefined;
     // A tools/call the token's scopes do not cover, but the user may allow: 403 for the whole request,
     // before anything runs (a batch mixing it with allowed calls is refused as a whole).
     const stepUp = (messages: readonly unknown[]) => {
       const missing = stepUpScopes(messages, { credential }, principal);
-      return missing ? () => void sendStepUp(res, stepUpChallenge({ credential }, missing), missing) : null;
+      if (!missing) return null;
+      return async () => {
+        await this.activity?.refusal(req, 'step_up', { missing: missing.join(' ') });
+        void sendStepUp(res, stepUpChallenge({ credential }, missing), missing);
+      };
     };
 
     if (Array.isArray(body)) {
@@ -183,7 +203,7 @@ export class McpController {
       if (!MCP_VERSIONS[version].batching) return void (await sendRpc(res, 400, rpcError(null, RPC.INVALID_REQUEST, `Invalid Request: JSON-RPC batches are not part of protocol ${version} (only 2025-03-26)`)));
       if (body.length === 0) return void (await sendRpc(res, 400, rpcError(null, RPC.INVALID_REQUEST, 'Invalid Request: an empty batch')));
       const refuse = stepUp(body.filter((m) => invalid(m) === null));
-      if (refuse) return refuse();
+      if (refuse) return void (await refuse());
       const outcomes = await Promise.all(
         body.map(async (m: unknown): Promise<DispatchOutcome | RpcResponse | null> => {
           const bad = invalid(m);
@@ -217,7 +237,7 @@ export class McpController {
       throw e;
     }
     const refuse = stepUp([msg]);
-    if (refuse) return refuse();
+    if (refuse) return void (await refuse());
     const out = await this.dispatcher.dispatch(msg, rctx, caller, userAgent, extra);
     if (out === null) return void (await res.status(202).send());
     await sendRpc(res, out.status, out.body, out.headers);

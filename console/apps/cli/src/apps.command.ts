@@ -1,7 +1,7 @@
 import type { Command } from 'commander';
 import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 
-import { appLine, limitLines, limitsPatch, resolveApp, type AppLimitsView, type AppView } from './apps.js';
+import { activityLine, appLine, limitLines, limitsPatch, resolveApp, type ActivityRow, type AppLimitsView, type AppView } from './apps.js';
 import { consoleApi } from './console-api.js';
 import { resolvePolicyId } from './policies.js';
 
@@ -69,12 +69,15 @@ export const appsCommand: CliCommandRegistration = (program: Command) => {
     .option('--sites <domains>', 'comma-separated sites its runs may visit ("" for no extra limit)')
     .option('--confirm', 'always ask before purchases and irreversible steps')
     .option('--no-confirm', "ask only when the task says so")
+    .option('--confirm-sensitive', 'ask me before its sensitive browser actions (secrets, password and payment forms, sensitive hosts, the desktop, network JavaScript)')
+    .option('--no-confirm-sensitive', 'do not ask before its sensitive browser actions')
     .option('--json', 'print JSON')
-    .action(async (ref: string, o: { policy?: string; allowPolicies?: string; maxRuns?: string; dailyRuns?: string; dailyCost?: string; sites?: string; confirm?: boolean; json?: boolean }, cmd: Command) => {
+    .action(async (ref: string, o: { policy?: string; allowPolicies?: string; maxRuns?: string; dailyRuns?: string; dailyCost?: string; sites?: string; confirm?: boolean; confirmSensitive?: boolean; json?: boolean }, cmd: Command) => {
       const a = await resolveApp(ref);
       // `--confirm` / `--no-confirm` count only when given (commander defaults the pair to true).
       const confirmGiven = cmd.getOptionValueSource('confirm') === 'cli';
-      const patch = limitsPatch({ ...o, confirm: confirmGiven ? o.confirm : undefined });
+      const sensitiveGiven = cmd.getOptionValueSource('confirmSensitive') === 'cli';
+      const patch = limitsPatch({ ...o, confirm: confirmGiven ? o.confirm : undefined, confirmSensitive: sensitiveGiven ? o.confirmSensitive : undefined });
       if (typeof patch.policyId === 'string') patch.policyId = await resolvePolicyId(patch.policyId);
       if (Array.isArray(patch.allowedPolicyIds)) patch.allowedPolicyIds = await Promise.all((patch.allowedPolicyIds as string[]).map((p) => resolvePolicyId(p)));
       const limits = Object.keys(patch).length ? await consoleApi().patch<AppLimitsView>(`/connected-apps/${a.clientId}/settings`, patch) : a.limits;
@@ -92,5 +95,23 @@ export const appsCommand: CliCommandRegistration = (program: Command) => {
       out(`MCP URL: ${p.mcpUrl}`);
       for (const c of p.checks) out(`${c.status === 'pass' ? 'ok  ' : c.status.padEnd(4)}  ${c.title}${c.status === 'pass' ? '' : `: ${c.detail}${c.fix ? ` ${c.fix.text}` : ''}`}`);
       for (const c of p.clients) out(`${c.id.padEnd(12)}  ${c.allowed === null ? '-' : c.allowed ? 'can connect' : 'blocked'}  ${c.detail}`);
+    });
+  apps
+    .command('activity [app]')
+    .description('What your AI apps did: one line per tool call or refusal, newest first (the audit trail; no typed text, scripts or results)')
+    .option('--tool <name>', 'only this tool')
+    .option('--outcome <outcome>', 'ok, error, still_working, confirmation_required or refused')
+    .option('--limit <n>', 'rows (default 50, at most 200)')
+    .option('--json', 'print JSON')
+    .action(async (ref: string | undefined, o: { tool?: string; outcome?: string; limit?: string; json?: boolean }) => {
+      const q = new URLSearchParams();
+      if (ref) q.set('clientId', (await resolveApp(ref)).clientId);
+      if (o.tool) q.set('tool', o.tool);
+      if (o.outcome) q.set('outcome', o.outcome);
+      if (o.limit) q.set('limit', o.limit);
+      const page = await consoleApi().get<{ items: ActivityRow[]; nextCursor: string | null }>(`/connected-apps/activity${q.size ? `?${q}` : ''}`);
+      if (o.json) return json(page);
+      if (page.items.length === 0) return out('No AI app activity.');
+      for (const r of page.items) out(activityLine(r));
     });
 };

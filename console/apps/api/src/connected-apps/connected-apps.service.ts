@@ -16,6 +16,7 @@ import { PoliciesService } from '../policies/policies.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { domainAllowed } from '../runner/policy';
 import { MCP_SCOPES } from '../mcp/mcp.scopes';
+import { McpActivityService } from '../mcp/mcp-activity.service';
 import { AppLimitError } from './connected-apps.errors';
 import { APP_CEILING_DEFAULTS, APP_LIMIT_DEFAULTS, type AppLimits, type ConnectedAppView, type RunAppLimits } from './connected-apps.schemas';
 import { APP_FIRST_RUN_EVENT } from './connected-apps.notifications';
@@ -77,6 +78,7 @@ export function limitsOf(row: SettingsRow | null): AppLimits {
     dailyRunLimit: row.dailyRunLimit,
     dailyCostLimitUsd: row.dailyCostLimitUsd === null ? null : Number(row.dailyCostLimitUsd),
     confirmPurchases: row.confirmPurchases,
+    confirmSensitiveActions: row.confirmSensitiveActions,
     paused: row.paused,
   };
 }
@@ -116,6 +118,7 @@ export class ConnectedAppsService {
     @Optional() private readonly system?: SystemSettingsService,
     @Optional() private readonly settings?: SettingsResolver,
     @Optional() private readonly notifications?: NotificationsService,
+    @Optional() private readonly activity?: McpActivityService,
   ) {}
 
   /** The wall clock; tests replace it. */
@@ -309,12 +312,22 @@ export class ConnectedAppsService {
       dailyRunLimit: next.dailyRunLimit,
       dailyCostLimitUsd: next.dailyCostLimitUsd === null ? null : new Prisma.Decimal(next.dailyCostLimitUsd),
       confirmPurchases: next.confirmPurchases,
+      confirmSensitiveActions: next.confirmSensitiveActions,
       paused: next.paused,
     };
     const saved = row
       ? await this.db(userId).connectedAppSettings.update({ where: { id: row.id }, data })
       : await this.db(userId).connectedAppSettings.create({ data: { ...data, userId, clientId } });
     this.log.log(`app settings user=${userId} client=${clientId} changed=[${Object.keys(patch).join(',')}]`);
+    // The audit trail (#465): which limits changed (their names, and pause), never their values otherwise.
+    await this.activity?.record({
+      userId,
+      event: 'app_settings',
+      credentialKind: 'jwt',
+      clientId,
+      outcome: 'ok',
+      detail: { changed: Object.keys(patch).sort(), ...(patch.paused !== undefined ? { paused: patch.paused } : {}), ...(patch.confirmSensitiveActions !== undefined ? { confirmSensitiveActions: patch.confirmSensitiveActions } : {}) },
+    });
     return clampLimits(limitsOf(saved), ceilings);
   }
 

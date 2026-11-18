@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline';
 import type { Command } from 'commander';
 import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 
-import { consoleCredentials } from './console-api.js';
+import { consoleApi, consoleCredentials } from './console-api.js';
 
 type Fetch = typeof globalThis.fetch;
 
@@ -121,13 +121,79 @@ export async function serveMcpStdio(opts: { input?: NodeJS.ReadableStream; outpu
   await Promise.all(pending);
 }
 
-/** `hexactra mcp serve`: the console's MCP tools over stdio, for agent frameworks. */
+/** `GET /api/admin/mcp/status` (#465). */
+export interface McpStatusView {
+  externalAppsEnabled: boolean;
+  patMcpEnabled: boolean;
+  oauthEnabled: boolean;
+  mcpUrl: string;
+  publicHttps: boolean;
+  connectedApps: number;
+  connectedUsers: number;
+  highRiskGrants: number;
+}
+
+/** The status in lines, for `hexactra mcp status`. */
+export function statusLines(s: McpStatusView): string[] {
+  const on = (b: boolean) => (b ? 'on' : 'OFF');
+  return [
+    `MCP endpoint: ${s.mcpUrl}`,
+    `External AI apps (OAuth): ${on(s.externalAppsEnabled)}${s.oauthEnabled ? '' : ' (the OAuth server is off: no app can sign in)'}`,
+    `Personal access tokens over MCP: ${on(s.patMcpEnabled)}`,
+    `Public HTTPS address: ${s.publicHttps ? 'yes' : 'no: ChatGPT and Claude cannot reach this console (docs/runbooks/public-exposure.md)'}`,
+    `Connected apps: ${s.connectedApps} (${s.connectedUsers} user${s.connectedUsers === 1 ? '' : 's'}); high-risk grants: ${s.highRiskGrants}`,
+  ];
+}
+
+/** The `mcp` settings patch of `enable` / `disable`: OAuth apps by default, personal access tokens with `--pat`, both with `--all`. */
+export function switchPatch(enabled: boolean, o: { pat?: boolean; all?: boolean }): Record<string, boolean> {
+  if (o.all) return { externalAppsEnabled: enabled, patMcpEnabled: enabled };
+  return o.pat ? { patMcpEnabled: enabled } : { externalAppsEnabled: enabled };
+}
+
+const print = (s: string): void => {
+  process.stdout.write(`${s}\n`);
+};
+
+/**
+ * `hexactra mcp …`: `serve` bridges the console's MCP tools over stdio for
+ * agent frameworks; `status`, `enable` and `disable` (#465) are the kill
+ * switch of external AI apps for an administrator (`system_settings:read` /
+ * `:write`), for an operator on the box during an incident.
+ */
 export const mcpCommand: CliCommandRegistration = (program: Command) => {
-  const mcp = program.command('mcp').description('The console as an MCP server for agent frameworks');
+  const mcp = program.command('mcp').description('The console as an MCP server: serve it over stdio, or switch external AI apps on and off');
   mcp
     .command('serve')
     .description('Serve MCP over stdio (bridged to POST /api/mcp as the logged-in user)')
     .action(async () => {
       await serveMcpStdio();
     });
+  mcp
+    .command('status')
+    .description('Whether external AI apps may connect, the public URL check and how many apps are connected (administrator)')
+    .option('--json', 'print JSON')
+    .action(async (o: { json?: boolean }) => {
+      const s = await consoleApi().get<McpStatusView>('/admin/mcp/status');
+      if (o.json) return print(JSON.stringify(s, null, 2));
+      for (const line of statusLines(s)) print(line);
+    });
+  const toggle = (enabled: boolean) => async (o: { pat?: boolean; all?: boolean }) => {
+    const patch = switchPatch(enabled, o);
+    await consoleApi().patch('/system-settings', { mcp: patch });
+    const what = o.all ? 'External AI apps and personal access tokens over MCP' : o.pat ? 'Personal access tokens over MCP' : 'External AI apps (OAuth)';
+    print(`${what}: ${enabled ? 'on' : 'off'}. It takes effect within a few seconds.`);
+  };
+  mcp
+    .command('disable')
+    .description('Kill switch: refuse every AI app signed in with OAuth on /api/mcp (503); --pat for personal access tokens over MCP, --all for both')
+    .option('--pat', 'personal access tokens over MCP instead (REST with a token keeps working)')
+    .option('--all', 'both')
+    .action(toggle(false));
+  mcp
+    .command('enable')
+    .description('Let AI apps signed in with OAuth call /api/mcp again; --pat for personal access tokens, --all for both')
+    .option('--pat', 'personal access tokens over MCP instead')
+    .option('--all', 'both')
+    .action(toggle(true));
 };
