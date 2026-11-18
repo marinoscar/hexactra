@@ -259,6 +259,10 @@ describe('Connect an AI app', () => {
     expect(screen.getByRole('link', { name: 'Agent framework recipes' })).toHaveAttribute('href', expect.stringContaining('agent-frameworks.md'));
     fireEvent.click(screen.getByRole('tab', { name: 'Claude' }));
     expect(await screen.findByTestId('guide-claude')).toHaveTextContent('Add custom connector');
+    // Three first prompts, when the steps were checked, and the full recipe (docs/hosted-clients.md, #468).
+    expect(screen.getByTestId('first-prompts').querySelectorAll('li')).toHaveLength(3);
+    expect(screen.getByTestId('guide-claude')).toHaveTextContent('Steps checked: docs as of 2026-11-18');
+    expect(screen.getByRole('link', { name: 'Full recipe and troubleshooting' })).toHaveAttribute('href', expect.stringContaining('docs/hosted-clients.md'));
   });
 
   it('OAuth off, as a member: who fixes it is the administrator, with no link', async () => {
