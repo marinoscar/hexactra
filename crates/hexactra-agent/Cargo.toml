@@ -35,5 +35,7 @@ hexactra-desktop-input = { path = "../hexactra-desktop-input" }
 winapi = { version = "0.3", features = ["winbase"] }
 
 [dev-dependencies]
+# `test-util`: paused time, so a test can tell "no retry sleep ran" without a wall clock (#493).
+tokio = { workspace = true, features = ["test-util"] }
 tokio-test.workspace = true
 tempfile.workspace = true
