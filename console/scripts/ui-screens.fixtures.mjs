@@ -12,6 +12,7 @@ export const IDS = {
   host: '22222222-2222-4222-8222-222222222222',
   liveRun: '33333331-3333-4333-8333-333333333333',
   finishedRun: '33333334-3333-4333-8333-333333333333',
+  chatRun: '33333335-3333-4333-8333-333333333333',
   question: '55555555-5555-4555-8555-555555555555',
   policy: '66666666-6666-4666-8666-666666666666',
   group: '77777777-7777-4777-8777-777777777777',
@@ -82,6 +83,11 @@ const liveRun = run(IDS.liveRun, 'running', {
 const finishedRun = run(IDS.finishedRun, 'failed', {
   stopReason: 'budget_cost', result: 'Compared 3 of 5 fares; the cheapest so far is 120 on the 9:00 departure.', error: 'Cost budget exhausted',
   finishedAt: iso(-60_000), budget: { ...budget, used: { ...budget.used, cost: 2.01 }, percent: { ...budget.percent, cost: 100.5 } },
+});
+/** A chat run over its soft action limit that still finished (#537). */
+const chatRun = run(IDS.chatRun, 'succeeded', {
+  trigger: 'chat', taskId: null, stopReason: 'finished', result: 'Sent the payment and checked it shows as completed.', finishedAt: iso(-30_000), stepCount: 64,
+  budget: { ...budget, used: { ...budget.used, actions: 64 }, percent: { ...budget.percent, actions: 106.7 }, enforcement: 'soft', over: ['actions'] },
 });
 const runs = [liveRun, run('33333332-3333-4333-8333-333333333333', 'waiting_human'), run('33333333-3333-4333-8333-333333333333', 'succeeded', { stopReason: 'finished', result: 'Held the 9:00 fare.' }), finishedRun]
   .map(({ steps: _steps, ...rest }) => rest);
@@ -332,6 +338,7 @@ export const RESPONSES = {
   [`GET /runs/${IDS.liveRun}`]: liveRun,
   [`GET /runs/${IDS.liveRun}/viewer`]: { hostId: IDS.host, hostName: 'mini-pc', desktop: true },
   [`GET /runs/${IDS.finishedRun}`]: finishedRun,
+  [`GET /runs/${IDS.chatRun}`]: chatRun,
   'GET /fleet/hosts': hosts,
   [`GET /fleet/hosts/${IDS.host}`]: hosts[0],
   [`GET /fleet/hosts/${IDS.host}/takeover`]: null,
@@ -353,4 +360,4 @@ export const RESPONSES = {
 };
 
 /** The ids a mock run puts in the parameterized routes. */
-export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app };
+export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app };

@@ -40,7 +40,7 @@
 //          redirected route fails the run)  --list (print the routes and exit)
 //
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
-// `{finishedRun}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}` and `{app}` are filled
+// `{finishedRun}`, `{chatRun}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}` and `{app}` are filled
 // in from the account (or the fixtures). The enabled slices' routes are read
 // from apps/web/src/slices/<id>.tsx, so a new slice page needs nothing here.
 //
@@ -71,6 +71,8 @@ export const ROUTES = [
   ['runs', '/runs'],
   ['run-live', '/runs/{liveRun}'],
   ['run-finished', '/runs/{finishedRun}'],
+  // A chat run that went over its (soft) usual limit and finished (#537).
+  ['run-chat-over-limit', '/runs/{chatRun}'],
   ['fleet', '/fleet'],
   ['desktop', '/fleet/hosts/{host}/desktop'],
   ['notes', '/notes'],
@@ -182,6 +184,7 @@ async function discoverIds(page) {
     return {
       liveRun: runs.find((r) => live.has(r.status))?.id,
       finishedRun: runs.find((r) => !live.has(r.status))?.id,
+      chatRun: (runs.find((r) => r.trigger === 'chat' && r.budget?.over?.length) ?? runs.find((r) => r.trigger === 'chat'))?.id,
       task: tasks[0]?.id,
       host: (hosts.find((h) => h.desktop && h.online) ?? hosts[0])?.id,
       question: inbox[0]?.questionId,

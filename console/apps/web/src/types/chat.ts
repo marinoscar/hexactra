@@ -1,3 +1,4 @@
+import type { RunBudget } from '../components/runBudget';
 // A chat and its messages, as the API returns them (`chatResponseSchema` and
 // friends in apps/api/src/openapi/chat.responses.ts) and as the chat's event
 // stream sends them (apps/api/src/chat/chat-stream.controller.ts).
@@ -75,6 +76,8 @@ export interface ChatRun {
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
+  /** The run's budget (#537): a chat run's limits are soft, shown and never enforced. Absent from older streams. */
+  budget?: RunBudget | null;
 }
 
 /** A task drafted from a chat (`POST /chats/:id/task-draft`, and the `meta` of a `task_draft` message). */
