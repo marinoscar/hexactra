@@ -59,6 +59,7 @@ When the agent needs you, the request is a card in the thread, not only an Inbox
 - **Code or password** (`secret`): a masked field in the card, and "Enter it in the browser myself" (take over).
 - **Sign-in** (#524, #527): the agent is told that signing in is its job. It asks for the username and password in one request (`kind: login`, `input: credentials`, a card titled "Sign-in needed"), types the username, types the password through the handoff, and asks for a code as a `secret` card. When the page offers "Remember me" or "Trust this device", the card shows it, ticked by default, and the agent sets the page's box as you chose. It asks for a takeover only for a passkey, a puzzle it cannot pass, or after you declined to sign in. These are instructions to a model: a model can still choose otherwise.
 - **Choice, text, number**: the same form the Inbox uses.
+- **Don't ask again** (#555): an approval the server marked rememberable shows a checkbox, off by default, naming what would be remembered ("Don't ask again: Press 'Pay' on bankofamerica.com"), with optional limits (only this chat, an amount, 30 or 7 days). Ticked, the same step on the same site goes ahead without a question next time; the settled card reads "Allowed · won't ask again" and links to the rule. The result card of a run in which a saved approval let a commitment through says so ("1 step went ahead on a saved approval: …"). See [approvals.md](approvals.md).
 
 The Inbox still lists a chat run's request, with **Answer in chat**. Scheduled, API and MCP runs use the Inbox as before.
 

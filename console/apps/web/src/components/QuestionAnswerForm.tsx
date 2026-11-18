@@ -23,6 +23,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { numberError, numberHint, selectionBounds, selectionHelp, selectionOk, textError } from '@app/shared/question-rules';
 
 import { digitsOnly, secretLabel, type AnswerBody, type AskedQuestion, type QuestionOption } from './questions';
+import { NO_REMEMBER, RememberRuleField, amountError, rememberRuleOf, type RememberRuleState } from './RememberRuleField';
 
 export interface QuestionAnswerFormProps {
   question: AskedQuestion;
@@ -34,6 +35,11 @@ export interface QuestionAnswerFormProps {
   disabled?: boolean;
   /** The answer is being sent: every control is disabled and the primary button shows progress. */
   busy?: boolean;
+  /**
+   * Whether "Don't ask again" may be offered (#555): the signed-in web and Android app only. Defaults to true;
+   * shown only for a question the server marked rememberable.
+   */
+  allowRemember?: boolean;
 }
 
 /** A shown secret hides again after this long without a keystroke. */
@@ -100,7 +106,7 @@ function OptionsBox({ count, children }: { count: number; children: ReactNode })
  * dropped before `onSubmit` is called, and showing it only changes the
  * input's `type`.
  */
-export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disabled: off, busy = false }: QuestionAnswerFormProps) {
+export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disabled: off, busy = false, allowRemember = true }: QuestionAnswerFormProps) {
   const disabled = Boolean(off) || busy;
   const [value, setValue] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
@@ -112,6 +118,14 @@ export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disab
   const [opened, setOpened] = useState(false);
   // The site's "remember me" option (#527): ticked by default, the person unticks it.
   const [remember, setRemember] = useState(true);
+  // "Don't ask again" (#555): off by default; only on an approval the server marked rememberable.
+  const [rule, setRule] = useState<RememberRuleState>(NO_REMEMBER);
+  const rememberable = allowRemember && q.kind === 'confirmation' && (q.input === 'confirm' || q.input === 'none') ? (q.rememberable ?? null) : null;
+  const ruleBody = rememberRuleOf(rememberable, rule);
+  const ruleAnswer = ruleBody ? { rememberRule: ruleBody } : {};
+  // A ticked box with an amount that is not one: the approval waits until it is fixed (never sent without the rule).
+  const ruleBlocked = Boolean(rememberable && rule.ticked && amountError(rule.amount));
+  const ruleField = rememberable ? <RememberRuleField rememberable={rememberable} value={rule} onChange={setRule} disabled={disabled} /> : null;
   const isSecret = q.input === 'secret' || q.input === 'credentials';
   const rememberAnswer = q.rememberLabel ? { remember } : {};
   const options = q.options ?? [];
@@ -178,7 +192,8 @@ export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disab
         return;
       }
       default:
-        send({ outcome: 'completed' });
+        if (ruleBlocked) return;
+        send({ outcome: 'completed', ...ruleAnswer });
     }
   };
 
@@ -214,7 +229,7 @@ export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disab
             This is a high-risk action. Are you sure you want to {confirmLabel.toLowerCase()}?
           </Alert>
           <Stack data-testid="question-actions" direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: { sm: 'wrap' }, mt: 2 }}>
-            <Button variant="contained" color="warning" disabled={disabled} loading={busy} onClick={() => send({ outcome: 'completed', value: 'approve' })} sx={ACTION_SX}>
+            <Button variant="contained" color="warning" disabled={disabled || ruleBlocked} loading={busy} onClick={() => send({ outcome: 'completed', value: 'approve', ...ruleAnswer })} sx={ACTION_SX}>
               Yes, {confirmLabel}
             </Button>
             <Button disabled={disabled} onClick={() => setConfirming(false)} sx={ACTION_SX}>
@@ -224,15 +239,20 @@ export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disab
         </Box>
       );
     }
-    return actions(
+    return (
       <>
-        <Button variant="contained" disabled={disabled} loading={busy} onClick={() => (high ? setConfirming(true) : send({ outcome: 'completed', value: 'approve' }))} sx={ACTION_SX}>
-          {confirmLabel}
-        </Button>
-        <Button variant="outlined" disabled={disabled} onClick={() => send({ outcome: 'completed', value: 'deny' })} sx={ACTION_SX}>
-          {denyLabel}
-        </Button>
-      </>,
+        {actions(
+          <>
+            <Button variant="contained" disabled={disabled || ruleBlocked} loading={busy} onClick={() => (high ? setConfirming(true) : send({ outcome: 'completed', value: 'approve', ...ruleAnswer }))} sx={ACTION_SX}>
+              {confirmLabel}
+            </Button>
+            <Button variant="outlined" disabled={disabled} onClick={() => send({ outcome: 'completed', value: 'deny' })} sx={ACTION_SX}>
+              {denyLabel}
+            </Button>
+          </>,
+        )}
+        {ruleField}
+      </>
     );
   }
 
@@ -454,10 +474,11 @@ export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disab
             </Button>,
           )
         : actions(
-            <Button type="submit" variant="contained" disabled={disabled || !ready} loading={busy} sx={ACTION_SX}>
+            <Button type="submit" variant="contained" disabled={disabled || !ready || ruleBlocked} loading={busy} sx={ACTION_SX}>
               {primaryLabel}
             </Button>,
           )}
+      {ruleField}
     </Box>
   );
 }

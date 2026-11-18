@@ -180,7 +180,7 @@ export function ChatPage() {
   };
   // ---- The run's request, answered in the thread (#488) ----
   /** What became of the last request seen here: answered in this chat, or closed some other way. */
-  const [settled, setSettled] = useState<{ id: string; text: string; tone: 'success' | 'info' } | null>(null);
+  const [settled, setSettled] = useState<{ id: string; text: string; tone: 'success' | 'info'; ruleId?: string | null } | null>(null);
   const lastRequest = useRef<string | null>(null);
   useEffect(() => {
     const before = lastRequest.current;
@@ -202,9 +202,10 @@ export function ChatPage() {
   const answerRequest = async (answer: AnswerBody): Promise<RequestResult> => {
     if (!request) return;
     const q = request;
+    let ruleId: string | null = null;
     try {
       if (answer.outcome === 'cancelled') await api.post(`/questions/${q.id}/cancel`, { channel: 'web' });
-      else await api.post(`/questions/${q.id}/answer`, { ...answer, channel: 'web' });
+      else ruleId = (await api.post<Question | undefined>(`/questions/${q.id}/answer`, { ...answer, channel: 'web' }))?.response?.ruleId ?? null;
     } catch (e) {
       // Answered on another device, or expired, in the meantime: that is its final state, not an error.
       if (!isSettledError(e)) throw e;
@@ -212,7 +213,7 @@ export function ChatPage() {
       return 'gone';
     }
     // Only what kind of answer it was is kept; never the answer of a secret.
-    setSettled({ id: q.id, text: settledText(q, answer), tone: 'success' });
+    setSettled({ id: q.id, text: settledText(q, answer), tone: 'success', ruleId });
   };
   const onCardVisible = useCallback((visible: boolean) => setCardVisible(visible), []);
   const openBrowser = useCallback(() => setBrowserOpen(true), []);
@@ -433,7 +434,7 @@ export function ChatPage() {
             onOpenBrowser={request.viewerUrl ? () => void openViewer(request.viewerUrl!) : undefined}
           />
         ) : (
-          settled && <RequestSettled text={settled.text} tone={settled.tone} />
+          settled && <RequestSettled text={settled.text} tone={settled.tone} ruleId={settled.ruleId} />
         )}
         {state.thinking && <TypingIndicator />}
       </>
