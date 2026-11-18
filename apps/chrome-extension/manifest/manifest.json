@@ -10,7 +10,8 @@
     "tabs",
     "storage",
     "nativeMessaging",
-    "debugger"
+    "debugger",
+    "declarativeNetRequest"
   ],
   "host_permissions": [
     "<all_urls>"

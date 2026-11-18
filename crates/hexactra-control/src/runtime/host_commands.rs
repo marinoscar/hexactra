@@ -328,6 +328,7 @@ mod tests {
 
     fn ok() -> OperationResult {
         OperationResult {
+            navigation_blocked: Vec::new(),
             ok: true,
             result: Some(json!({})),
             error: None,

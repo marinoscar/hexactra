@@ -217,6 +217,7 @@ async fn capture(timeout: Duration) -> Result<Vec<u8>, String> {
 /// Run one `desktop_*` action on this machine's display.
 pub async fn execute(action: &RemoteAction, timeout: Duration) -> OperationResult {
     let fail = |e: String| OperationResult {
+        navigation_blocked: Vec::new(),
         ok: false,
         result: None,
         error: Some(e),
@@ -249,6 +250,7 @@ pub async fn execute(action: &RemoteAction, timeout: Duration) -> OperationResul
     };
     match result {
         Ok(v) => OperationResult {
+            navigation_blocked: Vec::new(),
             ok: true,
             result: Some(v),
             error: None,

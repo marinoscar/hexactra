@@ -7,11 +7,12 @@
 // chrome.debugger (cdp.ts) for trusted input, JavaScript and capture (#366).
 //
 // Wire format (both directions are JSON objects):
-//   agent -> extension: { "type": "request", "id": string, "action": RemoteAction, "deadline_ms": number }
+//   agent -> extension: { "type": "request", "id": string, "action": RemoteAction, "deadline_ms": number, "allowed_domains"?: string[] }
 //   extension -> agent: { "type": "response", "id": string, "ok": boolean, "result"?: any, "error"?: string }
 //   extension -> agent: { "type": "hello", "version": string }
 //   agent <-> extension: { "type": "ping" } / { "type": "pong" }
 
+import { applyAllowedDomains, currentAllowed, recordBlocked, takeBlocked, urlAllowed, urlHost, type BlockedNavigation } from './site-policy.js';
 import * as cdp from './cdp.js';
 
 export const NATIVE_HOST_NAME = 'com.hexactra.nativehost';
@@ -48,6 +49,8 @@ export interface BridgeRequest {
   id: string;
   action: RemoteAction;
   deadline_ms?: number;
+  /** The session's allowed sites (#508); empty or absent: any site. */
+  allowed_domains?: string[];
 }
 
 export interface BridgeResponse {
@@ -56,6 +59,8 @@ export interface BridgeResponse {
   ok: boolean;
   result?: unknown;
   error?: string;
+  /** Top-level navigations blocked under the allowed sites since the last action (#508). */
+  navigation_blocked?: BlockedNavigation[];
 }
 
 /** Error raised for an action that cannot be performed. */
@@ -510,11 +515,21 @@ async function screenshot(tabId: number | undefined, marks: boolean) {
 
 // ---------------------------------------------------------------------------
 
+/** Refuse, and record, a navigation the session's allowed sites do not cover (#508). */
+function refuseOutsideAllowed(url: string): void {
+  const allowed = currentAllowed();
+  if (urlAllowed(url, allowed)) return;
+  const host = urlHost(url) ?? url;
+  recordBlocked(host);
+  throw new ActionError(`navigation_blocked: ${host} is not in this session's allowed sites (${allowed.join(', ')})`);
+}
+
 /** Execute one remote action. Throws ActionError on failure. */
 export async function executeAction(action: RemoteAction, deadline: number): Promise<unknown> {
   switch (action.type) {
     case 'navigate': {
       if (!isNavigableUrl(action.url)) throw new ActionError('not an openable URL (javascript: URLs are refused: use evaluate)');
+      refuseOutsideAllowed(action.url);
       const tab = await resolveTab(action.tab_id);
       const loaded = waitForTabComplete(tab.id!, Math.min(remaining(deadline), DEFAULT_NAV_TIMEOUT_MS));
       await chrome.tabs.update(tab.id!, { url: action.url });
@@ -605,6 +620,7 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
       if (action.url !== undefined && !isNavigableUrl(action.url)) {
         throw new ActionError('not an openable URL (javascript: URLs are refused: use evaluate)');
       }
+      if (action.url !== undefined) refuseOutsideAllowed(action.url);
       const tab = await chrome.tabs.create({ url: action.url ?? 'about:blank', active: true });
       if (action.url) await waitForTabComplete(tab.id!, Math.min(remaining(deadline), DEFAULT_NAV_TIMEOUT_MS)).catch(() => undefined);
       return { tab_id: tab.id };
@@ -673,12 +689,19 @@ export async function handleRequest(req: BridgeRequest): Promise<BridgeResponse>
       budget,
     );
   });
+  // Reported with this response: what was blocked since the last action and
+  // during this one. Taken in `finally` so a failure reports them too.
+  const withBlocked = (r: BridgeResponse): BridgeResponse => {
+    const nb = takeBlocked();
+    return nb.length ? { ...r, navigation_blocked: nb } : r;
+  };
   try {
+    await applyAllowedDomains(req.allowed_domains);
     const result = await Promise.race([executeAction(req.action, deadline), late]);
-    return { type: 'response', id: req.id, ok: true, result };
+    return withBlocked({ type: 'response', id: req.id, ok: true, result });
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
-    return { type: 'response', id: req.id, ok: false, error };
+    return withBlocked({ type: 'response', id: req.id, ok: false, error });
   } finally {
     clearTimeout(timer);
   }

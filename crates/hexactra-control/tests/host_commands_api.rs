@@ -66,6 +66,7 @@ async fn a_command_round_trips_through_the_host_poll() {
                         id,
                         command.id,
                         &OperationResult {
+                            navigation_blocked: Vec::new(),
                             ok: true,
                             result: Some(json!({ "created": true })),
                             error: None,
@@ -198,6 +199,7 @@ async fn only_the_owning_host_may_report_and_old_agents_get_operations_only() {
         panic!("expected the command");
     };
     let r = OperationResult {
+        navigation_blocked: Vec::new(),
         ok: false,
         result: None,
         error: Some("close_browser: refused".into()),

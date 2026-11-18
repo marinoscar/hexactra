@@ -44,7 +44,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { QUESTION_INPUTS, QUESTION_KINDS, questionSpecObject, questionSpecSchema, type QuestionSpec } from '../questions/questions.contract';
 import { QuestionsService } from '../questions/questions.service';
 import { FabricSession, handoffOutcome, isTakeoverActive } from '../runner/fabric-session';
-import { domainAllowed } from '../runner/policy';
+import { domainAllowed, fabricAllowedSites } from '../runner/policy';
 import { redactActionArgs, redactUrl } from '../tasks/redact';
 import { RunNotifier } from '../tasks/run-notifier';
 import { TasksService } from '../tasks/tasks.service';
@@ -258,10 +258,9 @@ export class ExternalBrowserController {
     });
     let sessionId: string;
     try {
-      // The sites the session may visit reach the fabric's session request (#465): an AI app's own list when it
-      // has one (the narrower rule an OAuth app is held to), otherwise the session's.
-      const appSites = decision?.appLimits?.allowedDomains ?? [];
-      const sites = appSites.length ? appSites : body.allowedDomains;
+      // The sites the session may visit reach the fabric's session request (#465), which enforces them in the
+      // browser (#508): the session's list narrowed by an AI app's own.
+      const sites = fabricAllowedSites(body.allowedDomains ?? [], decision?.appLimits?.allowedDomains ?? []);
       sessionId = await new FabricSession(this.fabric).create({ profile: body.profile, hostId: body.hostId ?? null, label: `${body.actor}: run ${run.id}`, allowedDomains: sites });
     } catch (e) {
       await this.tasks.transition(userId, run.id, 'failed', { error: e instanceof Error ? e.message : String(e), stopReason: 'error' });

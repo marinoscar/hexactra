@@ -128,7 +128,7 @@ When an app signed in with OAuth drives a browser itself, these actions wait for
 
 The call answers a tool error `CONFIRMATION_REQUIRED` naming the action, and a `confirm` question with risk **high** waits in the owner's inbox ("<App> wants to … Started by <App>."): only a channel where the owner is signed in can approve it, never the app through `inbox_answer`. Nothing reaches the fabric before. The approval is bound to the session, the action kind and the target (selector, host, point, script digest), lets **exactly that action through once**, and only within two minutes of the approval; a retry while it waits is `CONFIRMATION_PENDING`, after a "no" `CONFIRMATION_DENIED`. Personal access tokens, the console and the runner's own delegated runs are not asked (delegated runs have purchase confirmation, and their confirmation questions now end with "Started by <App>" when an app started the run).
 
-An app's allowed sites also reach the fabric's session request (`allowed_domains`); the console checks every navigation itself either way.
+An app's allowed sites also reach the fabric's session request (`allowed_domains`), narrowed by the task's own, and the fabric enforces them in the browser (#508): every top-level navigation to another site is blocked, including the ones a page starts itself (redirects, scripts, `window.open`). A blocked navigation shows in the run as a `navigation_blocked` step and is reported to the model; the console still checks every navigation the agent asks for. A confined session cannot use the desktop tools (`browser_desktop_*`): desktop input could reach any window.
 
 ### What the model is told, and what it never gets
 

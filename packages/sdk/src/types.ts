@@ -292,4 +292,12 @@ export interface OperationView {
   error?: string | null;
   created_at: string;
   completed_at?: string | null;
+  /** Top-level navigations blocked under the session's allowed sites since the previous action (#508). */
+  navigation_blocked?: BlockedNavigation[];
+}
+
+/** A top-level navigation the browser refused under a session's allowed sites (#508). */
+export interface BlockedNavigation {
+  host: string;
+  at: string;
 }

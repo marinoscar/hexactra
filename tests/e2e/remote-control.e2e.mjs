@@ -354,6 +354,41 @@ try {
     assert.match(r.err, /use the evaluate action/);
   });
 
+  await step('allowed sites (#508): the browser blocks a page that navigates itself elsewhere, and reports it', async () => {
+    const api = async (method, path, body) => {
+      const r = await fetch(`${controlUrl}${path}`, {
+        method,
+        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      return { status: r.status, body: await r.json().catch(() => null) };
+    };
+    const act = (session, action) => api('POST', `/v1/sessions/${session}/actions`, { action, timeout_ms: 30000 });
+    assert.equal((await api('POST', '/v1/sessions', { allowed_domains: ['*.bad'] })).status, 400);
+    const confined = (await api('POST', '/v1/sessions', { label: 'confined', allowed_domains: ['127.0.0.1'] })).body;
+    assert.deepEqual(confined.allowed_domains, ['127.0.0.1']);
+    // The agent asks for another host: refused before the browser moves.
+    const direct = (await act(confined.id, { type: 'navigate', url: site.replace('127.0.0.1', 'localhost') + '/next.html' })).body;
+    assert.equal(direct.state, 'failed', JSON.stringify(direct));
+    assert.match(direct.error, /navigation_blocked: localhost/);
+    assert.deepEqual(direct.navigation_blocked.map((b) => b.host), ['localhost']);
+    // The page sends itself to another host: the browser blocks it.
+    const nav = (await act(confined.id, { type: 'navigate', url: `${site}/redirect.html` })).body;
+    assert.equal(nav.state, 'succeeded', JSON.stringify(nav));
+    let blocked = nav.navigation_blocked ?? [];
+    await until('blocked navigation reported', async () => {
+      const r = (await act(confined.id, { type: 'tabs' })).body;
+      blocked = blocked.concat(r.navigation_blocked ?? []);
+      return blocked.some((b) => b.host === 'localhost');
+    }, 15_000);
+    const tabs = (await act(confined.id, { type: 'tabs' })).body.result.tabs;
+    assert.ok(!tabs.some((t) => /Hexactra Fixture Next/.test(t.title ?? '')), JSON.stringify(tabs));
+    await api('DELETE', `/v1/sessions/${confined.id}`);
+    // The next unconfined action lifts the rule: the same redirect now lands.
+    await ok('navigate', `${site}/redirect.html`);
+    await until('redirect lands when unconfined', async () => /Hexactra Fixture Next/.test((await cli('tabs')).out), 15_000);
+  });
+
   await step('full powers (#366): JavaScript, trusted input by position, marked screenshots and the desktop', async () => {
     const mcp = mcpClient();
     await mcp.rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'e2e', version: '0' } });

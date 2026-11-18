@@ -53,6 +53,7 @@ async fn fake_host(url: &str, bytes: &'static [u8]) {
                     id,
                     op.id,
                     &OperationResult {
+                        navigation_blocked: Vec::new(),
                         ok: true,
                         result: Some(json!({ "mime": "image/jpeg", "data": data })),
                         error: None,

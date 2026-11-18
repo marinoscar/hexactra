@@ -84,7 +84,7 @@ The full reference is [`api/openapi.yaml`](../api/openapi.yaml) (OpenAPI 3.1).
 |---|---|---|
 | `GET /v1/health` | anyone | Liveness and version |
 | `GET /v1/hosts` | client | Hosts, with `online`, `browser_connected`, `on_demand` (launches its browser when needed) and `viewer_url`. *Planned* (#336): `mode` (`unattended`, `attended`, `container`) and `desktop` (true when the host can share its desktop); `viewer_url` is then deprecated |
-| `POST /v1/sessions` | client | Create a session; body `{ "host_id"?, "label"?, "profile"?, "create_profile"? }`. `profile` defaults to `default`. Without `host_id` the control plane picks the most recently seen host that has a connected browser or launches one on demand. `503 no_host_available` if none |
+| `POST /v1/sessions` | client | Create a session; body `{ "host_id"?, "label"?, "profile"?, "create_profile"?, "allowed_domains"? }`. `profile` defaults to `default`. `allowed_domains` confines the session to those sites ([Allowed sites](#allowed-sites)); an invalid entry is `400`. Without `host_id` the control plane picks the most recently seen host that has a connected browser or launches one on demand. `503 no_host_available` if none |
 | `GET /v1/sessions`, `GET /v1/sessions/{id}` | client | List or read sessions |
 | `DELETE /v1/sessions/{id}` | client | End a session; queued operations become `cancelled` |
 | `POST /v1/sessions/{id}/actions` | client | Run one action. Body `{ "action": {...}, "timeout_ms"? }`. Waits for a terminal state and returns the operation. `?async=true` returns `202` at once |
@@ -92,7 +92,7 @@ The full reference is [`api/openapi.yaml`](../api/openapi.yaml) (OpenAPI 3.1).
 | `GET /v1/artifacts/{id}` | client | Bytes of a screenshot, by the handle in its result |
 | `POST /v1/hosts/register` | host | Register; body `{ "name", "version", "host_id"?, "viewer_url"? }`. *Planned* (#336, #338): `mode`, `desktop`, `desktop_protocol` (`rfb` or `kasmvnc`) |
 | `GET /v1/hosts/{id}/next?wait_ms=&browser_connected=&on_demand=&profiles=&running=&commands=` | host | Long-poll (max 30 s) for the next operation, or with `commands=true` a host command (`{ "command": {...} }`, sent first); `204` when none |
-| `POST /v1/hosts/{id}/operations/{op}/result` | host | Report `{ "ok", "result"?, "error"? }`. Only the host the operation was dispatched to may report, once |
+| `POST /v1/hosts/{id}/operations/{op}/result` | host | Report `{ "ok", "result"?, "error"?, "navigation_blocked"? }`. Only the host the operation was dispatched to may report, once |
 | `POST /v1/hosts/{id}/commands` | client | Run a [host command](#host-commands); body `{ "command": {...}, "timeout_ms"? }`. Waits for the result; `?async=true` returns `202` |
 | `GET /v1/hosts/{id}/commands`, `GET /v1/host-commands/{cmd}?wait_ms=` | client | Recent commands for a host (newest first), or one command |
 | `POST /v1/hosts/{id}/commands/{cmd}/result` | host | Report a command's result, like an operation's |
@@ -113,6 +113,7 @@ data: {"seq":42,"type":"operation.succeeded","at":"…","data":{"op_id":"…","s
 |---|---|
 | `host.registered`, `host.online`, `host.offline`, `host.removed`, `host.browser` | Host lifecycle; `host.browser` fires when the extension connects or disconnects |
 | `session.created`, `session.ended` | Session lifecycle |
+| `session.navigation_blocked` | The browser blocked a top-level navigation outside the session's [allowed sites](#allowed-sites): `{ session_id, operation_id, host, at }` |
 | `operation.queued`, `operation.dispatched`, `operation.succeeded`, `operation.failed`, `operation.timed_out`, `operation.cancelled` | Each action |
 | `handoff.created`, `handoff.resolved`, `handoff.cancelled`, `handoff.expired` | Human handoffs |
 | `handoff.secret_used`, `handoff.secret_claimed` | A `secret` answer was consumed by a `type_secret` action (with its `op_id`) or by the deprecated claim route. Never the value |
@@ -132,6 +133,19 @@ A host can keep several named browser profiles, each with its own cookies and si
 - **Sessions pick a profile.** Without `host_id`, the control plane picks an online host that has the profile, preferring one where it is already running.
 - **Unknown profiles are refused** with `404 profile_not_found`. Pass `create_profile: true` to let an on-demand host create it, so a typo never silently creates a new, signed-out profile. Attach-mode hosts cannot create profiles.
 - **Operations and handoffs carry the session's `profile`.**
+
+## Allowed sites
+
+A session created with `allowed_domains` may only load top-level pages on those sites (#508). The browser enforces the list itself, so a page cannot leave by redirecting, by script or with `window.open`.
+
+- **Matching.** A listed domain covers itself and its subdomains, case-insensitively: `example.com` allows `www.example.com`, not `badexample.com`. An IP literal is allowed only when it is listed. Write `example.com`, not `*.example.com` (refused). A scheme, path, port or trailing dot is stripped. At most 100 entries. An empty or absent list allows every site.
+- **What is blocked.** Every top-level navigation to another host, whoever starts it. Subresources (images, scripts, API calls of an allowed page) are not blocked.
+- **How it is reported.**
+  - A `navigate` or `new_tab` the agent asks for outside the list fails at once, with an error starting `navigation_blocked:`.
+  - A navigation the page starts itself is blocked by the browser and reported with the next action on that browser, in the operation's `navigation_blocked` list: `[{ "host", "at" }]`. Only the host is kept, never the URL. Each one is also a `session.navigation_blocked` event on the [event stream](#event-stream).
+- **Desktop actions are refused** in a confined session: desktop input reaches every window on the node, so the sites could not be enforced there.
+- **Scope.** The host agent sends the list with every action, and the extension applies it to the whole browser of that profile until the next action brings another list. An action of an unconfined session lifts it. Use a separate profile for confined sessions when a person shares the browser (attended mode).
+- **CLI.** `hexactra-fabric session create --allow-domain example.com --allow-domain example.org`.
 
 ## Host commands
 

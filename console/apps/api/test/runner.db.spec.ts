@@ -132,6 +132,35 @@ describe('the goal runner', () => {
     expect(outputs[3]).toMatch(/Refused: this looks like a purchase/);
   });
 
+  it('records each navigation the browser blocked under the allowed sites as its own step, outside the actions budget (#508)', async () => {
+    const userId = await login(`runner-blocked-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const db = prisma.forUser({ userId });
+    const chat = await db.conversation.create({ data: { userId, title: 'Order', allowedDomains: ['shop.example.test'] } });
+    const run = await db.run.create({ data: { userId, conversationId: chat.id, trigger: 'chat', goal: 'Read the item' } });
+    const base = fakeFabric();
+    const client = {
+      ...base.client,
+      request: async (method: string, path: string, opts: { body?: Record<string, unknown> } = {}) => {
+        const r = await (base.client as unknown as { request: (m: string, p: string, o?: unknown) => Promise<unknown> }).request(method, path, opts);
+        if (method === 'POST' && path.endsWith('/actions') && (opts.body?.action as { type?: string } | undefined)?.type === 'navigate') {
+          return { ...(r as object), navigation_blocked: [{ host: 'tracker.evil.test', at: '2026-11-18T10:00:00Z' }, { host: 'tracker.evil.test', at: '2026-11-18T10:00:01Z' }] };
+        }
+        return r;
+      },
+    };
+    const { ai, outputs } = scriptedAi([[['navigate', { url: 'https://shop.example.test/item', reason: 'open the shop' }], ['finish', { result: 'Done.', success: true }]]]);
+    const notifier = { needsYou: async () => undefined, finished: async () => undefined };
+    const runner = new GoalRunnerService(prisma, app.get(TasksService), client as never, ai, notifier as never);
+    await runner.advance(run.id, userId, null);
+    expect(outputs[0]).toMatch(/The browser blocked a page on tracker\.evil\.test/);
+    const steps = await prisma.runStep.findMany({ where: { runId: run.id }, orderBy: { seq: 'asc' } });
+    const blocked = steps.filter((s) => s.kind === 'navigation_blocked');
+    expect(blocked).toHaveLength(1);
+    expect(blocked[0]).toMatchObject({ ok: false, action: null, args: { host: 'tracker.evil.test' } });
+    expect(blocked[0]!.summary).toMatch(/not in this run's allowed sites/);
+  });
+
   it("reads the owner's chat guidance at the next chunk, once, shows a follow-up's context, and keeps the chat's limits (#490)", async () => {
     const userId = await login(`runner-guide-${stamp}@example.test`);
     const prisma = app.get(PrismaService);

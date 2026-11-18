@@ -167,6 +167,7 @@ pub async fn run(cfg: DaemonConfig) -> Result<()> {
 
 fn failure(msg: impl Into<String>) -> OperationResult {
     OperationResult {
+        navigation_blocked: Vec::new(),
         ok: false,
         result: None,
         error: Some(msg.into()),
@@ -228,6 +229,7 @@ fn spawn_open_desktop(
             .await
         {
             Ok(()) => OperationResult {
+                navigation_blocked: Vec::new(),
                 ok: true,
                 result: Some(serde_json::json!({ "tunnel_id": tunnel_id })),
                 error: None,
@@ -307,7 +309,9 @@ async fn run_attach_mode(cfg: DaemonConfig, client: HostClient) -> Result<()> {
                 let span = op_span(&op);
                 async {
                     tracing::info!(op_id = %op.id, kind = op.action.kind(), "executing operation");
-                    let result = if op.action.is_desktop() {
+                    let result = if op.action.is_desktop() && !op.allowed_domains.is_empty() {
+                        failure(crate::pool::DESKTOP_REFUSED)
+                    } else if op.action.is_desktop() {
                         // The node's OS desktop (#366): the agent drives it itself,
                         // in attach mode (attended nodes) as in launch mode.
                         let left = (op.deadline - chrono::Utc::now())
@@ -321,7 +325,9 @@ async fn run_attach_mode(cfg: DaemonConfig, client: HostClient) -> Result<()> {
                             op.profile
                         ))
                     } else {
-                        bridge.execute(op.id, &op.action, op.deadline).await
+                        bridge
+                            .execute_in(op.id, &op.action, op.deadline, &op.allowed_domains)
+                            .await
                     };
                     tracing::info!(op_id = %op.id, ok = result.ok, "operation finished");
                     report(&client, host_id, op.id, &result).await;
@@ -415,7 +421,7 @@ async fn run_launch_mode(
                 let span = op_span(&op);
                 tokio::spawn(async move {
                     let result = pool
-                        .execute(&op.profile, op.id, &op.action, op.deadline)
+                        .execute_in(&op.profile, op.id, &op.action, op.deadline, &op.allowed_domains)
                         .await;
                     if let Some(e) = &result.error {
                         if e.starts_with("browser unavailable") {

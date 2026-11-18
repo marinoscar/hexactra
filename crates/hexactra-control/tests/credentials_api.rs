@@ -144,6 +144,7 @@ async fn service_and_host_tokens_are_scoped() {
             hid,
             op.id,
             &hexactra_core::remote::OperationResult {
+                navigation_blocked: Vec::new(),
                 ok: true,
                 result: Some(json!({"tabs": []})),
                 error: None,

@@ -1,0 +1,14 @@
+<!doctype html>
+<html>
+  <head><title>Hexactra Fixture Redirect</title></head>
+  <body>
+    <p id="status">redirecting</p>
+    <script>
+      // The page sends itself to another host (localhost instead of
+      // 127.0.0.1): a session confined to 127.0.0.1 must block it (#508).
+      setTimeout(() => {
+        location.href = location.href.replace('127.0.0.1', 'localhost').replace('redirect.html', 'next.html');
+      }, 200);
+    </script>
+  </body>
+</html>
