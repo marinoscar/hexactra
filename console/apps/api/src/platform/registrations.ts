@@ -11,6 +11,7 @@ import {
   registerPlatformUserOwnedModels,
 } from '@marinoscar/platform-api/manifest';
 
+import { CHAT_MODEL_OWNERSHIP, CHAT_USER_OWNED_MODELS } from '../chat/chat.ownership';
 import { DOCUMENT_MODEL_OWNERSHIP, DOCUMENT_USER_OWNED_MODELS } from '../documents/documents.ownership';
 import { APP_MODEL_OWNERSHIP, APP_USER_OWNED_MODELS } from '../notes/notes.ownership';
 import { POLICIES_MODEL_OWNERSHIP, POLICIES_USER_OWNED_MODELS } from '../policies/policies.ownership';
@@ -19,5 +20,5 @@ import { TASKS_MODEL_OWNERSHIP, TASKS_USER_OWNED_MODELS } from '../tasks/tasks.o
 import { PERMISSION_OPTIONS } from './permissions';
 
 registerPlatformPermissions(PERMISSION_OPTIONS);
-registerPlatformUserOwnedModels([...APP_USER_OWNED_MODELS, ...TASKS_USER_OWNED_MODELS, ...QUESTIONS_USER_OWNED_MODELS, ...DOCUMENT_USER_OWNED_MODELS, ...POLICIES_USER_OWNED_MODELS]);
-registerPlatformModelOwnership([...APP_MODEL_OWNERSHIP, ...TASKS_MODEL_OWNERSHIP, ...QUESTIONS_MODEL_OWNERSHIP, ...DOCUMENT_MODEL_OWNERSHIP, ...POLICIES_MODEL_OWNERSHIP]);
+registerPlatformUserOwnedModels([...APP_USER_OWNED_MODELS, ...TASKS_USER_OWNED_MODELS, ...QUESTIONS_USER_OWNED_MODELS, ...DOCUMENT_USER_OWNED_MODELS, ...POLICIES_USER_OWNED_MODELS, ...CHAT_USER_OWNED_MODELS]);
+registerPlatformModelOwnership([...APP_MODEL_OWNERSHIP, ...TASKS_MODEL_OWNERSHIP, ...QUESTIONS_MODEL_OWNERSHIP, ...DOCUMENT_MODEL_OWNERSHIP, ...POLICIES_MODEL_OWNERSHIP, ...CHAT_MODEL_OWNERSHIP]);

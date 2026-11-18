@@ -11,7 +11,7 @@ import { RUN_STOP_REASONS } from '../runner/budget';
 import { TERMINAL_RUN_STATUSES, type RunStatus } from './run-status';
 
 export const RUN_STATUSES = ['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled'] as const satisfies readonly RunStatus[];
-export const RUN_TRIGGERS = ['manual', 'schedule', 'api', 'mcp', 'external'] as const;
+export const RUN_TRIGGERS = ['manual', 'schedule', 'api', 'mcp', 'external', 'chat'] as const;
 export type RunTrigger = (typeof RUN_TRIGGERS)[number];
 
 /** A run that is not finished: it can still change, and is never deleted (#418). */

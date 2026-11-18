@@ -818,6 +818,30 @@
         "none": "The TUI opens on its own runs and inbox screens; the summary is the web app's first page"
       },
       "web": "/"
+    },
+    {
+      "id": "chats.manage",
+      "description": "Chats: threads in which the owner asks for something and the agent answers; list, create, read with messages, post a message, rename, archive and delete (with the chat's runs)",
+      "rest": [
+        "GET /api/chats",
+        "POST /api/chats",
+        "GET /api/chats/{id}",
+        "PATCH /api/chats/{id}",
+        "DELETE /api/chats/{id}",
+        "POST /api/chats/{id}/messages"
+      ],
+      "cli": {
+        "none": "A chat is a conversation surface of the web app; the CLI starts a job with `runs start` and answers with `inbox answer`"
+      },
+      "mcp": {
+        "none": "A hosted AI app is already a chat: it starts runs with run_goal and shows the run and question cards in its own thread"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; a chat thread with cards is the web app's surface"
+      },
+      "web": {
+        "none": "The chat page arrives with #486 (epic #482); until then the routes are the API only"
+      }
     }
   ]
 }

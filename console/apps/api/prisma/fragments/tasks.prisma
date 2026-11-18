@@ -22,6 +22,8 @@ enum RunTrigger {
   api
   mcp
   external
+  /// Started from a chat (#483): the run carries `conversation_id`.
+  chat
 
   @@map("run_trigger")
 }
@@ -154,14 +156,20 @@ model Run {
   /// Tier escalations so far (#405).
   escalations      Int           @default(0)
 
-  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  task  Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  steps RunStep[]
+  /// The chat that started the run (trigger `chat`, #483); null for every other run.
+  conversationId   String?       @map("conversation_id") @db.Uuid
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task         Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  steps        RunStep[]
+  chatMessages ChatMessage[]
 
   @@index([userId, createdAt])
   /// The runs list filtered by status, newest first (#420).
   @@index([userId, status, createdAt])
   @@index([taskId, createdAt])
+  @@index([conversationId, createdAt])
   @@index([status])
   @@index([remindAt])
   @@map("runs")

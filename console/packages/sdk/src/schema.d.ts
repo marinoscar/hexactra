@@ -5989,6 +5989,60 @@ export interface paths {
         patch: operations["schedules_update"];
         trace?: never;
     };
+    "/api/chats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `chat:read`. */
+        get: operations["chat_list"];
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `chat:write`. */
+        post: operations["chat_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/chats/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description **Requires:** authentication, plus permission `chat:read`. */
+        get: operations["chat_get"];
+        put?: never;
+        post?: never;
+        /** @description **Requires:** authentication, plus permission `chat:write`. */
+        delete: operations["chat_remove"];
+        options?: never;
+        head?: never;
+        /** @description **Requires:** authentication, plus permission `chat:write`. */
+        patch: operations["chat_update"];
+        trace?: never;
+    };
+    "/api/chats/{id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description **Requires:** authentication, plus permission `chat:write`. */
+        post: operations["chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webhooks/events": {
         parameters: {
             query?: never;
@@ -6850,6 +6904,9 @@ export interface components {
              * @example WEBHOOK_EVENT_UNKNOWN
              * @example WEBHOOK_EVENT_NOT_PERMITTED
              * @example WEBHOOK_LIMIT_REACHED
+             * @example CHAT_NOT_FOUND
+             * @example CHAT_ARCHIVED
+             * @example CHAT_RUN_LIVE
              * @example ERROR
              */
             code: string;
@@ -12985,7 +13042,7 @@ export interface components {
                     /** @enum {string} */
                     status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
                     /** @enum {string} */
-                    trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
                     /** @description ISO 8601 timestamp */
                     createdAt: string;
                     finishedAt: string | null;
@@ -13097,7 +13154,7 @@ export interface components {
                         /** @enum {string} */
                         status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
                         /** @enum {string} */
-                        trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+                        trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
                         /** @description ISO 8601 timestamp */
                         createdAt: string;
                         finishedAt: string | null;
@@ -13213,7 +13270,7 @@ export interface components {
                     /** @enum {string} */
                     status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
                     /** @enum {string} */
-                    trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
                     /** @description ISO 8601 timestamp */
                     createdAt: string;
                     finishedAt: string | null;
@@ -13470,7 +13527,7 @@ export interface components {
                     /** @enum {string} */
                     status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
                     /** @enum {string} */
-                    trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
                     /** @description ISO 8601 timestamp */
                     createdAt: string;
                     finishedAt: string | null;
@@ -13575,7 +13632,7 @@ export interface components {
                 state?: "live" | "finished";
                 /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
                 taskId?: "none" | string;
-                /** @description What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas. */
+                /** @description What started the run. Any of: manual, schedule, api, mcp, external, chat. Repeat the parameter or separate the values with commas. */
                 trigger?: string | string[];
                 /**
                  * Format: date-time
@@ -13640,10 +13697,12 @@ export interface components {
             /** Format: uuid */
             userId: string;
             taskId: string | null;
+            /** @description The chat that started the run (trigger `chat`); null for every other run */
+            conversationId: string | null;
             /** @enum {string} */
             status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
             /** @enum {string} */
-            trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+            trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
             goal: string;
             profile: string;
             hostId: string | null;
@@ -13770,10 +13829,12 @@ export interface components {
                 /** Format: uuid */
                 userId: string;
                 taskId: string | null;
+                /** @description The chat that started the run (trigger `chat`); null for every other run */
+                conversationId: string | null;
                 /** @enum {string} */
                 status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
                 /** @enum {string} */
-                trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+                trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
                 goal: string;
                 profile: string;
                 hostId: string | null;
@@ -13920,10 +13981,12 @@ export interface components {
             /** Format: uuid */
             userId: string;
             taskId: string | null;
+            /** @description The chat that started the run (trigger `chat`); null for every other run */
+            conversationId: string | null;
             /** @enum {string} */
             status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
             /** @enum {string} */
-            trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+            trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
             goal: string;
             profile: string;
             hostId: string | null;
@@ -14067,10 +14130,12 @@ export interface components {
             /** Format: uuid */
             userId: string;
             taskId: string | null;
+            /** @description The chat that started the run (trigger `chat`); null for every other run */
+            conversationId: string | null;
             /** @enum {string} */
             status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
             /** @enum {string} */
-            trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+            trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
             goal: string;
             profile: string;
             hostId: string | null;
@@ -14522,7 +14587,7 @@ export interface components {
                     /** @enum {string} */
                     status: "succeeded" | "failed" | "cancelled";
                     /** @enum {string} */
-                    trigger: "manual" | "schedule" | "api" | "mcp" | "external";
+                    trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
                     /** @description ISO 8601 timestamp */
                     createdAt: string;
                     startedAt: string | null;
@@ -14688,6 +14753,180 @@ export interface components {
             concurrency?: "skip" | "queue";
             /** @description Overrides the task's agent policy for scheduled runs; null follows the task. */
             policyId?: string | null;
+        };
+        ChatPageResponseDto: {
+            items: {
+                /** Format: uuid */
+                id: string;
+                /** @description Empty until the first message names the chat, or the owner does */
+                title: string;
+                /**
+                 * @description An archived chat is read-only
+                 * @enum {string}
+                 */
+                status: "active" | "archived";
+                /** @description The browser profile the chat's runs use */
+                profile: string;
+                /** @description The machine the chat's runs prefer; null lets the console choose */
+                hostId: string | null;
+                hostFallback: boolean;
+                /** @description The agent policy of the chat's runs (a UUID or `builtin:<key>`); null follows the user's default */
+                policyId: string | null;
+                /** @description ISO 8601 timestamp */
+                lastMessageAt: string;
+                /** @description ISO 8601 timestamp */
+                createdAt: string;
+                /** @description ISO 8601 timestamp */
+                updatedAt: string;
+                /** @description Null for a chat with no message */
+                preview: {
+                    /** @enum {string} */
+                    role: "user" | "assistant" | "system";
+                    /**
+                     * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`).
+                     * @enum {string}
+                     */
+                    kind: "text" | "clarify" | "run" | "result" | "task_draft";
+                    /** @description The start of the newest message, on one line */
+                    text: string;
+                } | null;
+                /** @description The chat's live run (queued, running or waiting for a person); null when it has none */
+                liveRun: {
+                    /** Format: uuid */
+                    id: string;
+                    /** @enum {string} */
+                    status: "queued" | "running" | "waiting_human";
+                } | null;
+            }[];
+            /** @description Pass it as `cursor` to read the next page; null on the last page. Opaque: do not parse or build it. */
+            nextCursor: string | null;
+        };
+        ChatResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description Empty until the first message names the chat, or the owner does */
+            title: string;
+            /**
+             * @description An archived chat is read-only
+             * @enum {string}
+             */
+            status: "active" | "archived";
+            /** @description The browser profile the chat's runs use */
+            profile: string;
+            /** @description The machine the chat's runs prefer; null lets the console choose */
+            hostId: string | null;
+            hostFallback: boolean;
+            /** @description The agent policy of the chat's runs (a UUID or `builtin:<key>`); null follows the user's default */
+            policyId: string | null;
+            /** @description ISO 8601 timestamp */
+            lastMessageAt: string;
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            /** @description ISO 8601 timestamp */
+            updatedAt: string;
+        };
+        CreateChatDto: {
+            title?: string;
+            /** @description The browser profile the chat's runs use. */
+            profile?: string;
+            /** @description The machine the chat's runs prefer; `null` lets the console choose. */
+            hostId?: string | null;
+            /** @description Whether a run may use another machine when the preferred one is offline. */
+            hostFallback?: boolean;
+            /** @description The agent policy of the chat's runs: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy. */
+            policyId?: string | null;
+        };
+        ChatDetailResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description Empty until the first message names the chat, or the owner does */
+            title: string;
+            /**
+             * @description An archived chat is read-only
+             * @enum {string}
+             */
+            status: "active" | "archived";
+            /** @description The browser profile the chat's runs use */
+            profile: string;
+            /** @description The machine the chat's runs prefer; null lets the console choose */
+            hostId: string | null;
+            hostFallback: boolean;
+            /** @description The agent policy of the chat's runs (a UUID or `builtin:<key>`); null follows the user's default */
+            policyId: string | null;
+            /** @description ISO 8601 timestamp */
+            lastMessageAt: string;
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            /** @description ISO 8601 timestamp */
+            updatedAt: string;
+            messages: {
+                /** Format: uuid */
+                id: string;
+                /** @description Order within the chat, from 1 */
+                seq: number;
+                /** @enum {string} */
+                role: "user" | "assistant" | "system";
+                /**
+                 * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`).
+                 * @enum {string}
+                 */
+                kind: "text" | "clarify" | "run" | "result" | "task_draft";
+                /** @description Never a secret: a credential the agent asks for goes to the browser, not to the chat */
+                text: string;
+                /** @description The run a `run` or `result` message is about */
+                runId: string | null;
+                /** @description Kind-specific data; null for plain text */
+                meta: unknown | null;
+                /** @description ISO 8601 timestamp */
+                createdAt: string;
+            }[];
+            /** @description True when more messages follow the last one returned: read on with `afterSeq` */
+            hasMore: boolean;
+            /** @description The chat's live run (queued, running or waiting for a person); null when it has none */
+            liveRun: {
+                /** Format: uuid */
+                id: string;
+                /** @enum {string} */
+                status: "queued" | "running" | "waiting_human";
+            } | null;
+        };
+        UpdateChatDto: {
+            title?: string;
+            /** @enum {string} */
+            status?: "active" | "archived";
+            /** @description The browser profile the chat's runs use. */
+            profile?: string;
+            /** @description The machine the chat's runs prefer; `null` lets the console choose. */
+            hostId?: string | null;
+            /** @description Whether a run may use another machine when the preferred one is offline. */
+            hostFallback?: boolean;
+            /** @description The agent policy of the chat's runs: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy. */
+            policyId?: string | null;
+        };
+        ChatMessageResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description Order within the chat, from 1 */
+            seq: number;
+            /** @enum {string} */
+            role: "user" | "assistant" | "system";
+            /**
+             * @description `text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`).
+             * @enum {string}
+             */
+            kind: "text" | "clarify" | "run" | "result" | "task_draft";
+            /** @description Never a secret: a credential the agent asks for goes to the browser, not to the chat */
+            text: string;
+            /** @description The run a `run` or `result` message is about */
+            runId: string | null;
+            /** @description Kind-specific data; null for plain text */
+            meta: unknown | null;
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+        };
+        PostMessageDto: {
+            /** @description What the owner wrote. Never a password or a code: the agent asks for those through a request. */
+            text: string;
         };
         WebhookEventCatalogDto: {
             items: {
@@ -32841,7 +33080,7 @@ export interface operations {
                 state?: "live" | "finished";
                 /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
                 taskId?: "none" | string;
-                /** @description What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas. */
+                /** @description What started the run. Any of: manual, schedule, api, mcp, external, chat. Repeat the parameter or separate the values with commas. */
                 trigger?: string | string[];
                 /** @description Runs created at or after this ISO 8601 date-time (inclusive). */
                 from?: string;
@@ -32965,7 +33204,7 @@ export interface operations {
             query?: {
                 /** @description A task's id, or `none` for runs without a task (ad-hoc and external runs). */
                 taskId?: "none" | string;
-                /** @description What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas. */
+                /** @description What started the run. Any of: manual, schedule, api, mcp, external, chat. Repeat the parameter or separate the values with commas. */
                 trigger?: string | string[];
                 /** @description Runs created at or after this ISO 8601 date-time (inclusive). */
                 from?: string;
@@ -34331,6 +34570,314 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["ScheduleResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    chat_list: {
+        parameters: {
+            query?: {
+                /** @description `active` (the default) or `archived`. */
+                status?: "active" | "archived";
+                /** @description The previous page's `nextCursor`. Opaque: do not parse or build it. */
+                cursor?: string;
+                /** @description Rows to return: 1 to 100. Default 30. */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChatPageResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    chat_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateChatDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChatResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    chat_get: {
+        parameters: {
+            query?: {
+                /** @description Only messages with a `seq` greater than this: `0` (the default) is the whole thread. */
+                afterSeq?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChatDetailResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    chat_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    chat_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateChatDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChatResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostMessageDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ChatMessageResponseDto"];
                     };
                 };
             };

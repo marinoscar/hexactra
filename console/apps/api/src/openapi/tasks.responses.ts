@@ -29,7 +29,7 @@ export const taskSummarySchema = z
     scheduleState: z.enum(['none', 'active', 'paused', 'partial']).describe('`none`: no schedule. `active`: all enabled. `paused`: none enabled. `partial`: some enabled, some not.'),
     nextRunAt: iso.nullable().describe('The earliest next firing among the enabled schedules'),
     lastRun: z
-      .object({ id: z.uuid(), status: runStatus, trigger: z.enum(['manual', 'schedule', 'api', 'mcp', 'external']), createdAt: iso, finishedAt: iso.nullable() })
+      .object({ id: z.uuid(), status: runStatus, trigger: z.enum(['manual', 'schedule', 'api', 'mcp', 'external', 'chat']), createdAt: iso, finishedAt: iso.nullable() })
       .nullable()
       .describe('The newest run of the task'),
     liveRunId: z.uuid().nullable().describe('The newest run that is queued, running or waiting for a person'),
