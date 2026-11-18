@@ -44,6 +44,7 @@ import {
   type MemoryKind,
 } from '../memories/api';
 import { MemoryDialog } from '../memories/MemoryDialog';
+import { SuggestMemoriesSwitch } from '../memories/SuggestMemoriesSwitch';
 import { saveFile } from '../policies/api';
 import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, RelativeTime, toast, useApiAction, useBreakpoint, useConfirm } from '../ui';
 
@@ -250,6 +251,9 @@ export function MemoriesPage() {
         primary={{ key: 'add', label: 'Add', Icon: AddIcon, onClick: () => setEditing('new'), hidden: !canWrite }}
         actions={[{ key: 'export', label: 'Export', Icon: DownloadOutlinedIcon, onClick: () => void download(), hidden: isEmpty }]}
       />
+      <Box sx={{ mb: 2 }}>
+        <SuggestMemoriesSwitch disabled={!canWrite} />
+      </Box>
       <ErrorBanner error={action.error} />
       {memories === null && <ListSkeleton />}
       {isEmpty && !showArchived && (

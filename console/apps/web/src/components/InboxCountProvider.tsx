@@ -37,7 +37,8 @@ export function InboxCountProvider({ children }: { children: ReactNode }) {
     if (!allowed) return;
     api
       .get<unknown[]>('/inbox')
-      .then((list) => setCount(Array.isArray(list) ? list.length : 0))
+      // A memory suggestion (#553) waits on nobody: it is not counted.
+      .then((list) => setCount(Array.isArray(list) ? list.filter((i) => (i as { blocking?: unknown } | null)?.blocking !== false).length : 0))
       .catch(() => setCount(0));
   }, [api, allowed]);
 

@@ -92,3 +92,17 @@ export function matchesSearch(m: Memory, q: string): boolean {
   if (!needle) return true;
   return [m.label, ...m.aliases, ...Object.values(m.attributes)].join('\n').toLowerCase().includes(needle);
 }
+
+// ---- Suggestions (#553) ----
+
+/** Whether the agent may suggest memories (`memories.suggest` of the user settings, on by default). */
+export async function getSuggestMemories(api: PlatformApiClient): Promise<boolean> {
+  const doc = await api.get<{ memories?: { suggest?: boolean } | null }>('/user-settings');
+  return doc.memories?.suggest !== false;
+}
+
+/** Turns the agent's memory suggestions on or off. */
+export async function setSuggestMemories(api: PlatformApiClient, suggest: boolean): Promise<boolean> {
+  const doc = await api.patch<{ memories?: { suggest?: boolean } | null }>('/user-settings', { memories: { suggest } });
+  return doc.memories?.suggest !== false;
+}

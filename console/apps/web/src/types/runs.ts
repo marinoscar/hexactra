@@ -125,6 +125,10 @@ export interface Run {
    * the count on a list row. "Run again" asks before repeating such a run.
    */
   confirmedActions?: ConfirmedAction[] | number;
+  /** The owner's memories this run used (#553). */
+  memoryIds?: string[];
+  /** `GET /runs/:id`: the used memories that still exist, with their labels (#553). */
+  memories?: { id: string; label: string; status: 'active' | 'superseded' | 'archived' }[];
 }
 
 /** One step the owner confirmed that a run carried out (#540). The prompt is masked. */

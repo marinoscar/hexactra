@@ -196,6 +196,8 @@ model Run {
   /// Steps the owner confirmed that the run then carried out (#540): `[{ seq, prompt, action, at }]`,
   /// at most 20, the prompt cut to 300 characters and masked. Never a typed value or a secret.
   confirmedActions Json?         @map("confirmed_actions")
+  /// The owner's memories this run used (#553): the ones its goal names. Plain ids, not foreign keys: a deleted memory leaves its id.
+  memoryIds        String[]      @default([]) @map("memory_ids") @db.Uuid
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   task         Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)

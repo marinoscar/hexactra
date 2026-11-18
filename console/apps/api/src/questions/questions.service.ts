@@ -1,8 +1,10 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 import { Prisma, type Question } from '@prisma/client';
 
 import { FabricClient, FabricError } from '../fabric/fabric.client';
+import { MemoriesService } from '../memories/memories.service';
+import { createMemorySchema, supersedeMemorySchema } from '../memories/memories.schemas';
 import { PrismaService } from '../prisma/prisma.service';
 import { enqueueGoalRun } from '../runner/goal-run.enqueue';
 import { FabricSession, handoffOutcome, type CreatedHandoff, type FabricHandoff } from '../runner/fabric-session';
@@ -18,6 +20,10 @@ import {
   questionSpecSchema,
   toResponse,
   validateAnswer,
+  MEMORY_PROPOSAL_TTL_MS,
+  memoryProposalSchema,
+  type MemoryProposal,
+  type NormalizedAnswer,
   type QuestionAnswerInput,
   type QuestionGate,
   type QuestionConstraints,
@@ -68,6 +74,12 @@ export interface QuestionView {
   answeredAt: string | null;
   /** The AI app that asked (#464); null when no app did. */
   client: { id: string | null; name: string | null; verified: boolean } | null;
+  /** False for a question no run waits on: a memory proposal (#553). */
+  blocking: boolean;
+  /** memory (#553): the proposed memory, shown on its card; null for every other input. */
+  proposal: MemoryProposal | null;
+  /** The chat a memory proposal came from (#553); null otherwise. */
+  conversationId: string | null;
 }
 
 /** The client columns a question stores (#464). */
@@ -106,8 +118,14 @@ export function toQuestionView(q: Question): QuestionView {
     expiresAt: q.expiresAt.toISOString(),
     answeredAt: q.answeredAt?.toISOString() ?? null,
     client: q.clientId || q.clientName ? { id: q.clientId, name: q.clientName, verified: q.clientId !== null } : null,
+    blocking: q.blocking,
+    proposal: q.input === 'memory' ? ((q.proposal as unknown as MemoryProposal | null) ?? null) : null,
+    conversationId: q.conversationId,
   };
 }
+
+/** What a memory proposal's question says wherever it is listed or notified: never the proposal's values (#553). */
+export const MEMORY_PROPOSAL_PROMPT = 'The agent suggests remembering something.';
 
 /** A fabric handoff's input or kind, mapped onto the console's (unknown values fall back). */
 function inputOf(v: string): QuestionInputType {
@@ -135,6 +153,7 @@ export class QuestionsService {
     private readonly fabric: FabricClient,
     private readonly jobs: JobsService,
     private readonly events: QuestionEvents,
+    @Optional() private readonly memories?: MemoriesService,
   ) {}
 
   private db(userId: string) {
@@ -177,6 +196,32 @@ export class QuestionsService {
         ...clientData(opts.client),
         ...this.specData(spec),
         expiresAt: new Date(Date.now() + spec.timeoutMs),
+      },
+    });
+    await this.emit('question.asked', q);
+    return toQuestionView(q);
+  }
+
+  /**
+   * A memory proposal (#553): a question no run waits on, answered only on the
+   * owner's signed-in card. Created by the server only (`MemoryProposals`),
+   * never from a question spec. Its prompt is fixed and carries no value, so a
+   * notification or a webhook never shows what is proposed.
+   */
+  async createProposal(ownerUserId: string, proposal: MemoryProposal, opts: { askedBy: string; proposalKey: string; runId?: string | null; conversationId?: string | null }): Promise<QuestionView> {
+    const q = await this.db(ownerUserId).question.create({
+      data: {
+        ownerUserId,
+        askedBy: opts.askedBy.slice(0, 200),
+        runId: opts.runId ?? null,
+        conversationId: opts.conversationId ?? null,
+        input: 'memory',
+        kind: 'memory',
+        prompt: MEMORY_PROPOSAL_PROMPT,
+        blocking: false,
+        proposal: memoryProposalSchema.parse(proposal) as unknown as Prisma.InputJsonValue,
+        proposalKey: opts.proposalKey,
+        expiresAt: new Date(Date.now() + MEMORY_PROPOSAL_TTL_MS),
       },
     });
     await this.emit('question.asked', q);
@@ -380,6 +425,9 @@ export class QuestionsService {
     // The channel rules (channels/channel-rules.ts): a channel that does not sign the person in never sends a secret or approves a high-risk confirm.
     if (!mayAnswerOn(channel, { input: q.input, risk: q.risk }, input.outcome ?? 'completed')) {
       const where = CHANNEL_RULES[channelId(channel)]?.label ?? channel;
+      if (q.input === 'memory') {
+        throw new ForbiddenException({ code: 'CHANNEL_NOT_ALLOWED', message: `A memory the agent suggests is saved or declined only in Hexactra, signed in (the web app or the Android app), not from ${where}` });
+      }
       throw new ForbiddenException({
         code: 'CHANNEL_NOT_ALLOWED',
         message: `${q.input === 'credentials' ? 'A sign-in' : q.input === 'secret' ? 'A code or password' : 'A high-risk confirmation'} cannot be answered from ${where}: answer it in the Hexactra inbox, signed in`,
@@ -408,6 +456,20 @@ export class QuestionsService {
     if (claimed.count === 0) {
       const fresh = await this.find(actor.id, q.id);
       throw new ConflictException({ code: fresh.status === 'expired' ? 'QUESTION_EXPIRED' : 'ALREADY_ANSWERED', message: fresh.status === 'expired' ? 'This question expired' : 'This question was already answered' });
+    }
+
+    if (q.input === 'memory' && status === 'answered') {
+      // Only this handler writes a proposed memory, through the memories service: its secret check, label rule and limit apply.
+      try {
+        const memoryId = await this.saveProposal(actor.id, q, answer);
+        await db.question.updateMany({ where: { id: q.id }, data: { response: { ...response, memoryId } as unknown as Prisma.InputJsonValue } });
+      } catch (e) {
+        await db.question.updateMany({
+          where: { id: q.id, status, answeredAt: now },
+          data: { status: 'pending', response: Prisma.DbNull, answeredByUserId: null, answeredChannel: null, answeredAt: null },
+        });
+        throw e;
+      }
     }
 
     if (q.handoffId) {
@@ -440,6 +502,39 @@ export class QuestionsService {
     await this.emit(status === 'answered' ? 'question.answered' : 'question.cancelled', done, channel);
     await this.resumeRun(actor, done);
     return toQuestionView(done);
+  }
+
+  /**
+   * Writes the memory an approved proposal holds (#553), as the owner edited it
+   * on the card: a new memory, or a new version of the one it supersedes, with
+   * source `agent_proposed` and the run or chat it came from.
+   */
+  private async saveProposal(userId: string, q: Question, answer: NormalizedAnswer): Promise<string> {
+    if (!this.memories) throw new ConflictException({ code: 'MEMORIES_UNAVAILABLE', message: 'Memories are not available on this server' });
+    const proposal = memoryProposalSchema.parse(q.proposal ?? {});
+    const edited = answer.memory;
+    const body = {
+      kind: edited?.kind ?? proposal.kind,
+      label: edited?.label ?? proposal.label,
+      aliases: edited?.aliases ?? proposal.aliases,
+      attributes: edited?.attributes ?? proposal.attributes,
+    };
+    const origin = { source: 'agent_proposed' as const, sourceRunId: q.runId, sourceConversationId: q.conversationId };
+    const invalid = (issues: readonly { path: readonly PropertyKey[]; message: string }[]) =>
+      new BadRequestException({ code: 'INVALID_ANSWER', message: issues.map((i) => `${i.path.map(String).join('.') || 'memory'}: ${i.message}`).join('; ') });
+    if (proposal.supersedes) {
+      const parsed = supersedeMemorySchema.safeParse(body);
+      if (!parsed.success) throw invalid(parsed.error.issues);
+      try {
+        return (await this.memories.supersede(userId, proposal.supersedes, parsed.data, origin)).id;
+      } catch (e) {
+        // The memory it would replace was changed, archived or deleted since: save it as a new one.
+        if (!(e instanceof HttpException) || !['MEMORY_NOT_FOUND', 'MEMORY_NOT_ACTIVE'].includes(String((e.getResponse() as { code?: unknown }).code))) throw e;
+      }
+    }
+    const parsed = createMemorySchema.safeParse(body);
+    if (!parsed.success) throw invalid(parsed.error.issues);
+    return (await this.memories.create(userId, parsed.data, origin)).id;
   }
 
   /** The AI runner resumes its own runs at once; an external agent polls its handoff. */

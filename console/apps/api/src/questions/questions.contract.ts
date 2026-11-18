@@ -4,8 +4,16 @@
 // src/runner/fabric-session.ts.
 import { z } from 'zod';
 
+/** The inputs an agent (or a person's own automation) may ask with. */
 export const QUESTION_INPUTS = ['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials'] as const;
-export type QuestionInputType = (typeof QUESTION_INPUTS)[number];
+/**
+ * The inputs only the server creates (#553): `memory`, a memory the agent
+ * proposes and the owner saves or declines on its card. Never accepted from a
+ * question spec (`POST /api/questions`, `request_human`, an external agent).
+ */
+export const SERVER_QUESTION_INPUTS = ['memory'] as const;
+export type AskableInputType = (typeof QUESTION_INPUTS)[number];
+export type QuestionInputType = AskableInputType | (typeof SERVER_QUESTION_INPUTS)[number];
 
 /**
  * Inputs whose answer holds a secret the fabric keeps and types, never
@@ -74,6 +82,7 @@ export type QuestionConstraints = z.infer<typeof questionConstraintsSchema>;
 
 const CONSTRAINT_KEYS: Record<QuestionInputType, readonly (keyof QuestionConstraints)[]> = {
   none: [],
+  memory: [],
   takeover: [],
   secret: [],
   credentials: [],
@@ -200,6 +209,42 @@ export const questionSpecSchema = questionSpecObject.superRefine(refineSpec).tra
   },
 );
 
+// ---- Memory proposals (#553) ----
+
+export const MEMORY_PROPOSAL_KINDS = ['person', 'account', 'preference', 'fact'] as const;
+/** How long a memory proposal waits for the owner before it expires. */
+export const MEMORY_PROPOSAL_TTL_MS = 7 * 24 * 3600_000;
+
+const proposalLabel = z.string().trim().min(1).max(120);
+const proposalAliases = z.array(z.string().trim().min(1).max(60)).max(10);
+const proposalAttributes = z
+  .record(z.string().trim().min(1).max(60), z.string().trim().min(1).max(500))
+  .refine((r) => Object.keys(r).length >= 1 && Object.keys(r).length <= 20, { message: 'Between 1 and 20 attributes' });
+
+/** A memory as the agent proposes it (stored on the question, shown on the card). */
+export const memoryProposalSchema = z
+  .object({
+    kind: z.enum(MEMORY_PROPOSAL_KINDS),
+    label: proposalLabel,
+    aliases: proposalAliases.default([]),
+    attributes: proposalAttributes,
+    /** The id of the active memory this one would replace (a changed value). */
+    supersedes: z.uuid().nullable().default(null),
+  })
+  .strict();
+export type MemoryProposal = z.infer<typeof memoryProposalSchema>;
+
+/** What the owner saves from a proposal's card: the proposal, edited. */
+export const memoryProposalAnswerSchema = z
+  .object({
+    kind: z.enum(MEMORY_PROPOSAL_KINDS).optional(),
+    label: proposalLabel,
+    aliases: proposalAliases.optional(),
+    attributes: proposalAttributes,
+  })
+  .strict();
+export type MemoryProposalAnswer = z.infer<typeof memoryProposalAnswerSchema>;
+
 /** An answer as a person (or a channel on their behalf) sends it. */
 export const questionAnswerSchema = z
   .object({
@@ -212,6 +257,8 @@ export const questionAnswerSchema = z
     secret: z.string().max(TEXT_MAX_LENGTH).optional(),
     /** The person's choice for the question's "remember me" option. */
     remember: z.boolean().optional(),
+    /** memory (#553): the memory as the owner saves it, edited on the card; omitted, the proposal is saved as proposed. */
+    memory: memoryProposalAnswerSchema.optional(),
   })
   .strict();
 export type QuestionAnswerInput = z.infer<typeof questionAnswerSchema>;
@@ -224,6 +271,8 @@ export interface NormalizedAnswer {
   /** credentials: the password, forwarded to the fabric and never stored. */
   secret?: string;
   remember?: boolean;
+  /** memory: what the owner saves. */
+  memory?: MemoryProposalAnswer;
 }
 
 /** The stored and returned response. Never carries a secret value. */
@@ -234,6 +283,8 @@ export interface QuestionResponse {
   valueWithheld: boolean;
   /** What the person chose for the "remember me" option, when one was offered. */
   remember?: boolean;
+  /** memory (#553): the memory the answer saved. */
+  memoryId?: string;
   channel?: string;
   by?: string;
   answeredAt: string;
@@ -264,6 +315,7 @@ function onStep(value: number, base: number, step: number): boolean {
  */
 export function validateAnswer(q: Pick<QuestionSpec, 'input' | 'options' | 'constraints'> & { rememberLabel?: string | null }, a: QuestionAnswerInput): NormalizedAnswer {
   if (a.outcome === 'cancelled') return { outcome: 'cancelled' };
+  if (a.memory !== undefined && q.input !== 'memory') throw new AnswerInvalidError('memory is only for a memory proposal');
   if (a.secret !== undefined && q.input !== 'credentials') throw new AnswerInvalidError('secret is only for a sign-in (credentials)');
   if (a.remember !== undefined && !q.rememberLabel) throw new AnswerInvalidError('This question offered no "remember me" option');
   const remember = a.remember !== undefined ? { remember: a.remember } : {};
@@ -278,6 +330,10 @@ export function validateAnswer(q: Pick<QuestionSpec, 'input' | 'options' | 'cons
   };
   if (q.input !== 'multi_choice' && a.values !== undefined) fail(`values is only for multi_choice answers`);
   switch (q.input) {
+    case 'memory':
+      // The memory itself is checked where it is written (the secret check, the label rule, the limit).
+      if (a.value !== undefined) fail('A memory proposal is answered with memory, not value');
+      return { outcome: 'completed', ...(a.memory ? { memory: a.memory } : {}) };
     case 'none':
     case 'takeover':
       if (a.value !== undefined) fail(`A ${q.input} question takes no value`);

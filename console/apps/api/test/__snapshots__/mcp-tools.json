@@ -12,7 +12,7 @@
       "openWorldHint": true
     },
     "inputSchema": "598c2026b404ec09",
-    "outputSchema": "b644f34ff85f602e"
+    "outputSchema": "35783912de1ec06e"
   },
   {
     "name": "run_status",
@@ -27,7 +27,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ccc45f61684b506f",
-    "outputSchema": "ed5b92b4d0e43597"
+    "outputSchema": "7667177551135da1"
   },
   {
     "name": "run_wait",
@@ -57,7 +57,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ba6a4bcb152ad3e3",
-    "outputSchema": "77736a2f2d7b6e6e"
+    "outputSchema": "177cef981c3369f0"
   },
   {
     "name": "run_cancel",
@@ -72,7 +72,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "b644f34ff85f602e"
+    "outputSchema": "35783912de1ec06e"
   },
   {
     "name": "run_export",
@@ -147,7 +147,7 @@
       "openWorldHint": true
     },
     "inputSchema": "9d76478a6c60541f",
-    "outputSchema": "b644f34ff85f602e"
+    "outputSchema": "35783912de1ec06e"
   },
   {
     "name": "schedule_create",
@@ -237,7 +237,7 @@
       "openWorldHint": false
     },
     "inputSchema": "b5ceb7c3c697ea95",
-    "outputSchema": "c320e4d2185ceb43"
+    "outputSchema": "3dcd9e487db988c0"
   },
   {
     "name": "inbox_answer",
@@ -852,7 +852,7 @@
       "openWorldHint": false
     },
     "inputSchema": "5b0d5bd2f2456d07",
-    "outputSchema": "b644f34ff85f602e"
+    "outputSchema": "35783912de1ec06e"
   },
   {
     "name": "question_card_answer",

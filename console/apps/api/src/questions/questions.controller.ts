@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Optional, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, NotFoundException, Optional, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { ApiTags } from '@nestjs/swagger';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
@@ -6,6 +6,7 @@ import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { RequestClientService } from '../connected-apps/request-client';
 import { QuestionResponseDto } from '../openapi/console.responses';
 import { AnswerQuestionDto, CancelQuestionDto, CreateQuestionDto, GetQuestionDto, ListQuestionsDto } from './questions.schemas';
+import { MEMORY_ANSWER_CHANNELS, channelId } from './channels/channel-rules';
 import { QuestionsService, type QuestionActor, type QuestionView } from './questions.service';
 
 /**
@@ -25,16 +26,35 @@ export class QuestionsController {
   @Get()
   @ApiDataResponse(QuestionResponseDto, { isArray: true })
   @Auth({ permissions: ['runs:read'] })
-  list(@CurrentUser('id') userId: string, @Query() q: ListQuestionsDto): Promise<QuestionView[]> {
-    return this.questions.list(userId, q);
+  async list(@CurrentUser('id') userId: string, @Query() q: ListQuestionsDto, @Req() req?: object): Promise<QuestionView[]> {
+    const rows = await this.questions.list(userId, q);
+    // An MCP client (an AI app, or the console's own MCP tools) never reads a memory proposal (#553).
+    return (await this.fromMcp(req)) ? rows.filter((r) => r.input !== 'memory') : rows;
+  }
+
+  /** Whether the request came through the MCP endpoint (an AI app or an MCP client): memory proposals are not theirs to read or answer (#553). */
+  private async fromMcp(req?: object): Promise<boolean> {
+    return (await this.clients?.resolve(req))?.origin === 'mcp';
+  }
+
+  /** The channel an answer is recorded under: through MCP never one of the console's own signed-in channels, whatever the body says (#553). */
+  private async channelOf(req: object | undefined, claimed: string | undefined): Promise<string> {
+    const channel = claimed ?? 'api';
+    return MEMORY_ANSWER_CHANNELS.includes(channelId(channel)) && (await this.fromMcp(req)) ? 'mcp' : channel;
+  }
+
+  /** A memory proposal is a 404 to an MCP client (#553). */
+  private async visible(req: object | undefined, view: QuestionView): Promise<QuestionView> {
+    if (view.input === 'memory' && (await this.fromMcp(req))) throw new NotFoundException({ code: 'QUESTION_NOT_FOUND', message: 'Question not found' });
+    return view;
   }
 
   /** One question; `waitMs` (≤ 30000) holds the request while it is pending. */
   @Get(':id')
   @ApiDataResponse(QuestionResponseDto)
   @Auth({ permissions: ['runs:read'] })
-  get(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Query() q: GetQuestionDto): Promise<QuestionView> {
-    return this.questions.get(userId, id, q.waitMs);
+  async get(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Query() q: GetQuestionDto, @Req() req?: object): Promise<QuestionView> {
+    return this.visible(req, await this.questions.get(userId, id, q.waitMs));
   }
 
   /** Ask a free-standing question of yourself (every input but secret, which needs a browser session). */
@@ -53,9 +73,10 @@ export class QuestionsController {
   @ApiDataResponse(QuestionResponseDto)
   @HttpCode(200)
   @Auth({ permissions: ['runs:write'] })
-  answer(@CurrentUser() user: QuestionActor, @Param('id', ParseUUIDPipe) id: string, @Body() body: AnswerQuestionDto): Promise<QuestionView> {
+  async answer(@CurrentUser() user: QuestionActor, @Param('id', ParseUUIDPipe) id: string, @Body() body: AnswerQuestionDto, @Req() req?: object): Promise<QuestionView> {
     const { channel, ...answer } = body;
-    return this.questions.answer(user, id, answer, { channel: channel ?? 'api' });
+    // Through MCP the channel is never the console's own, whatever the body says (#553).
+    return this.questions.answer(user, id, answer, { channel: await this.channelOf(req, channel) });
   }
 
   /** Decline the question (the same as answering it with `outcome: "cancelled"`). */
@@ -63,7 +84,7 @@ export class QuestionsController {
   @ApiDataResponse(QuestionResponseDto)
   @HttpCode(200)
   @Auth({ permissions: ['runs:write'] })
-  cancel(@CurrentUser() user: QuestionActor, @Param('id', ParseUUIDPipe) id: string, @Body() body: CancelQuestionDto): Promise<QuestionView> {
-    return this.questions.cancel(user, id, { channel: body?.channel ?? 'api' });
+  async cancel(@CurrentUser() user: QuestionActor, @Param('id', ParseUUIDPipe) id: string, @Body() body: CancelQuestionDto, @Req() req?: object): Promise<QuestionView> {
+    return this.questions.cancel(user, id, { channel: await this.channelOf(req, body?.channel) });
   }
 }

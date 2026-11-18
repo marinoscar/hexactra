@@ -26,10 +26,17 @@ Every question has an **owner** (the user it is asked of), an **asker** (`user:<
 | `multi_choice` | Several options | `options`, `minSelections`, `maxSelections` | `values`: option ids |
 | `number` | A number | `min`, `max`, `step`, `unit` | `value`: a canonical decimal string (`"7.5"`) |
 | `confirm` | Approve or deny | `confirmLabel`, `denyLabel`, `risk` (`low` or `high`, default `high`) | `value`: `approve` or `deny` |
+| `memory` | Save or decline a memory the agent proposes (#553); **created by the server only** | `proposal: { kind, label, aliases, attributes, supersedes }` | `memoryId` of the saved memory |
 
 `kind` says why it is asked (`captcha`, `code`, `passkey`, `login`, `confirmation`, `other`). Declining is `outcome: "cancelled"` for any type.
 
 A response is `{ outcome, value?, values?, valueWithheld, channel?, by?, answeredAt }`. `by` is the signed-in answerer (`user:<id>`); a webhook answer is recorded as its owner on channel `webhook`. **The first answer wins**: a later one is a 409, whichever channel it comes from.
+
+### Memory proposals (#553)
+
+A question of input and kind `memory` is a memory the agent proposes ([memories.md](memories.md#how-the-agent-proposes-one-553)). No question spec can ask one: `POST /api/questions`, `request_human` and an external agent's handoff refuse `memory`. It carries `blocking: false` (no run waits on it: a run's end does not cancel it, the chat's request card and the run's waiting state ignore it), `proposal` (the proposed memory) and `conversationId` (the chat it came from). Its `prompt` is always "The agent suggests remembering something.", so a notification or a webhook carries no value. It expires after 7 days.
+
+The answer is `{ "outcome": "completed", "memory": { "label", "aliases"?, "attributes", "kind"? } }` (Save, with what the owner edited; without `memory` the proposal is saved as proposed) or `outcome: "cancelled"` (Not now). Only this answer writes the memory, through the memories service: a `422 MEMORY_HOLDS_SECRET` or a `409 MEMORY_LABEL_TAKEN` leaves the question pending. **Channels:** saved or declined only on `web`, `android_app` and `inbox`; every other channel, declining included, is `403 CHANNEL_NOT_ALLOWED`. Through the MCP endpoint a proposal is not listed and reads as `404`, and an answer claiming a console channel is recorded as `mcp` (refused).
 
 ### The confirmation gate (#550)
 
