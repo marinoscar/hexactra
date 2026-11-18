@@ -24,6 +24,17 @@ export interface AlertSources {
   stalls(since: Date): Promise<UserStalls[]>;
   /** Runs created since `since` whose `cost_usd` is over `overUsd`, most expensive first. */
   expensiveRuns(overUsd: number, since: Date): Promise<ExpensiveRun[]>;
+  /** Saved approvals (#554) used at least `minUses` times since `since`, busiest first. Optional: a source that predates #554 has none. */
+  busyApprovals?(minUses: number, since: Date): Promise<BusyApproval[]>;
+}
+
+/** A saved approval that was used a lot: ids, kind and category only (never a page label). */
+export interface BusyApproval {
+  ruleId: string;
+  userId: string;
+  kind: string;
+  category: string | null;
+  uses: number;
 }
 
 export interface UserUsage {
@@ -109,6 +120,8 @@ export const HEXACTRA_ALERT_KINDS = {
   RUN_STALLED: 'hexactra_run_stalled',
   /** #408. The starter rule's key is `hexactra.run_cost`. */
   RUN_COST_SPIKE: 'hexactra_run_cost',
+  /** #554. The starter rule's key is `hexactra.approval_busy`. */
+  APPROVAL_BUSY: 'hexactra_approval_busy',
 } as const;
 
 const hostOfflineConfig = z.object({ includeDraining: z.boolean().default(false) });
@@ -247,6 +260,30 @@ export const runCostSpikeKind: AlertRuleKind<z.infer<typeof costSpikeConfig>> = 
   describe: (rule) => `One run cost more than ${usd(rule.config.maxRunCostUsd)} (runs of the last ${rule.config.windowHours} h)`,
 };
 
+const approvalBusyConfig = z.object({
+  /** Uses of one saved approval in the window that fire the alert. */
+  maxUses: z.number().int().min(1).max(10_000).default(20),
+  windowHours: z.number().int().min(1).max(168).default(24),
+});
+export const approvalBusyKind: AlertRuleKind<z.infer<typeof approvalBusyConfig>> = {
+  id: HEXACTRA_ALERT_KINDS.APPROVAL_BUSY,
+  label: 'Saved approval used a lot',
+  description: 'One saved approval let the agent go ahead more often than expected in a day: a loop that keeps pressing a remembered button is noticed.',
+  configSchema: approvalBusyConfig,
+  async evaluate(ctx, rule) {
+    const { maxUses, windowHours } = rule.config;
+    const since = new Date(ctx.now.getTime() - windowHours * 3_600_000);
+    const busy = (await need().busyApprovals?.(maxUses + 1, since)) ?? [];
+    return busy.map((b) => ({
+      labels: { 'approval_rule.id': b.ruleId, 'user.id': b.userId },
+      value: b.uses,
+      breached: true,
+      summary: `${rule.name}: a saved approval (${b.kind}${b.category ? `, ${b.category}` : ''}) was used ${b.uses} times in ${windowHours} h (limit ${maxUses})`,
+    }));
+  },
+  describe: (rule) => `One saved approval used more than ${rule.config.maxUses} times within ${rule.config.windowHours} h`,
+};
+
 // Run retention keeps runs for these kinds' windows: a new kind that reads `runs` joins the list.
 const RUN_READERS: readonly string[] = [HEXACTRA_ALERT_KINDS.RUN_BUDGET, HEXACTRA_ALERT_KINDS.RUN_STALLED, HEXACTRA_ALERT_KINDS.RUN_COST_SPIKE];
 if (RUN_READING_ALERT_KINDS.length !== RUN_READERS.length || RUN_READING_ALERT_KINDS.some((k) => !RUN_READERS.includes(k))) {
@@ -258,6 +295,7 @@ registerAlertRuleKind(scheduleFailingKind);
 registerAlertRuleKind(runBudgetKind);
 registerAlertRuleKind(runStalledKind);
 registerAlertRuleKind(runCostSpikeKind);
+registerAlertRuleKind(approvalBusyKind);
 
 /**
  * The rules the console creates once (by key); admins tune them at
@@ -271,4 +309,6 @@ export const HEXACTRA_ALERT_RULES = [
   { key: 'hexactra.run_stalled', name: 'Runs stalling', kind: HEXACTRA_ALERT_KINDS.RUN_STALLED, severity: 'warning', config: { windowHours: 24, minStalls: 3 }, forSeconds: 0, enabled: true },
   // Off by default: the threshold depends on the deployment's prices.
   { key: 'hexactra.run_cost', name: 'Expensive run', kind: HEXACTRA_ALERT_KINDS.RUN_COST_SPIKE, severity: 'warning', config: { maxRunCostUsd: 10, windowHours: 24 }, forSeconds: 0, enabled: false },
+  // #554: a saved approval that keeps being used (a loop pressing a remembered button).
+  { key: 'hexactra.approval_busy', name: 'Saved approval used a lot', kind: HEXACTRA_ALERT_KINDS.APPROVAL_BUSY, severity: 'warning', config: { maxUses: 20, windowHours: 24 }, forSeconds: 0, enabled: true },
 ] as const;

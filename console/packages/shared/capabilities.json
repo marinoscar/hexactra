@@ -1011,6 +1011,43 @@
         "none": "The TUI is for watching and answering; memories are kept in the web app or the CLI"
       },
       "web": "/settings/memories"
+    },
+    {
+      "id": "approvals.list",
+      "description": "Saved approvals: the steps the owner told the agent not to ask about again, with their limits and recent uses, and whether Pause all is on",
+      "rest": [
+        "GET /api/approval-rules",
+        "GET /api/approval-rules/{id}"
+      ],
+      "cli": {
+        "none": "Saved approvals are reviewed in the web app, beside the requests that make them"
+      },
+      "mcp": {
+        "none": "Deliberate: hosted AI apps cannot read the owner's standing approvals (#554)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; use the web app"
+      },
+      "web": "/settings/approvals"
+    },
+    {
+      "id": "approvals.manage",
+      "description": "Narrow, disable, re-enable or delete a saved approval, and pause them all. Nothing creates one: only the owner's tick on a request does (#555)",
+      "rest": [
+        "PATCH /api/approval-rules/{id}",
+        "DELETE /api/approval-rules/{id}",
+        "PUT /api/approval-rules/paused"
+      ],
+      "cli": {
+        "none": "Saved approvals are changed in the web app; no CLI command creates or widens one"
+      },
+      "mcp": {
+        "none": "Deliberate: no MCP tool reads, creates or changes a saved approval (#554)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; use the web app"
+      },
+      "web": "/settings/approvals"
     }
   ]
 }

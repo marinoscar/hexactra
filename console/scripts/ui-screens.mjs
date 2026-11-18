@@ -105,6 +105,15 @@ export const ROUTES = [
   // Memories (#551): the page, and its add dialog (opened by clicking "Add").
   ['settings-memories', '/settings/memories'],
   ['settings-memories-dialog', '/settings/memories', { click: 'Add' }],
+  // Saved approvals (#554): the page, and its "Add a limit" dialog.
+  ['settings-approvals', '/settings/approvals'],
+  ['settings-approvals-limit', '/settings/approvals', {
+    action: async (page) => {
+      await page.getByRole('button', { name: /^More for Press 'Pay'/ }).first().click({ timeout: 5_000 });
+      await page.getByRole('menuitem', { name: 'Add a limit' }).click({ timeout: 5_000 });
+      await page.waitForTimeout(400);
+    },
+  }],
   ['settings-danger-zone', '/settings/danger-zone'],
   // Administration (the admin hub and its pages).
   ['admin', '/admin/settings'],

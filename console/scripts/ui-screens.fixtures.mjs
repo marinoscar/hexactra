@@ -23,7 +23,7 @@ export const IDS = {
 
 const PERMISSIONS = [
   'chat:read', 'chat:write', 'tasks:read', 'tasks:write', 'runs:read', 'runs:write', 'runs:delete', 'fleet:read', 'fleet:write', 'fleet:desktop', 'notes:read', 'notes:write',
-  'agent_policies:read', 'agent_policies:write', 'system_settings:read', 'system_settings:write', 'fabric_config:read', 'fabric_config:write',
+  'agent_policies:read', 'agent_policies:write', 'approvals:read', 'approvals:write', 'system_settings:read', 'system_settings:write', 'fabric_config:read', 'fabric_config:write',
   'users:read', 'allowlist:read', 'jobs:read', 'webhooks:read', 'system_webhooks:read', 'alerts:read', 'ai:use', 'ai_config:read', 'storage_config:read',
   'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
   'connected_apps:read', 'connected_apps:write', 'oauth_clients:read', 'oauth_clients:write',
@@ -370,6 +370,13 @@ const chatRows = [
   chatRow('88888888-8888-4888-8888-888888888883', '', { lastMessageAt: iso(-9 * 86_400_000), preview: null }),
 ];
 
+/** Saved approvals (#554). */
+const approvalRules = [
+  { id: '5a000000-0000-4000-8000-000000000001', kind: 'gate', host: 'bank.example.com', category: 'payment', matchKey: 'pay', summary: "Press 'Pay' on bank.example.com", taskId: null, taskName: null, conversationId: null, maxAmount: null, expiresAt: null, enabled: true, createdFromQuestionId: null, useCount: 4, lastUsedAt: iso(-2 * 86_400_000), lastUsedRunId: IDS.finishedRun, createdAt: iso(-20 * 86_400_000), updatedAt: iso(-20 * 86_400_000) },
+  { id: '5a000000-0000-4000-8000-000000000002', kind: 'ask', host: 'bank.example.com', category: null, matchKey: 'choose_date', summary: 'Choose dates on bank.example.com', taskId: null, taskName: null, conversationId: null, maxAmount: null, expiresAt: null, enabled: true, createdFromQuestionId: null, useCount: 0, lastUsedAt: null, lastUsedRunId: null, createdAt: iso(-10 * 86_400_000), updatedAt: iso(-10 * 86_400_000) },
+  { id: '5a000000-0000-4000-8000-000000000003', kind: 'gate', host: 'a-very-long-shop-name-for-narrow-screens.example.co.uk', category: 'purchase', matchKey: 'place your order', summary: "Press 'Place your order and pay with the saved card ending 1111' on a-very-long-shop-name-for-narrow-screens.example.co.uk", taskId: IDS.task, taskName: 'Weekly groceries', conversationId: null, maxAmount: 50, expiresAt: iso(40 * 86_400_000), enabled: false, createdFromQuestionId: null, useCount: 1, lastUsedAt: iso(-30 * 86_400_000), lastUsedRunId: null, createdAt: iso(-60 * 86_400_000), updatedAt: iso(-5 * 86_400_000) },
+];
+
 /** `"<METHOD> <path>"` to the response `data`. A function gets the request URL and its JSON body. */
 const memory = (id, kind, label, attributes, extra = {}) => ({
   id, kind, label, aliases: [], attributes, note: null, status: 'active', source: 'owner', sourceRunId: null, sourceConversationId: null,
@@ -429,6 +436,8 @@ export const RESPONSES = {
   'GET /connected-apps': connectedApps,
   // Memories (#551): a person, an account suggested by the agent, a preference and an archived fact.
   'GET /memories': (url) => (url.searchParams.get('status') === 'all' ? memories : memories.filter((m) => m.status === 'active')),
+  // Saved approvals (#554): three rules on two sites, one limited, one off.
+  'GET /approval-rules': { paused: false, rules: approvalRules },
   'GET /connected-apps/preflight': preflight,
   [`GET /connected-apps/${IDS.app}`]: connectedApps[0],
   'GET /notes': [{ id: 'note-1', title: 'A first note', body: '', archived: false }, { id: 'note-2', title: 'A note with a long title that has to wrap on a narrow phone screen', body: '', archived: true }],

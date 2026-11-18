@@ -4,6 +4,7 @@ import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import PsychologyOutlinedIcon from '@mui/icons-material/PsychologyOutlined';
+import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
 import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/ui';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { DANGER_ZONE_GROUP_LABEL } from '@marinoscar/platform-web/user-data/headless';
@@ -92,6 +93,16 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
         Icon: PsychologyOutlinedIcon,
         path: '/settings/memories',
         permission: 'memories:read',
+      },
+      // Saved approvals (#554). `approvals:read` is what `GET /api/approval-rules` enforces
+      // (apps/api/src/approvals/approval-rules.controller.ts); narrowing, turning off, deleting
+      // and Pause all need `approvals:write`, checked inside the page.
+      {
+        title: 'Saved approvals',
+        description: "Steps you told the agent not to ask about again: see, limit, turn off or delete them, or pause them all.",
+        Icon: VerifiedUserOutlinedIcon,
+        path: '/settings/approvals',
+        permission: 'approvals:read',
       },
     ],
   },
