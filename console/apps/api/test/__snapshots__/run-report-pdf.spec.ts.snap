@@ -1,0 +1,3025 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`buildReportDefinition matches the snapshot for a seeded run: 60 steps, 2 questions, 1 confirmed action, 6 images 1`] = `
+{
+  "content": [
+    {
+      "columnGap": 0,
+      "columns": [
+        {
+          "height": 22,
+          "svg": "<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><path d="M60 60V108L18.4 84V36L60 12L101.6 36V84L80 96.5" fill="none" stroke="#4b4be8" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/><circle cx="60" cy="60" r="13" fill="#ff6b4a"/></svg>",
+          "width": 22,
+        },
+        {
+          "margin": [
+            6,
+            4,
+            0,
+            0,
+          ],
+          "text": [
+            {
+              "style": "wordmark",
+              "text": "hexactra",
+            },
+            {
+              "style": "kicker",
+              "text": "   Run report",
+            },
+          ],
+          "width": "*",
+        },
+      ],
+    },
+    {
+      "id": "title",
+      "outline": true,
+      "outlineText": "Run report",
+      "style": "title",
+      "text": "Find the cheapest morning fare from City A to City B and book it",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineColor": "[function vLineColor]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        2,
+        0,
+        4,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "chip",
+              "text": "Succeeded",
+            },
+          ],
+        ],
+      },
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        6,
+        0,
+        0,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "factKey",
+              "text": "Started",
+            },
+            {
+              "style": "factValue",
+              "text": "18 Nov 2026, 18:00:01 UTC",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Finished",
+            },
+            {
+              "style": "factValue",
+              "text": "18 Nov 2026, 18:04:05 UTC",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Duration",
+            },
+            {
+              "style": "factValue",
+              "text": "4 min 4 s (working: 3 min 0 s)",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Started from",
+            },
+            {
+              "style": "factValue",
+              "text": "Task "Morning fares"",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Node",
+            },
+            {
+              "style": "factValue",
+              "text": "Node Alpha",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Browser profile",
+            },
+            {
+              "style": "factValue",
+              "text": "default",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Policy and model",
+            },
+            {
+              "style": "factValue",
+              "text": "No policy recorded
+Standard: provider-x:model-standard
+Frontier: provider-x:model-frontier",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Steps",
+            },
+            {
+              "style": "factValue",
+              "text": "60",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Model calls",
+            },
+            {
+              "style": "factValue",
+              "text": "64",
+            },
+          ],
+          [
+            {
+              "style": "factKey",
+              "text": "Cost",
+            },
+            {
+              "style": "factValue",
+              "text": "$0.42",
+            },
+          ],
+        ],
+        "widths": [
+          110,
+          "*",
+        ],
+      },
+    },
+    {
+      "id": "outcome",
+      "outline": true,
+      "outlineText": "Outcome",
+      "style": "h2",
+      "text": "Outcome",
+    },
+    {
+      "margin": [
+        0,
+        3,
+        0,
+        0,
+      ],
+      "text": [
+        {
+          "style": "strong",
+          "text": "Result: ",
+        },
+        "Booked fare Alpha for $120.00. The confirmation is in the account.",
+      ],
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineColor": "[function vLineColor]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        6,
+        0,
+        6,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "fillColor": "#f2f2fb",
+              "stack": [
+                {
+                  "style": "boxTitle",
+                  "text": "You confirmed 1 step that the run carried out",
+                },
+                {
+                  "margin": [
+                    0,
+                    0,
+                    0,
+                    3,
+                  ],
+                  "style": "small",
+                  "text": "These happened on the site and are not undone by the run ending.",
+                },
+                {
+                  "style": "body",
+                  "ul": [
+                    "Step 13 at 18:00:52 UTC: Book fare Alpha for $120.00? (click)",
+                  ],
+                },
+              ],
+            },
+          ],
+        ],
+        "widths": [
+          "*",
+        ],
+      },
+    },
+    {
+      "id": "questions",
+      "outline": true,
+      "outlineText": "Questions and answers",
+      "style": "h2",
+      "text": "Questions and answers",
+    },
+    {
+      "layout": {
+        "hLineColor": "[function hLineColor]",
+        "hLineWidth": "[function hLineWidth]",
+        "paddingBottom": "[function paddingBottom]",
+        "paddingLeft": "[function paddingLeft]",
+        "paddingRight": "[function paddingRight]",
+        "paddingTop": "[function paddingTop]",
+        "vLineWidth": "[function vLineWidth]",
+      },
+      "margin": [
+        0,
+        4,
+        0,
+        0,
+      ],
+      "table": {
+        "body": [
+          [
+            {
+              "style": "th",
+              "text": "Time",
+            },
+            {
+              "style": "th",
+              "text": "What was asked",
+            },
+            {
+              "style": "th",
+              "text": "Answer",
+            },
+            {
+              "style": "th",
+              "text": "Where",
+            },
+            {
+              "style": "th",
+              "text": "Waited",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "18:00:48",
+            },
+            {
+              "style": "td",
+              "text": "Book fare Alpha for $120.00?",
+            },
+            {
+              "style": "tdStrong",
+              "text": "Allowed",
+            },
+            {
+              "style": "td",
+              "text": "Notification",
+            },
+            {
+              "style": "td",
+              "text": "1 min 35 s",
+            },
+          ],
+          [
+            {
+              "style": "td",
+              "text": "18:02:00",
+            },
+            {
+              "style": "td",
+              "text": "Enter the code sent to your phone",
+            },
+            {
+              "style": "tdStrong",
+              "text": "Provided (not recorded)",
+            },
+            {
+              "style": "td",
+              "text": "Inbox",
+            },
+            {
+              "style": "td",
+              "text": "4.0 s",
+            },
+          ],
+        ],
+        "dontBreakRows": true,
+        "headerRows": 1,
+        "widths": [
+          44,
+          "*",
+          110,
+          56,
+          44,
+        ],
+      },
+    },
+    {
+      "stack": [
+        {
+          "id": "budget",
+          "outline": true,
+          "outlineText": "Budget",
+          "style": "h2",
+          "text": "Budget",
+        },
+        {
+          "layout": {
+            "hLineColor": "[function hLineColor]",
+            "hLineWidth": "[function hLineWidth]",
+            "paddingBottom": "[function paddingBottom]",
+            "paddingLeft": "[function paddingLeft]",
+            "paddingRight": "[function paddingRight]",
+            "paddingTop": "[function paddingTop]",
+            "vLineWidth": "[function vLineWidth]",
+          },
+          "table": {
+            "body": [
+              [
+                {
+                  "alignment": "left",
+                  "style": "th",
+                  "text": "Budget",
+                },
+                {
+                  "alignment": "right",
+                  "style": "th",
+                  "text": "Used",
+                },
+                {
+                  "alignment": "right",
+                  "style": "th",
+                  "text": "Limit",
+                },
+                {
+                  "alignment": "right",
+                  "style": "th",
+                  "text": "Percent",
+                },
+              ],
+              [
+                {
+                  "style": "td",
+                  "text": "Actions",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "60",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "100",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "60%",
+                },
+              ],
+              [
+                {
+                  "style": "td",
+                  "text": "Model calls",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "64",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "200",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "32%",
+                },
+              ],
+              [
+                {
+                  "style": "td",
+                  "text": "Active time",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "3 min",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "20 min",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "15%",
+                },
+              ],
+              [
+                {
+                  "style": "td",
+                  "text": "Input tokens",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "120,000",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "Unlimited",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "—",
+                },
+              ],
+              [
+                {
+                  "style": "td",
+                  "text": "Output tokens",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "8,000",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "Unlimited",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "—",
+                },
+              ],
+              [
+                {
+                  "style": "td",
+                  "text": "Cost",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "$0.42",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "$2.00",
+                },
+                {
+                  "alignment": "right",
+                  "style": "td",
+                  "text": "21%",
+                },
+              ],
+            ],
+            "dontBreakRows": true,
+            "headerRows": 1,
+            "widths": [
+              "*",
+              90,
+              110,
+              80,
+            ],
+          },
+        },
+      ],
+      "unbreakable": true,
+    },
+    {
+      "id": "timeline",
+      "outline": true,
+      "outlineText": "Timeline",
+      "style": "h2",
+      "text": "Timeline",
+    },
+    {
+      "margin": [
+        0,
+        0,
+        0,
+        4,
+      ],
+      "style": "muted",
+      "text": "Times are UTC.",
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "1.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:00:04",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 1 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "750 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "2.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:00:08",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 2 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "900 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "3.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:00:12",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 3 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.1 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "stack": [
+        {
+          "alignment": "center",
+          "height": 308.27,
+          "image": "step-3",
+          "width": 493.23,
+        },
+        {
+          "alignment": "center",
+          "margin": [
+            0,
+            3,
+            0,
+            0,
+          ],
+          "style": "caption",
+          "text": "Step 3 · the screen when the agent asked you · nothing masked",
+        },
+      ],
+      "unbreakable": true,
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "4–5.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:00:16",
+          "width": 44,
+        },
+        {
+          "style": "observed",
+          "text": "Observed the page (2 steps)",
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "2.5 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "6.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:00:24",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 6 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.5 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "7.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:00:28",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 7 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "600 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "8.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:00:32",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 8 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "750 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "9.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:00:36",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 9 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "900 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "10.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:00:40",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 10 on the fare list",
+            },
+            {
+              "style": "reason",
+              "text": "Why: Item 10 looks like the next fare to compare.",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.1 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "11.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:00:44",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 11 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.2 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "12.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:00:48",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Asked you to confirm the booking",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.4 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "stack": [
+        {
+          "alignment": "center",
+          "height": 308.27,
+          "image": "step-12",
+          "width": 493.23,
+        },
+        {
+          "alignment": "center",
+          "margin": [
+            0,
+            3,
+            0,
+            0,
+          ],
+          "style": "caption",
+          "text": "Step 12 · the screen when the agent asked for confirmation · 2 areas masked",
+        },
+      ],
+      "unbreakable": true,
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "13.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:00:52",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked Book now",
+            },
+            {
+              "style": "confirmedTag",
+              "text": "Confirmed by you",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.5 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "stack": [
+        {
+          "alignment": "center",
+          "height": 308.27,
+          "image": "step-13",
+          "width": 493.23,
+        },
+        {
+          "alignment": "center",
+          "margin": [
+            0,
+            3,
+            0,
+            0,
+          ],
+          "style": "caption",
+          "text": "Step 13 · the screen after the confirmed step · nothing masked",
+        },
+      ],
+      "unbreakable": true,
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "14.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:00:56",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Read the page text",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "600 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "15.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:01:00",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 15 on the fare list",
+            },
+            {
+              "style": "reason",
+              "text": "Why: Item 15 looks like the next fare to compare.",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "750 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "16.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:01:04",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 16 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "900 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "17.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:01:08",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 17 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.1 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "18.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:01:12",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 18 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.2 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "19.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:01:16",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 19 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.4 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "20.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:01:20",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "failed",
+              "text": [
+                {
+                  "bold": true,
+                  "text": "✗ Failed: ",
+                },
+                "The payment page did not load",
+              ],
+            },
+            {
+              "style": "reason",
+              "text": "Why: Item 20 looks like the next fare to compare.",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.5 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "stack": [
+        {
+          "alignment": "center",
+          "height": 308.27,
+          "image": "step-20",
+          "width": 493.23,
+        },
+        {
+          "alignment": "center",
+          "margin": [
+            0,
+            3,
+            0,
+            0,
+          ],
+          "style": "caption",
+          "text": "Step 20 · the screen when the step failed · nothing masked",
+        },
+      ],
+      "unbreakable": true,
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "21.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:01:24",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 21 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "600 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "22–23.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:01:28",
+          "width": 44,
+        },
+        {
+          "style": "observed",
+          "text": "Observed the page (2 steps)",
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.6 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "24.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:01:36",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 24 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.1 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "25.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:01:40",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "routing",
+              "text": "Moved up to the Frontier model: stalled",
+            },
+            {
+              "style": "reason",
+              "text": "Why: Item 25 looks like the next fare to compare.",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "0 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "26.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:01:44",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 26 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.4 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "27.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:01:48",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 27 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.5 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "28.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:01:52",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 28 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "600 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "29.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:01:56",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 29 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "750 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "30.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:02:00",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Asked you for the code from the confirmation message",
+            },
+            {
+              "style": "reason",
+              "text": "Why: Item 30 looks like the next fare to compare.",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "900 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "stack": [
+        {
+          "alignment": "center",
+          "height": 308.27,
+          "image": "step-30",
+          "width": 493.23,
+        },
+        {
+          "alignment": "center",
+          "margin": [
+            0,
+            3,
+            0,
+            0,
+          ],
+          "style": "caption",
+          "text": "Step 30 · the screen when the agent asked you · nothing masked",
+        },
+      ],
+      "unbreakable": true,
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "31.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:02:04",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "The owner provided it",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.1 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "32.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:02:08",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Read the page text",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.2 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "33.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:02:12",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 33 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.4 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "34.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:02:16",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 34 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.5 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "35.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:02:20",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 35 on the fare list",
+            },
+            {
+              "style": "reason",
+              "text": "Why: Item 35 looks like the next fare to compare.",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "600 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "36.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:02:24",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 36 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "750 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "37.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:02:28",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 37 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "900 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "38.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:02:32",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 38 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.1 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "39.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:02:36",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 39 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.2 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "40.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:02:40",
+          "width": 44,
+        },
+        {
+          "layout": {
+            "hLineColor": "[function hLineColor]",
+            "hLineWidth": "[function hLineWidth]",
+            "paddingBottom": "[function paddingBottom]",
+            "paddingLeft": "[function paddingLeft]",
+            "paddingRight": "[function paddingRight]",
+            "paddingTop": "[function paddingTop]",
+            "vLineColor": "[function vLineColor]",
+            "vLineWidth": "[function vLineWidth]",
+          },
+          "margin": [
+            0,
+            0,
+            0,
+            2,
+          ],
+          "table": {
+            "body": [
+              [
+                {
+                  "fillColor": "#f2f2fb",
+                  "stack": [
+                    {
+                      "style": "boxTitle",
+                      "text": "Your guidance",
+                    },
+                    {
+                      "style": "body",
+                      "text": "Prefer the morning flight if the prices are close.",
+                    },
+                  ],
+                },
+              ],
+            ],
+            "widths": [
+              "*",
+            ],
+          },
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "41.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:02:44",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Read the page text",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.5 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "42.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:02:48",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 42 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "600 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "43.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:02:52",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 43 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "750 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "44.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:02:56",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 44 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "900 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "45.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:03:00",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 45 on the fare list",
+            },
+            {
+              "style": "reason",
+              "text": "Why: Item 45 looks like the next fare to compare.",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.1 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "46.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:03:04",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 46 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.2 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "47.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:03:08",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 47 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.4 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "48.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:03:12",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 48 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.5 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "49–50.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:03:16",
+          "width": 44,
+        },
+        {
+          "style": "observed",
+          "text": "Observed the page (2 steps)",
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.4 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "51.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:03:24",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 51 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "900 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "52.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:03:28",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 52 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.1 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "53.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:03:32",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 53 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.2 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "54.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:03:36",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 54 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.4 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "55.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:03:40",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 55 on the fare list",
+            },
+            {
+              "style": "reason",
+              "text": "Why: Item 55 looks like the next fare to compare.",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.5 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "56.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:03:44",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 56 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "600 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "57.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:03:48",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Clicked item 57 on the fare list",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "750 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "58–59.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:03:52",
+          "width": 44,
+        },
+        {
+          "style": "observed",
+          "text": "Observed the page (2 steps)",
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "1.9 s",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "columnGap": 6,
+      "columns": [
+        {
+          "style": "seq",
+          "text": "60.",
+          "width": 34,
+        },
+        {
+          "style": "time",
+          "text": "18:04:00",
+          "width": 44,
+        },
+        {
+          "stack": [
+            {
+              "style": "body",
+              "text": "Final screen",
+            },
+            {
+              "style": "reason",
+              "text": "Why: Item 60 looks like the next fare to compare.",
+            },
+          ],
+          "width": "*",
+        },
+        {
+          "alignment": "right",
+          "style": "time",
+          "text": "0 ms",
+          "width": 48,
+        },
+      ],
+      "margin": [
+        0,
+        2.5,
+        0,
+        2.5,
+      ],
+    },
+    {
+      "margin": [
+        0,
+        4,
+        0,
+        8,
+      ],
+      "stack": [
+        {
+          "alignment": "center",
+          "height": 308.27,
+          "image": "step-60",
+          "width": 493.23,
+        },
+        {
+          "alignment": "center",
+          "margin": [
+            0,
+            3,
+            0,
+            0,
+          ],
+          "style": "caption",
+          "text": "Step 60 · the final screen · nothing masked",
+        },
+      ],
+      "unbreakable": true,
+    },
+  ],
+  "defaultStyle": {
+    "color": "#12131c",
+    "font": "Inter",
+    "fontSize": 9.5,
+    "lineHeight": 1.22,
+  },
+  "displayTitle": true,
+  "footer": {
+    "margin": [
+      51.0236220472441,
+      14,
+      51.0236220472441,
+      0,
+    ],
+    "stack": [
+      {
+        "columns": [
+          {
+            "text": "Run 5e1f3c2a",
+            "width": "*",
+          },
+          {
+            "text": "Page 2 of 5",
+            "width": "auto",
+          },
+          {
+            "alignment": "right",
+            "text": "Exported 18 Nov 2026, 19:00:00 UTC",
+            "width": "*",
+          },
+        ],
+        "style": "footer",
+      },
+      {
+        "alignment": "center",
+        "margin": [
+          0,
+          2,
+          0,
+          0,
+        ],
+        "style": "footer",
+        "text": "Sensitive data masked. Not a bank or legal record.",
+      },
+    ],
+  },
+  "images": {
+    "step-12": "<5572 bytes>",
+    "step-13": "<5989 bytes>",
+    "step-20": "<5914 bytes>",
+    "step-3": "<5764 bytes>",
+    "step-30": "<5622 bytes>",
+    "step-60": "<5794 bytes>",
+  },
+  "info": {
+    "author": "Hexactra",
+    "creationDate": "2026-11-18T19:00:00.000Z",
+    "creator": "Hexactra Console",
+    "producer": "Hexactra Console",
+    "subject": "Hexactra run 5e1f3c2a-7b4d-4e8f-9a61-0c2d3e4f5a6b",
+    "title": "Run report: Find the cheapest morning fare from City A to City B and book it",
+  },
+  "language": "en-US",
+  "pageMargins": [
+    51.0236220472441,
+    51.0236220472441,
+    51.0236220472441,
+    51.0236220472441,
+  ],
+  "pageSize": "A4",
+  "styles": {
+    "bannerTitle": {
+      "bold": true,
+      "fontSize": 11,
+    },
+    "body": {
+      "fontSize": 9.5,
+    },
+    "boxTitle": {
+      "bold": true,
+      "margin": [
+        0,
+        0,
+        0,
+        2,
+      ],
+    },
+    "caption": {
+      "color": "#5a5e72",
+      "fontSize": 8.5,
+      "italics": true,
+    },
+    "chip": {
+      "bold": true,
+      "color": "#4b4be8",
+      "fontSize": 9,
+    },
+    "confirmedTag": {
+      "bold": true,
+      "color": "#4b4be8",
+      "fontSize": 8.5,
+    },
+    "factKey": {
+      "color": "#5a5e72",
+      "fontSize": 9,
+    },
+    "factValue": {
+      "fontSize": 9.5,
+    },
+    "failed": {
+      "color": "#b3261e",
+    },
+    "footer": {
+      "color": "#5a5e72",
+      "fontSize": 7.5,
+    },
+    "h2": {
+      "bold": true,
+      "color": "#4b4be8",
+      "fontSize": 12.5,
+      "margin": [
+        0,
+        16,
+        0,
+        5,
+      ],
+    },
+    "kicker": {
+      "color": "#5a5e72",
+      "fontSize": 10,
+    },
+    "muted": {
+      "color": "#5a5e72",
+    },
+    "note": {
+      "color": "#5a5e72",
+      "fontSize": 9,
+      "italics": true,
+    },
+    "observed": {
+      "color": "#5a5e72",
+      "italics": true,
+    },
+    "reason": {
+      "color": "#5a5e72",
+      "fontSize": 8.5,
+      "margin": [
+        0,
+        1,
+        0,
+        0,
+      ],
+    },
+    "routing": {
+      "color": "#5a5e72",
+      "italics": true,
+    },
+    "seq": {
+      "bold": true,
+      "color": "#5a5e72",
+      "fontSize": 9,
+    },
+    "small": {
+      "color": "#5a5e72",
+      "fontSize": 8.5,
+    },
+    "strong": {
+      "bold": true,
+    },
+    "td": {
+      "fontSize": 9,
+    },
+    "tdStrong": {
+      "bold": true,
+      "fontSize": 9,
+    },
+    "th": {
+      "bold": true,
+      "color": "#5a5e72",
+      "fontSize": 8.5,
+    },
+    "time": {
+      "color": "#5a5e72",
+      "fontSize": 8.5,
+    },
+    "title": {
+      "bold": true,
+      "fontSize": 18,
+      "lineHeight": 1.15,
+      "margin": [
+        0,
+        10,
+        0,
+        6,
+      ],
+    },
+    "wordmark": {
+      "bold": true,
+      "color": "#12131c",
+      "fontSize": 13,
+    },
+  },
+  "tagged": true,
+  "version": "1.7",
+}
+`;
