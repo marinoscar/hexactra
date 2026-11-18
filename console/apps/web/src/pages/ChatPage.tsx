@@ -126,6 +126,7 @@ export function ChatPage() {
   // ---- The browser of the chat's live run (#487) ----
   const run = state.run;
   const liveRun = run && isLive(run.status) ? run : null;
+  const guidance = useMemo(() => new Map(state.guidance.map((g) => [g.seq, g.state])), [state.guidance]);
   const liveRunId = liveRun?.id ?? null;
   const [browserOpen, setBrowserOpen] = useState(false);
   const [cardVisible, setCardVisible] = useState(false);
@@ -355,6 +356,7 @@ export function ChatPage() {
   };
   const cards: ThreadCards = {
     run,
+    guidance,
     frame,
     frameHidden,
     now,
@@ -494,7 +496,7 @@ export function ChatPage() {
                 This chat is archived. It is read-only.
               </Alert>
             ) : (
-              canWrite && <ChatComposer value={draft} onChange={setDraft} onSend={() => void send(draft)} busy={sending} enterSends={!isPhone} autoFocus={!isPhone} placeholder={isNew ? 'What should I do?' : 'Message'} />
+              canWrite && <ChatComposer value={draft} onChange={setDraft} onSend={() => void send(draft)} busy={sending} enterSends={!isPhone} autoFocus={!isPhone} placeholder={isNew ? 'What should I do?' : liveRun ? 'Add something for the agent' : 'Message'} />
             )}
           </Box>
         </Box>

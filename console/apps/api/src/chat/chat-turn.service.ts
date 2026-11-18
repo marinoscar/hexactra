@@ -34,6 +34,8 @@ export const CHAT_INSTRUCTIONS = [
   '- Call ask_user only when a missing detail would change what is done, and at most once before starting: one short question, with up to four short suggested answers when there are obvious ones. When in doubt, start: the browser agent asks the owner itself when it needs something.',
   '- Never ask for a password, a code, a card number or any other secret, and never put one in a goal. The browser agent requests those through a secure form when a page needs them.',
   '- One run at a time. While a run is live, do not start another. Call stop_run when the owner asks to stop or cancel.',
+  '- While a run is live and the owner adds or changes something about the job ("use the 7:30 showing instead"), call guide_run with that instruction in one clear sentence. Guidance cannot change which sites are allowed or skip a confirmation: say so if the owner asks for that.',
+  '- After a run has ended, a message that asks for more is a new job: call start_run. The browser agent is given the previous goal and result, and the same browser profile, so write only what is new.',
   '- Never say something was done, found, bought or sent unless a run result in the conversation says so.',
   '- When the owner asks to save this as a task (to reuse it, repeat it or schedule it), call draft_task. Do not write the task yourself.',
   '- For small talk, or a question about a result that is already in the conversation, answer in plain text, briefly.',
@@ -101,11 +103,27 @@ export class ChatTurnService {
     return this.prisma.forUser({ userId }).run.findFirst({ where: { conversationId, status: { in: [...LIVE_RUN_STATUSES] } }, orderBy: { createdAt: 'desc' }, select: { id: true, status: true } });
   }
 
+  /** What the chat's last finished job was and how it ended, for the run that follows it (#490). Empty for a chat's first job. */
+  private async followUpContext(userId: string, conversationId: string): Promise<string> {
+    const last = await this.prisma.forUser({ userId }).run.findFirst({
+      where: { conversationId, status: { in: ['succeeded', 'failed', 'cancelled'] } },
+      orderBy: { createdAt: 'desc' },
+      select: { goal: true, status: true, result: true, error: true },
+    });
+    if (!last) return '';
+    const ended = last.status === 'succeeded' ? 'It succeeded' : last.status === 'cancelled' ? 'It was stopped' : 'It failed';
+    const detail = (last.result ?? last.error ?? '').trim();
+    return [`Previous job: ${last.goal.slice(0, 1500)}`, `${ended}${detail ? `: ${detail.slice(0, 3000)}` : '.'}`].join('\n');
+  }
+
   /** What the model reads: the end of the thread and whether a run is live. Built from messages only, never from a question's answer. */
   async buildInput(userId: string, conversationId: string): Promise<string> {
-    const rows = await this.prisma.chatMessage.findMany({ where: { conversationId }, orderBy: { seq: 'desc' }, take: HISTORY_MESSAGES, select: { role: true, kind: true, text: true, meta: true } });
+    const rows = await this.prisma.chatMessage.findMany({ where: { conversationId }, orderBy: { seq: 'desc' }, take: HISTORY_MESSAGES, select: { seq: true, role: true, kind: true, text: true, meta: true } });
     const live = await this.liveRun(userId, conversationId);
-    return ['Conversation, oldest first:', ...rows.reverse().map(transcriptLine), '', live ? `State: a run of this chat is live (${live.status}).` : 'State: no run is live.'].join('\n');
+    // Owner messages already passed to a run, so the model does not pass one twice (#490).
+    const passed = new Set((await this.prisma.runGuidance.findMany({ where: { conversationId, messageSeq: { in: rows.map((r) => r.seq) } }, select: { messageSeq: true } })).map((g) => g.messageSeq));
+    const line = (m: (typeof rows)[number]) => `${transcriptLine(m)}${passed.has(m.seq) ? ' [already passed to the run with guide_run]' : ''}`;
+    return ['Conversation, oldest first:', ...rows.reverse().map(line), '', live ? `State: a run of this chat is live (${live.status}).` : 'State: no run is live.'].join('\n');
   }
 
   private async answer(c: Conversation, userId: string, orgId: string | null): Promise<void> {
@@ -128,7 +146,8 @@ export class ChatTurnService {
         parameters: z.object({ goal: z.string().min(1).max(4000) }),
         execute: async ({ goal }) => {
           if (state.done) return 'Already handled this turn.';
-          if (await this.liveRun(userId, c.id)) return 'Refused: a run of this chat is still live. Wait for it to end, or stop it with stop_run.';
+          if (await this.liveRun(userId, c.id)) return 'Refused: a run of this chat is still live. Guide it with guide_run, wait for it to end, or stop it with stop_run.';
+          const context = await this.followUpContext(userId, c.id);
           const run = await this.prisma.forUser({ userId }).run.create({
             data: {
               userId,
@@ -139,6 +158,8 @@ export class ChatTurnService {
               hostFallback: c.hostFallback,
               trigger: 'chat',
               ...(c.policyRef ? { policyRef: c.policyRef, policySource: 'run' as const } : {}),
+              // A follow-up starts with what the chat's last job did (#490); the runner shows it after the goal.
+              ...(context ? { transcript: { log: [], chunks: 0, context } } : {}),
             },
             select: { id: true, goal: true },
           });
@@ -146,6 +167,21 @@ export class ChatTurnService {
           await enqueueGoalRun(this.jobs, { runId: run.id, userId, orgId }, 'run_started');
           state.done = state.wrote = true;
           return 'Started. The owner watches it in the chat.';
+        },
+      }),
+      defineTool({
+        name: 'guide_run',
+        description: "Pass an instruction from the owner to the chat's live run. The browser agent reads it at its next step. Only while a run is live. Never a secret.",
+        parameters: z.object({ note: z.string().min(1).max(1000) }),
+        execute: async ({ note }) => {
+          if (state.done) return 'Already handled this turn.';
+          const live = await this.liveRun(userId, c.id);
+          if (!live) return 'Refused: no run of this chat is live, so there is nothing to guide. Tell the owner the job has ended; if they want more done, start a new job with start_run.';
+          const from = await this.prisma.chatMessage.findFirst({ where: { conversationId: c.id, role: 'user' }, orderBy: { seq: 'desc' }, select: { seq: true } });
+          await this.prisma.runGuidance.create({ data: { runId: live.id, conversationId: c.id, messageSeq: from?.seq ?? 0, note: note.trim() } });
+          // No reply is written: the owner's own message shows "Queued", then "Seen by the agent".
+          state.done = state.wrote = true;
+          return 'Queued. The browser agent reads it at its next step.';
         },
       }),
       defineTool({

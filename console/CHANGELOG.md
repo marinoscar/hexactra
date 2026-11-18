@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chat: steer a working job and follow up** (#490, console 1.47.0). What you type while a run is live is passed to the agent at its next step ("Queued for the agent", then "Seen by the agent"); a request after a run has ended starts a new run that knows the previous goal and result. Guidance changes no limit. Details: README, "Chat".
 - **Chat: save a chat as a task** (#489, console 1.46.0). Details: README, "Chat".
   - **Save as task** on the result card of a run that succeeded, and by asking in words ("save this as a task"), which puts a draft card in the thread with **Review and save**. Both need `tasks:write`.
   - **The draft**: the assistant writes a short name and a standalone goal from the whole conversation; the machine, profile, agent policy, allowed sites and purchase confirmation come from the chat. `POST /chats/:id/task-draft` returns it and saves nothing. With no model, or an answer that is not a draft, it is the goal of the chat's newest run.
