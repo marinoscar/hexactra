@@ -28329,7 +28329,7 @@
             "name": "trigger",
             "required": false,
             "in": "query",
-            "description": "What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas.",
+            "description": "What started the run. Any of: manual, schedule, api, mcp, external, chat. Repeat the parameter or separate the values with commas.",
             "schema": {
               "anyOf": [
                 {
@@ -28640,7 +28640,7 @@
             "name": "trigger",
             "required": false,
             "in": "query",
-            "description": "What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas.",
+            "description": "What started the run. Any of: manual, schedule, api, mcp, external, chat. Repeat the parameter or separate the values with commas.",
             "schema": {
               "anyOf": [
                 {
@@ -31049,6 +31049,548 @@
           ]
         },
         "description": "**Requires:** authentication, plus permission `tasks:write`."
+      }
+    },
+    "/api/chats": {
+      "get": {
+        "operationId": "chat_list",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "`active` (the default) or `archived`.",
+            "schema": {
+              "default": "active",
+              "type": "string",
+              "enum": [
+                "active",
+                "archived"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "The previous page's `nextCursor`. Opaque: do not parse or build it.",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 400,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Rows to return: 1 to 100. Default 30.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChatPageResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Chats"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "chat:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `chat:read`."
+      },
+      "post": {
+        "operationId": "chat_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChatDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChatResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Chats"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "chat:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `chat:write`."
+      }
+    },
+    "/api/chats/{id}": {
+      "get": {
+        "operationId": "chat_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "afterSeq",
+            "required": false,
+            "in": "query",
+            "description": "Only messages with a `seq` greater than this: `0` (the default) is the whole thread.",
+            "schema": {
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "default": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChatDetailResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Chats"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "chat:read"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `chat:read`."
+      },
+      "patch": {
+        "operationId": "chat_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChatDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChatResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Chats"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "chat:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `chat:write`."
+      },
+      "delete": {
+        "operationId": "chat_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Chats"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "chat:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `chat:write`."
+      }
+    },
+    "/api/chats/{id}/messages": {
+      "post": {
+        "operationId": "chat_post",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostMessageDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChatMessageResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "tags": [
+          "Chats"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "chat:write"
+          ]
+        },
+        "description": "**Requires:** authentication, plus permission `chat:write`."
       }
     },
     "/api/webhooks/events": {
@@ -35413,6 +35955,9 @@
               "WEBHOOK_EVENT_UNKNOWN",
               "WEBHOOK_EVENT_NOT_PERMITTED",
               "WEBHOOK_LIMIT_REACHED",
+              "CHAT_NOT_FOUND",
+              "CHAT_ARCHIVED",
+              "CHAT_RUN_LIVE",
               "ERROR"
             ]
           },
@@ -63000,7 +63545,8 @@
                           "schedule",
                           "api",
                           "mcp",
-                          "external"
+                          "external",
+                          "chat"
                         ]
                       },
                       "createdAt": {
@@ -63422,7 +63968,8 @@
                                 "schedule",
                                 "api",
                                 "mcp",
-                                "external"
+                                "external",
+                                "chat"
                               ]
                             },
                             "createdAt": {
@@ -63860,7 +64407,8 @@
                           "schedule",
                           "api",
                           "mcp",
-                          "external"
+                          "external",
+                          "chat"
                         ]
                       },
                       "createdAt": {
@@ -64724,7 +65272,8 @@
                           "schedule",
                           "api",
                           "mcp",
-                          "external"
+                          "external",
+                          "chat"
                         ]
                       },
                       "createdAt": {
@@ -65202,7 +65751,7 @@
                 ]
               },
               "trigger": {
-                "description": "What started the run. Any of: manual, schedule, api, mcp, external. Repeat the parameter or separate the values with commas.",
+                "description": "What started the run. Any of: manual, schedule, api, mcp, external, chat. Repeat the parameter or separate the values with commas.",
                 "anyOf": [
                   {
                     "type": "string"
@@ -65446,6 +65995,19 @@
               }
             ]
           },
+          "conversationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The chat that started the run (trigger `chat`); null for every other run"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -65464,7 +66026,8 @@
               "schedule",
               "api",
               "mcp",
-              "external"
+              "external",
+              "chat"
             ]
           },
           "goal": {
@@ -66009,6 +66572,7 @@
           "id",
           "userId",
           "taskId",
+          "conversationId",
           "status",
           "trigger",
           "goal",
@@ -66071,6 +66635,19 @@
                     }
                   ]
                 },
+                "conversationId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The chat that started the run (trigger `chat`); null for every other run"
+                },
                 "status": {
                   "type": "string",
                   "enum": [
@@ -66089,7 +66666,8 @@
                     "schedule",
                     "api",
                     "mcp",
-                    "external"
+                    "external",
+                    "chat"
                   ]
                 },
                 "goal": {
@@ -66634,6 +67212,7 @@
                 "id",
                 "userId",
                 "taskId",
+                "conversationId",
                 "status",
                 "trigger",
                 "goal",
@@ -66783,6 +67362,19 @@
               }
             ]
           },
+          "conversationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The chat that started the run (trigger `chat`); null for every other run"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -66801,7 +67393,8 @@
               "schedule",
               "api",
               "mcp",
-              "external"
+              "external",
+              "chat"
             ]
           },
           "goal": {
@@ -67434,6 +68027,7 @@
           "id",
           "userId",
           "taskId",
+          "conversationId",
           "status",
           "trigger",
           "goal",
@@ -67491,6 +68085,19 @@
               }
             ]
           },
+          "conversationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The chat that started the run (trigger `chat`); null for every other run"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -67509,7 +68116,8 @@
               "schedule",
               "api",
               "mcp",
-              "external"
+              "external",
+              "chat"
             ]
           },
           "goal": {
@@ -68046,6 +68654,7 @@
           "id",
           "userId",
           "taskId",
+          "conversationId",
           "status",
           "trigger",
           "goal",
@@ -69650,7 +70259,8 @@
                             "schedule",
                             "api",
                             "mcp",
-                            "external"
+                            "external",
+                            "chat"
                           ]
                         },
                         "createdAt": {
@@ -70354,6 +70964,619 @@
             ]
           }
         }
+      },
+      "ChatPageResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Empty until the first message names the chat, or the owner does"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "archived"
+                  ],
+                  "description": "An archived chat is read-only"
+                },
+                "profile": {
+                  "type": "string",
+                  "description": "The browser profile the chat's runs use"
+                },
+                "hostId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The machine the chat's runs prefer; null lets the console choose"
+                },
+                "hostFallback": {
+                  "type": "boolean"
+                },
+                "policyId": {
+                  "description": "The agent policy of the chat's runs (a UUID or `builtin:<key>`); null follows the user's default",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "lastMessageAt": {
+                  "type": "string",
+                  "description": "ISO 8601 timestamp"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "ISO 8601 timestamp"
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "description": "ISO 8601 timestamp"
+                },
+                "preview": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "user",
+                            "assistant",
+                            "system"
+                          ]
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "text",
+                            "clarify",
+                            "run",
+                            "result",
+                            "task_draft"
+                          ],
+                          "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`)."
+                        },
+                        "text": {
+                          "type": "string",
+                          "description": "The start of the newest message, on one line"
+                        }
+                      },
+                      "required": [
+                        "role",
+                        "kind",
+                        "text"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Null for a chat with no message"
+                },
+                "liveRun": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "queued",
+                            "running",
+                            "waiting_human"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The chat's live run (queued, running or waiting for a person); null when it has none"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "status",
+                "profile",
+                "hostId",
+                "hostFallback",
+                "policyId",
+                "lastMessageAt",
+                "createdAt",
+                "updatedAt",
+                "preview",
+                "liveRun"
+              ]
+            }
+          },
+          "nextCursor": {
+            "description": "Pass it as `cursor` to read the next page; null on the last page. Opaque: do not parse or build it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ]
+      },
+      "ChatResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "title": {
+            "type": "string",
+            "description": "Empty until the first message names the chat, or the owner does"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ],
+            "description": "An archived chat is read-only"
+          },
+          "profile": {
+            "type": "string",
+            "description": "The browser profile the chat's runs use"
+          },
+          "hostId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The machine the chat's runs prefer; null lets the console choose"
+          },
+          "hostFallback": {
+            "type": "boolean"
+          },
+          "policyId": {
+            "description": "The agent policy of the chat's runs (a UUID or `builtin:<key>`); null follows the user's default",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastMessageAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "profile",
+          "hostId",
+          "hostFallback",
+          "policyId",
+          "lastMessageAt",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateChatDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "profile": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "description": "The browser profile the chat's runs use."
+          },
+          "hostId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The machine the chat's runs prefer; `null` lets the console choose."
+          },
+          "hostFallback": {
+            "type": "boolean",
+            "description": "Whether a run may use another machine when the preferred one is offline."
+          },
+          "policyId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The agent policy of the chat's runs: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."
+          }
+        }
+      },
+      "ChatDetailResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "title": {
+            "type": "string",
+            "description": "Empty until the first message names the chat, or the owner does"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ],
+            "description": "An archived chat is read-only"
+          },
+          "profile": {
+            "type": "string",
+            "description": "The browser profile the chat's runs use"
+          },
+          "hostId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The machine the chat's runs prefer; null lets the console choose"
+          },
+          "hostFallback": {
+            "type": "boolean"
+          },
+          "policyId": {
+            "description": "The agent policy of the chat's runs (a UUID or `builtin:<key>`); null follows the user's default",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastMessageAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "seq": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Order within the chat, from 1"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "user",
+                    "assistant",
+                    "system"
+                  ]
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "clarify",
+                    "run",
+                    "result",
+                    "task_draft"
+                  ],
+                  "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`)."
+                },
+                "text": {
+                  "type": "string",
+                  "description": "Never a secret: a credential the agent asks for goes to the browser, not to the chat"
+                },
+                "runId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The run a `run` or `result` message is about"
+                },
+                "meta": {
+                  "anyOf": [
+                    {},
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Kind-specific data; null for plain text"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "ISO 8601 timestamp"
+                }
+              },
+              "required": [
+                "id",
+                "seq",
+                "role",
+                "kind",
+                "text",
+                "runId",
+                "meta",
+                "createdAt"
+              ]
+            }
+          },
+          "hasMore": {
+            "type": "boolean",
+            "description": "True when more messages follow the last one returned: read on with `afterSeq`"
+          },
+          "liveRun": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "queued",
+                      "running",
+                      "waiting_human"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "status"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The chat's live run (queued, running or waiting for a person); null when it has none"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "profile",
+          "hostId",
+          "hostFallback",
+          "policyId",
+          "lastMessageAt",
+          "createdAt",
+          "updatedAt",
+          "messages",
+          "hasMore",
+          "liveRun"
+        ]
+      },
+      "UpdateChatDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          },
+          "profile": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "description": "The browser profile the chat's runs use."
+          },
+          "hostId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The machine the chat's runs prefer; `null` lets the console choose."
+          },
+          "hostFallback": {
+            "type": "boolean",
+            "description": "Whether a run may use another machine when the preferred one is offline."
+          },
+          "policyId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The agent policy of the chat's runs: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."
+          }
+        }
+      },
+      "ChatMessageResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "seq": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Order within the chat, from 1"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant",
+              "system"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "clarify",
+              "run",
+              "result",
+              "task_draft"
+            ],
+            "description": "`text`: plain text. `clarify`: a question to the owner (`meta.options` are suggested answers). `run`: the card of a run (`runId`). `result`: how a run ended (`runId`). `task_draft`: a task the AI drafted from the chat (`meta`)."
+          },
+          "text": {
+            "type": "string",
+            "description": "Never a secret: a credential the agent asks for goes to the browser, not to the chat"
+          },
+          "runId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The run a `run` or `result` message is about"
+          },
+          "meta": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Kind-specific data; null for plain text"
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "seq",
+          "role",
+          "kind",
+          "text",
+          "runId",
+          "meta",
+          "createdAt"
+        ]
+      },
+      "PostMessageDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000,
+            "description": "What the owner wrote. Never a password or a code: the agent asks for those through a request."
+          }
+        },
+        "required": [
+          "text"
+        ]
       },
       "WebhookEventCatalogDto": {
         "type": "object",

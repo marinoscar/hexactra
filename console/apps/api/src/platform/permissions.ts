@@ -14,6 +14,7 @@
 // exports, onboarding, android-app) enforces the `settings` slice's.
 import type { PlatformPermissionOptions } from '@marinoscar/platform-api/manifest';
 
+import { CHAT_PERMISSIONS } from '../chat/chat.permissions';
 import { FABRIC_PERMISSIONS } from '../fabric/fabric.permissions';
 import { FLEET_PERMISSIONS } from '../fleet/fleet.permissions';
 import { NOTES_PERMISSIONS } from '../notes/notes.permissions';
@@ -33,5 +34,5 @@ export const PERMISSION_OPTIONS = {
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? (['webhooks'] as const) : []),
     ...(alertsMounted() ? (['alerts'] as const) : []),
   ],
-  app: { permissions: [NOTES_PERMISSIONS, FABRIC_PERMISSIONS, FLEET_PERMISSIONS, TASKS_PERMISSIONS, POLICIES_PERMISSIONS] },
+  app: { permissions: [NOTES_PERMISSIONS, FABRIC_PERMISSIONS, FLEET_PERMISSIONS, TASKS_PERMISSIONS, POLICIES_PERMISSIONS, CHAT_PERMISSIONS] },
 } satisfies PlatformPermissionOptions;
