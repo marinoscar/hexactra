@@ -945,6 +945,74 @@
         "none": "An administrator's settings task; the CLI commands are the operator's kill switch, the web page the rest"
       },
       "web": "/admin/settings/ai-app-limits"
+    },
+    {
+      "id": "memories.read",
+      "description": "List, search and read your memories (facts the agent may use) with their history",
+      "rest": [
+        "GET /api/memories",
+        "GET /api/memories/{id}"
+      ],
+      "cli": [
+        "memories list",
+        "memories show"
+      ],
+      "mcp": {
+        "none": "Hosted AI apps and agents cannot read or write memories (#551, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; memories are kept in the web app or the CLI"
+      },
+      "web": "/settings/memories"
+    },
+    {
+      "id": "memories.write",
+      "description": "Add, edit, supersede, archive and unarchive a memory",
+      "rest": [
+        "POST /api/memories",
+        "PATCH /api/memories/{id}",
+        "POST /api/memories/{id}/supersede",
+        "POST /api/memories/{id}/archive",
+        "POST /api/memories/{id}/unarchive"
+      ],
+      "cli": "memories add",
+      "mcp": {
+        "none": "Hosted AI apps and agents cannot read or write memories (#551, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; memories are kept in the web app or the CLI"
+      },
+      "web": "/settings/memories"
+    },
+    {
+      "id": "memories.delete",
+      "description": "Delete a memory and its history permanently",
+      "rest": [
+        "DELETE /api/memories/{id}"
+      ],
+      "cli": "memories rm",
+      "mcp": {
+        "none": "Hosted AI apps and agents cannot read or write memories (#551, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; memories are kept in the web app or the CLI"
+      },
+      "web": "/settings/memories"
+    },
+    {
+      "id": "memories.export",
+      "description": "Export your memories as a hexactra.memories JSON file",
+      "rest": [
+        "GET /api/memories/export"
+      ],
+      "cli": "memories export",
+      "mcp": {
+        "none": "Hosted AI apps and agents cannot read or write memories (#551, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; memories are kept in the web app or the CLI"
+      },
+      "web": "/settings/memories"
     }
   ]
 }
