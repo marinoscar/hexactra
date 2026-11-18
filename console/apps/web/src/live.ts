@@ -36,3 +36,33 @@ export async function fetchRunScreenshot(id: string): Promise<string | null> {
   if (!res.ok) return null;
   return URL.createObjectURL(await res.blob());
 }
+
+/** The events of `GET /api/chats/:id/stream` (#485), or `open` on every (re)connect. */
+export const CHAT_STREAM_EVENTS = ['chat', 'message', 'turn', 'run', 'question', 'heartbeat'] as const;
+export type ChatStreamEventType = (typeof CHAT_STREAM_EVENTS)[number];
+export type ChatStreamEvent = { type: 'open' } | { type: ChatStreamEventType; data: unknown };
+
+/**
+ * Follow a chat: its new messages, whether the AI is working, its newest run
+ * and the request that run waits on. `afterSeq` is the newest `seq` the page
+ * holds when it subscribes. A reconnect asks from that same point again, so
+ * messages can arrive twice: keep them by `seq`. Returns the closer.
+ */
+export function subscribeChat(id: string, afterSeq: number, onEvent: (e: ChatStreamEvent) => void): () => void {
+  const known = new Set<string>(CHAT_STREAM_EVENTS);
+  const conn = connectSse({
+    url: `/api/chats/${id}/stream?afterSeq=${Math.max(0, Math.floor(afterSeq))}`,
+    authorization: bearer,
+    reauthenticate: () => api.refreshToken(),
+    onOpen: () => onEvent({ type: 'open' }),
+    onFrame: (f) => {
+      if (!known.has(f.event)) return;
+      try {
+        onEvent({ type: f.event as ChatStreamEventType, data: JSON.parse(f.data) });
+      } catch {
+        // a malformed frame is ignored; the next open resends the state
+      }
+    },
+  });
+  return () => conn.close();
+}

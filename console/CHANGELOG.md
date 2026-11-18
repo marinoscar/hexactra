@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chats: the live stream** (#485, console 1.40.0): `GET /api/chats/:id/stream` (Server-Sent Events, `chat:read`) is one connection for an open chat, so the page does not poll several routes. Still no page; the chat page follows in #486.
+  - **Events**: `chat` (`{ title, status }`), `message` (each message after `afterSeq`, then each new one), `turn` (`{ thinking }`, true while the AI works on its reply), `run` (`{ run }`: the chat's newest run with its status, goal, activity, step count, result, error, stop reason and cost, or `null`), `question` (`{ question }`: the request that run waits on, or `null` once it is answered, cancelled or expired) and `heartbeat` after 15 s of silence.
+  - **Reconnect** with `?afterSeq=<the newest seq you hold>`: the state events are sent again, the older messages are not. The stream stays open across runs and ends when the chat is deleted.
+  - **Never a response**: a `question` event carries the request only. A run event never carries the transcript or the policy snapshot.
+  - Another user's chat answers `404 CHAT_NOT_FOUND` and a bad `afterSeq` answers `400`, both before the stream opens.
+  - **Web client**: `subscribeChat(id, afterSeq, onEvent)` in `apps/web/src/live.ts`.
 - **Chats: the turn engine** (#484, console 1.39.0): a message posted to a chat now gets an answer. Still no page; the chat page follows in #486.
   - **What a turn does**: a `chat.turn` job reads the thread and does one thing: replies in plain text, asks one clarifying question (a `clarify` message, with up to four suggested answers in `meta.options`), or starts a browser run for the job (a `run` message). A run it starts is an ordinary run with the trigger `chat`, on the chat's profile, machine and agent policy.
   - **AI feature `chat_orchestrator`** ("Chat: understand the request and start browser runs"), next to `browser_agent` under Administration → AI. It does not drive a browser, so a small, fast model is enough. With no model set up, the thread says so.
