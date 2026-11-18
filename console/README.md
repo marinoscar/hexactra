@@ -343,6 +343,12 @@ The route behind it, `GET /api/home/summary`, is one read that never fails becau
 
 `/chat` is the quick way to get something done: say what you want, and follow it in one thread. A chat needs `chat:read`; writing in one needs `chat:write`. An administrator chooses the chat's model under Administration → AI (feature "Chat: understand the request and start browser runs"); until then the thread says no model is set up.
 
+| Desktop, dark | Phone, light |
+|---|---|
+| ![The chat on a desktop in the dark theme: the chat list, the thread with the Browser card and an approval request with the page it is about, Allow and Deny](docs/images/chat-desktop-dark.png) | ![The chat on a phone in the light theme: an approval request with the page it is about, Allow and Deny, above the message field](docs/images/chat-phone-light.png) |
+
+The same two screens in the other theme: [desktop, light](docs/images/chat-desktop-light.png), [phone, dark](docs/images/chat-phone-dark.png). The pictures are from a build with sample data. How a chat becomes runs, what the model is and is not shown, and what other clients do instead: [docs/chat.md](docs/chat.md).
+
 - **Start.** **New chat** opens an empty thread with three examples. Your first message creates the chat and names it. Enter sends on a desktop (Shift+Enter breaks the line); on a phone Enter breaks the line and the send button sends.
 - **What comes back.** The assistant replies, asks one clarifying question with suggested answers you can tap, or starts a browser run. A run shows as a **Browser** card (below); when it ends, a result card says how, with the number of steps, the cost, **Run again** and a link to the run. Three dots show while the assistant is working, and the line under the title says what is happening ("Thinking…", "Working in the browser…", "Waiting for you").
 - **The list.** Chats are listed with their last line, most recently active first; a green dot marks a chat whose run is live. **Active** and **Archived** switch the list. Each row's menu, and the menu of the open chat, has **Rename**, **Archive** (an archived chat is read-only until you unarchive it) and **Delete** (the chat, its messages and its runs; refused while a run is live).

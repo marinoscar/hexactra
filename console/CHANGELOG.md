@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chat documentation** (#491): `docs/chat.md`, screenshots in the README, VISION §26.7. No change to the app.
 - **Chat: steer a working job and follow up** (#490, console 1.47.0). What you type while a run is live is passed to the agent at its next step ("Queued for the agent", then "Seen by the agent"); a request after a run has ended starts a new run that knows the previous goal and result. Guidance changes no limit. Details: README, "Chat".
 - **Chat: save a chat as a task** (#489, console 1.46.0). Details: README, "Chat".
   - **Save as task** on the result card of a run that succeeded, and by asking in words ("save this as a task"), which puts a draft card in the thread with **Review and save**. Both need `tasks:write`.
