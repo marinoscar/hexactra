@@ -171,6 +171,23 @@ Every run keeps a trace a person can follow afterwards (#541): its steps (`run_s
 - **Removed with the run** by a delete and by the nightly retention; a storage failure never keeps a run.
 - **Metrics.** `app.runs.trace_screenshots` (labels `moment`, `result`: `stored`, `skipped`, `failed`) and `app.runs.trace_screenshot_bytes`. The Doctor's `runs.trace_storage` warns when storage is off. No image, key or prompt text is ever logged.
 
+## The run page
+
+The console shows the trace on the run's page (#544; README, "A run's page"): each question with its full masked prompt, its kind and the answer line built from `question.answer` (the outcome, where it was given from `channel`, the time, and how long the agent waited since the question step), the `guidance` steps as "You added: …", the "Confirmed by you" marker from `confirmedActions`, and a lazy thumbnail per step with `hasScreenshot`, fetched with the session from `GET /api/runs/{id}/steps/{seq}/screenshot` and shown through an object URL. A lightbox pages through the run's pictures; a **Pictures** filter keeps only those steps. The captions per `screenshotMoment`:
+
+| `screenshotMoment` | Caption |
+|---|---|
+| `question`, `before_confirmed` | The screen when the agent asked |
+| `after_confirmed` | After the confirmed step |
+| `failure` | When it stopped |
+| `final` | Final screen |
+
+**Export.** The run page, the chat's result card and the run list download `GET /api/runs/{id}/export?format=json|pdf&screenshots=embed|none` (PDF also `paper=a4|letter`, from the browser's locale) through the signed-in client, as a blob saved under the name of `Content-Disposition`. "Include screenshots" is remembered per browser (`localStorage`, `hexactra.runs.exportScreenshots`); `413 EXPORT_TOO_LARGE` shows the server's message and suggests turning it off. In the Android app the console runs in Chrome (a Trusted Web Activity, no WebView), so the download goes to Chrome's own download manager.
+
+| The Export menu on a phone |
+|---|
+| ![The Export menu opened from the run page's sticky bar on a phone: PDF report, JSON trace, Include screenshots and the note](images/run-export-phone.png) |
+
 ## What is masked
 
 A run's trace, its JSON export, its PDF report and the extension's screenshot masking hide sensitive text with one pattern table, so they cannot disagree. The table is `console/packages/shared/sensitive-patterns.js` (`@app/shared/sensitive-patterns`, version `SENSITIVE_PATTERNS_VERSION`); the API applies it with `maskSensitive(text)` and `maskValue(value)` (`apps/api/src/tasks/mask.ts`), and the extension reads a generated copy, `packages/contracts/sensitive-patterns.json` at the repository root (`node scripts/gen-sensitive-patterns.mjs` writes it; CI fails when it is stale). Masking hides text in what is shown and exported; it does not change what the model sees during a run.
