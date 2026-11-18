@@ -22,6 +22,7 @@ import { FABRIC_PERMISSIONS } from '../fabric/fabric.permissions';
 import { FLEET_PERMISSIONS } from '../fleet/fleet.permissions';
 import { NOTES_PERMISSIONS } from '../notes/notes.permissions';
 import { POLICIES_PERMISSIONS } from '../policies/policies.permissions';
+import { APPROVALS_PERMISSIONS } from '../approvals/approvals.permissions';
 import { TASKS_PERMISSIONS } from '../tasks/tasks.permissions';
 import { alertsMounted } from './alerts/alerts.enabled';
 import { enabledPermissionSlices, isSliceEnabled } from './slices/manifest';
@@ -37,5 +38,5 @@ export const PERMISSION_OPTIONS = {
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? (['webhooks'] as const) : []),
     ...(alertsMounted() ? (['alerts'] as const) : []),
   ],
-  app: { permissions: [NOTES_PERMISSIONS, FABRIC_PERMISSIONS, FLEET_PERMISSIONS, TASKS_PERMISSIONS, POLICIES_PERMISSIONS, CHAT_PERMISSIONS, CONNECTED_APPS_PERMISSIONS, MCP_PERMISSIONS, MEMORIES_PERMISSIONS] },
+  app: { permissions: [NOTES_PERMISSIONS, FABRIC_PERMISSIONS, FLEET_PERMISSIONS, TASKS_PERMISSIONS, POLICIES_PERMISSIONS, CHAT_PERMISSIONS, CONNECTED_APPS_PERMISSIONS, MCP_PERMISSIONS, MEMORIES_PERMISSIONS, APPROVALS_PERMISSIONS] },
 } satisfies PlatformPermissionOptions;
