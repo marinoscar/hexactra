@@ -1108,6 +1108,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/oauth/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List users' OAuth grants (Admin only)
+         * @description Paged, newest first. Filter by `clientId` (the client row id) and `userId`; active grants only unless `includeRevoked=true`. Never a token.
+         *
+         *     **Requires:** authentication, plus permission `oauth_clients:read`.
+         */
+        get: operations["oAuthGrantsAdmin_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/oauth/grants/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke one user's OAuth grant (Admin only)
+         * @description Revokes the grant and every token of it (`revoked_reason: admin`); takes effect on the next request. Audited (`oauth:grant.revoke`, the administrator as actor); emits `identity.oauth.grant.revoked`. Revoking an already-revoked grant is a no-op `204`.
+         *
+         *     **Requires:** authentication, plus permission `oauth_clients:write`.
+         */
+        delete: operations["oAuthGrantsAdmin_revoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/test/login": {
         parameters: {
             query?: never;
@@ -8382,6 +8426,36 @@ export interface components {
         };
         OAuthPolicyDto: {
             suggestedHosts: string[];
+        };
+        OAuthAdminGrantViewDto: {
+            /** Format: uuid */
+            id: string;
+            user: {
+                /** Format: uuid */
+                id: string;
+                email: string;
+            };
+            client: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+                host: string;
+            };
+            resource: {
+                id: string | null;
+                name: string;
+            };
+            scopes: string[];
+            organization: {
+                /** Format: uuid */
+                id: string;
+                name: string;
+            } | null;
+            /** Format: date-time */
+            createdAt: string;
+            lastUsedAt: string | null;
+            revokedAt: string | null;
+            revokedReason: ("user" | "admin" | "reuse_detected" | "client_disabled" | "offboarding") | null;
         };
         TestLoginDto: {
             /** Format: email */
@@ -19870,6 +19944,131 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthGrantsAdmin_list: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                clientId?: string;
+                userId?: string;
+                includeRevoked?: "true" | "false";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of grants */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            items: components["schemas"]["OAuthAdminGrantViewDto"][];
+                            /**
+                             * @description Total matching rows across all pages.
+                             * @example 42
+                             */
+                            total: number;
+                            /**
+                             * @description One-based page number.
+                             * @example 1
+                             */
+                            page: number;
+                            /** @example 20 */
+                            pageSize: number;
+                            /** @example 3 */
+                            totalPages: number;
+                        };
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    oAuthGrantsAdmin_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Grant not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Platform 0.1.0-next.36, and the console uses its new seams** (#520, console 1.52.1). The MCP endpoint tells "ask for more access" from "not allowed" with the platform's `userPermissionsOf` (EnterpriseAppBase #1194) instead of re-deriving the permissions from platform internals, and the admin **Disconnect** of a user's AI app calls the platform's `revokeGrantAsAdmin` (EnterpriseAppBase #1195). Behaviour is unchanged: same status codes, the same `oauth:grant.revoke` audit with the administrator as actor, and the app is signed out on its next call. The platform's own admin routes `GET`/`DELETE /api/admin/oauth/grants` are now available too.
+
 ### Added
 
 - **One rate limit across several API replicas** (#517, console 1.52.0, post-v1). `MCP_RATE_LIMIT_STORE=postgres` (new deployment variable in `infra/compose/app.env.example`; default `memory`, any other value stops the API at boot) counts the `/api/mcp` limits and the platform OAuth server's limits (`OAUTH_RATE_LIMITER`) in a shared table, so N replicas no longer allow N times each limit. A sliding window counter (one row per key and minute, the previous minute weighted by its share still inside the sliding minute), counted in one `INSERT … ON CONFLICT DO UPDATE … WHERE` statement that re-checks the limit under the row lock. New app table `rate_limit_windows` (migration `20261118134227_rate_limit_windows`; run `npm run prisma:migrate`), cleaned by the new hourly job `mcp.rate_limit.purge` (its `@Cron` only enqueues, only with `postgres`). Failure keeps today's rule: authenticated MCP callers are let through, unauthenticated ones (and the OAuth endpoints) get `429`. No Redis. The in-memory limiter stays the default for one process. Docs: `docs/mcp.md` "Rate limits"; `docs/runbooks/public-exposure.md` section 4, which also explains `trustProxy`: the API does not set it, so its per-address limits share one bucket behind the stack's nginx.
