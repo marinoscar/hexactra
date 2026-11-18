@@ -72076,6 +72076,19 @@
               }
             ]
           },
+          "conversationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The chat whose run asks (#488): the request is answered in that chat. Null for every other request."
+          },
           "goal": {
             "type": "string"
           },
@@ -72242,6 +72255,7 @@
         "required": [
           "questionId",
           "runId",
+          "conversationId",
           "goal",
           "handoffId",
           "askedBy",

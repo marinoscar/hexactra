@@ -353,7 +353,10 @@ The route behind it, `GET /api/home/summary`, is one read that never fails becau
 - **Open browser** shows the browser large, refreshed every 2 seconds, with a marker where the agent is acting: beside the thread from 1200 px, above the thread on a tablet, full screen on a phone. From there you can **Stop** the run (it asks first; needs `runs:write`) and **Take over** on the machine that runs it (needs `fleet:desktop` and a machine whose desktop can be opened). It closes when the run ends.
 - **Secrets.** While the agent waits for a secret (a code, a password), the picture is hidden in the card and in the pane, and none is fetched.
 
-Answering the agent's requests in the thread and "Save as task" arrive with the next parts of epic #482.
+- **Requests.** When the agent needs you, the request is a card in the thread, with the time left: an approval shows the page it is about, **Review** (opens the browser) and Deny / Allow (a high-risk one asks twice); a code or a password has its masked field and **Open the browser** to do the step by hand; a choice lists its options. Answering needs `runs:write`. After you answer, the card becomes one line ("Allowed", "Provided", "Sent"); a request answered elsewhere, cancelled or expired says so in its place. A secret goes to the agent's browser and nowhere else: it is not in the thread, and the line says only "Provided".
+- **When you are away.** A chat run's notifications (the request, its reminders, "Run finished") open the chat instead of the Inbox, and their buttons (Approve, Stop run, Remind me in 15 min) work as before. While that chat is open and in front, no notification pops for it. The Inbox still lists the request, with an **Answer in chat** link, and it can be answered there too.
+
+"Save as task" arrives with the next part of epic #482.
 
 ### Inbox
 

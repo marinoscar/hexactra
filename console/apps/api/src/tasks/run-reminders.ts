@@ -69,7 +69,7 @@ export class RunReminders {
     const run = await this.prisma.run.findFirst({
       where: { id, status: 'waiting_human' },
       select: {
-        id: true, userId: true, goal: true, taskId: true, trigger: true, handoffId: true, remindAt: true,
+        id: true, userId: true, goal: true, taskId: true, trigger: true, conversationId: true, handoffId: true, remindAt: true,
         waitingSince: true, handoffExpiresAt: true, remindedAt: true, reminderCount: true, snoozedUntil: true,
       },
     });

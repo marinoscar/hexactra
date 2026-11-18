@@ -99,7 +99,7 @@ export function handleActionClick(scope: ActionScope, event: ActionClickEvent, f
 }
 
 /** Options of `showNotification` as the platform's push handler passes them. */
-type ShowOptions = Record<string, unknown> & { tag?: string };
+type ShowOptions = Record<string, unknown> & { tag?: string; data?: unknown };
 
 /**
  * A scope whose `showNotification` re-alerts (`renotify`) when a pushed
@@ -112,6 +112,65 @@ export function withRunRenotify<S extends { readonly registration: { showNotific
   const registration = scope.registration as unknown as { showNotification(title: string, options?: ShowOptions): Promise<void> };
   const show = (title: string, options?: ShowOptions) =>
     registration.showNotification(title, options && typeof options.tag === 'string' && options.tag.startsWith('run-') ? { ...options, renotify: true } : options);
+  return new Proxy(scope, {
+    get(target, prop, receiver) {
+      if (prop === 'registration') {
+        return new Proxy(registration, { get: (r, p, rr) => (p === 'showNotification' ? show : Reflect.get(r, p, rr)) });
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+}
+
+const CHAT_PATH = /^\/chat\/([0-9a-fA-F-]{36})$/;
+
+/** The chat a notification leads to (`/chat/<id>` links, #488), or null. */
+export function chatOfNotification(data: unknown): string | null {
+  const link = typeof (data as { link?: unknown })?.link === 'string' ? (data as { link: string }).link : '';
+  if (!link.startsWith('/') || link.startsWith('//')) return null;
+  return CHAT_PATH.exec(new URL(link, 'https://worker.invalid').pathname)?.[1] ?? null;
+}
+
+/** A window of the app, as `clients.matchAll({ type: 'window' })` lists it. */
+export interface WindowLike {
+  readonly url: string;
+  readonly focused?: boolean;
+  readonly visibilityState?: string;
+}
+
+/** Whether the person is looking at that chat right now: a focused, visible window on its page. */
+export function chatIsInFront(windows: readonly WindowLike[], chatId: string): boolean {
+  return windows.some((w) => {
+    if (w.focused !== true || w.visibilityState !== 'visible') return false;
+    try {
+      return CHAT_PATH.exec(new URL(w.url).pathname)?.[1]?.toLowerCase() === chatId.toLowerCase();
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
+ * A scope whose `showNotification` shows nothing for a chat the person has
+ * open and in front (#488): the request is already on their screen, in the
+ * thread. Any other case shows the notification: another page, another chat, a
+ * hidden or unfocused window, no window at all, or windows that cannot be
+ * listed. (A browser allows a push without a notification while a window of
+ * the site is visible, which is exactly this case.) Wraps only the push path.
+ */
+export function withFocusedChatQuiet<
+  S extends { readonly registration: { showNotification(title: string, options?: never): Promise<void> }; readonly clients: object },
+>(scope: S): S {
+  const registration = scope.registration as unknown as { showNotification(title: string, options?: ShowOptions): Promise<void> };
+  const clients = scope.clients as unknown as { matchAll?(options: { type: 'window'; includeUncontrolled: boolean }): Promise<readonly WindowLike[]> };
+  const show = async (title: string, options?: ShowOptions) => {
+    const chatId = chatOfNotification(options?.data);
+    if (chatId && clients.matchAll) {
+      const windows = await clients.matchAll({ type: 'window', includeUncontrolled: true }).catch(() => [] as readonly WindowLike[]);
+      if (chatIsInFront(windows, chatId)) return;
+    }
+    return registration.showNotification(title, options);
+  };
   return new Proxy(scope, {
     get(target, prop, receiver) {
       if (prop === 'registration') {

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chat: the agent's requests are answered in the thread** (#488, console 1.45.0). Details: README, "Chat".
+  - **Request cards**: an approval (the page it is about, Review, Deny / Allow, twice for a high-risk one), a code or a password (masked field, or do the step in the browser), a choice, a takeover, each with the time left. They use the Inbox's answer form and the `web` channel, so the same rules apply.
+  - **After an answer** the card is one line: "Allowed", "Denied", "Provided", "Sent", "Declined". A request that ends elsewhere says so in its place. A secret is never kept by the page or shown again.
+  - **Notifications of a chat run open the chat** (`/chat/<id>`): the request, its reminders and "Run finished"; the email links too. The buttons work as before. Other runs still open the Inbox and the run page.
+  - **No notification while the chat is in front**: the service worker shows nothing for a chat that is open in a focused, visible window.
+  - **Inbox**: `GET /inbox` items carry `conversationId`; a chat's request has an **Answer in chat** link and can still be answered in the Inbox.
 - **Chat: the Browser card and the live browser** (#487, console 1.44.0). Details: README, "Chat".
   - **Browser card**: a run in a chat is one card that updates in place: what the browser is doing, a picture of it (every 5 s while the card is on screen), **Open browser**, and the run's steps. When the run ends it keeps the status and a link to the run.
   - **Open browser**: the browser large, refreshed every 2 s, with a marker where the agent acts. Beside the thread from 1200 px, above it on a tablet, a full-screen sheet on a phone. It closes when the run ends.

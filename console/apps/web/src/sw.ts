@@ -22,7 +22,7 @@ import {
   type NotificationsServiceWorkerScope,
 } from '@marinoscar/platform-web/notifications/service-worker';
 
-import { handleActionClick, withRunRenotify, type ActionClickEvent, type ActionScope } from './notificationActions';
+import { handleActionClick, withFocusedChatQuiet, withRunRenotify, type ActionClickEvent, type ActionScope } from './notificationActions';
 
 /** The members of the worker's global scope this file uses beyond the handlers'. */
 type WorkerScope = NotificationsServiceWorkerScope & {
@@ -49,7 +49,8 @@ scope.addEventListener('notificationclick', (event: NotificationsClickEvent) => 
   if (handleActionClick(scope as unknown as ActionScope, event as unknown as ActionClickEvent, fetch, ICONS)) return;
   handleNotificationClick(scope, event);
 });
-// A pushed notification that replaces one of the same run alerts again (renotify).
-const pushScope = withRunRenotify(scope);
+// A pushed notification that replaces one of the same run alerts again (renotify);
+// one about a chat the person has open and in front is not shown (#488).
+const pushScope = withFocusedChatQuiet(withRunRenotify(scope));
 scope.addEventListener('push', (event: NotificationsPushEvent) => event.waitUntil(handlePushEvent(pushScope, event, ICONS)));
 scope.addEventListener('pushsubscriptionchange', (event: NotificationsPushSubscriptionChangeEvent) => event.waitUntil(handlePushSubscriptionChange(scope, event)));
