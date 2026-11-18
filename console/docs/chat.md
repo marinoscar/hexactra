@@ -75,6 +75,21 @@ A chat has the same opt-in limits as a task, in **Chat settings**: the sites its
 
 **The limits are yours, never the model's.** The assistant cannot set them: `start_run` takes a goal and nothing else. Guidance cannot change them either: it is a line in the run's log, and the runner checks allowed sites and the purchase confirmation in code.
 
+## Budgets in a chat
+
+A run a chat starts (`trigger = 'chat'`) is interactive: you are in the conversation, you answer the agent's questions and you can press **Stop**. So its budgets are **soft** (#537): all six (actions, model calls, active time, input tokens, output tokens, cost) are counted, shown and warned about, and never end the run. This holds for a limit from the agent policy and for one from a deployment ceiling.
+
+- **Near a limit**, the Browser card shows one line under the activity: "Close to this chat's usual limit: 48 of 60 actions."
+- **Over a limit**, in the warning colour: "Over the usual limit: 64 of 60 actions. Still working. Press Stop to end it." The budget named is the one closest to, or furthest over, its limit.
+- **One notification**, the first time the run goes over any limit: "Still working, over its usual limit" (event `runs.over_budget`, browser and push; it opens the chat). Never a second one for the same run.
+- **The model is not told to hurry.** A soft budget never sends the "Finish the goal now" warning and never makes the one-call wrap-up a used-up budget gets. The run log gets one neutral line per budget: `Budget note: actions is over this chat's usual limit (64 of 60). The owner is present; keep working.`
+- **The run page** shows the meter with a full bar past the limit (`64 / 60 · 106%`) and "Limits are shown for reference. A chat run is not stopped by them." A finished run that went over says "Went over its usual limit: 64 of 60 actions" as plain information, never "Stopped".
+- **API.** A run's `budget` (on `GET /api/runs/:id`, its live stream and the chat stream's `run` event) carries `enforcement` (`soft` for a chat run, `hard` otherwise) and `over` (the budgets at or over their limit). The enforcement is fixed in the run's policy snapshot at its first step.
+
+**What still stops a chat run:** finishing, **Stop**, takeover, stall detection (the policy's `onStall`), and a failure. Allowed sites and the purchase confirmation keep working. Runs no person is watching (schedules, tasks, the API, MCP, external agents) keep hard budgets.
+
+**Known limit.** Soft budgets remove the cost brake in a chat: if a run loops while still "progressing", the warning is the only signal. Watch the card, and press Stop.
+
 ## Steering and follow-ups
 
 - **While a run is live**, what you type is passed to the working agent (`guide_run` → `run_guidance`). The runner reads pending lines between chunks, each once. Your message shows **Queued for the agent**, then **Seen by the agent**, or **Not seen: the job had ended**. It can take a few actions to land, because a chunk is not interrupted.
