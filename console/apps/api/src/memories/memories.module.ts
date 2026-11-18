@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { MemoriesController } from './memories.controller';
 import { MemoriesService } from './memories.service';
+import { MemoryContext } from './memory-context';
 import { MemoryMetrics } from './memory-metrics';
 
 /**
@@ -11,7 +12,7 @@ import { MemoryMetrics } from './memory-metrics';
  */
 @Module({
   controllers: [MemoriesController],
-  providers: [MemoriesService, MemoryMetrics],
-  exports: [MemoriesService],
+  providers: [MemoriesService, MemoryMetrics, MemoryContext],
+  exports: [MemoriesService, MemoryContext],
 })
 export class MemoriesModule {}

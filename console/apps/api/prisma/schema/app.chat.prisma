@@ -24,13 +24,15 @@ enum ChatMessageRole {
 
 /// What a message is, so the thread can render it: plain text, a clarifying
 /// question (`meta.options` are its chips), the card of a run, a run's result,
-/// or a drafted task.
+/// a drafted task, or a proposed memory (#553).
 enum ChatMessageKind {
   text
   clarify
   run
   result
   task_draft
+  /// The agent proposes a memory (#553): `meta.questionId` is the proposal, answered on its card.
+  memory
 
   @@map("chat_message_kind")
 }
