@@ -18,6 +18,11 @@ export const IDS = {
   group: '77777777-7777-4777-8777-777777777777',
   chat: '88888888-8888-4888-8888-888888888888',
   app: '8888888a-8888-4888-8888-888888888888',
+  // Task parameters (#556): a task with three, the run waiting for its values, and a run that used them.
+  paramTask: '11111111-1111-4111-8111-111111111119',
+  formQuestion: '55555555-5555-4555-8555-555555555559',
+  paramRun: '33333339-3333-4333-8333-333333333333',
+  memory: '99999999-9999-4999-8999-999999999991',
 };
 
 const PERMISSIONS = [
@@ -25,7 +30,7 @@ const PERMISSIONS = [
   'agent_policies:read', 'agent_policies:write', 'system_settings:read', 'system_settings:write', 'fabric_config:read', 'fabric_config:write',
   'users:read', 'allowlist:read', 'jobs:read', 'webhooks:read', 'system_webhooks:read', 'alerts:read', 'ai:use', 'ai_config:read', 'storage_config:read',
   'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
-  'connected_apps:read', 'connected_apps:write', 'oauth_clients:read', 'oauth_clients:write',
+  'connected_apps:read', 'connected_apps:write', 'oauth_clients:read', 'oauth_clients:write', 'memories:read',
 ];
 
 const limits = { maxActions: 60, maxModelCalls: 120, maxActiveMinutes: 20, maxInputTokens: null, maxOutputTokens: null, maxCostUsd: 2 };
@@ -359,5 +364,47 @@ export const RESPONSES = {
   'GET /notes': [{ id: 'note-1', title: 'A first note', body: '', archived: false }, { id: 'note-2', title: 'A note with a long title that has to wrap on a narrow phone screen', body: '', archived: true }],
 };
 
+// ---- Task parameters (#556): the task form with three parameters, the run dialog, the form card, a schedule's values, a run's Inputs ----
+
+const ZELLE_GOAL = 'Send {{Amount}} today to {{Recipient phone}} using Zelle on my Bank of America account using the checking account ending in {{Account last 4}}';
+const paramTask = task(IDS.paramTask, 'Zelle to my wife', {
+  goal: ZELLE_GOAL, hostId: null, hostFallback: true, allowedDomains: ['bank.example.test'], policyId: null,
+  parameters: [
+    { key: 'amount', label: 'Amount', type: 'money', required: true, help: 'In dollars, for example 25' },
+    { key: 'recipient_phone', label: 'Recipient phone', type: 'phone', required: true, default: { memory: { id: IDS.memory, attribute: 'phone' } } },
+    { key: 'account_last_4', label: 'Account last 4', type: 'text', required: true, default: { value: '0659' }, constraints: { maxLength: 4 } },
+  ],
+  createdAt: iso(-2 * 86_400_000), updatedAt: iso(-86_400_000),
+  summary: { ...taskSummary, schedules: [taskSchedule('33333333-3333-4333-8333-333333333339', 'Every month on day 1 at 09:00', { inputs: { amount: '25' } })] },
+});
+const memories = [
+  { id: IDS.memory, kind: 'person', label: 'My wife', aliases: ['wife'], attributes: { name: 'Person A', phone: '555-010-6020' }, note: null, status: 'active', source: 'owner', sourceRunId: null, sourceConversationId: null, supersededById: null, lastUsedAt: null, createdAt: iso(-86_400_000), updatedAt: iso(-86_400_000) },
+  { id: '99999999-9999-4999-8999-999999999992', kind: 'account', label: 'Checking account', aliases: [], attributes: { bank: 'Bank X', ending: '0659' }, note: null, status: 'active', source: 'owner', sourceRunId: null, sourceConversationId: null, supersededById: null, lastUsedAt: null, createdAt: iso(-86_400_000), updatedAt: iso(-86_400_000) },
+];
+const formQuestion = {
+  ...question, questionId: IDS.formQuestion, id: IDS.formQuestion, runId: IDS.paramRun, goal: ZELLE_GOAL, handoffId: null, askedBy: `run:${IDS.paramRun}`, browserBound: false,
+  prompt: 'A few details to start "Zelle to my wife": Amount, When', pageTitle: null, kind: 'other', input: 'form', options: null, constraints: null, viewerUrl: null, risk: null,
+  fields: [
+    { key: 'amount', label: 'Amount', type: 'money', required: true, help: 'In dollars, for example 25' },
+    { key: 'when', label: 'When', type: 'date', required: true },
+    { key: 'account', label: 'Account', type: 'choice', required: true, options: ['Checking ending 0659', 'Savings ending 1234'] },
+  ],
+};
+const paramRun = run(IDS.paramRun, 'succeeded', {
+  taskId: IDS.paramTask, goal: 'Send ⟦25⟧ today to ⟦•••-•••-6020⟧ using Zelle on my Bank of America account using the checking account ending in ⟦0659⟧',
+  result: 'Sent 25 to the recipient.', finishedAt: iso(-60_000),
+  inputs: [
+    { key: 'amount', label: 'Amount', value: '25', source: 'asked' },
+    { key: 'recipient_phone', label: 'Recipient phone', value: '•••-•••-6020', source: 'memory' },
+    { key: 'account_last_4', label: 'Account last 4', value: '0659', source: 'default' },
+  ],
+});
+RESPONSES[`GET /tasks/${IDS.paramTask}`] = paramTask;
+RESPONSES[`GET /tasks/${IDS.paramTask}/stats`] = RESPONSES[`GET /tasks/${IDS.task}/stats`];
+RESPONSES['GET /memories'] = memories;
+RESPONSES[`GET /questions/${IDS.formQuestion}`] = formQuestion;
+RESPONSES[`GET /runs/${IDS.paramRun}`] = paramRun;
+RESPONSES['GET /inbox'] = [formQuestion, ...RESPONSES['GET /inbox']];
+
 /** The ids a mock run puts in the parameterized routes. */
-export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app };
+export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun };

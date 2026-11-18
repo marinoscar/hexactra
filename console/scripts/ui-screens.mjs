@@ -40,7 +40,8 @@
 //          redirected route fails the run)  --list (print the routes and exit)
 //
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
-// `{finishedRun}`, `{chatRun}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}` and `{app}` are filled
+// `{finishedRun}`, `{chatRun}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}`, `{app}`,
+// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556) are filled
 // in from the account (or the fixtures). The enabled slices' routes are read
 // from apps/web/src/slices/<id>.tsx, so a new slice page needs nothing here.
 //
@@ -114,6 +115,12 @@ export const ROUTES = [
   ['activate', '/activate'],
   ['oauth-error', '/oauth/error?code=client_not_allowed&host=client.example.test', { signedOut: true }],
   ['login', '/login', { signedOut: true }],
+  // Task parameters (#556). `click` presses a button (by its accessible name) once the page settled.
+  ['task-edit-parameters', '/tasks/{paramTask}/edit'],
+  ['task-schedule-values', '/tasks/{paramTask}/edit', { click: 'Edit' }],
+  ['task-run-dialog', '/tasks/{paramTask}', { click: 'Run now' }],
+  ['question-form', '/inbox/q/{formQuestion}'],
+  ['run-inputs', '/runs/{paramRun}'],
 ];
 
 const DEFAULT_WIDTHS = [360, 390, 768, 1024, 1440];
@@ -336,6 +343,10 @@ async function main() {
             // The app has no such route (yet), or the account may not open it: it was sent elsewhere.
             note(name, width, 'redirected');
             continue;
+          }
+          if (options.click) {
+            await page.getByRole('button', { name: options.click, exact: true }).first().click({ timeout: 5_000 });
+            await page.waitForTimeout(500);
           }
           const size = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth }));
           await page.screenshot({ path: join(args.out, `${name}-${width}-${scheme}.png`), fullPage: true });
