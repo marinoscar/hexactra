@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Per-address limits count each caller again behind the stack's nginx** (#530, console 1.54.1). The API built Fastify without `trustProxy`, so every caller reached it from nginx's container address and the unauthenticated MCP limit and the platform OAuth server's authorize and register limits shared one bucket for everyone. New deployment variable `TRUST_PROXY` (`infra/compose/app.env.example`): empty (the default) trusts loopback, link-local and private ranges, `false` trusts no proxy, otherwise a comma-separated list of IPs or CIDRs; `true`, a hop count (Fastify 5 ignores one) or a malformed entry stops the API at boot. New Doctor check `mcp.trust_proxy` warns when it is `false` while `APP_URL` is public HTTPS. Docs: `docs/runbooks/public-exposure.md` section 4, the README "Enable it" checklist, `docs/mcp.md` "Rate limits".
 - **The browser's picture stays while a run waits for you** (#525, console 1.53.1). The fabric took no screenshot while the agent waited for an answer or a person held the desktop, so the chat's Browser card and an approval's page went blank (for example after switching apps and back). A plain screenshot is now taken in those moments, except while a code or password is being asked for. Needs the fabric redeployed.
 
 ### Documentation

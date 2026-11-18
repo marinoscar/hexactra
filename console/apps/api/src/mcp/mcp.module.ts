@@ -7,7 +7,7 @@ import { McpActivityPurgeHandler, McpActivityPurgeTask } from './mcp-activity.jo
 import { McpAdminController } from './mcp-admin.controller';
 import { McpController } from './mcp.controller';
 import { McpDispatcher } from './mcp.dispatcher';
-import { McpEndpointCheck, McpExposureCheck, McpHighRiskGrantsCheck, McpKillSwitchCheck, McpPublicReachabilityCheck } from './mcp.doctor-checks';
+import { McpEndpointCheck, McpExposureCheck, McpHighRiskGrantsCheck, McpKillSwitchCheck, McpPublicReachabilityCheck, McpTrustProxyCheck } from './mcp.doctor-checks';
 
 /**
  * The console as an MCP server (`POST /api/mcp`). The run and question events
@@ -19,6 +19,6 @@ import { McpEndpointCheck, McpExposureCheck, McpHighRiskGrantsCheck, McpKillSwit
 @Module({
   imports: [TasksModule, QuestionsModule, FabricModule],
   controllers: [McpController, McpAdminController],
-  providers: [McpDispatcher, McpActivityPurgeHandler, McpActivityPurgeTask, McpEndpointCheck, McpPublicReachabilityCheck, McpExposureCheck, McpKillSwitchCheck, McpHighRiskGrantsCheck],
+  providers: [McpDispatcher, McpActivityPurgeHandler, McpActivityPurgeTask, McpEndpointCheck, McpPublicReachabilityCheck, McpExposureCheck, McpKillSwitchCheck, McpHighRiskGrantsCheck, McpTrustProxyCheck],
 })
 export class McpModule {}

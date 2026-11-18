@@ -8,11 +8,13 @@
 //   mcp.exposure             warn: an admin route answers 200 without a credential through the public URL
 //   mcp.kill_switch          pass: the state of the two switches (the Doctor has no `info` status)
 //   mcp.high_risk_grants     warn: grants hold browser:evaluate, desktop:control or policies:write
+//   mcp.trust_proxy          warn: TRUST_PROXY=false while APP_URL is public https (every caller shares one per-address bucket)
 import { Injectable, Optional, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DoctorCheckRegistry, type DoctorCheck, type DoctorCheckOutcome } from '@marinoscar/platform-api/doctor';
 import { OAuthServerSettingsReader } from '@marinoscar/platform-api/identity';
 
+import { describeTrustProxy, parseTrustProxy } from '../config/trust-proxy';
 import { PrismaService } from '../prisma/prisma.service';
 import { HIGH_RISK_GRANT_SCOPES, grantCounts } from './mcp-admin.controller';
 import { McpSettingsReader } from './mcp-settings.reader';
@@ -217,4 +219,35 @@ export class McpHighRiskGrantsCheck extends McpCheck {
   }
 }
 
-export const MCP_DOCTOR_CHECKS = [McpEndpointCheck, McpPublicReachabilityCheck, McpExposureCheck, McpKillSwitchCheck, McpHighRiskGrantsCheck];
+/**
+ * `mcp.trust_proxy`: which proxies the API trusts for the caller's address
+ * (`TRUST_PROXY`, read at boot, #530). The API always sits behind the stack's
+ * nginx, so with the variable `false` every caller reaches the API from
+ * nginx's address and the per-address limits (unauthenticated MCP answers, the
+ * OAuth server's authorize and register) count everyone in one bucket. That
+ * matters once the console is public: warn then; otherwise report the setting.
+ */
+@Injectable()
+export class McpTrustProxyCheck extends McpCheck {
+  readonly id = 'mcp.trust_proxy';
+  readonly label = 'Caller addresses behind the proxy';
+  /** The raw variable; tests replace it. */
+  readEnv: () => string | undefined = () => process.env.TRUST_PROXY;
+
+  async check(): Promise<DoctorCheckOutcome> {
+    const setting = parseTrustProxy(this.readEnv());
+    const effective = describeTrustProxy(setting);
+    if (setting !== false) return { status: 'pass', detail: `Trusted proxies: ${effective}. The per-address limits count each caller apart.`, data: { trustProxy: setting } };
+    if (!isPublicHttpsUrl(this.appUrl())) {
+      return { status: 'pass', detail: `TRUST_PROXY is false: the per-address limits count every caller as the stack's nginx. APP_URL is not a public https address, so few callers share that bucket.`, data: { trustProxy: false } };
+    }
+    return {
+      status: 'warn',
+      detail: 'TRUST_PROXY is false while the console is public: every caller reaches the API from the address of the stack\'s nginx, so the per-address limits (unauthenticated MCP answers, the OAuth server\'s authorize and register) share one bucket, and one noisy caller can lock everyone out of them.',
+      remedy: `Remove TRUST_PROXY from infra/compose/.env (the default trusts loopback and private ranges) or set it to the address of the stack's nginx, then restart the API (${PUBLIC_EXPOSURE_RUNBOOK}, section 4).`,
+      data: { trustProxy: false },
+    };
+  }
+}
+
+export const MCP_DOCTOR_CHECKS = [McpEndpointCheck, McpPublicReachabilityCheck, McpExposureCheck, McpKillSwitchCheck, McpHighRiskGrantsCheck, McpTrustProxyCheck];
