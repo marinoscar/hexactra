@@ -110,7 +110,16 @@ A guard on `McpController` (no global guard; `apps/api/src/mcp/mcp.rate-limit.ts
 | per user | 600 | every request, all the user's credentials |
 | per source address, unauthenticated | 30 | answers `401`; over it a `401` becomes a `429` (a valid credential is never affected) |
 
-A refusal is HTTP `429` with `Retry-After` and a JSON-RPC error `-32029` whose message names the wait (`data.retryAfterS`). The limiter is in memory behind the `MCP_RATE_LIMITER` token (one API process); a failing limiter lets authenticated callers through and refuses unauthenticated ones. The metric `app.mcp.rate_limited` counts refusals by key kind and client bucket. nginx adds a coarse per-address limit, a 1 MiB body and a 300 s read timeout on `/api/mcp` (`infra/nginx/app.d/`).
+A refusal is HTTP `429` with `Retry-After` and a JSON-RPC error `-32029` whose message names the wait (`data.retryAfterS`). A failing limiter lets authenticated callers through and refuses unauthenticated ones. The metric `app.mcp.rate_limited` counts refusals by key kind and client bucket. nginx adds a coarse per-address limit, a 1 MiB body and a 300 s read timeout on `/api/mcp` (`infra/nginx/app.d/`).
+
+**Where the limits are counted** (#517). The limiter sits behind the `MCP_RATE_LIMITER` token and is chosen at boot by the deployment variable `MCP_RATE_LIMIT_STORE` (`infra/compose/app.env.example`; `apps/api/src/mcp/mcp-security.module.ts`):
+
+| `MCP_RATE_LIMIT_STORE` | Store | Algorithm | Use |
+|---|---|---|---|
+| `memory` (default, also when empty) | this API process's memory | exact sliding window: the times of the hits in the last minute | one API process (the stack's default) |
+| `postgres` | the table `rate_limit_windows`, shared by every API process | sliding window counter: one row per key and fixed minute; a hit is allowed while `current + 1 + floor(previous × the share of the previous minute still inside the sliding minute) ≤ limit` | more than one API replica; otherwise each replica allows the full limit |
+
+Any other value stops the API at boot. The Postgres counter is one statement per hit (`INSERT … ON CONFLICT DO UPDATE … WHERE`, the limit re-checked under the row lock), so two replicas never both take the last slot. It approximates the exact window: it assumes the previous minute's hits were evenly spread, so a burst at the end of the previous minute is under-counted by at most its uneven share, and it never allows more than the limit within one fixed minute. Like the in-memory limiter, a refused hit is not counted. Each replica uses its own clock to place the window: keep the replicas' clocks synchronised (NTP). A key longer than 200 characters is stored as its SHA-256. With `postgres` the same store also backs the platform OAuth server's limits (`OAUTH_RATE_LIMITER`: authorize and register per address, token and revoke per client), which then count across replicas too and, because those endpoints are unauthenticated, answer `429` with `Retry-After: 60` when the store fails (the platform's in-memory default stays in place with `memory`). The hourly job `mcp.rate_limit.purge` (its `@Cron`, at :23, only enqueues, and only with `postgres`) deletes windows past `expires_at` (the end of the minute after theirs). Behind a proxy, the per-address limits need Fastify's `trustProxy`: [runbooks/public-exposure.md, section 4](runbooks/public-exposure.md#4-the-limits-that-apply).
 
 ### Kill switches
 

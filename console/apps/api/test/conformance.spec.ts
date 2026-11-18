@@ -134,6 +134,10 @@ runPlatformConformance({
           why: 'The task list filters and sorts on facts computed from schedules and runs, and the summaries and statistics aggregate runs per task (FILTER, DISTINCT ON, percentile_cont, days in a time zone): one statement each instead of one per task. Every statement binds the caller\'s `user_id`.',
         },
         {
+          file: 'mcp/mcp.rate-limit.pg.ts',
+          why: 'The shared rate limiter (#517) counts a hit in one statement so that several API processes never both take the last slot: an INSERT … ON CONFLICT DO UPDATE … WHERE on `rate_limit_windows` re-checks the limit under the row lock, which Prisma\'s upsert cannot express. The table holds bucket names (`grant:<id>`, `unauth:<address>`), no user-owned rows; every value is a bound parameter.',
+        },
+        {
           file: 'home/home.service.ts',
           why: 'The Home summary (#430) reads each block in one statement: a window count beside the limited rows, a task name joined on the same user, three named fields out of `runs.policy_snapshot` (the snapshot never leaves the database), and the week bucketed by day in a time zone. Every statement binds the caller\'s `user_id` (`owner_user_id` for questions) and joins only rows of that user.',
         },
