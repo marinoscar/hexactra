@@ -10,6 +10,7 @@
 import type { AuthCredentialInfo } from '@marinoscar/platform-api/identity';
 
 import { RPC } from './mcp.results';
+import type { StepUpForm } from './mcp.settings';
 
 /** What one revision gets from this server. */
 export interface McpVersionFlags {
@@ -264,6 +265,43 @@ export function clientBucket(name: string | undefined): ClientBucket {
   if (n.includes('hermes')) return 'hermes';
   if (/^pi(?:$|[\s/@_-])/.test(n)) return 'pi';
   return 'other';
+}
+
+/** The hosts an OAuth client of ChatGPT lives on (a subdomain counts): its client id document, redirect URI or `client_uri`. */
+export const CHATGPT_CLIENT_HOSTS: readonly string[] = ['chatgpt.com', 'openai.com'];
+
+/** A self-asserted `clientInfo.name` of ChatGPT. */
+const CHATGPT_CLIENT_NAME = /openai|chatgpt/i;
+
+/**
+ * Whether the caller is ChatGPT (#531), for the one place the console answers
+ * it differently: the form of a step-up (`stepUpTransport`). True when one of
+ * the OAuth client's hosts (the platform-derived `host`, a redirect URI's
+ * host, `client_uri`'s host) is `chatgpt.com` or `openai.com` or a subdomain,
+ * or when the request's `clientInfo.name` (the `initialize` params, or
+ * `_meta` on 2026-07-28; absent on a later request of a handshake revision)
+ * names OpenAI or ChatGPT. Presentation only: it never decides what a caller
+ * may do.
+ */
+export function isChatGptCaller(c: { clientHosts?: readonly (string | null | undefined)[]; clientInfoName?: string | null }): boolean {
+  for (const raw of c.clientHosts ?? []) {
+    const host = (raw ?? '').trim().toLowerCase().replace(/\.$/, '');
+    if (host && CHATGPT_CLIENT_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) return true;
+  }
+  return Boolean(c.clientInfoName && CHATGPT_CLIENT_NAME.test(c.clientInfoName));
+}
+
+/**
+ * How a step-up is sent (#531): `http` (the `403 insufficient_scope` with
+ * `WWW-Authenticate`) or `tool` (a tool error result carrying the same
+ * challenge in `_meta["mcp/www_authenticate"]`). Only an OAuth caller steps
+ * up, so anything else is `http`. The `mcp.stepUpForm` setting: `http` and
+ * `tool` force their form on every OAuth caller; `auto` gives ChatGPT `tool`.
+ */
+export function stepUpTransport(setting: StepUpForm, credentialKind: string | undefined, chatGpt: boolean): 'http' | 'tool' {
+  if (credentialKind !== 'oauth') return 'http';
+  if (setting === 'http' || setting === 'tool') return setting;
+  return chatGpt ? 'tool' : 'http';
 }
 
 /** Loopback hosts whose origins (any port, http or https) may call the endpoint from a browser. */

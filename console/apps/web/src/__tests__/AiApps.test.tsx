@@ -453,6 +453,19 @@ describe('External AI apps (admin, #465)', () => {
     expect(screen.getByRole('link', { name: /OAuth clients/ })).toHaveAttribute('href', '/admin/settings/oauth-clients');
   });
 
+  it('the step-up form (#531): automatic by default, saved with the rest', async () => {
+    const host = renderPage(['system_settings:read', 'system_settings:write']);
+    const select = await screen.findByRole('combobox', { name: 'How an app asks for more permission' });
+    expect(select).toHaveTextContent('Automatic (recommended)');
+    expect(screen.getByText(/ChatGPT gets a tool error carrying the sign-in challenge/)).toBeInTheDocument();
+    fireEvent.mouseDown(select);
+    fireEvent.click(await screen.findByRole('option', { name: 'HTTP 403 for every app' }));
+    expect(screen.getByText(/The 403 with WWW-Authenticate, for every app/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await screen.findByText(/takes effect within a few seconds\./);
+    expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ body: { mcp: { stepUpForm: 'http' } } });
+  });
+
   it('read-only without system_settings:write: no Save, controls disabled', async () => {
     renderPage(['system_settings:read']);
     expect(await screen.findByRole('spinbutton', { name: 'Runs at once per app' })).toBeDisabled();
