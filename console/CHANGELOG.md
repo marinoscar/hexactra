@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Chat: the Browser card and the live browser** (#487, console 1.44.0). Details: README, "Chat".
+  - **Browser card**: a run in a chat is one card that updates in place: what the browser is doing, a picture of it (every 5 s while the card is on screen), **Open browser**, and the run's steps. When the run ends it keeps the status and a link to the run.
+  - **Open browser**: the browser large, refreshed every 2 s, with a marker where the agent acts. Beside the thread from 1200 px, above it on a tablet, a full-screen sheet on a phone. It closes when the run ends.
+  - **Stop** (asks first; `runs:write`) and **Take over** on the machine that runs the browser (`fleet:desktop`, and a machine whose desktop can be opened).
+  - **Result card**: the result or the reason, the steps, the cost (marked when it is a lower bound), **Run again** (asks for the same job in the chat) and a link to the run.
+  - **Secrets**: while the agent waits for a secret, the picture is hidden and none is fetched. A hidden tab fetches no picture either.
 - **Chat: the page** (#486, console 1.43.0): `/chat` is a new way to get something done. Say what you want; the assistant replies, asks one clarifying question, or starts a browser run, all in one thread. Details: README, "Chat".
   - **Thread**: your messages on the right, the assistant's on the left, a day separator, three dots while the assistant works, and a line under the title that says what is happening. A clarifying question shows its suggested answers as chips you tap. A run and its result show as cards with a link to the run (the Browser card with the live view is the next part).
   - **Composer**: Enter sends on a desktop and Shift+Enter breaks the line; on a phone Enter breaks the line. It stays usable while the assistant works, and what you typed is kept when a send fails.
