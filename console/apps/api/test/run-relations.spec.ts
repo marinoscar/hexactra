@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { effectiveOnDelete, readSchemaDatamodel } from '@marinoscar/platform-api/testing';
 
 /** Run-id columns with no foreign key, each cleared by `RunDeleteService`. Adding one means handling it there. */
-const PLAIN_RUN_ID_COLUMNS = ['ApprovalRule.lastUsedRunId', 'ApprovalRuleUse.runId', 'McpActivity.runId', 'TaskSchedule.lastRunId'];
+const PLAIN_RUN_ID_COLUMNS = ['ApprovalRule.lastUsedRunId', 'ApprovalRuleUse.runId', 'McpActivity.runId', 'Memory.sourceRunId', 'TaskSchedule.lastRunId'];
 
 /**
  * Foreign keys to Run that are ON DELETE SET NULL on purpose: the row outlives

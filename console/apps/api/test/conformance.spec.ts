@@ -138,6 +138,10 @@ runPlatformConformance({
           why: 'The shared rate limiter (#517) counts a hit in one statement so that several API processes never both take the last slot: an INSERT … ON CONFLICT DO UPDATE … WHERE on `rate_limit_windows` re-checks the limit under the row lock, which Prisma\'s upsert cannot express. The table holds bucket names (`grant:<id>`, `unauth:<address>`), no user-owned rows; every value is a bound parameter.',
         },
         {
+          file: 'memories/memories.service.ts',
+          why: 'Memories (#551) take a transaction-scoped advisory lock (`pg_advisory_xact_lock(hashtext(\'memories:<user id>\'))`) before checking the 500-memory limit and the case-insensitive label rule, so two concurrent writes of one user cannot both pass; Prisma has no lock primitive. The only value is the bound caller id; the statement reads and writes no rows.',
+        },
+        {
           file: 'home/home.service.ts',
           why: 'The Home summary (#430) reads each block in one statement: a window count beside the limited rows, a task name joined on the same user, three named fields out of `runs.policy_snapshot` (the snapshot never leaves the database), and the week bucketed by day in a time zone. Every statement binds the caller\'s `user_id` (`owner_user_id` for questions) and joins only rows of that user.',
         },
