@@ -170,14 +170,13 @@ export function TasksCard({ host }: TasksCardProps) {
               <div className="tmain">
                 <p className="tname">{row.name || 'Untitled task'}</p>
                 <p className="muted tsched">
-                  {row.scheduleText ?? 'No schedule'}
+                  {row.scheduleState === 'paused' ? 'Schedules paused' : (row.scheduleText ?? 'No schedule')}
                   {next && row.scheduleState !== 'paused' ? ` · Next: ${next}` : ''}
                 </p>
                 <div className="meta">
                   {live ? <span className="chip chip-running">Running</span> : null}
                   {last && !live ? <span className={`chip chip-${row.lastRun!.status}`}>Last run: {last}</span> : null}
                   {!last && !live ? <span className="muted">Never run</span> : null}
-                  {row.scheduleState === 'paused' ? <span className="chip">Paused</span> : null}
                 </div>
               </div>
               {st.confirmPause ? (

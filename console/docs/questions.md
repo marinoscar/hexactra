@@ -34,21 +34,23 @@ A response is `{ outcome, value?, values?, valueWithheld, channel?, by?, answere
 
 A question is delivered on every registered channel and withdrawn from all of them once it is settled. The channel rules decide where an answer may come back:
 
-| Answer | Inbox (web, Android app, CLI/TUI, MCP `inbox_answer` with a personal access token) | Notification buttons | Webhook (`answer-by-token`) | MCP relay by an app signed in with OAuth (`mcp-oauth`) | MCP elicitation (`mcp-elicitation`) |
-|---|---|---|---|---|---|
-| `choice`, `multi_choice`, `text`, `number` | Yes | A two-option `choice` gets one button per option; the rest open the question | Yes | Yes | Yes (a form in the AI app) |
-| `confirm`, `risk: low` | Yes | Approve and Deny buttons | Yes | Yes | Yes (a yes/no field) |
-| `confirm`, `risk: high` | Yes (signed in) | Opens the question | No: the payload carries no token | No: the inbox link | Never asked |
-| `secret` | Yes, on the question's protected page | A link only | A link only | No: the inbox link | Never asked (no URL mode either) |
-| `none`, `takeover` | Yes | Opens the question | No | No: the inbox link | Never asked |
+| Answer | Inbox (web, Android app, CLI/TUI, MCP `inbox_answer` with a personal access token) | Notification buttons | Webhook (`answer-by-token`) | MCP relay by an app signed in with OAuth (`mcp-oauth`) | MCP elicitation (`mcp-elicitation`) | MCP Apps question card (`mcp-app`) |
+|---|---|---|---|---|---|---|
+| `choice`, `multi_choice`, `text`, `number` | Yes | A two-option `choice` gets one button per option; the rest open the question | Yes | Yes | Yes (a form in the AI app) | Yes (the card's form) |
+| `confirm`, `risk: low` | Yes | Approve and Deny buttons | Yes | Yes | Yes (a yes/no field) | Yes (two buttons) |
+| `confirm`, `risk: high` | Yes (signed in) | Opens the question | No: the payload carries no token | No: the inbox link | Never asked | No: the inbox link |
+| `secret` | Yes, on the question's protected page | A link only | A link only | No: the inbox link | Never asked (no URL mode either) | No: the inbox link |
+| `none`, `takeover` | Yes | Opens the question | No | No: the inbox link | Never asked | `none`: Done; `takeover`: a link to the viewer |
 
-The rule table is code: `CHANNEL_RULES` in `apps/api/src/questions/channels/channel-rules.ts`, by channel id (`mcp-oauth.claude` is the `mcp-oauth` channel from a Claude client). `QuestionsService` refuses, with `403`, a secret or the approval of a high-risk confirm from a channel that is not signed in (`notification`, `webhook`, `mcp-oauth`, `mcp-elicitation`); declining is allowed from anywhere. The web, Android, CLI, TUI, inbox, REST and `mcp` (a personal access token) channels are signed in.
+The rule table is code: `CHANNEL_RULES` in `apps/api/src/questions/channels/channel-rules.ts`, by channel id (`mcp-oauth.claude` is the `mcp-oauth` channel from a Claude client). `QuestionsService` refuses, with `403`, a secret or the approval of a high-risk confirm from a channel that is not signed in (`notification`, `webhook`, `mcp-oauth`, `mcp-elicitation`, `mcp-app`); declining is allowed from anywhere. The web, Android, CLI, TUI, inbox, REST and `mcp` (a personal access token) channels are signed in.
 
 - **Public answers** (choice, multi_choice, text, number, low-risk confirm) can be collected on any channel.
 - **Secrets are link-only.** No notification, webhook or chat message ever carries a secret or a way to type one.
 - **High-risk confirmations** are answered only where the console signs the person in.
 - Chat apps (Slack, Teams, Telegram) are post-v1 (#293); they will be added as channels, under the same rules.
 - **AI apps (#463).** An app signed in with OAuth relays what the user typed in the chat (`inbox_answer`, channel `mcp-oauth.<client>`), and on MCP `2026-07-28` the console may ask a run's question in the app's own form (elicitation, channel `mcp-elicitation.<client>`). Neither is a Hexactra sign-in, so both carry public answers only. Details: [mcp.md](mcp.md#following-a-run-from-a-chat).
+- **The MCP Apps question card (#467).** In an AI app that renders MCP Apps, the question card (and the run card's "Needs you" banner) shows the typed form and records the click with `question_card_answer` under channel `mcp-app.<client>`. The person answered first-hand, but the card is drawn by the AI app and its calls carry the app's credential, so it is not a sign-in either: public answers and acknowledgements only. The tool also refuses a takeover (it is done in the browser). Details: [mcp-apps.md](mcp-apps.md#what-can-and-cannot-be-answered-in-a-chat).
+- **One copy of the answer rules.** The constraint checks, the selection limits and which inputs need a sign-in are `@app/shared/question-rules` (`packages/shared/question-rules.js`), read by the web form, the MCP Apps widgets and `channel-rules.ts`.
 
 ## The web form
 

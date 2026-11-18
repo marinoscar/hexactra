@@ -100,7 +100,8 @@ export function questionFromInbox(v: unknown): CardQuestion | undefined {
     ...(str(q.expiresAt) ? { expiresAt: str(q.expiresAt) } : {}),
     runId: str(q.runId) ?? null,
     ...(str(q.askedBy) ? { askedBy: str(q.askedBy) } : {}),
-    ...(str(q.goal) ? { goal: str(q.goal) } : {}),
+    // A free-standing question's inbox item repeats its prompt as the goal: the run's goal only.
+    ...(str(q.runId) && str(q.goal) && q.goal !== q.prompt ? { goal: str(q.goal) } : {}),
     ...(str(q.viewerUrl) ? { viewerUrl: str(q.viewerUrl) } : {}),
   };
 }

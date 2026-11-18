@@ -3,6 +3,7 @@
 // caller is offered, and the supersession key.
 import { MCP_APP_MIME, MCP_APPS_EXTENSION_ID, MCP_UI_RESOURCES, QUESTION_CARD_URI, RUN_CARD_URI, TASKS_CARD_URI, cardKey, claudeUiDomain, clientSupportsApps, mcpServerUrl, stampHtml, toolUiMeta, uiDomainFor, uiResourceMeta } from '../src/mcp/mcp.apps';
 import { offeredTools, withCardKey } from '../src/mcp/mcp.dispatcher';
+import { MCP_SCOPE_IDS, grantedScopes } from '../src/mcp/mcp.scopes';
 import { MCP_TOOLS } from '../src/mcp/mcp.tools';
 
 describe('Claude ui.domain', () => {
@@ -83,5 +84,13 @@ describe('tools', () => {
     expect(withCardKey(goal, { content: [], isError: true, structuredContent: { code: 'X' } }).structuredContent).toEqual({ code: 'X' });
     expect(withCardKey(list, { content: [], structuredContent: { items: [] } }).structuredContent).toEqual({ items: [] });
     expect(cardKey(5).created_at).toBe(5);
+  });
+});
+
+describe('granted scopes (what a card may show, #467)', () => {
+  it('every scope for a personal access token or a session; the token\'s own scopes, in consent order, when it carries them', () => {
+    expect(grantedScopes(undefined)).toEqual([...MCP_SCOPE_IDS]);
+    expect(grantedScopes({})).toEqual([...MCP_SCOPE_IDS]);
+    expect(grantedScopes({ scopes: ['inbox:write', 'runs:read', 'unknown:scope'] })).toEqual(['runs:read', 'inbox:write']);
   });
 });

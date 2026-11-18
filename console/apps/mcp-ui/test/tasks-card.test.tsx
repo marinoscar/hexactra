@@ -62,7 +62,7 @@ describe('rows', () => {
     expect(r1.getByText('Last run: Finished')).toBeInTheDocument();
     const r2 = within(row(evil));
     expect(r2.getByText('Never run')).toBeInTheDocument();
-    expect(r2.getAllByText('Paused').length).toBeGreaterThan(0);
+    expect(r2.getByText('Schedules paused')).toBeInTheDocument();
     expect(document.querySelector('img')).toBeNull();
   });
 
