@@ -240,7 +240,8 @@
       "rest": [
         "GET /api/runs/{id}",
         "GET /api/runs/{id}/stream",
-        "GET /api/runs/{id}/screenshot"
+        "GET /api/runs/{id}/screenshot",
+        "GET /api/runs/{id}/steps/{seq}/screenshot"
       ],
       "cli": [
         "runs show",

@@ -162,7 +162,8 @@ describe('nudge_then_escalate', () => {
     expect(done.stepCount).toBe(7);
     expect(await routingOf(db, run.id, prisma)).toEqual([{ from: 'standard', to: 'frontier', reason: 'repeated click on #x 3 times', kind: 'escalate' }]);
     const steps = await prisma.runStep.findMany({ where: { runId: run.id }, orderBy: { seq: 'asc' } });
-    expect(steps.filter((s) => s.kind !== 'routing')).toHaveLength(7);
+    // Routing steps and the closing `end` step (#541) are records, not actions.
+    expect(steps.filter((s) => s.kind !== 'routing' && s.kind !== 'end')).toHaveLength(7);
     expect(new Set(steps.map((s) => s.seq)).size).toBe(steps.length);
   });
 
