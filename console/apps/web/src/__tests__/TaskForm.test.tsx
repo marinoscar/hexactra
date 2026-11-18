@@ -263,7 +263,8 @@ describe('creating a task', () => {
     fireEvent.click(save());
     expect(await within(schedule).findByText('A schedule may fire at most every 5 minutes')).toBeInTheDocument();
     expect(within(schedule).getByRole('group', { name: 'Schedule editor' })).toBeInTheDocument();
-    expect(schedule).toHaveFocus();
+    // The form moves the focus in an effect, a render after the error is on screen (#496).
+    await waitFor(() => expect(schedule).toHaveFocus());
     expect(sent('POST', '/tasks')).toHaveLength(1);
     expect(screen.queryByText('task page')).not.toBeInTheDocument();
   });
@@ -283,7 +284,8 @@ describe('creating a task', () => {
     expect(await screen.findByText('This policy is not available. Choose another.')).toBeInTheDocument();
     fireEvent.click(save());
     expect(await screen.findByText('Too long')).toBeInTheDocument();
-    expect(screen.getByLabelText(/^Name/)).toHaveFocus();
+    // The focus leaves the policy select (the first failed save put it there) an effect later (#496).
+    await waitFor(() => expect(screen.getByLabelText(/^Name/)).toHaveFocus());
     expect(screen.getByLabelText(/^Name/)).toHaveAccessibleDescription('Too long');
     fireEvent.click(save());
     expect(await screen.findByRole('alert')).toHaveTextContent('The database is away');
