@@ -170,7 +170,16 @@ What agents ask people is in the console's `questions` table ([../questions.md](
 - **Webhook answer tokens.** Only questions with a public answer (choice, multi_choice, text, number, a low-risk confirm) get one, in the `answer` block of `questions.question.asked`. To stop webhook answers for a user, remove their webhook endpoints: tokens already sent keep working until their question settles or expires.
 - **Secrets.** A code or password typed into a question is relayed to the fabric and typed into the page by the fabric's `type_secret` action. It is never stored by the console, never returned by an API, and the fabric keeps it in memory for at most 10 minutes. Restoring a backup cannot bring one back.
 
-## 8. External AI apps
+## 8. When a run went wrong: ask for its trace
+
+A user who reports a run that did something odd, stopped early or "failed after paying" can hand you everything in one file, safe to share:
+
+- **Ask for:** the run exported as **JSON without screenshots** — run page → **Export** → JSON trace, "Include screenshots" off (or `hexactra runs export <id> --no-screenshots`). It is masked always; without screenshots it carries no pictures of their screens. A PDF (`--pdf`) is for a person to read; the JSON is for you or a coding agent.
+- **Read it:** `run` (status, `stopReason`, `result`, `error`, `confirmedActions`: steps the owner approved that were carried out), `budget` (`enforcement: "soft"` for a chat run, which is never stopped by a budget; `over` lists the budgets past their limit), `models` (the tiers used), then `steps` in order: `kind` `action`/`handoff`/`finish`/`error`, `handoff` + `action: "answered"` for the owner's answer, `guidance` for what they added in the chat, `routing` for tier changes, `end` last. A `question` on a step holds the prompt and the answer (`valueWithheld` for a secret). `masking.hits` says how much was masked.
+- **Common readings:** `stopReason: "stalled"` → the stall detector (`docs/runs.md`); a `budget_*` reason on a scheduled or API run → a hard budget; a result that starts "The step you confirmed was carried out" → the run ended after a confirmed, irreversible step — check the site before running it again.
+- **Never ask** for a screenshot of their bank, a password or a code; the file never holds those.
+
+## 9. External AI apps
 
 ChatGPT, Claude and agent frameworks call the console's MCP endpoint (`/api/mcp`). Putting the console on the internet for them: [public-exposure.md](public-exposure.md); the threat model: [../security-hosted-clients.md](../security-hosted-clients.md).
 

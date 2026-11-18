@@ -148,6 +148,16 @@ Each user has a retention rule; a nightly job deletes the finished runs outside 
 
 The nightly job (`browser.runs.retention`, 03:20 server time) reads each user's rule, applies the limit and deletes through `RunDeleteService.deleteByIds` with `mode: 'retention'`, at most 20,000 runs per user per night.
 
+## The run trace (epic #536)
+
+The sections below are one chapter: what a run records and when it keeps a picture ([What a run records](#what-a-run-records)), how the run page shows it ([The run page](#the-run-page)), what is masked and what is not ([What is masked](#what-is-masked)), the file and its route ([Exporting a run](#exporting-a-run)), the PDF ([The PDF report](#the-pdf-report)), and how it all is removed ([Retention](#retention); pictures go with their run). In short:
+
+- **Masked always.** Screenshots are masked in the page before they are taken (the extension, `screenshot` with `mask: true`); text is masked when it is read and exported. There is no unmasked image and no unmasked export, for any role.
+- **Not masked:** names, addresses, balances and amounts (they are not patterns), and anything inside an image, a canvas or a video that is not a recognised field or text pattern. Reports say "masked", never "anonymised"; export **without screenshots** before sharing a trace outside.
+- **Never recorded or exported:** a secret's or a sign-in's value, the model's working memory (`runs.transcript`), tokens, an AI app's grant or limits, object keys.
+- **Storage:** 5 to 15 pictures per run, at most 40, about 150 kB each (≈ 1.5 MB per run kept).
+- **The trace is not the audit trail.** The durable audit events stay that ([VISION.MD §13.5](../../VISION.MD)).
+
 ## What a run records
 
 Every run keeps a trace a person can follow afterwards (#541): its steps (`run_steps`), the questions it asked and the answers given, the owner's guidance from the chat, and **masked screenshots of the key moments**. `GET /api/runs/{id}` returns it; the run's live stream sends the same step fields.

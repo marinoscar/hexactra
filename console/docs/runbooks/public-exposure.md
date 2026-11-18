@@ -123,7 +123,7 @@ The API limits are in Administration → **External AI apps** (`mcp` system sett
 - [ ] Review Settings → **AI apps** (each user) and Administration → External AI apps → **Connected apps** (every user) **monthly**; disconnect what is not used.
 - [ ] More than one API replica: `MCP_RATE_LIMIT_STORE=postgres`, so the rate limits are one count, not one per replica ([section 4](#4-the-limits-that-apply)).
 - [ ] `TRUST_PROXY` is empty (the default) or lists the stack's nginx, not `false`, so the per-address limits count each caller apart ([section 4](#4-the-limits-that-apply)).
-- [ ] Know where the kill switch is: Administration → External AI apps, or `hexactra mcp disable` on the box ([operations runbook](operations.md#8-external-ai-apps)).
+- [ ] Know where the kill switch is: Administration → External AI apps, or `hexactra mcp disable` on the box ([operations runbook](operations.md#9-external-ai-apps)).
 - [ ] Doctor is green: `mcp.endpoint`, `mcp.public_reachability`, `mcp.exposure`, `mcp.trust_proxy`, `oauth.public_url`, `oauth.well_known`.
 
 **After an incident, rotate:** disconnect every app (Administration → External AI apps → Connected apps → Disconnect each, or delete the OAuth client in OAuth clients, which revokes all its grants and tokens), revoke personal access tokens that may have leaked (Settings → Personal access tokens), and rotate `JWT_SECRET` only if console sessions themselves are suspected (it signs everyone out).
