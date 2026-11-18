@@ -5,6 +5,8 @@
 // 2025-06-18; REST failures come back as the sentences of the error table.
 import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import Ajv2020 from 'ajv/dist/2020';
+import { z } from 'zod';
 
 import { createApp } from '../src/main';
 import { FabricClient } from '../src/fabric/fabric.client';
@@ -43,6 +45,8 @@ async function rpc(t: string, method: string, params: Record<string, unknown> = 
 }
 
 const checked = new Set<string>();
+/** A strict client's view: the MCP TypeScript SDK checks `structuredContent` against the published `outputSchema` (JSON Schema), not the zod schema. */
+const ajv = new Ajv2020({ strict: false, allErrors: true });
 
 /** Call a tool, check its structured content against its output schema and its text block, and return the structured content. */
 async function call(t: string, name: string, args: Record<string, unknown>) {
@@ -53,6 +57,8 @@ async function call(t: string, name: string, args: Record<string, unknown>) {
   expect(sc).toBeDefined();
   const parsed = tool.output!.safeParse(sc);
   expect([name, parsed.success ? [] : parsed.error.issues.slice(0, 40).map((i) => `${i.path.join(".")}: ${i.message}`)]).toEqual([name, []]);
+  const validate = ajv.compile(z.toJSONSchema(tool.output!, { io: 'input' }) as object);
+  expect([name, validate(sc) ? [] : (validate.errors ?? []).slice(0, 10).map((e) => `${e.instancePath} ${e.message}`)]).toEqual([name, []]);
   // A summary line, then JSON (or, for browser_text, the text itself).
   const text = result.content[0].text;
   expect(text.split('\n')[0].length).toBeGreaterThan(0);
@@ -73,6 +79,7 @@ describe('structured results validate against the output schemas (real REST answ
       expect(status).toMatchObject({ id: run.id, steps: [], olderSteps: 0 });
       expect(status).not.toHaveProperty('transcript');
       expect(await call(t, 'run_wait', { run_id: run.id, wait_s: 0 })).toMatchObject({ run_id: run.id, status: 'queued', needs_human: false });
+      expect(await call(t, 'run_card_poll', { run_id: run.id, wait_s: 0 })).toMatchObject({ id: run.id, progress: { run_id: run.id, status: 'queued' } });
       expect((await call(t, 'runs_list', {})).items!.map((r) => r.id)).toContain(run.id);
       expect(await call(t, 'runs_list', { limit: 1 })).toMatchObject({ items: [expect.objectContaining({ id: run.id })] });
       expect(await call(t, 'run_cancel', { run_id: run.id })).toMatchObject({ id: run.id });

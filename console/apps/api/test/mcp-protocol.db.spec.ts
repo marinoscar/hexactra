@@ -76,7 +76,8 @@ describe.each(HANDSHAKE)('handshake revision %s', (version) => {
     const init = await post({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: version, capabilities: {}, clientInfo: { name: 'test', version: '0' } } });
     expect(init.status).toBe(200);
     expect(init.json.result).toMatchObject({ protocolVersion: version, capabilities: { tools: { listChanged: false } }, serverInfo: { name: 'hexactra-console', title: 'Hexactra', version: consoleVersion } });
-    expect(init.json.result.capabilities.resources).toBeUndefined();
+    // MCP Apps (#466): the ui:// resources and the extension.
+    expect(init.json.result.capabilities).toMatchObject({ resources: { listChanged: false, subscribe: false }, extensions: { 'io.modelcontextprotocol/ui': { mimeTypes: ['text/html;profile=mcp-app'] } } });
     expect(init.json.result.instructions).toMatch(/full authority/i);
     expect(init.headers['mcp-session-id']).toBeUndefined();
     expect((await post({ jsonrpc: '2.0', method: 'notifications/initialized' }, { 'mcp-protocol-version': version })).status).toBe(202);
@@ -155,8 +156,8 @@ describe('stateless revision 2026-07-28', () => {
     }
   });
 
-  it('resources/list is empty and resources/read is not found (-32602)', async () => {
-    expect((await modern('resources/list')).json.result).toMatchObject({ resources: [], ttlMs: 300000, cacheScope: 'private' });
+  it('resources/list carries the cache hints and an unknown resource is not found (-32602); the run card: mcp-apps.db.spec.ts', async () => {
+    expect((await modern('resources/list')).json.result).toMatchObject({ resources: expect.any(Array), ttlMs: 300000, cacheScope: 'private' });
     const read = await modern('resources/read', { uri: 'ui://hexactra/none' }, 1, { 'mcp-name': 'ui://hexactra/none' });
     expect(read.json.error.code).toBe(-32602);
   });

@@ -65702,48 +65702,58 @@
                 "type": "object",
                 "properties": {
                   "effective": {
-                    "allOf": [
-                      {
-                        "type": "object",
-                        "propertyNames": {
-                          "type": "string",
-                          "enum": [
-                            "actions",
-                            "modelCalls",
-                            "activeMinutes",
-                            "inputTokens",
-                            "outputTokens",
-                            "cost"
-                          ]
-                        },
-                        "additionalProperties": {
-                          "type": [
-                            "number",
-                            "null"
-                          ]
-                        },
-                        "required": [
-                          "actions",
-                          "modelCalls",
-                          "activeMinutes",
-                          "inputTokens",
-                          "outputTokens",
-                          "cost"
+                    "type": "object",
+                    "properties": {
+                      "actions": {
+                        "type": [
+                          "number",
+                          "null"
                         ]
                       },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "warnAtPercent": {
-                            "type": "integer",
-                            "minimum": -9007199254740991,
-                            "maximum": 9007199254740991
-                          }
-                        },
-                        "required": [
-                          "warnAtPercent"
+                      "modelCalls": {
+                        "type": [
+                          "number",
+                          "null"
                         ]
+                      },
+                      "activeMinutes": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "inputTokens": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "outputTokens": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "cost": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "warnAtPercent": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
                       }
+                    },
+                    "required": [
+                      "actions",
+                      "modelCalls",
+                      "activeMinutes",
+                      "inputTokens",
+                      "outputTokens",
+                      "cost",
+                      "warnAtPercent"
                     ],
                     "description": "The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD."
                   },
@@ -66317,48 +66327,58 @@
                       "type": "object",
                       "properties": {
                         "effective": {
-                          "allOf": [
-                            {
-                              "type": "object",
-                              "propertyNames": {
-                                "type": "string",
-                                "enum": [
-                                  "actions",
-                                  "modelCalls",
-                                  "activeMinutes",
-                                  "inputTokens",
-                                  "outputTokens",
-                                  "cost"
-                                ]
-                              },
-                              "additionalProperties": {
-                                "type": [
-                                  "number",
-                                  "null"
-                                ]
-                              },
-                              "required": [
-                                "actions",
-                                "modelCalls",
-                                "activeMinutes",
-                                "inputTokens",
-                                "outputTokens",
-                                "cost"
+                          "type": "object",
+                          "properties": {
+                            "actions": {
+                              "type": [
+                                "number",
+                                "null"
                               ]
                             },
-                            {
-                              "type": "object",
-                              "properties": {
-                                "warnAtPercent": {
-                                  "type": "integer",
-                                  "minimum": -9007199254740991,
-                                  "maximum": 9007199254740991
-                                }
-                              },
-                              "required": [
-                                "warnAtPercent"
+                            "modelCalls": {
+                              "type": [
+                                "number",
+                                "null"
                               ]
+                            },
+                            "activeMinutes": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "inputTokens": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "outputTokens": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "cost": {
+                              "type": [
+                                "number",
+                                "null"
+                              ]
+                            },
+                            "warnAtPercent": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
                             }
+                          },
+                          "required": [
+                            "actions",
+                            "modelCalls",
+                            "activeMinutes",
+                            "inputTokens",
+                            "outputTokens",
+                            "cost",
+                            "warnAtPercent"
                           ],
                           "description": "The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD."
                         },
@@ -67019,48 +67039,58 @@
                 "type": "object",
                 "properties": {
                   "effective": {
-                    "allOf": [
-                      {
-                        "type": "object",
-                        "propertyNames": {
-                          "type": "string",
-                          "enum": [
-                            "actions",
-                            "modelCalls",
-                            "activeMinutes",
-                            "inputTokens",
-                            "outputTokens",
-                            "cost"
-                          ]
-                        },
-                        "additionalProperties": {
-                          "type": [
-                            "number",
-                            "null"
-                          ]
-                        },
-                        "required": [
-                          "actions",
-                          "modelCalls",
-                          "activeMinutes",
-                          "inputTokens",
-                          "outputTokens",
-                          "cost"
+                    "type": "object",
+                    "properties": {
+                      "actions": {
+                        "type": [
+                          "number",
+                          "null"
                         ]
                       },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "warnAtPercent": {
-                            "type": "integer",
-                            "minimum": -9007199254740991,
-                            "maximum": 9007199254740991
-                          }
-                        },
-                        "required": [
-                          "warnAtPercent"
+                      "modelCalls": {
+                        "type": [
+                          "number",
+                          "null"
                         ]
+                      },
+                      "activeMinutes": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "inputTokens": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "outputTokens": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "cost": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "warnAtPercent": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
                       }
+                    },
+                    "required": [
+                      "actions",
+                      "modelCalls",
+                      "activeMinutes",
+                      "inputTokens",
+                      "outputTokens",
+                      "cost",
+                      "warnAtPercent"
                     ],
                     "description": "The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD."
                   },
@@ -67717,48 +67747,58 @@
                 "type": "object",
                 "properties": {
                   "effective": {
-                    "allOf": [
-                      {
-                        "type": "object",
-                        "propertyNames": {
-                          "type": "string",
-                          "enum": [
-                            "actions",
-                            "modelCalls",
-                            "activeMinutes",
-                            "inputTokens",
-                            "outputTokens",
-                            "cost"
-                          ]
-                        },
-                        "additionalProperties": {
-                          "type": [
-                            "number",
-                            "null"
-                          ]
-                        },
-                        "required": [
-                          "actions",
-                          "modelCalls",
-                          "activeMinutes",
-                          "inputTokens",
-                          "outputTokens",
-                          "cost"
+                    "type": "object",
+                    "properties": {
+                      "actions": {
+                        "type": [
+                          "number",
+                          "null"
                         ]
                       },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "warnAtPercent": {
-                            "type": "integer",
-                            "minimum": -9007199254740991,
-                            "maximum": 9007199254740991
-                          }
-                        },
-                        "required": [
-                          "warnAtPercent"
+                      "modelCalls": {
+                        "type": [
+                          "number",
+                          "null"
                         ]
+                      },
+                      "activeMinutes": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "inputTokens": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "outputTokens": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "cost": {
+                        "type": [
+                          "number",
+                          "null"
+                        ]
+                      },
+                      "warnAtPercent": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
                       }
+                    },
+                    "required": [
+                      "actions",
+                      "modelCalls",
+                      "activeMinutes",
+                      "inputTokens",
+                      "outputTokens",
+                      "cost",
+                      "warnAtPercent"
                     ],
                     "description": "The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD."
                   },

@@ -18,6 +18,7 @@ import { appUrlOf, followRun, progressOf, readRunState, relayChannel, runScreens
 import { MAX_TOOL_WAIT_S, UNTRUSTED_NOTICE, limitsOf, textResult, toolOutput, type McpContext, type McpToolResult } from './mcp.results';
 import { answerableHere, howToAnswer, progressHasPageText, progressSummary, runProgressSchema, type RunProgress } from './run-progress';
 import type { McpEffect, McpScope } from './mcp.scopes';
+import { RUN_CARD_URI, type McpToolVisibility } from './mcp.apps';
 
 export type { McpContent, McpContext, McpToolResult } from './mcp.results';
 export { MAX_TOOL_WAIT_S } from './mcp.results';
@@ -40,6 +41,10 @@ export interface McpTool {
   openWorld: boolean;
   /** Calling it twice with the same arguments has no further effect. */
   idempotent?: boolean;
+  /** MCP Apps (#466): the `ui://` resource a host renders with this tool's result (`_meta.ui.resourceUri`). */
+  ui?: { resourceUri: string };
+  /** MCP Apps: who may call it (`_meta.ui.visibility`); absent is the default, the model and the app. */
+  visibility?: McpToolVisibility[];
   call(args: Record<string, unknown>, ctx: McpContext): Promise<McpToolResult>;
 }
 
@@ -286,6 +291,8 @@ function runHasPageText(r: Record<string, unknown>): boolean {
 
 /** How long run_goal and task_run wait by default: hosted (OAuth) clients have no timers, so they wait for a first report. */
 export const RUN_START_WAIT_S_OAUTH = 45;
+/** The longest one refresh of the run card waits (under the host's own time limits for app calls). */
+export const RUN_CARD_POLL_MAX_WAIT_S = 25;
 /** How long run_wait waits by default. */
 export const RUN_WAIT_DEFAULT_S = 60;
 
@@ -427,6 +434,7 @@ export const MCP_TOOLS: McpTool[] = [
     scope: 'runs:write',
     effect: 'write',
     openWorld: true,
+    ui: { resourceUri: RUN_CARD_URI },
     call: (a, ctx) => startAndFollow(ctx, a, () => ctx.api('POST', '/runs', { goal: a.goal, profile: a.profile, ...(a.policy_id !== undefined ? { policyId: a.policy_id } : {}) })),
   },
   {
@@ -449,6 +457,7 @@ export const MCP_TOOLS: McpTool[] = [
     effect: 'read',
     openWorld: false,
     idempotent: true,
+    ui: { resourceUri: RUN_CARD_URI },
     async call(a, ctx) {
       const st = await readRunState(ctx, String(a.run_id));
       const { steps: rawSteps, ...run } = stripRun(st.run);
@@ -492,6 +501,7 @@ export const MCP_TOOLS: McpTool[] = [
     effect: 'read',
     openWorld: false,
     idempotent: true,
+    ui: { resourceUri: RUN_CARD_URI },
     call: async (a, ctx) => followedOutput(await followRun(ctx, String(a.run_id), { waitS: Number(a.wait_s), since: a.since !== undefined ? String(a.since) : null, screenshot: Boolean(a.screenshot) }), 'progress'),
   },
   {
@@ -639,6 +649,7 @@ export const MCP_TOOLS: McpTool[] = [
     scope: 'runs:write',
     effect: 'write',
     openWorld: true,
+    ui: { resourceUri: RUN_CARD_URI },
     call: (a, ctx) => startAndFollow(ctx, a, () => ctx.api('POST', `/tasks/${String(a.task_id)}/runs`, a.policy_id !== undefined ? { policyId: a.policy_id } : {})),
   },
   {
@@ -1368,6 +1379,30 @@ export const MCP_TOOLS: McpTool[] = [
     openWorld: true,
     idempotent: true,
     call: async (a, ctx) => text(await ctx.api('DELETE', `/browser/sessions/${String(a.session_id)}`, { success: a.success, ...(a.result ? { result: a.result } : {}) })),
+  },
+  // --- MCP Apps helpers (#466): called by a widget through the host, hidden from the model ---
+  {
+    name: 'run_card_poll',
+    title: 'Refresh a run card',
+    description:
+      "Used by Hexactra's live run card (an MCP App) to refresh itself: waits like run_wait, then returns the run with its progress block and, with screenshot: true, a picture of its browser. " +
+      'Hidden from the model (visibility app); a model follows a run with run_wait.',
+    input: z.object({
+      run_id: runId,
+      since: z.string().max(500).optional().describe('The cursor of the previous answer: only what happened after it is reported.'),
+      wait_s: z.number().int().min(0).max(RUN_CARD_POLL_MAX_WAIT_S).default(RUN_CARD_POLL_MAX_WAIT_S).describe(`Wait up to this many seconds (at most ${RUN_CARD_POLL_MAX_WAIT_S}) for something new.`),
+      screenshot: screenshotParam,
+    }),
+    output: runWithProgressOutput,
+    scope: 'runs:read',
+    effect: 'read',
+    openWorld: false,
+    idempotent: true,
+    visibility: ['app'],
+    async call(a, ctx) {
+      const f = await followRun(ctx, String(a.run_id), { waitS: Number(a.wait_s), since: a.since !== undefined ? String(a.since) : null, screenshot: Boolean(a.screenshot) });
+      return runWithProgress(f.st.run, f.progress, f.images);
+    },
   },
 ];
 

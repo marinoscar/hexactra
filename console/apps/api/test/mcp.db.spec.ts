@@ -57,8 +57,9 @@ describe('the console MCP server', () => {
     expect(create.annotations).toMatchObject({ readOnlyHint: false });
     // Every hint is explicit (#462).
     expect(list.json.result.tools.find((x: { name: string }) => x.name === 'run_status').annotations).toEqual({ title: expect.any(String), readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
-    // Every read-only hint names a real tool.
-    for (const n of READ_ONLY_TOOLS) expect(names).toContain(n);
+    // Every read-only hint names a real tool (an app-only tool, #466, is not listed to a personal access token).
+    for (const n of READ_ONLY_TOOLS) if (n !== 'run_card_poll') expect(names).toContain(n);
+    expect(names).not.toContain('run_card_poll');
 
     const made = await rpc(t, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'task_create', arguments: { name: 'Fare', goal: 'Find a fare', allowed_domains: ['flights.example.test'] } } });
     expect(made.json.result.isError).toBeFalsy();

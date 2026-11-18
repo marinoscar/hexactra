@@ -36,6 +36,19 @@ import {
   type RpcResponse,
 } from './mcp.results';
 import { MCP_INSTRUCTIONS, MCP_TOOLS, toolAnnotations, type McpTool } from './mcp.tools';
+import {
+  MCP_APP_MIME,
+  MCP_APPS_EXTENSION_ID,
+  MCP_UI_RESOURCES,
+  cardKey,
+  clientSupportsApps,
+  loadUiResource,
+  toolUiMeta,
+  uiDomainFor,
+  uiResourceAvailable,
+  uiResourceListEntry,
+  uiResourceMeta,
+} from './mcp.apps';
 
 function header(headers: Record<string, unknown>, name: string): string | undefined {
   const v = headers[name];
@@ -61,8 +74,14 @@ export function stillWorking(tool: McpTool, limits: McpLimits): McpToolResult {
   return { content: [{ type: 'text', text: `${tool.name} is still working after ${s} seconds; the work continues on the server. ${followUp(tool.name)}` }] };
 }
 
-/** One tool entry of `tools/list` for a revision: title and outputSchema only where the revision has them. */
-export function toolListEntry(t: McpTool, flags: { toolTitle: boolean; structuredContent: boolean }): Record<string, unknown> {
+/**
+ * One tool entry of `tools/list` for a revision: title and outputSchema only
+ * where the revision has them; `_meta.ui` (MCP Apps, #466) when the tool
+ * links a resource that can be served, or has a visibility.
+ */
+export function toolListEntry(t: McpTool, flags: { toolTitle: boolean; structuredContent: boolean }, opts: { uiAvailable?: (uri: string) => boolean } = {}): Record<string, unknown> {
+  const resourceUri = t.ui && (opts.uiAvailable?.(t.ui.resourceUri) ?? true) ? t.ui.resourceUri : undefined;
+  const meta = toolUiMeta(resourceUri, t.visibility);
   return {
     name: t.name,
     ...(flags.toolTitle ? { title: t.title } : {}),
@@ -71,7 +90,22 @@ export function toolListEntry(t: McpTool, flags: { toolTitle: boolean; structure
     // `io: 'input'` keeps extra properties allowed: the REST shapes grow, and a client must not reject a newer field.
     ...(flags.structuredContent && t.output ? { outputSchema: z.toJSONSchema(t.output, { io: 'input' }) } : {}),
     annotations: toolAnnotations(t),
+    ...(meta ? { _meta: meta } : {}),
   };
+}
+
+/**
+ * The tools a caller is offered (#466): every model-visible tool, and an
+ * app-only tool (`visibility: ["app"]`, the run card's helper) only to a
+ * caller that can host MCP Apps: an app signed in with OAuth (the hosted
+ * clients) or a client that declared the MCP Apps extension in this
+ * request's capabilities. Personal access token clients keep exactly their
+ * list. Calling an app-only tool works for every caller (a host on a
+ * handshake revision sends no capabilities with `tools/list`).
+ */
+export function offeredTools(rctx: Pick<McpRequestContext, 'credential' | 'clientCapabilities'>): McpTool[] {
+  const appsHost = credentialKindOf(rctx) === 'oauth' || clientSupportsApps(rctx.clientCapabilities);
+  return MCP_TOOLS.filter((t) => !t.visibility || t.visibility.includes('model') || appsHost);
 }
 
 /** What the transport knows about one request beyond the message: who it is and whether the client is still there. */
@@ -262,9 +296,11 @@ export class McpDispatcher {
         return ok({});
       case 'server/discover':
         return ok({ supportedVersions: [...SUPPORTED_VERSIONS], capabilities: this.capabilities(), instructions: MCP_INSTRUCTIONS }, true);
-      case 'tools/list':
+      case 'tools/list': {
         // Deterministic order: the registry's own order.
-        return ok({ tools: MCP_TOOLS.map((t) => toolListEntry(t, flags)) }, true);
+        const version = serverInfo().version;
+        return ok({ tools: offeredTools(rctx).map((t) => toolListEntry(t, flags, { uiAvailable: (uri) => uiResourceAvailable(uri, version) })) }, true);
+      }
       case 'tools/call': {
         const params = (msg.params ?? {}) as { name?: unknown; arguments?: unknown; inputResponses?: unknown; requestState?: unknown };
         const name = String(params.name ?? '');
@@ -316,15 +352,27 @@ export class McpDispatcher {
           const check = tool.output.safeParse(result.structuredContent);
           if (!check.success) this.log.warn(`mcp tool ${tool.name}: structuredContent does not match its output schema: ${check.error.issues.slice(0, 3).map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
         }
-        return ok({ ...finalize(withoutSchemaBreakingError(tool, result)) });
+        return ok({ ...finalize(withCardKey(tool, withoutSchemaBreakingError(tool, result))) });
       }
-      case 'resources/list':
-        // No resources until the MCP Apps (E33.8); the capability is not advertised.
-        return ok({ resources: [] }, true);
+      case 'resources/list': {
+        // MCP Apps (#466): the `ui://` resources a tool this caller is offered links to, when built.
+        const version = serverInfo().version;
+        const linked = new Set(offeredTools(rctx).flatMap((t) => (t.ui ? [t.ui.resourceUri] : [])));
+        const domain = uiDomainFor(extra.client, process.env.APP_URL);
+        const resources = MCP_UI_RESOURCES.filter((r) => linked.has(r.uri) && loadUiResource(r, version) !== null).map((r) => uiResourceListEntry(r, domain));
+        return ok({ resources }, true);
+      }
       case 'resources/templates/list':
         return ok({ resourceTemplates: [] }, true);
       case 'resources/read': {
         const uri = String((msg.params as { uri?: unknown } | undefined)?.uri ?? '');
+        const r = MCP_UI_RESOURCES.find((x) => x.uri === uri);
+        const loaded = r ? loadUiResource(r, serverInfo().version) : null;
+        if (r && loaded) {
+          // The HTML holds no user data: any credential /api/mcp admits may read it.
+          const domain = uiDomainFor(extra.client, process.env.APP_URL);
+          return ok({ contents: [{ uri: r.uri, mimeType: MCP_APP_MIME, text: loaded.text, _meta: uiResourceMeta(r, domain) }] });
+        }
         // Resource not found: -32602 from 2026-07-28, -32002 before (changelog, minor change 6).
         return { status: 200, body: rpcError(id, flags.perRequestMeta ? RPC.INVALID_PARAMS : RPC.RESOURCE_NOT_FOUND_LEGACY, `Resource not found: ${uri}`, { uri }) };
       }
@@ -334,9 +382,9 @@ export class McpDispatcher {
     }
   }
 
-  /** What the server offers. `resources` and the MCP Apps extension come with E33.8; no tasks extension. */
+  /** What the server offers: tools, the `ui://` resources and the MCP Apps extension (#466); no tasks extension. */
   private capabilities(): Record<string, unknown> {
-    return { tools: { listChanged: false } };
+    return { tools: { listChanged: false }, resources: { listChanged: false, subscribe: false }, extensions: { [MCP_APPS_EXTENSION_ID]: { mimeTypes: [MCP_APP_MIME] } } };
   }
 
   /**
@@ -354,6 +402,17 @@ export class McpDispatcher {
       _meta: { ...((result._meta as Record<string, unknown> | undefined) ?? {}), [META.serverInfo]: serverInfo() },
     };
   }
+}
+
+/**
+ * A result that opens a run card carries the card's supersession key
+ * (`card_key`: server time and a counter) in `structuredContent`, so the
+ * newest card of a run keeps polling and older ones stop (#466). Not in the
+ * text, and not on errors.
+ */
+export function withCardKey(tool: Pick<McpTool, 'ui'>, result: McpToolResult): McpToolResult {
+  if (!tool.ui || result.isError || !result.structuredContent) return result;
+  return { ...result, structuredContent: { ...result.structuredContent, card_key: cardKey() } };
 }
 
 /**

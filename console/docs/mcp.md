@@ -136,6 +136,7 @@ Every tool, as `tools/list` announces it (generated from the registry by `apps/a
 | `browser_handoff_status` | Check a help request | `browser:drive` | read | yes | yes | yes |
 | `browser_type_secret` | Type a secret the user gave | `browser:drive` | destructive | yes | no | no |
 | `browser_close` | Close a browser session | `browser:drive` | destructive | yes | yes | no |
+| `run_card_poll` | Refresh a run card | `runs:read` | read | no | yes | yes |
 <!-- mcp-tools:end -->
 
 **Rules the server gives every client (`instructions`):**
@@ -242,6 +243,8 @@ In a chat, "do X on the web for me" is three calls, never a polling loop:
 3. **When the run needs the user**, the block says so (`needs_human: true` and `question`). If `question.answerable_here` is true, ask the user in the chat and pass their answer on with `inbox_answer { run_id or question_id, outcome, value }`, then call `run_wait` again. If it is false, give the user `question.how_to_answer` ("Open your Hexactra inbox to answer this: https://<console>/inbox/q/<id>").
 
 Leaving, timing out or the client disconnecting never stops a run: it outlives the chat. `run_cancel` stops it and returns the final progress block.
+
+In a host that renders MCP Apps (Claude, ChatGPT), `run_goal`, `task_run`, `run_status` and `run_wait` also show a **live run card** in the chat: the screenshot, the activity line, the budget, Stop and a link to the console. The card updates itself through the app-only tool `run_card_poll`. The resource, the per-host `domain` and the card's rules are in [mcp-apps.md](mcp-apps.md). Clients without MCP Apps get the same text as before.
 
 `run_wait` subscribes to the run's events on the console's event bus (the runner publishes a status change and every recorded step on `runs.events`; question events wake it too) and reads the run only when one arrives, so a waiting call holds no database connection; the subscription is released on return, on disconnect and at the deadline. If the subscription cannot be made, it reads the run once and answers `changed: false`. The run page's live stream (`GET /runs/:id/stream`) still reads the run every second; `run_wait` does not use it.
 

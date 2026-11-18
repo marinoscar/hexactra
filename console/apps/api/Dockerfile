@@ -12,17 +12,36 @@ COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
 COPY apps/cli/package.json ./apps/cli/
 COPY packages/shared ./packages/shared/
-# The SDK is a workspace too: npm ci needs its manifest to match the lockfile.
+# The SDK and the MCP Apps widgets are workspaces too: npm ci needs their manifests to match the lockfile.
 COPY packages/sdk/package.json ./packages/sdk/
+COPY apps/mcp-ui/package.json ./apps/mcp-ui/
 RUN npm ci --workspace=api --include-workspace-root
 COPY apps/api/prisma ./apps/api/prisma/
 COPY apps/api/prisma.config.ts ./apps/api/
 RUN cd apps/api && DATABASE_URL="postgresql://build:build@localhost:5432/build" npx prisma generate
 
+# The MCP Apps widgets (apps/mcp-ui, #466): one self-contained HTML file each,
+# served by the API as ui:// resources from /app/apps/mcp-ui/dist. Built in a
+# stage of their own so Vite and Preact never reach the API image.
+FROM base AS widgets
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+COPY apps/cli/package.json ./apps/cli/
+COPY apps/mcp-ui/package.json ./apps/mcp-ui/
+COPY packages/shared ./packages/shared/
+COPY packages/sdk/package.json ./packages/sdk/
+RUN npm ci --workspace=mcp-ui --include-workspace-root --ignore-scripts
+COPY apps/mcp-ui ./apps/mcp-ui
+# The bundle check reads the tool names from the API's pinned manifest.
+COPY apps/api/test/__snapshots__/mcp-tools.json ./apps/api/test/__snapshots__/
+RUN npm run build --workspace=mcp-ui
+
 FROM base AS development
 COPY --from=deps /app ./
 COPY tsconfig.base.json ./
 COPY apps/api ./apps/api
+COPY --from=widgets /app/apps/mcp-ui/dist ./apps/mcp-ui/dist
 WORKDIR /app/apps/api
 EXPOSE 3000
 CMD ["npm", "run", "start:dev"]
@@ -42,6 +61,7 @@ COPY --from=build /app/apps/api/dist ./apps/api/dist
 # The seed (`npm run prisma:seed`) reads the permission catalog and settings
 # registry from src/, so the image carries them with prisma/.
 COPY apps/api ./apps/api
+COPY --from=widgets /app/apps/mcp-ui/dist ./apps/mcp-ui/dist
 WORKDIR /app/apps/api
 EXPOSE 3000
 CMD ["node", "dist/main.js"]

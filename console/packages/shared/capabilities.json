@@ -248,7 +248,8 @@
       ],
       "mcp": [
         "run_status",
-        "run_wait"
+        "run_wait",
+        "run_card_poll"
       ],
       "tui": "runs",
       "web": "/runs/:id"
