@@ -2,9 +2,12 @@ import {
   ConflictException,
   Controller,
   Get,
+  Inject,
   Injectable,
   NotFoundException,
+  Optional,
   Param,
+  ParseIntPipe,
   ParseUUIDPipe,
   Res,
   Sse,
@@ -23,6 +26,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { readSnapshot, snapshotBudgetView } from '../policies/policy-snapshot';
 import { runTierView } from '../policies/run-tier-view';
 import { withCost } from '../tasks/run-cost';
+import { RUN_ARTIFACT_STORE, type RunArtifactStore } from '../tasks/run-delete.service';
+import { STEP_QUESTION_SELECT, stepView } from '../tasks/run-trace.view';
 import { FabricSession } from './fabric-session';
 
 const POLL_MS = 1_000;
@@ -57,6 +62,7 @@ export class RunLiveController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly fabric: FabricClient,
+    @Optional() @Inject(RUN_ARTIFACT_STORE) private readonly artifacts?: RunArtifactStore,
   ) {}
 
   private async ownRun(userId: string, id: string) {
@@ -93,7 +99,9 @@ export class RunLiveController {
         if (closed) return;
         try {
           const run = await this.ownRun(userId, id);
-          const steps = await this.prisma.runStep.findMany({ where: { runId: id, seq: { gt: lastSeq } }, orderBy: { seq: 'asc' }, take: 200 });
+          const rows = await this.prisma.runStep.findMany({ where: { runId: id, seq: { gt: lastSeq } }, orderBy: { seq: 'asc' }, take: 200, include: { question: { select: STEP_QUESTION_SELECT } } });
+          // The same step view as GET /runs/:id (#541): the masked question, `hasScreenshot`, never the object key.
+          const steps = rows.map(stepView);
           for (const s of steps) {
             observer.next({ type: 'step', id: `step-${s.seq}`, data: s });
             lastSeq = s.seq;
@@ -153,6 +161,21 @@ export class RunLiveController {
       if (e instanceof FabricError) throw new ConflictException({ code: 'SCREENSHOT_FAILED', message: e.message });
       throw e;
     }
+  }
+
+  /**
+   * The masked trace picture of one step (#541), from object storage. The owner only (404 for another
+   * user's run, a missing step or a step without a picture); cacheable privately for an hour.
+   */
+  @Get(':id/steps/:seq/screenshot')
+  @UseGuards(RunOwnerGuard)
+  @Auth({ permissions: ['runs:read'] })
+  async stepScreenshot(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Param('seq', ParseIntPipe) seq: number, @Res() reply: FastifyReply): Promise<void> {
+    await this.ownRun(userId, id);
+    const step = await this.prisma.runStep.findFirst({ where: { runId: id, seq }, select: { screenshotKey: true } });
+    const found = step?.screenshotKey && this.artifacts ? await this.artifacts.get(step.screenshotKey) : null;
+    if (!found) throw new NotFoundException({ code: 'SCREENSHOT_NOT_FOUND', message: 'This step has no screenshot' });
+    await reply.header('cache-control', 'private, max-age=3600').type(found.contentType).send(found.bytes);
   }
 
   /** The host the run's browser is on, and whether its desktop can be opened in the console (to take over). */

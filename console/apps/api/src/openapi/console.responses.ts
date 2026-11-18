@@ -188,13 +188,42 @@ export const runStepResponseSchema = z.object({
   id: z.uuid(),
   runId: z.uuid(),
   seq: z.number().int(),
-  kind: z.string().describe('action | handoff | finish | error | note | routing (a tier change or provider fallback, with `args` { from, to, reason }; not an action)'),
+  kind: z
+    .string()
+    .describe(
+      'action | handoff | finish | error | note | routing (a tier change or provider fallback, with `args` { from, to, reason }; not an action) | guidance (an owner message from the chat, masked; not an action) | end (the closing step with the final screen; not an action). A `handoff` step with `action: "answered"` is the owner\'s answer (not an action).',
+    ),
   action: z.string().nullable(),
   args: z.record(z.string(), z.unknown()).nullable().describe('Redacted: typed text is its length, URLs lose their query'),
   ok: z.boolean(),
   summary: z.string(),
   reasoning: z.string().nullable(),
-  screenshotKey: z.string().nullable(),
+  hasScreenshot: z.boolean().describe('The step has a masked trace screenshot (#541): `GET /runs/{id}/steps/{seq}/screenshot`'),
+  screenshotMoment: z.enum(['question', 'before_confirmed', 'after_confirmed', 'failure', 'final']).nullable().describe('The key moment the step records a screen for'),
+  screenshotMasked: z.number().int().nullable().describe('How many regions the extension masked in the picture'),
+  screenshotNote: z.enum(['unavailable', 'masked_failed', 'no_storage', 'capped']).nullable().describe('Why a key moment has no picture'),
+  questionId: z.uuid().nullable().describe('The question the step asked or answered'),
+  question: z
+    .object({
+      id: z.uuid(),
+      kind: z.string(),
+      input: z.string(),
+      prompt: z.string().describe('Masked'),
+      options: z.array(z.object({ id: z.string(), label: z.string() })).nullable().describe('Labels masked'),
+      risk: z.string().nullable(),
+      status: z.string(),
+      answer: z
+        .object({
+          outcome: z.string(),
+          value: z.string().optional().describe('Masked; absent when the value is withheld (a secret, a sign-in)'),
+          valueWithheld: z.boolean(),
+          channel: z.string().nullable(),
+          answeredAt: z.string().nullable(),
+        })
+        .nullable(),
+    })
+    .nullable()
+    .describe('The question this step asked or answered, masked (#541); null for any other step'),
   durationMs: z.number().int().nullable(),
   createdAt: iso,
 });

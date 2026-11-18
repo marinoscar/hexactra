@@ -14,6 +14,10 @@ How to check that old runs are being removed, and how to remove them without wai
 - A user's nightly share is at most 20,000 runs. The rest goes the next night, and the API log says so (`reached the nightly cap`).
 - A second pass the same night deletes nothing: it is safe to run again.
 
+## Screenshots go with the run
+
+A run's masked trace screenshots (#541, `runs/<userId>/<runId>/…` in object storage, about 150 kB each, 5 to 15 per run) are removed when the run is deleted, by hand or by this job. If storage fails, the run is deleted all the same and the API logs how many objects were left; `npm run storage:purge` knows the `run-traces` prefix.
+
 ## Check it
 
 1. **Administration → Doctor**, check **Run retention** (`runs.retention`).

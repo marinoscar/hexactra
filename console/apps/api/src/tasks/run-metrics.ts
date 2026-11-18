@@ -12,6 +12,9 @@ const STATUSES = ['succeeded', 'failed', 'cancelled'] as const;
 export const RUN_DELETE_MODES = ['single', 'ids', 'filter', 'retention'] as const;
 export type RunDeleteMode = (typeof RUN_DELETE_MODES)[number];
 const STEP_KINDS = ['action', 'handoff', 'finish', 'error', 'note'] as const;
+/** The key moments a trace screenshot is taken at (#541; runner/trace.ts). */
+const TRACE_MOMENTS = ['question', 'before_confirmed', 'after_confirmed', 'failure', 'final'] as const;
+const TRACE_RESULTS = ['stored', 'skipped', 'failed'] as const;
 
 /** Names are permanent once dashboards read them. */
 export const RUN_METRICS: readonly AppMetricDef[] = [
@@ -76,6 +79,22 @@ export const RUN_METRICS: readonly AppMetricDef[] = [
     description: 'Runs deleted from the history, by how they were chosen: one run, a list of ids, a filter, or the retention rule.',
     attributes: { mode: { kind: 'enum', values: RUN_DELETE_MODES } },
   },
+  {
+    key: 'runTraceScreenshots',
+    name: 'app.runs.trace_screenshots',
+    kind: 'counter',
+    unit: '{image}',
+    description: 'Masked trace screenshots of runs (#541), by key moment and result: stored, skipped (no storage, capped, no page) or failed.',
+    attributes: { moment: { kind: 'enum', values: TRACE_MOMENTS }, result: { kind: 'enum', values: TRACE_RESULTS } },
+  },
+  {
+    key: 'runTraceScreenshotBytes',
+    name: 'app.runs.trace_screenshot_bytes',
+    kind: 'histogram',
+    unit: 'By',
+    description: 'Size of one stored trace screenshot: what the run history costs in object storage.',
+    buckets: [20_000, 50_000, 100_000, 150_000, 250_000, 500_000, 1_000_000],
+  },
 ];
 registerAppMetrics(RUN_METRICS);
 
@@ -118,6 +137,12 @@ export class RunMetrics {
   /** Runs deleted from the history; never a run, task or user id as a label. */
   deleted(mode: RunDeleteMode, n: number): void {
     if (n > 0) this.metrics?.add('runsDeleted', n, { mode });
+  }
+
+  /** One trace screenshot (#541): its moment and what became of it; never a run, key or image. */
+  traceScreenshot(moment: string, result: 'stored' | 'skipped' | 'failed', bytes = 0): void {
+    this.metrics?.add('runTraceScreenshots', 1, { moment, result });
+    if (result === 'stored' && bytes > 0) this.metrics?.record('runTraceScreenshotBytes', bytes);
   }
 
   /** The spend of a finished run; never a run, task or user id as a label. */

@@ -215,6 +215,8 @@ model RunStep {
   runId         String   @map("run_id") @db.Uuid
   seq           Int
   /// action | handoff | finish | error | note | routing (a tier change or a provider fallback; not an action, #405)
+  /// | guidance (an owner message from the chat, #541) | end (the closing step with the final screen, #541).
+  /// A `handoff` step with action `answered` is the owner's answer (#541). guidance, end and answered are not actions.
   kind          String   @db.VarChar(20)
   /// The fabric action type (navigate, click, …) for kind=action.
   action        String?  @db.VarChar(40)
@@ -224,14 +226,25 @@ model RunStep {
   summary       String   @default("") @db.VarChar(2000)
   /// What the model said it was doing (its own words, trimmed).
   reasoning     String?  @db.VarChar(2000)
-  /// Object-storage key of the screenshot taken at this step.
+  /// Object-storage key of the masked trace screenshot taken at this step (#541): `runs/<userId>/<runId>/<seq>-<moment>.jpg`.
+  /// Never returned by the API: the image is served by `GET /runs/:id/steps/:seq/screenshot`.
   screenshotKey String?  @map("screenshot_key") @db.VarChar(500)
+  /// Which key moment the screenshot is (#541): question | before_confirmed | after_confirmed | failure | final.
+  screenshotMoment String? @map("screenshot_moment") @db.VarChar(24)
+  /// How many regions the extension masked in the screenshot.
+  screenshotMasked Int?    @map("screenshot_masked")
+  /// Why a key moment has no screenshot: unavailable | masked_failed | no_storage | capped.
+  screenshotNote   String? @map("screenshot_note") @db.VarChar(24)
+  /// The question a `handoff` step asked, or answered (#541).
+  questionId    String?  @map("question_id") @db.Uuid
   durationMs    Int?     @map("duration_ms")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  run Run @relation(fields: [runId], references: [id], onDelete: Cascade)
+  run      Run       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  question Question? @relation(fields: [questionId], references: [id], onDelete: SetNull)
 
   @@unique([runId, seq])
+  @@index([questionId])
   @@map("run_steps")
 }
 

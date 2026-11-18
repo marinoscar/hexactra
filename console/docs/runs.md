@@ -148,6 +148,29 @@ Each user has a retention rule; a nightly job deletes the finished runs outside 
 
 The nightly job (`browser.runs.retention`, 03:20 server time) reads each user's rule, applies the limit and deletes through `RunDeleteService.deleteByIds` with `mode: 'retention'`, at most 20,000 runs per user per night.
 
+## What a run records
+
+Every run keeps a trace a person can follow afterwards (#541): its steps (`run_steps`), the questions it asked and the answers given, the owner's guidance from the chat, and **masked screenshots of the key moments**. `GET /api/runs/{id}` returns it; the run's live stream sends the same step fields.
+
+| Step | What it is | An action? |
+|---|---|---|
+| `action`, `handoff`, `finish`, `error`, `note` | What the agent did, asked, or ended with | yes (counts toward `stepCount` and the actions budget) |
+| `handoff` with `action: "answered"` | The owner's answer: "The owner allowed it", "declined", "provided the sign-in", or "answered: …" (masked). A secret, a sign-in or a withheld value never appears. | no |
+| `guidance` | A message the owner typed in the chat while the run worked (#490), masked | no |
+| `routing` | A tier change or a provider fallback (#405) | no |
+| `end` | The closing step; it holds the final screen | no |
+
+**Questions.** A step that asked a person carries `questionId`, and the API adds `question: { id, kind, input, prompt, options, risk, status, answer: { outcome, value?, valueWithheld, channel, answeredAt } | null }`. `prompt`, the option labels and `value` are masked when they are read; `value` is absent for a secret, a sign-in or a withheld answer.
+
+**Screenshots: the key moments.** A masked picture is stored when the agent asks a person (`question`; for a confirmation, `before_confirmed`: the screen the owner was asked about), after a confirmed action succeeded (`after_confirmed`), when a stall is signalled (`failure`, on the latest step), and at the end of every run (`final`, on the `end` step). Expect 5 to 15 per run; at most 40, past which only `before_confirmed`, `after_confirmed` and `final` are kept.
+
+- **Masked at capture, in the page.** The trace asks the fabric for `{ type: "screenshot", mask: true }` (#539): the extension covers password and code fields and text that looks like a card, account or identity number before the picture is taken, so no unmasked trace image exists anywhere. It never reuses the model's own (unmasked) screenshot. A page that cannot be masked gives no picture at all, never an unmasked one.
+- **Never during a secret.** No picture is taken for a `secret` or `credentials` request (the fabric refuses them then anyway, #525).
+- **Best effort.** A capture is bounded to 10 seconds and is not an action: it never counts toward `stepCount`, the actions budget or the stall detector. A step without its picture says why in `screenshotNote`: `no_storage` (the storage slice is off), `capped`, `masked_failed` or `unavailable`.
+- **Where.** Object storage, key `runs/<userId>/<runId>/<seq>-<moment>.jpg` (prefix `run-traces`), about 150 kB each. Steps return `hasScreenshot` and `screenshotMoment`, never the key. The picture: `GET /api/runs/{id}/steps/{seq}/screenshot` (`runs:read`, the owner only: `404` for another user's run, a missing step or a step without a picture; `Cache-Control: private, max-age=3600`).
+- **Removed with the run** by a delete and by the nightly retention; a storage failure never keeps a run.
+- **Metrics.** `app.runs.trace_screenshots` (labels `moment`, `result`: `stored`, `skipped`, `failed`) and `app.runs.trace_screenshot_bytes`. The Doctor's `runs.trace_storage` warns when storage is off. No image, key or prompt text is ever logged.
+
 ## What is masked
 
 A run's trace, its JSON export, its PDF report and the extension's screenshot masking hide sensitive text with one pattern table, so they cannot disagree. The table is `console/packages/shared/sensitive-patterns.js` (`@app/shared/sensitive-patterns`, version `SENSITIVE_PATTERNS_VERSION`); the API applies it with `maskSensitive(text)` and `maskValue(value)` (`apps/api/src/tasks/mask.ts`), and the extension reads a generated copy, `packages/contracts/sensitive-patterns.json` at the repository root (`node scripts/gen-sensitive-patterns.mjs` writes it; CI fails when it is stale). Masking hides text in what is shown and exported; it does not change what the model sees during a run.

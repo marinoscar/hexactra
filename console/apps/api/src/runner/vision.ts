@@ -148,3 +148,62 @@ export function roundInput(text: string, views: ScreenView | ScreenView[] | null
     },
   ] as RoundInput;
 }
+
+/** A masked trace screenshot (#541): the image the trace keeps, never the model's unmasked one. */
+export interface TraceShot {
+  bytes: Buffer;
+  contentType: string;
+  /** Regions the extension covered. */
+  masked: number;
+}
+
+/** Why a key moment has no picture (#541). */
+export type TraceNote = 'unavailable' | 'masked_failed' | 'no_storage' | 'capped';
+
+/** How long a trace capture may take before the run goes on without it. */
+export const TRACE_CAPTURE_TIMEOUT_MS = 10_000;
+
+/**
+ * One masked screenshot of the page for the run's trace (#541): the fabric
+ * `screenshot` action with `mask: true` and no marks; the extension covers
+ * password and code fields and text that looks like a card, account or
+ * identity number before the picture is taken. Throws `mask_unavailable`
+ * (as `TraceCaptureError('masked_failed')`) when the page cannot be masked:
+ * there is never an unmasked fallback.
+ */
+export async function captureTrace(session: FabricSession, fabric: FabricClient, sessionId: string, timeoutMs = TRACE_CAPTURE_TIMEOUT_MS): Promise<TraceShot> {
+  let op;
+  try {
+    // Bounded: a slow page or a busy host never holds the run up for more than the timeout.
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('trace capture timed out')), timeoutMs);
+    });
+    try {
+      op = await Promise.race([session.act(sessionId, { type: 'screenshot', mask: true }, timeoutMs, { waitForTakeover: false }), timeout]);
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (e) {
+    throw new TraceCaptureError(/mask_unavailable/.test(e instanceof Error ? `${e.message} ${(e as { code?: string }).code ?? ''}` : String(e)) ? 'masked_failed' : 'unavailable');
+  }
+  if (op.state !== 'succeeded') throw new TraceCaptureError(/mask_unavailable/.test(`${op.error ?? ''}`) ? 'masked_failed' : 'unavailable');
+  const r = op.result ?? {};
+  let mime = str(r.mime) ?? 'image/jpeg';
+  let base64 = str(r.data);
+  if (!base64) {
+    const artifactId = str(r.artifact_id);
+    if (!artifactId) throw new TraceCaptureError('unavailable');
+    const res = await fabric.raw('GET', `/v1/artifacts/${artifactId}`, { retries: 1 });
+    mime = res.headers.get('content-type') ?? mime;
+    return { bytes: Buffer.from(await res.arrayBuffer()), contentType: mime, masked: num(r.masked) ?? 0 };
+  }
+  return { bytes: Buffer.from(base64, 'base64'), contentType: mime, masked: num(r.masked) ?? 0 };
+}
+
+/** A trace capture that did not produce a picture, and why. */
+export class TraceCaptureError extends Error {
+  constructor(readonly note: TraceNote) {
+    super(`trace capture: ${note}`);
+  }
+}

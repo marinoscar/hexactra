@@ -379,6 +379,20 @@ describe('what a deleted run takes with it', () => {
     expect(store.delete.mock.calls.map((c) => c[0])).toEqual([`runs/${b}/1.png`]);
     expect(await exists(b)).toBe(false);
 
+    // The trace screenshots (#541) are removed with their run, under their own key format.
+    store.delete.mockReset();
+    store.delete.mockResolvedValue(undefined);
+    const traced = await run(user.userId);
+    await prisma.runStep.createMany({
+      data: [
+        { runId: traced, seq: 1, kind: 'handoff', screenshotKey: `runs/${user.userId}/${traced}/1-before_confirmed.jpg`, screenshotMoment: 'before_confirmed' },
+        { runId: traced, seq: 2, kind: 'handoff', action: 'answered' },
+        { runId: traced, seq: 3, kind: 'end', screenshotKey: `runs/${user.userId}/${traced}/3-final.jpg`, screenshotMoment: 'final' },
+      ],
+    });
+    expect((await call(user, 'DELETE', `/runs/${traced}`)).statusCode).toBe(204);
+    expect(sorted(store.delete.mock.calls.map((c) => c[0]))).toEqual([`runs/${user.userId}/${traced}/1-before_confirmed.jpg`, `runs/${user.userId}/${traced}/3-final.jpg`]);
+
     // Without the storage slice there is no port: the delete still works.
     Object.assign(service, { store: undefined });
     const c = await run(user.userId);
