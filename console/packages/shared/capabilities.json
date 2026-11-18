@@ -840,9 +840,11 @@
       "tui": {
         "none": "The TUI is for watching and answering; a chat thread with cards is the web app's surface"
       },
-      "web": {
-        "none": "The chat page arrives with #486 (epic #482); until then the routes are the API only"
-      }
+      "web": [
+        "/chat",
+        "/chat/new",
+        "/chat/:id"
+      ]
     }
   ]
 }

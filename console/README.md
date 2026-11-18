@@ -19,7 +19,7 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 | Tasks: saved goals with a profile, an agent policy (budgets and models), optional allowed sites, opt-in confirm-before-purchase ([Create a task](#create-a-task), [A task's page](#a-tasks-page)) | `/tasks`, `/tasks/new`, `/tasks/:id`, `/tasks/:id/edit` | `/api/tasks` | `hexactra tasks list\|create\|update\|run [--watch]\|pause\|resume\|delete` | `tasks:read` / `tasks:write` |
 | Agent policies: named, versioned bundles of model tiers, budgets (any of them unlimited), stall detection and context settings; four built-ins, a default per user, one per task, schedule or run ([Agent policies](#agent-policies)) | Settings → Browser agent → Agent policies; Administration → Browser agent | `/api/agent-policies` | `hexactra policies`; MCP `policies_*` and `policy_*` tools; SDK `hx.policies` | `agent_policies:read` / `:write` |
 | Runs: the AI goal runner (`browser.goal.run` job): steps, handoffs, cancel; the list is paged, filtered and searched on the server, with counts per status; finished runs can be deleted, one, many or everything a filter matches ([docs/runs.md](docs/runs.md)) | `/runs`, `/runs/:id` | `/api/runs`, `GET /api/runs/counts`, `POST /api/tasks/:id/runs`, `POST /api/runs/:id/cancel`, `DELETE /api/runs/:id`, `POST /api/runs/delete` | `hexactra runs list\|start\|show\|watch\|cancel\|delete [--older-than DAYS]` | `runs:read` / `runs:write` / `runs:delete` |
-| Chats: threads whose jobs are ordinary runs (trigger `chat`); list, read, post, rename, archive, delete. A posted message is answered by a `chat.turn` job (AI feature `chat_orchestrator`): a reply, one clarifying question, or a browser run whose result lands in the thread. The API only for now: the chat page is #486 (epic #482) | — | `/api/chats`, `POST /api/chats/:id/messages` | none: a chat is a web surface | `chat:read` / `chat:write` |
+| Chats: say what you want done; the AI replies, asks one clarifying question, or starts a browser run whose result lands in the thread (a `chat.turn` job, AI feature `chat_orchestrator`; runs carry the trigger `chat`). Rename, archive, delete; machine, profile, policy, allowed sites and purchase confirmation per chat ([Chat](#chat)) | `/chat`, `/chat/new`, `/chat/:id` | `/api/chats`, `POST /api/chats/:id/messages`, `GET /api/chats/:id/stream` | none: a chat is a web surface | `chat:read` / `chat:write` |
 | Run history: each user's retention rule (keep N days, the newest N per task), enforced nightly; a deployment limit for administrators ([Run history and retention](#run-history-and-retention)) | Settings → Browser agent → Run history; Administration → Browser agent → Run history limit | `GET /api/runs/retention`, `GET /api/runs/retention/preview`, `POST /api/runs/retention/apply`; the `runs` namespace of `/api/user-settings` and `/api/system-settings` | — | `runs:delete`; `system_settings:read` / `:write` for the limit |
 | Inbox: what agents wait for (CAPTCHA, code, sign-in, confirmation); answers resume the run | `/inbox` | `GET /api/inbox`, `POST /api/inbox/:runId/respond` | `hexactra inbox list\|answer RUN --done\|--value\|--choice\|--secret-stdin\|--decline`; TUI **Agent ▸ Inbox** | `runs:read` / `runs:write` |
 | Questions: an agent asks its user a typed question (text, choice, multi-choice, number, confirm, none, takeover; a secret only in a browser session) and waits for the typed answer; the person answers on any channel, the first answer wins ([docs/questions.md](docs/questions.md)) | `/inbox`, `/inbox/q/:id` | `/api/questions`, `POST /api/questions/:id/answer\|cancel\|answer-by-token` | `hexactra questions ask\|list\|show\|answer`; TUI **Agent ▸ Inbox** | `runs:read` / `runs:write` |
@@ -308,6 +308,7 @@ What each page of the web app is for and how to use it, from a phone, a tablet o
 | Page | What it is for |
 |---|---|
 | [Home](#home) (`/`) | What needs you, what is running, what runs next, what just happened. |
+| [Chat](#chat) (`/chat`) | Say what you want done and follow it in one thread. |
 | [Inbox](#inbox) (`/inbox`) | The questions your agents are waiting on. |
 | [Tasks](#tasks) (`/tasks`), [a task's page](#a-tasks-page), [the task form](#create-a-task) | What your agents do, and when: create, schedule, pause, run. |
 | [Schedules](#schedules) | The schedule editor inside the task form and the task's page. |
@@ -338,6 +339,18 @@ A new account sees a **Get started** card instead of the dashboard blocks until 
 The page reads the summary when it opens, when the window gets the focus, and every 10 seconds while the tab is visible (every 5 while an agent runs or waits for you). When a read fails, the last data stays on screen, dimmed, with when it was read and a Retry.
 
 The route behind it, `GET /api/home/summary`, is one read that never fails because a part is slow: what each block needs, its limits and what it never carries are in [docs/api-tasks-runs.md](docs/api-tasks-runs.md#home).
+### Chat
+
+`/chat` is the quick way to get something done: say what you want, and follow it in one thread. A chat needs `chat:read`; writing in one needs `chat:write`. An administrator chooses the chat's model under Administration → AI (feature "Chat: understand the request and start browser runs"); until then the thread says no model is set up.
+
+- **Start.** **New chat** opens an empty thread with three examples. Your first message creates the chat and names it. Enter sends on a desktop (Shift+Enter breaks the line); on a phone Enter breaks the line and the send button sends.
+- **What comes back.** The assistant replies, asks one clarifying question with suggested answers you can tap, or starts a browser run. A run shows as a card with its goal and a link to the run; when it ends, a second card says how. Three dots show while the assistant is working, and the line under the title says what is happening ("Thinking…", "Working in the browser…", "Waiting for you").
+- **The list.** Chats are listed with their last line, most recently active first; a green dot marks a chat whose run is live. **Active** and **Archived** switch the list. Each row's menu, and the menu of the open chat, has **Rename**, **Archive** (an archived chat is read-only until you unarchive it) and **Delete** (the chat, its messages and its runs; refused while a run is live).
+- **Chat settings** (the open chat's menu): the machine, the browser profile, the agent policy, the sites its runs may visit, and **Ask me before a purchase or another step that is hard to undo**, which is on by default in a chat. They apply to the next run the chat starts.
+- **Widths.** From 900 px the list is beside the thread; from 600 px it is a drawer behind the menu button; on a phone the list and the thread are two screens with a back arrow. The thread scrolls, the page does not, and the message field stays above the keyboard.
+
+The Browser card with the live view, answering the agent's requests in the thread and "Save as task" arrive with the next parts of epic #482.
+
 ### Inbox
 
 **Inbox** (`/inbox`) is where an agent's questions wait for you. The number of pending questions is on the Inbox entry of the navigation (rail, bottom bar and user menu) and in the tab's title ("(2) Hexactra Console"), and Home lists the first three under **Needs you**. A notification about a question opens the Inbox with that question first; `/inbox/q/:id` shows one question on its own.
@@ -529,7 +542,7 @@ Operators: [docs/runbooks/run-retention.md](docs/runbooks/run-retention.md). The
 
 ### On a phone, a tablet and a desktop
 
-Every page above works at any width, and none scrolls sideways. On a phone the bottom bar has Home, Inbox, Tasks and Runs (Fleet, Settings and Administration are in the user menu), tables are cards, a page's main action stays in reach, and filters fold behind a **Filters** button. The breakpoints, what is pinned where and how it is checked (`npm run ui:screens`) are in [Responsive rules](#responsive-rules).
+Every page above works at any width, and none scrolls sideways. On a phone the bottom bar has Home, Chat, Inbox and **More** (Tasks and Runs; Fleet, Settings and Administration are in the user menu), tables are cards, a page's main action stays in reach, and filters fold behind a **Filters** button. The breakpoints, what is pinned where and how it is checked (`npm run ui:screens`) are in [Responsive rules](#responsive-rules).
 
 ## Layout
 
