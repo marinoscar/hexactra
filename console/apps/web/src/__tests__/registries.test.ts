@@ -106,6 +106,8 @@ describe('browser agent cards', () => {
       ['/settings/run-history', 'runs:delete', undefined],
       // #464, appended: what GET /api/connected-apps enforces.
       ['/settings/ai-apps', 'connected_apps:read', undefined],
+      // #551, appended: what GET /api/memories enforces.
+      ['/settings/memories', 'memories:read', undefined],
       // #554, appended: what GET /api/approval-rules enforces.
       ['/settings/approvals', approvalsList![1], undefined],
     ]);
