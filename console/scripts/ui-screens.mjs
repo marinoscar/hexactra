@@ -39,6 +39,9 @@
 //          --schemes light,dark  --only <name,name>  --strict (a skipped or
 //          redirected route fails the run)  --list (print the routes and exit)
 //
+// A route's options: `signedOut` (open it without a session), `click` (the
+// accessible name of a button to press before the screenshot: a dialog).
+//
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
 // `{finishedRun}`, `{chatRun}`, `{traceRun}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}` and `{app}` are filled
 // in from the account (or the fixtures). The enabled slices' routes are read
@@ -99,6 +102,9 @@ export const ROUTES = [
   ['settings-ai-apps', '/settings/ai-apps'],
   ['settings-ai-app', '/settings/ai-apps/{app}'],
   ['settings-ai-apps-connect', '/settings/ai-apps/connect'],
+  // Memories (#551): the page, and its add dialog (opened by clicking "Add").
+  ['settings-memories', '/settings/memories'],
+  ['settings-memories-dialog', '/settings/memories', { click: 'Add' }],
   ['settings-danger-zone', '/settings/danger-zone'],
   // Administration (the admin hub and its pages).
   ['admin', '/admin/settings'],
@@ -377,6 +383,10 @@ async function main() {
           // A live page keeps a stream open, so "network idle" may never come: wait for it briefly, then let the page settle.
           await page.waitForLoadState('networkidle', { timeout: 6_000 }).catch(() => undefined);
           await page.waitForTimeout(500);
+          if (options.click) {
+            await page.getByRole('button', { name: options.click, exact: true }).first().click({ timeout: 5_000 });
+            await page.waitForTimeout(400);
+          }
           const at = new URL(page.url()).pathname;
           if (at !== path.split('?')[0]) {
             // The app has no such route (yet), or the account may not open it: it was sent elsewhere.
