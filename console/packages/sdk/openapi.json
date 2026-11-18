@@ -38347,6 +38347,17 @@
               "maxKeepDays"
             ]
           },
+          "mcp": {
+            "type": "object",
+            "properties": {
+              "elicitation": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "elicitation"
+            ]
+          },
           "notes": {
             "type": "object",
             "properties": {
@@ -39245,6 +39256,7 @@
         "required": [
           "security",
           "runs",
+          "mcp",
           "notes",
           "browserAgentTiers",
           "agentPricing",
@@ -39283,6 +39295,17 @@
             },
             "required": [
               "maxKeepDays"
+            ]
+          },
+          "mcp": {
+            "type": "object",
+            "properties": {
+              "elicitation": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "elicitation"
             ]
           },
           "notes": {
@@ -40301,6 +40324,14 @@
                   }
                 ],
                 "description": "The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling."
+              }
+            }
+          },
+          "mcp": {
+            "type": "object",
+            "properties": {
+              "elicitation": {
+                "type": "boolean"
               }
             }
           },

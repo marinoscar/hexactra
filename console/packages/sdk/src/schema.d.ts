@@ -7747,6 +7747,9 @@ export interface components {
                 /** @description The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling. */
                 maxKeepDays: number | null;
             };
+            mcp: {
+                elicitation: boolean;
+            };
             notes: {
                 archiveAfterDays: number;
             };
@@ -7948,6 +7951,9 @@ export interface components {
             runs?: {
                 /** @description The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling. */
                 maxKeepDays: number | null;
+            };
+            mcp?: {
+                elicitation: boolean;
             };
             notes?: {
                 archiveAfterDays: number;
@@ -8157,6 +8163,9 @@ export interface components {
             runs?: {
                 /** @description The most days any user's runs are kept. A user's longer limit, or no limit, is cut to it by the nightly job. `null`: no ceiling. */
                 maxKeepDays?: number | null;
+            };
+            mcp?: {
+                elicitation?: boolean;
             };
             notes?: {
                 archiveAfterDays?: number;

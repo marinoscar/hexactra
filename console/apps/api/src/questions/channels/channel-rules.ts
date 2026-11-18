@@ -8,6 +8,11 @@
 // - A high-risk confirm: only where the console signs the person in (web,
 //   Android app, CLI/TUI); never a webhook or a push button.
 // - takeover and none need the page itself.
+// - An MCP client signed in with OAuth (a hosted chat app) relays what the
+//   person typed in the chat, and an MCP elicitation is a form the client
+//   draws: neither is a console sign-in, so they collect public answers only
+//   (#463). A personal access token (channel `mcp`) is the person's own
+//   credential and keeps answering everything but a secret's value.
 import type { QuestionInputType, QuestionOption } from '../questions.contract';
 
 /** The fields of a question the rules read. */
@@ -32,6 +37,53 @@ export function isPublicAnswer(q: RuleQuestion): boolean {
     default:
       return false;
   }
+}
+
+/** Whether a channel signs the person in to the console itself (the rule for high-risk confirms and secrets). */
+export interface ChannelRule {
+  signedIn: boolean;
+  /** What the channel is, for the docs and the refusal. */
+  label: string;
+}
+
+/**
+ * Every channel an answer is recorded under, by its id (the part before a
+ * `.`: `mcp-elicitation.claude` is `mcp-elicitation` from a Claude client).
+ * A channel that is not signed in never records a secret or approves a
+ * high-risk confirm: `QuestionsService` refuses it (`CHANNEL_NOT_ALLOWED`).
+ * What else a channel offers (one-tap buttons, public answers only) is its
+ * own business (`quickAnswers`, `isPublicAnswer`). Unknown ids are treated
+ * as signed in (the REST caller is the person, as before).
+ */
+export const CHANNEL_RULES: Readonly<Record<string, ChannelRule>> = {
+  web: { signedIn: true, label: 'the web app' },
+  android_app: { signedIn: true, label: 'the Android app' },
+  cli: { signedIn: true, label: 'the CLI' },
+  tui: { signedIn: true, label: 'the terminal app' },
+  inbox: { signedIn: true, label: 'the inbox' },
+  api: { signedIn: true, label: 'the REST API' },
+  mcp: { signedIn: true, label: 'an MCP client with a personal access token' },
+  notification: { signedIn: false, label: 'a notification button' },
+  webhook: { signedIn: false, label: 'a webhook receiver' },
+  'mcp-oauth': { signedIn: false, label: 'an AI app connected with OAuth, relaying the chat' },
+  'mcp-elicitation': { signedIn: false, label: "an AI app's form (MCP elicitation)" },
+};
+
+/** The rule id of a channel label (`mcp-elicitation.claude` → `mcp-elicitation`). */
+export function channelId(channel: string): string {
+  return channel.split('.')[0] ?? channel;
+}
+
+/** Whether a question needs a signed-in channel to be answered: a secret, or a confirm that is not low risk. */
+export function needsSignedIn(q: Pick<RuleQuestion, 'input' | 'risk'>): boolean {
+  return q.input === 'secret' || (q.input === 'confirm' && q.risk !== 'low');
+}
+
+/** Whether `channel` may record this answer to `q`. Declining is allowed everywhere. */
+export function mayAnswerOn(channel: string, q: Pick<RuleQuestion, 'input' | 'risk'>, outcome: 'completed' | 'cancelled' = 'completed'): boolean {
+  if (outcome === 'cancelled') return true;
+  const rule = CHANNEL_RULES[channelId(channel)];
+  return !rule || rule.signedIn || !needsSignedIn(q);
 }
 
 /** One quick-answer button: what it says and the answer value it sends. */

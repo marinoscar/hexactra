@@ -125,6 +125,12 @@ export class McpController {
     const userAgent = header(req, 'user-agent');
     const credential = authCredentialOf(req as FastifyRequest & RequestWithAuthCredential);
     const headers: McpHeaders = { protocolVersion: header(req, 'mcp-protocol-version'), method: header(req, 'mcp-method'), name: header(req, 'mcp-name') };
+    // A waiting tool (run_wait) stops waiting when the client goes away; nothing it started is cancelled.
+    const gone = new AbortController();
+    res.raw.once('close', () => {
+      if (!res.raw.writableEnded) gone.abort();
+    });
+    const extra = { userId: (req as FastifyRequest & { user?: { id?: string } }).user?.id, signal: gone.signal };
 
     if (Array.isArray(body)) {
       // Batches exist in 2025-03-26 only (and a request with no version header is 2025-03-26).
@@ -145,7 +151,7 @@ export class McpController {
             const msg = m as RpcMessage;
             try {
               const rctx = requestContext({ protocolVersion: headers.protocolVersion }, msg, credential);
-              return (await this.dispatcher.dispatch(msg, rctx, authorization, userAgent))?.body ?? null;
+              return (await this.dispatcher.dispatch(msg, rctx, authorization, userAgent, extra))?.body ?? null;
             } catch (e) {
               if (e instanceof McpProtocolError) return msg.id === undefined ? null : rpcError(idOf(msg) ?? null, e.code, e.message, e.data);
               throw e;
@@ -167,7 +173,7 @@ export class McpController {
       if (e instanceof McpProtocolError) return void (await sendRpc(res, e.httpStatus, rpcError(idOf(msg) ?? null, e.code, e.message, e.data)));
       throw e;
     }
-    const out = await this.dispatcher.dispatch(msg, rctx, authorization, userAgent);
+    const out = await this.dispatcher.dispatch(msg, rctx, authorization, userAgent, extra);
     if (out === null) return void (await res.status(202).send());
     await sendRpc(res, out.status, out.body);
   }

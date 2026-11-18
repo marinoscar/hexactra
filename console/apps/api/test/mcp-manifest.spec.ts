@@ -123,7 +123,7 @@ describe('MCP tool manifest (#462)', () => {
 
   it('classifies the tools by the rules of #462', () => {
     const by = (n: string) => MCP_TOOLS.find((t) => t.name === n)!;
-    expect(MCP_TOOLS).toHaveLength(54);
+    expect(MCP_TOOLS).toHaveLength(55);
     for (const n of ['run_cancel', 'browser_close', 'task_update', 'policy_update', 'policy_set_default', 'policies_import', 'task_pause', 'browser_click', 'browser_type', 'browser_press', 'browser_click_at', 'browser_drag', 'browser_type_keys', 'browser_key', 'browser_evaluate', 'browser_type_secret']) {
       expect([n, by(n).effect]).toEqual([n, 'destructive']);
     }

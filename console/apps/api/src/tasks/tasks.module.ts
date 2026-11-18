@@ -15,6 +15,7 @@ import { RunRetentionApplyHandler, RunRetentionHandler, RunRetentionTask } from 
 import { RunRetentionService } from './run-retention.service';
 import { RunActionTokens } from './run-action-token';
 import { RunMetrics } from './run-metrics';
+import { RunEvents } from './run-events';
 import { RunNotifier } from './run-notifier';
 import { RunRemindHandler, RunRemindTask, RunReminders } from './run-reminders';
 import { RunsQueryService } from './runs.query';
@@ -49,7 +50,7 @@ const artifacts = runArtifactStore();
   imports: [FabricModule, PoliciesModule, ...(artifacts.imports ?? [])],
   // RunsDeleteController and RunRetentionController first: their fixed paths are declared before any `:id` route.
   controllers: [TasksController, TaskSchedulesController, RunsDeleteController, RunRetentionController, RunsController],
-  providers: [TasksService, RunsQueryService, RunDeleteService, RunsDeleteHandler, RunRetentionService, RunRetentionHandler, RunRetentionApplyHandler, RunRetentionTask, RunRetentionDoctorCheck, ...artifacts.providers, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders, RunRemindHandler, RunRemindTask],
-  exports: [TasksService, RunsQueryService, RunDeleteService, RunRetentionService, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, ActionTokenStore, RunActionTokens, RunReminders],
+  providers: [TasksService, RunsQueryService, RunDeleteService, RunsDeleteHandler, RunRetentionService, RunRetentionHandler, RunRetentionApplyHandler, RunRetentionTask, RunRetentionDoctorCheck, ...artifacts.providers, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, RunEvents, ActionTokenStore, RunActionTokens, RunReminders, RunRemindHandler, RunRemindTask],
+  exports: [TasksService, RunsQueryService, RunDeleteService, RunRetentionService, TaskSchedulesService, TaskSummaryService, RunNotifier, RunMetrics, RunEvents, ActionTokenStore, RunActionTokens, RunReminders],
 })
 export class TasksModule {}

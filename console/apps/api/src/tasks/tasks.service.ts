@@ -6,6 +6,7 @@ import { assertTransition, isTerminal, type RunStatus } from './run-status';
 import type { CreateTaskDto, UpdateTaskDto } from './tasks.schemas';
 import { FabricClient } from '../fabric/fabric.client';
 import { activeElapsedMs } from '../runner/active-time';
+import { RunEvents } from './run-events';
 import { RunMetrics } from './run-metrics';
 import { PoliciesService } from '../policies/policies.service';
 import type { RunStopReason } from '../runner/budget';
@@ -43,7 +44,13 @@ export class TasksService {
     @Optional() private readonly fabric?: FabricClient,
     @Optional() private readonly policies?: PoliciesService,
     @Optional() private readonly taskSchedules?: TaskSchedulesService,
+    @Optional() readonly events?: RunEvents,
   ) {}
+
+  /** Tell waiters (MCP `run_wait`) that a run recorded a step; after the write. Never fails. */
+  async stepRecorded(ownerUserId: string, runId: string, stepCount: number): Promise<void> {
+    await this.events?.publish({ type: 'run.step', runId, ownerUserId, stepCount });
+  }
 
   private db(userId: string) {
     return this.prisma.forUser({ userId });
@@ -191,6 +198,8 @@ export class TasksService {
         if (to === 'running' && !run.startedAt) this.metrics.started(run.trigger);
         if (to === 'waiting_human') this.metrics.handoff();
         const saved = await db.run.findFirstOrThrow({ where: { id }, omit: { transcript: true } });
+        // After the write: wake anyone following the run (MCP run_wait).
+        await this.events?.publish({ type: 'run.status', runId: id, ownerUserId: userId, status: to });
         if (isTerminal(to)) {
           this.metrics.finished(to, run.trigger, (now.getTime() - (run.startedAt ?? run.createdAt).getTime()) / 1000);
           if (saved.modelCalls > 0 && saved.costKnown) this.metrics.cost(to, Number(saved.costUsd));

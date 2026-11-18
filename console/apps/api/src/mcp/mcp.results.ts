@@ -53,6 +53,51 @@ export interface McpContext {
   credential?: { kind: McpCredentialKind };
   /** The limits of this request (absent in unit tests: the defaults). */
   limits?: McpLimits;
+  /** The console's own URL (`APP_URL`), for links in results; absent: `http://localhost:3535`. */
+  appUrl?: string;
+  /** The client's metric bucket (`claude`, `chatgpt`, …), recorded with an answer it relays. */
+  client?: string;
+  /**
+   * Wake-ups for one run (#463): the run's status and step events and its
+   * questions, from the event bus. Absent (a unit test, no bus): a waiting
+   * tool reads once and answers `changed: false`.
+   */
+  watchRun?(runId: string): RunWatch;
+  /** Aborted when the client goes away: a waiting tool stops waiting (nothing is cancelled). */
+  signal?: AbortSignal;
+  /** MCP elicitation for this call (2026-07-28 multi round-trip only), when the client can take it. */
+  elicitation?: McpElicitationContext;
+}
+
+/** What woke a waiter. */
+export type RunWake = 'status' | 'question' | 'step' | 'timeout' | 'aborted';
+
+/** One subscription to a run's events, released with `close()`. Events between two `next` calls are kept. */
+export interface RunWatch {
+  /** The next event within `ms`; with `ignoreSteps`, step events do not wake it (status and question events still do). */
+  next(ms: number, opts?: { ignoreSteps?: boolean }): Promise<RunWake>;
+  close(): void;
+}
+
+/** The answer a client sent for the question a tool elicited (an `ElicitResult`). */
+export interface McpElicitResponse {
+  action: 'accept' | 'decline' | 'cancel';
+  content?: Record<string, unknown>;
+}
+
+/** Elicitation state of one call: whether the tool may ask, and what a retry carries. */
+export interface McpElicitationContext {
+  /** The client declared form elicitation on 2026-07-28 and `mcp.elicitation` is on. */
+  available: boolean;
+  /** A verified retry: the run and question asked about, the cursor then, and the client's answer (absent if it sent none). */
+  resume?: { runId: string; questionId: string; cursor: string | null; response?: McpElicitResponse };
+}
+
+/** A tool's request for input (`resultType: "input_required"`), sealed into `requestState` by the dispatcher. */
+export interface McpInputRequired {
+  inputRequests: Record<string, { method: 'elicitation/create'; params: Record<string, unknown> }>;
+  /** What the retry needs; the dispatcher adds the caller, the tool, its arguments and an expiry, and signs it. */
+  state: { runId: string; questionId: string; cursor: string | null; expiresAt: number };
 }
 
 /** The limits a tool applies: the context's, else the non-OAuth defaults. */
@@ -73,6 +118,8 @@ export interface McpToolResult {
   summary?: string;
   /** Internal, removed before the result is sent: the text came from a web page. */
   untrusted?: boolean;
+  /** Internal: answer `input_required` instead of this result (2026-07-28; the dispatcher builds it). */
+  inputRequired?: McpInputRequired;
 }
 
 /** The line that leads every result holding text from a web page. */
@@ -126,7 +173,7 @@ export function errorResult(message: string, code = 'INVALID_ARGUMENTS'): McpToo
  * removed; and the size limit applied (`fit`).
  */
 export function finalizeResult(result: McpToolResult, opts: { structured: boolean; limits: McpLimits }): McpToolResult {
-  const { summary, untrusted, structuredContent, ...rest } = result;
+  const { summary, untrusted, structuredContent, inputRequired: _ir, ...rest } = result;
   let firstText = true;
   const content = rest.content.map((c): McpContent => {
     if (c.type !== 'text' || !firstText) return c;

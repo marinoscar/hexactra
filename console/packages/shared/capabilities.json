@@ -246,7 +246,10 @@
         "runs show",
         "runs watch"
       ],
-      "mcp": "run_status",
+      "mcp": [
+        "run_status",
+        "run_wait"
+      ],
       "tui": "runs",
       "web": "/runs/:id"
     },

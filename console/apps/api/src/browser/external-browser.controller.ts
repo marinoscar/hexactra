@@ -119,6 +119,7 @@ export class ExternalBrowserController {
     await this.prisma.runStep.create({
       data: { runId, seq: updated.stepCount, kind, action, args: args ? (redactActionArgs(action ?? '', args) as never) : undefined, ok, summary: summary.slice(0, 1_900), durationMs: Date.now() - started },
     });
+    await this.tasks.stepRecorded?.(userId, runId, updated.stepCount);
   }
 
   @Post()

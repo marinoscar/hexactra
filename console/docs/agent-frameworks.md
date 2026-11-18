@@ -21,8 +21,8 @@ What differs between them:
 
 ## Which tools to give the agent
 
-- **Delegate (recommended).** Give the agent `run_goal`, `run_status`, `inbox_list`, `inbox_answer` and `run_cancel` (and `ask_human`, `question_status` to let it ask you questions, `policies_list` to let it choose a policy). Hexactra's own goal runner then drives the browser and asks you for CAPTCHAs and codes. The framework only follows progress. Filters:
-  - Hermes: `tools: { include: [run_goal, run_status, inbox_list, inbox_answer, run_cancel] }`.
+- **Delegate (recommended).** Give the agent `run_goal`, `run_status`, `run_wait`, `inbox_list`, `inbox_answer` and `run_cancel` (and `ask_human`, `question_status` to let it ask you questions, `policies_list` to let it choose a policy). Hexactra's own goal runner then drives the browser and asks you for CAPTCHAs and codes. The framework only follows progress, with `run_wait` (one call that returns when something happens; see [mcp.md](mcp.md#following-a-run-from-a-chat)). Filters:
+  - Hermes: `tools: { include: [run_goal, run_status, run_wait, inbox_list, inbox_answer, run_cancel] }`.
   - OpenClaw: `toolFilter: { include: [...] }`.
   - Pi: `"exposure": "hidden"` with `"toolExposure": { "run_*": "direct", "inbox_*": "direct", "ask_human": "direct", "question_status": "direct", "policies_list": "direct" }` (the last one only if the agent should choose a policy).
 - **Drive.** Expose the `browser_*` tools too, and the framework's model controls the browser step by step. Each action is still recorded as a run that you can watch and stop in the console.

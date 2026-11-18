@@ -539,6 +539,7 @@ export class GoalRunnerService {
         },
       });
       await db.run.updateMany({ where: { id: run.id }, data: { stepCount: state.stepCount } });
+      await this.tasks.stepRecorded?.(run.userId, run.id, state.stepCount);
       memory.log.push(`${state.stepCount}. ${action ?? kind}${args ? ` ${JSON.stringify(redactActionArgs(action ?? '', args))}` : ''} → ${ok ? 'ok' : 'FAILED'}: ${trim(summary, 300)}`);
     };
 

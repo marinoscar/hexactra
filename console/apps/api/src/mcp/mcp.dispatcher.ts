@@ -5,14 +5,36 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { resolveApiVersion } from '@marinoscar/platform-api/host';
+import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { SpanStatusCode, trace } from '@opentelemetry/api';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
+import { QuestionEvents } from '../questions/question-events';
+import { RunEvents } from '../tasks/run-events';
+import { ELICIT_KEY, ELICITING_TOOLS, argsDigest, clientCanElicitForm, openState, sealState } from './mcp.elicitation';
 import { McpMetrics, MCP_METRIC_METHODS } from './mcp.metrics';
+import { watchRun, type RunEventSource } from './mcp.run-watch';
+import { MCP_DEFAULT_SETTINGS } from './mcp.settings';
 import { LIST_CACHE_SCOPE, LIST_TTL_MS, META, SUPPORTED_VERSIONS, clientBucket, negotiateInitialize, type McpRequestContext, type RpcMessage } from './mcp.protocol';
 import { McpApiError, mapUnknownError } from './mcp.errors';
-import { RPC, errorResult, finalizeResult, limitsFor, rpcError, rpcResult, withDeadline, type McpContext, type McpCredentialKind, type McpLimits, type McpToolResult, type RpcId, type RpcResponse } from './mcp.results';
+import {
+  RPC,
+  errorResult,
+  finalizeResult,
+  limitsFor,
+  rpcError,
+  rpcResult,
+  withDeadline,
+  type McpContext,
+  type McpCredentialKind,
+  type McpElicitResponse,
+  type McpElicitationContext,
+  type McpLimits,
+  type McpToolResult,
+  type RpcId,
+  type RpcResponse,
+} from './mcp.results';
 import { MCP_INSTRUCTIONS, MCP_TOOLS, toolAnnotations, type McpTool } from './mcp.tools';
 
 function header(headers: Record<string, unknown>, name: string): string | undefined {
@@ -30,7 +52,7 @@ function followUp(tool: string): string {
   if (tool === 'ask_human' || tool === 'question_status' || tool === 'inbox_answer') return 'Follow it with question_status.';
   if (tool === 'browser_request_human' || tool === 'browser_handoff_status') return 'Follow it with browser_handoff_status.';
   if (tool.startsWith('browser_')) return 'Check the page with browser_screenshot before acting again.';
-  return 'Follow it with run_status or runs_list.';
+  return 'Follow it with run_wait or runs_list.';
 }
 
 /** The answer of a call that passed its server-side deadline: a normal result, never a hung request. */
@@ -50,6 +72,23 @@ export function toolListEntry(t: McpTool, flags: { toolTitle: boolean; structure
     ...(flags.structuredContent && t.output ? { outputSchema: z.toJSONSchema(t.output, { io: 'input' }) } : {}),
     annotations: toolAnnotations(t),
   };
+}
+
+/** What the transport knows about one request beyond the message: who it is and whether the client is still there. */
+export interface DispatchExtra {
+  /** The authenticated user (binds a `requestState` to its caller). */
+  userId?: string;
+  /** Aborted when the client disconnects: a waiting tool stops waiting. */
+  signal?: AbortSignal;
+}
+
+/** An `ElicitResult` from a retry's `inputResponses`, or undefined when it is not one. */
+function elicitResponseOf(v: unknown): McpElicitResponse | undefined {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  const r = v as { action?: unknown; content?: unknown };
+  if (r.action !== 'accept' && r.action !== 'decline' && r.action !== 'cancel') return undefined;
+  const content = r.content !== null && typeof r.content === 'object' && !Array.isArray(r.content) ? (r.content as Record<string, unknown>) : undefined;
+  return { action: r.action, ...(content ? { content } : {}) };
 }
 
 /** What the dispatcher answers: the JSON-RPC response and the HTTP status it wants (200 unless said). */
@@ -75,10 +114,38 @@ export class McpDispatcher {
   constructor(
     private readonly adapter: HttpAdapterHost,
     @Optional() private readonly metrics: McpMetrics = new McpMetrics(),
+    @Optional() private readonly runEvents?: RunEvents,
+    @Optional() private readonly questionEvents?: QuestionEvents,
+    @Optional() private readonly settings?: SystemSettingsService,
   ) {}
 
+  /** The event sources a waiting tool listens on (no database access); empty without a run event source. */
+  private runSources(): RunEventSource[] {
+    if (!this.runEvents) return [];
+    const runs = this.runEvents;
+    const sources: RunEventSource[] = [(h) => runs.subscribe((e) => h({ runId: e.runId, kind: e.type === 'run.step' ? 'step' : 'status' }))];
+    const questions = this.questionEvents;
+    if (questions) sources.push((h) => questions.subscribe((e) => h({ runId: e.runId, kind: 'question' })));
+    return sources;
+  }
+
+  /** `mcp.elicitation` (system settings): on unless an administrator turned it off. */
+  private async elicitationEnabled(): Promise<boolean> {
+    try {
+      const v = await this.settings?.getNamespace('mcp');
+      return (v ?? MCP_DEFAULT_SETTINGS).elicitation !== false;
+    } catch {
+      return MCP_DEFAULT_SETTINGS.elicitation;
+    }
+  }
+
   /** How tools reach the console: its REST routes, in-process, as the caller. */
-  private toolContext(authorization: string, kind: McpCredentialKind | undefined, limits: McpLimits): McpContext {
+  private toolContext(
+    authorization: string,
+    kind: McpCredentialKind | undefined,
+    limits: McpLimits,
+    extra: { client?: string; signal?: AbortSignal; elicitation?: McpElicitationContext } = {},
+  ): McpContext {
     const fastify = this.adapter.httpAdapter.getInstance<FastifyInstance>();
     const call = async (method: string, path: string, body?: unknown, extra?: Record<string, string>) =>
       fastify.inject({
@@ -117,6 +184,11 @@ export class McpDispatcher {
       },
       ...(kind ? { credential: { kind } } : {}),
       limits,
+      ...(process.env.APP_URL ? { appUrl: process.env.APP_URL } : {}),
+      ...(extra.client ? { client: extra.client } : {}),
+      ...(extra.signal ? { signal: extra.signal } : {}),
+      ...(extra.elicitation ? { elicitation: extra.elicitation } : {}),
+      ...(this.runEvents ? { watchRun: (runId: string) => watchRun(runId, this.runSources(), extra.signal) } : {}),
     };
   }
 
@@ -126,7 +198,7 @@ export class McpDispatcher {
    * method, the tool name, the revision, the client, the credential kind and
    * whether it failed: never a token, an argument value or a result.
    */
-  async dispatch(msg: RpcMessage, rctx: McpRequestContext, authorization: string, userAgent?: string): Promise<DispatchOutcome | null> {
+  async dispatch(msg: RpcMessage, rctx: McpRequestContext, authorization: string, userAgent?: string, extra: DispatchExtra = {}): Promise<DispatchOutcome | null> {
     const method = typeof msg.method === 'string' ? msg.method : '';
     const toolName = method === 'tools/call' ? String((msg.params as { name?: unknown } | undefined)?.name ?? '').slice(0, 64) : undefined;
     const client = clientBucket(rctx.clientInfo?.name ?? userAgent);
@@ -142,7 +214,7 @@ export class McpDispatcher {
       const started = Date.now();
       let isError = false;
       try {
-        const out = await this.route(msg, method, rctx, authorization);
+        const out = await this.route(msg, method, rctx, authorization, { ...extra, client });
         isError = out !== null && (out.body.error !== undefined || (out.body.result as McpToolResult | undefined)?.isError === true);
         return out;
       } catch (e) {
@@ -161,7 +233,7 @@ export class McpDispatcher {
     });
   }
 
-  private async route(msg: RpcMessage, method: string, rctx: McpRequestContext, authorization: string): Promise<DispatchOutcome | null> {
+  private async route(msg: RpcMessage, method: string, rctx: McpRequestContext, authorization: string, extra: DispatchExtra & { client?: string } = {}): Promise<DispatchOutcome | null> {
     const id = msg.id as RpcId | undefined;
     if (id === undefined) return null; // a notification: nothing to answer
     const { flags } = rctx;
@@ -194,7 +266,7 @@ export class McpDispatcher {
         // Deterministic order: the registry's own order.
         return ok({ tools: MCP_TOOLS.map((t) => toolListEntry(t, flags)) }, true);
       case 'tools/call': {
-        const params = (msg.params ?? {}) as { name?: unknown; arguments?: unknown };
+        const params = (msg.params ?? {}) as { name?: unknown; arguments?: unknown; inputResponses?: unknown; requestState?: unknown };
         const name = String(params.name ?? '');
         const tool = MCP_TOOLS.find((t) => t.name === name);
         if (!tool) return { status: 200, body: rpcError(id, RPC.INVALID_PARAMS, `Unknown tool ${name}`) };
@@ -203,7 +275,23 @@ export class McpDispatcher {
         const finalize = (r: McpToolResult) => finalizeResult(r, { structured: flags.structuredContent, limits });
         const args = tool.input.safeParse(params.arguments ?? {});
         if (!args.success) return ok({ ...finalize(errorResult(`Invalid arguments: ${args.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`)) });
-        const work = tool.call(args.data as Record<string, unknown>, this.toolContext(authorization, kind, limits)).catch((e: unknown) => {
+        const data = args.data as Record<string, unknown>;
+        // Multi round-trip elicitation (2026-07-28 only): whether this call may ask, and a retry's verified state and answer.
+        let elicitation: McpElicitationContext | undefined;
+        if (flags.multiRoundTrip && ELICITING_TOOLS.has(tool.name)) {
+          const available = clientCanElicitForm(rctx.clientCapabilities) && (await this.elicitationEnabled());
+          elicitation = { available };
+          if (params.requestState !== undefined) {
+            const state = openState(params.requestState, { sub: extra.userId ?? '', tool: tool.name, args: argsDigest(data) });
+            if (!state) {
+              return { status: 200, body: rpcError(id, RPC.INVALID_PARAMS, 'Invalid requestState: it was altered, has expired, or belongs to another call or user. Call the tool again without it.') };
+            }
+            const responses = params.inputResponses !== null && typeof params.inputResponses === 'object' ? (params.inputResponses as Record<string, unknown>) : {};
+            const response = elicitResponseOf(responses[ELICIT_KEY]);
+            elicitation.resume = { runId: state.runId, questionId: state.questionId, cursor: state.cursor, ...(response ? { response } : {}) };
+          }
+        }
+        const work = tool.call(data, this.toolContext(authorization, kind, limits, { client: extra.client, signal: extra.signal, elicitation })).catch((e: unknown) => {
           if (e instanceof McpApiError) {
             // The original answer stays in the log (with its request id); the model gets a sentence.
             this.log.warn(`mcp tool ${tool.name} failed: ${e.status} ${e.code} ${e.message.slice(0, 300)}${e.requestId ? ` request=${e.requestId}` : ''}`);
@@ -213,6 +301,15 @@ export class McpDispatcher {
           return mapUnknownError(e, tool.name);
         });
         const result = await withDeadline(work, limits.deadlineMs, () => stillWorking(tool, limits));
+        if (result.inputRequired && flags.multiRoundTrip) {
+          // Ask the client's user (MRTR): the request state is signed, bound to the caller, this call and an expiry.
+          const st = result.inputRequired.state;
+          const requestState = sealState({ v: 1, tool: tool.name, args: argsDigest(data), sub: extra.userId ?? '', exp: Number.isFinite(st.expiresAt) ? st.expiresAt : Date.now() + 15 * 60_000, runId: st.runId, questionId: st.questionId, cursor: st.cursor });
+          return {
+            status: 200,
+            body: rpcResult(id, { resultType: 'input_required', inputRequests: result.inputRequired.inputRequests, requestState, _meta: { [META.serverInfo]: serverInfo() } }),
+          };
+        }
         // The output schemas are checked by the tests against real REST answers; outside production a
         // mismatch is logged (never refused: the answer is still useful).
         if (tool.output && result.structuredContent && !result.isError && process.env.NODE_ENV !== 'production') {

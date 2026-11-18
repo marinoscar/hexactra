@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 import { Prisma, type Question } from '@prisma/client';
 
@@ -6,6 +6,7 @@ import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { PrismaService } from '../prisma/prisma.service';
 import { enqueueGoalRun } from '../runner/goal-run.enqueue';
 import { FabricSession, handoffOutcome, type CreatedHandoff, type FabricHandoff } from '../runner/fabric-session';
+import { CHANNEL_RULES, channelId, mayAnswerOn } from './channels/channel-rules';
 import { QuestionEvents, type QuestionEventType } from './question-events';
 import {
   AnswerInvalidError,
@@ -348,6 +349,14 @@ export class QuestionsService {
   private async answerQuestion(actor: QuestionActor, q: Question, input: QuestionAnswerInput, channel: string): Promise<QuestionView> {
     if (q.status !== 'pending') {
       throw new ConflictException({ code: q.status === 'expired' ? 'QUESTION_EXPIRED' : 'ALREADY_ANSWERED', message: q.status === 'expired' ? 'This question expired' : 'This question was already answered' });
+    }
+    // The channel rules (channels/channel-rules.ts): a channel that does not sign the person in never sends a secret or approves a high-risk confirm.
+    if (!mayAnswerOn(channel, { input: q.input, risk: q.risk }, input.outcome ?? 'completed')) {
+      const where = CHANNEL_RULES[channelId(channel)]?.label ?? channel;
+      throw new ForbiddenException({
+        code: 'CHANNEL_NOT_ALLOWED',
+        message: `${q.input === 'secret' ? 'A code or password' : 'A high-risk confirmation'} cannot be answered from ${where}: answer it in the Hexactra inbox, signed in`,
+      });
     }
     let answer;
     try {

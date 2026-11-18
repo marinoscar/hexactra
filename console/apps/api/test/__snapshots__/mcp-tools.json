@@ -11,8 +11,8 @@
       "idempotentHint": false,
       "openWorldHint": true
     },
-    "inputSchema": "6b03fe71b66ab09c",
-    "outputSchema": "0852756c0086ac22"
+    "inputSchema": "598c2026b404ec09",
+    "outputSchema": "b5bebcbbfb3492b4"
   },
   {
     "name": "run_status",
@@ -26,8 +26,23 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchema": "c0993ec45530a21f",
-    "outputSchema": "e1c2b9ac59b4b2f0"
+    "inputSchema": "ccc45f61684b506f",
+    "outputSchema": "a2e4018736803484"
+  },
+  {
+    "name": "run_wait",
+    "title": "Wait for a run",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "Wait for a run",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "a15cb892c5955d1e",
+    "outputSchema": "5b7c97be9f8e4916"
   },
   {
     "name": "runs_list",
@@ -57,7 +72,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "0852756c0086ac22"
+    "outputSchema": "b5bebcbbfb3492b4"
   },
   {
     "name": "tasks_list",
@@ -116,8 +131,8 @@
       "idempotentHint": false,
       "openWorldHint": true
     },
-    "inputSchema": "7643257f453f879a",
-    "outputSchema": "0852756c0086ac22"
+    "inputSchema": "9d76478a6c60541f",
+    "outputSchema": "b5bebcbbfb3492b4"
   },
   {
     "name": "schedule_create",
@@ -222,7 +237,7 @@
       "openWorldHint": false
     },
     "inputSchema": "49e3d69fa3fe7bb7",
-    "outputSchema": "f2be54568571da8e"
+    "outputSchema": "7a944fcc6d061af7"
   },
   {
     "name": "ask_human",
