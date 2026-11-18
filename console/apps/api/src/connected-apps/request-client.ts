@@ -83,6 +83,30 @@ export function clientLabel(client: { host: string; name: string }): string {
   return label.slice(0, CLIENT_NAME_MAX);
 }
 
+/** The host of a URL, lower-cased; null when it is not one. */
+function hostOfUrl(url: unknown): string | null {
+  if (typeof url !== 'string') return null;
+  try {
+    return new URL(url).hostname.toLowerCase() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Every host an OAuth client row names: `host`, `client_uri`'s and each redirect URI's, without duplicates. */
+export function hostsOf(row: { host: string; clientUri?: string | null; redirectUris?: unknown }): string[] {
+  const out = new Set<string>();
+  const own = row.host.trim().toLowerCase();
+  if (own && own !== 'loopback') out.add(own);
+  const uri = hostOfUrl(row.clientUri);
+  if (uri) out.add(uri);
+  for (const r of Array.isArray(row.redirectUris) ? row.redirectUris : []) {
+    const h = hostOfUrl(r);
+    if (h) out.add(h);
+  }
+  return [...out];
+}
+
 /** A self-asserted MCP client name, cleaned: control characters dropped, at most 64 characters. */
 export function cleanClientName(raw: string | undefined | null): string | null {
   if (!raw) return null;
@@ -117,7 +141,7 @@ function header(req: AnyRequest, name: string): string | undefined {
 /** Resolves a request's client context. */
 @Injectable()
 export class RequestClientService {
-  private readonly names = new Map<string, { label: string; at: number }>();
+  private readonly names = new Map<string, { label: string; hosts: string[]; at: number }>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -157,14 +181,29 @@ export class RequestClientService {
 
   /** An OAuth client's stored display name: one read by primary key, cached for a minute. */
   async displayName(clientId: string): Promise<string | null> {
+    return (await this.clientRow(clientId))?.label ?? null;
+  }
+
+  /**
+   * The hosts an OAuth client lives on (#531): the platform-derived `host`
+   * (its client id document's or its redirect URIs'), each redirect URI's
+   * host and `client_uri`'s host. Read with the display name (same cache).
+   * Tells ChatGPT from other apps for the form of a step-up; never an
+   * authorization decision.
+   */
+  async clientHosts(clientId: string): Promise<string[]> {
+    return (await this.clientRow(clientId))?.hosts ?? [];
+  }
+
+  private async clientRow(clientId: string): Promise<{ label: string; hosts: string[] } | null> {
     const now = this.clock();
     const hit = this.names.get(clientId);
-    if (hit && now - hit.at < CLIENT_NAME_TTL_MS) return hit.label;
-    const row = await this.prisma.oAuthClient.findUnique({ where: { id: clientId }, select: { host: true, name: true } }).catch(() => null);
-    if (!row) return hit?.label ?? null;
-    const label = clientLabel(row);
+    if (hit && now - hit.at < CLIENT_NAME_TTL_MS) return hit;
+    const row = await this.prisma.oAuthClient.findUnique({ where: { id: clientId }, select: { host: true, name: true, clientUri: true, redirectUris: true } }).catch(() => null);
+    if (!row) return hit ?? null;
+    const entry = { label: clientLabel(row), hosts: hostsOf(row), at: now };
     if (this.names.size > 500) this.names.clear();
-    this.names.set(clientId, { label, at: now });
-    return label;
+    this.names.set(clientId, entry);
+    return entry;
   }
 }

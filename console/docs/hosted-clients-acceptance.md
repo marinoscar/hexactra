@@ -53,7 +53,8 @@ Client: ____________   Version / build: ____________   Date: ____________   Test
 
 - [ ] "Open example.test and click …": the step-up consent appears with only the new box; after approval the browser is driven.
 - [ ] A sensitive action asks for confirmation **in the console** (E33.7), not in the chat.
-- [ ] Whether the client needed anything beyond the HTTP `403` challenge to start the step-up (ChatGPT: the `_meta["mcp/www_authenticate"]` form) is recorded; if it did, a follow-up issue exists.
+- [ ] Which step-up form the client got and acted on is recorded (#531): ChatGPT gets a tool error with `_meta["mcp/www_authenticate"]` (Administration → External AI apps → **How an app asks for more permission** at **Automatic**), every other client the HTTP `403`. Check it in the External AI apps **Activity** (a `step_up` refusal, then the tool call succeeding after consent).
+- [ ] If a client did not start the consent: switch **How an app asks for more permission** to the other form (**HTTP 403 for every app** or **Tool error for every app**), Save, wait a few seconds and ask again. Record which form worked; if it is not the default for that client, file a follow-up issue to change the detection or default (`stepUpTransport`, `apps/api/src/mcp/mcp.protocol.ts`) and set the setting back to **Automatic** once it ships.
 
 ### Tokens, pause, disconnect
 

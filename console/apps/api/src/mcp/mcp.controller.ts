@@ -3,11 +3,13 @@ import { ApiTags } from '@nestjs/swagger';
 import { Auth, InProcessDelegation, authCredentialOf, type RequestWithAuthCredential } from '@marinoscar/platform-api/identity';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
+import { RequestClientService } from '../connected-apps/request-client';
 import { McpActivityService } from './mcp-activity.service';
+import { McpSettingsReader } from './mcp-settings.reader';
 import { userPermissionsOf } from './mcp.access';
 import { McpKillSwitchGuard, McpRateLimitGuard, McpRefusalFilter, type McpUnauthenticatedLimit } from './mcp.rate-limit';
 import { McpDispatcher, stepUpChallenge, stepUpScopes, type DispatchOutcome, type McpCaller } from './mcp.dispatcher';
-import { MCP_VERSIONS, McpProtocolError, acceptsJson, isAllowedOrigin, requestContext, resolveVersion, type McpHeaders, type RpcMessage } from './mcp.protocol';
+import { MCP_VERSIONS, McpProtocolError, acceptsJson, isAllowedOrigin, isChatGptCaller, requestContext, resolveVersion, stepUpTransport, type McpHeaders, type McpRequestContext, type RpcMessage } from './mcp.protocol';
 import { RPC, rpcError, type RpcId, type RpcResponse } from './mcp.results';
 
 import { MCP_PATH } from './mcp.path';
@@ -39,12 +41,16 @@ function sendRpc(reply: FastifyReply, status: number, body: RpcResponse | RpcRes
   return reply.code(status).header('content-type', 'application/json').send(JSON.stringify(body));
 }
 
+/** The words of a step-up, the same in both forms. */
+export function stepUpText(missing: readonly string[]): string {
+  return `This tool needs permission the user has not given this app yet (${missing.join(' ')}). Ask the user to allow it.`;
+}
+
 /**
  * Step-up (#460): the whole HTTP request is refused with `403` and the
  * platform's `insufficient_scope` challenge, whose `scope` lists the scopes
- * the token holds and the missing ones. Claude and ChatGPT start re-consent
- * on this status and header; a `200` with an error result would only be read
- * by the model.
+ * the token holds and the missing ones. Claude starts re-consent on this
+ * status and header.
  */
 function sendStepUp(reply: FastifyReply, challenge: string, missing: readonly string[]): FastifyReply {
   return reply
@@ -52,7 +58,25 @@ function sendStepUp(reply: FastifyReply, challenge: string, missing: readonly st
     .header('www-authenticate', challenge)
     .header('content-type', 'application/json')
     .header('cache-control', 'no-store')
-    .send(JSON.stringify({ error: 'insufficient_scope', error_description: `This tool needs permission the user has not given this app yet (${missing.join(' ')}). Ask the user to allow it.` }));
+    .send(JSON.stringify({ error: 'insufficient_scope', error_description: stepUpText(missing) }));
+}
+
+/** The `_meta` key ChatGPT reads a tool's authentication challenge from (#531). */
+export const WWW_AUTHENTICATE_META = 'mcp/www_authenticate';
+
+/**
+ * Step-up as a tool result (#531): ChatGPT's documented form. A `200` with a
+ * JSON-RPC result that is a tool error with the same words as the `403`
+ * body, and the very `WWW-Authenticate` value in
+ * `_meta["mcp/www_authenticate"]` (an array of challenges). No
+ * `structuredContent`: there is no tool output to describe.
+ */
+export function stepUpToolResult(id: RpcId, challenge: string, missing: readonly string[]): RpcResponse {
+  return {
+    jsonrpc: '2.0',
+    id,
+    result: { isError: true, content: [{ type: 'text', text: stepUpText(missing) }], _meta: { [WWW_AUTHENTICATE_META]: [challenge] } },
+  };
 }
 
 /**
@@ -154,7 +178,23 @@ export class McpController {
     private readonly dispatcher: McpDispatcher,
     private readonly delegation: InProcessDelegation,
     @Optional() private readonly activity?: McpActivityService,
+    @Optional() private readonly settings?: McpSettingsReader,
+    @Optional() private readonly clients?: RequestClientService,
   ) {}
+
+  /**
+   * Which form a step-up takes for this request (#531): the `mcp.stepUpForm`
+   * setting, and for `auto` whether the caller is ChatGPT (its OAuth
+   * client's hosts, or the request's `clientInfo.name`). A batch keeps the
+   * `403`: hosted clients send one call per request.
+   */
+  private async stepUpForm(credential: ReturnType<typeof authCredentialOf>, rctx: Pick<McpRequestContext, 'clientInfo'> | undefined): Promise<'http' | 'tool'> {
+    if (credential?.kind !== 'oauth') return 'http';
+    const setting = (await this.settings?.read())?.stepUpForm ?? 'auto';
+    if (setting !== 'auto') return stepUpTransport(setting, credential.kind, false);
+    const clientHosts = (await this.clients?.clientHosts(credential.clientId).catch(() => [])) ?? [];
+    return stepUpTransport(setting, credential.kind, isChatGptCaller({ clientHosts, clientInfoName: rctx?.clientInfo?.name }));
+  }
 
   @Post()
   @HttpCode(200)
@@ -182,12 +222,18 @@ export class McpController {
     const principal = userPermissions ? { permissions: userPermissions } : undefined;
     // A tools/call the token's scopes do not cover, but the user may allow: 403 for the whole request,
     // before anything runs (a batch mixing it with allowed calls is refused as a whole).
-    const stepUp = (messages: readonly unknown[]) => {
+    const stepUp = (messages: readonly unknown[], single?: { id: RpcId | undefined; rctx: McpRequestContext }) => {
       const missing = stepUpScopes(messages, { credential }, principal);
       if (!missing) return null;
       return async () => {
         await this.activity?.refusal(req, 'step_up', { missing: missing.join(' ') });
-        void sendStepUp(res, stepUpChallenge({ credential }, missing), missing);
+        const challenge = stepUpChallenge({ credential }, missing);
+        // A tool error result only for one tools/call with an id (#531); a batch, or a call sent as a notification, gets the 403.
+        if (single && single.id !== undefined && (await this.stepUpForm(credential, single.rctx)) === 'tool') {
+          res.header('cache-control', 'no-store');
+          return void (await sendRpc(res, 200, stepUpToolResult(single.id, challenge, missing)));
+        }
+        void sendStepUp(res, challenge, missing);
       };
     };
 
@@ -236,7 +282,7 @@ export class McpController {
       if (e instanceof McpProtocolError) return void (await sendRpc(res, e.httpStatus, rpcError(idOf(msg) ?? null, e.code, e.message, e.data)));
       throw e;
     }
-    const refuse = stepUp([msg]);
+    const refuse = stepUp([msg], { id: idOf(msg), rctx });
     if (refuse) return void (await refuse());
     const out = await this.dispatcher.dispatch(msg, rctx, caller, userAgent, extra);
     if (out === null) return void (await res.status(202).send());

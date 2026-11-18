@@ -42916,6 +42916,14 @@
                   "maxLength": 253,
                   "pattern": "^[a-z0-9.-]+$"
                 }
+              },
+              "stepUpForm": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "http",
+                  "tool"
+                ]
               }
             },
             "required": [
@@ -43981,6 +43989,14 @@
                   "maxLength": 253,
                   "pattern": "^[a-z0-9.-]+$"
                 }
+              },
+              "stepUpForm": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "http",
+                  "tool"
+                ]
               }
             },
             "required": [
@@ -45125,6 +45141,14 @@
                   "maxLength": 253,
                   "pattern": "^[a-z0-9.-]+$"
                 }
+              },
+              "stepUpForm": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "http",
+                  "tool"
+                ]
               }
             }
           },

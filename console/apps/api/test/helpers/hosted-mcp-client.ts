@@ -40,18 +40,32 @@ export interface HostedClientProfile {
   readsSecuritySchemes: boolean;
   /** Declares the elicitation capability (2026-07-28 only: answers a run's question in its own form). */
   elicitation: boolean;
+  /**
+   * Its redirect URI is ChatGPT's (`chatgpt.com`, the one vendor host in these
+   * profiles: the integration under test, #531), so the console answers its
+   * step-up with a tool error carrying `_meta["mcp/www_authenticate"]`.
+   */
+  chatGptRedirect: boolean;
 }
 
 const run = randomUUID().slice(0, 6);
 
-/** The five profiles. Hosts are placeholders (`*.example.test`), never a vendor's. */
+/**
+ * The five profiles. Hosts are placeholders (`*.example.test`), never a
+ * vendor's; the one exception is `tool-level-auth`'s redirect URI on
+ * `chatgpt.com` (`CHATGPT_REDIRECT_URI`), which makes the console treat it as
+ * ChatGPT (#531).
+ */
 export const HOSTED_CLIENT_PROFILES: readonly HostedClientProfile[] = [
-  { name: 'hosted-cimd', imitates: 'a hosted assistant with a client metadata document', registration: 'cimd', redirect: 'fixed', protocol: '2025-11-25', host: `assistant-a-${run}.example.test`, appendsOfflineAccess: true, readsSecuritySchemes: false, elicitation: false },
-  { name: 'hosted-dcr', imitates: 'a hosted assistant that registers itself on every connection', registration: 'dcr', redirect: 'fixed', protocol: '2025-06-18', host: `assistant-b-${run}.example.test`, appendsOfflineAccess: false, readsSecuritySchemes: false, elicitation: false },
-  { name: 'native-loopback', imitates: 'a terminal client signing in through a loopback page', registration: 'cimd', redirect: 'loopback', protocol: '2025-11-25', host: `assistant-c-${run}.example.test`, appendsOfflineAccess: true, readsSecuritySchemes: false, elicitation: false },
-  { name: 'stateless', imitates: 'a client on the stateless 2026-07-28 revision with forms', registration: 'cimd', redirect: 'fixed', protocol: '2026-07-28', host: `assistant-d-${run}.example.test`, appendsOfflineAccess: true, readsSecuritySchemes: false, elicitation: true },
-  { name: 'tool-level-auth', imitates: 'a hosted assistant that reads per-tool securitySchemes', registration: 'predefined', redirect: 'fixed', protocol: '2025-06-18', host: `assistant-e-${run}.example.test`, appendsOfflineAccess: false, readsSecuritySchemes: true, elicitation: false },
+  { name: 'hosted-cimd', imitates: 'a hosted assistant with a client metadata document', registration: 'cimd', redirect: 'fixed', protocol: '2025-11-25', host: `assistant-a-${run}.example.test`, appendsOfflineAccess: true, readsSecuritySchemes: false, elicitation: false, chatGptRedirect: false },
+  { name: 'hosted-dcr', imitates: 'a hosted assistant that registers itself on every connection', registration: 'dcr', redirect: 'fixed', protocol: '2025-06-18', host: `assistant-b-${run}.example.test`, appendsOfflineAccess: false, readsSecuritySchemes: false, elicitation: false, chatGptRedirect: false },
+  { name: 'native-loopback', imitates: 'a terminal client signing in through a loopback page', registration: 'cimd', redirect: 'loopback', protocol: '2025-11-25', host: `assistant-c-${run}.example.test`, appendsOfflineAccess: true, readsSecuritySchemes: false, elicitation: false, chatGptRedirect: false },
+  { name: 'stateless', imitates: 'a client on the stateless 2026-07-28 revision with forms', registration: 'cimd', redirect: 'fixed', protocol: '2026-07-28', host: `assistant-d-${run}.example.test`, appendsOfflineAccess: true, readsSecuritySchemes: false, elicitation: true, chatGptRedirect: false },
+  { name: 'tool-level-auth', imitates: 'a hosted assistant on ChatGPT\'s redirect URI that reads per-tool securitySchemes', registration: 'predefined', redirect: 'fixed', protocol: '2025-06-18', host: `assistant-e-${run}.example.test`, appendsOfflineAccess: false, readsSecuritySchemes: true, elicitation: false, chatGptRedirect: true },
 ];
+
+/** ChatGPT's OAuth redirect URI, as its connector documentation gives it: the predefined client of `tool-level-auth` registers it. */
+export const CHATGPT_REDIRECT_URI = 'https://chatgpt.com/connector_platform_oauth_redirect';
 
 /** The `_meta` keys of 2026-07-28 (mirrors `META` in src/mcp/mcp.protocol.ts, read from there by the spec). */
 export interface StatelessMetaKeys {

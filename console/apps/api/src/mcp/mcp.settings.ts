@@ -4,6 +4,16 @@ import { z } from 'zod';
 /** The deployment's ceilings of the MCP rate limits: an administrator may set a limit up to these (#465). */
 export const MCP_RATE_CEILINGS = { rateLimitPerCredential: 6000, rateLimitWritesPerApp: 600, rateLimitUnauthenticated: 600, rateLimitPerUser: 20_000 } as const;
 
+/**
+ * How a step-up reaches an app signed in with OAuth (#531): `http` is the
+ * `403 insufficient_scope` with `WWW-Authenticate`; `tool` is a tool error
+ * result carrying the same challenge in `_meta["mcp/www_authenticate"]`
+ * (ChatGPT's documented form); `auto` sends `tool` to ChatGPT and `http` to
+ * every other app.
+ */
+export const STEP_UP_FORMS = ['auto', 'http', 'tool'] as const;
+export type StepUpForm = (typeof STEP_UP_FORMS)[number];
+
 /** The `mcp` namespace of the system settings document: how the console's MCP server behaves for every user. */
 export const mcpSettingsSchema = z.object({
   /**
@@ -49,6 +59,14 @@ export const mcpSettingsSchema = z.object({
    * Ships empty: the owner adds their bank and payment providers.
    */
   sensitiveHosts: z.array(z.string().trim().toLowerCase().min(1).max(253).regex(/^[a-z0-9.-]+$/, 'A host name, such as bank.example')).max(200).optional(),
+  /**
+   * How a step-up is sent to an app signed in with OAuth (#531): `auto`
+   * (default) answers ChatGPT with a tool error carrying
+   * `_meta["mcp/www_authenticate"]` and every other app with HTTP `403`;
+   * `http` sends the `403` to every app; `tool` sends the tool error to every
+   * app. Personal access tokens and sessions never step up.
+   */
+  stepUpForm: z.enum(STEP_UP_FORMS).optional(),
 });
 export type McpSettings = z.infer<typeof mcpSettingsSchema>;
 export const mcpSettingsPatchSchema = mcpSettingsSchema.partial();
@@ -65,6 +83,7 @@ export const MCP_DEFAULT_SETTINGS = {
   rateLimitUnauthenticated: 30,
   rateLimitPerUser: 600,
   sensitiveHosts: [] as string[],
+  stepUpForm: 'auto' as StepUpForm,
 } satisfies Required<McpSettings>;
 
 /** The `mcp` namespace with every field filled (a field stored before it existed reads its default). */
@@ -86,7 +105,7 @@ export function resolveMcpSettings(v: Partial<McpSettings> | null | undefined): 
 export const MCP_SYSTEM_SETTINGS = {
   key: 'mcp',
   description:
-    "MCP server: whether a run's question is asked through the AI app's own form (elicitation), whether OAuth apps are shown the tools they need extra permission for, the ceilings of every connected AI app's limits, the kill switches of external AI apps and of personal access tokens over MCP, the rate limits of /api/mcp and the hosts whose pages need the user's approval before an AI app acts on them.",
+    "MCP server: whether a run's question is asked through the AI app's own form (elicitation), whether OAuth apps are shown the tools they need extra permission for, the ceilings of every connected AI app's limits, the kill switches of external AI apps and of personal access tokens over MCP, the rate limits of /api/mcp, the hosts whose pages need the user's approval before an AI app acts on them, and how a step-up is sent (HTTP 403 or a tool error for ChatGPT).",
   storedSchema: mcpSettingsSchema,
   patchSchema: mcpSettingsPatchSchema,
   putSchema: mcpSettingsSchema,

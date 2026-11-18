@@ -8715,6 +8715,8 @@ export interface components {
                 rateLimitUnauthenticated?: number;
                 rateLimitPerUser?: number;
                 sensitiveHosts?: string[];
+                /** @enum {string} */
+                stepUpForm?: "auto" | "http" | "tool";
             };
             notes: {
                 archiveAfterDays: number;
@@ -8943,6 +8945,8 @@ export interface components {
                 rateLimitUnauthenticated?: number;
                 rateLimitPerUser?: number;
                 sensitiveHosts?: string[];
+                /** @enum {string} */
+                stepUpForm?: "auto" | "http" | "tool";
             };
             notes?: {
                 archiveAfterDays: number;
@@ -9178,6 +9182,8 @@ export interface components {
                 rateLimitUnauthenticated?: number;
                 rateLimitPerUser?: number;
                 sensitiveHosts?: string[];
+                /** @enum {string} */
+                stepUpForm?: "auto" | "http" | "tool";
             };
             notes?: {
                 archiveAfterDays?: number;

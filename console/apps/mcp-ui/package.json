@@ -1,6 +1,6 @@
 {
   "name": "mcp-ui",
-  "version": "1.54.1",
+  "version": "1.55.0",
   "private": true,
   "description": "The console's MCP Apps widgets (the live run card, the question card and the tasks card): one self-contained HTML file each, served by the API as ui:// resources.",
   "type": "module",

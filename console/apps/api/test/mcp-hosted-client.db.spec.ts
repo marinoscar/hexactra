@@ -7,10 +7,11 @@
 //   hosted-dcr        Dynamic Client Registration on every connection, 2025-06-18
 //   native-loopback   CIMD, loopback redirect on a random port (127.0.0.1, then localhost), 2025-11-25
 //   stateless         CIMD, 2026-07-28: no initialize, server/discover, Mcp-Method/Mcp-Name, elicitation
-//   tool-level-auth   a predefined client that reads per-tool securitySchemes, 2025-06-18
+//   tool-level-auth   a predefined client that reads per-tool securitySchemes, 2025-06-18; acts as ChatGPT
+//                     (redirect URI on chatgpt.com): its step-up is a tool error with _meta["mcp/www_authenticate"] (#531)
 //
 // Every profile runs the same eight-step journey:
-//   1 the 401 and both discovery documents   5 browser_open: 403 step-up, re-authorize, the same call works
+//   1 the 401 and both discovery documents   5 browser_open: step-up (403, or ChatGPT's tool error), re-authorize, the same call works
 //   2 authorize, consent, code exchange       6 the access token expires (faked clock): 401, refresh, continue;
 //   3 tools/list                                a replayed refresh token past the grace window revokes the grant
 //   4 a run with a question and a screenshot  7 disconnect in the console: 401 with the challenge
@@ -38,7 +39,7 @@ import { MCP_TOOLS } from '../src/mcp/mcp.tools';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { QuestionsService } from '../src/questions/questions.service';
 import { TasksService } from '../src/tasks/tasks.service';
-import { HOSTED_CLIENT_PROFILES, HostedMcpClient, StubCimdTransport, parseChallenge, type Approver, type HostedClientProfile, type McpAnswer } from './helpers/hosted-mcp-client';
+import { CHATGPT_REDIRECT_URI, HOSTED_CLIENT_PROFILES, HostedMcpClient, StubCimdTransport, parseChallenge, type Approver, type HostedClientProfile, type McpAnswer } from './helpers/hosted-mcp-client';
 
 /** What the issue asks of every OAuth endpoint in the test. */
 const OAUTH_BUDGET_MS = 2_000;
@@ -97,7 +98,8 @@ beforeAll(async () => {
   fetcher.resolver = { resolveAll: async () => [{ address: '93.184.216.34', family: 4 }] };
 
   const tla = HOSTED_CLIENT_PROFILES.find((p) => p.registration === 'predefined')!;
-  predefined = await createOAuthTestClient(prisma as never, { name: 'Scripted tool-level-auth', redirectUris: [`https://${tla.host}/oauth/callback`], host: tla.host, tokenEndpointAuthMethod: 'none' });
+  // Its redirect URI is ChatGPT's (#531): the console's ChatGPT detection reads the client's redirect URI hosts.
+  predefined = await createOAuthTestClient(prisma as never, { name: 'Scripted tool-level-auth', redirectUris: [tla.chatGptRedirect ? CHATGPT_REDIRECT_URI : `https://${tla.host}/oauth/callback`], host: tla.host, tokenEndpointAuthMethod: 'none' });
   await setOAuthSettings({
     enabled: true,
     allowedClientHosts: HOSTED_CLIENT_PROFILES.map((p) => p.host),
@@ -280,17 +282,36 @@ async function delegate(client: HostedMcpClient) {
 async function stepUp(client: HostedMcpClient, granted: string[]) {
   const goal = `Open a page (${client.profile.name}, ${stamp})`;
   if (client.profile.readsSecuritySchemes) {
-    // It reads what the tool needs before calling it: not granted yet. It still calls once: the HTTP 403 is
-    // the signal the console sends (E33.2), and its challenge names the scopes to ask for.
+    // It reads what the tool needs before calling it: not granted yet. It still calls once: the refusal (for
+    // ChatGPT a tool error with _meta["mcp/www_authenticate"], #531) carries the challenge naming the scopes to ask for.
     const listed = ok(await client.rpc('tools/list')) as unknown as { tools: Array<{ name: string; securitySchemes: Array<{ type: string; scopes: string[] }> }> };
     const schemes = listed.tools.find((t) => t.name === 'browser_open')!.securitySchemes;
     expect(schemes).toEqual([{ type: 'oauth2', scopes: ['browser:drive'] }]);
     expect(schemes[0]!.scopes.every((s) => granted.includes(s))).toBe(false);
   }
   const refused = await client.callTool('browser_open', { goal });
-  expect(refused.status).toBe(403);
-  const challenge = parseChallenge(refused.headers['www-authenticate']);
-  expect(challenge).toMatchObject({ error: 'insufficient_scope', resource_metadata: `${appUrl}/.well-known/oauth-protected-resource/api/mcp` });
+  let challengeValue: unknown;
+  if (client.profile.chatGptRedirect) {
+    // ChatGPT (#531): a 200 with a tool error result; the challenge is in _meta["mcp/www_authenticate"], not a header.
+    expect(refused.status).toBe(200);
+    expect(refused.headers['www-authenticate']).toBeUndefined();
+    const result = refused.json.result as Result & { _meta?: Record<string, unknown> };
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+    expect(result.content).toEqual([{ type: 'text', text: 'This tool needs permission the user has not given this app yet (browser:drive). Ask the user to allow it.' }]);
+    const values = result._meta?.['mcp/www_authenticate'] as string[];
+    expect(values).toHaveLength(1);
+    expect(values[0]).toMatch(/^Bearer /);
+    challengeValue = values[0];
+  } else {
+    expect(refused.status).toBe(403);
+    expect(refused.json).toMatchObject({ error: 'insufficient_scope' });
+    challengeValue = refused.headers['www-authenticate'];
+  }
+  const challenge = parseChallenge(challengeValue);
+  expect(challenge).toMatchObject({ error: 'insufficient_scope', error_description: expect.any(String), resource_metadata: `${appUrl}/.well-known/oauth-protected-resource/api/mcp` });
+  // The refusal is recorded the same way in both forms.
+  expect(await prisma.mcpActivity.count({ where: { userId, event: 'step_up', outcome: 'refused', tool: 'browser_open', createdAt: { gte: suiteStart } } })).toBeGreaterThanOrEqual(1);
   const asked = grantedOf(challenge.scope!);
   expect(asked).toEqual(expect.arrayContaining([...granted.filter((s) => s !== 'offline_access'), 'browser:drive']));
   expect(await prisma.run.count({ where: { userId, goal } })).toBe(0);
@@ -383,7 +404,7 @@ describe.each(HOSTED_CLIENT_PROFILES.map((p) => [p.name, p] as [string, HostedCl
     expect(consent.client.host).toBe(profile.host);
     // The consent page names where the code goes: the client's host, or the loopback address and port it sent.
     expect(consent.redirectHost).toBe(new URL(client.redirectsSent[0]!).host);
-    if (profile.redirect === 'fixed') expect(consent.redirectHost).toBe(profile.host);
+    if (profile.redirect === 'fixed') expect(consent.redirectHost).toBe(profile.chatGptRedirect ? 'chatgpt.com' : profile.host);
     expect(consent.isLoopbackRedirect).toBe(profile.redirect === 'loopback');
     expect(tokens.access_token).toMatch(/^oat_/);
     expect(tokens.refresh_token).toMatch(/^ort_/);

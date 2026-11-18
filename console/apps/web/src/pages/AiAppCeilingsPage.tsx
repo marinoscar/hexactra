@@ -1,5 +1,5 @@
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
-import { Alert, Box, Button, Chip, CircularProgress, Divider, FormControlLabel, Paper, Stack, Switch, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, CircularProgress, Divider, FormControlLabel, MenuItem, Paper, Stack, Switch, TextField, Typography } from '@mui/material';
 import { isPlatformApiError, usePlatformHost } from '@marinoscar/platform-web/core';
 import { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -38,15 +38,24 @@ const BEHAVIOUR = [
 ] as const;
 type SwitchKey = (typeof SWITCHES)[number]['key'] | (typeof BEHAVIOUR)[number]['key'];
 
+/** `mcp.stepUpForm` (#531): how an app is asked to get more permission. */
+export const STEP_UP_FORM_OPTIONS = [
+  { value: 'auto', label: 'Automatic (recommended)', help: 'ChatGPT gets a tool error carrying the sign-in challenge; every other app gets HTTP 403.' },
+  { value: 'http', label: 'HTTP 403 for every app', help: 'The 403 with WWW-Authenticate, for every app, ChatGPT included.' },
+  { value: 'tool', label: 'Tool error for every app', help: 'A tool error carrying the challenge in _meta["mcp/www_authenticate"], for every app signed in with OAuth.' },
+] as const;
+type StepUpForm = (typeof STEP_UP_FORM_OPTIONS)[number]['value'];
+
 interface McpSettingsDoc {
   version: number;
-  mcp?: Partial<Record<NumberKey, number> & Record<SwitchKey, boolean>> & { sensitiveHosts?: string[] } & Record<string, unknown>;
+  mcp?: Partial<Record<NumberKey, number> & Record<SwitchKey, boolean>> & { sensitiveHosts?: string[]; stepUpForm?: StepUpForm } & Record<string, unknown>;
 }
 
 interface Draft {
   numbers: Record<NumberKey, string>;
   switches: Record<SwitchKey, boolean>;
   sensitiveHosts: string;
+  stepUpForm: StepUpForm;
 }
 
 /** Every user's connected app (`GET /api/admin/connected-apps`). */
@@ -80,6 +89,7 @@ function toDraft(doc: McpSettingsDoc): Draft {
     numbers: Object.fromEntries(APP_CEILINGS.map((c) => [c.key, String((m[c.key] as number | undefined) ?? c.fallback)])) as Record<NumberKey, string>,
     switches: Object.fromEntries([...SWITCHES, ...BEHAVIOUR].map((s) => [s.key, (m[s.key] as boolean | undefined) ?? s.fallback])) as Record<SwitchKey, boolean>,
     sensitiveHosts: (m.sensitiveHosts ?? []).join('\n'),
+    stepUpForm: STEP_UP_FORM_OPTIONS.some((o) => o.value === m.stepUpForm) ? (m.stepUpForm as StepUpForm) : 'auto',
   };
 }
 
@@ -213,7 +223,7 @@ export function AiAppCeilingsPage() {
     setSaved(false);
     setError(null);
     try {
-      const value = { ...Object.fromEntries(APP_CEILINGS.map((c) => [c.key, Number(draft.numbers[c.key])])), ...draft.switches, sensitiveHosts: hosts.hosts };
+      const value = { ...Object.fromEntries(APP_CEILINGS.map((c) => [c.key, Number(draft.numbers[c.key])])), ...draft.switches, sensitiveHosts: hosts.hosts, stepUpForm: draft.stepUpForm };
       const doc = await api.patch<McpSettingsDoc>('/system-settings', { mcp: value }, { ifMatch: String(version) });
       setVersion(doc.version);
       setSaved(true);
@@ -293,6 +303,23 @@ export function AiAppCeilingsPage() {
               How apps work
             </Typography>
             <Stack spacing={1.5}>{BEHAVIOUR.map(switchRow)}</Stack>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label="How an app asks for more permission"
+              value={draft.stepUpForm}
+              disabled={!canWrite}
+              onChange={(e) => edit({ stepUpForm: e.target.value as StepUpForm })}
+              helperText={STEP_UP_FORM_OPTIONS.find((o) => o.value === draft.stepUpForm)?.help}
+              sx={{ mt: 2 }}
+            >
+              {STEP_UP_FORM_OPTIONS.map((o) => (
+                <MenuItem key={o.value} value={o.value}>
+                  {o.label}
+                </MenuItem>
+              ))}
+            </TextField>
             <Divider sx={{ my: 2 }} />
             <TextField
               fullWidth
