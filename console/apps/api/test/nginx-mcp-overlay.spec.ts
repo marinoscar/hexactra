@@ -62,9 +62,15 @@ describe('the nginx overlay of /api/mcp (#465)', () => {
         }
       };
       walk(dir);
+      // A non-root runner cannot create nginx's default temp directories (/var/lib/nginx/*):
+      // point them into the scratch directory, as `nginx -t` creates them while testing.
+      const main = join(dir, 'nginx.conf');
+      const temps = ['client_body', 'proxy', 'fastcgi', 'uwsgi', 'scgi'].map((k) => `${k}_temp_path ${dir}/${k}_temp;`).join(' ');
+      writeFileSync(main, readFileSync(main, 'utf8').replace(/\bhttp\s*\{/, (m) => `${m} ${temps}`));
       const r = spawnSync('nginx', ['-t', '-p', dir, '-c', join(dir, 'nginx.conf'), '-e', join(dir, 'error.log')], { encoding: 'utf8' });
-      expect({ status: r.status, out: r.stderr }).toMatchObject({ status: 0 });
+      // stderr first, so a failure shows nginx's own message.
       expect(r.stderr).toMatch(/syntax is ok/);
+      expect(r.status).toBe(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
