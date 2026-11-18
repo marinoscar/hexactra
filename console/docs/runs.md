@@ -148,6 +148,39 @@ Each user has a retention rule; a nightly job deletes the finished runs outside 
 
 The nightly job (`browser.runs.retention`, 03:20 server time) reads each user's rule, applies the limit and deletes through `RunDeleteService.deleteByIds` with `mode: 'retention'`, at most 20,000 runs per user per night.
 
+## What is masked
+
+A run's trace, its JSON export, its PDF report and the extension's screenshot masking hide sensitive text with one pattern table, so they cannot disagree. The table is `console/packages/shared/sensitive-patterns.js` (`@app/shared/sensitive-patterns`, version `SENSITIVE_PATTERNS_VERSION`); the API applies it with `maskSensitive(text)` and `maskValue(value)` (`apps/api/src/tasks/mask.ts`), and the extension reads a generated copy, `packages/contracts/sensitive-patterns.json` at the repository root (`node scripts/gen-sensitive-patterns.mjs` writes it; CI fails when it is stale). Masking hides text in what is shown and exported; it does not change what the model sees during a run.
+
+The patterns are applied in this order, most specific first. A pattern with a check masks a match only when the checksum passes; a number that fails it can still be masked by a later pattern (a 9-digit number with no banking word nearby is masked by `digits`).
+
+<!-- masked-patterns:start -->
+| Order | Pattern | What matches | Check | Shown as |
+|---|---|---|---|---|
+| 1 | `token` | The console's and the fabric's credentials (`pat_`, `oat_`, `hxs_`, …), `Bearer …` values, JWTs, and `sk-…`, `key-…` style API keys | — | `[redacted token]` |
+| 2 | `urlSecret` | The query and fragment of an `http(s)` URL (they can carry tokens); origin and path stay | — | `https://example.test/path (query removed)` |
+| 3 | `email` | An email address | — | `o•••@example.test` |
+| 4 | `iban` | An IBAN: country code, two check digits, 11 to 30 letters and digits (grouped by four or not), passing the mod-97 check | `mod97` | `GB•• •••• 3456` |
+| 5 | `card` | A payment card number: 13 to 19 digits, plain or in groups split by spaces or dashes, passing the Luhn check | `luhn` | `•••• 4242` |
+| 6 | `ssn` | A US Social Security number `ddd-dd-dddd`, and 9 digits after the words SSN or Social Security | — | `•••-••-6789` |
+| 7 | `routing` | A US routing number: 9 digits passing the ABA checksum, after the words routing, ABA or RTN | `aba` | `•••••6789` |
+| 8 | `account` | An account number: 6 to 17 digits after the words account, acct, checking, savings or IBAN, or after a "#" | — | `••••0659` |
+| 9 | `phone` | A phone number: US forms (`(555) 123-4567`, `555-123-4567`, `+1 555 123 4567`) and international forms with a leading `+` | — | `•••-•••-6020` |
+| 10 | `digits` | Any other run of 9 or more digits | — | `••••1234` |
+<!-- masked-patterns:end -->
+
+- Text a page already shortened, such as "checking ending 0659" or "phone ending 6020", is left as it is.
+- Dates, times, prices, step numbers, CSS selectors and ids, UUIDs and run ids, and pixel sizes are not masked.
+- **Names, addresses, balances and amounts are not patterns** and are not masked. Reports therefore say "masked", never "anonymised".
+- Masking is deterministic and idempotent: masking masked text changes nothing.
+
+The table above is generated from the pattern table; after changing a pattern (and bumping `SENSITIVE_PATTERNS_VERSION`), rewrite it and the extension's copy:
+
+```bash
+cd console/apps/api && UPDATE_MASK_DOCS=1 npx jest --config ./test/jest.config.js mask
+node scripts/gen-sensitive-patterns.mjs   # from the repository root
+```
+
 ## Sample data for development
 
 ```bash

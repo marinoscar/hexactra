@@ -2,7 +2,7 @@
   "name": "@app/shared",
   "version": "1.56.0",
   "private": true,
-  "description": "The app's identity and slice manifest: the files every runtime reads its name, repository, CLI name, colours and enabled platform slices from, and the answer rules of a typed question (question-rules) the web form, the MCP Apps widgets and the API share.",
+  "description": "The app's identity and slice manifest: the files every runtime reads its name, repository, CLI name, colours and enabled platform slices from, and the answer rules of a typed question (question-rules) the web form, the MCP Apps widgets and the API share, and the sensitive-text patterns (sensitive-patterns) the run trace, its exports and the extension mask with.",
   "type": "commonjs",
   "main": "./index.js",
   "types": "./index.d.ts",
@@ -17,6 +17,10 @@
     "./question-rules": {
       "types": "./question-rules.d.ts",
       "default": "./question-rules.js"
+    },
+    "./sensitive-patterns": {
+      "types": "./sensitive-patterns.d.ts",
+      "default": "./sensitive-patterns.js"
     }
   },
   "files": [
@@ -26,6 +30,8 @@
     "slices.json",
     "capabilities.json",
     "question-rules.js",
-    "question-rules.d.ts"
+    "question-rules.d.ts",
+    "sensitive-patterns.js",
+    "sensitive-patterns.d.ts"
   ]
 }

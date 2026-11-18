@@ -81,6 +81,8 @@ jobs:
           node-version: '22'
       - run: node --test scripts/crx3.test.mjs
       - run: node scripts/extension-id.mjs --check
+      # The extension's copy of the console's sensitive-text patterns is generated, never hand-copied (#538).
+      - run: node scripts/gen-sensitive-patterns.mjs --check
 
   agent-sync:
     name: Agent instructions sync
