@@ -110,6 +110,7 @@ impl Modify for Bearer {
         super::takeover::release,
         super::takeover::current,
     ),
+    components(schemas(ScreenshotResult)),
     tags(
         (name = "sessions", description = "Sessions, actions and operations"),
         (name = "hosts", description = "Registered hosts"),

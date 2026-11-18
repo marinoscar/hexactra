@@ -73,6 +73,7 @@ async fn shoot(url: &str, session: uuid::Uuid, inline: bool) -> OperationView {
         .json(&ActionRequest {
             action: RemoteAction::Screenshot {
                 marks: false,
+                mask: false,
                 tab_id: None,
             },
             timeout_ms: Some(5_000),

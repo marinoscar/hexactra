@@ -711,6 +711,7 @@ mod tests {
     fn shot() -> RemoteAction {
         RemoteAction::Screenshot {
             marks: false,
+            mask: false,
             tab_id: None,
         }
     }
@@ -738,6 +739,7 @@ mod tests {
                 RemoteAction::Tabs,
                 RemoteAction::Screenshot {
                     marks: true,
+                    mask: false,
                     tab_id: None,
                 },
             ] {
@@ -753,7 +755,14 @@ mod tests {
     async fn no_screenshot_is_taken_while_a_secret_is_asked_for() {
         let (s, sess) = setup();
         let (h, _) = s.create_handoff(sess, req(HandoffInput::Secret)).unwrap();
-        for looks in [shot(), RemoteAction::DesktopScreenshot] {
+        // A masked screenshot (#539) is refused too: masking is not a reason
+        // to capture while the person types a secret.
+        let masked = RemoteAction::Screenshot {
+            marks: false,
+            mask: true,
+            tab_id: None,
+        };
+        for looks in [shot(), masked, RemoteAction::DesktopScreenshot] {
             assert!(matches!(
                 s.enqueue(sess, looks, Duration::from_secs(1)),
                 Err(StoreError::HandoffPending(id)) if id == h.id

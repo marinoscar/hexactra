@@ -857,6 +857,8 @@ impl RuntimeStore {
         // desktop: that is when they most need to see it (#525). Not while a
         // secret is being asked for: what they type must not be captured.
         // A marked screenshot draws on the page for a moment, so it is not one of them.
+        // `mask` (#539) does not change this: a masked plain screenshot is
+        // still a look, and the secret-handoff refusal applies to it too.
         let looks_only = matches!(
             action,
             RemoteAction::Screenshot { marks: false, .. } | RemoteAction::DesktopScreenshot
