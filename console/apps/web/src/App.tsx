@@ -53,6 +53,7 @@ import { FabricConnectionPage } from './pages/FabricConnectionPage';
 import { DesktopPage } from './pages/DesktopPage';
 import { FleetPage } from './pages/FleetPage';
 import { HomePage } from './pages/HomePage';
+import { ChatPage } from './pages/ChatPage';
 import { InboxPage } from './pages/InboxPage';
 import { QuestionPage } from './pages/QuestionPage';
 import { RunDetailPage } from './pages/RunDetailPage';
@@ -147,7 +148,7 @@ function AppShell() {
   return (
     <ShellLayout
       navigation={NAVIGATION}
-      // The phone bar: Home, Inbox, Tasks, Runs; the rest is in the user menu.
+      // The phone bar: Home, Chat, Inbox and More (Tasks, Runs); the rest is in the user menu.
       bottomNav={<ShellBottomNav navigation={PHONE_NAVIGATION} />}
       brand={<BrandLogo label={APP_NAME} />}
       appBar={
@@ -229,6 +230,10 @@ export function AppRoutes() {
           <Route path="tasks/new" element={<Gate permission="tasks:write"><TaskCreatePage /></Gate>} />
           <Route path="tasks/:id/edit" element={<Gate permission="tasks:write"><TaskEditPage /></Gate>} />
           <Route path="tasks/:id" element={<Gate permission="tasks:read"><TaskDetailPage /></Gate>} />
+          {/* Chat (#486): the list, the new-chat screen and one thread are one page. */}
+          <Route path="chat" element={<Gate permission="chat:read"><ChatPage /></Gate>} />
+          <Route path="chat/new" element={<Gate permission="chat:write"><ChatPage /></Gate>} />
+          <Route path="chat/:id" element={<Gate permission="chat:read"><ChatPage /></Gate>} />
           <Route path="inbox" element={<Gate permission="runs:read"><InboxPage /></Gate>} />
           <Route path="inbox/q/:id" element={<Gate permission="runs:read"><QuestionPage /></Gate>} />
           <Route path="runs" element={<Gate permission="runs:read"><RunsPage /></Gate>} />

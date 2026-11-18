@@ -13,7 +13,7 @@ import { NAVIGATION, PHONE_NAVIGATION } from '../config/navigation';
 import { BOTTOM_BAR_HEIGHT, aboveBottomBar } from '../ui';
 import { mockViewport } from './matchMedia';
 
-const PERMISSIONS = ['runs:read', 'tasks:read', 'fleet:read', 'system_settings:read'];
+const PERMISSIONS = ['chat:read', 'runs:read', 'tasks:read', 'fleet:read', 'system_settings:read'];
 const question = (id: string) => ({ questionId: id });
 
 let restore: (() => void) | null = null;
@@ -37,9 +37,17 @@ function renderNav(ui: React.ReactElement, inbox: unknown, permissions = PERMISS
 }
 
 describe('phone bottom bar', () => {
-  it('draws Home, Inbox, Tasks, Runs in that order and no "More" tab', async () => {
+  it('draws Home, Chat, Inbox and "More" (Tasks and Runs are under it) (#486)', async () => {
     restore = mockViewport(390);
     renderNav(<ShellBottomNav navigation={PHONE_NAVIGATION} />, []);
+    const tabs = await screen.findAllByRole('button');
+    expect(tabs.map((t) => t.textContent)).toEqual(['Home', 'Chat', 'Inbox', 'More']);
+    expect(screen.getByRole('button', { name: /More destinations/ })).toBeInTheDocument();
+  });
+
+  it('without chat:read keeps the four tabs it had: Home, Inbox, Tasks, Runs, and no "More"', async () => {
+    restore = mockViewport(390);
+    renderNav(<ShellBottomNav navigation={PHONE_NAVIGATION} />, [], PERMISSIONS.filter((p) => p !== 'chat:read'));
     const tabs = await screen.findAllByRole('button');
     expect(tabs.map((t) => t.textContent)).toEqual(['Home', 'Inbox', 'Tasks', 'Runs']);
     expect(screen.queryByRole('button', { name: /More destinations/ })).not.toBeInTheDocument();
