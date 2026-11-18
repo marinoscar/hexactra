@@ -12,6 +12,7 @@ import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import PaidOutlinedIcon from '@mui/icons-material/PaidOutlined';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import SpeedOutlinedIcon from '@mui/icons-material/SpeedOutlined';
 
 import { composeSections } from '../slices/sections';
@@ -93,6 +94,15 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
         description: "The most days any user's finished runs are kept, whatever their own setting says.",
         Icon: AutoDeleteOutlinedIcon,
         path: '/admin/settings/run-history',
+        permission: 'system_settings:read',
+      },
+      // Connected AI apps (#464): the ceilings of every user's per-app limits, the `mcp`
+      // namespace of the system settings document (GET /api/system-settings).
+      {
+        title: 'AI app limits',
+        description: 'The most runs any connected AI app (ChatGPT, Claude, ...) may have at once and start per day.',
+        Icon: SmartToyOutlinedIcon,
+        path: '/admin/settings/ai-app-limits',
         permission: 'system_settings:read',
       },
     ],

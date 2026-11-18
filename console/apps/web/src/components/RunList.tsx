@@ -74,6 +74,7 @@ import {
   type RunListScope,
   type RunView,
 } from './runFilters';
+import { ORIGIN_LABEL, StartedByChip, appDisplayName } from './StartedByChip';
 import { RUN_MENU_LABEL, rowCost, runAgain, runDuration, runMenuActions, triggerWords, type RunMenuAction } from './runRow';
 import { useRunList } from './useRunList';
 
@@ -124,6 +125,9 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
   const canReadTasks = viewer.hasPermission('tasks:read');
   const catalog = usePolicyCatalog({ withTiers: false });
   const scoped = scope?.taskId !== undefined;
+  /** The list of one AI app's runs (its page, #464): no "Started by" filter or column. */
+  const scopedApp = scope?.clientId !== undefined;
+  const canReadApps = viewer.hasPermission('connected_apps:read');
 
   // ---- Filters, in the URL ----
   const [params, setParams] = useSearchParams();
@@ -171,10 +175,26 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
     };
   }, [api, scoped, canReadTasks]);
 
+  // ---- The "Started by" filter's apps (#464) ----
+  const [apps, setApps] = useState<{ clientId: string; displayName: string }[] | null>(null);
+  useEffect(() => {
+    if (scopedApp || !canReadApps) return;
+    let stale = false;
+    api
+      .get<{ clientId: string; displayName: string }[]>('/connected-apps')
+      .then((all) => {
+        if (!stale) setApps(all.map((a) => ({ clientId: a.clientId, displayName: a.displayName })));
+      })
+      .catch(() => undefined);
+    return () => {
+      stale = true;
+    };
+  }, [api, scopedApp, canReadApps]);
+
   // ---- The phone's filter drawer ----
   const [drawer, setDrawer] = useState(false);
   const [draft, setDraft] = useState(filters);
-  const activeCount = activeFilterCount(filters, scoped);
+  const activeCount = activeFilterCount(filters, scoped, scopedApp);
 
   // ---- Selection ----
   const [selectMode, setSelectMode] = useState(false);
@@ -391,7 +411,8 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
             ),
           } satisfies Column<RunListItem>,
         ]),
-    { key: 'trigger', header: 'Trigger', render: triggerWords },
+    ...(scopedApp ? [] : [{ key: 'startedBy', header: 'Started by', render: (r: RunListItem) => <StartedByChip run={r} /> }]),
+    { key: 'trigger', header: 'Trigger', hideBelow: 'lg' as const, render: triggerWords },
     { key: 'steps', header: 'Steps', align: 'right', render: (r) => n(r.stepCount) },
     { key: 'started', header: 'Started', render: (r) => <RelativeTime iso={r.startedAt ?? r.createdAt} /> },
     { key: 'duration', header: 'Duration', render: (r) => runDuration(r, now) ?? '—' },
@@ -447,6 +468,11 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
             {r.goal}
           </Typography>
           {activityLine(r)}
+          {!scopedApp && (r.client || (r.origin && r.origin !== 'web')) && (
+            <Box sx={{ mt: 0.5 }}>
+              <StartedByChip run={r} />
+            </Box>
+          )}
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, overflowWrap: 'anywhere' }}>
             {meta}
             {cost && (
@@ -503,6 +529,15 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
       ? [{ key: 'stop', label: `Stopped by: ${filters.stopReason.map((r) => STOP_FILTER_LABEL[r]).join(', ')}`, clear: { ...filters, stopReason: [] } }]
       : []),
     ...(filters.policyId ? [{ key: 'policy', label: `Policy: ${catalog.byId(filters.policyId)?.name ?? filters.policyId}`, clear: { ...filters, policyId: null } }] : []),
+    ...(!scopedApp && (filters.origin.length || filters.clientId)
+      ? [
+          {
+            key: 'startedBy',
+            label: `Started by: ${filters.clientId ? (apps?.find((a) => a.clientId === filters.clientId)?.displayName ?? appDisplayName(items.find((r) => r.client?.id === filters.clientId)?.client?.name ?? 'one AI app')) : filters.origin.map((o) => (o === 'mcp' ? 'Any AI app' : ORIGIN_LABEL[o])).join(', ')}`,
+            clear: { ...filters, origin: [], clientId: null },
+          },
+        ]
+      : []),
   ];
   const clearAll = () => {
     setSearch('');
@@ -511,7 +546,7 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
   const unfiltered = chips.length === 0 && filters.view === 'all';
 
   const controls = (value: RunFilters, onChange: (next: RunFilters) => void, layout: 'row' | 'column') => (
-    <RunFilterControls value={value} onChange={onChange} scoped={scoped} tasks={canReadTasks ? (tasks ?? []) : null} policies={canReadPolicies ? catalog.policies : null} timeZone={timeZone} layout={layout} />
+    <RunFilterControls value={value} onChange={onChange} scoped={scoped} scopedApp={scopedApp} apps={canReadApps ? apps : null} tasks={canReadTasks ? (tasks ?? []) : null} policies={canReadPolicies ? catalog.policies : null} timeZone={timeZone} layout={layout} />
   );
   const total = viewCount(counts, filters.view);
   const countsCost = counts ? formatCost(counts.costUsd, counts.costKnown) : null;

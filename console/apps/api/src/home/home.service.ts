@@ -74,6 +74,10 @@ export interface HomeRecentRun {
   goal: string;
   status: string;
   trigger: string;
+  /** Where the run was started from (#464). */
+  origin: string;
+  /** The AI app that started it; null for any other caller. */
+  client: { id: string | null; name: string | null; verified: boolean } | null;
   createdAt: Date;
   startedAt: Date | null;
   finishedAt: Date | null;
@@ -275,9 +279,10 @@ export class HomeService {
 
   /** The finished runs, the most recently finished first. */
   private async recentRuns(userId: string): Promise<HomeRecentRun[]> {
-    const rows = await this.prisma.$queryRaw<(Omit<HomeRecentRun, 'costUsd'> & { costUsd: unknown; modelCalls: number })[]>(Prisma.sql`
+    const rows = await this.prisma.$queryRaw<(Omit<HomeRecentRun, 'costUsd' | 'client'> & { costUsd: unknown; modelCalls: number; clientId: string | null; clientName: string | null })[]>(Prisma.sql`
       SELECT r.id::text AS id, r.task_id::text AS "taskId", t.name AS "taskName", left(r.goal, ${TEXT_MAX}) AS goal,
-             r.status::text AS status, r.trigger::text AS trigger, r.created_at AS "createdAt", r.started_at AS "startedAt",
+             r.status::text AS status, r.trigger::text AS trigger, r.origin::text AS origin,
+             r.client_id::text AS "clientId", r.client_name AS "clientName", r.created_at AS "createdAt", r.started_at AS "startedAt",
              r.finished_at AS "finishedAt", r.step_count AS "stepCount", r.stop_reason::text AS "stopReason",
              r.cost_usd::float8 AS "costUsd", r.cost_known AS "costKnown", r.model_calls AS "modelCalls",
              CASE WHEN r.status = 'failed' THEN left(split_part(r.error, E'\n', 1), ${TEXT_MAX}) END AS error
@@ -286,7 +291,12 @@ export class HomeService {
       WHERE r.user_id = ${userId}::uuid AND r.status IN ('succeeded', 'failed', 'cancelled')
       ORDER BY COALESCE(r.finished_at, r.created_at) DESC, r.id DESC
       LIMIT ${HOME_LIMITS.recentRuns}`);
-    return rows.map(({ modelCalls, costUsd, ...r }) => ({ ...r, error: str(r.error), costUsd: modelCalls > 0 ? round(num(costUsd), 6) : null }));
+    return rows.map(({ modelCalls, costUsd, clientId, clientName, ...r }) => ({
+      ...r,
+      client: clientId || clientName ? { id: clientId, name: clientName, verified: clientId !== null } : null,
+      error: str(r.error),
+      costUsd: modelCalls > 0 ? round(num(costUsd), 6) : null,
+    }));
   }
 
   /** The runs created in the last seven calendar days of `timezone`, per day; a day without runs is a row of zeros. */

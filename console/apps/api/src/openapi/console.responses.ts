@@ -2,6 +2,7 @@
 // so for the generated SDK in packages/sdk). `@ApiDataResponse` wraps each in
 // the platform's `{ data }` envelope. They describe what the services return;
 // the tests in test/sdk.db.spec.ts exercise them through the SDK.
+import { runClientSchema, runOriginSchema } from '../connected-apps/connected-apps.schemas';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
@@ -105,6 +106,8 @@ export const runResponseSchema = z.object({
   conversationId: z.uuid().nullable().describe('The chat that started the run (trigger `chat`); null for every other run'),
   status: runStatus,
   trigger: z.enum(['manual', 'schedule', 'api', 'mcp', 'external', 'chat']),
+  origin: runOriginSchema,
+  client: runClientSchema.nullable(),
   goal: z.string(),
   profile: z.string(),
   hostId: z.uuid().nullable(),
@@ -226,6 +229,7 @@ export const questionResponseSchema = z.object({
   createdAt: iso,
   expiresAt: iso,
   answeredAt: iso.nullable(),
+  client: runClientSchema.nullable().describe('The AI app that asked; null when no app did'),
 });
 export class QuestionResponseDto extends createZodDto(questionResponseSchema) {}
 

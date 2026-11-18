@@ -36,6 +36,8 @@ export function runWhere(filter: RunFilter): Prisma.RunWhereInput {
     ...(filter.q ? { goal: { contains: filter.q, mode: 'insensitive' as const } } : {}),
     ...(stopReasons ? { stopReason: { in: stopReasons } } : {}),
     ...(filter.policyId ? { policyRef: filter.policyId } : {}),
+    ...(filter.origin ? { origin: { in: filter.origin } } : {}),
+    ...(filter.clientId ? { clientId: filter.clientId } : {}),
   };
 }
 

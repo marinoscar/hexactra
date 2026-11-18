@@ -85,7 +85,31 @@ function useHomeSummary() {
 }
 
 /** "What should your agent do?": one field, one button, and the tasks run most recently as chips. */
-function QuickStart({ tasks, inputRef }: { tasks: { id: string; name: string }[]; inputRef: React.RefObject<HTMLInputElement | null> }) {
+/**
+ * Whether the viewer may connect AI apps and has none yet (#464): Home then
+ * links to the "Connect an AI app" guide. False while unknown.
+ */
+function useNoConnectedApps(): boolean {
+  const { api, viewer } = usePlatformHost();
+  const canRead = viewer.hasPermission('connected_apps:read');
+  const [none, setNone] = useState(false);
+  useEffect(() => {
+    if (!canRead) return;
+    let stale = false;
+    api
+      .get<unknown[]>('/connected-apps')
+      .then((apps) => {
+        if (!stale) setNone(Array.isArray(apps) && apps.length === 0);
+      })
+      .catch(() => undefined);
+    return () => {
+      stale = true;
+    };
+  }, [api, canRead]);
+  return none;
+}
+
+function QuickStart({ tasks, inputRef, connectApp = false }: { tasks: { id: string; name: string }[]; inputRef: React.RefObject<HTMLInputElement | null>; connectApp?: boolean }) {
   const { api } = usePlatformHost();
   const navigate = useNavigate();
   const [goal, setGoal] = useState('');
@@ -128,6 +152,11 @@ function QuickStart({ tasks, inputRef }: { tasks: { id: string; name: string }[]
           <Link component={RouterLink} to={NEW_RUN_LINK} underline="hover" variant="body2" sx={{ ml: tasks.length > 0 ? 'auto' : 0, minHeight: { xs: 44, sm: 'auto' }, display: 'inline-flex', alignItems: 'center' }}>
             More options
           </Link>
+          {connectApp && (
+            <Link component={RouterLink} to="/settings/ai-apps/connect" underline="hover" variant="body2" data-testid="home-connect-ai-app" sx={{ minHeight: { xs: 44, sm: 'auto' }, display: 'inline-flex', alignItems: 'center' }}>
+              Use it from ChatGPT or Claude
+            </Link>
+          )}
         </Stack>
       </CardContent>
     </Card>
@@ -146,6 +175,7 @@ export function HomePage() {
   const name = firstName(useOptionalAuth()?.user?.displayName);
   const timeZone = useProfileTimeZone();
   const { summary, error, loadedAt, reload } = useHomeSummary();
+  const noApps = useNoConnectedApps();
   const goalInput = useRef<HTMLInputElement | null>(null);
   const answer = useApiAction('Could not send the answer');
   const [onboarded, setOnboarded] = useState(readOnboarded);
@@ -272,7 +302,7 @@ export function HomePage() {
                 <Box sx={COLUMN}>
                   {canRun && (
                     <Slot order={1}>
-                      <QuickStart tasks={recentTasks(summary)} inputRef={goalInput} />
+                      <QuickStart tasks={recentTasks(summary)} inputRef={goalInput} connectApp={noApps} />
                     </Slot>
                   )}
                   {summary.recentRuns && (

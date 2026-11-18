@@ -2,6 +2,7 @@
 // "Errors"). One place: the tools throw `McpApiError` (built by the
 // dispatcher's in-process REST client) and the dispatcher maps it here.
 // Never a raw REST string, never "Internal Server Error", never a stack.
+import { APP_LIMIT_CODES, appLimitSentence, type AppLimitCode } from '../connected-apps/connected-apps.errors';
 import type { McpToolResult } from './mcp.results';
 
 /** A REST route answered with an error (status 400 and up). */
@@ -100,6 +101,10 @@ export function mapApiError(e: McpApiError, tool: string): McpToolResult {
   const { status, code, requestId } = e;
   const message = e.message.trim();
   const extra = { status, requestId };
+  // A per-app limit (#464): its own sentence (connected-apps.errors.ts), naming where the user changes it.
+  if ((APP_LIMIT_CODES as readonly string[]).includes(code)) {
+    return errorOutcome(generic(message) ? appLimitSentence(code as AppLimitCode, (e.details ?? {}) as never) : message, code, extra);
+  }
   if (status === 400 || status === 422) {
     const issues = issuesOf(e.details);
     const what = issues.length ? issues.map((i) => (i.path ? `${i.path}: ${i.message}` : i.message)).join('; ') : message;

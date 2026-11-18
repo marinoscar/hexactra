@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { ApiTags } from '@nestjs/swagger';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
@@ -7,6 +7,8 @@ import { ApiBody } from '@nestjs/swagger';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+import { ConnectedAppsService } from '../connected-apps/connected-apps.service';
+import { RequestClientService, clientColumns } from '../connected-apps/request-client';
 import { profileNameSchema } from '../fleet/fleet.schemas';
 import { PoliciesService } from '../policies/policies.service';
 import { policyRefSchema } from '../policies/policies.schemas';
@@ -46,6 +48,8 @@ export class RunsStartController {
     private readonly prisma: PrismaService,
     private readonly jobs: JobsService,
     private readonly policies: PoliciesService,
+    private readonly clients: RequestClientService,
+    private readonly apps: ConnectedAppsService,
   ) {}
 
   /** Run a saved task now. */
@@ -53,12 +57,16 @@ export class RunsStartController {
   @ApiDataResponse(RunResponseDto, { status: 201 })
   @Auth({ permissions: ['runs:write'] })
   @ApiBody({ type: RunTaskDto, required: false })
-  async runTask(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string, @Body() rawBody?: unknown) {
+  async runTask(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string, @Req() req: object, @Body() rawBody?: unknown) {
     // The body is optional (it was empty before policies): parsed here, not by the global pipe.
     const parsed = runTaskSchema.safeParse(rawBody ?? {});
     if (!parsed.success) throw new BadRequestException({ code: 'VALIDATION_ERROR', message: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') });
     const task = await this.tasks.getTask(user.id, id);
     await this.policies.assertAssignable(user.id, parsed.data.policyId);
+    // Who is starting it (#464), and the limits of the AI app behind the request: a refusal writes nothing.
+    const client = await this.clients.resolve(req);
+    const decision = await this.apps.checkStart(user.id, client, { kind: 'run', policyId: parsed.data.policyId, taskPolicyRef: task.policyRef, allowedDomains: task.allowedDomains });
+    const policyId = parsed.data.policyId ?? decision.policyOverride;
     const run = await this.prisma.forUser({ userId: user.id }).run.create({
       data: {
         userId: user.id,
@@ -68,11 +76,14 @@ export class RunsStartController {
         hostId: task.hostId,
         hostFallback: task.hostFallback,
         trigger: 'manual',
-        ...(parsed.data.policyId ? { policyRef: parsed.data.policyId, policySource: 'run' as const } : {}),
+        ...clientColumns(client),
+        ...(decision.appLimits ? { appLimits: decision.appLimits as never } : {}),
+        ...(policyId ? { policyRef: policyId, policySource: 'run' as const } : {}),
       },
       omit: { transcript: true },
     });
     await enqueueGoalRun(this.jobs, { runId: run.id, userId: user.id, orgId: user.activeOrgId ?? null }, 'run_started');
+    await this.apps.afterStart(user.id, client, run);
     return runView(withCost(run));
   }
 
@@ -80,8 +91,12 @@ export class RunsStartController {
   @Post('runs')
   @ApiDataResponse(RunResponseDto, { status: 201 })
   @Auth({ permissions: ['runs:write'] })
-  async start(@CurrentUser() user: Principal, @Body() body: StartRunDto) {
+  async start(@CurrentUser() user: Principal, @Body() body: StartRunDto, @Req() req: object) {
     await this.policies.assertAssignable(user.id, body.policyId);
+    // Who is starting it (#464), from the request's credential (never from the body), and the app's limits.
+    const client = await this.clients.resolve(req);
+    const decision = await this.apps.checkStart(user.id, client, { kind: 'run', policyId: body.policyId });
+    const policyId = body.policyId ?? decision.policyOverride;
     const run = await this.prisma.forUser({ userId: user.id }).run.create({
       data: {
         userId: user.id,
@@ -90,11 +105,14 @@ export class RunsStartController {
         hostId: body.hostId ?? null,
         hostFallback: body.hostFallback,
         trigger: 'api',
-        ...(body.policyId ? { policyRef: body.policyId, policySource: 'run' as const } : {}),
+        ...clientColumns(client),
+        ...(decision.appLimits ? { appLimits: decision.appLimits as never } : {}),
+        ...(policyId ? { policyRef: policyId, policySource: 'run' as const } : {}),
       },
       omit: { transcript: true },
     });
     await enqueueGoalRun(this.jobs, { runId: run.id, userId: user.id, orgId: user.activeOrgId ?? null }, 'run_started');
+    await this.apps.afterStart(user.id, client, run);
     return runView(withCost(run));
   }
 }

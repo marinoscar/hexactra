@@ -4,6 +4,7 @@
 // when the active filter would include it). Pure: no React, no fetch.
 import { getTimeZoneOffsetMinutes, zonedDateKey } from '@marinoscar/platform-web/timezone/headless';
 
+import { RUN_ORIGINS, type RunOrigin } from '../aiApps/types';
 import { RUN_TRIGGERS, type RunCounts, type RunListItem, type RunStatus, type RunTrigger } from '../types/runs';
 
 /** The status tabs, in the order they show. */
@@ -51,9 +52,13 @@ export interface RunFilters {
   stopReason: StopFilter[];
   /** An agent policy's id (`builtin:<key>` or a UUID), or null. */
   policyId: string | null;
+  /** "Started by" (#464): where the runs came from. */
+  origin: RunOrigin[];
+  /** "Started by" an AI app: its OAuth client id (URL `app`), or null. */
+  clientId: string | null;
 }
 
-export const NO_FILTERS: RunFilters = { view: 'all', q: '', taskId: null, trigger: [], from: null, to: null, stopReason: [], policyId: null };
+export const NO_FILTERS: RunFilters = { view: 'all', q: '', taskId: null, trigger: [], from: null, to: null, stopReason: [], policyId: null, origin: [], clientId: null };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -76,6 +81,7 @@ export function filtersFromParams(params: URLSearchParams): RunFilters {
   const from = params.get('from');
   const to = params.get('to');
   const policyId = params.get('policyId')?.trim();
+  const app = params.get('app');
   return {
     view: (RUN_VIEWS as readonly string[]).includes(view ?? '') ? (view as RunView) : 'all',
     q: (params.get('q') ?? '').slice(0, 200),
@@ -85,10 +91,12 @@ export function filtersFromParams(params: URLSearchParams): RunFilters {
     to: to && DAY.test(to) ? to : null,
     stopReason: list(params.get('stopReason'), STOP_FILTERS),
     policyId: policyId ? policyId : null,
+    origin: list(params.get('origin'), RUN_ORIGINS),
+    clientId: app && UUID.test(app) ? app : null,
   };
 }
 
-const FILTER_KEYS = ['view', 'q', 'taskId', 'trigger', 'from', 'to', 'stopReason', 'policyId'] as const;
+const FILTER_KEYS = ['view', 'q', 'taskId', 'trigger', 'from', 'to', 'stopReason', 'policyId', 'origin', 'app'] as const;
 
 /** `params` with the filters written into it; a parameter that is not a filter is kept. */
 export function filtersToParams(filters: RunFilters, params: URLSearchParams = new URLSearchParams()): URLSearchParams {
@@ -102,18 +110,21 @@ export function filtersToParams(filters: RunFilters, params: URLSearchParams = n
   if (filters.to) next.set('to', filters.to);
   if (filters.stopReason.length) next.set('stopReason', filters.stopReason.join(','));
   if (filters.policyId) next.set('policyId', filters.policyId);
+  if (filters.origin.length) next.set('origin', filters.origin.join(','));
+  if (filters.clientId) next.set('app', filters.clientId);
   return next;
 }
 
 /** The filters that narrow the list beyond its tab, counted for the "Filters (2)" button. A fixed task (`scoped`) is not one. */
-export function activeFilterCount(filters: RunFilters, scoped = false): number {
+export function activeFilterCount(filters: RunFilters, scoped = false, scopedApp = false): number {
   return (
     (filters.q.trim() ? 1 : 0) +
     (filters.taskId && !scoped ? 1 : 0) +
     (filters.trigger.length ? 1 : 0) +
     (filters.from || filters.to ? 1 : 0) +
     (filters.stopReason.length && showsStopFilter(filters.view) ? 1 : 0) +
-    (filters.policyId ? 1 : 0)
+    (filters.policyId ? 1 : 0) +
+    (filters.origin.length || (filters.clientId && !scopedApp) ? 1 : 0)
   );
 }
 
@@ -168,6 +179,8 @@ const VIEW_STATUS: Partial<Record<RunView, RunStatus>> = { needs: 'waiting_human
 /** `scope.taskId` fixes the task: the list of one task's runs (the task page). */
 export interface RunListScope {
   taskId?: string;
+  /** An AI app's client id: the list of the runs one app started (its page, #464). */
+  clientId?: string;
 }
 
 /**
@@ -189,6 +202,9 @@ export function apiFilter(filters: RunFilters, scope: RunListScope, timeZone: st
   if (filters.q.trim()) out.q = filters.q.trim();
   if (filters.stopReason.length && showsStopFilter(filters.view)) out.stopReason = [...filters.stopReason];
   if (filters.policyId) out.policyId = filters.policyId;
+  if (filters.origin.length) out.origin = [...filters.origin];
+  const clientId = scope.clientId ?? filters.clientId;
+  if (clientId) out.clientId = clientId;
   return out;
 }
 
@@ -246,5 +262,8 @@ export function matchesFilters(run: RunListItem, filters: RunFilters, scope: Run
     if (!reason || !filters.stopReason.some((f) => (f === 'budget' ? reason.startsWith('budget_') : f === reason))) return false;
   }
   if (filters.policyId && run.policy?.id !== filters.policyId) return false;
+  if (filters.origin.length && !filters.origin.includes((run.origin ?? 'web') as RunOrigin)) return false;
+  const clientId = scope.clientId ?? filters.clientId;
+  if (clientId && run.client?.id !== clientId) return false;
   return true;
 }

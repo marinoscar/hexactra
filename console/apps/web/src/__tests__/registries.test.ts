@@ -101,6 +101,8 @@ describe('browser agent cards', () => {
       ['/settings/agent-model-tiers', 'agent_policies:read', 'ai'],
       // #422, appended.
       ['/settings/run-history', 'runs:delete', undefined],
+      // #464, appended: what GET /api/connected-apps enforces.
+      ['/settings/ai-apps', 'connected_apps:read', undefined],
     ]);
   });
 
@@ -112,6 +114,8 @@ describe('browser agent cards', () => {
       ['Model prices', '/admin/settings/agent-pricing', 'system_settings:read', undefined],
       // #422, appended.
       ['Run history limit', '/admin/settings/run-history', 'system_settings:read', undefined],
+      // #464, appended.
+      ['AI app limits', '/admin/settings/ai-app-limits', 'system_settings:read', undefined],
     ]);
   });
 
@@ -125,7 +129,7 @@ describe('browser agent cards', () => {
     expect(at).toBeGreaterThan(userLabels.indexOf('Notes'));
     if (userLabels.includes('Integrations')) expect(at).toBe(userLabels.indexOf('Integrations') + 1);
     // No existing group gained one of the new cards.
-    const newPaths = new Set(['/settings/agent-policies', '/settings/agent-model-tiers', '/settings/run-history', '/admin/settings/agent-model-tiers', '/admin/settings/agent-ceilings', '/admin/settings/agent-pricing', '/admin/settings/run-history']);
+    const newPaths = new Set(['/settings/agent-policies', '/settings/agent-model-tiers', '/settings/run-history', '/settings/ai-apps', '/admin/settings/agent-model-tiers', '/admin/settings/agent-ceilings', '/admin/settings/agent-pricing', '/admin/settings/run-history', '/admin/settings/ai-app-limits']);
     for (const s of [...ADMIN_SECTIONS, ...USER_SETTINGS_SECTIONS].filter((x) => x.label !== 'Browser agent')) {
       for (const c of s.cards) expect(newPaths.has(c.path!), `${s.label}: ${c.path}`).toBe(false);
     }
@@ -135,7 +139,7 @@ describe('browser agent cards', () => {
     const controller = read('../../../api/src/tasks/run-retention.controller.ts');
     const enforced = [...controller.matchAll(/@Auth\(\{ permissions: \['([^']+)'\] \}\)/g)].map((m) => m[1]);
     expect(enforced).toEqual(['runs:delete', 'runs:delete', 'runs:delete']);
-    const card = group(USER_SETTINGS_SECTIONS)?.cards.at(-1);
+    const card = group(USER_SETTINGS_SECTIONS)?.cards.find((c) => c.path === '/settings/run-history');
     expect(card).toMatchObject({ title: 'Run history', description: 'How long finished runs are kept.', path: '/settings/run-history', permission: enforced[0] });
     expect(appSource).toMatch(/path="settings\/run-history" element=\{<Gate permission="runs:delete">/);
     expect(appSource).toMatch(/path="admin\/settings\/run-history" element=\{<Gate permission="system_settings:read">/);

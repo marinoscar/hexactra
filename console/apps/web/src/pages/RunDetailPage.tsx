@@ -18,6 +18,7 @@ import { runAgain } from '../components/runRow';
 import { RunTimeline } from '../components/RunTimeline';
 import { withStreamedSteps } from '../components/runTimeline';
 import type { Run, RunStep } from '../types/runs';
+import { StartedByChip } from '../components/StartedByChip';
 import { APP_BAR_HEIGHT, EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, StatusChip, aboveBottomBar, formatDateTime, isLive as isLiveStatus, useBreakpoint, useConfirm, useProfileTimeZone } from '../ui';
 
 /** Where a person can watch and take over the run's browser. */
@@ -245,7 +246,11 @@ export function RunDetailPage() {
         </>
       }
     >
-      <StatusChip status={run.status} size="medium" />
+      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: 'wrap', alignItems: 'center' }}>
+        <StatusChip status={run.status} size="medium" />
+        {/* Who started it (#464): the console, the CLI, a schedule, or an AI app by name. */}
+        <StartedByChip run={run} size="medium" />
+      </Stack>
     </PageHeader>
   );
   // The action error and the way back to the task sit under the header in every layout.

@@ -40,7 +40,7 @@
 //          redirected route fails the run)  --list (print the routes and exit)
 //
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
-// `{finishedRun}`, `{host}`, `{question}`, `{policy}`, `{group}` and `{chat}` are filled
+// `{finishedRun}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}` and `{app}` are filled
 // in from the account (or the fixtures). The enabled slices' routes are read
 // from apps/web/src/slices/<id>.tsx, so a new slice page needs nothing here.
 //
@@ -84,6 +84,10 @@ export const ROUTES = [
   ['settings-agent-model-tiers', '/settings/agent-model-tiers'],
   ['settings-webhooks', '/settings/webhooks'],
   ['settings-connected-apps', '/settings/connected-apps'],
+  // Connected AI apps (#464).
+  ['settings-ai-apps', '/settings/ai-apps'],
+  ['settings-ai-app', '/settings/ai-apps/{app}'],
+  ['settings-ai-apps-connect', '/settings/ai-apps/connect'],
   ['settings-danger-zone', '/settings/danger-zone'],
   // Administration (the admin hub and its pages).
   ['admin', '/admin/settings'],
@@ -103,6 +107,7 @@ export const ROUTES = [
   ['admin-factory-reset', '/admin/settings/factory-reset'],
   ['admin-run-history', '/admin/settings/run-history'],
   ['admin-oauth-clients', '/admin/settings/oauth-clients'],
+  ['admin-ai-app-limits', '/admin/settings/ai-app-limits'],
   // Outside the shell.
   ['activate', '/activate'],
   ['oauth-error', '/oauth/error?code=client_not_allowed&host=client.example.test', { signedOut: true }],
@@ -172,7 +177,7 @@ async function discoverIds(page) {
       const data = body.data ?? body;
       return Array.isArray(data) ? data : (data.items ?? []);
     };
-    const [runs, tasks, hosts, inbox, policies, groups, chats] = await Promise.all([get('/runs'), get('/tasks'), get('/fleet/hosts'), get('/inbox'), get('/agent-policies'), get('/groups'), get('/chats')]);
+    const [runs, tasks, hosts, inbox, policies, groups, chats, apps] = await Promise.all([get('/runs'), get('/tasks'), get('/fleet/hosts'), get('/inbox'), get('/agent-policies'), get('/groups'), get('/chats'), get('/connected-apps')]);
     const live = new Set(['queued', 'running', 'waiting_human']);
     return {
       liveRun: runs.find((r) => live.has(r.status))?.id,
@@ -183,6 +188,7 @@ async function discoverIds(page) {
       policy: (policies.find((p) => !p.builtin) ?? policies[0])?.id,
       group: groups[0]?.id,
       chat: chats[0]?.id,
+      app: apps[0]?.clientId,
     };
   });
 }

@@ -1,5 +1,6 @@
 // A run and its steps, as the API returns them (`runResponseSchema` and
 // `runStepResponseSchema` in apps/api/src/openapi/console.responses.ts).
+import type { RunClient, RunOrigin } from '../aiApps/types';
 import type { RunActivity } from '../components/RunActivity';
 import { STOP_REASONS, type BudgetKey, type RunBudget, type RunPolicy, type RunTier, type StopReason, type Tier } from '../components/runBudget';
 
@@ -35,6 +36,10 @@ export interface Run {
   taskId: string | null;
   status: RunStatus;
   trigger: string;
+  /** Where the run was started from (#464): web (the console), android, cli, api, mcp (an AI app), schedule, system. */
+  origin?: RunOrigin;
+  /** The AI app that started it (#464); null when no app did. */
+  client?: RunClient | null;
   actor?: string | null;
   goal: string;
   profile: string;

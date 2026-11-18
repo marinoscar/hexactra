@@ -157,6 +157,8 @@ export class ChatTurnService {
               hostId: c.hostId,
               hostFallback: c.hostFallback,
               trigger: 'chat',
+              // A chat runs in the console (#464): the person typed it there.
+              origin: 'web',
               ...(c.policyRef ? { policyRef: c.policyRef, policySource: 'run' as const } : {}),
               // A follow-up starts with what the chat's last job did (#490); the runner shows it after the goal.
               ...(context ? { transcript: { log: [], chunks: 0, context } } : {}),

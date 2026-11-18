@@ -57,7 +57,7 @@ describe('schedules', () => {
     expect(first.started).toBeGreaterThanOrEqual(1);
     const runs = await prisma.forUser({ userId }).run.findMany({ where: { taskId: task.id } });
     expect(runs).toHaveLength(1);
-    expect(runs[0]).toMatchObject({ trigger: 'schedule', goal: 'Check the fare', status: 'queued' });
+    expect(runs[0]).toMatchObject({ trigger: 'schedule', origin: 'schedule', clientId: null, goal: 'Check the fare', status: 'queued' });
     const job = await prisma.job.findFirst({ where: { type: 'browser.goal.run', subjectId: runs[0]!.id } });
     expect(job).not.toBeNull();
 

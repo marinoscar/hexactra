@@ -28280,6 +28280,421 @@
         }
       }
     },
+    "/api/connected-apps": {
+      "get": {
+        "description": "Your active OAuth grants to the MCP endpoint, one per app, with the scopes in words, your limits for the app and its usage over 30 days (counted from runs).\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
+        "operationId": "connectedApps_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConnectedAppListResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Your connected AI apps",
+        "tags": [
+          "Connected apps"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connected_apps:read"
+          ]
+        }
+      }
+    },
+    "/api/connected-apps/preflight": {
+      "get": {
+        "description": "For the \"Connect an AI app\" guide: is the OAuth server on, is the console on a public HTTPS URL that answers the discovery documents (the platform Doctor checks `oauth.public_url` and `oauth.well_known`), and are the hosts of ChatGPT and Claude allowed. Each failing row says who can fix it.\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
+        "operationId": "connectedApps_preflight",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppPreflightResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Can an AI app connect?",
+        "tags": [
+          "Connected apps"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connected_apps:read"
+          ]
+        }
+      }
+    },
+    "/api/connected-apps/{clientId}": {
+      "get": {
+        "description": "An app you connected, or one known from its runs or settings after it was disconnected (`grantId` null).\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
+        "operationId": "connectedApps_get",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConnectedAppResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "One connected AI app",
+        "tags": [
+          "Connected apps"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connected_apps:read"
+          ]
+        }
+      }
+    },
+    "/api/connected-apps/{clientId}/settings": {
+      "get": {
+        "description": "The defaults until you change one; clamped to the deployment ceilings.\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
+        "operationId": "connectedApps_settings",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppLimitsResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "An app's limits",
+        "tags": [
+          "Connected apps"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connected_apps:read"
+          ]
+        }
+      },
+      "patch": {
+        "description": "Any subset of the limits. A limit only narrows what the app may do: it never widens a task's own allowed sites or confirmation. `maxConcurrentRuns` and `dailyRunLimit` may not exceed the deployment ceilings (`mcp.maxConcurrentRunsPerApp`, `mcp.maxDailyRunsPerApp`). `paused: true` refuses new runs and sessions from the app; live ones keep running.\n\n**Requires:** authentication, plus permission `connected_apps:write`.",
+        "operationId": "connectedApps_patch",
+        "parameters": [
+          {
+            "name": "clientId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchAppSettingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppLimitsResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Change an app's limits",
+        "tags": [
+          "Connected apps"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connected_apps:write"
+          ]
+        }
+      }
+    },
     "/api/tasks": {
       "get": {
         "description": "With no parameter: every task, newest first, as an array. `envelope=1` returns a page `{ items, nextCursor, total }`; `include=summary` adds schedule and run facts to each task; `q`, `filter`, `policyId` and `sort` narrow and order the list. `created_desc` and `name_asc` page by keyset; the other sorts page by an offset inside the cursor. The cursor is opaque and belongs to one `sort`.\n\n**Requires:** authentication, plus permission `tasks:read`.",
@@ -29849,6 +30264,36 @@
             }
           },
           {
+            "name": "origin",
+            "required": false,
+            "in": "query",
+            "description": "Where the run was started from (#464). Any of: web, android, cli, api, mcp, schedule, system. Repeat the parameter or separate the values with commas.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "clientId",
+            "required": false,
+            "in": "query",
+            "description": "Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`).",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
             "name": "envelope",
             "required": false,
             "in": "query",
@@ -30156,6 +30601,36 @@
             "description": "Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`.",
             "schema": {
               "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "origin",
+            "required": false,
+            "in": "query",
+            "description": "Where the run was started from (#464). Any of: web, android, cli, api, mcp, schedule, system. Repeat the parameter or separate the values with commas.",
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "clientId",
+            "required": false,
+            "in": "query",
+            "description": "Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`).",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
             }
           }
@@ -37646,6 +38121,12 @@
               "INVALID_TASK_CURSOR",
               "SCHEDULE_LIMIT",
               "NO_SCHEDULES",
+              "APP_PAUSED",
+              "APP_RUN_LIMIT",
+              "APP_COST_LIMIT",
+              "APP_POLICY_NOT_ALLOWED",
+              "APP_DOMAIN_NOT_ALLOWED",
+              "APP_NOT_FOUND",
               "WEBHOOK_NOT_FOUND",
               "WEBHOOK_DELIVERY_NOT_FOUND",
               "WEBHOOK_URL_INVALID",
@@ -41439,6 +41920,16 @@
               },
               "advertiseStepUpTools": {
                 "type": "boolean"
+              },
+              "maxConcurrentRunsPerApp": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "maxDailyRunsPerApp": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
               }
             },
             "required": [
@@ -42458,6 +42949,16 @@
               },
               "advertiseStepUpTools": {
                 "type": "boolean"
+              },
+              "maxConcurrentRunsPerApp": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "maxDailyRunsPerApp": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
               }
             },
             "required": [
@@ -43556,6 +44057,16 @@
               },
               "advertiseStepUpTools": {
                 "type": "boolean"
+              },
+              "maxConcurrentRunsPerApp": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 20
+              },
+              "maxDailyRunsPerApp": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
               }
             }
           },
@@ -66010,6 +66521,711 @@
           "name"
         ]
       },
+      "ConnectedAppListResponseDto": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "clientId": {
+              "type": "string",
+              "description": "`oauth_clients.id`"
+            },
+            "grantId": {
+              "description": "The active grant (what Disconnect revokes: `DELETE /api/oauth/grants/:id`); null when the app is no longer connected",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "description": "The display name: the client's host (\"chatgpt.com\"), or its own name for a local app"
+            },
+            "displayName": {
+              "type": "string",
+              "description": "\"ChatGPT\", \"Claude\", or the name"
+            },
+            "selfName": {
+              "description": "The name the client gives itself (self-asserted; secondary)",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "host": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "logoUri": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "verified": {
+              "type": "boolean",
+              "description": "True: an OAuth client known to the server"
+            },
+            "removed": {
+              "type": "boolean",
+              "description": "The client row was deleted by an administrator: its runs keep their name"
+            },
+            "connectedAt": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "lastUsedAt": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "scopes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "A short name: \"Delegate\", \"Tasks\", \"Inbox\", \"Drive browser\", \"JavaScript\", \"Desktop\", \"Policies\"."
+                  },
+                  "consent": {
+                    "type": "string",
+                    "description": "What the consent page said"
+                  },
+                  "risk": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "elevated",
+                      "high"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "label",
+                  "consent",
+                  "risk"
+                ]
+              }
+            },
+            "limits": {
+              "type": "object",
+              "properties": {
+                "policyId": {
+                  "description": "The agent policy this app's runs use when the call names none; null: the user's default.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "allowedPolicyIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "The only policies this app may choose; empty: any."
+                },
+                "allowedDomains": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit."
+                },
+                "maxConcurrentRuns": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Live runs and sessions this app may have at once (clamped to the deployment ceiling)."
+                },
+                "dailyRunLimit": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991,
+                  "description": "Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling)."
+                },
+                "dailyCostLimitUsd": {
+                  "description": "USD per day over this app's runs; null: no cost limit.",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "confirmPurchases": {
+                  "type": "boolean",
+                  "description": "Ask before risky steps (purchases, submissions) even when the task does not."
+                },
+                "paused": {
+                  "type": "boolean",
+                  "description": "Refuse new runs and sessions from this app without disconnecting it."
+                }
+              },
+              "required": [
+                "policyId",
+                "allowedPolicyIds",
+                "allowedDomains",
+                "maxConcurrentRuns",
+                "dailyRunLimit",
+                "dailyCostLimitUsd",
+                "confirmPurchases",
+                "paused"
+              ]
+            },
+            "usage": {
+              "type": "object",
+              "properties": {
+                "runs30d": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "costUsd30d": {
+                  "type": "number"
+                },
+                "costKnown": {
+                  "type": "boolean"
+                },
+                "lastRunAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "liveRuns": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "runsToday": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "costTodayUsd": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "runs30d",
+                "costUsd30d",
+                "costKnown",
+                "lastRunAt",
+                "liveRuns",
+                "runsToday",
+                "costTodayUsd"
+              ]
+            }
+          },
+          "required": [
+            "clientId",
+            "grantId",
+            "name",
+            "displayName",
+            "selfName",
+            "host",
+            "logoUri",
+            "verified",
+            "removed",
+            "connectedAt",
+            "lastUsedAt",
+            "scopes",
+            "limits",
+            "usage"
+          ]
+        }
+      },
+      "AppPreflightResponseDto": {
+        "type": "object",
+        "properties": {
+          "mcpUrl": {
+            "type": "string",
+            "description": "The URL to paste into the AI app: `<APP_URL>/api/mcp`"
+          },
+          "admin": {
+            "type": "boolean",
+            "description": "Whether the caller may change the OAuth settings (`oauth_clients:write`)"
+          },
+          "ready": {
+            "type": "boolean",
+            "description": "True when no check failed or warned"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "enum": [
+                    "oauth_enabled",
+                    "public_url",
+                    "well_known"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pass",
+                    "warn",
+                    "fail",
+                    "skip"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "detail": {
+                  "type": "string"
+                },
+                "fix": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "who": {
+                          "type": "string",
+                          "enum": [
+                            "admin",
+                            "you"
+                          ],
+                          "description": "`admin`: the caller can fix it (they hold the permission); `you` never appears here today"
+                        },
+                        "path": {
+                          "description": "The console page that fixes it, for an administrator",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "text": {
+                          "type": "string",
+                          "description": "What to do, in a sentence; \"Ask your administrator to …\" for anyone else"
+                        }
+                      },
+                      "required": [
+                        "who",
+                        "path",
+                        "text"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "status",
+                "title",
+                "detail",
+                "fix"
+              ]
+            }
+          },
+          "clients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "enum": [
+                    "chatgpt",
+                    "claude",
+                    "claude-code",
+                    "other"
+                  ]
+                },
+                "allowed": {
+                  "description": "Whether the OAuth settings let this app connect; null when it cannot be told in advance (any other client)",
+                  "type": [
+                    "boolean",
+                    "null"
+                  ]
+                },
+                "hosts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "detail": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "allowed",
+                "hosts",
+                "detail"
+              ]
+            }
+          }
+        },
+        "required": [
+          "mcpUrl",
+          "admin",
+          "ready",
+          "checks",
+          "clients"
+        ]
+      },
+      "ConnectedAppResponseDto": {
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": "string",
+            "description": "`oauth_clients.id`"
+          },
+          "grantId": {
+            "description": "The active grant (what Disconnect revokes: `DELETE /api/oauth/grants/:id`); null when the app is no longer connected",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "The display name: the client's host (\"chatgpt.com\"), or its own name for a local app"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "\"ChatGPT\", \"Claude\", or the name"
+          },
+          "selfName": {
+            "description": "The name the client gives itself (self-asserted; secondary)",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "host": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "logoUri": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "True: an OAuth client known to the server"
+          },
+          "removed": {
+            "type": "boolean",
+            "description": "The client row was deleted by an administrator: its runs keep their name"
+          },
+          "connectedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastUsedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string",
+                  "description": "A short name: \"Delegate\", \"Tasks\", \"Inbox\", \"Drive browser\", \"JavaScript\", \"Desktop\", \"Policies\"."
+                },
+                "consent": {
+                  "type": "string",
+                  "description": "What the consent page said"
+                },
+                "risk": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "elevated",
+                    "high"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "consent",
+                "risk"
+              ]
+            }
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "policyId": {
+                "description": "The agent policy this app's runs use when the call names none; null: the user's default.",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "allowedPolicyIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The only policies this app may choose; empty: any."
+              },
+              "allowedDomains": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit."
+              },
+              "maxConcurrentRuns": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Live runs and sessions this app may have at once (clamped to the deployment ceiling)."
+              },
+              "dailyRunLimit": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling)."
+              },
+              "dailyCostLimitUsd": {
+                "description": "USD per day over this app's runs; null: no cost limit.",
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "confirmPurchases": {
+                "type": "boolean",
+                "description": "Ask before risky steps (purchases, submissions) even when the task does not."
+              },
+              "paused": {
+                "type": "boolean",
+                "description": "Refuse new runs and sessions from this app without disconnecting it."
+              }
+            },
+            "required": [
+              "policyId",
+              "allowedPolicyIds",
+              "allowedDomains",
+              "maxConcurrentRuns",
+              "dailyRunLimit",
+              "dailyCostLimitUsd",
+              "confirmPurchases",
+              "paused"
+            ]
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "runs30d": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "costUsd30d": {
+                "type": "number"
+              },
+              "costKnown": {
+                "type": "boolean"
+              },
+              "lastRunAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "liveRuns": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "runsToday": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "costTodayUsd": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "runs30d",
+              "costUsd30d",
+              "costKnown",
+              "lastRunAt",
+              "liveRuns",
+              "runsToday",
+              "costTodayUsd"
+            ]
+          }
+        },
+        "required": [
+          "clientId",
+          "grantId",
+          "name",
+          "displayName",
+          "selfName",
+          "host",
+          "logoUri",
+          "verified",
+          "removed",
+          "connectedAt",
+          "lastUsedAt",
+          "scopes",
+          "limits",
+          "usage"
+        ]
+      },
+      "AppLimitsResponseDto": {
+        "type": "object",
+        "properties": {
+          "policyId": {
+            "description": "The agent policy this app's runs use when the call names none; null: the user's default.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "allowedPolicyIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The only policies this app may choose; empty: any."
+          },
+          "allowedDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit."
+          },
+          "maxConcurrentRuns": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Live runs and sessions this app may have at once (clamped to the deployment ceiling)."
+          },
+          "dailyRunLimit": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991,
+            "description": "Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling)."
+          },
+          "dailyCostLimitUsd": {
+            "description": "USD per day over this app's runs; null: no cost limit.",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "confirmPurchases": {
+            "type": "boolean",
+            "description": "Ask before risky steps (purchases, submissions) even when the task does not."
+          },
+          "paused": {
+            "type": "boolean",
+            "description": "Refuse new runs and sessions from this app without disconnecting it."
+          }
+        },
+        "required": [
+          "policyId",
+          "allowedPolicyIds",
+          "allowedDomains",
+          "maxConcurrentRuns",
+          "dailyRunLimit",
+          "dailyCostLimitUsd",
+          "confirmPurchases",
+          "paused"
+        ]
+      },
+      "PatchAppSettingsDto": {
+        "type": "object",
+        "properties": {
+          "policyId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "allowedPolicyIds": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+            }
+          },
+          "allowedDomains": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
+            }
+          },
+          "maxConcurrentRuns": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          },
+          "dailyRunLimit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "dailyCostLimitUsd": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.01,
+                "maximum": 10000,
+                "multipleOf": 0.01
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confirmPurchases": {
+            "type": "boolean"
+          },
+          "paused": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
       "TaskDetailResponseDto": {
         "type": "object",
         "properties": {
@@ -68529,6 +69745,26 @@
                 "description": "Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`.",
                 "type": "string",
                 "maxLength": 64
+              },
+              "origin": {
+                "description": "Where the run was started from (#464). Any of: web, android, cli, api, mcp, schedule, system. Repeat the parameter or separate the values with commas.",
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                ]
+              },
+              "clientId": {
+                "description": "Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`).",
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               }
             },
             "additionalProperties": false
@@ -68758,6 +69994,55 @@
               "mcp",
               "external",
               "chat"
+            ]
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "web",
+              "android",
+              "cli",
+              "api",
+              "mcp",
+              "schedule",
+              "system"
+            ],
+            "description": "Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system"
+          },
+          "client": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "description": "The OAuth client id; null for an unverified MCP client name",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "name": {
+                    "description": "The display name at the time the run started",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "verified": {
+                    "type": "boolean",
+                    "description": "False: a name an MCP client gave itself over a personal access token"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "verified"
+                ],
+                "description": "The AI app that started the run; null when it was not started by an app"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "goal": {
@@ -69305,6 +70590,8 @@
           "conversationId",
           "status",
           "trigger",
+          "origin",
+          "client",
           "goal",
           "profile",
           "hostId",
@@ -69398,6 +70685,55 @@
                     "mcp",
                     "external",
                     "chat"
+                  ]
+                },
+                "origin": {
+                  "type": "string",
+                  "enum": [
+                    "web",
+                    "android",
+                    "cli",
+                    "api",
+                    "mcp",
+                    "schedule",
+                    "system"
+                  ],
+                  "description": "Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system"
+                },
+                "client": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "description": "The OAuth client id; null for an unverified MCP client name",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "name": {
+                          "description": "The display name at the time the run started",
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "verified": {
+                          "type": "boolean",
+                          "description": "False: a name an MCP client gave itself over a personal access token"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "verified"
+                      ],
+                      "description": "The AI app that started the run; null when it was not started by an app"
+                    },
+                    {
+                      "type": "null"
+                    }
                   ]
                 },
                 "goal": {
@@ -69945,6 +71281,8 @@
                 "conversationId",
                 "status",
                 "trigger",
+                "origin",
+                "client",
                 "goal",
                 "profile",
                 "hostId",
@@ -70125,6 +71463,55 @@
               "mcp",
               "external",
               "chat"
+            ]
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "web",
+              "android",
+              "cli",
+              "api",
+              "mcp",
+              "schedule",
+              "system"
+            ],
+            "description": "Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system"
+          },
+          "client": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "description": "The OAuth client id; null for an unverified MCP client name",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "name": {
+                    "description": "The display name at the time the run started",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "verified": {
+                    "type": "boolean",
+                    "description": "False: a name an MCP client gave itself over a personal access token"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "verified"
+                ],
+                "description": "The AI app that started the run; null when it was not started by an app"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "goal": {
@@ -70760,6 +72147,8 @@
           "conversationId",
           "status",
           "trigger",
+          "origin",
+          "client",
           "goal",
           "profile",
           "hostId",
@@ -70848,6 +72237,55 @@
               "mcp",
               "external",
               "chat"
+            ]
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "web",
+              "android",
+              "cli",
+              "api",
+              "mcp",
+              "schedule",
+              "system"
+            ],
+            "description": "Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system"
+          },
+          "client": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "description": "The OAuth client id; null for an unverified MCP client name",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "name": {
+                    "description": "The display name at the time the run started",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "verified": {
+                    "type": "boolean",
+                    "description": "False: a name an MCP client gave itself over a personal access token"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "verified"
+                ],
+                "description": "The AI app that started the run; null when it was not started by an app"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "goal": {
@@ -71387,6 +72825,8 @@
           "conversationId",
           "status",
           "trigger",
+          "origin",
+          "client",
           "goal",
           "profile",
           "hostId",
@@ -71661,6 +73101,43 @@
                 "type": "null"
               }
             ]
+          },
+          "client": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "description": "The OAuth client id; null for an unverified MCP client name",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "name": {
+                    "description": "The display name at the time the run started",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "verified": {
+                    "type": "boolean",
+                    "description": "False: a name an MCP client gave itself over a personal access token"
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "verified"
+                ],
+                "description": "The AI app that started the run; null when it was not started by an app"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The AI app that asked; null when no app did"
           }
         },
         "required": [
@@ -71683,7 +73160,8 @@
           "viewerUrl",
           "createdAt",
           "expiresAt",
-          "answeredAt"
+          "answeredAt",
+          "client"
         ]
       },
       "CreateQuestionDto": {
@@ -73007,6 +74485,55 @@
                             "chat"
                           ]
                         },
+                        "origin": {
+                          "type": "string",
+                          "enum": [
+                            "web",
+                            "android",
+                            "cli",
+                            "api",
+                            "mcp",
+                            "schedule",
+                            "system"
+                          ],
+                          "description": "Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system"
+                        },
+                        "client": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "description": "The OAuth client id; null for an unverified MCP client name",
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "name": {
+                                  "description": "The display name at the time the run started",
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ]
+                                },
+                                "verified": {
+                                  "type": "boolean",
+                                  "description": "False: a name an MCP client gave itself over a personal access token"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "name",
+                                "verified"
+                              ],
+                              "description": "The AI app that started the run; null when it was not started by an app"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
                         "createdAt": {
                           "type": "string",
                           "description": "ISO 8601 timestamp"
@@ -73086,6 +74613,8 @@
                         "goal",
                         "status",
                         "trigger",
+                        "origin",
+                        "client",
                         "createdAt",
                         "startedAt",
                         "finishedAt",

@@ -40,6 +40,45 @@ export interface RunPolicySnapshot {
    * ceilings (#404), written at the run's first advance. Absent on a snapshot taken before that.
    */
   effectiveBudget?: EffectiveBudget;
+  /**
+   * The limits of the AI app that started the run (#464), as they were when it
+   * started: its allowed sites (checked as well as the task's own) and whether
+   * risky steps need a person. Absent on a run no app started.
+   */
+  appLimits?: SnapshotAppLimits | null;
+}
+
+/** What a snapshot keeps of an app's limits (`RunAppLimits` of connected-apps.schemas.ts). */
+export interface SnapshotAppLimits {
+  clientId: string;
+  clientName: string | null;
+  allowedDomains: string[];
+  confirmPurchases: boolean;
+  policyId: string | null;
+  allowedPolicyIds: string[];
+  appliedPolicyId: string | null;
+  maxConcurrentRuns: number;
+  dailyRunLimit: number;
+  dailyCostLimitUsd: number | null;
+}
+
+/** An app's limits as stored on a run (`runs.app_limits`); null when absent or unreadable. */
+export function readAppLimits(value: unknown): SnapshotAppLimits | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Partial<SnapshotAppLimits>;
+  if (typeof v.clientId !== 'string' || !Array.isArray(v.allowedDomains)) return null;
+  return {
+    clientId: v.clientId,
+    clientName: typeof v.clientName === 'string' ? v.clientName : null,
+    allowedDomains: v.allowedDomains.filter((d): d is string => typeof d === 'string'),
+    confirmPurchases: v.confirmPurchases !== false,
+    policyId: typeof v.policyId === 'string' ? v.policyId : null,
+    allowedPolicyIds: Array.isArray(v.allowedPolicyIds) ? v.allowedPolicyIds.filter((d): d is string => typeof d === 'string') : [],
+    appliedPolicyId: typeof v.appliedPolicyId === 'string' ? v.appliedPolicyId : null,
+    maxConcurrentRuns: typeof v.maxConcurrentRuns === 'number' ? v.maxConcurrentRuns : 0,
+    dailyRunLimit: typeof v.dailyRunLimit === 'number' ? v.dailyRunLimit : 0,
+    dailyCostLimitUsd: typeof v.dailyCostLimitUsd === 'number' ? v.dailyCostLimitUsd : null,
+  };
 }
 
 /** Parse a stored snapshot; null when it is absent or no longer valid. */

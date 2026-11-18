@@ -31,6 +31,7 @@ function view(over: Partial<QuestionView>): QuestionView {
     id: ID,
     askedBy: 'agent:test',
     runId: null,
+    client: null,
     handoffId: null,
     browserBound: false,
     input: 'text',

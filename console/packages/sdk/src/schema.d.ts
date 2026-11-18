@@ -5601,6 +5601,100 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connected-apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your connected AI apps
+         * @description Your active OAuth grants to the MCP endpoint, one per app, with the scopes in words, your limits for the app and its usage over 30 days (counted from runs).
+         *
+         *     **Requires:** authentication, plus permission `connected_apps:read`.
+         */
+        get: operations["connectedApps_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connected-apps/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Can an AI app connect?
+         * @description For the "Connect an AI app" guide: is the OAuth server on, is the console on a public HTTPS URL that answers the discovery documents (the platform Doctor checks `oauth.public_url` and `oauth.well_known`), and are the hosts of ChatGPT and Claude allowed. Each failing row says who can fix it.
+         *
+         *     **Requires:** authentication, plus permission `connected_apps:read`.
+         */
+        get: operations["connectedApps_preflight"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connected-apps/{clientId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One connected AI app
+         * @description An app you connected, or one known from its runs or settings after it was disconnected (`grantId` null).
+         *
+         *     **Requires:** authentication, plus permission `connected_apps:read`.
+         */
+        get: operations["connectedApps_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connected-apps/{clientId}/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * An app's limits
+         * @description The defaults until you change one; clamped to the deployment ceilings.
+         *
+         *     **Requires:** authentication, plus permission `connected_apps:read`.
+         */
+        get: operations["connectedApps_settings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change an app's limits
+         * @description Any subset of the limits. A limit only narrows what the app may do: it never widens a task's own allowed sites or confirmation. `maxConcurrentRuns` and `dailyRunLimit` may not exceed the deployment ceilings (`mcp.maxConcurrentRunsPerApp`, `mcp.maxDailyRunsPerApp`). `paused: true` refuses new runs and sessions from the app; live ones keep running.
+         *
+         *     **Requires:** authentication, plus permission `connected_apps:write`.
+         */
+        patch: operations["connectedApps_patch"];
+        trace?: never;
+    };
     "/api/tasks": {
         parameters: {
             query?: never;
@@ -7298,6 +7392,12 @@ export interface components {
              * @example INVALID_TASK_CURSOR
              * @example SCHEDULE_LIMIT
              * @example NO_SCHEDULES
+             * @example APP_PAUSED
+             * @example APP_RUN_LIMIT
+             * @example APP_COST_LIMIT
+             * @example APP_POLICY_NOT_ALLOWED
+             * @example APP_DOMAIN_NOT_ALLOWED
+             * @example APP_NOT_FOUND
              * @example WEBHOOK_NOT_FOUND
              * @example WEBHOOK_DELIVERY_NOT_FOUND
              * @example WEBHOOK_URL_INVALID
@@ -8419,6 +8519,8 @@ export interface components {
             mcp: {
                 elicitation: boolean;
                 advertiseStepUpTools: boolean;
+                maxConcurrentRunsPerApp?: number;
+                maxDailyRunsPerApp?: number;
             };
             notes: {
                 archiveAfterDays: number;
@@ -8638,6 +8740,8 @@ export interface components {
             mcp?: {
                 elicitation: boolean;
                 advertiseStepUpTools: boolean;
+                maxConcurrentRunsPerApp?: number;
+                maxDailyRunsPerApp?: number;
             };
             notes?: {
                 archiveAfterDays: number;
@@ -8864,6 +8968,8 @@ export interface components {
             mcp?: {
                 elicitation?: boolean;
                 advertiseStepUpTools?: boolean;
+                maxConcurrentRunsPerApp?: number;
+                maxDailyRunsPerApp?: number;
             };
             notes?: {
                 archiveAfterDays?: number;
@@ -13613,6 +13719,181 @@ export interface components {
             /** @description Unique among the user's policies. */
             name: string;
         };
+        ConnectedAppListResponseDto: {
+            /** @description `oauth_clients.id` */
+            clientId: string;
+            /** @description The active grant (what Disconnect revokes: `DELETE /api/oauth/grants/:id`); null when the app is no longer connected */
+            grantId: string | null;
+            /** @description The display name: the client's host ("chatgpt.com"), or its own name for a local app */
+            name: string;
+            /** @description "ChatGPT", "Claude", or the name */
+            displayName: string;
+            /** @description The name the client gives itself (self-asserted; secondary) */
+            selfName: string | null;
+            host: string | null;
+            logoUri: string | null;
+            /** @description True: an OAuth client known to the server */
+            verified: boolean;
+            /** @description The client row was deleted by an administrator: its runs keep their name */
+            removed: boolean;
+            connectedAt: string | null;
+            lastUsedAt: string | null;
+            scopes: {
+                id: string;
+                /** @description A short name: "Delegate", "Tasks", "Inbox", "Drive browser", "JavaScript", "Desktop", "Policies". */
+                label: string;
+                /** @description What the consent page said */
+                consent: string;
+                /** @enum {string} */
+                risk: "low" | "elevated" | "high";
+            }[];
+            limits: {
+                /** @description The agent policy this app's runs use when the call names none; null: the user's default. */
+                policyId: string | null;
+                /** @description The only policies this app may choose; empty: any. */
+                allowedPolicyIds: string[];
+                /** @description Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit. */
+                allowedDomains: string[];
+                /** @description Live runs and sessions this app may have at once (clamped to the deployment ceiling). */
+                maxConcurrentRuns: number;
+                /** @description Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling). */
+                dailyRunLimit: number;
+                /** @description USD per day over this app's runs; null: no cost limit. */
+                dailyCostLimitUsd: number | null;
+                /** @description Ask before risky steps (purchases, submissions) even when the task does not. */
+                confirmPurchases: boolean;
+                /** @description Refuse new runs and sessions from this app without disconnecting it. */
+                paused: boolean;
+            };
+            usage: {
+                runs30d: number;
+                costUsd30d: number;
+                costKnown: boolean;
+                lastRunAt: string | null;
+                liveRuns: number;
+                runsToday: number;
+                costTodayUsd: number;
+            };
+        }[];
+        AppPreflightResponseDto: {
+            /** @description The URL to paste into the AI app: `<APP_URL>/api/mcp` */
+            mcpUrl: string;
+            /** @description Whether the caller may change the OAuth settings (`oauth_clients:write`) */
+            admin: boolean;
+            /** @description True when no check failed or warned */
+            ready: boolean;
+            checks: {
+                /** @enum {string} */
+                id: "oauth_enabled" | "public_url" | "well_known";
+                /** @enum {string} */
+                status: "pass" | "warn" | "fail" | "skip";
+                title: string;
+                detail: string;
+                fix: {
+                    /**
+                     * @description `admin`: the caller can fix it (they hold the permission); `you` never appears here today
+                     * @enum {string}
+                     */
+                    who: "admin" | "you";
+                    /** @description The console page that fixes it, for an administrator */
+                    path: string | null;
+                    /** @description What to do, in a sentence; "Ask your administrator to …" for anyone else */
+                    text: string;
+                } | null;
+            }[];
+            clients: {
+                /** @enum {string} */
+                id: "chatgpt" | "claude" | "claude-code" | "other";
+                /** @description Whether the OAuth settings let this app connect; null when it cannot be told in advance (any other client) */
+                allowed: boolean | null;
+                hosts: string[];
+                detail: string;
+            }[];
+        };
+        ConnectedAppResponseDto: {
+            /** @description `oauth_clients.id` */
+            clientId: string;
+            /** @description The active grant (what Disconnect revokes: `DELETE /api/oauth/grants/:id`); null when the app is no longer connected */
+            grantId: string | null;
+            /** @description The display name: the client's host ("chatgpt.com"), or its own name for a local app */
+            name: string;
+            /** @description "ChatGPT", "Claude", or the name */
+            displayName: string;
+            /** @description The name the client gives itself (self-asserted; secondary) */
+            selfName: string | null;
+            host: string | null;
+            logoUri: string | null;
+            /** @description True: an OAuth client known to the server */
+            verified: boolean;
+            /** @description The client row was deleted by an administrator: its runs keep their name */
+            removed: boolean;
+            connectedAt: string | null;
+            lastUsedAt: string | null;
+            scopes: {
+                id: string;
+                /** @description A short name: "Delegate", "Tasks", "Inbox", "Drive browser", "JavaScript", "Desktop", "Policies". */
+                label: string;
+                /** @description What the consent page said */
+                consent: string;
+                /** @enum {string} */
+                risk: "low" | "elevated" | "high";
+            }[];
+            limits: {
+                /** @description The agent policy this app's runs use when the call names none; null: the user's default. */
+                policyId: string | null;
+                /** @description The only policies this app may choose; empty: any. */
+                allowedPolicyIds: string[];
+                /** @description Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit. */
+                allowedDomains: string[];
+                /** @description Live runs and sessions this app may have at once (clamped to the deployment ceiling). */
+                maxConcurrentRuns: number;
+                /** @description Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling). */
+                dailyRunLimit: number;
+                /** @description USD per day over this app's runs; null: no cost limit. */
+                dailyCostLimitUsd: number | null;
+                /** @description Ask before risky steps (purchases, submissions) even when the task does not. */
+                confirmPurchases: boolean;
+                /** @description Refuse new runs and sessions from this app without disconnecting it. */
+                paused: boolean;
+            };
+            usage: {
+                runs30d: number;
+                costUsd30d: number;
+                costKnown: boolean;
+                lastRunAt: string | null;
+                liveRuns: number;
+                runsToday: number;
+                costTodayUsd: number;
+            };
+        };
+        AppLimitsResponseDto: {
+            /** @description The agent policy this app's runs use when the call names none; null: the user's default. */
+            policyId: string | null;
+            /** @description The only policies this app may choose; empty: any. */
+            allowedPolicyIds: string[];
+            /** @description Sites this app's runs and browser sessions may visit (suffix match), on top of the task's own; empty: no extra limit. */
+            allowedDomains: string[];
+            /** @description Live runs and sessions this app may have at once (clamped to the deployment ceiling). */
+            maxConcurrentRuns: number;
+            /** @description Runs and sessions per day in the user's profile time zone (clamped to the deployment ceiling). */
+            dailyRunLimit: number;
+            /** @description USD per day over this app's runs; null: no cost limit. */
+            dailyCostLimitUsd: number | null;
+            /** @description Ask before risky steps (purchases, submissions) even when the task does not. */
+            confirmPurchases: boolean;
+            /** @description Refuse new runs and sessions from this app without disconnecting it. */
+            paused: boolean;
+        };
+        PatchAppSettingsDto: {
+            policyId?: string | null;
+            allowedPolicyIds?: string[];
+            allowedDomains?: string[];
+            maxConcurrentRuns?: number;
+            dailyRunLimit?: number;
+            dailyCostLimitUsd?: number | null;
+            confirmPurchases?: boolean;
+            paused?: boolean;
+        };
         TaskDetailResponseDto: {
             /** Format: uuid */
             id: string;
@@ -14304,6 +14585,13 @@ export interface components {
                 stopReason?: string | string[];
                 /** @description Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`. */
                 policyId?: string;
+                /** @description Where the run was started from (#464). Any of: web, android, cli, api, mcp, schedule, system. Repeat the parameter or separate the values with commas. */
+                origin?: string | string[];
+                /**
+                 * Format: uuid
+                 * @description Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`).
+                 */
+                clientId?: string;
             };
             /** @description With `filter`: the number of runs the caller expects to delete (the count it showed). When the real count differs by more than 5 %, nothing is deleted and the answer is 409 `COUNT_CHANGED`. */
             expectedCount?: number;
@@ -14357,6 +14645,19 @@ export interface components {
             status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
             /** @enum {string} */
             trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
+            /**
+             * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
+             * @enum {string}
+             */
+            origin: "web" | "android" | "cli" | "api" | "mcp" | "schedule" | "system";
+            client: {
+                /** @description The OAuth client id; null for an unverified MCP client name */
+                id: string | null;
+                /** @description The display name at the time the run started */
+                name: string | null;
+                /** @description False: a name an MCP client gave itself over a personal access token */
+                verified: boolean;
+            } | null;
             goal: string;
             profile: string;
             hostId: string | null;
@@ -14489,6 +14790,19 @@ export interface components {
                 status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
                 /** @enum {string} */
                 trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
+                /**
+                 * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
+                 * @enum {string}
+                 */
+                origin: "web" | "android" | "cli" | "api" | "mcp" | "schedule" | "system";
+                client: {
+                    /** @description The OAuth client id; null for an unverified MCP client name */
+                    id: string | null;
+                    /** @description The display name at the time the run started */
+                    name: string | null;
+                    /** @description False: a name an MCP client gave itself over a personal access token */
+                    verified: boolean;
+                } | null;
                 goal: string;
                 profile: string;
                 hostId: string | null;
@@ -14641,6 +14955,19 @@ export interface components {
             status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
             /** @enum {string} */
             trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
+            /**
+             * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
+             * @enum {string}
+             */
+            origin: "web" | "android" | "cli" | "api" | "mcp" | "schedule" | "system";
+            client: {
+                /** @description The OAuth client id; null for an unverified MCP client name */
+                id: string | null;
+                /** @description The display name at the time the run started */
+                name: string | null;
+                /** @description False: a name an MCP client gave itself over a personal access token */
+                verified: boolean;
+            } | null;
             goal: string;
             profile: string;
             hostId: string | null;
@@ -14790,6 +15117,19 @@ export interface components {
             status: "queued" | "running" | "waiting_human" | "succeeded" | "failed" | "cancelled";
             /** @enum {string} */
             trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
+            /**
+             * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
+             * @enum {string}
+             */
+            origin: "web" | "android" | "cli" | "api" | "mcp" | "schedule" | "system";
+            client: {
+                /** @description The OAuth client id; null for an unverified MCP client name */
+                id: string | null;
+                /** @description The display name at the time the run started */
+                name: string | null;
+                /** @description False: a name an MCP client gave itself over a personal access token */
+                verified: boolean;
+            } | null;
             goal: string;
             profile: string;
             hostId: string | null;
@@ -14960,6 +15300,15 @@ export interface components {
             /** @description ISO 8601 timestamp */
             expiresAt: string;
             answeredAt: string | null;
+            /** @description The AI app that asked; null when no app did */
+            client: {
+                /** @description The OAuth client id; null for an unverified MCP client name */
+                id: string | null;
+                /** @description The display name at the time the run started */
+                name: string | null;
+                /** @description False: a name an MCP client gave itself over a personal access token */
+                verified: boolean;
+            } | null;
         };
         CreateQuestionDto: {
             /** @enum {string} */
@@ -15244,6 +15593,19 @@ export interface components {
                     status: "succeeded" | "failed" | "cancelled";
                     /** @enum {string} */
                     trigger: "manual" | "schedule" | "api" | "mcp" | "external" | "chat";
+                    /**
+                     * @description Where the run was started from: web (the console), android, cli, api, mcp (an AI app), schedule, system
+                     * @enum {string}
+                     */
+                    origin: "web" | "android" | "cli" | "api" | "mcp" | "schedule" | "system";
+                    client: {
+                        /** @description The OAuth client id; null for an unverified MCP client name */
+                        id: string | null;
+                        /** @description The display name at the time the run started */
+                        name: string | null;
+                        /** @description False: a name an MCP client gave itself over a personal access token */
+                        verified: boolean;
+                    } | null;
                     /** @description ISO 8601 timestamp */
                     createdAt: string;
                     startedAt: string | null;
@@ -34003,6 +34365,256 @@ export interface operations {
             };
         };
     };
+    connectedApps_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ConnectedAppListResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectedApps_preflight: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AppPreflightResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectedApps_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ConnectedAppResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectedApps_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AppLimitsResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectedApps_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchAppSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AppLimitsResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
     tasks_list: {
         parameters: {
             query?: {
@@ -34829,6 +35441,10 @@ export interface operations {
                 stopReason?: string | string[];
                 /** @description Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`. */
                 policyId?: string;
+                /** @description Where the run was started from (#464). Any of: web, android, cli, api, mcp, schedule, system. Repeat the parameter or separate the values with commas. */
+                origin?: string | string[];
+                /** @description Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`). */
+                clientId?: string;
                 /** @description `1` returns `{ items, nextCursor }` instead of an array. */
                 envelope?: "1" | "true";
                 /** @description The previous page's `nextCursor`. Opaque: do not parse or build it. */
@@ -34953,6 +35569,10 @@ export interface operations {
                 stopReason?: string | string[];
                 /** @description Runs that ran under this agent policy: an own policy's UUID or `builtin:<key>`. */
                 policyId?: string;
+                /** @description Where the run was started from (#464). Any of: web, android, cli, api, mcp, schedule, system. Repeat the parameter or separate the values with commas. */
+                origin?: string | string[];
+                /** @description Runs started by this AI app: its OAuth client id (`client.id` of a run, `clientId` of `GET /connected-apps`). */
+                clientId?: string;
             };
             header?: never;
             path?: never;

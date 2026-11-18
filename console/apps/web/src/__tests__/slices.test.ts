@@ -126,7 +126,8 @@ describe('with every slice enabled', () => {
     const app = await compose(ids);
     const routes = app.routes.map((route) => route.path);
     expect(new Set(routes).size).toBe(routes.length);
-    const aiCards = app.cards.filter((card) => card.path?.includes('/ai'));
+    // "AI apps" and "AI app limits" (#464) are about connected ChatGPT and Claude, not the AI slice: they show with AI off.
+    const aiCards = app.cards.filter((card) => card.path?.includes('/ai') && card.path !== '/settings/ai-apps' && card.path !== '/admin/settings/ai-app-limits');
     expect(aiCards.length).toBeGreaterThan(0);
     // Every AI card hides while AI is off, except the one that switches it on.
     for (const card of aiCards) expect(card.feature === 'ai' || card.path === '/admin/settings/ai').toBe(true);

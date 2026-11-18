@@ -17,6 +17,7 @@ import { HexactraAlertsModule } from './alerts/alerts.module';
 import { alertsModule } from './platform/alerts/alerts.config';
 import { alertsMounted } from './platform/alerts/alerts.enabled';
 import { ChatModule } from './chat/chat.module';
+import { ConnectedAppsModule } from './connected-apps/connected-apps.module';
 import { QuestionsModule } from './questions/questions.module';
 import { RunnerModule } from './runner/runner.module';
 import { SchedulesModule } from './schedules/schedules.module';
@@ -44,6 +45,8 @@ import { PrismaModule } from './prisma/prisma.service';
     FabricModule,
     FleetModule,
     PoliciesModule,
+    // Connected AI apps (#464): the request's client context and the per-app limits (global).
+    ConnectedAppsModule,
     TasksModule,
     QuestionsModule,
     BrowserModule,

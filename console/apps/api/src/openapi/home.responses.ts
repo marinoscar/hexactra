@@ -3,6 +3,8 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+import { runClientSchema, runOriginSchema } from '../connected-apps/connected-apps.schemas';
+
 import { RUN_STOP_REASONS } from '../runner/budget';
 
 const iso = z.string().describe('ISO 8601 timestamp');
@@ -56,6 +58,8 @@ const homeRecentRunSchema = z.object({
   goal: z.string().describe('At most 300 characters'),
   status: z.enum(['succeeded', 'failed', 'cancelled']),
   trigger,
+  origin: runOriginSchema,
+  client: runClientSchema.nullable(),
   createdAt: iso,
   startedAt: iso.nullable(),
   finishedAt: iso.nullable(),

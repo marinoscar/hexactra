@@ -28,6 +28,21 @@ enum RunTrigger {
   @@map("run_trigger")
 }
 
+/// Where a run was started from (#464), set by the server from the request's
+/// credential (never from a request body): the console (`web`), the Android app,
+/// the CLI, another API caller, an AI app over MCP, a schedule, or the system.
+enum RunOrigin {
+  web
+  android
+  cli
+  api
+  mcp
+  schedule
+  system
+
+  @@map("run_origin")
+}
+
 /// Why a run stopped (#404). `budget_*` is a budget of the run's policy (or a deployment
 /// ceiling); `stalled` is stall detection; `no_model` is no usable model.
 enum RunStopReason {
@@ -159,6 +174,20 @@ model Run {
   /// The chat that started the run (trigger `chat`, #483); null for every other run.
   conversationId   String?       @map("conversation_id") @db.Uuid
 
+  /// Where the run was started from (#464); existing runs were backfilled from `trigger`.
+  origin           RunOrigin     @default(web)
+  /// The OAuth client (`oauth_clients.id`) of the AI app that started it; null for any other caller.
+  /// No foreign key: a run keeps it after an administrator removes the client.
+  clientId         String?       @map("client_id") @db.Uuid
+  /// The app's display name at the time (the client's host label, or an MCP `clientInfo.name`
+  /// for a personal access token caller: then `client_id` is null and the name is unverified).
+  clientName       String?       @map("client_name") @db.VarChar(64)
+  /// The OAuth grant (consent) the app used.
+  grantId          String?       @map("grant_id") @db.Uuid
+  /// The per-app limits that applied when the run started (ConnectedAppSettings, #464); null when none did.
+  /// Copied into the policy snapshot at the first advance.
+  appLimits        Json?         @map("app_limits")
+
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   task         Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)
   conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
@@ -171,6 +200,8 @@ model Run {
   @@index([userId, status, createdAt])
   @@index([taskId, createdAt])
   @@index([conversationId, createdAt])
+  /// Runs of one AI app and its usage counters (#464).
+  @@index([userId, clientId, createdAt])
   @@index([status])
   @@index([remindAt])
   @@map("runs")
