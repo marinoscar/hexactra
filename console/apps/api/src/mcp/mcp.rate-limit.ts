@@ -9,10 +9,12 @@
 //   user           user:<id>                              600, across all the user's credentials
 //   unauthenticated  unauth:<source address>              30 answers `401` (discovery probes)
 //
-// The limiter is a sliding window in this process's memory behind the
-// `MCP_RATE_LIMITER` token: the console runs one API process. Several replicas
-// need a shared store: bind `MCP_RATE_LIMITER` to a limiter over it (Redis,
-// Postgres) in `McpSecurityModule`.
+// The limiter sits behind the `MCP_RATE_LIMITER` token, chosen at boot by
+// `MCP_RATE_LIMIT_STORE` (McpSecurityModule): `memory` (the default, one API
+// process) is an exact sliding window in this process's memory; `postgres`
+// (several API replicas, #517) is a sliding window counter in the shared
+// `rate_limit_windows` table (mcp.rate-limit.pg.ts), which also backs the
+// OAuth server's limits.
 //
 // Failure: a limiter that throws lets an authenticated caller through and
 // refuses an unauthenticated one (fail open / fail closed), logging once a minute.
