@@ -7639,6 +7639,10 @@ export interface components {
              * @example INTERNAL_ERROR
              * @example ROLE_NOT_ASSIGNABLE
              * @example INVALID_RETURN_URI
+             * @example APPROVAL_RULE_NOT_FOUND
+             * @example RULE_CANNOT_WIDEN
+             * @example APPROVAL_RULE_INVALID
+             * @example APPROVAL_RULE_DUPLICATE
              * @example POLICY_PIN_INVALID
              * @example POLICY_REF_INVALID
              * @example POLICY_BUILTIN_READONLY
@@ -7681,10 +7685,6 @@ export interface components {
              * @example WEBHOOK_EVENT_UNKNOWN
              * @example WEBHOOK_EVENT_NOT_PERMITTED
              * @example WEBHOOK_LIMIT_REACHED
-             * @example APPROVAL_RULE_NOT_FOUND
-             * @example RULE_CANNOT_WIDEN
-             * @example APPROVAL_RULE_INVALID
-             * @example APPROVAL_RULE_DUPLICATE
              * @example CHAT_NOT_FOUND
              * @example CHAT_ARCHIVED
              * @example CHAT_RUN_LIVE
@@ -16148,6 +16148,21 @@ export interface components {
                 category: string;
                 label: string | null;
             } | null;
+            /** @description What "Don't ask again" would remember (#555): the kind, the site, the category and the label or topic, and the summary the owner reads. Computed by the server only; null when the question cannot be remembered. */
+            rememberable: {
+                /** @enum {string} */
+                kind: "gate" | "ask";
+                /** @description The registrable domain of the page the browser reported */
+                host: string;
+                /** @description gate: payment, purchase, send, delete or submit */
+                category: string | null;
+                /** @description gate: the element's label; ask: the topic */
+                matchKey: string;
+                /** @description What the owner reads: "Press 'Pay' on bankofamerica.com" */
+                summary: string;
+                /** @description Where a rule may be limited to: this task or this chat when the run has one */
+                scopes?: ("everywhere" | "this_task" | "this_chat")[];
+            } | null;
             /** @enum {string} */
             status: "pending" | "answered" | "cancelled" | "expired";
             response: {
@@ -16160,6 +16175,11 @@ export interface components {
                 valueWithheld: boolean;
                 /** @description The person's choice for the question's "remember me" option */
                 remember?: boolean;
+                /**
+                 * Format: uuid
+                 * @description The saved approval this answer created or found ("Don't ask again", #555)
+                 */
+                ruleId?: string;
                 channel?: string;
                 /** @description Who answered, e.g. user:<id> */
                 by?: string;
@@ -16231,6 +16251,14 @@ export interface components {
             values?: string[];
             secret?: string;
             remember?: boolean;
+            rememberRule?: {
+                /** @constant */
+                enabled: true;
+                /** @enum {string} */
+                scope?: "everywhere" | "this_task" | "this_chat";
+                maxAmount?: number;
+                expiresInDays?: number;
+            };
             channel?: string;
         };
         /** @default {} */
@@ -16247,6 +16275,14 @@ export interface components {
             values?: string[];
             secret?: string;
             remember?: boolean;
+            rememberRule?: {
+                /** @constant */
+                enabled: true;
+                /** @enum {string} */
+                scope?: "everywhere" | "this_task" | "this_chat";
+                maxAmount?: number;
+                expiresInDays?: number;
+            };
         };
         OpenDto: {
             /** @default default */
@@ -16345,6 +16381,21 @@ export interface components {
             risk: ("low" | "high") | null;
             /** @description credentials and secret: the site's "remember me" option, in the page's words */
             rememberLabel: string | null;
+            /** @description What "Don't ask again" would remember (#555): the kind, the site, the category and the label or topic, and the summary the owner reads. Computed by the server only; null when the question cannot be remembered. */
+            rememberable: {
+                /** @enum {string} */
+                kind: "gate" | "ask";
+                /** @description The registrable domain of the page the browser reported */
+                host: string;
+                /** @description gate: payment, purchase, send, delete or submit */
+                category: string | null;
+                /** @description gate: the element's label; ask: the topic */
+                matchKey: string;
+                /** @description What the owner reads: "Press 'Pay' on bankofamerica.com" */
+                summary: string;
+                /** @description Where a rule may be limited to: this task or this chat when the run has one */
+                scopes?: ("everywhere" | "this_task" | "this_chat")[];
+            } | null;
             pageTitle: string | null;
             viewerUrl: string | null;
             /** @description ISO 8601 timestamp */

@@ -124,7 +124,49 @@ export interface QuestionSpec {
    * request is parsed: `questionSpecSchema` has no such field, so one sent by a model or an API caller is dropped.
    */
   gate?: QuestionGate | null;
+  /**
+   * What a "Don't ask again" tick would remember (#555), computed by the server in the runner from the gate's
+   * verdict or a fixed topic, and the page the fabric reports. Like `gate`, it is not in `questionSpecSchema`:
+   * a `rememberable` sent by a model or an API caller is dropped.
+   */
+  rememberable?: QuestionRememberable | null;
 }
+
+/** The kinds of question a saved approval can be made from (#555). */
+export const REMEMBERABLE_KINDS = ['gate', 'ask'] as const;
+
+/**
+ * What the owner can tick "Don't ask again" for (#555): a `gate` (the server stopped a commitment; keyed on the
+ * category and the element's label) or an `ask` (the agent asked on its own; keyed on a fixed topic). `host` is
+ * the registrable domain of the page the fabric reported. `summary` is the sentence the owner reads and the rule stores.
+ */
+export interface QuestionRememberable {
+  kind: (typeof REMEMBERABLE_KINDS)[number];
+  host: string;
+  category: string | null;
+  matchKey: string;
+  summary: string;
+  /** Where a rule may be limited to: `everywhere` always; `this_task` and `this_chat` when the run has one. */
+  scopes?: (typeof REMEMBER_RULE_SCOPES)[number][];
+}
+
+/** The scopes a "Don't ask again" rule may be limited to (#555). */
+export const REMEMBER_RULE_SCOPES = ['everywhere', 'this_task', 'this_chat'] as const;
+
+/**
+ * The owner's "Don't ask again" tick on an approval (#555), with its optional limits. Accepted only with an
+ * approval, only on a `rememberable` question and only from the signed-in web or Android app. Distinct from
+ * `remember`, the site's own "remember me" option of a sign-in (#527).
+ */
+export const rememberRuleSchema = z
+  .object({
+    enabled: z.literal(true),
+    scope: z.enum(REMEMBER_RULE_SCOPES).optional(),
+    maxAmount: z.number().finite().positive().max(1_000_000_000).optional(),
+    expiresInDays: z.number().int().min(1).max(3650).optional(),
+  })
+  .strict();
+export type RememberRuleInput = z.infer<typeof rememberRuleSchema>;
 
 /** What the confirmation gate stopped (#550): the page's host (from the fabric), the commitment's category, the element's label. */
 export interface QuestionGate {
@@ -212,6 +254,8 @@ export const questionAnswerSchema = z
     secret: z.string().max(TEXT_MAX_LENGTH).optional(),
     /** The person's choice for the question's "remember me" option. */
     remember: z.boolean().optional(),
+    /** "Don't ask again" (#555): make a saved approval of this approval. Signed-in web and Android app only. */
+    rememberRule: rememberRuleSchema.optional(),
   })
   .strict();
 export type QuestionAnswerInput = z.infer<typeof questionAnswerSchema>;
@@ -234,6 +278,8 @@ export interface QuestionResponse {
   valueWithheld: boolean;
   /** What the person chose for the "remember me" option, when one was offered. */
   remember?: boolean;
+  /** The saved approval this answer created or found ("Don't ask again", #555). */
+  ruleId?: string;
   channel?: string;
   by?: string;
   answeredAt: string;

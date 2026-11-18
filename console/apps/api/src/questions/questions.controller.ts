@@ -53,9 +53,12 @@ export class QuestionsController {
   @ApiDataResponse(QuestionResponseDto)
   @HttpCode(200)
   @Auth({ permissions: ['runs:write'] })
-  answer(@CurrentUser() user: QuestionActor, @Param('id', ParseUUIDPipe) id: string, @Body() body: AnswerQuestionDto): Promise<QuestionView> {
+  async answer(@CurrentUser() user: QuestionActor, @Param('id', ParseUUIDPipe) id: string, @Body() body: AnswerQuestionDto, @Req() req?: object): Promise<QuestionView> {
     const { channel, ...answer } = body;
-    return this.questions.answer(user, id, answer, { channel: channel ?? 'api' });
+    // "Don't ask again" (#555) is the person's own tick in the signed-in web or Android app: the request's origin,
+    // from its credential (never the declared channel), must be one of those. A token, the CLI and an AI app approve once.
+    const rememberAllowed = answer.rememberRule ? ['web', 'android'].includes((await this.clients?.resolve(req))?.origin ?? '') : true;
+    return this.questions.answer(user, id, answer, { channel: channel ?? 'api', rememberAllowed });
   }
 
   /** Decline the question (the same as answering it with `outcome: "cancelled"`). */

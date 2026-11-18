@@ -1,6 +1,8 @@
-import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Optional, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
+import { ApprovalRulesService } from '../approvals/approval-rules.service';
+import { savedApprovalsLine } from '../approvals/approval-runner';
 import { PrismaService } from '../prisma/prisma.service';
 import { readConfirmedActions } from '../runner/confirmed-actions';
 import { RunEndHooks } from '../tasks/run-end-hooks';
@@ -32,6 +34,7 @@ export class ChatResults implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly chats: ChatService,
     private readonly hooks: RunEndHooks,
+    @Optional() private readonly approvals?: ApprovalRulesService,
   ) {}
 
   onModuleInit(): void {
@@ -49,7 +52,17 @@ export class ChatResults implements OnModuleInit, OnModuleDestroy {
       select: { id: true, conversationId: true, status: true, result: true, error: true, stopReason: true, costUsd: true, costKnown: true, stepCount: true, confirmedActions: true },
     });
     if (!run?.conversationId) return;
-    const meta: Prisma.InputJsonObject = { status: run.status, stopReason: run.stopReason, costUsd: Number(run.costUsd), costKnown: run.costKnown, stepCount: run.stepCount, confirmedActions: readConfirmedActions(run.confirmedActions).length };
+    // Steps that went ahead on saved approvals (#555): the same line as the end-of-run notification.
+    const savedApprovals = savedApprovalsLine((await this.approvals?.gateUsesOfRun(userId, run.id).catch(() => [])) ?? []);
+    const meta: Prisma.InputJsonObject = {
+      status: run.status,
+      stopReason: run.stopReason,
+      costUsd: Number(run.costUsd),
+      costKnown: run.costKnown,
+      stepCount: run.stepCount,
+      confirmedActions: readConfirmedActions(run.confirmedActions).length,
+      ...(savedApprovals ? { savedApprovals } : {}),
+    };
     await this.chats.append(run.conversationId, { role: 'assistant', kind: 'result', text: resultText(run).slice(0, RESULT_TEXT_MAX), runId: run.id, meta }, { onceForRun: true });
   }
 

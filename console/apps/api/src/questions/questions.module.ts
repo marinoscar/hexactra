@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { ApprovalsModule } from '../approvals/approvals.module';
 import { FabricModule } from '../fabric/fabric.module';
 import { TasksModule } from '../tasks/tasks.module';
 import { AnswerByTokenController } from './channels/answer-by-token.controller';
@@ -21,7 +22,7 @@ import { QuestionsService } from './questions.service';
  * `QuestionChannelRegistry`) hear `QuestionEvents` through the dispatcher.
  */
 @Module({
-  imports: [FabricModule, TasksModule],
+  imports: [FabricModule, TasksModule, ApprovalsModule],
   controllers: [QuestionsController, AnswerByTokenController],
   providers: [
     QuestionsService,

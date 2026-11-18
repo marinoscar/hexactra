@@ -242,12 +242,21 @@ const questionConstraints = z.object({
   minSelections: z.number().int().optional(),
   maxSelections: z.number().int().optional(),
 });
+const questionRememberable = z.object({
+  kind: z.enum(['gate', 'ask']),
+  host: z.string().describe('The registrable domain of the page the browser reported'),
+  category: z.string().nullable().describe('gate: payment, purchase, send, delete or submit'),
+  matchKey: z.string().describe('gate: the element\'s label; ask: the topic'),
+  summary: z.string().describe("What the owner reads: \"Press 'Pay' on bankofamerica.com\""),
+  scopes: z.array(z.enum(['everywhere', 'this_task', 'this_chat'])).optional().describe('Where a rule may be limited to: this task or this chat when the run has one'),
+});
 export const questionAnswerResponseSchema = z.object({
   outcome: z.enum(['completed', 'cancelled']),
   value: z.string().optional().describe('Never present for a secret; for a sign-in (credentials), the username'),
   values: z.array(z.string()).optional(),
   valueWithheld: z.boolean().describe('True for a secret and a sign-in: the secret or password went to the browser, single use, and is never returned'),
   remember: z.boolean().optional().describe('The person\'s choice for the question\'s "remember me" option'),
+  ruleId: z.uuid().optional().describe('The saved approval this answer created or found ("Don\'t ask again", #555)'),
   channel: z.string().optional(),
   by: z.string().optional().describe('Who answered, e.g. user:<id>'),
   answeredAt: iso,
@@ -272,6 +281,9 @@ export const questionResponseSchema = z.object({
     .object({ host: z.string().nullable(), category: z.string(), label: z.string().nullable() })
     .nullable()
     .describe('The commitment the confirmation gate stopped (#550): the page host the browser reported, the category and the element label. Set by the server only.'),
+  rememberable: questionRememberable
+    .nullable()
+    .describe('What "Don\'t ask again" would remember (#555): the kind, the site, the category and the label or topic, and the summary the owner reads. Computed by the server only; null when the question cannot be remembered.'),
   status: z.enum(['pending', 'answered', 'cancelled', 'expired']),
   response: questionAnswerResponseSchema.nullable(),
   pageTitle: z.string().nullable(),
@@ -302,6 +314,9 @@ export const inboxItemResponseSchema = z.object({
   denyLabel: z.string().nullable(),
   risk: z.enum(['low', 'high']).nullable(),
   rememberLabel: z.string().nullable().describe('credentials and secret: the site\'s "remember me" option, in the page\'s words'),
+  rememberable: questionRememberable
+    .nullable()
+    .describe('What "Don\'t ask again" would remember (#555): the kind, the site, the category and the label or topic, and the summary the owner reads. Computed by the server only; null when the question cannot be remembered.'),
   pageTitle: z.string().nullable(),
   viewerUrl: z.string().nullable(),
   createdAt: iso,

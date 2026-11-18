@@ -1,12 +1,13 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, HttpStatus, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { JobsService } from '@marinoscar/platform-api/jobs';
 import { Prisma, type Question } from '@prisma/client';
 
+import { ApprovalRulesService } from '../approvals/approval-rules.service';
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { PrismaService } from '../prisma/prisma.service';
 import { enqueueGoalRun } from '../runner/goal-run.enqueue';
 import { FabricSession, handoffOutcome, type CreatedHandoff, type FabricHandoff } from '../runner/fabric-session';
-import { CHANNEL_RULES, channelId, mayAnswerOn } from './channels/channel-rules';
+import { CHANNEL_RULES, channelId, mayAnswerOn, mayRememberOn } from './channels/channel-rules';
 import { QuestionEvents, type QuestionEventType } from './question-events';
 import {
   holdsSecret,
@@ -20,6 +21,7 @@ import {
   validateAnswer,
   type QuestionAnswerInput,
   type QuestionGate,
+  type QuestionRememberable,
   type QuestionConstraints,
   type QuestionInputType,
   type QuestionOption,
@@ -27,6 +29,9 @@ import {
   type QuestionSpec,
   type QuestionStatusType,
 } from './questions.contract';
+
+/** Thrown inside the answer's transaction when another answer won: the rule it made is rolled back. */
+class LostRace extends Error {}
 
 /** The longest a `GET /api/questions/:id?waitMs=` holds the request. */
 export const MAX_WAIT_MS = 30_000;
@@ -59,6 +64,8 @@ export interface QuestionView {
   rememberLabel: string | null;
   /** The commitment the server's confirmation gate stopped (#550), set by the server only; null otherwise. */
   gate: QuestionGate | null;
+  /** What "Don't ask again" would remember (#555), computed by the server only; null when the question cannot be remembered. */
+  rememberable: QuestionRememberable | null;
   status: QuestionStatusType;
   response: QuestionResponse | null;
   pageTitle: string | null;
@@ -98,6 +105,7 @@ export function toQuestionView(q: Question): QuestionView {
     risk: (q.risk as 'low' | 'high' | null) ?? null,
     rememberLabel: q.rememberLabel,
     gate: (q.gate as unknown as QuestionGate | null) ?? null,
+    rememberable: (q.rememberable as unknown as QuestionRememberable | null) ?? null,
     status: q.status,
     response: (q.response as unknown as QuestionResponse | null) ?? null,
     pageTitle: q.pageTitle,
@@ -135,6 +143,7 @@ export class QuestionsService {
     private readonly fabric: FabricClient,
     private readonly jobs: JobsService,
     private readonly events: QuestionEvents,
+    @Optional() private readonly approvals?: ApprovalRulesService,
   ) {}
 
   private db(userId: string) {
@@ -195,6 +204,7 @@ export class QuestionsService {
       risk: spec.risk,
       rememberLabel: spec.rememberLabel,
       gate: spec.gate ? (spec.gate as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+      rememberable: spec.rememberable ? (spec.rememberable as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
     };
   }
 
@@ -348,9 +358,9 @@ export class QuestionsService {
    * first answer wins and a later one gets 409. A browser-bound answer is
    * forwarded to the fabric; a run waiting on it is resumed.
    */
-  async answer(actor: QuestionActor, id: string, input: QuestionAnswerInput, opts: { channel?: string } = {}): Promise<QuestionView> {
+  async answer(actor: QuestionActor, id: string, input: QuestionAnswerInput, opts: { channel?: string; rememberAllowed?: boolean } = {}): Promise<QuestionView> {
     const q = await this.find(actor.id, id);
-    return this.answerQuestion(actor, q, input, opts.channel ?? 'api');
+    return this.answerQuestion(actor, q, input, opts.channel ?? 'api', opts.rememberAllowed ?? true);
   }
 
   /** Decline a question: the same as answering it with `outcome: "cancelled"`. */
@@ -373,7 +383,7 @@ export class QuestionsService {
     return this.answerQuestion(actor, q, input, opts.channel ?? 'inbox');
   }
 
-  private async answerQuestion(actor: QuestionActor, q: Question, input: QuestionAnswerInput, channel: string): Promise<QuestionView> {
+  private async answerQuestion(actor: QuestionActor, q: Question, input: QuestionAnswerInput, channel: string, rememberAllowed = true): Promise<QuestionView> {
     if (q.status !== 'pending') {
       throw new ConflictException({ code: q.status === 'expired' ? 'QUESTION_EXPIRED' : 'ALREADY_ANSWERED', message: q.status === 'expired' ? 'This question expired' : 'This question was already answered' });
     }
@@ -400,11 +410,31 @@ export class QuestionsService {
     const response = toResponse(q.input as QuestionInputType, answer, { channel, by, answeredAt: now });
     const status = answer.outcome === 'completed' ? 'answered' : 'cancelled';
     const db = this.db(actor.id);
-    // First answer wins: only a still-pending, unexpired question is claimed.
-    const claimed = await db.question.updateMany({
-      where: { id: q.id, status: 'pending', expiresAt: { gt: now } },
-      data: { status, response: response as unknown as Prisma.InputJsonValue, answeredByUserId: actor.id, answeredChannel: channel, answeredAt: now },
-    });
+    // "Don't ask again" (#555): checked before anything is claimed, so a refused tick leaves the question answerable once.
+    const remember = input.rememberRule ? await this.rememberPlan(actor, q, input, answer, channel, rememberAllowed) : null;
+    // First answer wins: only a still-pending, unexpired question is claimed. With "Don't ask again", the rule is
+    // made in the same transaction as the answer: both happen, or neither.
+    let createdRuleId: string | null = null;
+    const claimed = remember
+      ? await this.prisma.$transaction(async (tx) => {
+          const made = await this.approvals!.createFromAnswer(remember.question, remember.choice, { tx, now, orgId: actor.activeOrgId ?? null });
+          response.ruleId = made.rule.id;
+          if (made.created) createdRuleId = made.rule.id;
+          const c = await tx.question.updateMany({
+            where: { id: q.id, ownerUserId: actor.id, status: 'pending', expiresAt: { gt: now } },
+            data: { status, response: response as unknown as Prisma.InputJsonValue, answeredByUserId: actor.id, answeredChannel: channel, answeredAt: now },
+          });
+          // Lost the race: roll the rule back with the answer.
+          if (c.count === 0) throw new LostRace();
+          return c;
+        }).catch((e: unknown) => {
+          if (e instanceof LostRace) return { count: 0 };
+          throw e;
+        })
+      : await db.question.updateMany({
+          where: { id: q.id, status: 'pending', expiresAt: { gt: now } },
+          data: { status, response: response as unknown as Prisma.InputJsonValue, answeredByUserId: actor.id, answeredChannel: channel, answeredAt: now },
+        });
     if (claimed.count === 0) {
       const fresh = await this.find(actor.id, q.id);
       throw new ConflictException({ code: fresh.status === 'expired' ? 'QUESTION_EXPIRED' : 'ALREADY_ANSWERED', message: fresh.status === 'expired' ? 'This question expired' : 'This question was already answered' });
@@ -416,11 +446,14 @@ export class QuestionsService {
         // The secret (if any) travels in this call only: never stored or logged.
         await session.respond(q.handoffId, { outcome: answer.outcome, value: answer.value, values: answer.values, secret: answer.secret, remember: answer.remember, channel, answeredBy: by });
       } catch (e) {
-        const release = () =>
-          db.question.updateMany({
+        const release = async () => {
+          await db.question.updateMany({
             where: { id: q.id, status, answeredAt: now },
             data: { status: 'pending', response: Prisma.DbNull, answeredByUserId: null, answeredChannel: null, answeredAt: null },
           });
+          // The answer did not reach the browser: a rule it made is undone with it (#555).
+          if (createdRuleId) await this.prisma.approvalRule.deleteMany({ where: { id: createdRuleId, userId: actor.id, useCount: 0 } });
+        };
         if (e instanceof FabricError && (e.status === 404 || e.status === 409)) {
           // Resolved on the fabric already (another channel, or expired): take its state.
           await release();
@@ -440,6 +473,33 @@ export class QuestionsService {
     await this.emit(status === 'answered' ? 'question.answered' : 'question.cancelled', done, channel);
     await this.resumeRun(actor, done);
     return toQuestionView(done);
+  }
+
+  /**
+   * Checks a "Don't ask again" tick (#555) and returns what the rule is made from, or throws `422`. The tick is
+   * accepted only with an approval, only on a question the server marked `rememberable`, and only from the
+   * signed-in web or Android app (`mayRememberOn`, and the request's own origin: never a token or an AI app).
+   */
+  private async rememberPlan(actor: QuestionActor, q: Question, input: QuestionAnswerInput, answer: { outcome: string; value?: string }, channel: string, rememberAllowed: boolean) {
+    const refuse = (code: string, message: string): never => {
+      throw new HttpException({ code, message }, HttpStatus.UNPROCESSABLE_ENTITY);
+    };
+    if (!this.approvals) refuse('REMEMBER_NOT_AVAILABLE', 'Saved approvals are not available.');
+    if (!rememberAllowed || !mayRememberOn(channel)) {
+      const where = CHANNEL_RULES[channelId(channel)]?.label ?? channel;
+      refuse('REMEMBER_NOT_ALLOWED_HERE', `"Don't ask again" can only be ticked in the Hexactra web or Android app, signed in, not from ${where}. Your approval can still be given once from here.`);
+    }
+    const rememberable = (q.rememberable as unknown as QuestionRememberable | null) ?? null;
+    if (!rememberable) refuse('NOT_REMEMBERABLE', 'This request cannot be remembered.');
+    // Only a confirmation: never a secret, a sign-in, a code or a choice, whatever a row says.
+    const approves = answer.outcome === 'completed' && q.kind === 'confirmation' && (q.input === 'none' || (q.input === 'confirm' && answer.value === 'approve'));
+    if (!approves) refuse('REMEMBER_NEEDS_APPROVAL', '"Don\'t ask again" goes with an approval only.');
+    const run = q.runId ? await this.db(actor.id).run.findFirst({ where: { id: q.runId }, select: { taskId: true, conversationId: true } }) : null;
+    const r = input.rememberRule!;
+    return {
+      question: { id: q.id, userId: actor.id, rememberable: rememberable!, taskId: run?.taskId ?? null, conversationId: run?.conversationId ?? null },
+      choice: { scope: r.scope, maxAmount: r.maxAmount ?? null, expiresInDays: r.expiresInDays ?? null },
+    };
   }
 
   /** The AI runner resumes its own runs at once; an external agent polls its handoff. */

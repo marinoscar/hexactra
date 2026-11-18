@@ -1,6 +1,6 @@
 {
   "name": "cli",
-  "version": "1.63.0",
+  "version": "1.65.0",
   "private": true,
   "description": "The app's CLI: @marinoscar/platform-cli composed with this app's identity.",
   "type": "module",

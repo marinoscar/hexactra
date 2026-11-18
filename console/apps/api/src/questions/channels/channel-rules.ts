@@ -109,3 +109,16 @@ export function quickAnswers(q: RuleQuestion): QuickAnswer[] | null {
   if (q.input === 'choice' && q.options?.length === 2) return q.options.map((o) => ({ title: label(o.label), value: o.id }));
   return null;
 }
+
+/**
+ * The channels where "Don't ask again" may be ticked (#555): only where a secret may be answered by the person
+ * signed in to the console in a browser, the web app and the Android app. A notification button, the answer
+ * link, a webhook, the MCP relay, an elicitation form, an MCP Apps card and a hosted AI app approve once and
+ * cannot make a saved approval; the CLI and a REST caller with a token neither.
+ */
+export const REMEMBER_RULE_CHANNELS: readonly string[] = ['web', 'android_app'];
+
+/** Whether `channel` may create a saved approval with its answer (#555). */
+export function mayRememberOn(channel: string): boolean {
+  return REMEMBER_RULE_CHANNELS.includes(channelId(channel));
+}
