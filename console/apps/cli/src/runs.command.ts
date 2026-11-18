@@ -5,7 +5,7 @@ import { resolveApp, startedBy } from './apps.js';
 import { consoleApi } from './console-api.js';
 import { findHost, type FleetHost } from './fleet.js';
 import { costText, resolvePolicyId, runPolicyLines, type RunPolicyFields } from './policies.js';
-import { countOlderThan, deleteOlderThan, parseDays, runsWord } from './runs.js';
+import { countOlderThan, deleteOlderThan, exportRun, parseDays, runsWord, sizeText } from './runs.js';
 
 /** `--host <name|id>`: "any" lets the fabric choose (#384). */
 async function hostRef(ref: string): Promise<string | null> {
@@ -251,6 +251,15 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
       const cost = costUsd === null ? '' : ` ($${costUsd.toFixed(2)} of recorded cost)`;
       if (!(await confirmed(`Delete ${runsWord(matched)} older than ${o.olderThan} days${cost}?`, o.yes))) return out('nothing deleted');
       out(await deleteOlderThan(api, filter, matched));
+    });
+  runs
+    .command('export <id>')
+    .description("Write a run's masked JSON trace file (steps, questions and answers, screenshots, chat) for your records or a bug report")
+    .option('--no-screenshots', 'leave the trace screenshots out (a much smaller file)')
+    .option('-o, --output <file>', 'write to this file (default: hexactra-run-<id>-<date>.json in the current directory)')
+    .action(async (id: string, o: { screenshots: boolean; output?: string }) => {
+      const file = await exportRun(consoleApi(), id, { screenshots: o.screenshots, ...(o.output ? { output: o.output } : {}) });
+      out(`wrote ${file.path} (${sizeText(file.bytes)})`);
     });
   runs
     .command('cancel <id>')

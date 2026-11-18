@@ -267,6 +267,21 @@
       "web": "/runs/:id"
     },
     {
+      "id": "runs.export",
+      "description": "Export a run as one masked JSON trace file: the run, its policy, budget, steps, questions and answers, trace screenshots and chat",
+      "rest": [
+        "GET /api/runs/{id}/export"
+      ],
+      "cli": "runs export",
+      "mcp": "run_export",
+      "tui": {
+        "none": "The TUI is for watching and answering; a file is written with the CLI"
+      },
+      "web": {
+        "none": "The Export button on the run page comes with E35.8; until then use the CLI, the SDK or the route"
+      }
+    },
+    {
       "id": "runs.delete",
       "description": "Delete finished runs: one, a list, or everything a filter matches",
       "rest": [

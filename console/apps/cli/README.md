@@ -188,6 +188,7 @@ hexactra runs watch <run-id>
 hexactra runs cancel <run-id>
 hexactra runs delete <run-id>              # a finished run; asks first (--yes for a script)
 hexactra runs delete --older-than 90       # every finished run older than 90 days; shows the count, then asks
+hexactra runs export <run-id>              # its masked JSON trace file, in the current directory (--no-screenshots, -o <file>)
 hexactra tasks pause <task-id>             # pause every schedule of the task
 hexactra tasks resume <task-id>
 ```
@@ -197,6 +198,7 @@ hexactra tasks resume <task-id>
 `runs list`, `runs show` and the Runs screen of the terminal UI show each run's policy and cost, and the tier, budget use and stop reason when the console reports them.
 
 - **Deleting runs is permanent.** `runs delete` removes the run with its steps and answers, and its cost leaves the task's spend. A run that is queued, running or waiting for you is refused: cancel it first. Without `--yes` the command asks on the terminal; when there is no terminal (a pipe, a CI job) it deletes nothing and says to pass `--yes`. It needs the `runs:delete` permission. The standing rule (keep N days) is set in the web app: Settings → Run history.
+- **Exporting a run writes one masked file.** `runs export <run-id>` writes `hexactra-run-<id>-<yyyymmdd>.json` (or `-o <file>`) and prints its path and size: the run, its steps, questions and answers, trace screenshots and chat, with card and account numbers, emails, phone numbers and tokens masked, never the transcript or a secret answer. `--no-screenshots` makes it much smaller; a file over 50 MB with screenshots is refused with that hint. Take the full run id (`runs list --json`). See docs/runs.md, "Exporting a run".
 - **A paused task still runs when you start it.** `tasks pause` only stops its schedules; `tasks run` keeps working.
 - **The Runs screen** of the terminal UI shows the 30 most recent runs; `m` loads the next 30.
 
