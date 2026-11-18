@@ -29,7 +29,8 @@ import { RunLiveController } from '../src/runner/run-live.controller';
 
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
-const SECRET = '987654';
+// Not hex-only: a random UUID in the stored row must never match it by chance.
+const SECRET = 'otp-987654-zq';
 
 beforeAll(async () => {
   app = await createApp();
