@@ -68,9 +68,14 @@ describe('the nginx overlay of /api/mcp (#465)', () => {
       const temps = ['client_body', 'proxy', 'fastcgi', 'uwsgi', 'scgi'].map((k) => `${k}_temp_path ${dir}/${k}_temp;`).join(' ');
       writeFileSync(main, readFileSync(main, 'utf8').replace(/\bhttp\s*\{/, (m) => `${m} ${temps}`));
       const r = spawnSync('nginx', ['-t', '-p', dir, '-c', join(dir, 'nginx.conf'), '-e', join(dir, 'error.log')], { encoding: 'utf8' });
-      // stderr first, so a failure shows nginx's own message.
+      // The configuration must parse and validate ("syntax is ok"). After that, `nginx -t` also
+      // opens the files it would use; a non-root runner may not, which is the runner's
+      // permission, not the configuration: allow only that kind of failure.
       expect(r.stderr).toMatch(/syntax is ok/);
-      expect(r.status).toBe(0);
+      if (r.status !== 0) {
+        const errors = r.stderr.split('\n').filter((l) => /\[(emerg|alert|crit|error)\]/.test(l));
+        expect({ errors, onlyPermissions: errors.every((l) => /Permission denied|Operation not permitted/.test(l)) }).toMatchObject({ onlyPermissions: true });
+      }
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
