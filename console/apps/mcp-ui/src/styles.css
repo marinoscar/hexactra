@@ -1,4 +1,4 @@
-/* The run card: plain CSS on the host's style variables (MCP Apps
+/* The MCP Apps cards (run, question, tasks): plain CSS on the host's style variables (MCP Apps
    McpUiStyleVariableKey), with neutral fallbacks and system fonts. Light and
    dark follow the host's theme (data-theme on the card). Transparent page. */
 :root {
@@ -307,6 +307,162 @@ body {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+/* The typed answer form (#467): run card banner and question card. */
+.qform {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.options {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.options legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-weight: var(--font-weight-medium, 500);
+}
+.option {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  min-height: 44px;
+  padding: 6px 4px;
+  border-radius: var(--r);
+  cursor: pointer;
+}
+.option input {
+  margin-top: 3px;
+  flex: none;
+}
+.option-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.option-desc {
+  font-size: var(--font-text-xs-size, 12px);
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.field label {
+  font-weight: var(--font-weight-medium, 500);
+}
+.input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r);
+  background: var(--c-bg);
+  color: var(--c-text);
+  font: inherit;
+}
+textarea.input {
+  resize: vertical;
+}
+.input[aria-invalid='true'] {
+  border-color: var(--c-danger-text);
+}
+.with-unit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.unit {
+  flex: none;
+  color: var(--c-text2);
+}
+.hint {
+  font-size: var(--font-text-xs-size, 12px);
+  min-height: 1em;
+}
+.field-error {
+  margin: 0;
+  color: var(--c-danger-text);
+  overflow-wrap: anywhere;
+}
+.q-done {
+  margin: 0;
+  font-weight: var(--font-weight-medium, 500);
+  overflow-wrap: anywhere;
+}
+.q-done.ok {
+  color: var(--c-success-text);
+}
+.input:focus-visible,
+.option input:focus-visible {
+  outline: 2px solid var(--c-ring);
+  outline-offset: 2px;
+}
+/* The question card's list and the tasks card's rows. */
+.qlist,
+.tlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.qitem,
+.trow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r);
+  min-width: 0;
+}
+.qitem.settled {
+  background: var(--c-bg2);
+}
+.qmeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: center;
+}
+.q-goal {
+  font-size: var(--font-text-xs-size, 12px);
+  overflow-wrap: anywhere;
+}
+.countdown {
+  color: var(--c-danger-text);
+  font-weight: var(--font-weight-medium, 500);
+}
+.tmain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.tname {
+  margin: 0;
+  font-weight: var(--font-weight-semibold, 600);
+  overflow-wrap: anywhere;
+}
+.tsched {
+  overflow-wrap: anywhere;
+}
+.chip-running {
+  color: var(--c-ring);
+}
+.chip-cancelled {
+  color: var(--c-text2);
 }
 @media (max-width: 360px) {
   .card {

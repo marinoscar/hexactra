@@ -99,6 +99,8 @@ describe('structured results validate against the output schemas (real REST answ
       await call(t, 'question_status', { question_id: q.question_id });
       expect((await call(t, 'inbox_list', {})).items!.map((x) => x.questionId)).toContain(q.question_id);
       expect(await call(t, 'inbox_answer', { question_id: q.question_id, outcome: 'completed', value: 'A' })).toMatchObject({ status: 'answered', value: 'A' });
+      const q2 = await call(t, 'ask_human', { prompt: 'Which one?', input: 'multi_choice', options: ['A', 'B', 'C'] });
+      expect(await call(t, 'question_card_answer', { question_id: q2.question_id, outcome: 'completed', values: ['A', 'C'] })).toMatchObject({ status: 'answered', values: ['A', 'C'], channel: expect.stringMatching(/^mcp-app/) });
 
       expect((await call(t, 'policies_list', {})).items!.map((p) => p.id)).toContain('builtin:balanced');
       const policy = await call(t, 'policy_get', { policy_id: 'builtin:balanced' });

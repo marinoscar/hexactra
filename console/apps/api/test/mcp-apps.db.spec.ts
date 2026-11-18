@@ -12,7 +12,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import Ajv2020 from 'ajv/dist/2020';
 
 import { createApp } from '../src/main';
-import { MCP_APP_MIME, MCP_APPS_EXTENSION_ID, RUN_CARD_URI, mcpUiDistDir, setMcpUiDistDir } from '../src/mcp/mcp.apps';
+import { MCP_APP_MIME, MCP_APPS_EXTENSION_ID, MCP_UI_RESOURCES, QUESTION_CARD_URI, RUN_CARD_URI, TASKS_CARD_URI, mcpUiDistDir, setMcpUiDistDir } from '../src/mcp/mcp.apps';
 import { McpDispatcher, toolListEntry } from '../src/mcp/mcp.dispatcher';
 import { MCP_VERSIONS, META, type McpRequestContext } from '../src/mcp/mcp.protocol';
 import { MCP_TOOLS } from '../src/mcp/mcp.tools';
@@ -27,10 +27,12 @@ const APP_URL = 'https://console.example.test';
 const workerMode = process.env.JOBS_WORKER_MODE;
 const appUrl = process.env.APP_URL;
 const UI_TOOLS = ['run_goal', 'run_status', 'run_wait', 'task_run'];
+/** The tools linked to the question and tasks cards (#467). */
+const CARD_TOOLS: Record<string, string> = { inbox_list: QUESTION_CARD_URI, question_status: QUESTION_CARD_URI, ask_human: QUESTION_CARD_URI, tasks_list: TASKS_CARD_URI, schedules_list: TASKS_CARD_URI };
 /** Claude's documented rule, computed here from the formula: first 32 hex of SHA-256 of the server URL + `.claudemcpcontent.com`. */
 
 /** The real build (`npm run build` runs before the db tier in CI), or a stand-in so the spec runs without one. */
-const built = existsSync(join(mcpUiDistDir(), 'run-card.html'));
+const built = MCP_UI_RESOURCES.every((r) => existsSync(join(mcpUiDistDir(), r.file)));
 let fixtureDir: string | null = null;
 const users = new Set<string>();
 
@@ -39,7 +41,7 @@ beforeAll(async () => {
   process.env.APP_URL = APP_URL;
   if (!built) {
     fixtureDir = mkdtempSync(join(tmpdir(), 'mcp-ui-'));
-    writeFileSync(join(fixtureDir, 'run-card.html'), '<!doctype html><html><head><title>Hexactra run</title></head><body><div id="root"></div><script type="module">/* stand-in */</script></body></html>');
+    for (const r of MCP_UI_RESOURCES) writeFileSync(join(fixtureDir, r.file), `<!doctype html><html><head><title>${r.title}</title></head><body><div id="root"></div><script type="module">/* stand-in */</script></body></html>`);
     setMcpUiDistDir(fixtureDir);
   }
   app = await createApp();
@@ -115,7 +117,7 @@ describe('the server advertises MCP Apps', () => {
 });
 
 describe('resources', () => {
-  it('resources/list lists the run card for a caller with runs:read, with the cache hints on 2026-07-28', async () => {
+  it('resources/list lists the run, question and tasks cards, with the cache hints on 2026-07-28', async () => {
     const who = await login(`mcp-apps-list-${stamp}@example.test`);
     const list = await legacy(who.t, 'resources/list');
     expect(list.json.result.resources).toEqual([
@@ -127,9 +129,26 @@ describe('resources', () => {
         mimeType: 'text/html;profile=mcp-app',
         _meta: { ui: { csp: { connectDomains: [], resourceDomains: [] }, prefersBorder: true } },
       },
+      ...[
+        [QUESTION_CARD_URI, 'question_card', 'Hexactra question'],
+        [TASKS_CARD_URI, 'tasks_card', 'Hexactra tasks'],
+      ].map(([uri, name, title]) => ({ uri, name, title, description: expect.any(String), mimeType: 'text/html;profile=mcp-app', _meta: { ui: { csp: { connectDomains: [], resourceDomains: [] }, prefersBorder: true } } })),
     ]);
     const modernList = await modern(who.t, 'resources/list');
-    expect(modernList.result).toMatchObject({ resources: [{ uri: RUN_CARD_URI }], ttlMs: 300000, cacheScope: 'private', resultType: 'complete' });
+    expect(modernList.result).toMatchObject({ resources: [{ uri: RUN_CARD_URI }, { uri: QUESTION_CARD_URI }, { uri: TASKS_CARD_URI }], ttlMs: 300000, cacheScope: 'private', resultType: 'complete' });
+    // The two new cards are read like the run card: one self-contained page each (#467).
+    for (const [uri, name, tool] of [
+      [QUESTION_CARD_URI, 'question_card', 'question_card_answer'],
+      [TASKS_CARD_URI, 'tasks_card', 'task_pause'],
+    ]) {
+      const c = (await legacy(who.t, 'resources/read', { uri })).json.result.contents[0];
+      expect(c).toMatchObject({ uri, mimeType: 'text/html;profile=mcp-app', _meta: { ui: { csp: { connectDomains: [], resourceDomains: [] } } } });
+      expect(c.text).toMatch(new RegExp(`^<!doctype html>\\n<!-- hexactra-mcp-ui ${name} sha256:[0-9a-f]{16}`, 'i'));
+      if (built) {
+        expect(c.text).not.toMatch(/<script[^>]*\ssrc=/i);
+        expect(c.text).toContain(tool);
+      }
+    }
   });
 
   it('resources/read returns the HTML with the MCP App MIME type and an empty CSP, and no domain (not even for Claude)', async () => {
@@ -176,7 +195,10 @@ describe('tools', () => {
     for (const name of UI_TOOLS) {
       expect([name, tools.find((x) => x.name === name)._meta]).toEqual([name, { ui: { resourceUri: RUN_CARD_URI }, 'ui/resourceUri': RUN_CARD_URI, 'openai/outputTemplate': RUN_CARD_URI }]);
     }
-    expect(tools.filter((x) => x._meta).map((x) => x.name).sort()).toEqual([...UI_TOOLS].sort());
+    for (const [name, uri] of Object.entries(CARD_TOOLS)) {
+      expect([name, tools.find((x) => x.name === name)._meta]).toEqual([name, { ui: { resourceUri: uri }, 'ui/resourceUri': uri, 'openai/outputTemplate': uri }]);
+    }
+    expect(tools.filter((x) => x._meta).map((x) => x.name).sort()).toEqual([...UI_TOOLS, ...Object.keys(CARD_TOOLS)].sort());
   });
 
   it('personal access token clients: tools/list gains only additive _meta (same tools, same entries otherwise)', async () => {

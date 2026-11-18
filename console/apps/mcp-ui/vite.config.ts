@@ -1,7 +1,9 @@
 /// <reference types="vitest/config" />
-// The MCP Apps widgets (#466): one self-contained HTML file per widget, every
-// script and style inlined (vite-plugin-singlefile), so a host renders it
-// under the strictest CSP (no external origin at all). The code is written
+// The MCP Apps widgets (#466, #467): one self-contained HTML file per widget,
+// every script and style inlined (vite-plugin-singlefile), so a host renders
+// it under the strictest CSP (no external origin at all). The plugin inlines
+// one entry per build, so each widget is its own build: `MCP_UI_WIDGET`
+// names it (scripts/build-widgets.mjs runs the three in turn). The code is written
 // against React's API and runs on Preact's compat layer: React DOM alone is
 // ~190 KB minified and the run card's budget is 300 KB (docs/mcp-apps.md).
 import { createRequire } from 'node:module';
@@ -10,6 +12,11 @@ import { dirname, resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
+
+/** The widgets, each `src/<name>.html` built to `dist/<name>.html`. */
+export const WIDGETS = ['run-card', 'question-card', 'tasks-card'] as const;
+const widget = process.env.MCP_UI_WIDGET ?? 'run-card';
+if (!(WIDGETS as readonly string[]).includes(widget)) throw new Error(`MCP_UI_WIDGET: unknown widget ${widget} (one of ${WIDGETS.join(', ')})`);
 
 const HERE = typeof import.meta.dirname === 'string' ? import.meta.dirname : process.cwd();
 const require = createRequire(resolve(HERE, 'package.json'));
@@ -35,9 +42,10 @@ export default defineConfig({
   resolve: { alias: PREACT_ALIASES },
   build: {
     outDir: resolve(HERE, 'dist'),
-    emptyOutDir: true,
+    // The widgets share dist/: scripts/build-widgets.mjs empties it once, before the first.
+    emptyOutDir: false,
     target: 'es2022',
-    rollupOptions: { input: { 'run-card': resolve(HERE, 'src', 'run-card.html') } },
+    rollupOptions: { input: { [widget]: resolve(HERE, 'src', `${widget}.html`) } },
   },
   test: {
     root: HERE,

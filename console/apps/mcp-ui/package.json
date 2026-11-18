@@ -1,18 +1,19 @@
 {
   "name": "mcp-ui",
-  "version": "1.36.0",
+  "version": "1.37.0",
   "private": true,
-  "description": "The console's MCP Apps widgets (the live run card): one self-contained HTML file each, served by the API as ui:// resources.",
+  "description": "The console's MCP Apps widgets (the live run card, the question card and the tasks card): one self-contained HTML file each, served by the API as ui:// resources.",
   "type": "module",
   "scripts": {
     "dev": "vite build --watch",
-    "build": "tsc --noEmit && vite build && node scripts/check-bundle.mjs",
+    "build": "tsc --noEmit && node scripts/build-widgets.mjs && node scripts/check-bundle.mjs",
     "check:bundle": "node scripts/check-bundle.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run"
   },
   "dependencies": {
+    "@app/shared": "*",
     "@modelcontextprotocol/client": "2.4.0",
     "@modelcontextprotocol/ext-apps": "2.1.0",
     "preact": "11.1.1",

@@ -1,12 +1,13 @@
-// The run card's bundle rules (#466), run after every build (and so in CI's
-// `npm run build`):
+// The widgets' bundle rules (#466, #467), run after every build (and so in
+// CI's `npm run build`), for each widget in WIDGETS:
 // 1. one self-contained HTML file: no <script src>, no <link href>, no
 //    import of another file;
-// 2. at most 300 KB (uncompressed);
+// 2. within its budget (uncompressed): the run card 300 KB (it carries the
+//    MCP Apps SDK), the question and tasks cards 250 KB each;
 // 3. no external URL beyond the allowlist below (each with its reason);
-// 4. no MCP tool name except the ones the card may call (src/model.ts,
-//    ALLOWED_TOOLS): every tool name the console has comes from the API's
-//    pinned manifest (apps/api/test/__snapshots__/mcp-tools.json).
+// 4. no MCP tool name except the ones that widget may call (its `tools`,
+//    the same list as its source's): every tool name the console has comes
+//    from the API's pinned manifest (apps/api/test/__snapshots__/mcp-tools.json).
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,7 +15,14 @@ import { fileURLToPath } from 'node:url';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
 const DIST = join(ROOT, 'dist');
-export const BUDGET_BYTES = 300 * 1024;
+/** Each widget: its file, its budget and the only tools it may name (src/model.ts, src/question-model.ts, src/tasks-model.ts). */
+export const WIDGETS = {
+  'run-card.html': { budget: 300 * 1024, tools: ['run_card_poll', 'run_wait', 'run_status', 'run_cancel', 'task_run', 'question_card_answer'] },
+  'question-card.html': { budget: 250 * 1024, tools: ['inbox_list', 'question_card_answer', 'question_status'] },
+  'tasks-card.html': { budget: 250 * 1024, tools: ['tasks_list', 'task_run', 'task_pause', 'task_resume'] },
+};
+/** The run card's budget (the largest). */
+export const BUDGET_BYTES = WIDGETS['run-card.html'].budget;
 
 /** Strings that look like URLs but are never fetched (the CSP allows no origin anyway). */
 export const URL_ALLOWLIST = [
@@ -39,7 +47,8 @@ export const URL_ALLOWLIST = [
   'https://*.example.com',
 ];
 
-export const ALLOWED_TOOLS = ['run_card_poll', 'run_wait', 'run_status', 'run_cancel', 'task_run'];
+/** The run card's tools (kept for the run card's own test). */
+export const ALLOWED_TOOLS = WIDGETS['run-card.html'].tools;
 
 function toolNames() {
   const path = join(ROOT, '..', 'api', 'test', '__snapshots__', 'mcp-tools.json');
@@ -48,15 +57,19 @@ function toolNames() {
 
 export function checkHtml(html, { names = toolNames(), file = 'run-card.html' } = {}) {
   const problems = [];
+  const widget = WIDGETS[file];
+  if (!widget) return { size: 0, problems: [`${file}: not a known widget (add it to WIDGETS)`] };
+  const budget = widget.budget;
+  const allowed = widget.tools;
   const size = Buffer.byteLength(html, 'utf8');
-  if (size > BUDGET_BYTES) problems.push(`${file}: ${size} bytes, over the ${BUDGET_BYTES}-byte budget`);
+  if (size > budget) problems.push(`${file}: ${size} bytes, over the ${budget}-byte budget`);
   if (/<script[^>]*\ssrc\s*=/i.test(html)) problems.push(`${file}: a <script src> (everything must be inline)`);
   if (/<link[^>]*\shref\s*=/i.test(html)) problems.push(`${file}: a <link href> (everything must be inline)`);
   if (/\bimport\s*\(\s*["'`]/.test(html) || /\bfrom\s*["'`]\.{0,2}\//.test(html)) problems.push(`${file}: imports another file`);
   const urls = new Set(html.match(/https?:\/\/[^\s"'`<>)\\]+/g) ?? []);
   const external = [...urls].filter((u) => !URL_ALLOWLIST.some((a) => u === a || u.startsWith(a)));
   if (external.length) problems.push(`${file}: external URLs ${external.join(', ')}`);
-  const called = names.filter((n) => !ALLOWED_TOOLS.includes(n) && new RegExp(`(^|[^A-Za-z0-9_])${n}([^A-Za-z0-9_]|$)`).test(html));
+  const called = names.filter((n) => !allowed.includes(n) && new RegExp(`(^|[^A-Za-z0-9_])${n}([^A-Za-z0-9_]|$)`).test(html));
   if (called.length) problems.push(`${file}: names tools it must never call: ${called.join(', ')}`);
   if (/["'`]browser_[a-z_]+["'`]/.test(html)) problems.push(`${file}: names a browser_* tool`);
   return { size, problems };
@@ -66,11 +79,11 @@ function main() {
   const files = readdirSync(DIST).filter((f) => f.endsWith('.html'));
   const extra = readdirSync(DIST).filter((f) => !f.endsWith('.html') && statSync(join(DIST, f)).isFile());
   const problems = [];
-  if (!files.includes('run-card.html')) problems.push('dist/run-card.html is missing');
+  for (const w of Object.keys(WIDGETS)) if (!files.includes(w)) problems.push(`dist/${w} is missing`);
   if (extra.length) problems.push(`dist holds files besides the widgets: ${extra.join(', ')}`);
   for (const f of files) {
     const r = checkHtml(readFileSync(join(DIST, f), 'utf8'), { file: f });
-    console.log(`${f}: ${r.size} bytes (${(r.size / 1024).toFixed(1)} KB of ${BUDGET_BYTES / 1024} KB)`);
+    if (WIDGETS[f]) console.log(`${f}: ${r.size} bytes (${(r.size / 1024).toFixed(1)} KB of ${WIDGETS[f].budget / 1024} KB)`);
     problems.push(...r.problems);
   }
   if (problems.length) {

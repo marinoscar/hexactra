@@ -13,6 +13,15 @@
 //   draws: neither is a console sign-in, so they collect public answers only
 //   (#463). A personal access token (channel `mcp`) is the person's own
 //   credential and keeps answering everything but a secret's value.
+// - The MCP Apps question card (#467, channel `mcp-app`) is a form the
+//   person clicks in the chat: a first-hand answer, but still not a console
+//   sign-in, so it collects public answers and acknowledgements only.
+//
+// Which inputs are public and which need a sign-in are the shared answer
+// rules (packages/shared/question-rules.js), the ones the web form and the
+// widgets read too.
+import { isPublicAnswer as sharedIsPublicAnswer, needsSignedIn as sharedNeedsSignedIn } from '@app/shared/question-rules';
+
 import type { QuestionInputType, QuestionOption } from '../questions.contract';
 
 /** The fields of a question the rules read. */
@@ -24,19 +33,9 @@ export interface RuleQuestion {
   denyLabel?: string | null;
 }
 
-/** Whether the answer is public: a channel that does not sign the person in (a webhook) may collect it. */
+/** Whether the answer is public: a channel that does not sign the person in (a webhook) may collect it (packages/shared/question-rules.js). */
 export function isPublicAnswer(q: RuleQuestion): boolean {
-  switch (q.input) {
-    case 'choice':
-    case 'multi_choice':
-    case 'text':
-    case 'number':
-      return true;
-    case 'confirm':
-      return q.risk === 'low';
-    default:
-      return false;
-  }
+  return sharedIsPublicAnswer(q);
 }
 
 /** Whether a channel signs the person in to the console itself (the rule for high-risk confirms and secrets). */
@@ -67,6 +66,7 @@ export const CHANNEL_RULES: Readonly<Record<string, ChannelRule>> = {
   webhook: { signedIn: false, label: 'a webhook receiver' },
   'mcp-oauth': { signedIn: false, label: 'an AI app connected with OAuth, relaying the chat' },
   'mcp-elicitation': { signedIn: false, label: "an AI app's form (MCP elicitation)" },
+  'mcp-app': { signedIn: false, label: "an AI app's question card (MCP Apps), where the person clicked" },
 };
 
 /** The rule id of a channel label (`mcp-elicitation.claude` → `mcp-elicitation`). */
@@ -74,9 +74,9 @@ export function channelId(channel: string): string {
   return channel.split('.')[0] ?? channel;
 }
 
-/** Whether a question needs a signed-in channel to be answered: a secret, or a confirm that is not low risk. */
+/** Whether a question needs a signed-in channel to be answered: a secret, or a confirm that is not low risk (packages/shared/question-rules.js). */
 export function needsSignedIn(q: Pick<RuleQuestion, 'input' | 'risk'>): boolean {
-  return q.input === 'secret' || (q.input === 'confirm' && q.risk !== 'low');
+  return sharedNeedsSignedIn(q);
 }
 
 /** Whether `channel` may record this answer to `q`. Declining is allowed everywhere. */

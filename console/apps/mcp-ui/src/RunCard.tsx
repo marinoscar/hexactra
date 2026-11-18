@@ -1,6 +1,10 @@
 // The live run card (#466). Every string from a tool result is rendered as a
-// React text node: never as HTML, never as an attribute that runs code. The
-// card has no input of any kind, so it can never collect a secret.
+// React text node: never as HTML, never as an attribute that runs code.
+// Its only inputs are the "Needs you" banner's typed form (#467: a choice, a
+// number, some text or a low-risk confirm, sent with question_card_answer);
+// a code, a password, a high-risk approval or a takeover is never collected
+// here, only linked to the console.
+import { chatAnswerMode, type RuleAnswer } from '@app/shared/question-rules';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { HostBridge, HostContextLike } from './bridge';
@@ -20,6 +24,8 @@ import {
   type ToolResultLike,
 } from './model';
 import { Poller, type PollStatus, type PollerOptions } from './poller';
+import { sendAnswer, tellConversation } from './shared/answer';
+import { QuestionForm } from './shared/QuestionForm';
 import { Supersession, type ChannelFactory } from './supersede';
 
 export interface RunCardProps {
@@ -76,6 +82,8 @@ export function RunCard({ host, pollerOptions, channelFactory, isVisible }: RunC
   const [shotAt, setShotAt] = useState<number | null>(null);
   const [snapAt, setSnapAt] = useState(0);
   const [now, setNow] = useState(() => (pollerOptions?.now ?? Date.now)());
+  /** The inline answer of the question in the banner (#467). */
+  const [answered, setAnswered] = useState<{ id: string; kind: 'sending' | 'done' | 'error'; text: string } | null>(null);
 
   const poller = useRef<Poller | null>(null);
   const election = useRef<Supersession | null>(null);
@@ -198,6 +206,20 @@ export function RunCard({ host, pollerOptions, channelFactory, isVisible }: RunC
     }
   };
 
+  const answerInline = async (a: RuleAnswer) => {
+    const q = snap?.progress.question;
+    if (!q || superseded) return;
+    setAnswered({ id: q.id, kind: 'sending', text: '' });
+    const o = await sendAnswer(host, 'question_card_answer', q, a);
+    if (o.kind === 'sent') {
+      setAnswered({ id: q.id, kind: 'done', text: o.declined ? 'Sent: you declined.' : `Sent: ${o.label}` });
+      await tellConversation(host, o);
+      // The run resumes: the next refresh shows it.
+    } else if (o.kind === 'already') setAnswered({ id: q.id, kind: 'done', text: `Answered on another device: ${o.label}` });
+    else if (o.kind === 'expired') setAnswered({ id: q.id, kind: 'done', text: 'This question expired.' });
+    else setAnswered({ id: q.id, kind: 'error', text: o.kind === 'refused' ? o.message : 'Not sent: the answer did not reach Hexactra. Try again.' });
+  };
+
   const open = async (url: string | null) => {
     if (!url) return;
     try {
@@ -237,6 +259,8 @@ export function RunCard({ host, pollerOptions, channelFactory, isVisible }: RunC
   const startedHere = toolName !== undefined && toolName !== 'run_status' && toolName !== 'run_wait' && toolName !== 'run_card_poll';
   const question = p.needs_human ? p.question : undefined;
   const inbox = question ? inboxUrl(p.console_url, question.id) : null;
+  const inlineForm = question !== undefined && chatAnswerMode(question) === 'form';
+  const inline = question && answered?.id === question.id ? answered : null;
   const pageDerived = state === 'running' || p.activity.startsWith('Last step') || state === 'waiting';
 
   return (
@@ -277,8 +301,22 @@ export function RunCard({ host, pollerOptions, channelFactory, isVisible }: RunC
         <section className="banner needs" aria-label="The run needs you">
           <p className="q-label">Needs you</p>
           <p className="q-prompt">{question.prompt}</p>
+          {inline?.kind === 'done' ? (
+            <p className="q-done ok" role="status">
+              {inline.text}
+            </p>
+          ) : inlineForm ? (
+            <QuestionForm
+              key={question.id}
+              question={question}
+              disabled={superseded || inline?.kind === 'sending'}
+              error={inline?.kind === 'error' ? inline.text : null}
+              onSubmit={(a) => answerInline(a)}
+              onOpen={() => void open(inbox)}
+            />
+          ) : null}
           <div className="row">
-            {question.answerable_here && question.input !== 'secret' ? (
+            {question.answerable_here && !inlineForm && question.input !== 'secret' ? (
               <button type="button" className="btn" disabled={superseded} onClick={() => void host.sendMessage('Ask me the question my Hexactra run is waiting on, so I can answer it here.').catch(() => setNotice('Answer it in the chat.'))}>
                 Answer in the chat
               </button>

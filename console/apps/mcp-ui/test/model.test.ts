@@ -75,7 +75,7 @@ describe('helpers', () => {
     expect(isYounger({ instanceId: 'a', key: { created_at: 1, seq: 10 } }, a)).toBe(true);
   });
 
-  it('calls only the run tools', () => {
-    expect([...ALLOWED_TOOLS].sort()).toEqual(['run_cancel', 'run_card_poll', 'run_status', 'run_wait', 'task_run']);
+  it('calls only the run tools, and question_card_answer for the question in its banner (#467)', () => {
+    expect([...ALLOWED_TOOLS].sort()).toEqual(['question_card_answer', 'run_cancel', 'run_card_poll', 'run_status', 'run_wait', 'task_run']);
   });
 });

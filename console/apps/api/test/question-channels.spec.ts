@@ -7,7 +7,9 @@ import { sanitizePushExtras, type NotificationEventDef } from '@marinoscar/platf
 
 import { HEXACTRA_NOTIFICATIONS, QUESTION_ASKED_EVENT, hexactraPushPayload } from '../src/platform/notifications/hexactra.notifications';
 import { QUESTION_ANSWERED_WEBHOOK, questionAskedWebhookSchema, questionSettledWebhookSchema } from '../src/platform/webhooks/hexactra.webhook-events';
-import { isPublicAnswer, quickAnswers } from '../src/questions/channels/channel-rules';
+import * as sharedRules from '@app/shared/question-rules';
+
+import { isPublicAnswer, mayAnswerOn, quickAnswers } from '../src/questions/channels/channel-rules';
 import { NotificationsQuestionChannel } from '../src/questions/channels/notifications.channel';
 import { QuestionChannelRegistry } from '../src/questions/channels/question-channel';
 import { QuestionChannelDispatcher } from '../src/questions/channels/question-dispatcher';
@@ -92,6 +94,22 @@ describe('channel rules', () => {
       { title: '18:40 flight', value: 'late' },
     ]);
     for (const k of ['highConfirm', 'choice3', 'multi', 'text', 'number', 'secret', 'takeover', 'none']) expect(quickAnswers(CASES[k]!)).toBeNull();
+  });
+
+  it('are the shared answer rules the web form and the MCP Apps widgets read (packages/shared/question-rules.js)', () => {
+    for (const q of Object.values(CASES)) expect(isPublicAnswer(q)).toBe(sharedRules.isPublicAnswer(q));
+    expect(Object.entries(CASES).map(([k, q]) => [k, sharedRules.chatAnswerMode(q)])).toEqual(
+      Object.keys(CASES).map((k) => [k, k === 'secret' ? 'secret' : k === 'takeover' ? 'takeover' : k === 'none' ? 'acknowledge' : k === 'highConfirm' ? 'signed_in' : 'form']),
+    );
+  });
+
+  it('the MCP Apps question card (mcp-app, #467): public answers and acknowledgements, never a secret or a high-risk approval; declining always', () => {
+    const allowed = Object.entries(CASES).filter(([, q]) => mayAnswerOn('mcp-app.claude', q)).map(([k]) => k);
+    expect(allowed.sort()).toEqual(['choice2', 'choice3', 'lowConfirm', 'multi', 'none', 'number', 'takeover', 'text']);
+    expect(mayAnswerOn('mcp-app.chatgpt', CASES.secret!, 'cancelled')).toBe(true);
+    expect(mayAnswerOn('mcp-app', CASES.highConfirm!)).toBe(false);
+    // A signed-in channel still may.
+    expect(mayAnswerOn('web', CASES.highConfirm!)).toBe(true);
   });
 });
 

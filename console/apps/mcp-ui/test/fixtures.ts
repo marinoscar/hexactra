@@ -4,6 +4,7 @@ import { act } from '@testing-library/react';
 import { vi } from 'vitest';
 
 import type { HostBridge, HostContextLike } from '../src/bridge';
+import type { HostBridge as SharedHostBridge } from '../src/shared/bridge';
 import type { ToolResultLike } from '../src/model';
 
 export const RUN_ID = '11111111-1111-4111-8111-111111111111';
@@ -104,4 +105,35 @@ export function channelBus() {
     return ch;
   };
   return { factory, channels };
+}
+
+/** A mocked host for any widget (the question and tasks cards, #467). */
+export function mockWidgetHost<T extends string>(opts: { context?: HostContextLike; tools?: (name: T, args: Record<string, unknown>) => Promise<ToolResultLike> } = {}) {
+  let onResult: ((r: ToolResultLike) => void) | null = null;
+  const pending: ToolResultLike[] = [];
+  const handler = { fn: opts.tools ?? (async () => new Promise<ToolResultLike>(() => undefined)) };
+  const host = {
+    callTool: vi.fn((name: T, args: Record<string, unknown>) => handler.fn(name, args)),
+    openLink: vi.fn(async (_url: string) => undefined),
+    sendMessage: vi.fn(async (_text: string) => undefined),
+    hostContext: () => opts.context,
+    onToolResult: (cb: (r: ToolResultLike) => void) => {
+      onResult = cb;
+      for (const r of pending.splice(0)) cb(r);
+    },
+    onToolInput: () => undefined,
+    onHostContextChanged: () => undefined,
+  } satisfies SharedHostBridge<T>;
+  return {
+    host,
+    setTools(fn: (name: T, args: Record<string, unknown>) => Promise<ToolResultLike>) {
+      handler.fn = fn;
+    },
+    push(r: ToolResultLike) {
+      act(() => {
+        if (onResult) onResult(r);
+        else pending.push(r);
+      });
+    },
+  };
 }

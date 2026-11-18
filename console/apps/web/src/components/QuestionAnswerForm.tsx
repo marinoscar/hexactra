@@ -20,6 +20,8 @@ import {
 } from '@mui/material';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 
+import { numberError, numberHint, selectionBounds, selectionHelp, selectionOk, textError } from '@app/shared/question-rules';
+
 import { digitsOnly, secretLabel, type AnswerBody, type AskedQuestion, type QuestionOption } from './questions';
 
 export interface QuestionAnswerFormProps {
@@ -56,34 +58,9 @@ const OPTION_ROW_SX = {
   '& .MuiFormControlLabel-label': { flex: 1, minWidth: 0, overflowWrap: 'anywhere', pt: '5px' },
 } as const;
 
-/** Why a number does not fit its constraints, or null. */
-export function numberError(raw: string, c: AskedQuestion['constraints']): string | null {
-  if (raw.trim() === '') return null;
-  if (!/^-?\d+(\.\d+)?$/.test(raw.trim())) return 'Enter a number';
-  const n = Number(raw);
-  if (c?.min !== undefined && n < c.min) return `At least ${c.min}`;
-  if (c?.max !== undefined && n > c.max) return `At most ${c.max}`;
-  if (c?.step !== undefined) {
-    const k = (n - (c.min ?? 0)) / c.step;
-    if (Math.abs(k - Math.round(k)) > 1e-9) return `In steps of ${c.step}`;
-  }
-  return null;
-}
-
-/** Why a text answer does not fit its constraints, or null. */
-export function textError(v: string, c: AskedQuestion['constraints']): string | null {
-  if (v === '') return null;
-  if (c?.maxLength !== undefined && v.length > c.maxLength) return `At most ${c.maxLength} characters`;
-  if (!c?.multiline && /[\r\n]/.test(v)) return 'One line only';
-  if (c?.pattern) {
-    try {
-      if (!new RegExp(`^(?:${c.pattern})$`, 'u').test(v)) return 'This does not have the expected format';
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
+// The answer rules (constraints, selections) are shared with the MCP Apps
+// question card and the API: packages/shared/question-rules.js.
+export { numberError, textError } from '@app/shared/question-rules';
 
 function OptionLabel({ o }: { o: QuestionOption }) {
   return (
@@ -136,8 +113,9 @@ export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disab
   const isSecret = q.input === 'secret';
   const options = q.options ?? [];
   const c = q.constraints;
-  const minSel = c?.minSelections ?? 1;
-  const maxSel = c?.maxSelections ?? options.length;
+  const bounds = selectionBounds(c, options.length);
+  const minSel = bounds.min;
+  const maxSel = bounds.max;
   const confirmLabel = q.confirmLabel ?? 'Approve';
   const denyLabel = q.denyLabel ?? 'Deny';
 
@@ -176,7 +154,7 @@ export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disab
         if (value) send({ outcome: 'completed', value });
         return;
       case 'multi_choice':
-        if (picked.length >= minSel && picked.length <= maxSel) send({ outcome: 'completed', values: options.map((o) => o.id).filter((id) => picked.includes(id)) });
+        if (selectionOk(picked.length, bounds)) send({ outcome: 'completed', values: options.map((o) => o.id).filter((id) => picked.includes(id)) });
         return;
       case 'secret': {
         if (!secret) return;
@@ -266,8 +244,8 @@ export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disab
       );
       break;
     case 'multi_choice': {
-      ready = picked.length >= minSel && picked.length <= maxSel;
-      const help = minSel === maxSel ? `Choose ${minSel}` : maxSel >= options.length && minSel <= 1 ? 'Choose one or more' : `Choose between ${minSel} and ${maxSel}`;
+      ready = selectionOk(picked.length, bounds);
+      const help = selectionHelp(bounds, options.length);
       field = (
         <FormControl fullWidth component="fieldset">
           <FormLabel component="legend">{help}</FormLabel>
@@ -336,7 +314,7 @@ export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disab
           onChange={(e) => setValue(e.target.value)}
           disabled={disabled}
           error={Boolean(error)}
-          helperText={error ?? ([c?.min !== undefined ? `min ${c.min}` : '', c?.max !== undefined ? `max ${c.max}` : '', c?.step !== undefined ? `step ${c.step}` : ''].filter(Boolean).join(' · ') || undefined)}
+          helperText={error ?? (numberHint(c) || undefined)}
           // No native spinner: on a phone it takes the room the value and the unit need.
           sx={{
             '& input[type=number]': { MozAppearance: 'textfield', minWidth: 0 },

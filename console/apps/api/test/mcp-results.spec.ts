@@ -119,13 +119,14 @@ describe('every tool stays within the limits with the largest plausible answer',
     if (path.startsWith('/questions')) return { id: RID, input: 'text', prompt: big, status: 'answered', expiresAt: 'now', response: { outcome: 'completed', value: 'v'.repeat(4096) } };
     if (method === 'GET' && path === '/agent-policies') return Array.from({ length: 500 }, (_, i) => ({ id: `p${i}`, name: big, description: big, builtin: false, isDefault: false, hasNoHardStop: false, version: 1, spec: { models: { startTier: 'fast', maxTier: 'frontier' }, budget: {} }, usage: {} }));
     if (path.startsWith('/agent-policies/import')) return { created: Array.from({ length: 100 }, (_, i) => ({ index: i, id: 'x', name: big })), replaced: [], skipped: [], warnings: [], errors: [] };
+    if (method === 'GET' && path.startsWith('/tasks?')) return { items: Array.from({ length: 100 }, (_, i) => ({ id: RID, name: big, goal: big, summary: { scheduleState: 'active', schedules: [{ enabled: true, description: big }], nextRunAt: null, lastRun: null, liveRunId: null } })), nextCursor: 'c', total: 2000 };
     if (method === 'GET' && ['/tasks', '/schedules', '/inbox', '/fleet/hosts'].includes(path)) return Array.from({ length: 2000 }, (_, i) => ({ id: i, name: big, goal: big }));
     return { id: RID, name: big, goal: big, spec: { x: 'q'.repeat(400_000) }, valid: true, description: big, policyId: 'p', status: 'pending', created: [], replaced: [], skipped: [] };
   }
   const ARGS: Record<string, Record<string, unknown>> = {
     run_goal: { goal: 'g' }, run_status: { run_id: RID, steps: 50 }, run_wait: { run_id: RID, screenshot: true }, run_card_poll: { run_id: RID, screenshot: true }, runs_list: {}, run_cancel: { run_id: RID }, tasks_list: {}, task_create: { name: 'n', goal: 'g' }, task_update: { task_id: RID }, task_run: { task_id: RID },
     schedule_create: { task_id: RID, cron: '0 9 * * 1-5' }, schedule_preview: { cron: '0 9 * * 1-5' }, task_pause: { task_id: RID }, task_resume: { task_id: RID }, schedules_list: {}, inbox_list: {},
-    inbox_answer: { question_id: RID, outcome: 'completed', value: 'x' }, ask_human: { prompt: 'p', input: 'text' }, question_status: { question_id: RID }, policies_list: {}, policy_get: { policy_id: 'builtin:balanced' },
+    inbox_answer: { question_id: RID, outcome: 'completed', value: 'x' }, question_card_answer: { question_id: RID, outcome: 'completed', value: 'x' }, ask_human: { prompt: 'p', input: 'text' }, question_status: { question_id: RID }, policies_list: {}, policy_get: { policy_id: 'builtin:balanced' },
     policy_create: { name: 'n', spec: {} }, policy_update: { policy_id: 'builtin:balanced' }, policy_set_default: { policy_id: null }, policies_export: {}, policies_import: { file: {} }, hosts_list: {}, browser_open: { goal: 'g' },
     browser_request_human: { session_id: SID, kind: 'other', prompt: 'p' }, browser_handoff_status: { session_id: SID, handoff_id: RID }, browser_close: { session_id: SID },
   };

@@ -29,6 +29,8 @@ export interface ProgressQuestion {
   options?: { id: string; label: string; description?: string }[] | null;
   constraints?: Record<string, unknown> | null;
   risk?: 'low' | 'high' | null;
+  confirmLabel?: string | null;
+  denyLabel?: string | null;
   status?: string;
   expiresAt: string;
 }
@@ -50,6 +52,8 @@ export const progressQuestionSchema = z.object({
   options: z.array(z.object({ id: z.string(), label: z.string(), description: z.string().optional() })).nullable(),
   constraints: z.record(z.string(), z.unknown()).nullable(),
   risk: z.enum(['low', 'high']).nullable(),
+  confirm_label: z.string().optional().describe('confirm: the approve button label, when the asker set one'),
+  deny_label: z.string().optional().describe('confirm: the deny button label, when the asker set one'),
   expires_at: iso,
   answerable_here: z.boolean().describe('true: ask the user in the chat and pass the answer on with inbox_answer; false: give them how_to_answer'),
   how_to_answer: z.string().optional().describe('When it cannot be answered here: the sentence and link to give the user'),
@@ -289,7 +293,8 @@ export function runProgress(run: ProgressRun, question: ProgressQuestion | null,
   };
 }
 
-function questionBlock(q: ProgressQuestion, opts: ProgressOptions): NonNullable<RunProgress['question']> {
+/** The typed question block (snake_case) a run's progress and the question tools carry. */
+export function questionBlock(q: ProgressQuestion, opts: Pick<ProgressOptions, 'appUrl' | 'via'>): NonNullable<RunProgress['question']> {
   const here = answerableHere(q, opts.via);
   return {
     id: q.id,
@@ -298,6 +303,8 @@ function questionBlock(q: ProgressQuestion, opts: ProgressOptions): NonNullable<
     options: q.options ?? null,
     constraints: q.constraints ?? null,
     risk: q.risk ?? null,
+    ...(q.confirmLabel ? { confirm_label: q.confirmLabel } : {}),
+    ...(q.denyLabel ? { deny_label: q.denyLabel } : {}),
     expires_at: q.expiresAt,
     answerable_here: here,
     ...(here ? {} : { how_to_answer: howToAnswer(opts.appUrl, q.id) }),

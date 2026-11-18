@@ -11,3 +11,16 @@ export type McpScope = (typeof MCP_SCOPE_IDS)[number];
 /** What a tool does to the user's things: the source of the MCP hints. */
 export const MCP_EFFECTS = ['read', 'write', 'destructive'] as const;
 export type McpEffect = (typeof MCP_EFFECTS)[number];
+
+/**
+ * The scopes the caller holds, for a widget that shows an action only when
+ * it may be used (#467: Run, Pause, answering). A credential that carries
+ * scopes (an OAuth token, from E33.2 on) lists them; a personal access token
+ * or a session holds every scope. Display only: every call is still checked
+ * by the server.
+ */
+export function grantedScopes(credential: { scopes?: readonly string[] } | undefined): McpScope[] {
+  const held = credential?.scopes;
+  if (!held) return [...MCP_SCOPE_IDS];
+  return MCP_SCOPE_IDS.filter((s) => held.includes(s));
+}

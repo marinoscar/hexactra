@@ -97,15 +97,61 @@ describe('run states', () => {
 });
 
 describe('needs you', () => {
-  it('offers "Answer in the chat" and the inbox for a question answerable here', async () => {
+  it('offers "Answer in the chat" and the inbox for a question answerable by the model but not in the card (a high-risk confirm over a personal access token)', async () => {
     const m = mount({ tools: hang });
-    m.push(result('waiting_human', { progress: { question: { id: 'q1', input: 'choice', prompt: 'Which time works?', answerable_here: true } } }));
-    expect(screen.getByText('Which time works?')).toBeInTheDocument();
+    m.push(result('waiting_human', { progress: { question: { id: 'q1', input: 'confirm', risk: 'high', prompt: 'Pay 40 EUR?', answerable_here: true } } }));
+    expect(screen.getByText('Pay 40 EUR?')).toBeInTheDocument();
+    // No approve button in the card: a high-risk approval is never collected in a chat's widget.
+    expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Answer in the chat' }));
     expect(m.host.sendMessage).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: 'Open inbox' }));
     await advance(0);
     expect(m.host.openLink).toHaveBeenCalledWith('https://console.example.test/inbox/q/q1');
+  });
+
+  it('answers a choice in the banner itself (#467): question_card_answer, "Sent", then a short message to the conversation', async () => {
+    const calls: [string, Record<string, unknown>][] = [];
+    const m = mount({
+      tools: async (name, args) => {
+        calls.push([name, args]);
+        if (name === 'question_card_answer') return { content: [{ type: 'text', text: 'ok' }], structuredContent: { question_id: 'q1', status: 'answered', input: 'choice', outcome: 'completed', value: 'late' } };
+        return new Promise(() => undefined);
+      },
+    });
+    m.push(
+      result('waiting_human', {
+        progress: { question: { id: 'q1', input: 'choice', prompt: 'Which time works?', options: [{ id: 'early', label: '19:00' }, { id: 'late', label: '20:00', description: 'Terrace' }], answerable_here: true } },
+      }),
+    );
+    expect(screen.getByText('Terrace')).toBeInTheDocument();
+    const send = screen.getByRole('button', { name: 'Send' });
+    expect(send).toBeDisabled();
+    fireEvent.click(screen.getByRole('radio', { name: /20:00/ }));
+    fireEvent.click(send);
+    await advance(0);
+    expect(calls.find(([n]) => n === 'question_card_answer')).toEqual(['question_card_answer', { question_id: 'q1', outcome: 'completed', value: 'late' }]);
+    expect(screen.getByText('Sent: 20:00')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
+    expect(m.host.sendMessage).toHaveBeenCalledWith("I answered the agent's question: 20:00");
+    // The model's own relay button is not offered next to the form.
+    expect(screen.queryByRole('button', { name: 'Answer in the chat' })).toBeNull();
+  });
+
+  it('keeps the form with the server\'s sentence when the answer is refused', async () => {
+    const m = mount({
+      tools: async (name) => {
+        if (name === 'question_card_answer') return { isError: true, content: [{ type: 'text', text: 'At most 5 [INVALID_ANSWER]' }] };
+        return new Promise(() => undefined);
+      },
+    });
+    m.push(result('waiting_human', { progress: { question: { id: 'q1', input: 'number', prompt: 'How many?', constraints: { max: 5 }, answerable_here: true } } }));
+    fireEvent.input(screen.getByLabelText('Number'), { target: { value: '4' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await advance(0);
+    expect(screen.getByRole('alert')).toHaveTextContent('At most 5');
+    expect(screen.getByLabelText('Number')).not.toBeDisabled();
+    expect(m.host.sendMessage).not.toHaveBeenCalled();
   });
 
   it('never shows an input or a screenshot while a secret is asked for, and only links to the inbox', () => {

@@ -3,10 +3,11 @@
 // and effect (#462). The MCP annotations, the docs table and the manifest
 // snapshot (test/mcp-manifest.spec.ts) are all derived from it. Every tool
 // calls the console's own REST routes in-process, as the caller.
+import { chatAnswerMode } from '@app/shared/question-rules';
 import { z } from 'zod';
 
 import { fleetHostResponseSchema, inboxItemResponseSchema, runListItemResponseSchema, runPageResponseSchema, runResponseSchema, runStepResponseSchema, runTierSchema, scheduleResponseSchema, taskResponseSchema } from '../openapi/console.responses';
-import { schedulePreviewSchema, taskDetailSchema, taskWithSummarySchema } from '../openapi/tasks.responses';
+import { schedulePreviewSchema, taskWithSummarySchema } from '../openapi/tasks.responses';
 import { agentPolicySpecSchema } from '../policies/agent-policy.schema';
 import { parsePolicyRef } from '../policies/builtin-policies';
 import { agentPolicyResponseSchema, defaultPolicyResponseSchema } from '../policies/policies.schemas';
@@ -16,9 +17,9 @@ import { RUN_STATUSES, STOP_REASON_FILTERS } from '../tasks/runs.schemas';
 import { McpApiError, errorOutcome } from './mcp.errors';
 import { appUrlOf, followRun, progressOf, readRunState, relayChannel, runScreenshot, viaOf, type Followed } from './mcp.run-follow';
 import { MAX_TOOL_WAIT_S, UNTRUSTED_NOTICE, limitsOf, textResult, toolOutput, type McpContext, type McpToolResult } from './mcp.results';
-import { answerableHere, howToAnswer, progressHasPageText, progressSummary, runProgressSchema, type RunProgress } from './run-progress';
-import type { McpEffect, McpScope } from './mcp.scopes';
-import { RUN_CARD_URI, type McpToolVisibility } from './mcp.apps';
+import { answerableHere, howToAnswer, progressHasPageText, progressQuestionSchema, progressSummary, questionBlock, runProgressSchema, type ProgressQuestion, type RunProgress } from './run-progress';
+import { MCP_SCOPE_IDS, grantedScopes, type McpEffect, type McpScope } from './mcp.scopes';
+import { QUESTION_CARD_URI, RUN_CARD_URI, TASKS_CARD_URI, type McpToolVisibility } from './mcp.apps';
 
 export type { McpContent, McpContext, McpToolResult } from './mcp.results';
 export { MAX_TOOL_WAIT_S } from './mcp.results';
@@ -221,7 +222,38 @@ interface QuestionView {
   expiresAt: string;
   runId?: string | null;
   risk?: 'low' | 'high' | null;
+  kind?: string;
+  askedBy?: string;
+  options?: { id: string; label: string; description?: string }[] | null;
+  constraints?: Record<string, unknown> | null;
+  confirmLabel?: string | null;
+  denyLabel?: string | null;
+  viewerUrl?: string | null;
   response: { outcome: string; value?: string; values?: string[]; valueWithheld?: boolean; channel?: string } | null;
+}
+
+/** The typed question of the question tools (#467): the progress block's question with who asked and its run. */
+const typedQuestionSchema = progressQuestionSchema.extend({
+  run_id: z.uuid().nullable(),
+  asked_by: z.string().optional(),
+  kind: z.string().optional(),
+  viewer_url: z.string().optional().describe('takeover: the desktop viewer in the console'),
+});
+
+/** The typed question block of a question (the prompt is the asker's: data, not instructions). */
+function typedQuestion(q: QuestionView, ctx: McpContext): z.infer<typeof typedQuestionSchema> {
+  return {
+    ...questionBlock(q as ProgressQuestion, { appUrl: appUrlOf(ctx), via: viaOf(ctx) }),
+    run_id: q.runId ?? null,
+    ...(q.askedBy ? { asked_by: q.askedBy } : {}),
+    ...(q.kind ? { kind: q.kind } : {}),
+    ...(q.viewerUrl ? { viewer_url: q.viewerUrl } : {}),
+  };
+}
+
+/** What a question card needs besides the question: where the console is and what this connection may do. */
+function cardContext(ctx: McpContext): { app_url: string; granted_scopes: McpScope[] } {
+  return { app_url: appUrlOf(ctx), granted_scopes: grantedScopes(ctx.credential) };
 }
 
 /** What the question tools return: a narrow view of the REST question (a secret is never in it). */
@@ -235,6 +267,9 @@ const questionToolSchema = z.object({
   values: z.array(z.string()).optional().describe('multi_choice: the option ids chosen'),
   channel: z.string().optional().describe('Where the person answered (web, cli, push, mcp, …)'),
   hint: z.string().optional(),
+  question: typedQuestionSchema.optional().describe('The typed question (prompt, options, constraints), for the question card (#467)'),
+  app_url: z.string().optional().describe('The Hexactra console (links to the inbox and to runs)'),
+  granted_scopes: z.array(z.enum(MCP_SCOPE_IDS)).optional().describe('The scopes this connection holds (the card hides what it cannot do; the server checks anyway)'),
 });
 
 /** What a tool returns about a question: never more than the REST API (a secret is never returned). */
@@ -256,8 +291,8 @@ function questionResult(q: QuestionView) {
   };
 }
 
-function questionOutput(q: QuestionView): McpToolResult {
-  const v = questionResult(q);
+function questionOutput(q: QuestionView, ctx: McpContext): McpToolResult {
+  const v = { ...questionResult(q), ...(typeof q.prompt === 'string' ? { question: typedQuestion(q, ctx) } : {}), ...cardContext(ctx) };
   return toolOutput({ text: v, structured: v, summary: `Question ${q.id}: ${q.status}${q.response ? ` (${q.response.outcome})` : ''}.` });
 }
 
@@ -332,6 +367,123 @@ async function startAndFollow(ctx: McpContext, a: Record<string, unknown>, start
   const waitS = a.wait_s !== undefined ? Number(a.wait_s) : viaOf(ctx) === 'oauth' ? RUN_START_WAIT_S_OAUTH : 0;
   if (created && waitS === 0) return runWithProgress(created, progressOf(ctx, { run: created as never, question: null, secretOpen: false }, true));
   return followedOutput(await followRun(ctx, runId, { waitS, since: null, screenshot: false }), 'run');
+}
+
+/** How many tasks tasks_list returns without `limit` (#467: the tasks card shows 20 at a time). */
+export const TASKS_LIST_DEFAULT = 50;
+/** The longest goal tasks_list returns (#467: the payload stays small). */
+export const TASKS_LIST_GOAL_CHARS = 200;
+
+/** One task as tasks_list answers it: its fields, the goal cut short, and the summary facts the tasks card shows. */
+const taskListItemSchema = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  goal: z.string().describe(`The goal, cut to ${TASKS_LIST_GOAL_CHARS} characters`),
+  goalTruncated: z.boolean().optional().describe('true: the goal is longer than shown'),
+  profile: z.string(),
+  allowedDomains: z.array(z.string()),
+  policyId: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  scheduleState: z.enum(['none', 'active', 'paused', 'partial']).describe('none: no schedule; active: all enabled; paused: none enabled; partial: some enabled'),
+  paused: z.boolean().describe('It has schedules and none of them is enabled'),
+  scheduleText: z.string().nullable().describe('The enabled schedules in words, e.g. "Monday to Friday at 09:00"; null with no schedule'),
+  nextRunAt: z.string().nullable().describe('ISO 8601: the next scheduled start'),
+  lastRun: z.object({ id: z.uuid(), status: z.string(), finishedAt: z.string().nullable() }).nullable().describe('The newest run'),
+  liveRunId: z.uuid().nullable().describe('A run of the task that is queued, running or waiting for the user'),
+  policyName: z.string().nullable().optional(),
+});
+
+function taskListItem(t: Record<string, unknown>): z.infer<typeof taskListItemSchema> {
+  const goal = typeof t.goal === 'string' ? t.goal : '';
+  const s = (t.summary ?? {}) as { schedules?: { enabled?: boolean; description?: string }[]; scheduleState?: string; nextRunAt?: string | null; lastRun?: { id: string; status: string; finishedAt: string | null } | null; liveRunId?: string | null; policy?: { name?: string } | null };
+  const state = (['none', 'active', 'paused', 'partial'].includes(String(s.scheduleState)) ? s.scheduleState : 'none') as 'none' | 'active' | 'paused' | 'partial';
+  const schedules = Array.isArray(s.schedules) ? s.schedules : [];
+  const enabled = schedules.filter((x) => x.enabled).map((x) => String(x.description ?? ''));
+  const scheduleText = !schedules.length ? null : enabled.length ? `${enabled.slice(0, 2).join('; ')}${enabled.length > 2 ? ` and ${enabled.length - 2} more` : ''}` : 'Paused';
+  return {
+    id: String(t.id),
+    name: String(t.name ?? ''),
+    goal: goal.length > TASKS_LIST_GOAL_CHARS ? `${goal.slice(0, TASKS_LIST_GOAL_CHARS - 1)}…` : goal,
+    ...(goal.length > TASKS_LIST_GOAL_CHARS ? { goalTruncated: true } : {}),
+    profile: String(t.profile ?? 'default'),
+    allowedDomains: Array.isArray(t.allowedDomains) ? (t.allowedDomains as string[]) : [],
+    policyId: typeof t.policyId === 'string' ? t.policyId : null,
+    createdAt: String(t.createdAt ?? ''),
+    updatedAt: String(t.updatedAt ?? ''),
+    scheduleState: state,
+    paused: state === 'paused',
+    scheduleText,
+    nextRunAt: s.nextRunAt ?? null,
+    lastRun: s.lastRun ? { id: s.lastRun.id, status: s.lastRun.status, finishedAt: s.lastRun.finishedAt ?? null } : null,
+    liveRunId: s.liveRunId ?? null,
+    policyName: s.policy?.name ?? null,
+  };
+}
+
+/** Why a question cannot be answered from a chat, in words. */
+function notHereReason(q: Pick<QuestionView, 'input'>): string {
+  return q.input === 'secret' ? 'a code or password is never passed through a chat' : q.input === 'confirm' ? 'a high-risk confirmation needs the user signed in to Hexactra' : 'it is done in the browser itself';
+}
+
+/** The answer output of inbox_answer and question_card_answer (the outputSchema). */
+const answerOutputSchema = questionToolSchema.partial().extend({
+  ok: z.boolean().optional(),
+  already_answered: z.boolean().optional().describe('Someone answered first (on another device); outcome and value are theirs'),
+  progress: runProgressSchema.optional().describe("The run's progress after the answer (a run's question only)"),
+});
+
+/**
+ * Pass an answer on (inbox_answer, `relay`: the model relays what the user
+ * said) or record one the user clicked in the question card
+ * (question_card_answer, `app`, channel `mcp-app.<client>`, #467). Both go
+ * through `POST /questions/:id/answer`, where the channel rules
+ * (questions/channels/channel-rules.ts) are the authority: the checks here
+ * only give a better sentence first.
+ */
+async function answerTool(a: Record<string, unknown>, ctx: McpContext, mode: 'relay' | 'app'): Promise<McpToolResult> {
+  if (Boolean(a.question_id) === Boolean(a.run_id)) return errorOutcome('Invalid arguments: give question_id or run_id (one of them).', 'INVALID_ARGUMENTS');
+  const body = { outcome: a.outcome, ...(a.value !== undefined ? { value: a.value } : {}), ...(a.values !== undefined ? { values: a.values } : {}) };
+  const oauth = viaOf(ctx) === 'oauth';
+  let qid = a.question_id ? String(a.question_id) : null;
+  if (oauth || mode === 'app') {
+    // A hosted app relays the chat, and a card is clicked in one: both answer by question, under the channel rules.
+    let q: QuestionView | undefined;
+    if (qid) q = await ctx.api<QuestionView>('GET', `/questions/${qid}`);
+    else {
+      const pending = await ctx.api<unknown>('GET', `/questions?runId=${String(a.run_id)}&status=pending&limit=20`);
+      q = (Array.isArray(pending) ? (pending as QuestionView[]) : [])[0];
+      if (!q) return errorOutcome('Nothing on that run is waiting for an answer. Check it with run_wait.', 'NOT_WAITING');
+      qid = q.id;
+    }
+    // The card answers public questions and acknowledgements only (the shared answer rules): never a secret, a high-risk confirm or a takeover.
+    const here = mode === 'app' ? ['form', 'acknowledge'].includes(chatAnswerMode(q)) : answerableHere(q, 'oauth');
+    if (a.outcome === 'completed' && q.status === 'pending' && !here) {
+      return errorOutcome(`This question cannot be answered from the chat: ${notHereReason(q)}. Give the user this: ${howToAnswer(appUrlOf(ctx), q.id)}`, 'NOT_ANSWERABLE_HERE');
+    }
+  }
+  let answered: QuestionView | null = null;
+  let plain: Record<string, unknown> | null = null;
+  try {
+    if (qid) answered = await ctx.api<QuestionView>('POST', `/questions/${qid}/answer`, { ...body, channel: relayChannel(ctx, mode === 'app' ? 'app' : 'relay') });
+    else plain = await ctx.api<Record<string, unknown>>('POST', `/inbox/${String(a.run_id)}/respond`, body);
+  } catch (e) {
+    // First answer wins: say who won, as a normal answer (a 409 on a question that is settled with an answer).
+    if (!(e instanceof McpApiError && e.status === 409 && qid)) throw e;
+    const won = await ctx.api<QuestionView>('GET', `/questions/${qid}`);
+    // The card shows an expired question as such; the model gets the error, as before.
+    const settled = won.status === 'answered' || won.status === 'cancelled' || (mode === 'app' && won.status === 'expired');
+    if (!settled) throw e;
+    const v = { ...questionResult(won), ...(won.status === 'expired' ? {} : { already_answered: true }), ...(mode === 'app' ? cardContext(ctx) : {}) };
+    delete (v as { hint?: string }).hint;
+    if (won.status === 'expired') return toolOutput({ text: v, structured: v, summary: 'This question expired before anyone answered.' });
+    return toolOutput({ text: v, structured: v, summary: `This was already answered on another device${won.response ? ` (${won.response.outcome}${won.response.value !== undefined ? `: ${won.response.value}` : ''})` : ''}.` });
+  }
+  const runOf = a.run_id ? String(a.run_id) : (answered?.runId ?? null);
+  const progress = runOf ? progressOf(ctx, await readRunState(ctx, runOf), true) : undefined;
+  const v = { ...(answered ? questionResult(answered) : (plain ?? {})), ...(progress ? { progress } : {}), ...(mode === 'app' ? cardContext(ctx) : {}) };
+  const summary = answered ? `Question ${answered.id}: ${answered.status}${answered.response ? ` (${answered.response.outcome})` : ''}.` : `Answer passed on to run ${String(a.run_id)}.`;
+  return toolOutput({ text: v, structured: v, summary: progress ? `${summary} ${progressSummary(progress)}` : summary, untrusted: progress ? progressHasPageText(progress) : false });
 }
 
 /** A list answer: the bare list in `content` (as it always was), `{ items }` as structured content. */
@@ -562,14 +714,36 @@ export const MCP_TOOLS: McpTool[] = [
   {
     name: 'tasks_list',
     title: 'List saved tasks',
-    description: 'List the saved tasks: reusable goals with a profile, allowed sites and an agent policy. Use it to find a task to run (task_run), change (task_update) or schedule (schedule_create).',
-    input: z.object({}),
-    output: z.object({ items: z.array(taskDetailSchema) }),
+    description:
+      'List the saved tasks, newest first: reusable goals with a profile, allowed sites and an agent policy, each with its schedule in words, next run, last run and whether it is paused. ' +
+      'Use it to find a task to run (task_run), change (task_update) or schedule (schedule_create). Goals are cut to 200 characters (read one whole with task_update\'s answer or the console). ' +
+      `At most ${TASKS_LIST_DEFAULT} tasks per call by default (limit up to 100); when next_cursor is set, call again with cursor to get more.`,
+    input: z.object({
+      limit: z.number().int().min(1).max(100).optional().describe(`How many tasks to return (default ${TASKS_LIST_DEFAULT}, at most 100).`),
+      cursor: z.string().max(600).optional().describe('next_cursor of the previous answer, for the next page.'),
+    }),
+    output: z.object({
+      items: z.array(taskListItemSchema),
+      next_cursor: z.string().nullable().describe('Pass as cursor for the next page; null on the last page'),
+      total: z.number().int().describe('How many tasks the user has'),
+      app_url: z.string().optional().describe('The Hexactra console (each task is at app_url/tasks/<id>)'),
+      granted_scopes: z.array(z.enum(MCP_SCOPE_IDS)).optional().describe('The scopes this connection holds (the tasks card hides Run and Pause when it cannot use them)'),
+    }),
     scope: 'runs:read',
     effect: 'read',
     openWorld: false,
     idempotent: true,
-    call: async (_a, ctx) => listOutput(await ctx.api<unknown[]>('GET', '/tasks'), 'task'),
+    ui: { resourceUri: TASKS_CARD_URI },
+    async call(a, ctx) {
+      const limit = a.limit !== undefined ? Number(a.limit) : TASKS_LIST_DEFAULT;
+      const qs = `include=summary&envelope=1&limit=${limit}${a.cursor !== undefined ? `&cursor=${encodeURIComponent(String(a.cursor))}` : ''}`;
+      const page = await ctx.api<{ items?: Record<string, unknown>[]; nextCursor?: string | null; total?: number }>('GET', `/tasks?${qs}`);
+      const items = (Array.isArray(page?.items) ? page.items : []).map(taskListItem);
+      const v = { items, next_cursor: page?.nextCursor ?? null, total: typeof page?.total === 'number' ? page.total : items.length };
+      const more = v.next_cursor ? ` More: call tasks_list with cursor "${v.next_cursor}".` : '';
+      // The text keeps the bare list it always was (hosts without structured content), now with the summary fields.
+      return toolOutput({ text: items, structured: { ...v, ...cardContext(ctx) }, summary: `${items.length} of ${v.total} task${v.total === 1 ? '' : 's'}.${more}` });
+    },
   },
   {
     name: 'task_create',
@@ -727,6 +901,7 @@ export const MCP_TOOLS: McpTool[] = [
     effect: 'read',
     openWorld: false,
     idempotent: true,
+    ui: { resourceUri: TASKS_CARD_URI },
     call: async (_a, ctx) => listOutput(await ctx.api<unknown[]>('GET', '/schedules'), 'schedule'),
   },
   {
@@ -734,12 +909,21 @@ export const MCP_TOOLS: McpTool[] = [
     title: 'List waiting questions',
     description: "List what the user's agents are waiting for: CAPTCHAs, codes, sign-ins, confirmations and questions. Use it to see what to relay to the user; answer with inbox_answer.",
     input: z.object({}),
-    output: z.object({ items: z.array(inboxItemResponseSchema) }),
+    output: z.object({
+      items: z.array(inboxItemResponseSchema),
+      app_url: z.string().optional().describe('The Hexactra console (links to the inbox)'),
+      granted_scopes: z.array(z.enum(MCP_SCOPE_IDS)).optional().describe('The scopes this connection holds (the question card hides what it cannot do)'),
+    }),
     scope: 'inbox:read',
     effect: 'read',
     openWorld: false,
     idempotent: true,
-    call: async (_a, ctx) => listOutput(await ctx.api<unknown[]>('GET', '/inbox'), 'waiting question'),
+    ui: { resourceUri: QUESTION_CARD_URI },
+    async call(_a, ctx) {
+      const items = await ctx.api<unknown[]>('GET', '/inbox');
+      // The text is the bare list, as it always was; the card reads the console URL and the scopes from the structured result.
+      return toolOutput({ text: items, structured: { items, ...cardContext(ctx) }, summary: `${items.length} waiting question${items.length === 1 ? '' : 's'}.` });
+    },
   },
   {
     name: 'inbox_answer',
@@ -755,54 +939,11 @@ export const MCP_TOOLS: McpTool[] = [
       value: z.union([z.string().max(4096), z.number()]).optional().describe('The answer for text, choice, number and confirm.'),
       values: z.array(z.string().max(64)).max(10).optional().describe('multi_choice: the option ids chosen.'),
     }),
-    output: questionToolSchema.partial().extend({
-      ok: z.boolean().optional(),
-      already_answered: z.boolean().optional().describe('Someone answered first (on another device); outcome and value are theirs'),
-      progress: runProgressSchema.optional().describe("The run's progress after the answer (a run's question only)"),
-    }),
+    output: answerOutputSchema,
     scope: 'inbox:write',
     effect: 'write',
     openWorld: false,
-    async call(a, ctx) {
-      if (Boolean(a.question_id) === Boolean(a.run_id)) return errorOutcome('Invalid arguments: give question_id or run_id (one of them).', 'INVALID_ARGUMENTS');
-      const body = { outcome: a.outcome, ...(a.value !== undefined ? { value: a.value } : {}), ...(a.values !== undefined ? { values: a.values } : {}) };
-      const oauth = viaOf(ctx) === 'oauth';
-      let qid = a.question_id ? String(a.question_id) : null;
-      if (oauth) {
-        // A hosted app relays the chat: it answers by question, under the channel rules (questions/channels/channel-rules.ts).
-        let q: QuestionView | undefined;
-        if (qid) q = await ctx.api<QuestionView>('GET', `/questions/${qid}`);
-        else {
-          const pending = await ctx.api<unknown>('GET', `/questions?runId=${String(a.run_id)}&status=pending&limit=20`);
-          q = (Array.isArray(pending) ? (pending as QuestionView[]) : [])[0];
-          if (!q) return errorOutcome('Nothing on that run is waiting for an answer. Check it with run_wait.', 'NOT_WAITING');
-          qid = q.id;
-        }
-        if (a.outcome === 'completed' && q.status === 'pending' && !answerableHere(q, 'oauth')) {
-          const why = q.input === 'secret' ? 'a code or password is never passed through a chat' : q.input === 'confirm' ? 'a high-risk confirmation needs the user signed in to Hexactra' : 'it is done in the browser itself';
-          return errorOutcome(`This question cannot be answered from the chat: ${why}. Give the user this: ${howToAnswer(appUrlOf(ctx), q.id)}`, 'NOT_ANSWERABLE_HERE');
-        }
-      }
-      let answered: QuestionView | null = null;
-      let plain: Record<string, unknown> | null = null;
-      try {
-        if (qid) answered = await ctx.api<QuestionView>('POST', `/questions/${qid}/answer`, { ...body, channel: relayChannel(ctx, 'relay') });
-        else plain = await ctx.api<Record<string, unknown>>('POST', `/inbox/${String(a.run_id)}/respond`, body);
-      } catch (e) {
-        // First answer wins: say who won, as a normal answer (a 409 on a question that is settled with an answer).
-        if (!(e instanceof McpApiError && e.status === 409 && qid)) throw e;
-        const won = await ctx.api<QuestionView>('GET', `/questions/${qid}`);
-        if (won.status !== 'answered' && won.status !== 'cancelled') throw e;
-        const v = { ...questionResult(won), already_answered: true };
-        delete (v as { hint?: string }).hint;
-        return toolOutput({ text: v, structured: v, summary: `This was already answered on another device${won.response ? ` (${won.response.outcome}${won.response.value !== undefined ? `: ${won.response.value}` : ''})` : ''}.` });
-      }
-      const runOf = a.run_id ? String(a.run_id) : (answered?.runId ?? null);
-      const progress = runOf ? progressOf(ctx, await readRunState(ctx, runOf), true) : undefined;
-      const v = { ...(answered ? questionResult(answered) : (plain ?? {})), ...(progress ? { progress } : {}) };
-      const summary = answered ? `Question ${answered.id}: ${answered.status}${answered.response ? ` (${answered.response.outcome})` : ''}.` : `Answer passed on to run ${String(a.run_id)}.`;
-      return toolOutput({ text: v, structured: v, summary: progress ? `${summary} ${progressSummary(progress)}` : summary, untrusted: progress ? progressHasPageText(progress) : false });
-    },
+    call: (a, ctx) => answerTool(a, ctx, 'relay'),
   },
   {
     name: 'ask_human',
@@ -829,9 +970,10 @@ export const MCP_TOOLS: McpTool[] = [
     scope: 'inbox:write',
     effect: 'write',
     openWorld: false,
+    ui: { resourceUri: QUESTION_CARD_URI },
     async call(a, ctx) {
       const q = await ctx.api<QuestionView>('POST', '/questions', { ...questionBody(a), asker: a.agent_name });
-      return questionOutput(Number(a.wait_s) > 0 ? await awaitQuestion(ctx, q.id, Number(a.wait_s), q) : q);
+      return questionOutput(Number(a.wait_s) > 0 ? await awaitQuestion(ctx, q.id, Number(a.wait_s), q) : q, ctx);
     },
   },
   {
@@ -845,7 +987,8 @@ export const MCP_TOOLS: McpTool[] = [
     effect: 'read',
     openWorld: false,
     idempotent: true,
-    call: async (a, ctx) => questionOutput(await awaitQuestion(ctx, String(a.question_id), Number(a.wait_s))),
+    ui: { resourceUri: QUESTION_CARD_URI },
+    call: async (a, ctx) => questionOutput(await awaitQuestion(ctx, String(a.question_id), Number(a.wait_s)), ctx),
   },
 
   // --- agent policies (budgets and model tiers of a run) --------------------
@@ -1403,6 +1546,26 @@ export const MCP_TOOLS: McpTool[] = [
       const f = await followRun(ctx, String(a.run_id), { waitS: Number(a.wait_s), since: a.since !== undefined ? String(a.since) : null, screenshot: Boolean(a.screenshot) });
       return runWithProgress(f.st.run, f.progress, f.images);
     },
+  },
+  {
+    name: 'question_card_answer',
+    title: 'Answer from the question card',
+    description:
+      "Used by Hexactra's question card (an MCP App) to send the answer the user clicked in it: like inbox_answer, recorded as answered in the chat's question card. " +
+      'Only public answers (choice, multi_choice, text, number, a low-risk confirm) and acknowledgements; a code or password, a high-risk confirmation or a takeover is refused. ' +
+      'Hidden from the model (visibility app); a model passes on an answer with inbox_answer.',
+    input: z.object({
+      question_id: id.describe('The question (from inbox_list, ask_human, question_status or a run\'s progress).'),
+      outcome: z.enum(['completed', 'cancelled']).describe('completed answers; cancelled declines.'),
+      value: z.union([z.string().max(4096), z.number()]).optional().describe('The answer for text, choice, number and confirm.'),
+      values: z.array(z.string().max(64)).max(10).optional().describe('multi_choice: the option ids chosen.'),
+    }),
+    output: answerOutputSchema,
+    scope: 'inbox:write',
+    effect: 'write',
+    openWorld: false,
+    visibility: ['app'],
+    call: (a, ctx) => answerTool(a, ctx, 'app'),
   },
 ];
 

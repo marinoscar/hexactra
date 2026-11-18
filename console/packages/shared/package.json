@@ -1,8 +1,8 @@
 {
   "name": "@app/shared",
-  "version": "1.36.0",
+  "version": "1.37.0",
   "private": true,
-  "description": "The app's identity and slice manifest: the files every runtime reads its name, repository, CLI name, colours and enabled platform slices from.",
+  "description": "The app's identity and slice manifest: the files every runtime reads its name, repository, CLI name, colours and enabled platform slices from, and the answer rules of a typed question (question-rules) the web form, the MCP Apps widgets and the API share.",
   "type": "commonjs",
   "main": "./index.js",
   "types": "./index.d.ts",
@@ -13,13 +13,19 @@
     },
     "./identity.json": "./identity.json",
     "./slices.json": "./slices.json",
-    "./capabilities.json": "./capabilities.json"
+    "./capabilities.json": "./capabilities.json",
+    "./question-rules": {
+      "types": "./question-rules.d.ts",
+      "default": "./question-rules.js"
+    }
   },
   "files": [
     "index.js",
     "index.d.ts",
     "identity.json",
     "slices.json",
-    "capabilities.json"
+    "capabilities.json",
+    "question-rules.js",
+    "question-rules.d.ts"
   ]
 }

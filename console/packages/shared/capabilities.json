@@ -391,7 +391,10 @@
         "POST /api/questions/{id}/cancel"
       ],
       "cli": "questions answer",
-      "mcp": "inbox_answer",
+      "mcp": [
+        "inbox_answer",
+        "question_card_answer"
+      ],
       "tui": "inbox",
       "web": [
         "/inbox",

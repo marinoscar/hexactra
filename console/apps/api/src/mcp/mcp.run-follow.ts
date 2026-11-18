@@ -31,9 +31,11 @@ export function viaOf(ctx: McpContext): AnswerVia {
 }
 
 /** The channel an answer passed on by this caller is recorded under (channel-rules.ts). */
-export function relayChannel(ctx: McpContext, kind: 'relay' | 'elicitation'): string {
+export function relayChannel(ctx: McpContext, kind: 'relay' | 'elicitation' | 'app'): string {
   const client = ctx.client && /^[a-z0-9-]{1,20}$/.test(ctx.client) ? `.${ctx.client}` : '';
   if (kind === 'elicitation') return `mcp-elicitation${client}`;
+  // The person clicked in an MCP Apps question card (#467): first-hand, but not a console sign-in.
+  if (kind === 'app') return `mcp-app${client}`;
   return viaOf(ctx) === 'oauth' ? `mcp-oauth${client}` : 'mcp';
 }
 

@@ -1,19 +1,18 @@
 // What the run card knows about a run, read from tool results. Pure
 // functions: every string here comes from a tool result (and so, partly,
 // from web pages and the agent) and is only ever rendered as text.
+import { questionFromBlock, type CardQuestion } from './shared/question';
+import { formatDuration, num, obj, safeUrl, str, structured, type ToolResultLike } from './shared/text';
+import type { CardKey } from './shared/supersede';
+
+export type { CardKey } from './shared/supersede';
+export type { CardQuestion } from './shared/question';
+export type { ToolResultLike } from './shared/text';
+export { formatDuration, safeUrl } from './shared/text';
 
 /** The only server tools this bundle ever calls (the build checks the file holds no other tool name). */
-export const ALLOWED_TOOLS = ['run_card_poll', 'run_wait', 'run_status', 'run_cancel', 'task_run'] as const;
+export const ALLOWED_TOOLS = ['run_card_poll', 'run_wait', 'run_status', 'run_cancel', 'task_run', 'question_card_answer'] as const;
 export type AllowedTool = (typeof ALLOWED_TOOLS)[number];
-
-/** The typed question of a waiting run (the progress block's `question`). */
-export interface CardQuestion {
-  id: string;
-  input: string;
-  prompt: string;
-  answerable_here: boolean;
-  how_to_answer?: string;
-}
 
 /** The progress block (#463) the card reads. */
 export interface CardProgress {
@@ -47,12 +46,6 @@ export interface CardRun {
   trigger?: string;
 }
 
-/** A supersession key minted by the server (`card_key`). */
-export interface CardKey {
-  created_at: number;
-  seq: number;
-}
-
 /** One tool result, as the card uses it. */
 export interface Snapshot {
   progress: CardProgress;
@@ -61,31 +54,12 @@ export interface Snapshot {
   key?: CardKey;
 }
 
-/** The parts of an MCP `CallToolResult` the card reads. */
-export interface ToolResultLike {
-  content?: unknown[];
-  structuredContent?: Record<string, unknown>;
-  isError?: boolean;
-}
-
 const IMAGE_MIMES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
-
-function obj(v: unknown): Record<string, unknown> | undefined {
-  return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
-}
-
-function str(v: unknown): string | undefined {
-  return typeof v === 'string' ? v : undefined;
-}
-
-function num(v: unknown, d = 0): number {
-  return typeof v === 'number' && Number.isFinite(v) ? v : d;
-}
 
 function progressOf(v: unknown): CardProgress | undefined {
   const p = obj(v);
   if (!p || typeof p.run_id !== 'string' || typeof p.status !== 'string') return undefined;
-  const q = obj(p.question);
+  const question = questionFromBlock(p.question);
   const budget = obj(p.budget);
   return {
     run_id: p.run_id,
@@ -95,9 +69,7 @@ function progressOf(v: unknown): CardProgress | undefined {
     steps_done: num(p.steps_done),
     elapsed_s: num(p.elapsed_s),
     needs_human: p.needs_human === true,
-    ...(q && typeof q.id === 'string'
-      ? { question: { id: q.id, input: str(q.input) ?? '', prompt: str(q.prompt) ?? '', answerable_here: q.answerable_here === true, ...(str(q.how_to_answer) ? { how_to_answer: str(q.how_to_answer) } : {}) } }
-      : {}),
+    ...(question ? { question } : {}),
     ...(str(p.result) !== undefined ? { result: str(p.result) } : {}),
     ...(str(p.stop_reason) !== undefined ? { stop_reason: str(p.stop_reason) } : {}),
     ...(budget ? { budget: Object.fromEntries(Object.entries(budget).map(([k, x]) => [k, typeof x === 'number' ? x : null])) } : {}),
@@ -122,25 +94,6 @@ function runOf(v: Record<string, unknown>): CardRun | undefined {
     policy: policy && typeof policy.name === 'string' ? { name: policy.name } : null,
     ...(str(v.trigger) ? { trigger: str(v.trigger) } : {}),
   };
-}
-
-/** The structured result: `structuredContent`, else the JSON after a text block's summary line (hosts that drop structured content). */
-function structured(r: ToolResultLike): Record<string, unknown> | undefined {
-  if (obj(r.structuredContent)) return r.structuredContent;
-  for (const c of r.content ?? []) {
-    const b = obj(c);
-    const text = b?.type === 'text' ? str(b.text) : undefined;
-    if (!text) continue;
-    const at = text.indexOf('{');
-    if (at < 0) continue;
-    try {
-      const v = obj(JSON.parse(text.slice(at)));
-      if (v) return v;
-    } catch {
-      // not JSON: a plain sentence
-    }
-  }
-  return undefined;
 }
 
 /**
@@ -221,29 +174,10 @@ export function budgetMeter(budget: Record<string, number | null> | undefined): 
   return best;
 }
 
-/** "6 s", "1 min 40 s", "2 h 5 min". */
-export function formatDuration(seconds: number): string {
-  const n = Math.max(0, Math.floor(seconds));
-  if (n < 60) return `${n} s`;
-  if (n < 3600) return `${Math.floor(n / 60)} min ${n % 60} s`;
-  return `${Math.floor(n / 3600)} h ${Math.floor((n % 3600) / 60)} min`;
-}
-
 export function formatCost(run: CardRun | undefined): string | null {
   if (!run || typeof run.costUsd !== 'number' || run.costUsd <= 0) return null;
   const v = `$${run.costUsd < 0.01 ? run.costUsd.toFixed(4) : run.costUsd.toFixed(2)}`;
   return run.costKnown === false ? `at least ${v}` : v;
-}
-
-/** An http(s) URL, or `null`: the only links the card opens. */
-export function safeUrl(v: string | undefined): string | null {
-  if (!v) return null;
-  try {
-    const u = new URL(v);
-    return u.protocol === 'https:' || u.protocol === 'http:' ? u.toString() : null;
-  } catch {
-    return null;
-  }
 }
 
 /** The console page that answers a question (the inbox), from the run's console URL. */
