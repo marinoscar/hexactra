@@ -155,6 +155,14 @@ impl RuntimeStore {
             .map(|h| h.view.id)
     }
 
+    /// Whether the handoff asks for a secret (a code, a password).
+    pub(super) fn handoff_asks_secret(inner: &Inner, id: Uuid) -> bool {
+        inner
+            .handoffs
+            .get(&id)
+            .is_some_and(|h| h.view.input == HandoffInput::Secret)
+    }
+
     pub(super) fn cancel_session_handoffs(
         inner: &mut Inner,
         session_id: Uuid,
@@ -661,6 +669,83 @@ mod tests {
     }
 
     /// A completed secret handoff on `sess`.
+    fn shot() -> RemoteAction {
+        RemoteAction::Screenshot {
+            marks: false,
+            tab_id: None,
+        }
+    }
+
+    // #525: the person still sees the page while the session waits for them.
+    #[tokio::test]
+    async fn a_plain_screenshot_is_taken_while_a_handoff_waits_but_nothing_acts() {
+        for input in [
+            HandoffInput::None,
+            HandoffInput::Confirm,
+            HandoffInput::Takeover,
+        ] {
+            let (s, sess) = setup();
+            let (h, _) = s.create_handoff(sess, req(input)).unwrap();
+            assert!(s.enqueue(sess, shot(), Duration::from_secs(1)).is_ok());
+            assert!(s
+                .enqueue(
+                    sess,
+                    RemoteAction::DesktopScreenshot,
+                    Duration::from_secs(1)
+                )
+                .is_ok());
+            // Everything that acts on the page, or draws on it, still waits.
+            for acts in [
+                RemoteAction::Tabs,
+                RemoteAction::Screenshot {
+                    marks: true,
+                    tab_id: None,
+                },
+            ] {
+                assert!(matches!(
+                    s.enqueue(sess, acts, Duration::from_secs(1)),
+                    Err(StoreError::HandoffPending(id)) if id == h.id
+                ));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn no_screenshot_is_taken_while_a_secret_is_asked_for() {
+        let (s, sess) = setup();
+        let (h, _) = s.create_handoff(sess, req(HandoffInput::Secret)).unwrap();
+        for looks in [shot(), RemoteAction::DesktopScreenshot] {
+            assert!(matches!(
+                s.enqueue(sess, looks, Duration::from_secs(1)),
+                Err(StoreError::HandoffPending(id)) if id == h.id
+            ));
+        }
+        // Once the secret is given, the picture is back.
+        s.respond_handoff(h.id, Responder::Operator, answer(Some("424242"), None))
+            .unwrap();
+        assert!(s.enqueue(sess, shot(), Duration::from_secs(1)).is_ok());
+    }
+
+    #[tokio::test]
+    async fn a_plain_screenshot_is_taken_while_a_person_holds_the_desktop() {
+        let (s, sess) = setup();
+        let host = s.get_session(sess).unwrap().host_id;
+        s.take_over(
+            host,
+            crate::runtime::takeover::TakeoverActor {
+                user_id: "u1".into(),
+                display_name: None,
+            },
+            None,
+        )
+        .unwrap();
+        assert!(s.enqueue(sess, shot(), Duration::from_secs(1)).is_ok());
+        assert!(matches!(
+            s.enqueue(sess, RemoteAction::Tabs, Duration::from_secs(1)),
+            Err(StoreError::TakeoverActive(_))
+        ));
+    }
+
     fn answered_secret(s: &RuntimeStore, sess: Uuid, value: &str) -> Uuid {
         let (h, _) = s.create_handoff(sess, req(HandoffInput::Secret)).unwrap();
         s.respond_handoff(h.id, Responder::Operator, answer(Some(value), None))

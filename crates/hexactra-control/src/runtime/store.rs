@@ -852,8 +852,19 @@ impl RuntimeStore {
         if session.status != RemoteSessionStatus::Active {
             return Err(StoreError::Conflict("session has ended".into()));
         }
+        // A picture of the page changes nothing on it, so it is still taken
+        // while the session waits for its person or a person holds the
+        // desktop: that is when they most need to see it (#525). Not while a
+        // secret is being asked for: what they type must not be captured.
+        // A marked screenshot draws on the page for a moment, so it is not one of them.
+        let looks_only = matches!(
+            action,
+            RemoteAction::Screenshot { marks: false, .. } | RemoteAction::DesktopScreenshot
+        );
         if let Some(h) = Self::pending_handoff(&inner, session_id) {
-            return Err(StoreError::HandoffPending(h));
+            if !looks_only || Self::handoff_asks_secret(&inner, h) {
+                return Err(StoreError::HandoffPending(h));
+            }
         }
         let host_id = session.host_id;
         if let Some(until) = inner
@@ -863,7 +874,9 @@ impl RuntimeStore {
             .filter(|l| l.expires_at > Utc::now())
             .map(|l| l.expires_at)
         {
-            return Err(StoreError::TakeoverActive(until));
+            if !looks_only {
+                return Err(StoreError::TakeoverActive(until));
+            }
         }
         if !inner.hosts.contains_key(&host_id) {
             return Err(StoreError::NotFound("host"));

@@ -127,7 +127,11 @@ export class RunLiveController {
     });
   }
 
-  /** A fresh JPEG of the run's browser (live runs only). Never stored. */
+  /**
+   * A fresh JPEG of the run's browser (live runs only). Never stored. Also
+   * while the run waits for its person, when they most need to see the page;
+   * the fabric refuses it only while a secret is being asked for (#525).
+   */
   @Get(':id/screenshot')
   @Auth({ permissions: ['runs:read'] })
   async screenshot(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Res() reply: FastifyReply): Promise<void> {
@@ -136,7 +140,8 @@ export class RunLiveController {
       throw new ConflictException({ code: 'RUN_NOT_LIVE', message: 'The run has no live browser' });
     }
     try {
-      const op = await new FabricSession(this.fabric).act(run.sessionId, { type: 'screenshot' }, 20_000);
+      // A picture never waits for a person to release the desktop: it is taken while they hold it (#525), and a fabric that refuses says so at once.
+      const op = await new FabricSession(this.fabric).act(run.sessionId, { type: 'screenshot' }, 20_000, { waitForTakeover: false });
       const artifactId = op.result?.artifact_id;
       if (op.state !== 'succeeded' || typeof artifactId !== 'string') {
         throw new ConflictException({ code: 'SCREENSHOT_FAILED', message: op.error ?? `The screenshot ${op.state}` });
