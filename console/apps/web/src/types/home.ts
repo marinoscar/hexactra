@@ -1,6 +1,7 @@
 // `GET /api/home/summary`, as the API returns it (`homeSummaryResponseSchema`
 // in apps/api/src/openapi/home.responses.ts). A block the viewer may not see is null.
 import type { QuestionInput } from '../components/questions';
+import type { RunClient, RunOrigin } from '../aiApps/types';
 import type { RunStatus, RunStopReason } from './runs';
 
 export interface HomeQuestion {
@@ -59,6 +60,9 @@ export interface HomeRecentRun {
   costUsd: number | null;
   costKnown: boolean;
   error: string | null;
+  /** Where it was started from, and the AI app that started it (#464). */
+  origin?: RunOrigin;
+  client?: RunClient | null;
 }
 
 export interface HomeUpcoming {

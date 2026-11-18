@@ -2,6 +2,7 @@ import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import RuleOutlinedIcon from '@mui/icons-material/RuleOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
+import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/ui';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { DANGER_ZONE_GROUP_LABEL } from '@marinoscar/platform-web/user-data/headless';
@@ -71,6 +72,16 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
         Icon: HistoryOutlinedIcon,
         path: '/settings/run-history',
         permission: 'runs:delete',
+      },
+      // Connected AI apps (#464). `connected_apps:read` is what `GET /api/connected-apps`
+      // enforces (apps/api/src/connected-apps/connected-apps.controller.ts); the limits
+      // and Pause need `connected_apps:write`, checked inside the page.
+      {
+        title: 'AI apps',
+        description: 'ChatGPT, Claude and other AI apps connected to your account: what each may do and spend, and how to connect one.',
+        Icon: SmartToyOutlinedIcon,
+        path: '/settings/ai-apps',
+        permission: 'connected_apps:read',
       },
     ],
   },

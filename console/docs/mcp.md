@@ -66,6 +66,34 @@ Every tool also carries `securitySchemes: [{ "type": "oauth2", "scopes": [<its s
 | `offline_access` | Stay connected without asking again | — | requested by the client | — | (a refresh token) | none |
 <!-- mcp-scopes:end -->
 
+## Which app did what (attribution)
+
+Every run, browser session and question started over MCP records **which app** started it (#464). For an app signed in with OAuth that is its OAuth client and grant, read from the token the platform's in-process delegation carries to the REST route; for a personal access token caller it is the MCP `clientInfo.name` (unverified). The MCP endpoint passes that name to its in-process sub-requests in a marker header that the REST routes honour **only** on a request the delegation injected (`apps/api/src/connected-apps/request-client.ts`): a network caller cannot claim to be ChatGPT. The runs list and run page show it as **Started by**, and `GET /api/runs?clientId=` lists one app's runs ([docs/runs.md](runs.md#who-started-a-run)). The free-text `agent_name` of `ask_human` and `browser_open` stays what it was: the name shown with the question, not the attribution.
+
+## Per-app limits
+
+What each OAuth app may do on top of its consent, set by the user per app in **Settings → AI apps** (`/settings/ai-apps/:clientId`), `PATCH /api/connected-apps/{clientId}/settings` or `hexactra apps limits`. One row per user and app (`connected_app_settings`), created the first time it is needed; until then the defaults apply.
+
+| Limit | Meaning | Default |
+|---|---|---|
+| `policyId` | The agent policy its runs use when the call names none | the user's default |
+| `allowedPolicyIds` | The only policies it may name; another `policy_id` is refused (`APP_POLICY_NOT_ALLOWED`). With a list and no `policyId`, a run whose default is outside the list uses the first allowed one | any |
+| `allowedDomains` | Sites its runs and browser sessions may visit, **intersected** with the task's own (a URL must pass both); a task whose sites cannot meet the app's is refused (`APP_DOMAIN_NOT_ALLOWED`), and so is a session's navigation outside them | none (no extra limit) |
+| `maxConcurrentRuns` | Live runs and sessions at once (`APP_RUN_LIMIT`) | 2 |
+| `dailyRunLimit` | Runs and sessions per day, in the user's profile time zone (`APP_RUN_LIMIT`) | 50 |
+| `dailyCostLimitUsd` | USD per day over its runs; checked when a run starts (`APP_COST_LIMIT`) | none |
+| `confirmPurchases` | Ask before risky steps (purchases, submissions) even when the task does not | on |
+| `paused` | Refuse new runs and sessions (`APP_PAUSED`) without disconnecting; live ones keep running | off |
+
+- **Where they are enforced:** in the routes that start work (`POST /api/runs`, `POST /api/tasks/{id}/runs`, `POST /api/browser/sessions` and a session's navigation), keyed on the request's client context, so they hold for every tool. A refusal is `403` with its code and a sentence, and **writes nothing** (no run row). Personal access tokens, sessions and the console itself are not limited by them.
+- **A limit only narrows.** It never widens a task's allowed sites or turns its confirmation off: `confirmPurchases: false` means "as the task says". The limits that applied are recorded on the run and copied into its policy snapshot (`appLimits`) at its first step.
+- **Usage is counted, not stored:** live runs, today's runs and spend, and the 30-day figures come from `runs` (index `(user_id, client_id, created_at)`).
+- **Deployment ceilings:** Administration → **AI app limits** (`mcp.maxConcurrentRunsPerApp`, default 5, at most 20; `mcp.maxDailyRunsPerApp`, default 200, at most 1000). A user's value above a ceiling is refused when saved and clamped when read.
+- **Notifications:** `app.connected` when an app connects (its scopes in words, "Not you? Disconnect it", a link to its page) and `app.scope_added` when a step-up adds `browser:drive`, `browser:evaluate`, `desktop:control` or `policies:write`; both are mandatory (the platform's `mandatory` flag is per event, so `app.connected` cannot be switched off for any connection, not only for high-risk scopes). `app.first_run` ("Claude started a run: …") is off by default. They come from the platform event `identity.oauth.grant.created`, whose listener only enqueues the job `connected_apps.grant.notify`.
+- **Disconnect** is the platform's `DELETE /api/oauth/grants/{id}`, from the AI apps page, the platform's Connected apps page or `hexactra apps disconnect`: the same grant, so the pages never disagree.
+
+The "Connect an AI app" guide (`/settings/ai-apps/connect`) checks first whether an app can connect (`GET /api/connected-apps/preflight`: the OAuth server is on, `APP_URL` is a public HTTPS address that answers the discovery documents, by running the platform Doctor checks `oauth.public_url` and `oauth.well_known`, and the hosts of ChatGPT and Claude are allowed), then shows the steps for ChatGPT, Claude, Claude Code and any other MCP client. The steps are in one file, `apps/web/src/content/connect-ai-apps.ts`.
+
 ## Protocol versions
 
 One endpoint speaks every MCP revision in use. There are no sessions: each request stands alone, and the server never issues `Mcp-Session-Id` (a client that sends one is ignored).
@@ -234,6 +262,7 @@ A tool error is a result with `isError: true` (never a JSON-RPC error), a senten
 | REST answer | Text |
 |---|---|
 | 400 or 422 | `Invalid arguments: <field>: <message>` (field names as the tools take them, `allowed_domains`), with the route's code when it has one (`CRON_TOO_FREQUENT`) |
+| 403 with `APP_PAUSED`, `APP_RUN_LIMIT`, `APP_COST_LIMIT`, `APP_POLICY_NOT_ALLOWED` or `APP_DOMAIN_NOT_ALLOWED` | The limit in a sentence that says where the user changes it, e.g. `This app reached its daily limit of 50 runs. The user can raise it in Settings → AI apps.` ([Per-app limits](#per-app-limits)) |
 | 403 | `Your Hexactra account is not allowed to do this.` (an OAuth app's call outside its consent is not a tool error: it is an HTTP `403 insufficient_scope`, see [Asking for more](#asking-for-more-step-up)) |
 | 404 | `No <run, task, agent policy, browser session, …> with that id. Use <runs_list, tasks_list, policies_list, …> to find it.` |
 | 409 or 412 with a code | The route's message, its code and the next step, e.g. `(NO_SCHEDULES) The task has no schedule: add one with schedule_create.`; `POLICY_VERSION_CONFLICT`: read it again with `policy_get`; `TAKEOVER_ACTIVE`: a person is controlling the browser |

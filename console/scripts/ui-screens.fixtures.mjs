@@ -15,6 +15,7 @@ export const IDS = {
   question: '55555555-5555-4555-8555-555555555555',
   policy: '66666666-6666-4666-8666-666666666666',
   group: '77777777-7777-4777-8777-777777777777',
+  app: '88888888-8888-4888-8888-888888888888',
 };
 
 const PERMISSIONS = [
@@ -22,6 +23,7 @@ const PERMISSIONS = [
   'agent_policies:read', 'agent_policies:write', 'system_settings:read', 'system_settings:write', 'fabric_config:read', 'fabric_config:write',
   'users:read', 'allowlist:read', 'jobs:read', 'webhooks:read', 'system_webhooks:read', 'alerts:read', 'ai:use', 'ai_config:read', 'storage_config:read',
   'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
+  'connected_apps:read', 'connected_apps:write', 'oauth_clients:read', 'oauth_clients:write',
 ];
 
 const limits = { maxActions: 60, maxModelCalls: 120, maxActiveMinutes: 20, maxInputTokens: null, maxOutputTokens: null, maxCostUsd: 2 };
@@ -179,8 +181,8 @@ const runRows = [
   { ...runs[1], taskName: 'Check fare', startedAt: iso(-900_000), costUsd: 0.4 },
   listRun(1, 'succeeded', { stopReason: 'finished', result: 'Held the 9:00 fare.', costUsd: 0.31, trigger: 'schedule' }),
   listRun(2, 'failed', { stopReason: 'budget_cost', costUsd: 2.01, trigger: 'schedule', policy: { id: IDS.policy, name: 'Careful shopping with a rather long policy name', version: 3, source: 'task', builtin: false } }),
-  listRun(3, 'failed', { stopReason: 'stalled', costUsd: 0.74, costKnown: false, trigger: 'mcp' }),
-  listRun(4, 'cancelled', { stopReason: 'cancelled', costUsd: null, trigger: 'api' }),
+  listRun(3, 'failed', { stopReason: 'stalled', costUsd: 0.74, costKnown: false, trigger: 'mcp', origin: 'mcp', client: { id: IDS.app, name: 'chatgpt.com', verified: true } }),
+  listRun(4, 'cancelled', { stopReason: 'cancelled', costUsd: null, trigger: 'api', origin: 'cli' }),
   listRun(5, 'succeeded', {
     taskId: null, taskName: null, stopReason: 'finished', costUsd: 0.12,
     goal: 'Open the supplier portal at https://portal.example.test/orders/2026/11/overview?tab=open&sort=due, export the open orders as a spreadsheet and say how many are due this week',
@@ -223,7 +225,7 @@ const homeSummary = {
     pausedCount: 1, failingCount: 1,
   },
   recentRuns: {
-    items: runRows.filter((r) => !LIVE.has(r.status)).map((r) => ({ id: r.id, taskId: r.taskId, taskName: r.taskName, goal: r.goal, status: r.status, trigger: r.trigger, createdAt: r.createdAt, startedAt: r.startedAt, finishedAt: r.finishedAt, stepCount: r.stepCount, stopReason: r.stopReason, costUsd: r.costUsd, costKnown: r.costKnown, error: r.status === 'failed' ? 'Cost budget exhausted' : null })),
+    items: runRows.filter((r) => !LIVE.has(r.status)).map((r) => ({ id: r.id, taskId: r.taskId, taskName: r.taskName, goal: r.goal, status: r.status, trigger: r.trigger, createdAt: r.createdAt, startedAt: r.startedAt, finishedAt: r.finishedAt, stepCount: r.stepCount, stopReason: r.stopReason, costUsd: r.costUsd, costKnown: r.costKnown, origin: r.origin ?? 'web', client: r.client ?? null, error: r.status === 'failed' ? 'Cost budget exhausted' : null })),
   },
   week: { totals: { succeeded: 31, failed: 6, cancelled: 1, successRate: 0.84, costUsd: 8.4, costKnown: false, budgetStops: 3, stalled: 1 }, series: weekDays },
   fleet: { total: 2, online: 1, disabled: 1, stale: false, hosts: hosts.map((h) => ({ id: h.id, name: h.name, online: h.online, draining: h.draining, mode: h.mode })) },
@@ -236,6 +238,47 @@ const schedulePreview = (_url, body) => {
   if (/^\*(\/[1-4])? /.test(cron)) return { valid: false, code: 'CRON_TOO_FREQUENT', message: 'A schedule may run at most every 5 minutes.' };
   const description = { '0 9 * * 1-5': 'Monday to Friday at 09:00', '0 8 * * 6': 'Every Saturday at 08:00', '30 7 1 * *': 'On day 1 of every month at 07:30', '0 9 * * *': 'Every day at 09:00' }[cron] ?? `Custom schedule (${cron})`;
   return { valid: true, cron, timezone: body?.timezone ?? 'Etc/UTC', description, next: Array.from({ length: body?.count ?? 5 }, (_, i) => `${iso((i + 1) * 86_400_000).slice(0, 10)}T09:00:00.000Z`), intervalSeconds: 86_400 };
+};
+
+// Connected AI apps (#464).
+const appLimits = { policyId: null, allowedPolicyIds: [], allowedDomains: ['shop.example.test'], maxConcurrentRuns: 2, dailyRunLimit: 50, dailyCostLimitUsd: 5, confirmPurchases: true, paused: false };
+const connectedApps = [
+  {
+    clientId: IDS.app, grantId: '99999998-9999-4999-8999-999999999999', name: 'chatgpt.com', displayName: 'ChatGPT', selfName: 'ChatGPT', host: 'chatgpt.com', logoUri: null, verified: true, removed: false,
+    connectedAt: iso(-12 * 86_400_000), lastUsedAt: iso(-3_600_000),
+    scopes: [
+      { id: 'runs:read', label: 'See runs', consent: 'See your runs, tasks, schedules and machines', risk: 'low' },
+      { id: 'runs:write', label: 'Delegate', consent: 'Give goals to your Hexactra agent, start and stop runs', risk: 'low' },
+      { id: 'inbox:read', label: 'Inbox', consent: 'See questions your agent is waiting on', risk: 'low' },
+      { id: 'browser:drive', label: 'Drive browser', consent: 'Control a browser on your machines directly, step by step', risk: 'elevated' },
+      { id: 'browser:evaluate', label: 'JavaScript', consent: 'Run JavaScript in pages you are signed in to', risk: 'high' },
+    ],
+    limits: appLimits,
+    usage: { runs30d: 14, costUsd30d: 3.82, costKnown: true, lastRunAt: iso(-3_600_000), liveRuns: 1, runsToday: 3, costTodayUsd: 0.64 },
+  },
+  {
+    clientId: '88888889-8888-4888-8888-888888888888', grantId: '99999997-9999-4999-8999-999999999999', name: 'Claude Code', displayName: 'Claude Code', selfName: 'Claude Code', host: null, logoUri: null, verified: true, removed: false,
+    connectedAt: iso(-2 * 86_400_000), lastUsedAt: null,
+    scopes: [{ id: 'runs:write', label: 'Delegate', consent: 'Give goals to your Hexactra agent, start and stop runs', risk: 'low' }],
+    limits: { ...appLimits, allowedDomains: [], paused: true },
+    usage: { runs30d: 0, costUsd30d: 0, costKnown: true, lastRunAt: null, liveRuns: 0, runsToday: 0, costTodayUsd: 0 },
+  },
+];
+const preflight = {
+  mcpUrl: 'https://console.example.test/api/mcp',
+  admin: true,
+  ready: false,
+  checks: [
+    { id: 'oauth_enabled', status: 'pass', title: 'Sign-in for AI apps is on', detail: 'AI apps can ask you to sign in with your Hexactra account.', fix: null },
+    { id: 'public_url', status: 'pass', title: 'The console is on a public HTTPS address', detail: 'https://console.example.test', fix: null },
+    { id: 'well_known', status: 'fail', title: 'The sign-in documents answer from the internet', detail: 'https://console.example.test/.well-known/oauth-protected-resource/api/mcp answered HTML (the web app), not the resource document.', fix: { who: 'admin', path: '/admin/settings/oauth-clients', text: 'Make the proxy in front of the console pass /.well-known/oauth-* to the API (Administration → Doctor shows the details).' } },
+  ],
+  clients: [
+    { id: 'chatgpt', allowed: true, hosts: ['chatgpt.com'], detail: 'ChatGPT may connect.' },
+    { id: 'claude', allowed: false, hosts: ['claude.ai'], detail: 'Allow claude.ai in Administration → OAuth clients.' },
+    { id: 'claude-code', allowed: true, hosts: ['loopback'], detail: 'Claude Code may connect from your computer.' },
+    { id: 'other', allowed: null, hosts: [], detail: "The app's host must be allowed in Administration → OAuth clients, or use a personal access token." },
+  ],
 };
 
 /** `"<METHOD> <path>"` to the response `data`. A function gets the request URL and its JSON body. */
@@ -278,8 +321,11 @@ export const RESPONSES = {
   'GET /agent-policies/default': { policyId: 'builtin:balanced' },
   'GET /agent-policies/model-tiers/effective': { policy: null, tiers: { fast: effectiveTier('provider-a:model-small'), standard: effectiveTier('provider-a:model-mid'), frontier: effectiveTier('provider-a:model-large-2026') } },
   'GET /fabric/connection': { url: 'http://fabric-control:8787', tokenSet: true, source: 'settings', updatedAt: iso(-86_400_000) },
+  'GET /connected-apps': connectedApps,
+  'GET /connected-apps/preflight': preflight,
+  [`GET /connected-apps/${IDS.app}`]: connectedApps[0],
   'GET /notes': [{ id: 'note-1', title: 'A first note', body: '', archived: false }, { id: 'note-2', title: 'A note with a long title that has to wrap on a narrow phone screen', body: '', archived: true }],
 };
 
 /** The ids a mock run puts in the parameterized routes. */
-export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group };
+export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, app: IDS.app };

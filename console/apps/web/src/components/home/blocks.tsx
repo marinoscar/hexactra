@@ -10,6 +10,7 @@ import { Link as RouterLink } from 'react-router-dom';
 
 import type { HomeFleet, HomeLiveRun, HomeQuestion, HomeRecentRun, HomeSummary, HomeWeek } from '../../types/home';
 import { RelativeTime, StatusChip, formatCost } from '../../ui';
+import { StartedByChip } from '../StartedByChip';
 import { KIND_LABEL } from '../questions';
 import { taskPaths } from '../taskList';
 import { budgetColor, escalated, liveLine, progressLine, runDuration, successRate, timeLeft, upNextWhen, weekRunsLink, type ChecklistStep } from './homeText';
@@ -301,9 +302,11 @@ function RecentRunRow({ run }: { run: HomeRecentRun }) {
           '&:focus-visible': { outline: 2, outlineColor: 'primary.main', outlineOffset: 2 },
         }}
       >
-        <Box sx={{ gridArea: 'chip', minWidth: 0, maxWidth: '100%' }}>
+        <Stack direction="row" spacing={0.5} useFlexGap sx={{ gridArea: 'chip', minWidth: 0, maxWidth: '100%', flexWrap: 'wrap' }}>
           <StatusChip status={run.status} stopReason={run.stopReason} />
-        </Box>
+          {/* Who started it (#464), when it was not the console itself. */}
+          {(run.client || (run.origin && run.origin !== 'web')) && <StartedByChip run={run} />}
+        </Stack>
         <Box sx={{ gridArea: 'name', minWidth: 0, maxWidth: '100%' }}>
           <Typography sx={ONE_LINE}>{run.taskName ?? run.goal}</Typography>
           {run.error && (

@@ -229,6 +229,7 @@ export const questionResponseSchema = z.object({
   createdAt: iso,
   expiresAt: iso,
   answeredAt: iso.nullable(),
+  client: runClientSchema.nullable().describe('The AI app that asked; null when no app did'),
 });
 export class QuestionResponseDto extends createZodDto(questionResponseSchema) {}
 

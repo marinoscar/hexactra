@@ -148,6 +148,8 @@ export class ChatTurnService {
               hostId: c.hostId,
               hostFallback: c.hostFallback,
               trigger: 'chat',
+              // A chat runs in the console (#464): the person typed it there.
+              origin: 'web',
               ...(c.policyRef ? { policyRef: c.policyRef, policySource: 'run' as const } : {}),
             },
             select: { id: true, goal: true },

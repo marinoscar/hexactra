@@ -34,7 +34,7 @@ import {
   type StallState,
 } from './stall';
 import { PolicyResolver } from '../policies/policy.resolver';
-import { readSnapshot, type RunPolicySnapshot } from '../policies/policy-snapshot';
+import { readAppLimits, readSnapshot, type RunPolicySnapshot } from '../policies/policy-snapshot';
 import { PrismaService } from '../prisma/prisma.service';
 import { questionSpecSchema, type QuestionConstraints, type QuestionInputType, type QuestionOption, type QuestionResponse, type QuestionSpec } from '../questions/questions.contract';
 import { QuestionsService } from '../questions/questions.service';
@@ -266,7 +266,7 @@ export class GoalRunnerService {
    * settings does not change a live run. Fall-through notes (a level that named
    * a deleted or foreign policy) go to the run's first log line.
    */
-  private async policySnapshot(db: ReturnType<PrismaService['forUser']>, run: { id: string; userId: string; taskId: string | null; policyRef: string | null; policySource: RunPolicySnapshot['source'] | null; policySnapshot: Prisma.JsonValue | null; task: { policyRef: string | null } | null }, memory: RunMemory): Promise<RunPolicySnapshot> {
+  private async policySnapshot(db: ReturnType<PrismaService['forUser']>, run: { id: string; userId: string; taskId: string | null; policyRef: string | null; policySource: RunPolicySnapshot['source'] | null; policySnapshot: Prisma.JsonValue | null; appLimits?: Prisma.JsonValue | null; task: { policyRef: string | null } | null }, memory: RunMemory): Promise<RunPolicySnapshot> {
     const stored = readSnapshot(run.policySnapshot);
     if (stored) {
       // Upgrade an older snapshot once, then never change it: the effective budget (#404) and the model tiers (#403).
@@ -297,6 +297,9 @@ export class GoalRunnerService {
     }
     // What the run is held to: the policy's budget under the deployment's ceilings, fixed for the run (#404).
     snapshot = { ...snapshot, effectiveBudget: computeEffectiveBudget(snapshot.spec.budget, await this.ceilings()) };
+    // The limits of the AI app that started it (#464), recorded on the run at its start: the snapshot keeps them.
+    const appLimits = readAppLimits(run.appLimits);
+    if (appLimits) snapshot = { ...snapshot, appLimits };
     // Compare-and-set: only the first writer's snapshot stands (a retried job re-reads it).
     const { count } = await db.run.updateMany({
       where: { id: run.id, policySnapshot: { equals: Prisma.DbNull } },
@@ -447,11 +450,18 @@ export class GoalRunnerService {
     // Context efficiency (#406): every knob is the run's own snapshot, never a constant.
     const ctx = snapshot.spec.context;
     const shotWindow = new ScreenshotWindow(ctx.screenshotsKept, ctx.pruneBatch);
+    // The AI app's limits (#464), from the snapshot: they only ever narrow the task's opt-ins.
+    const app = snapshot.appLimits ?? readAppLimits(run.appLimits);
     const policy = {
       // The opt-ins of the run's task, or of the chat that started it (#484); an ad-hoc run has none.
       allowedDomains: run.task?.allowedDomains ?? run.conversation?.allowedDomains ?? [],
-      confirmRisky: run.task?.confirmRiskyActions ?? run.conversation?.confirmRiskyActions ?? false,
+      // The app's own allowed sites: a URL must pass both lists.
+      appDomains: app?.allowedDomains ?? [],
+      confirmRisky: (run.task?.confirmRiskyActions ?? run.conversation?.confirmRiskyActions ?? false) || app?.confirmPurchases === true,
     };
+    /** Whether a URL is allowed by the task and by the app. */
+    const siteAllowed = (url: string) => domainAllowed(url, policy.allowedDomains) && domainAllowed(url, policy.appDomains);
+    const sitesText = [policy.allowedDomains.join(', ') || null, policy.appDomains.length ? `the app's: ${policy.appDomains.join(', ')}` : null].filter(Boolean).join('; ');
     // Routing steps (#405) take a `seq` but are not actions: the sequence runs ahead of `stepCount` by their number.
     const lastSeq = await this.prisma.runStep.aggregate({ where: { runId: run.id }, _max: { seq: true } });
     const state = {
@@ -671,9 +681,9 @@ export class GoalRunnerService {
         description: 'Open any URL in the current tab.',
         parameters: z.object({ url: z.string().max(8000), reason: z.string().max(500) }),
         execute: async ({ url, reason }) => {
-          if (!domainAllowed(url, policy.allowedDomains)) {
+          if (!siteAllowed(url)) {
             await record('action', 'navigate', { url }, false, 'refused by policy: site not allowed', Date.now(), reason);
-            return `Refused: ${url.startsWith('javascript:') ? 'use run_javascript instead of a javascript: URL' : `that site is not allowed for this task (${policy.allowedDomains.join(', ')})`}.`;
+            return `Refused: ${url.startsWith('javascript:') ? 'use run_javascript instead of a javascript: URL' : `that site is not allowed for this task (${sitesText})`}.`;
           }
           return act({ type: 'navigate', url }, reason);
         },
@@ -832,9 +842,9 @@ export class GoalRunnerService {
         description: 'Open a new tab, optionally at a URL, and make it active.',
         parameters: z.object({ url: z.string().max(8000).nullable() }),
         execute: async ({ url }) => {
-          if (url && !domainAllowed(url, policy.allowedDomains)) {
+          if (url && !siteAllowed(url)) {
             await record('action', 'new_tab', { url }, false, 'refused by policy: site not allowed', Date.now());
-            return `Refused: that site is not allowed for this task (${policy.allowedDomains.join(', ')}).`;
+            return `Refused: that site is not allowed for this task (${sitesText}).`;
           }
           return act({ type: 'new_tab', ...(url ? { url } : {}) });
         },
@@ -1151,7 +1161,7 @@ export class GoalRunnerService {
       const buildInput = () =>
         [
           `Goal: ${goal}`,
-          `Allowed sites: ${policy.allowedDomains.join(', ') || 'any'}.`,
+          `Allowed sites: ${sitesText || 'any'}.`,
           memory.log.length ? `Progress so far (latest last):\n${memory.log.slice(-LOG_LINES).join('\n')}` : 'Nothing has been done yet. Start by navigating or observing the page.',
           memory.confirmationGranted ? 'The person approved the next irreversible step.' : '',
           ...warnings,

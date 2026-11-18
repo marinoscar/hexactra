@@ -60,6 +60,19 @@ export interface QuestionView {
   createdAt: string;
   expiresAt: string;
   answeredAt: string | null;
+  /** The AI app that asked (#464); null when no app did. */
+  client: { id: string | null; name: string | null; verified: boolean } | null;
+}
+
+/** The client columns a question stores (#464). */
+export interface QuestionClient {
+  clientId: string | null;
+  clientName: string | null;
+  grantId: string | null;
+}
+
+function clientData(c: QuestionClient | null | undefined) {
+  return c ? { clientId: c.clientId, clientName: c.clientName, grantId: c.grantId } : {};
 }
 
 export function toQuestionView(q: Question): QuestionView {
@@ -84,6 +97,7 @@ export function toQuestionView(q: Question): QuestionView {
     createdAt: q.createdAt.toISOString(),
     expiresAt: q.expiresAt.toISOString(),
     answeredAt: q.answeredAt?.toISOString() ?? null,
+    client: q.clientId || q.clientName ? { id: q.clientId, name: q.clientName, verified: q.clientId !== null } : null,
   };
 }
 
@@ -138,7 +152,7 @@ export class QuestionsService {
    * needs `runId` or `fabricSessionId` (browser-bound questions are created
    * by `mirrorHandoff`).
    */
-  async create(owner: QuestionActor, spec: QuestionSpec, opts: { askedBy: string; runId?: string | null; fabricSessionId?: string | null }): Promise<QuestionView> {
+  async create(owner: QuestionActor, spec: QuestionSpec, opts: { askedBy: string; runId?: string | null; fabricSessionId?: string | null; client?: QuestionClient | null }): Promise<QuestionView> {
     if (spec.input === 'secret' && !opts.runId && !opts.fabricSessionId) {
       throw new BadRequestException({ code: 'SECRET_NEEDS_BROWSER', message: 'A secret question must belong to a browser session (it is typed there, never stored)' });
     }
@@ -152,6 +166,7 @@ export class QuestionsService {
         askedBy: opts.askedBy.slice(0, 200),
         runId: opts.runId ?? null,
         fabricSessionId: opts.fabricSessionId ?? null,
+        ...clientData(opts.client),
         ...this.specData(spec),
         expiresAt: new Date(Date.now() + spec.timeoutMs),
       },
@@ -192,7 +207,7 @@ export class QuestionsService {
   }
 
   /** Record the question a fabric handoff asks (the goal runner's and external agents' handoffs). */
-  async mirrorHandoff(owner: QuestionActor, spec: QuestionSpec, h: CreatedHandoff, opts: { askedBy: string; runId: string | null; fabricSessionId: string | null }): Promise<QuestionView> {
+  async mirrorHandoff(owner: QuestionActor, spec: QuestionSpec, h: CreatedHandoff, opts: { askedBy: string; runId: string | null; fabricSessionId: string | null; client?: QuestionClient | null }): Promise<QuestionView> {
     const viewerUrl = h.viewerUrl && h.viewerUrl.length <= 2000 ? h.viewerUrl : await this.desktopLink(opts.fabricSessionId);
     const q = await this.db(owner.id).question.create({
       data: {
@@ -200,6 +215,7 @@ export class QuestionsService {
         askedBy: opts.askedBy.slice(0, 200),
         runId: opts.runId,
         fabricSessionId: opts.fabricSessionId,
+        ...clientData(opts.client),
         handoffId: h.id,
         ...this.specData(spec),
         pageTitle: h.pageTitle?.slice(0, 500) ?? null,

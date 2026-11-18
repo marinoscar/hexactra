@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 import type { CliCommandRegistration } from '@marinoscar/platform-cli/core';
 
+import { resolveApp, startedBy } from './apps.js';
 import { consoleApi } from './console-api.js';
 import { findHost, type FleetHost } from './fleet.js';
 import { costText, resolvePolicyId, runPolicyLines, type RunPolicyFields } from './policies.js';
@@ -33,6 +34,9 @@ interface Step {
   summary: string;
 }
 interface Run extends RunPolicyFields {
+  /** Where it was started from, and the AI app that started it (#464). */
+  origin?: string;
+  client?: { name: string | null; verified: boolean } | null;
   id: string;
   status: string;
   goal: string;
@@ -196,11 +200,14 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
   runs
     .command('list')
     .option('--status <status>', 'filter by status')
+    .option('--app <app>', 'only the runs an AI app started (id, id prefix, host or name; see apps list)')
+    .option('--origin <origin>', 'only runs started from: web, android, cli, api, mcp, schedule or system (comma-separated)')
     .option('--json', 'print JSON')
-    .action(async (o: { status?: string; json?: boolean }) => {
-      const list = await consoleApi().get<Run[]>('/runs', { query: { status: o.status } });
+    .action(async (o: { status?: string; app?: string; origin?: string; json?: boolean }) => {
+      const clientId = o.app ? (await resolveApp(o.app)).clientId : undefined;
+      const list = await consoleApi().get<Run[]>('/runs', { query: { status: o.status, ...(clientId ? { clientId } : {}), ...(o.origin ? { origin: o.origin } : {}) } });
       if (o.json) return json(list);
-      for (const r of list) out(`${r.id.slice(0, 8)}  ${label(r.status).padEnd(10)}  ${r.stepCount} steps  ${(r.policy?.name ?? '-').padEnd(12)}  ${(costText(r) ?? '-').padEnd(8)}  ${r.goal.slice(0, 60)}`);
+      for (const r of list) out(`${r.id.slice(0, 8)}  ${label(r.status).padEnd(10)}  ${r.stepCount} steps  ${(r.policy?.name ?? '-').padEnd(12)}  ${(costText(r) ?? '-').padEnd(8)}  ${r.goal.slice(0, 60)}  [${startedBy(r)}]`);
     });
   runs
     .command('start <goal>')

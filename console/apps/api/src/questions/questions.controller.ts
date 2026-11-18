@@ -1,8 +1,9 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Optional, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { ApiTags } from '@nestjs/swagger';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 
+import { RequestClientService } from '../connected-apps/request-client';
 import { QuestionResponseDto } from '../openapi/console.responses';
 import { AnswerQuestionDto, CancelQuestionDto, CreateQuestionDto, GetQuestionDto, ListQuestionsDto } from './questions.schemas';
 import { QuestionsService, type QuestionActor, type QuestionView } from './questions.service';
@@ -16,7 +17,10 @@ import { QuestionsService, type QuestionActor, type QuestionView } from './quest
 @ApiTags('Questions')
 @Controller('questions')
 export class QuestionsController {
-  constructor(private readonly questions: QuestionsService) {}
+  constructor(
+    private readonly questions: QuestionsService,
+    @Optional() private readonly clients?: RequestClientService,
+  ) {}
 
   @Get()
   @ApiDataResponse(QuestionResponseDto, { isArray: true })
@@ -37,9 +41,11 @@ export class QuestionsController {
   @Post()
   @ApiDataResponse(QuestionResponseDto, { status: 201 })
   @Auth({ permissions: ['runs:write'] })
-  create(@CurrentUser() user: QuestionActor, @Body() body: CreateQuestionDto): Promise<QuestionView> {
+  async create(@CurrentUser() user: QuestionActor, @Body() body: CreateQuestionDto, @Req() req?: object): Promise<QuestionView> {
     const { asker, ...spec } = body;
-    return this.questions.create(user, this.questions.parseSpec(spec), { askedBy: asker ? `agent:${asker}` : `user:${user.id}` });
+    // The AI app that asks (#464), from the request's credential: never the free-text `asker`.
+    const client = (await this.clients?.resolve(req)) ?? null;
+    return this.questions.create(user, this.questions.parseSpec(spec), { askedBy: asker ? `agent:${asker}` : `user:${user.id}`, client: client && client.origin === 'mcp' ? client : null });
   }
 
   /** Answer (or decline, `outcome: "cancelled"`). The first answer wins; a later one is 409. */

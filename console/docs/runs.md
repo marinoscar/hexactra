@@ -36,8 +36,10 @@ All of them work with and without `envelope`.
 | `q` | 1 to 200 characters | Case-insensitive substring of the goal. Plain text: `%` and `_` are not wildcards. Empty is ignored. |
 | `stopReason` | one or more stop reasons (`finished`, `budget_cost`, `stalled`, …), or `budget` | Any of them. `budget` is every `budget_*` reason. |
 | `policyId` | an agent policy id: a UUID or `builtin:<key>` | The runs that ran under that policy. |
+| `origin` | one or more of `web`, `android`, `cli`, `api`, `mcp`, `schedule`, `system` | Where the runs were started from (#464; see [Who started a run](#who-started-a-run)). |
+| `clientId` | an AI app's OAuth client id (`client.id` of a run, `clientId` of `GET /api/connected-apps`) | The runs that app started. |
 
-A list parameter (`status`, `trigger`, `stopReason`) is repeated (`status=failed&status=cancelled`) or comma-separated (`status=failed,cancelled`).
+A list parameter (`status`, `trigger`, `stopReason`, `origin`) is repeated (`status=failed&status=cancelled`) or comma-separated (`status=failed,cancelled`).
 
 Errors are `400` with a typed `code`:
 
@@ -52,6 +54,27 @@ Errors are `400` with a typed `code`:
 A row is the run as `GET /api/runs/{id}` returns it, without its steps, plus `taskName` (null for a run without a task). It includes `startedAt`, `finishedAt`, `policy { id, name, version, source, builtin }`, `costUsd`, `costKnown`, `modelCalls`, `stopReason` and `currentTier`.
 
 A list row never carries the run's transcript or its policy snapshot, so 50 rows stay well under 100 KB. `budget` is present while a run is live and `null` on a finished run: read a finished run's budget from `GET /api/runs/{id}`.
+
+### Who started a run
+
+Every run carries `origin` and `client` (#464). The server sets them from the request's credential, **never** from a request body or a header a network caller sends (a `clientName` or `origin` in a body is ignored):
+
+| `origin` | Set when |
+|---|---|
+| `web` | A signed-in session in the console (the Runs page, a task, Home, a chat). |
+| `android` | The Android app's own client (a User-Agent with `HexactraAndroid`). The Android app's web view is Chrome and reads as `web`. |
+| `cli` | The CLI (`hexactra/<version>` User-Agent). |
+| `api` | Any other personal access token caller: the SDK, a script, an agent framework over REST. |
+| `mcp` | A call through `POST /api/mcp`: an AI app signed in with OAuth, or any MCP client with a personal access token or a session. |
+| `schedule` | A task's schedule. |
+| `system` | A worker node or the server itself. |
+
+`client` is `{ id, name, verified }`, or `null` when no AI app started the run:
+
+- An app signed in with **OAuth**: `id` is its OAuth client (`oauth_clients.id`), `name` the client's host at the time (`chatgpt.com`, `claude.ai`; a local app such as Claude Code: its own name), `verified: true`. The run also records the grant (server-side only). An app an administrator removes keeps its name on its runs.
+- An MCP client with a **personal access token**: `id: null`, `name` is the MCP `clientInfo.name` it sent (at most 64 characters), `verified: false`. The console shows it with a "?".
+
+Existing runs were backfilled from `trigger` (`manual` and `chat` → `web`, `schedule` → `schedule`, `api` and `external` → `api`, `mcp` → `mcp`). External browser sessions and questions carry the same client fields. A list row carries `origin` and `client`, never the grant or the limits that applied.
 
 ## `GET /api/runs/counts`
 

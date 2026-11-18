@@ -3,9 +3,18 @@
 // sentence the MCP error table (src/mcp/mcp.errors.ts) gives the model. A
 // refusal is thrown BEFORE anything is written: no run row, no session.
 import { ForbiddenException } from '@nestjs/common';
+import { registerErrorCode } from '@marinoscar/platform-api/core';
 
 export const APP_LIMIT_CODES = ['APP_PAUSED', 'APP_RUN_LIMIT', 'APP_COST_LIMIT', 'APP_POLICY_NOT_ALLOWED', 'APP_DOMAIN_NOT_ALLOWED'] as const;
 export type AppLimitCode = (typeof APP_LIMIT_CODES)[number];
+
+// Registered at import, so the platform's exception filter keeps them and the OpenAPI document lists them.
+registerErrorCode({ code: 'APP_PAUSED', status: 403, description: 'The AI app behind this request is paused by its user (Settings → AI apps): no new run or browser session.' });
+registerErrorCode({ code: 'APP_RUN_LIMIT', status: 403, description: "The AI app reached its limit of live runs (`details.kind: concurrent`) or of runs today (`daily`); `details.limit` is the limit." });
+registerErrorCode({ code: 'APP_COST_LIMIT', status: 403, description: "The AI app's runs today reached its daily spending limit (`details.limit`, USD)." });
+registerErrorCode({ code: 'APP_POLICY_NOT_ALLOWED', status: 403, description: 'The agent policy named is not one the user allowed this AI app to use.' });
+registerErrorCode({ code: 'APP_DOMAIN_NOT_ALLOWED', status: 403, description: "The task's sites, or the site opened, are outside the sites the user allowed this AI app." });
+registerErrorCode({ code: 'APP_NOT_FOUND', status: 404, description: 'No AI app with that id is connected to, or known by, your account.' });
 
 /** Where the owner changes an app's limits. */
 export const APP_SETTINGS_PLACE = 'Settings → AI apps';

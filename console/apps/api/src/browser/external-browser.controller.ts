@@ -12,6 +12,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Req,
   Res,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
@@ -20,6 +21,9 @@ import type { FastifyReply } from 'fastify';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+import { AppLimitError } from '../connected-apps/connected-apps.errors';
+import { ConnectedAppsService } from '../connected-apps/connected-apps.service';
+import { RequestClientService, clientColumns } from '../connected-apps/request-client';
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { assertBrowserScopes, browserActionScope } from './browser-action-scopes';
 import { profileNameSchema } from '../fleet/fleet.schemas';
@@ -97,6 +101,8 @@ export class ExternalBrowserController {
     private readonly tasks: TasksService,
     @Optional() private readonly notifier?: RunNotifier,
     @Optional() private readonly questions?: QuestionsService,
+    @Optional() private readonly clients?: RequestClientService,
+    @Optional() private readonly apps?: ConnectedAppsService,
   ) {}
 
   private async liveRun(userId: string, runId: string) {
@@ -125,10 +131,23 @@ export class ExternalBrowserController {
 
   @Post()
   @Auth({ permissions: ['runs:write'] })
-  async open(@CurrentUser('id') userId: string, @Body() body: OpenDto, @AuthCredential() credential?: AuthCredentialInfo | null) {
+  async open(@CurrentUser('id') userId: string, @Body() body: OpenDto, @AuthCredential() credential?: AuthCredentialInfo | null, @Req() req?: object) {
     assertBrowserScopes(credential, 'browser:drive');
+    // Who opens it (#464) and the AI app's limits (paused, run limits, sites): a refusal opens nothing.
+    const client = (await this.clients?.resolve(req)) ?? null;
+    const decision = client && this.apps ? await this.apps.checkStart(userId, client, { kind: 'session', allowedDomains: body.allowedDomains }) : null;
     const run = await this.prisma.forUser({ userId }).run.create({
-      data: { userId, goal: body.goal, profile: body.profile, hostId: body.hostId ?? null, trigger: 'external', actor: body.actor, status: 'queued' },
+      data: {
+        userId,
+        goal: body.goal,
+        profile: body.profile,
+        hostId: body.hostId ?? null,
+        trigger: 'external',
+        actor: body.actor,
+        status: 'queued',
+        ...(client ? clientColumns(client) : {}),
+        ...(decision?.appLimits ? { appLimits: decision.appLimits as never } : {}),
+      },
     });
     let sessionId: string;
     try {
@@ -141,7 +160,8 @@ export class ExternalBrowserController {
     await this.tasks.transition(userId, run.id, 'running', {
       sessionId,
       // The policy of an external session lives in its memory, like a run's.
-      transcript: { log: [], chunks: 0, allowedDomains: body.allowedDomains } as never,
+      // An AI app's own site limit (#464) is kept apart and checked too: the two lists intersect.
+      transcript: { log: [], chunks: 0, allowedDomains: body.allowedDomains, ...(decision?.appLimits?.allowedDomains.length ? { appAllowedDomains: decision.appLimits.allowedDomains } : {}) } as never,
     });
     this.log.log(`external session opened by ${body.actor}: run ${run.id}`);
     await this.notifier?.started(userId, run);
@@ -165,6 +185,11 @@ export class ExternalBrowserController {
     if ((type === 'navigate' || type === 'new_tab') && typeof action.url === 'string' && !domainAllowed(action.url, allowed)) {
       await this.record(runId, userId, 'action', type, action, false, 'refused by policy: site not allowed', started);
       throw new BadRequestException({ code: 'SITE_NOT_ALLOWED', message: `This session may not open ${redactUrl(action.url)}` });
+    }
+    const appAllowed = ((run.transcript as { appAllowedDomains?: string[] } | null)?.appAllowedDomains ?? []) as string[];
+    if ((type === 'navigate' || type === 'new_tab') && typeof action.url === 'string' && !domainAllowed(action.url, appAllowed)) {
+      await this.record(runId, userId, 'action', type, action, false, "refused by the app's limits: site not allowed", started);
+      throw new AppLimitError('APP_DOMAIN_NOT_ALLOWED', { site: redactUrl(action.url) });
     }
 
     // Type the secret a person gave through a handoff; the agent never sees it.
@@ -259,7 +284,7 @@ export class ExternalBrowserController {
     // Mirror it in the question broker (the inbox and every channel read it there).
     if (this.questions) {
       try {
-        await this.questions.mirrorHandoff({ id: userId }, spec, created, { askedBy: `agent:${(run.actor ?? 'external agent').slice(0, 190)}`, runId, fabricSessionId: run.sessionId });
+        await this.questions.mirrorHandoff({ id: userId }, spec, created, { askedBy: `agent:${(run.actor ?? 'external agent').slice(0, 190)}`, runId, fabricSessionId: run.sessionId, client: { clientId: run.clientId, clientName: run.clientName, grantId: run.grantId } });
       } catch (e) {
         // The handoff exists on the fabric: the inbox mirrors it on first answer.
         this.log.warn(`run ${runId}: could not mirror handoff ${id}: ${e instanceof Error ? e.message : String(e)}`);

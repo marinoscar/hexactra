@@ -476,7 +476,7 @@ What is stored is always a 5-field cron expression, so the CLI, the SDK and MCP 
 | ![The Runs page: status tabs with counts, search and filters, and the list, on a desktop](docs/images/runs-desktop.png) | ![The Runs page: status tabs with counts, search and filters, and the list, on a phone](docs/images/runs-phone.png) |
 
 - **Status tabs** with the number of runs in each: All, Live, Needs you, Succeeded, Failed, Cancelled. Beside them, how many runs match and what they cost ("≥" when a call could not be priced).
-- **Search** looks in the goal. **Filters**: task (or "One-off goals"), trigger, a date range (Today, 7, 30 or 90 days, or two dates, cut in your profile time zone), "Stopped by" (Budget, Stalled, Error, No model; on the All and Failed tabs) and policy. On a phone they are behind the **Filters** button.
+- **Search** looks in the goal. **Filters**: task (or "One-off goals"), trigger, started by (Console, CLI, Schedule, any AI app, or one app), a date range (Today, 7, 30 or 90 days, or two dates, cut in your profile time zone), "Stopped by" (Budget, Stalled, Error, No model; on the All and Failed tabs) and policy. On a phone they are behind the **Filters** button.
 - **Every filter is in the URL** (`?view=failed&q=invoice&trigger=schedule&from=2026-11-01`), so a filtered view can be bookmarked or sent, and survives a reload. Active filters show as chips; **Clear all** removes them.
 - **Each run** shows its status (with the reason a failed run stopped), goal, task, trigger, steps, when it started, how long it took, its cost, and what a running one is doing right now. The list refreshes the live runs every 5 seconds while the tab is visible.
 - **The ⋮ menu of a run:** Open, Run again, Run again with… (another policy), Cancel (a live run) and Delete (a finished run). "Run again" keeps the original policy only when it was chosen for that one run.
@@ -491,6 +491,16 @@ What is stored is always a 5-field cron expression, so the CLI, the SDK and MCP 
 A run's steps and answers are deleted with it, and its cost and stop reason leave the task's spend and the alerts. This cannot be undone. A run that is queued, running or waiting for you is never deleted: cancel it first. More than 500 runs are deleted in the background; the page says so and refreshes when it is done. One run can also be deleted from its own page (`/runs/:id`, **Delete**).
 
 For code: the list is `RunList` (`apps/web/src/components/RunList.tsx`) over the `useRunList` hook (`useRunList.ts`); `<RunList scope={{ taskId }} />` is the same list fixed to one task.
+
+### AI apps
+
+**Settings → AI apps** (`/settings/ai-apps`, `connected_apps:read`) lists ChatGPT, Claude and the other AI apps connected to your account with OAuth: what each may do (the scopes in words; the risky ones in warning colour), when it was connected and last used, its runs and spend over 30 days, and a **Paused** switch. An app's page has its limits (its default policy, the policies it may choose, the sites it may visit, runs at once, runs and spend per day, always ask before purchases), the runs it started, and **Disconnect**. Every run shows who started it (**Started by**: Console, CLI, Schedule, or the app by name), and the Runs page filters by it. Home links to the guide while no app is connected.
+
+**Connect an AI app** (`/settings/ai-apps/connect`) first checks that an app can connect at all (sign-in for AI apps on, a public HTTPS address, the app's host allowed; each problem says who fixes it), then gives the console's MCP URL to copy and the steps for ChatGPT, Claude, Claude Code or another MCP client. Administrators cap every app in **Administration → AI app limits**. From the CLI: `hexactra apps list|show|pause|resume|disconnect|limits|check` and `hexactra runs list --app <app>`. Details: [docs/mcp.md, Per-app limits](docs/mcp.md#per-app-limits).
+
+| On a desktop | On a phone |
+|---|---|
+| ![AI apps: ChatGPT and Claude Code with what each may do, last use, 30-day runs and spend, and the Paused switch, on a desktop](docs/images/ai-apps-desktop.png) | ![Connect an AI app: the preflight, the ChatGPT tab with the MCP URL to copy and the steps, on a phone](docs/images/ai-apps-connect-phone.png) |
 
 ### Run history and retention
 

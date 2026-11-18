@@ -843,6 +843,49 @@
       "web": {
         "none": "The chat page arrives with #486 (epic #482); until then the routes are the API only"
       }
+    },
+    {
+      "id": "apps.manage",
+      "description": "AI apps connected to the account with OAuth (ChatGPT, Claude, ...): list them with what they may do and their 30-day usage, show one, change its limits (policy, allowed policies, sites, runs at once, runs and spend per day, confirm purchases), pause and resume it, disconnect it (the platform's grant revocation)",
+      "rest": [
+        "GET /api/connected-apps",
+        "GET /api/connected-apps/{clientId}",
+        "GET /api/connected-apps/{clientId}/settings",
+        "PATCH /api/connected-apps/{clientId}/settings",
+        "DELETE /api/oauth/grants/{id}"
+      ],
+      "cli": [
+        "apps list",
+        "apps show",
+        "apps pause",
+        "apps resume",
+        "apps disconnect",
+        "apps limits"
+      ],
+      "mcp": {
+        "none": "An app does not manage itself or other apps: the limits are the user's control over the apps"
+      },
+      "tui": {
+        "none": "A settings task done rarely; the CLI commands and the web page cover it"
+      },
+      "web": "/settings/ai-apps"
+    },
+    {
+      "id": "apps.connect_guide",
+      "description": "Connect an AI app: the console's MCP URL and whether an app can connect yet (OAuth on, a public HTTPS address that answers the discovery documents, the app's hosts allowed), with who can fix each problem",
+      "rest": [
+        "GET /api/connected-apps/preflight"
+      ],
+      "cli": [
+        "apps check"
+      ],
+      "mcp": {
+        "none": "Read before an app is connected: an app that can call tools is already connected"
+      },
+      "tui": {
+        "none": "A one-off setup step; the CLI command and the web guide cover it"
+      },
+      "web": "/settings/ai-apps/connect"
     }
   ]
 }

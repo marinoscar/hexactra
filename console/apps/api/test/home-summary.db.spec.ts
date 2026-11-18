@@ -209,7 +209,7 @@ describe('GET /api/home/summary: a busy account', () => {
       ['activity', 'budgetPercent', 'budgetWarnPercent', 'currentTier', 'goal', 'hostId', 'hostName', 'id', 'policyName', 'startTier', 'startedAt', 'status', 'stepCount', 'taskId', 'taskName'].sort(),
     );
     expect(Object.keys(s.recentRuns!.items[0]!).sort()).toEqual(
-      ['costKnown', 'costUsd', 'createdAt', 'error', 'finishedAt', 'goal', 'id', 'startedAt', 'status', 'stepCount', 'stopReason', 'taskId', 'taskName', 'trigger'].sort(),
+      ['client', 'costKnown', 'costUsd', 'createdAt', 'error', 'finishedAt', 'goal', 'id', 'origin', 'startedAt', 'status', 'stepCount', 'stopReason', 'taskId', 'taskName', 'trigger'].sort(),
     );
     expect(Object.keys(s.fleet!.hosts[0]!).sort()).toEqual(['draining', 'id', 'mode', 'name', 'online']);
     const limited = s.liveRuns!.items.find((r) => r.id === id.limited)!;

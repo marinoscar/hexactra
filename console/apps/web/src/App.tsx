@@ -67,6 +67,10 @@ import { AgentPolicyEditorPage } from './pages/AgentPolicyEditorPage';
 import { ModelTiersPage } from './pages/ModelTiersPage';
 import { AgentCeilingsPage } from './pages/AgentCeilingsPage';
 import { RunHistorySettingsPage } from './pages/RunHistorySettingsPage';
+import { AiAppCeilingsPage } from './pages/AiAppCeilingsPage';
+import { AiAppDetailPage } from './pages/AiAppDetailPage';
+import { AiAppsPage } from './pages/AiAppsPage';
+import { ConnectAiAppPage } from './pages/ConnectAiAppPage';
 import { RunRetentionCeilingPage } from './pages/RunRetentionCeilingPage';
 import { AgentPricingPage } from './pages/AgentPricingPage';
 import { AppPlatformHost } from './platformHost';
@@ -265,6 +269,11 @@ export function AppRoutes() {
           <Route path="admin/settings/agent-ceilings" element={<Gate permission="system_settings:read"><AgentCeilingsPage /></Gate>} />
           <Route path="admin/settings/agent-pricing" element={<Gate permission="system_settings:read"><AgentPricingPage /></Gate>} />
           <Route path="settings/run-history" element={<Gate permission="runs:delete"><RunHistorySettingsPage /></Gate>} />
+          {/* Connected AI apps (#464): `connected_apps:read` is what /api/connected-apps enforces. */}
+          <Route path="settings/ai-apps" element={<Gate permission="connected_apps:read"><AiAppsPage /></Gate>} />
+          <Route path="settings/ai-apps/connect" element={<Gate permission="connected_apps:read"><ConnectAiAppPage /></Gate>} />
+          <Route path="settings/ai-apps/:clientId" element={<Gate permission="connected_apps:read"><AiAppDetailPage /></Gate>} />
+          <Route path="admin/settings/ai-app-limits" element={<Gate permission="system_settings:read"><AiAppCeilingsPage /></Gate>} />
           <Route path="admin/settings/run-history" element={<Gate permission="system_settings:read"><RunRetentionCeilingPage /></Gate>} />
           <Route path="settings/danger-zone" element={<UserDangerZonePage />} />
           <Route path="admin/settings/factory-reset" element={<Gate permission={factoryResetSettingsPage.card.permission!}><FactoryResetPage /></Gate>} />

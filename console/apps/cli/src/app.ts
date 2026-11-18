@@ -5,6 +5,7 @@ import { ANDROID_IDENTITY_SOURCE, APP_NAME, CLI_NAME, REPO_SLUG } from '@app/sha
 import { androidCommand } from '@marinoscar/platform-cli/android';
 import type { CreateCliOptions } from '@marinoscar/platform-cli';
 
+import { appsCommand } from './apps.command.js';
 import { BRAND_TUI_MENU_ROOT, BRAND_TUI_THEME } from './brand.js';
 import { agentCommand } from './agent/agent.command.js';
 import { agentScreen } from './agent/agent.tui.js';
@@ -83,7 +84,7 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   version: readVersion(),
   // `android`: build, version and release the Android app (apps/android) through the platform's group,
   // behind this app's folder check (#478): the app is in console/, and a build needs `npm ci` there.
-  extraCommands: [bundledHostCommand, fabricCommand, fleetCommand, agentCommand, runsCommand, policiesCommand, inboxCommand, questionsCommand, mcpCommand, withAndroidPreflight(androidCommand({ identity: ANDROID_IDENTITY_SOURCE }))],
+  extraCommands: [bundledHostCommand, fabricCommand, fleetCommand, agentCommand, runsCommand, policiesCommand, appsCommand, inboxCommand, questionsCommand, mcpCommand, withAndroidPreflight(androidCommand({ identity: ANDROID_IDENTITY_SOURCE }))],
   tuiScreens: [inboxScreen, runsScreen, fleetScreen, agentScreen, androidScreen],
   // The hexactra brand (docs/brand): its colours, and the Trace mark with the wordmark atop the menu.
   tuiTheme: BRAND_TUI_THEME,

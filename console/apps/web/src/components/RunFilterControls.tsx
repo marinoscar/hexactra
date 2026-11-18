@@ -1,6 +1,8 @@
 import { Autocomplete, Checkbox, ListItemText, MenuItem, Stack, TextField } from '@mui/material';
 
+import { RUN_ORIGINS, type RunOrigin } from '../aiApps/types';
 import type { PolicyCatalog } from '../policies/usePolicyCatalog';
+import { ORIGIN_LABEL } from './StartedByChip';
 import { RUN_TRIGGERS } from '../types/runs';
 import {
   DATE_PRESETS,
@@ -38,6 +40,10 @@ export interface RunFilterControlsProps {
   timeZone: string;
   /** `row`: side by side above the list; `column`: stacked, in the phone's filter drawer. */
   layout: 'row' | 'column';
+  /** The connected AI apps the "Started by" filter offers (#464); null offers only the origins (no `connected_apps:read`). */
+  apps?: readonly { clientId: string; displayName: string }[] | null;
+  /** The list is fixed to one app: no "Started by" filter. */
+  scopedApp?: boolean;
 }
 
 function multi<T extends string>(raw: unknown, allowed: readonly T[]): T[] {
@@ -45,8 +51,25 @@ function multi<T extends string>(raw: unknown, allowed: readonly T[]): T[] {
   return allowed.filter((v) => picked.has(v));
 }
 
+/** The origins the "Started by" filter offers, in this order (`system` is internal). */
+export const STARTED_BY_ORIGINS: readonly RunOrigin[] = RUN_ORIGINS.filter((o) => o !== 'system');
+
+/** The "Started by" select's value: `origin:<o>`, `app:<clientId>`, or empty. */
+export function startedByValue(f: Pick<RunFilters, 'origin' | 'clientId'>): string {
+  if (f.clientId) return `app:${f.clientId}`;
+  if (f.origin.length) return `origin:${f.origin.join(',')}`;
+  return '';
+}
+
+/** The filters with a "Started by" choice applied: an origin or an app, never both. */
+export function applyStartedBy(f: RunFilters, choice: string): RunFilters {
+  if (choice.startsWith('app:')) return { ...f, origin: [], clientId: choice.slice(4) };
+  if (choice.startsWith('origin:')) return { ...f, clientId: null, origin: choice.slice(7).split(',').filter((o): o is RunOrigin => (RUN_ORIGINS as readonly string[]).includes(o)) };
+  return { ...f, origin: [], clientId: null };
+}
+
 /** The filters beside Search: task, trigger, date range, "Stopped by" and policy. */
-export function RunFilterControls({ value, onChange, scoped, tasks, policies, timeZone, layout }: RunFilterControlsProps) {
+export function RunFilterControls({ value, onChange, scoped, tasks, policies, timeZone, layout, apps = null, scopedApp = false }: RunFilterControlsProps) {
   const row = layout === 'row';
   const field = { size: 'small' as const, sx: row ? { minWidth: 150, flex: '1 1 150px', maxWidth: 240 } : undefined, fullWidth: !row };
   const options = [ONE_OFF, ...(tasks ?? [])];
@@ -138,6 +161,30 @@ export function RunFilterControls({ value, onChange, scoped, tasks, policies, ti
               <ListItemText primary={STOP_FILTER_LABEL[r]} />
             </MenuItem>
           ))}
+        </TextField>
+      )}
+      {!scopedApp && (
+        <TextField
+          select
+          label="Started by"
+          {...field}
+          value={startedByValue(value)}
+          onChange={(e) => onChange(applyStartedBy(value, String(e.target.value)))}
+          slotProps={{ htmlInput: { 'data-testid': 'started-by-filter' } }}
+        >
+          <MenuItem value="">Anyone</MenuItem>
+          {STARTED_BY_ORIGINS.map((o) => (
+            <MenuItem key={o} value={`origin:${o}`}>
+              {o === 'mcp' ? 'Any AI app' : ORIGIN_LABEL[o]}
+            </MenuItem>
+          ))}
+          {(apps ?? []).map((a) => (
+            <MenuItem key={a.clientId} value={`app:${a.clientId}`}>
+              {a.displayName}
+            </MenuItem>
+          ))}
+          {value.clientId && !(apps ?? []).some((a) => a.clientId === value.clientId) && <MenuItem value={`app:${value.clientId}`}>One AI app</MenuItem>}
+          {value.origin.length > 1 && <MenuItem value={startedByValue(value)}>{value.origin.map((o) => ORIGIN_LABEL[o]).join(', ')}</MenuItem>}
         </TextField>
       )}
       {policies !== null && (

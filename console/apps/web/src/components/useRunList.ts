@@ -63,9 +63,11 @@ export function useRunList({ scope, filters, pageSize = RUN_PAGE_SIZE, live = tr
   const { api } = usePlatformHost();
   const timeZone = useProfileTimeZone();
   const scopeTaskId = scope?.taskId;
+  /** One AI app's runs (its page, #464). */
+  const scopeClientId = scope?.clientId;
   // The query strings are the identity of a filter: the effects below depend on them, not on object identity.
-  const listQuery = useMemo(() => toQuery(apiFilter(filters, { taskId: scopeTaskId }, timeZone)), [filters, scopeTaskId, timeZone]);
-  const countsQuery = useMemo(() => toQuery(apiFilter(filters, { taskId: scopeTaskId }, timeZone, false)), [filters, scopeTaskId, timeZone]);
+  const listQuery = useMemo(() => toQuery(apiFilter(filters, { taskId: scopeTaskId, clientId: scopeClientId }, timeZone)), [filters, scopeTaskId, scopeClientId, timeZone]);
+  const countsQuery = useMemo(() => toQuery(apiFilter(filters, { taskId: scopeTaskId, clientId: scopeClientId }, timeZone, false)), [filters, scopeTaskId, scopeClientId, timeZone]);
 
   const [items, setItems] = useState<RunListItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -83,8 +85,8 @@ export function useRunList({ scope, filters, pageSize = RUN_PAGE_SIZE, live = tr
   const cursorRef = useRef<string | null>(null);
   cursorRef.current = nextCursor;
   const busyMore = useRef(false);
-  const latest = useRef({ filters, timeZone, scopeTaskId });
-  latest.current = { filters, timeZone, scopeTaskId };
+  const latest = useRef({ filters, timeZone, scopeTaskId, scopeClientId });
+  latest.current = { filters, timeZone, scopeTaskId, scopeClientId };
 
   const refreshCounts = useCallback(async (): Promise<RunCounts | null> => {
     const mine = generation.current;
@@ -173,8 +175,8 @@ export function useRunList({ scope, filters, pageSize = RUN_PAGE_SIZE, live = tr
       const signal = abort.current?.signal;
       ticking = true;
       try {
-        const { filters: f, timeZone: zone, scopeTaskId: task } = latest.current;
-        const page = await api.get<RunPage>(`/runs?${toQuery(task ? { taskId: task } : {}, { envelope: '1', state: 'live', limit: '100' })}`, { signal });
+        const { filters: f, timeZone: zone, scopeTaskId: task, scopeClientId: app } = latest.current;
+        const page = await api.get<RunPage>(`/runs?${toQuery({ ...(task ? { taskId: task } : {}), ...(app ? { clientId: app } : {}) }, { envelope: '1', state: 'live', limit: '100' })}`, { signal });
         if (mine !== generation.current) return;
         const liveById = new Map(page.items.map((r) => [r.id, r]));
         const before = itemsRef.current;
@@ -193,7 +195,7 @@ export function useRunList({ scope, filters, pageSize = RUN_PAGE_SIZE, live = tr
         );
         if (mine !== generation.current) return;
         const isNew = (r: RunListItem, rows: readonly RunListItem[], have: ReadonlySet<string>) =>
-          !have.has(r.id) && Date.parse(r.createdAt) > (rows[0] ? Date.parse(rows[0].createdAt) : Number.NEGATIVE_INFINITY) && matchesFilters(r, f, { taskId: task }, zone);
+          !have.has(r.id) && Date.parse(r.createdAt) > (rows[0] ? Date.parse(rows[0].createdAt) : Number.NEGATIVE_INFINITY) && matchesFilters(r, f, { taskId: task, clientId: app }, zone);
         const merge = (prev: RunListItem[]): RunListItem[] => {
           const have = new Set(prev.map((r) => r.id));
           const merged = prev.flatMap((r) => {
