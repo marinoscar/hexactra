@@ -13,7 +13,7 @@
 // unavailable CLI fails the test; with CLIENT_CLIS_SMOKE=1 (a developer's
 // machine) it is skipped with the reason logged; otherwise skipped.
 import { execFile, spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -128,13 +128,41 @@ interface Cli {
   unavailable: string | null;
 }
 
-/** A pinned CLI: the binary named by `envVar` (it must report `version`), or `npx` at that version. */
-function pinnedCli(label: string, envVar: string, pkg: string, version: string, versionArgs: string[]): Cli {
+/**
+ * Installs `pkg@version` into a cached prefix and returns its bin, running the package's own
+ * `install.cjs` when it ships one (Claude Code fetches its native binary there, and an npm that
+ * skips install scripts, as CI's does, leaves it out).
+ */
+function installedBin(pkg: string, version: string, bin: string): { cmd: string; error: string | null } {
+  const prefix = join(tmpdir(), 'hexactra-agent-clis', `${pkg.replace(/[@/]/g, '_')}-${version}`);
+  const cmd = join(prefix, 'node_modules', '.bin', bin);
+  const env = { ...process.env, npm_config_cache: npmCache, npm_config_ignore_scripts: 'false' };
+  if (!existsSync(cmd)) {
+    mkdirSync(prefix, { recursive: true });
+    const r = spawnSync('npm', ['install', '--prefix', prefix, '--no-save', '--no-audit', '--no-fund', `${pkg}@${version}`], { encoding: 'utf8', timeout: 300_000, env });
+    if (r.status !== 0) return { cmd, error: `npm install ${pkg}@${version} exited ${r.status}: ${`${r.stdout ?? ''}${r.stderr ?? ''}`.trim().slice(0, 400)}` };
+  }
+  const script = join(prefix, 'node_modules', ...pkg.split('/'), 'install.cjs');
+  if (existsSync(script)) {
+    const r = spawnSync(process.execPath, [script], { cwd: join(prefix, 'node_modules', ...pkg.split('/')), encoding: 'utf8', timeout: 300_000, env });
+    if (r.status !== 0) return { cmd, error: `${script} exited ${r.status}: ${`${r.stdout ?? ''}${r.stderr ?? ''}`.trim().slice(0, 400)}` };
+  }
+  return { cmd, error: null };
+}
+
+/** A pinned CLI: the binary named by `envVar` (it must report `version`), or `npx` at that version (or, with `bin`, an installed copy). */
+function pinnedCli(label: string, envVar: string, pkg: string, version: string, versionArgs: string[], bin?: string): Cli {
   const named = process.env[envVar];
-  const cmd = named || 'npx';
-  const pre = named ? [] : ['--yes', `${pkg}@${version}`];
+  let cmd = named || 'npx';
+  let pre = named ? [] : ['--yes', `${pkg}@${version}`];
   const wanted = required || process.env.CLIENT_CLIS_SMOKE === '1';
   if (!wanted) return { label, cmd, pre, unavailable: 'set CLIENT_CLIS_SMOKE=1 to run it here (CI sets AGENT_CLIENTS_SMOKE=1)' };
+  if (!named && bin) {
+    const installed = installedBin(pkg, version, bin);
+    if (installed.error) return { label, cmd: installed.cmd, pre: [], unavailable: installed.error };
+    cmd = installed.cmd;
+    pre = [];
+  }
   const probe = spawnSync(cmd, [...pre, ...versionArgs], { encoding: 'utf8', timeout: 300_000, env: { ...process.env, npm_config_cache: npmCache, NO_COLOR: '1' } });
   const out = `${probe.stdout ?? ''}${probe.stderr ?? ''}`;
   if (probe.error) return { label, cmd, pre, unavailable: `${cmd} could not run: ${probe.error.message}` };
@@ -143,7 +171,7 @@ function pinnedCli(label: string, envVar: string, pkg: string, version: string, 
   return { label, cmd, pre, unavailable: null };
 }
 
-const claudeCode = pinnedCli('Claude Code', 'CLAUDE_BIN', '@anthropic-ai/claude-code', CLAUDE_CODE_VERSION, ['--version']);
+const claudeCode = pinnedCli('Claude Code', 'CLAUDE_BIN', '@anthropic-ai/claude-code', CLAUDE_CODE_VERSION, ['--version'], 'claude');
 const inspector = pinnedCli('MCP Inspector', 'MCP_INSPECTOR_BIN', '@modelcontextprotocol/inspector', MCP_INSPECTOR_VERSION, ['--version']);
 
 /** Runs when the CLI is available; under AGENT_CLIENTS_SMOKE=1 always runs (and fails when it is not). Never a pass for a test that did not run. */
