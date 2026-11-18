@@ -268,7 +268,7 @@
     },
     {
       "id": "runs.export",
-      "description": "Export a run as one masked JSON trace file: the run, its policy, budget, steps, questions and answers, trace screenshots and chat",
+      "description": "Export a run as one masked JSON trace file (the run, its policy, budget, steps, questions and answers, trace screenshots and chat) or as a PDF report",
       "rest": [
         "GET /api/runs/{id}/export"
       ],
