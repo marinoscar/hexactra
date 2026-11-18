@@ -15,6 +15,8 @@ const STEP_KINDS = ['action', 'handoff', 'finish', 'error', 'note'] as const;
 /** The key moments a trace screenshot is taken at (#541; runner/trace.ts). */
 const TRACE_MOMENTS = ['question', 'before_confirmed', 'after_confirmed', 'failure', 'final'] as const;
 const TRACE_RESULTS = ['stored', 'skipped', 'failed'] as const;
+/** The formats of a run export: the JSON file (#542) and the PDF report (#543). */
+const RUN_EXPORT_FORMAT_LABELS = ['json', 'pdf'] as const;
 
 /** Names are permanent once dashboards read them. */
 export const RUN_METRICS: readonly AppMetricDef[] = [
@@ -95,6 +97,14 @@ export const RUN_METRICS: readonly AppMetricDef[] = [
     description: 'Size of one stored trace screenshot: what the run history costs in object storage.',
     buckets: [20_000, 50_000, 100_000, 150_000, 250_000, 500_000, 1_000_000],
   },
+  {
+    key: 'runsExported',
+    name: 'app.runs.exported',
+    kind: 'counter',
+    unit: '{file}',
+    description: 'Run trace files exported (#542), by format and whether the screenshots were embedded.',
+    attributes: { format: { kind: 'enum', values: RUN_EXPORT_FORMAT_LABELS }, screenshots: { kind: 'enum', values: ['embed', 'none'] } },
+  },
 ];
 registerAppMetrics(RUN_METRICS);
 
@@ -143,6 +153,11 @@ export class RunMetrics {
   traceScreenshot(moment: string, result: 'stored' | 'skipped' | 'failed', bytes = 0): void {
     this.metrics?.add('runTraceScreenshots', 1, { moment, result });
     if (result === 'stored' && bytes > 0) this.metrics?.record('runTraceScreenshotBytes', bytes);
+  }
+
+  /** One exported run file (#542): its format and whether images were embedded; never a run or user id. */
+  exported(format: 'json' | 'pdf', screenshots: 'embed' | 'none'): void {
+    this.metrics?.add('runsExported', 1, { format, screenshots });
   }
 
   /** The spend of a finished run; never a run, task or user id as a label. */

@@ -83,6 +83,7 @@ describe('structured results validate against the output schemas (real REST answ
       expect((await call(t, 'runs_list', {})).items!.map((r) => r.id)).toContain(run.id);
       expect(await call(t, 'runs_list', { limit: 1 })).toMatchObject({ items: [expect.objectContaining({ id: run.id })] });
       expect(await call(t, 'run_cancel', { run_id: run.id })).toMatchObject({ id: run.id });
+      expect(await call(t, 'run_export', { run_id: run.id })).toMatchObject({ type: 'hexactra.run-trace', formatVersion: 1, run: { id: run.id }, truncated: false });
 
       const task = await call(t, 'task_create', { name: `Contract ${stamp}`, goal: 'g', schedules: [{ cron: '0 9 * * 1-5' }] });
       expect((await call(t, 'tasks_list', {})).items!.map((x) => x.id)).toContain(task.id);

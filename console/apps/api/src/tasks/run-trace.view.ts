@@ -40,12 +40,15 @@ export interface StepQuestionView {
 const mask = (s: string) => maskSensitive(s).text;
 const SECRET_INPUTS = new Set(['secret', 'credentials']);
 
-/** The masked view of a step's question. */
-export function stepQuestionView(q: StepQuestionRow): StepQuestionView {
+/**
+ * The masked view of a step's question. `maskText` is the masking of each text (default `maskSensitive`); the
+ * export (#542) passes the identity and masks the whole file at once, so `masking.hits` counts the question too.
+ */
+export function stepQuestionView(q: StepQuestionRow, maskText: (s: string) => string = mask): StepQuestionView {
   const options = Array.isArray(q.options)
     ? (q.options as { id?: unknown; label?: unknown }[])
         .filter((o) => o && typeof o.id === 'string' && typeof o.label === 'string')
-        .map((o) => ({ id: o.id as string, label: mask(o.label as string) }))
+        .map((o) => ({ id: o.id as string, label: maskText(o.label as string) }))
     : null;
   const r = q.response && typeof q.response === 'object' ? (q.response as Record<string, unknown>) : null;
   let answer: StepQuestionView['answer'] = null;
@@ -54,13 +57,13 @@ export function stepQuestionView(q: StepQuestionRow): StepQuestionView {
     const raw = Array.isArray(r.values) ? (r.values as unknown[]).filter((v) => typeof v === 'string').join(', ') : typeof r.value === 'string' ? r.value : null;
     answer = {
       outcome: r.outcome,
-      ...(!withheld && raw ? { value: mask(raw.slice(0, 1_000)) } : {}),
+      ...(!withheld && raw ? { value: maskText(raw.slice(0, 1_000)) } : {}),
       valueWithheld: withheld,
       channel: typeof r.channel === 'string' ? r.channel : null,
       answeredAt: typeof r.answeredAt === 'string' ? r.answeredAt : null,
     };
   }
-  return { id: q.id, kind: q.kind, input: q.input, prompt: mask(q.prompt), options, risk: q.risk, status: q.status, answer };
+  return { id: q.id, kind: q.kind, input: q.input, prompt: maskText(q.prompt), options, risk: q.risk, status: q.status, answer };
 }
 
 /** A step for the API: `hasScreenshot` and the moment instead of the object key; the masked question when it has one. */

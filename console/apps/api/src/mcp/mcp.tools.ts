@@ -19,6 +19,8 @@ import { appUrlOf, followRun, progressOf, readRunState, relayChannel, runScreens
 import { MAX_TOOL_WAIT_S, UNTRUSTED_NOTICE, limitsOf, textResult, toolOutput, type McpContext, type McpToolResult } from './mcp.results';
 import { answerableHere, howToAnswer, progressHasPageText, progressQuestionSchema, progressSummary, questionBlock, runProgressSchema, type ProgressQuestion, type RunProgress } from './run-progress';
 import { browserActionScope } from '../browser/browser-action-scopes';
+import { fitRunTrace, runExportOutputSchema, traceHasPageText } from './run-export';
+import type { RunTrace } from '../tasks/run-trace.schemas';
 import { MCP_SCOPE_IDS, grantedScopes, type McpEffect, type McpScope } from './mcp.scopes';
 import { QUESTION_CARD_URI, RUN_CARD_URI, TASKS_CARD_URI, type McpToolVisibility } from './mcp.apps';
 
@@ -760,6 +762,27 @@ export const MCP_TOOLS: McpTool[] = [
     async call(a, ctx) {
       const run = await ctx.api<Record<string, unknown>>('POST', `/runs/${String(a.run_id)}/cancel`, {});
       return runWithProgress(run, progressOf(ctx, { run: run as never, question: null, secretOpen: false }, true));
+    },
+  },
+  {
+    name: 'run_export',
+    title: "Export a run's trace",
+    description:
+      "Read one run's whole trace: the run, its agent policy, budget and models, every step with the question it asked and the owner's answer, and the messages of its chat. " +
+      'Use it to explain what a run did or why it failed. Sensitive values (card and account numbers, emails, phone numbers, tokens) are masked and a withheld answer is never included; there are no images. ' +
+      '`truncated` says when it was cut to fit: reasoning first, then the oldest steps. A live run has `partial: true`.',
+    input: z.object({ run_id: runId }),
+    output: runExportOutputSchema,
+    scope: 'runs:read',
+    effect: 'read',
+    openWorld: false,
+    idempotent: true,
+    async call(a, ctx) {
+      const trace = await ctx.api<RunTrace>('GET', `/runs/${String(a.run_id)}/export?format=json&screenshots=none`);
+      const v = fitRunTrace(trace, limitsOf(ctx).maxResultChars) as unknown as Record<string, unknown>;
+      const cut = trace.steps.length - (v.steps as unknown[]).length;
+      const summary = `Run ${trace.run.id.slice(0, 8)}: ${trace.run.status}, ${trace.steps.length} step${trace.steps.length === 1 ? '' : 's'}${cut ? ` (${cut} oldest left out to fit)` : ''}.`;
+      return toolOutput({ text: v, structured: v, summary, untrusted: traceHasPageText(trace) });
     },
   },
   {
