@@ -90,12 +90,15 @@ describe('shell navigation', () => {
 describe('browser agent cards', () => {
   const group = (sections: typeof ADMIN_SECTIONS) => sections.find((s) => s.label === 'Browser agent');
   const policiesController = read('../../../api/src/policies/policies.controller.ts');
+  const approvalsController = read('../../../api/src/approvals/approval-rules.controller.ts');
   // The platform's system settings routes (GET /api/system-settings) and their permission ids.
   const settingsPermissions = readFileSync(join(__dirname, '..', '..', '..', '..', 'node_modules', '@marinoscar', 'platform-api', 'dist', 'settings', 'settings.permissions.js'), 'utf8');
 
   it('the user cards: Agent policies and Model tiers, behind what GET /api/agent-policies enforces', () => {
     const listRoute = /@Get\(\)\s*\n\s*@ApiDataResponse\([^)]*\)\)?\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(policiesController);
     expect(listRoute?.[1]).toBe('agent_policies:read');
+    const approvalsList = /@Get\(\)\s*\n\s*@ApiDataResponse\([^)]*\)\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(approvalsController);
+    expect(approvalsList?.[1]).toBe('approvals:read');
     expect(group(USER_SETTINGS_SECTIONS)?.cards.map((c) => [c.path, c.permission, c.feature])).toEqual([
       ['/settings/agent-policies', listRoute![1], undefined],
       ['/settings/agent-model-tiers', 'agent_policies:read', 'ai'],
@@ -103,6 +106,8 @@ describe('browser agent cards', () => {
       ['/settings/run-history', 'runs:delete', undefined],
       // #464, appended: what GET /api/connected-apps enforces.
       ['/settings/ai-apps', 'connected_apps:read', undefined],
+      // #554, appended: what GET /api/approval-rules enforces.
+      ['/settings/approvals', approvalsList![1], undefined],
     ]);
   });
 
