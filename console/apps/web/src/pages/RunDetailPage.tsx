@@ -10,6 +10,8 @@ import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { isPlatformApiError, usePlatformHost } from '@marinoscar/platform-web/core';
 
+import { maskText } from '@app/shared/sensitive-patterns';
+
 import { fetchRunScreenshot, subscribeRun } from '../live';
 import { ActionOverlay, frameCaption, RunActivityBar, useNow } from '../components/RunActivity';
 import { RunBudgetMeter, RunHeaderChips, RunStopReason } from '../components/RunBudgetMeter';
@@ -65,6 +67,24 @@ function BarAction({ label, short, Icon, color, disabled, onClick }: { label: st
  * stream, with what it is doing right now (#379); while the run is live, the browser's screenshot refreshes every
  * 2 s and the viewer link lets a person take over.
  */
+/** "Used: My wife, Checking account" (#553): the owner's memories the run's goal used, each a link to Memories. */
+export function UsedMemories({ memories }: { memories: Run['memories'] }) {
+  if (!memories?.length) return null;
+  return (
+    <Typography variant="body2" color="text.secondary" sx={{ mb: 1, overflowWrap: 'anywhere' }} data-testid="used-memories">
+      Used:{' '}
+      {memories.map((m, i) => (
+        <span key={m.id}>
+          {i > 0 && ', '}
+          <Link component={RouterLink} to={`/settings/memories?memory=${m.id}`} underline="hover">
+            {m.label}
+          </Link>
+        </span>
+      ))}
+    </Typography>
+  );
+}
+
 export function RunDetailPage() {
   const { api, viewer } = usePlatformHost();
   const { id } = useParams<{ id: string }>();
@@ -237,7 +257,8 @@ export function RunDetailPage() {
   const header = (
     <PageHeader
       variant="h5"
-      title={run.goal}
+      // The goal as a person reads it here: masked (#553), so a remembered phone or account number is not shown in full.
+      title={maskText(run.goal).text}
       back={run.taskId ? { to: `/tasks/${run.taskId}`, label: taskName ?? 'Task' } : back}
       actions={[
         { key: 'again', label: 'Run again', onClick: () => void again(), hidden: !finished || run.trigger === 'external' || !viewer.hasPermission('runs:write') },
@@ -272,6 +293,7 @@ export function RunDetailPage() {
         </Typography>
       )}
       <RunHeaderChips policy={run.policy} tier={run.tier} />
+      <UsedMemories memories={run.memories} />
     </>
   );
   // A typed stop reason (#404) says why in one line; older runs keep the plain result and error.
