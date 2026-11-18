@@ -39,8 +39,10 @@ pass "stack is up and healthy"
 # Run a command and print its whole output in one write. Under `set -o
 # pipefail`, `cmd | grep -q X` fails whenever grep matches and exits before
 # cmd has finished writing (cmd dies of SIGPIPE), so every command whose
-# output is checked with `grep -q` goes through this.
-buffered() { local out; out="$("$@")" || return $?; printf '%s\n' "$out"; }
+# output is checked with `grep -q` goes through this. The command's own
+# failure is returned; the write of its captured output ignores a reader that
+# already left (#560: a large page such as noVNC's still hit EPIPE).
+buffered() { local out; out="$("$@")" || return $?; (trap '' PIPE; printf '%s\n' "$out") 2>/dev/null || true; }
 hx() { buffered "${COMPOSE[@]}" exec -T -e HEXACTRA_API_TOKEN="$HEXACTRA_API_TOKEN" control hexactra-fabric --url http://127.0.0.1:8787 "$@"; }
 chromium_running() { "${COMPOSE[@]}" exec -T host pgrep -f 'user-data-dir=/data/profiles/default' >/dev/null; }
 
