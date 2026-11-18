@@ -20,6 +20,7 @@ import { builtinPolicy } from '../src/policies/builtin-policies';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { computeEffectiveBudget } from '../src/runner/budget';
 import { TasksService } from '../src/tasks/tasks.service';
+import { MCP_SCOPE_IDS } from '../src/mcp/mcp.scopes';
 
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
@@ -101,7 +102,7 @@ async function modern(t: string, method: string, params: Record<string, unknown>
 
 /** The same request as an app signed in with OAuth (the credential kind E33.1 brings; the token here is a session). */
 async function oauth(who: { t: string; userId: string }, method: string, params: Record<string, unknown> = {}): Promise<Json> {
-  const rctx: McpRequestContext = { version: '2025-06-18', flags: MCP_VERSIONS['2025-06-18'], clientInfo: { name: 'claude-ai' }, credential: { kind: 'oauth' } as never };
+  const rctx: McpRequestContext = { version: '2025-06-18', flags: MCP_VERSIONS['2025-06-18'], clientInfo: { name: 'claude-ai' }, credential: { kind: 'oauth', scopes: [...MCP_SCOPE_IDS] } as never };
   const out = await app.get(McpDispatcher).dispatch({ jsonrpc: '2.0', id: 1, method, params }, rctx, `Bearer ${who.t}`, undefined, { userId: who.userId });
   return out!.body;
 }

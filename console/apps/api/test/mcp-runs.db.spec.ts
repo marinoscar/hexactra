@@ -15,6 +15,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { QuestionsService } from '../src/questions/questions.service';
 import type { QuestionSpec } from '../src/questions/questions.contract';
 import { TasksService } from '../src/tasks/tasks.service';
+import { MCP_SCOPE_IDS } from '../src/mcp/mcp.scopes';
 
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
@@ -76,7 +77,7 @@ async function call(t: string, name: string, args: Record<string, unknown>): Pro
 
 /** The same call as an app signed in with OAuth (the credential kind E33.1 brings; the token here is a session). */
 async function callOauth(who: { t: string; userId: string }, name: string, args: Record<string, unknown>): Promise<ToolResult> {
-  const rctx: McpRequestContext = { version: '2025-06-18', flags: MCP_VERSIONS['2025-06-18'], clientInfo: { name: 'claude-ai' }, credential: { kind: 'oauth' } as never };
+  const rctx: McpRequestContext = { version: '2025-06-18', flags: MCP_VERSIONS['2025-06-18'], clientInfo: { name: 'claude-ai' }, credential: { kind: 'oauth', scopes: [...MCP_SCOPE_IDS] } as never };
   const out = await app.get(McpDispatcher).dispatch({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, rctx, `Bearer ${who.t}`, undefined, { userId: who.userId });
   return out!.body.result as ToolResult;
 }

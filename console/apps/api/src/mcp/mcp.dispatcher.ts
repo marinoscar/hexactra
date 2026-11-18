@@ -5,6 +5,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 import { resolveApiVersion } from '@marinoscar/platform-api/host';
+import { buildBearerChallenge } from '@marinoscar/platform-api/identity';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { SpanStatusCode, trace } from '@opentelemetry/api';
 import type { FastifyInstance, InjectOptions, LightMyRequestResponse } from 'fastify';
@@ -35,7 +36,9 @@ import {
   type RpcId,
   type RpcResponse,
 } from './mcp.results';
-import { MCP_INSTRUCTIONS, MCP_TOOLS, toolAnnotations, type McpTool } from './mcp.tools';
+import { MCP_TOOLS, instructionsFor, toolAnnotations, type McpTool } from './mcp.tools';
+import { challengeScopes, isScopeGated, missingScopes, scopeUsable, toolAccess, toolScopes, type GatePrincipal, type ToolAccess } from './mcp.access';
+import { MCP_OAUTH_RESOURCE_ID } from './mcp.scopes';
 import {
   MCP_APP_MIME,
   MCP_APPS_EXTENSION_ID,
@@ -100,22 +103,46 @@ export function stillWorking(tool: McpTool, limits: McpLimits): McpToolResult {
   return { content: [{ type: 'text', text: `${tool.name} is still working after ${s} seconds; the work continues on the server. ${followUp(tool.name)}` }] };
 }
 
+/** Appended to the description of a tool an OAuth app may ask the user to allow (#460). */
+export const STEP_UP_NOTE = 'Needs extra permission: the user will be asked to allow it.';
+
+/** The tool error of a call the user's own account may not make (#460): no consent can help. */
+export const FORBIDDEN_TOOL_TEXT = 'Your Hexactra account is not allowed to do this. Ask an administrator.';
+
+/**
+ * A tool's per-tool auth declaration for ChatGPT (`securitySchemes`, an
+ * extension outside core MCP that other clients ignore): the OAuth scopes the
+ * tool needs, its own first. On every tool for every caller. The shape
+ * (`[{ type: 'oauth2', scopes }]`) follows the epic (#458) and is NOT yet
+ * verified against OpenAI's documentation (unreachable from the build
+ * environment): E33.10 (#468) verifies it with the real client.
+ */
+export function securitySchemes(t: Pick<McpTool, 'scope'>): Array<{ type: 'oauth2'; scopes: string[] }> {
+  return [{ type: 'oauth2', scopes: toolScopes(t) }];
+}
+
 /**
  * One tool entry of `tools/list` for a revision: title and outputSchema only
  * where the revision has them; `_meta.ui` (MCP Apps, #466) when the tool
- * links a resource that can be served, or has a visibility.
+ * links a resource that can be served, or has a visibility; `securitySchemes`
+ * always (#460); with `stepUp`, the description says the user will be asked.
  */
-export function toolListEntry(t: McpTool, flags: { toolTitle: boolean; structuredContent: boolean }, opts: { uiAvailable?: (uri: string) => boolean } = {}): Record<string, unknown> {
+export function toolListEntry(
+  t: McpTool,
+  flags: { toolTitle: boolean; structuredContent: boolean },
+  opts: { uiAvailable?: (uri: string) => boolean; stepUp?: boolean } = {},
+): Record<string, unknown> {
   const resourceUri = t.ui && (opts.uiAvailable?.(t.ui.resourceUri) ?? true) ? t.ui.resourceUri : undefined;
   const meta = toolUiMeta(resourceUri, t.visibility);
   return {
     name: t.name,
     ...(flags.toolTitle ? { title: t.title } : {}),
-    description: t.description,
+    description: opts.stepUp ? `${t.description} ${STEP_UP_NOTE}` : t.description,
     inputSchema: z.toJSONSchema(t.input, { io: 'input' }),
     // `io: 'input'` keeps extra properties allowed: the REST shapes grow, and a client must not reject a newer field.
     ...(flags.structuredContent && t.output ? { outputSchema: z.toJSONSchema(t.output, { io: 'input' }) } : {}),
     annotations: toolAnnotations(t),
+    securitySchemes: securitySchemes(t),
     ...(meta ? { _meta: meta } : {}),
   };
 }
@@ -134,10 +161,56 @@ export function offeredTools(rctx: Pick<McpRequestContext, 'credential' | 'clien
   return MCP_TOOLS.filter((t) => !t.visibility || t.visibility.includes('model') || appsHost);
 }
 
+/**
+ * The tools `tools/list` gives a caller (#460), in registry order: what
+ * `offeredTools` offers, less, for an OAuth app, the `forbidden` tools, and
+ * the `needs_scope` ones unless `advertiseStepUp` (they are then marked).
+ * Every other caller gets exactly `offeredTools`.
+ */
+export function listedTools(rctx: Pick<McpRequestContext, 'credential' | 'clientCapabilities'>, principal: GatePrincipal | undefined, advertiseStepUp: boolean): Array<{ tool: McpTool; access: ToolAccess }> {
+  return offeredTools(rctx)
+    .map((tool) => ({ tool, access: toolAccess(tool, rctx.credential, principal) }))
+    .filter((t) => t.access === 'allowed' || (t.access === 'needs_scope' && advertiseStepUp));
+}
+
+/** The scopes a step-up must add for these messages, or `null` when no `tools/call` among them needs one (#460). */
+export function stepUpScopes(messages: readonly unknown[], rctx: Pick<McpRequestContext, 'credential'>, principal: GatePrincipal | undefined): string[] | null {
+  if (!isScopeGated(rctx.credential)) return null;
+  const missing = new Set<string>();
+  for (const m of messages) {
+    if (m === null || typeof m !== 'object' || (m as RpcMessage).method !== 'tools/call') continue;
+    const name = String(((m as RpcMessage).params as { name?: unknown } | undefined)?.name ?? '');
+    const tool = MCP_TOOLS.find((t) => t.name === name);
+    if (!tool || toolAccess(tool, rctx.credential, principal) !== 'needs_scope') continue;
+    for (const s of missingScopes(tool, rctx.credential)) missing.add(s);
+  }
+  return missing.size > 0 ? [...missing] : null;
+}
+
+/**
+ * The `WWW-Authenticate` value of a step-up (`403 insufficient_scope`): the
+ * platform's challenge, whose `scope` lists every scope the token holds and
+ * the missing ones.
+ */
+export function stepUpChallenge(rctx: Pick<McpRequestContext, 'credential'>, missing: readonly string[]): string {
+  return buildBearerChallenge({
+    resourceId: MCP_OAUTH_RESOURCE_ID,
+    error: 'insufficient_scope',
+    errorDescription: 'This tool needs more permission than the user allowed',
+    scope: challengeScopes(rctx.credential, missing),
+  });
+}
+
 /** What the transport knows about one request beyond the message: who it is and whether the client is still there. */
 export interface DispatchExtra {
   /** The authenticated user (binds a `requestState` to its caller). */
   userId?: string;
+  /**
+   * The permissions the user's roles give, before an OAuth token's narrowing
+   * (#460): tells a tool the user may allow (`needs_scope`) from one they may
+   * not (`forbidden`). Absent: every missing scope counts as `needs_scope`.
+   */
+  userPermissions?: readonly string[];
   /** Aborted when the client disconnects: a waiting tool stops waiting. */
   signal?: AbortSignal;
 }
@@ -155,6 +228,8 @@ function elicitResponseOf(v: unknown): McpElicitResponse | undefined {
 export interface DispatchOutcome {
   status: number;
   body: RpcResponse;
+  /** HTTP headers the transport adds (a `401`'s `WWW-Authenticate`). */
+  headers?: Record<string, string>;
 }
 
 /** The server's identity; `version` is the console's own version. */
@@ -196,6 +271,16 @@ export class McpDispatcher {
       return (v ?? MCP_DEFAULT_SETTINGS).elicitation !== false;
     } catch {
       return MCP_DEFAULT_SETTINGS.elicitation;
+    }
+  }
+
+  /** `mcp.advertiseStepUpTools` (system settings): on unless an administrator turned it off. */
+  private async advertiseStepUpTools(): Promise<boolean> {
+    try {
+      const v = await this.settings?.getNamespace('mcp');
+      return (v ?? MCP_DEFAULT_SETTINGS).advertiseStepUpTools !== false;
+    } catch {
+      return MCP_DEFAULT_SETTINGS.advertiseStepUpTools;
     }
   }
 
@@ -300,6 +385,9 @@ export class McpDispatcher {
     const id = msg.id as RpcId | undefined;
     if (id === undefined) return null; // a notification: nothing to answer
     const { flags } = rctx;
+    const principal: GatePrincipal | undefined = extra.userPermissions ? { permissions: extra.userPermissions } : undefined;
+    // The instructions name only what the caller can use (#460): everything, except for an OAuth app.
+    const instructions = instructionsFor((scope) => scopeUsable(scope, rctx.credential, principal));
     const ok = (result: Record<string, unknown>, cacheable = false): DispatchOutcome => ({ status: 200, body: rpcResult(id, this.decorate(result, rctx, cacheable)) });
     // 2026-07-28 answers an unknown method with HTTP 404 (transport rule); earlier revisions inside a 200.
     const notFound = (message: string, data?: unknown): DispatchOutcome => ({ status: flags.perRequestMeta ? 404 : 200, body: rpcError(id, RPC.METHOD_NOT_FOUND, message, data) });
@@ -316,7 +404,7 @@ export class McpDispatcher {
           protocolVersion: negotiateInitialize((msg.params as { protocolVersion?: unknown } | undefined)?.protocolVersion),
           capabilities: this.capabilities(),
           serverInfo: serverInfo(),
-          instructions: MCP_INSTRUCTIONS,
+          instructions,
         });
       }
       case 'ping':
@@ -324,11 +412,15 @@ export class McpDispatcher {
         if (!flags.handshake) return notFound('Method not found: ping (removed in 2026-07-28)');
         return ok({});
       case 'server/discover':
-        return ok({ supportedVersions: [...SUPPORTED_VERSIONS], capabilities: this.capabilities(), instructions: MCP_INSTRUCTIONS }, true);
+        return ok({ supportedVersions: [...SUPPORTED_VERSIONS], capabilities: this.capabilities(), instructions }, true);
       case 'tools/list': {
-        // Deterministic order: the registry's own order.
+        // Deterministic order: the registry's own order. An OAuth app sees what its consent covers, plus (by default) what it may ask for.
         const version = serverInfo().version;
-        return ok({ tools: offeredTools(rctx).map((t) => toolListEntry(t, flags, { uiAvailable: (uri) => uiResourceAvailable(uri, version) })) }, true);
+        const advertise = isScopeGated(rctx.credential) ? await this.advertiseStepUpTools() : false;
+        const tools = listedTools(rctx, principal, advertise).map(({ tool, access }) =>
+          toolListEntry(tool, flags, { uiAvailable: (uri) => uiResourceAvailable(uri, version), stepUp: access === 'needs_scope' }),
+        );
+        return ok({ tools }, true);
       }
       case 'tools/call': {
         const params = (msg.params ?? {}) as { name?: unknown; arguments?: unknown; inputResponses?: unknown; requestState?: unknown };
@@ -338,6 +430,13 @@ export class McpDispatcher {
         const kind = credentialKindOf(rctx);
         const limits = limitsFor(kind);
         const finalize = (r: McpToolResult) => finalizeResult(r, { structured: flags.structuredContent, limits });
+        // The scope gate (#460). The transport answers `needs_scope` with `403 insufficient_scope` before
+        // dispatching; reaching here with it (a direct dispatch) is refused as a tool error all the same.
+        const access = toolAccess(tool, rctx.credential, principal);
+        if (access === 'forbidden') return ok({ ...finalize(errorResult(FORBIDDEN_TOOL_TEXT)) });
+        if (access === 'needs_scope') {
+          return ok({ ...finalize(errorResult(`${tool.name} needs extra permission (${missingScopes(tool, rctx.credential).join(' ')}): reconnect the app and allow it.`)) });
+        }
         const args = tool.input.safeParse(params.arguments ?? {});
         if (!args.success) return ok({ ...finalize(errorResult(`Invalid arguments: ${args.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`)) });
         const data = args.data as Record<string, unknown>;
@@ -356,7 +455,10 @@ export class McpDispatcher {
             elicitation.resume = { runId: state.runId, questionId: state.questionId, cursor: state.cursor, ...(response ? { response } : {}) };
           }
         }
+        // An OAuth token that stops being valid while the tool works (its grant revoked): the whole request is a 401.
+        let tokenGone = false;
         const work = tool.call(data, this.toolContext(caller, toolCredential(rctx), limits, { client: extra.client, signal: extra.signal, elicitation })).catch((e: unknown) => {
+          if (e instanceof McpApiError && e.status === 401 && kind === 'oauth') tokenGone = true;
           if (e instanceof McpApiError) {
             // The original answer stays in the log (with its request id); the model gets a sentence.
             this.log.warn(`mcp tool ${tool.name} failed: ${e.status} ${e.code} ${e.message.slice(0, 300)}${e.requestId ? ` request=${e.requestId}` : ''}`);
@@ -366,6 +468,7 @@ export class McpDispatcher {
           return mapUnknownError(e, tool.name);
         });
         const result = await withDeadline(work, limits.deadlineMs, () => stillWorking(tool, limits));
+        if (tokenGone) return tokenRevoked(id);
         if (result.inputRequired && flags.multiRoundTrip) {
           // Ask the client's user (MRTR): the request state is signed, bound to the caller, this call and an expiry.
           const st = result.inputRequired.state;
@@ -431,6 +534,22 @@ export class McpDispatcher {
       _meta: { ...((result._meta as Record<string, unknown> | undefined) ?? {}), [META.serverInfo]: serverInfo() },
     };
   }
+}
+
+/**
+ * The answer to an OAuth app whose token stopped being valid during a call
+ * (#460, "Error handling"): HTTP `401` with the platform's `invalid_token`
+ * challenge for the whole request, so the client signs in again, never a tool
+ * error the model would read.
+ */
+export function tokenRevoked(id: RpcId): DispatchOutcome {
+  let challenge: string | undefined;
+  try {
+    challenge = buildBearerChallenge({ resourceId: MCP_OAUTH_RESOURCE_ID, error: 'invalid_token', errorDescription: 'The access token is invalid or expired' });
+  } catch {
+    // No APP_URL: the 401 stands without the header.
+  }
+  return { status: 401, body: rpcError(id, RPC.INVALID_REQUEST, 'Unauthorized: the access token is no longer valid; sign in again'), ...(challenge ? { headers: { 'www-authenticate': challenge } } : {}) };
 }
 
 /**

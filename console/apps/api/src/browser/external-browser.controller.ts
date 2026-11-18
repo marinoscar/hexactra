@@ -15,12 +15,13 @@ import {
   Res,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
+import { Auth, AuthCredential, CurrentUser, type AuthCredentialInfo } from '@marinoscar/platform-api/identity';
 import type { FastifyReply } from 'fastify';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import { FabricClient, FabricError } from '../fabric/fabric.client';
+import { assertBrowserScopes, browserActionScope } from './browser-action-scopes';
 import { profileNameSchema } from '../fleet/fleet.schemas';
 import { PrismaService } from '../prisma/prisma.service';
 import { QUESTION_INPUTS, QUESTION_KINDS, questionSpecObject, questionSpecSchema, type QuestionSpec } from '../questions/questions.contract';
@@ -124,7 +125,8 @@ export class ExternalBrowserController {
 
   @Post()
   @Auth({ permissions: ['runs:write'] })
-  async open(@CurrentUser('id') userId: string, @Body() body: OpenDto) {
+  async open(@CurrentUser('id') userId: string, @Body() body: OpenDto, @AuthCredential() credential?: AuthCredentialInfo | null) {
+    assertBrowserScopes(credential, 'browser:drive');
     const run = await this.prisma.forUser({ userId }).run.create({
       data: { userId, goal: body.goal, profile: body.profile, hostId: body.hostId ?? null, trigger: 'external', actor: body.actor, status: 'queued' },
     });
@@ -149,7 +151,9 @@ export class ExternalBrowserController {
   @Post(':runId/actions')
   @HttpCode(200)
   @Auth({ permissions: ['runs:write'] })
-  async act(@CurrentUser('id') userId: string, @Param('runId', ParseUUIDPipe) runId: string, @Body() body: ActionDto) {
+  async act(@CurrentUser('id') userId: string, @Param('runId', ParseUUIDPipe) runId: string, @Body() body: ActionDto, @AuthCredential() credential?: AuthCredentialInfo | null) {
+    // An OAuth app needs the action kind's own scope (#460), checked before anything is read or recorded.
+    assertBrowserScopes(credential, browserActionScope(String(body.action.type)));
     const run = await this.liveRun(userId, runId);
     if (run.status === 'waiting_human') throw new ConflictException({ code: 'HANDOFF_PENDING', message: 'Waiting for the person to answer the handoff' });
     const session = new FabricSession(this.fabric);
@@ -235,7 +239,8 @@ export class ExternalBrowserController {
   /** Ask the person for help; answered in the Inbox. Poll it with GET …/handoffs/:id. */
   @Post(':runId/handoffs')
   @Auth({ permissions: ['runs:write'] })
-  async handoff(@CurrentUser('id') userId: string, @Param('runId', ParseUUIDPipe) runId: string, @Body() body: HandoffDto) {
+  async handoff(@CurrentUser('id') userId: string, @Param('runId', ParseUUIDPipe) runId: string, @Body() body: HandoffDto, @AuthCredential() credential?: AuthCredentialInfo | null) {
+    assertBrowserScopes(credential, 'browser:drive');
     const spec = parseHandoffSpec(body);
     const run = await this.liveRun(userId, runId);
     const started = Date.now();
@@ -290,7 +295,8 @@ export class ExternalBrowserController {
   /** End the session and the run. */
   @Delete(':runId')
   @Auth({ permissions: ['runs:write'] })
-  async close(@CurrentUser('id') userId: string, @Param('runId', ParseUUIDPipe) runId: string, @Body() body: CloseDto) {
+  async close(@CurrentUser('id') userId: string, @Param('runId', ParseUUIDPipe) runId: string, @Body() body: CloseDto, @AuthCredential() credential?: AuthCredentialInfo | null) {
+    assertBrowserScopes(credential, 'browser:drive');
     const run = await this.prisma.forUser({ userId }).run.findFirst({ where: { id: runId, trigger: 'external' } });
     if (!run) throw new NotFoundException({ code: 'SESSION_NOT_FOUND', message: 'Browser session not found' });
     if (run.sessionId) await new FabricSession(this.fabric).end(run.sessionId);

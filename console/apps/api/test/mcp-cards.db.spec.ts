@@ -62,13 +62,13 @@ async function login(email: string): Promise<Who> {
 
 /** A tools/call through the dispatcher as a client (`claude-ai`: bucket `claude`), signed in with OAuth or a personal access token. */
 async function call(who: Who, name: string, args: Record<string, unknown>, kind: 'oauth' | 'pat' = 'oauth'): Promise<ToolResult> {
-  const rctx: McpRequestContext = { version: '2025-06-18', flags: MCP_VERSIONS['2025-06-18'], clientInfo: { name: 'claude-ai' }, credential: { kind } as never };
+  const rctx: McpRequestContext = { version: '2025-06-18', flags: MCP_VERSIONS['2025-06-18'], clientInfo: { name: 'claude-ai' }, credential: (kind === 'oauth' ? { kind, scopes: [...MCP_SCOPE_IDS] } : { kind }) as never };
   const out = await app.get(McpDispatcher).dispatch({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }, rctx, `Bearer ${who.t}`, undefined, { userId: who.userId });
   return out!.body.result as ToolResult;
 }
 
 async function toolsList(who: Who): Promise<Json[]> {
-  const rctx: McpRequestContext = { version: '2025-06-18', flags: MCP_VERSIONS['2025-06-18'], clientInfo: { name: 'claude-ai' }, credential: { kind: 'oauth' } as never };
+  const rctx: McpRequestContext = { version: '2025-06-18', flags: MCP_VERSIONS['2025-06-18'], clientInfo: { name: 'claude-ai' }, credential: { kind: 'oauth', scopes: [...MCP_SCOPE_IDS] } as never };
   const out = await app.get(McpDispatcher).dispatch({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }, rctx, `Bearer ${who.t}`, undefined, { userId: who.userId });
   return (out!.body.result as { tools: Json[] }).tools;
 }
