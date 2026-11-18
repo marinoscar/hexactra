@@ -1,0 +1,221 @@
+// The db tier: saving a chat as a task (#489) against a real, migrated and
+// seeded database: the draft the AI writes, what it falls back to, what it is
+// shown, the `draft_task` tool, and the line that links the saved task.
+import type { NestFastifyApplication } from '@nestjs/platform-fastify';
+import type { AiService } from '@marinoscar/platform-api/ai';
+import { JobsService } from '@marinoscar/platform-api/jobs';
+
+import { ChatResults } from '../src/chat/chat-results.service';
+import { ChatTaskDraftService, TASK_DRAFT_INSTRUCTIONS, parseDraft } from '../src/chat/chat-task-draft.service';
+import { ChatTurnService } from '../src/chat/chat-turn.service';
+import { ChatService } from '../src/chat/chat.service';
+import { createApp } from '../src/main';
+import { PrismaService } from '../src/prisma/prisma.service';
+import { TasksService } from '../src/tasks/tasks.service';
+
+let app: NestFastifyApplication;
+let prisma: PrismaService;
+let chats: ChatService;
+const stamp = `${Date.now()}`;
+
+const workerMode = process.env.JOBS_WORKER_MODE;
+beforeAll(async () => {
+  process.env.JOBS_WORKER_MODE = 'off';
+  app = await createApp();
+  await app.init();
+  await app.getHttpAdapter().getInstance().ready();
+  if (workerMode === undefined) delete process.env.JOBS_WORKER_MODE;
+  else process.env.JOBS_WORKER_MODE = workerMode;
+  prisma = app.get(PrismaService);
+  chats = app.get(ChatService, { strict: false });
+});
+afterAll(async () => {
+  await app?.close();
+});
+
+type Session = { token: string; userId: string };
+async function login(name: string, role: 'contributor' | 'viewer' = 'contributor'): Promise<Session> {
+  const res = await app.inject({ method: 'POST', url: '/api/auth/test/login', payload: { email: `draft-${name}-${stamp}@example.test`, role } });
+  const token = new URL(String(res.headers.location)).searchParams.get('token')!;
+  const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { authorization: `Bearer ${token}` } });
+  return { token, userId: me.json<{ data: { id: string } }>().data.id };
+}
+async function post<T = unknown>(s: Session, url: string, payload: unknown = {}): Promise<{ statusCode: number; code?: string; data: T }> {
+  const res = await app.inject({ method: 'POST', url: `/api${url}`, headers: { authorization: `Bearer ${s.token}` }, payload: payload as object });
+  const body = res.json<{ data?: T; code?: string; error?: { code?: string } }>();
+  return { statusCode: res.statusCode, code: body.code ?? body.error?.code, data: body.data as T };
+}
+
+/** A model whose `respond` answers the given text (or fails), remembering what it was asked. */
+function writer(answer: string | Error) {
+  const asked: { instructions: string; input: string }[] = [];
+  const respond = jest.fn(async (req: { instructions: string; input: string }) => {
+    asked.push(req);
+    if (answer instanceof Error) throw answer;
+    return { outputText: answer };
+  });
+  const features: unknown[] = [];
+  const ai = { forUser: (_userId: string, opts: unknown) => (features.push(opts), { respond }) } as unknown as AiService;
+  return { ai, asked, features, respond };
+}
+
+/** A chat in which a job was clarified, run and finished, with its own run settings. */
+async function finishedChat(s: Session) {
+  const chat = await chats.create(s.userId, { title: 'Cinema', profile: 'home', hostFallback: false, policyId: 'builtin:economy', allowedDomains: ['cinema.example.test'], confirmRiskyActions: true });
+  await chats.postUserMessage(s.userId, chat.id, 'Book cinema tickets for tonight');
+  await chats.append(chat.id, { role: 'assistant', kind: 'clarify', text: 'Which showing?', meta: { options: ['4:30 PM', '7:30 PM'] } });
+  await chats.postUserMessage(s.userId, chat.id, '7:30 PM, two seats in the middle');
+  const run = await prisma.run.create({ data: { userId: s.userId, conversationId: chat.id, trigger: 'chat', goal: 'Book 2 tickets for the 7:30 PM showing tonight, middle rows.', status: 'succeeded', result: 'Booked F7 and F8.' } });
+  await chats.append(chat.id, { role: 'assistant', kind: 'run', text: run.goal, runId: run.id });
+  await chats.append(chat.id, { role: 'assistant', kind: 'result', text: 'Booked F7 and F8.', runId: run.id, meta: { status: 'succeeded' } });
+  return { chat, run };
+}
+
+describe('the task draft the AI writes', () => {
+  it('takes its name and goal from the model and everything else from the chat', async () => {
+    const alice = await login('write');
+    const { chat } = await finishedChat(alice);
+    const model = writer('{"name": "Cinema tickets for tonight", "goal": "Book 2 tickets for the 7:30 PM showing of tonight\'s film at the usual cinema, in the middle rows."}');
+    const draft = await new ChatTaskDraftService(prisma, model.ai).draft(alice.userId, chat.id, 'org-1');
+
+    expect(draft).toEqual({
+      name: 'Cinema tickets for tonight',
+      goal: "Book 2 tickets for the 7:30 PM showing of tonight's film at the usual cinema, in the middle rows.",
+      profile: 'home',
+      hostId: null,
+      hostFallback: false,
+      policyId: 'builtin:economy',
+      allowedDomains: ['cinema.example.test'],
+      confirmRiskyActions: true,
+    });
+    expect(model.features).toEqual([{ feature: 'chat_orchestrator', orgId: 'org-1' }]);
+    expect(model.asked[0]!.instructions).toBe(TASK_DRAFT_INSTRUCTIONS);
+    expect(model.asked[0]!.instructions).toMatch(/Never include a password, a code, a card number/);
+    // It read the conversation: the request, the clarification, the answer, the run and its result.
+    for (const line of ['[user] Book cinema tickets for tonight', '[assistant asked] Which showing?', '[user] 7:30 PM, two seats in the middle', '[run started] Book 2 tickets', '[run succeeded] Booked F7 and F8.']) {
+      expect(model.asked[0]!.input).toContain(line);
+    }
+    // Nothing was saved.
+    expect(await prisma.task.count({ where: { userId: alice.userId } })).toBe(0);
+  });
+
+  it("is shown chat messages only: never a question's answer", async () => {
+    const alice = await login('secret');
+    const { chat, run } = await finishedChat(alice);
+    await prisma.question.create({
+      data: { ownerUserId: alice.userId, askedBy: `run:${run.id}`, runId: run.id, input: 'text', kind: 'code', prompt: 'Enter the code from your phone', status: 'answered', response: { outcome: 'completed', value: '918273', valueWithheld: false }, expiresAt: new Date(Date.now() + 3_600_000) },
+    });
+    const model = writer('{"name":"n","goal":"g"}');
+    await new ChatTaskDraftService(prisma, model.ai).draft(alice.userId, chat.id, null);
+    expect(model.asked[0]!.input).not.toContain('918273');
+    expect(model.asked[0]!.input).not.toContain('Enter the code');
+  });
+
+  it.each([
+    ['the model fails', new Error('provider_unavailable')],
+    ['the model answers prose', 'Sure! Here is your task.'],
+    ['the model answers JSON without a goal', '{"name": "x"}'],
+  ])("falls back to the newest run's goal and the chat's title when %s", async (_name, answer) => {
+    const alice = await login(`fallback-${String(answer).length}`);
+    const { chat } = await finishedChat(alice);
+    const draft = await new ChatTaskDraftService(prisma, writer(answer).ai).draft(alice.userId, chat.id, null);
+    expect(draft).toMatchObject({ name: 'Cinema', goal: 'Book 2 tickets for the 7:30 PM showing tonight, middle rows.', profile: 'home' });
+  });
+
+  it('falls back to the first message when the chat started no run, and clips a long answer', async () => {
+    const alice = await login('norun');
+    const chat = await chats.create(alice.userId, {});
+    await chats.postUserMessage(alice.userId, chat.id, 'Check my electricity bill');
+    const drafts = new ChatTaskDraftService(prisma, writer(new Error('no model')).ai);
+    expect(await drafts.draft(alice.userId, chat.id, null)).toMatchObject({ name: 'Check my electricity bill', goal: 'Check my electricity bill', policyId: null, allowedDomains: [] });
+
+    const long = await new ChatTaskDraftService(prisma, writer(JSON.stringify({ name: 'n'.repeat(500), goal: 'g'.repeat(9000) })).ai).draft(alice.userId, chat.id, null);
+    expect(long.name).toHaveLength(200);
+    expect(long.goal).toHaveLength(4000);
+  });
+
+  it('reads the JSON out of an answer with a code fence or words around it', () => {
+    expect(parseDraft('```json\n{"name":"A","goal":"Do it"}\n```')).toEqual({ name: 'A', goal: 'Do it' });
+    expect(parseDraft('Here: {"goal":" Do it "} done')).toEqual({ name: '', goal: 'Do it' });
+    expect(parseDraft('{"goal":""}')).toBeNull();
+    expect(parseDraft('{not json}')).toBeNull();
+    expect(parseDraft('nothing')).toBeNull();
+  });
+});
+
+describe('POST /chats/:id/task-draft', () => {
+  it('answers a draft (here with no model set up: the fallback) and saves nothing', async () => {
+    const alice = await login('route');
+    const { chat } = await finishedChat(alice);
+    const res = await post<{ name: string; goal: string; policyId: string | null }>(alice, `/chats/${chat.id}/task-draft`);
+    expect(res.statusCode).toBe(200);
+    expect(res.data).toMatchObject({ name: 'Cinema', goal: 'Book 2 tickets for the 7:30 PM showing tonight, middle rows.', policyId: 'builtin:economy' });
+    expect(await prisma.task.count({ where: { userId: alice.userId } })).toBe(0);
+  });
+
+  it("answers 404 for another user's chat and 403 without tasks:write", async () => {
+    const alice = await login('owner');
+    const mallory = await login('other');
+    const viewer = await login('viewer', 'viewer');
+    const { chat } = await finishedChat(alice);
+    const foreign = await post(mallory, `/chats/${chat.id}/task-draft`);
+    expect(foreign.statusCode).toBe(404);
+    expect(foreign.code).toBe('CHAT_NOT_FOUND');
+    const own = await prisma.conversation.create({ data: { userId: viewer.userId, title: 'Read only' } });
+    expect((await post(viewer, `/chats/${own.id}/task-draft`)).statusCode).toBe(403);
+  });
+});
+
+describe('the draft_task tool', () => {
+  it('writes a task_draft message carrying the draft, and ends the turn', async () => {
+    const alice = await login('tool');
+    const { chat } = await finishedChat(alice);
+    await chats.postUserMessage(alice.userId, chat.id, 'Save this as a task so I can reuse it');
+    const drafts = new ChatTaskDraftService(prisma, writer('{"name":"Cinema tickets","goal":"Book 2 tickets for the 7:30 PM showing."}').ai);
+    const outputs: string[] = [];
+    const runTools = jest.fn(async (req: { tools: { tool: { name: string }; execute: (a: unknown, c: unknown) => Promise<unknown> }[]; onStep?: (s: unknown) => void }) => {
+      expect(req.tools.map((t) => t.tool.name).sort()).toEqual(['ask_user', 'draft_task', 'start_run', 'stop_run']);
+      outputs.push(String(await req.tools.find((t) => t.tool.name === 'draft_task')!.execute({}, { userId: 'u' })));
+      req.onStep?.({ step: 1, response: { usage: {} }, calls: [] });
+      return { final: { outputText: '' }, steps: [], stopReason: 'steps_exhausted' };
+    });
+    const ai = { forUser: () => ({ runTools }) } as unknown as AiService;
+    const turns = new ChatTurnService(prisma, chats, app.get(ChatResults, { strict: false }), app.get(TasksService, { strict: false }), app.get(JobsService, { strict: false }), ai, drafts);
+
+    expect(await turns.run(chat.id, alice.userId, null)).toBe('answered');
+    expect(outputs).toEqual(['Drafted. The owner reviews and saves it from the chat.']);
+    const last = await prisma.chatMessage.findFirstOrThrow({ where: { conversationId: chat.id }, orderBy: { seq: 'desc' } });
+    expect(last).toMatchObject({ role: 'assistant', kind: 'task_draft', text: 'Book 2 tickets for the 7:30 PM showing.' });
+    expect(last.meta).toEqual({ name: 'Cinema tickets', goal: 'Book 2 tickets for the 7:30 PM showing.', profile: 'home', hostId: null, hostFallback: false, policyId: 'builtin:economy', allowedDomains: ['cinema.example.test'], confirmRiskyActions: true });
+  });
+});
+
+describe('POST /chats/:id/task-link', () => {
+  it('adds one line that names the saved task and carries its id, however often it is sent', async () => {
+    const alice = await login('link');
+    const { chat } = await finishedChat(alice);
+    const task = await prisma.task.create({ data: { userId: alice.userId, name: 'Cinema tickets', goal: 'Book 2 tickets.' } });
+    const first = await post<{ id: string; role: string; text: string; meta: unknown }>(alice, `/chats/${chat.id}/task-link`, { taskId: task.id });
+    expect(first.statusCode).toBe(201);
+    expect(first.data).toMatchObject({ role: 'system', text: 'Saved as the task "Cinema tickets".', meta: { taskId: task.id } });
+    const again = await post<{ id: string }>(alice, `/chats/${chat.id}/task-link`, { taskId: task.id });
+    expect(again.data.id).toBe(first.data.id);
+    expect(await prisma.chatMessage.count({ where: { conversationId: chat.id, role: 'system' } })).toBe(1);
+  });
+
+  it("refuses a task that is not the caller's, another user's chat, and a bad id", async () => {
+    const alice = await login('link-owner');
+    const mallory = await login('link-other');
+    const { chat } = await finishedChat(alice);
+    const theirs = await prisma.task.create({ data: { userId: mallory.userId, name: 'Not yours', goal: 'x' } });
+    const mine = await prisma.task.create({ data: { userId: alice.userId, name: 'Mine', goal: 'x' } });
+    const foreignTask = await post(alice, `/chats/${chat.id}/task-link`, { taskId: theirs.id });
+    // (`TASK_NOT_FOUND` is not a registered code: the platform's filter answers the generic one, as on the tasks routes.)
+    expect(foreignTask.statusCode).toBe(404);
+    const foreignChat = await post(mallory, `/chats/${chat.id}/task-link`, { taskId: theirs.id });
+    expect([foreignChat.statusCode, foreignChat.code]).toEqual([404, 'CHAT_NOT_FOUND']);
+    expect((await post(alice, `/chats/${chat.id}/task-link`, { taskId: 'nope' })).statusCode).toBe(400);
+    expect((await post(alice, `/chats/${chat.id}/task-link`, { taskId: mine.id })).statusCode).toBe(201);
+    expect(await prisma.chatMessage.count({ where: { conversationId: chat.id, role: 'system' } })).toBe(1);
+  });
+});

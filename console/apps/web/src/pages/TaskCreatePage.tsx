@@ -1,23 +1,48 @@
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 
 import { getTask } from '../taskForm/api';
 import { TaskForm } from '../components/TaskForm';
 import { GOAL_MAX, copyValues, emptyValues, type TaskFormValues } from '../taskForm/values';
+import type { ChatDraftState, ChatTaskDraft } from '../types/chat';
 import { CardSkeleton, ErrorBanner, PageContainer, PageHeader } from '../ui';
+
+/** The form values of a task drafted from a chat (#489): every field the draft carries, no schedule. */
+export function valuesFromDraft(draft: ChatTaskDraft): TaskFormValues {
+  return {
+    ...emptyValues(),
+    name: String(draft.name ?? '').slice(0, 200),
+    goal: String(draft.goal ?? '').slice(0, GOAL_MAX),
+    profile: draft.profile || emptyValues().profile,
+    hostId: draft.hostId ?? null,
+    hostFallback: draft.hostFallback !== false,
+    policyId: draft.policyId ?? null,
+    allowedDomains: Array.isArray(draft.allowedDomains) ? draft.allowedDomains.filter((d) => typeof d === 'string') : [],
+    confirmRiskyActions: draft.confirmRiskyActions === true,
+  };
+}
+
+/** The chat's draft in the router's state, when the page was opened from a chat. */
+function chatDraftOf(state: unknown): ChatDraftState | null {
+  const s = state as Partial<ChatDraftState> | null;
+  return s && typeof s.chatId === 'string' && s.chatDraft && typeof s.chatDraft.goal === 'string' ? (s as ChatDraftState) : null;
+}
 
 /**
  * `/tasks/new`: a new task. `?goal=` prefills the goal; `?from=<taskId>`
  * starts from a copy of that task ("Copy of ...", the same policy, its
- * schedules paused).
+ * schedules paused). Opened from a chat (#489) it starts from the task the
+ * chat drafted, handed over in the router's state (never in the URL), and
+ * tells the chat once the task is saved.
  */
 export function TaskCreatePage() {
   const { api } = usePlatformHost();
   const [params] = useSearchParams();
   const from = params.get('from');
   const goal = params.get('goal');
-  const [initial, setInitial] = useState<TaskFormValues | null>(() => (from ? null : { ...emptyValues(), goal: (goal ?? '').slice(0, GOAL_MAX) }));
+  const fromChat = chatDraftOf(useLocation().state);
+  const [initial, setInitial] = useState<TaskFormValues | null>(() => (fromChat ? valuesFromDraft(fromChat.chatDraft) : from ? null : { ...emptyValues(), goal: (goal ?? '').slice(0, GOAL_MAX) }));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,9 +62,9 @@ export function TaskCreatePage() {
 
   return (
     <PageContainer width="default">
-      <PageHeader title="New task" back={{ to: '/tasks', label: 'Tasks' }} />
+      <PageHeader title="New task" subtitle={fromChat ? 'Drafted from your chat. Check it, change what you like, then save.' : undefined} back={fromChat ? { to: `/chat/${fromChat.chatId}`, label: 'Chat' } : { to: '/tasks', label: 'Tasks' }} />
       <ErrorBanner error={error} onClose={() => setError(null)} />
-      {initial === null ? <CardSkeleton /> : <TaskForm mode="create" initial={initial} cancelTo="/tasks" />}
+      {initial === null ? <CardSkeleton /> : <TaskForm mode="create" initial={initial} cancelTo={fromChat ? `/chat/${fromChat.chatId}` : '/tasks'} onCreated={fromChat ? (taskId) => api.post(`/chats/${fromChat.chatId}/task-link`, { taskId }).then(() => undefined) : undefined} />}
     </PageContainer>
   );
 }

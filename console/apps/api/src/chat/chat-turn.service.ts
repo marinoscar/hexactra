@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AiError, AiService, defineTool, type AiDefinedTool } from '@marinoscar/platform-api/ai';
 import { JobsService } from '@marinoscar/platform-api/jobs';
-import type { ChatMessage, Conversation } from '@prisma/client';
+import type { Conversation } from '@prisma/client';
 import { z } from 'zod';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,7 +10,11 @@ import { LIVE_RUN_STATUSES } from '../tasks/runs.schemas';
 import { TasksService } from '../tasks/tasks.service';
 import { CHAT_ORCHESTRATOR_FEATURE_ID } from './chat-orchestrator.feature';
 import { ChatResults } from './chat-results.service';
+import { ChatTaskDraftService } from './chat-task-draft.service';
 import { ChatService } from './chat.service';
+import { transcriptLine } from './chat-transcript';
+
+export { transcriptLine } from './chat-transcript';
 
 /** What one job did: answered, found nothing to answer, or found another turn at work. */
 export type ChatTurnOutcome = 'answered' | 'idle' | 'busy';
@@ -23,7 +27,6 @@ const MAX_ROUNDS = 3;
 const MAX_MODEL_STEPS = 4;
 /** How much of the thread the model reads. */
 const HISTORY_MESSAGES = 40;
-const HISTORY_MESSAGE_CHARS = 2_000;
 
 export const CHAT_INSTRUCTIONS = [
   'You are the chat front of Hexactra, an agent that operates a real web browser on behalf of its owner. You do not browse yourself: you decide what happens next in the conversation.',
@@ -32,26 +35,12 @@ export const CHAT_INSTRUCTIONS = [
   '- Never ask for a password, a code, a card number or any other secret, and never put one in a goal. The browser agent requests those through a secure form when a page needs them.',
   '- One run at a time. While a run is live, do not start another. Call stop_run when the owner asks to stop or cancel.',
   '- Never say something was done, found, bought or sent unless a run result in the conversation says so.',
+  '- When the owner asks to save this as a task (to reuse it, repeat it or schedule it), call draft_task. Do not write the task yourself.',
   '- For small talk, or a question about a result that is already in the conversation, answer in plain text, briefly.',
 ].join('\n');
 
 /** Thrown from `onStep` once the turn has done its one thing (asked, or started a run). */
 class TurnDone extends Error {}
-
-const clip = (text: string, max: number) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
-
-/** One line of the thread as the model reads it. Messages never hold a secret, so neither does this. */
-export function transcriptLine(m: Pick<ChatMessage, 'role' | 'kind' | 'text' | 'meta'>): string {
-  const text = clip(m.text.trim(), HISTORY_MESSAGE_CHARS);
-  if (m.kind === 'clarify') {
-    const options = (m.meta as { options?: unknown } | null)?.options;
-    return `[assistant asked] ${text}${Array.isArray(options) && options.length ? ` (suggested: ${options.join(' | ')})` : ''}`;
-  }
-  if (m.kind === 'run') return `[run started] ${text}`;
-  if (m.kind === 'result') return `[run ${String((m.meta as { status?: unknown } | null)?.status ?? 'ended')}] ${text}`;
-  if (m.kind === 'task_draft') return `[task drafted] ${text}`;
-  return `[${m.role}] ${text}`;
-}
 
 /**
  * The chat's turn engine (#484): takes up the owner's newest message and
@@ -74,6 +63,7 @@ export class ChatTurnService {
     private readonly tasks: TasksService,
     private readonly jobs: JobsService,
     private readonly ai: AiService,
+    private readonly drafts?: ChatTaskDraftService,
   ) {}
 
   async run(conversationId: string, userId: string, orgId: string | null): Promise<ChatTurnOutcome> {
@@ -170,6 +160,23 @@ export class ChatTurnService {
           return 'Stopping the run.';
         },
       }),
+      ...(this.drafts
+        ? [
+            defineTool({
+              name: 'draft_task',
+              description: 'Draft a reusable task from this conversation, for the owner to review and save. Only when the owner asks to save, reuse, repeat or schedule what was done.',
+              parameters: z.object({}),
+              execute: async () => {
+                if (state.done) return 'Already handled this turn.';
+                const draft = await this.drafts!.draft(userId, c.id, orgId);
+                if (!draft.goal) return 'There is nothing to save yet: no job was described in this chat.';
+                await this.chats.append(c.id, { role: 'assistant', kind: 'task_draft', text: draft.goal, meta: { ...draft } });
+                state.done = state.wrote = true;
+                return 'Drafted. The owner reviews and saves it from the chat.';
+              },
+            }),
+          ]
+        : []),
     ];
 
     let text = '';

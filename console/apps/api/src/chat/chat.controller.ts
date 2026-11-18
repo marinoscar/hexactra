@@ -3,8 +3,9 @@ import { ApiTags } from '@nestjs/swagger';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 
-import { ChatDetailResponseDto, ChatMessageResponseDto, ChatPageResponseDto, ChatResponseDto } from '../openapi/chat.responses';
-import { CreateChatDto, GetChatDto, ListChatsDto, PostMessageDto, UpdateChatDto } from './chat.schemas';
+import { ChatDetailResponseDto, ChatMessageResponseDto, ChatPageResponseDto, ChatResponseDto, ChatTaskDraftResponseDto } from '../openapi/chat.responses';
+import { ChatTaskDraftService } from './chat-task-draft.service';
+import { CreateChatDto, GetChatDto, LinkTaskDto, ListChatsDto, PostMessageDto, UpdateChatDto } from './chat.schemas';
 import { ChatService } from './chat.service';
 import { ChatTurnQueue } from './chat-turn.job';
 
@@ -24,6 +25,7 @@ export class ChatController {
   constructor(
     private readonly chats: ChatService,
     private readonly turns: ChatTurnQueue,
+    private readonly drafts: ChatTaskDraftService,
   ) {}
 
   /** One page of chats, most recently active first: `{ items, nextCursor }`. Rows carry a preview, never the messages. */
@@ -73,5 +75,26 @@ export class ChatController {
     const message = await this.chats.postUserMessage(user.id, id, body.text);
     await this.turns.request(id, user.id, user.activeOrgId ?? null);
     return message;
+  }
+
+  /**
+   * Draft a reusable task from the chat (#489): the AI writes a name and a
+   * standalone goal from the conversation; the rest is the chat's run
+   * settings. Nothing is saved: the owner reviews it in the task form.
+   */
+  @Post(':id/task-draft')
+  @HttpCode(200)
+  @ApiDataResponse(ChatTaskDraftResponseDto)
+  @Auth({ permissions: ['chat:read', 'tasks:write'] })
+  draft(@CurrentUser() user: Principal, @Param('id', ParseUUIDPipe) id: string) {
+    return this.drafts.draft(user.id, id, user.activeOrgId ?? null);
+  }
+
+  /** Note in the thread that a task was saved from the chat: a line with the task's name, linked by `meta.taskId`. */
+  @Post(':id/task-link')
+  @ApiDataResponse(ChatMessageResponseDto)
+  @Auth({ permissions: ['chat:write', 'tasks:read'] })
+  link(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Body() body: LinkTaskDto) {
+    return this.chats.linkTask(userId, id, body.taskId);
   }
 }

@@ -1,8 +1,10 @@
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
-import { Box, Chip, Divider, Paper, Stack, Typography } from '@mui/material';
+import { Box, Button, Chip, Divider, Link, Paper, Stack, Typography } from '@mui/material';
 import { keyframes } from '@mui/material/styles';
 
-import type { ChatMessage, ChatRun } from '../types/chat';
+import { Link as RouterLink } from 'react-router-dom';
+
+import type { ChatMessage, ChatRun, ChatTaskDraft } from '../types/chat';
 import { formatTime, useProfileTimeZone } from '../ui';
 import { BrowserCard, ResultCard } from './ChatBrowser';
 import { clarifyOptions, type ThreadRow } from './chatThread';
@@ -31,19 +33,43 @@ function Stamp({ iso, align }: { iso: string; align: 'left' | 'right' }) {
   );
 }
 
-/** A task the AI drafted, until its own card (#489): what it is. */
-function DraftRow({ message }: { message: ChatMessage }) {
+/** The task a `task_draft` message carries, when its `meta` is one. */
+export function draftOf(message: Pick<ChatMessage, 'kind' | 'meta' | 'text'>): ChatTaskDraft | null {
+  if (message.kind !== 'task_draft') return null;
+  const meta = message.meta as Partial<ChatTaskDraft> | null;
+  const goal = typeof meta?.goal === 'string' && meta.goal.trim() ? meta.goal : message.text;
+  if (!goal.trim()) return null;
+  return {
+    name: typeof meta?.name === 'string' ? meta.name : '',
+    goal,
+    profile: typeof meta?.profile === 'string' ? meta.profile : 'default',
+    hostId: typeof meta?.hostId === 'string' ? meta.hostId : null,
+    hostFallback: meta?.hostFallback !== false,
+    policyId: typeof meta?.policyId === 'string' ? meta.policyId : null,
+    allowedDomains: Array.isArray(meta?.allowedDomains) ? meta.allowedDomains.filter((d): d is string => typeof d === 'string') : [],
+    confirmRiskyActions: meta?.confirmRiskyActions === true,
+  };
+}
+
+/** A task the assistant drafted from the chat (#489): its name, its goal, and the way to review and save it. */
+function DraftCard({ message, onReview }: { message: ChatMessage; onReview?: (draft: ChatTaskDraft) => void }) {
+  const draft = draftOf(message);
   return (
-    <Paper variant="outlined" sx={{ p: 1.5, maxWidth: BUBBLE_MAX, borderRadius: 3, bgcolor: 'background.paper' }}>
+    <Paper variant="outlined" component="article" aria-label="Task draft" sx={{ p: 1.5, width: '100%', maxWidth: { xs: '100%', sm: 440 }, borderRadius: 3, bgcolor: 'background.paper' }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
         <TaskAltIcon fontSize="small" color="primary" aria-hidden />
         <Typography variant="subtitle2" component="p">
-          Drafted a task
+          {draft?.name || 'A task from this chat'}
         </Typography>
       </Stack>
       <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
-        {message.text}
+        {draft?.goal ?? message.text}
       </Typography>
+      {draft && onReview && (
+        <Button variant="contained" onClick={() => onReview(draft)} sx={{ mt: 1.5, minHeight: { xs: 44, sm: 36 }, borderRadius: 3 }}>
+          Review and save
+        </Button>
+      )}
     </Paper>
   );
 }
@@ -60,6 +86,12 @@ export interface ThreadCards {
   onCardVisible: (visible: boolean) => void;
   /** Start the job of a finished run again; undefined when that is not possible now. */
   onRunAgain?: (result: ChatMessage) => void;
+  /** Draft a task from the chat (the result card's button); undefined when the viewer cannot write tasks. */
+  onSaveAsTask?: () => void;
+  /** A draft is being written. */
+  savingTask?: boolean;
+  /** Open a drafted task in the task form; undefined when the viewer cannot write tasks. */
+  onReviewDraft?: (draft: ChatTaskDraft) => void;
 }
 
 export interface MessageRowProps {
@@ -73,9 +105,19 @@ export interface MessageRowProps {
 /** One message of the thread: the owner's on the right, the assistant's on the left, a system line in the middle. */
 export function MessageRow({ message, answerable, onAnswer, cards }: MessageRowProps) {
   if (message.role === 'system') {
+    // "Saved as the task …" carries the task's id (#489): the line links to it.
+    const taskId = (message.meta as { taskId?: unknown } | null)?.taskId;
     return (
       <Typography role="status" variant="body2" color="text.secondary" sx={{ textAlign: 'center', my: 1, px: 2, overflowWrap: 'anywhere' }}>
         {message.text}
+        {typeof taskId === 'string' && (
+          <>
+            {' '}
+            <Link component={RouterLink} to={`/tasks/${taskId}`}>
+              Open the task
+            </Link>
+          </>
+        )}
       </Typography>
     );
   }
@@ -95,9 +137,9 @@ export function MessageRow({ message, answerable, onAnswer, cards }: MessageRowP
           onVisible={cards.onCardVisible}
         />
       ) : message.kind === 'result' ? (
-        <ResultCard message={message} onRunAgain={cards.onRunAgain ? () => cards.onRunAgain?.(message) : undefined} />
+        <ResultCard message={message} onRunAgain={cards.onRunAgain ? () => cards.onRunAgain?.(message) : undefined} onSaveAsTask={cards.onSaveAsTask} saving={cards.savingTask} />
       ) : message.kind === 'task_draft' ? (
-        <DraftRow message={message} />
+        <DraftCard message={message} onReview={cards.onReviewDraft} />
       ) : (
         <Box
           sx={{
