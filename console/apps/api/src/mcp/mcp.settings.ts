@@ -9,20 +9,28 @@ export const mcpSettingsSchema = z.object({
    * only reads the question in the progress block and relays the answer.
    */
   elicitation: z.boolean(),
+  /**
+   * Also list, to an app signed in with OAuth, the tools its consent does not
+   * cover but the user may allow (#460): marked "Needs extra permission", so
+   * the model knows they exist and the app can ask the user (step-up). Off:
+   * such an app sees only the tools it may call.
+   */
+  advertiseStepUpTools: z.boolean(),
 });
 export type McpSettings = z.infer<typeof mcpSettingsSchema>;
 export const mcpSettingsPatchSchema = mcpSettingsSchema.partial();
 
-export const MCP_DEFAULT_SETTINGS: McpSettings = { elicitation: true };
+export const MCP_DEFAULT_SETTINGS: McpSettings = { elicitation: true, advertiseStepUpTools: true };
 
 /**
  * `mcp` (Admin, `system_settings:write`): read by the MCP dispatcher when a
- * tool would ask a question through the client (#463). Registered before
+ * tool would ask a question through the client (#463) and when it lists the
+ * tools to an OAuth app (#460). Registered before
  * `SettingsModule.forRoot()` (src/platform/platform.ts).
  */
 export const MCP_SYSTEM_SETTINGS = {
   key: 'mcp',
-  description: "MCP server: whether a run's question is asked through the AI app's own form (elicitation).",
+  description: "MCP server: whether a run's question is asked through the AI app's own form (elicitation), and whether OAuth apps are shown the tools they need extra permission for.",
   storedSchema: mcpSettingsSchema,
   patchSchema: mcpSettingsPatchSchema,
   putSchema: mcpSettingsSchema,

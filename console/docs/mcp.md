@@ -36,26 +36,34 @@ Hosted assistants cannot hold a personal access token: they sign the user in wit
    ![The consent page with every scope requested, at 1440 px in dark mode: the client's host first, the five default scopes, then browser control and the three high-risk scopes with warning icons, all unticked](images/oauth-consent-all-1440-dark.png)
 
    The other screenshots (default and every scope, 390 and 1440 px, light and dark) are `docs/images/oauth-consent-*.png`.
-5. **Calls.** The client gets a short-lived `oat_` access token (and a refresh token). The token works on `/api/mcp` only (`403` anywhere else) and carries the user's permissions **narrowed** to its scopes' permissions: each tool calls the REST route behind it in-process, as that narrowed principal (the platform's in-process delegation, the same path sessions and personal access tokens take), so a tool whose route needs a permission the scopes do not grant fails with "not allowed". From E33.2 a tool is also offered only with its scope.
+5. **Calls.** The client gets a short-lived `oat_` access token (and a refresh token). The token works on `/api/mcp` only (`403` anywhere else) and carries the user's permissions **narrowed** to its scopes' permissions: each tool calls the REST route behind it in-process, as that narrowed principal (the platform's in-process delegation, the same path sessions and personal access tokens take), and each tool is offered and callable only with its scope ([What a connected app can do](#what-a-connected-app-can-do)); a tool outside the consent starts a step-up ([Asking for more](#asking-for-more-step-up)).
 6. **Disconnect.** Settings → **Connected apps** lists each app and disconnects it; its next call is `401` with the same challenge, which starts sign-in again.
 
-### OAuth scopes
+### What a connected app can do
 
-Each scope is a bundle of existing console permissions: exactly those the `@Auth({ permissions })` of the REST routes its tools call require. Generated from `MCP_SCOPES` (`apps/api/src/mcp/mcp.scopes.ts`) and the tool registry by `apps/api/test/mcp-manifest.spec.ts`. One permission sometimes serves a default scope and an opt-in one (`runs:write` is behind `POST /api/runs` and behind every browser and desktop action of `/api/browser/sessions`): the permission is not split; the opt-in scopes list it too, and the tool gate of E33.2 draws the finer line. `browser:evaluate` and `desktop:control` also require `browser:drive` (E33.2).
+An app signed in with OAuth sees and can call only the tools its consent covers. Each tool names one scope; a tool is **callable** when the token holds that scope and every scope in **Also needs** (`browser:evaluate` and `desktop:control` also need `browser:drive`), and the user's own role gives the permissions behind them. Each scope is a bundle of existing console permissions: exactly those the `@Auth({ permissions })` of the REST routes its tools call require. Generated from `MCP_SCOPES` (`apps/api/src/mcp/mcp.scopes.ts`) and the tool registry by `apps/api/test/mcp-manifest.spec.ts`.
+
+One permission sometimes serves a default scope and an opt-in one (`runs:write` is behind `POST /api/runs` and behind every browser and desktop action of `/api/browser/sessions`): the permission is not split; the scope gate draws the finer line, at two layers (`apps/api/src/mcp/mcp.access.ts`):
+- **The tools.** `tools/list` gives an OAuth app the tools it may call and, while **`mcp.advertiseStepUpTools`** is on (the default; system settings, namespace `mcp`: `PATCH /api/system-settings { "mcp": { "advertiseStepUpTools": false } }` turns it off; the admin card comes with E33.7), the tools it could ask the user for, with "Needs extra permission: the user will be asked to allow it." at the end of their description. A tool the user's role cannot use (a write tool for a **viewer**) is never listed, and calling it answers a tool error, `Your Hexactra account is not allowed to do this. Ask an administrator.` (HTTP `200`: no consent can help). The order is the registry's, on every call.
+- **The REST routes.** `/api/browser/sessions` (open, actions, handoffs, close) needs `browser:drive` from an OAuth caller, and each action kind its own scope (`evaluate` needs `browser:evaluate`, `desktop_*` need `desktop:control`; one table, `apps/api/src/browser/browser-action-scopes.ts`, which the browser tools are checked against when the registry loads). The routes see the app's credential through the in-process delegation, so a tool that slipped past the first layer would still be refused, with the same `403 insufficient_scope`.
+
+Every tool also carries `securitySchemes: [{ "type": "oauth2", "scopes": [<its scope>, …what it also needs] }]` in `tools/list`, for every caller: ChatGPT's per-tool auth declaration, an extension outside core MCP that other clients ignore. The shape follows the epic (#458) and is **not yet verified** against OpenAI's documentation (unreachable while it was built); E33.10 (#468) verifies it with the real client.
+
+**Personal access tokens and sessions are not gated.** They keep every tool, the same `tools/list` (plus the additive `securitySchemes`) and the same `instructions`, byte for byte: scopes are for OAuth apps only.
 
 <!-- mcp-scopes:start -->
-| Scope | Consent page | Risk | Default | Tools | Console permissions |
-|---|---|---|---|---|---|
-| `runs:read` | See your runs, tasks, schedules and machines | low | yes | `run_status`, `run_wait`, `runs_list`, `tasks_list`, `schedule_preview`, `schedules_list`, `policies_list`, `policy_get`, `policies_export`, `hosts_list`, `run_card_poll` | `runs:read`, `tasks:read`, `fleet:read`, `agent_policies:read` |
-| `runs:write` | Give goals to your Hexactra agent, start and stop runs | low | yes | `run_goal`, `run_cancel`, `task_run` | `runs:write`, `runs:read` |
-| `tasks:write` | Create and change tasks and schedules | low | yes | `task_create`, `task_update`, `schedule_create`, `task_pause`, `task_resume` | `tasks:write` |
-| `inbox:read` | See questions your agent is waiting on | low | yes | `inbox_list`, `question_status` | `runs:read` |
-| `inbox:write` | Ask you questions and pass on answers you give in the chat | low | yes | `inbox_answer`, `ask_human`, `question_card_answer` | `runs:write`, `runs:read` |
-| `browser:drive` | Control a browser on your machines directly, step by step | elevated | no | `browser_open`, `browser_navigate`, `browser_elements`, `browser_text`, `browser_click`, `browser_type`, `browser_press`, `browser_scroll`, `browser_wait_for`, `browser_back`, `browser_tabs`, `browser_screenshot`, `browser_click_at`, `browser_hover_at`, `browser_drag`, `browser_scroll_at`, `browser_type_keys`, `browser_key`, `browser_request_human`, `browser_handoff_status`, `browser_type_secret`, `browser_close` | `runs:write`, `runs:read` |
-| `browser:evaluate` | Run JavaScript in pages you are signed in to | high | no | `browser_evaluate` | `runs:write` |
-| `desktop:control` | Control the whole desktop of your machines (mouse, keyboard, screen) | high | no | `browser_desktop_screenshot`, `browser_desktop_click`, `browser_desktop_type`, `browser_desktop_key`, `browser_desktop_scroll`, `browser_desktop_drag` | `runs:write`, `runs:read` |
-| `policies:write` | Change spending limits and model choices for your agent | high | no | `policy_create`, `policy_update`, `policy_set_default`, `policies_import` | `agent_policies:write` |
-| `offline_access` | Stay connected without asking again | — | requested by the client | (a refresh token) | none |
+| Scope | Consent page | Risk | Default | Also needs | Tools | Console permissions |
+|---|---|---|---|---|---|---|
+| `runs:read` | See your runs, tasks, schedules and machines | low | yes | — | `run_status`, `run_wait`, `runs_list`, `tasks_list`, `schedule_preview`, `schedules_list`, `policies_list`, `policy_get`, `policies_export`, `hosts_list`, `run_card_poll` | `runs:read`, `tasks:read`, `fleet:read`, `agent_policies:read` |
+| `runs:write` | Give goals to your Hexactra agent, start and stop runs | low | yes | — | `run_goal`, `run_cancel`, `task_run` | `runs:write`, `runs:read` |
+| `tasks:write` | Create and change tasks and schedules | low | yes | — | `task_create`, `task_update`, `schedule_create`, `task_pause`, `task_resume` | `tasks:write` |
+| `inbox:read` | See questions your agent is waiting on | low | yes | — | `inbox_list`, `question_status` | `runs:read` |
+| `inbox:write` | Ask you questions and pass on answers you give in the chat | low | yes | — | `inbox_answer`, `ask_human`, `question_card_answer` | `runs:write`, `runs:read` |
+| `browser:drive` | Control a browser on your machines directly, step by step | elevated | no | — | `browser_open`, `browser_navigate`, `browser_elements`, `browser_text`, `browser_click`, `browser_type`, `browser_press`, `browser_scroll`, `browser_wait_for`, `browser_back`, `browser_tabs`, `browser_screenshot`, `browser_click_at`, `browser_hover_at`, `browser_drag`, `browser_scroll_at`, `browser_type_keys`, `browser_key`, `browser_request_human`, `browser_handoff_status`, `browser_type_secret`, `browser_close` | `runs:write`, `runs:read` |
+| `browser:evaluate` | Run JavaScript in pages you are signed in to | high | no | `browser:drive` | `browser_evaluate` | `runs:write` |
+| `desktop:control` | Control the whole desktop of your machines (mouse, keyboard, screen) | high | no | `browser:drive` | `browser_desktop_screenshot`, `browser_desktop_click`, `browser_desktop_type`, `browser_desktop_key`, `browser_desktop_scroll`, `browser_desktop_drag` | `runs:write`, `runs:read` |
+| `policies:write` | Change spending limits and model choices for your agent | high | no | — | `policy_create`, `policy_update`, `policy_set_default`, `policies_import` | `agent_policies:write` |
+| `offline_access` | Stay connected without asking again | — | requested by the client | — | (a refresh token) | none |
 <!-- mcp-scopes:end -->
 
 ## Protocol versions
@@ -97,6 +105,27 @@ One span per JSON-RPC message (`mcp <method>`) with `mcp.method`, `mcp.tool.name
 
 ### Smoke test with the MCP Inspector
 
+### Asking for more (step-up)
+
+When the model calls a tool the consent does not cover but the user may allow (the default consent and `browser_open`, say), the console refuses the **whole HTTP request**, before the tool runs:
+
+```http
+HTTP/1.1 403 Forbidden
+www-authenticate: Bearer resource_metadata="https://<console>/.well-known/oauth-protected-resource/api/mcp", error="insufficient_scope", error_description="This tool needs more permission than the user allowed", scope="runs:read runs:write tasks:write inbox:read inbox:write browser:drive"
+content-type: application/json; charset=utf-8
+cache-control: no-store
+
+{"error":"insufficient_scope","error_description":"This tool needs permission the user has not given this app yet (browser:drive). Ask the user to allow it."}
+```
+
+- **The `scope` lists what the token already holds and what is missing**, because clients do not reliably carry earlier scopes into a step-up. The challenge is the platform's (`buildBearerChallenge`).
+- **What the user sees.** Claude and ChatGPT start a new sign-in on this status and header: the console's consent page lists the app's earlier scopes as already allowed and asks only about the new one(s). Approving gives the app a token with the union, and the grant (Settings → Connected apps) holds it. Declining leaves the app as it was.
+- **A `200` would not work.** A tool error with the same text is only read by the model; a hosted client starts re-consent on an HTTP `403` with `WWW-Authenticate` only.
+- **Batches** (protocol 2025-03-26) that mix an allowed call and one that needs a step-up are refused as a whole with that `403`. Hosted clients send one call per request.
+- **ChatGPT's tool-level form.** ChatGPT also reads `_meta["mcp/www_authenticate"]` on a tool error result. The console sends the HTTP `403` only; whether ChatGPT needs the `_meta` form as well is checked with the real client in E33.10 (#468).
+- **A token that stops being valid during a call** (the app disconnected while a tool worked) answers the whole request `401` with the `invalid_token` challenge, so the client signs in again.
+- **The instructions follow the consent.** An OAuth app without `browser:drive` gets `instructions` with no "Drive" paragraph, no `browser_*` tool and no "full authority" sentence; with it, the Drive paragraph and the authority sentence, naming JavaScript and the desktop only when `browser:evaluate` or `desktop:control` is usable too.
+
 `scripts/mcp-inspector-smoke.sh` runs the pinned MCP Inspector CLI against a running console: `MCP_URL=https://<console>/api/mcp HEXACTRA_TOKEN=pat_… scripts/mcp-inspector-smoke.sh`.
 
 ## Tools
@@ -110,7 +139,7 @@ One span per JSON-RPC message (`mcp <method>`) with `mcp.method`, `mcp.tool.name
 | Drive a browser yourself | `browser_open`, then `browser_navigate`, `browser_elements`, `browser_text`, `browser_click`, `browser_type`, `browser_press`, `browser_scroll`, `browser_wait_for`, `browser_back`, `browser_tabs`, `browser_screenshot` (an image, with numbered marks by default); full powers (VISION §27): `browser_evaluate` (JavaScript), `browser_click_at`, `browser_hover_at`, `browser_drag`, `browser_scroll_at`, `browser_type_keys`, `browser_key` (trusted input by position), `browser_desktop_screenshot`, `browser_desktop_click`, `browser_desktop_type`, `browser_desktop_key`, `browser_desktop_scroll`, `browser_desktop_drag` (the node's OS desktop); `browser_request_human`, `browser_handoff_status`, `browser_type_secret`, `browser_close` |
 | Fleet | `hosts_list` (each host's mode, unattended or attended, is *Planned* in #336). Viewing and controlling a node's desktop is for people only, so there is no viewer tool ([nodes.md](../../docs/nodes.md)). |
 
-Every tool, as `tools/list` announces it (generated from the registry by `apps/api/test/mcp-manifest.spec.ts`; `UPDATE_MCP_MANIFEST=1 npx jest --config ./test/jest.config.js mcp-manifest` rewrites it). **Effect** sets the hints: `read` is `readOnlyHint: true, destructiveHint: false`; `write` is `readOnlyHint: false, destructiveHint: false`; `destructive` is `readOnlyHint: false, destructiveHint: true`. **Open world** is `openWorldHint` (the tool makes a browser or the runner touch the web), **Idempotent** is `idempotentHint`. **Scope** is the OAuth scope that will offer the tool (E33.2; personal access tokens and sessions keep every tool). `policies_export` only reads, so it is in `runs:read`, not `policies:write`.
+Every tool, as `tools/list` announces it (generated from the registry by `apps/api/test/mcp-manifest.spec.ts`; `UPDATE_MCP_MANIFEST=1 npx jest --config ./test/jest.config.js mcp-manifest` rewrites it). **Effect** sets the hints: `read` is `readOnlyHint: true, destructiveHint: false`; `write` is `readOnlyHint: false, destructiveHint: false`; `destructive` is `readOnlyHint: false, destructiveHint: true`. **Open world** is `openWorldHint` (the tool makes a browser or the runner touch the web), **Idempotent** is `idempotentHint`. **Scope** is the OAuth scope that offers the tool to an app signed in with OAuth ([What a connected app can do](#what-a-connected-app-can-do); personal access tokens and sessions keep every tool). `policies_export` only reads, so it is in `runs:read`, not `policies:write`.
 
 <!-- mcp-tools:start -->
 | Tool | Title | Scope | Effect | Open world | Idempotent | Structured output |
@@ -174,7 +203,7 @@ Every tool, as `tools/list` announces it (generated from the registry by `apps/a
 | `question_card_answer` | Answer from the question card | `inbox:write` | write | no | no | yes |
 <!-- mcp-tools:end -->
 
-**Rules the server gives every client (`instructions`):**
+**Rules the server gives every client (`instructions`; an OAuth app without `browser:drive` gets the delegating part only, see [Asking for more](#asking-for-more-step-up)):**
 - You act with the user's full authority, like a person at their computer: look at the page, act by selector or by position, run JavaScript, and use the desktop.
 - Ask the person (`browser_request_human`) only for what only they have: a code sent to them, a passkey, a password you were not given, a CAPTCHA puzzle you cannot pass. Never guess codes.
 - Type codes with `browser_type_secret`, so the agent never sees them.
@@ -205,7 +234,7 @@ A tool error is a result with `isError: true` (never a JSON-RPC error), a senten
 | REST answer | Text |
 |---|---|
 | 400 or 422 | `Invalid arguments: <field>: <message>` (field names as the tools take them, `allowed_domains`), with the route's code when it has one (`CRON_TOO_FREQUENT`) |
-| 403 | `Your Hexactra account is not allowed to do this.` |
+| 403 | `Your Hexactra account is not allowed to do this.` (an OAuth app's call outside its consent is not a tool error: it is an HTTP `403 insufficient_scope`, see [Asking for more](#asking-for-more-step-up)) |
 | 404 | `No <run, task, agent policy, browser session, …> with that id. Use <runs_list, tasks_list, policies_list, …> to find it.` |
 | 409 or 412 with a code | The route's message, its code and the next step, e.g. `(NO_SCHEDULES) The task has no schedule: add one with schedule_create.`; `POLICY_VERSION_CONFLICT`: read it again with `policy_get`; `TAKEOVER_ACTIVE`: a person is controlling the browser |
 | 429 | `Too many requests. Wait N seconds.` |

@@ -41256,10 +41256,14 @@
             "properties": {
               "elicitation": {
                 "type": "boolean"
+              },
+              "advertiseStepUpTools": {
+                "type": "boolean"
               }
             },
             "required": [
-              "elicitation"
+              "elicitation",
+              "advertiseStepUpTools"
             ]
           },
           "notes": {
@@ -42271,10 +42275,14 @@
             "properties": {
               "elicitation": {
                 "type": "boolean"
+              },
+              "advertiseStepUpTools": {
+                "type": "boolean"
               }
             },
             "required": [
-              "elicitation"
+              "elicitation",
+              "advertiseStepUpTools"
             ]
           },
           "notes": {
@@ -43364,6 +43372,9 @@
             "type": "object",
             "properties": {
               "elicitation": {
+                "type": "boolean"
+              },
+              "advertiseStepUpTools": {
                 "type": "boolean"
               }
             }

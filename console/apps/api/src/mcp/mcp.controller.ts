@@ -3,7 +3,8 @@ import { ApiTags } from '@nestjs/swagger';
 import { Auth, InProcessDelegation, authCredentialOf, type RequestWithAuthCredential } from '@marinoscar/platform-api/identity';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-import { McpDispatcher, type McpCaller } from './mcp.dispatcher';
+import { userPermissionsOf } from './mcp.access';
+import { McpDispatcher, stepUpChallenge, stepUpScopes, type DispatchOutcome, type McpCaller } from './mcp.dispatcher';
 import { MCP_VERSIONS, McpProtocolError, acceptsJson, isAllowedOrigin, requestContext, resolveVersion, type McpHeaders, type RpcMessage } from './mcp.protocol';
 import { RPC, rpcError, type RpcId, type RpcResponse } from './mcp.results';
 
@@ -31,8 +32,25 @@ function header(req: FastifyRequest, name: string): string | undefined {
   return Array.isArray(v) ? v[0] : v;
 }
 
-function sendRpc(reply: FastifyReply, status: number, body: RpcResponse | RpcResponse[]): FastifyReply {
+function sendRpc(reply: FastifyReply, status: number, body: RpcResponse | RpcResponse[], headers: Record<string, string> = {}): FastifyReply {
+  for (const [k, v] of Object.entries(headers)) reply.header(k, v);
   return reply.code(status).header('content-type', 'application/json').send(JSON.stringify(body));
+}
+
+/**
+ * Step-up (#460): the whole HTTP request is refused with `403` and the
+ * platform's `insufficient_scope` challenge, whose `scope` lists the scopes
+ * the token holds and the missing ones. Claude and ChatGPT start re-consent
+ * on this status and header; a `200` with an error result would only be read
+ * by the model.
+ */
+function sendStepUp(reply: FastifyReply, challenge: string, missing: readonly string[]): FastifyReply {
+  return reply
+    .code(403)
+    .header('www-authenticate', challenge)
+    .header('content-type', 'application/json')
+    .header('cache-control', 'no-store')
+    .send(JSON.stringify({ error: 'insufficient_scope', error_description: `This tool needs permission the user has not given this app yet (${missing.join(' ')}). Ask the user to allow it.` }));
 }
 
 /**
@@ -141,7 +159,17 @@ export class McpController {
     res.raw.once('close', () => {
       if (!res.raw.writableEnded) gone.abort();
     });
-    const extra = { userId: (req as FastifyRequest & { user?: { id?: string } }).user?.id, signal: gone.signal };
+    const user = (req as FastifyRequest & { user?: { id?: string } }).user;
+    // An OAuth app is gated by its token's scopes (#460): the user's own permissions tell what step-up could add.
+    const userPermissions = credential?.kind === 'oauth' ? userPermissionsOf(user) : undefined;
+    const extra = { userId: user?.id, signal: gone.signal, ...(userPermissions ? { userPermissions } : {}) };
+    const principal = userPermissions ? { permissions: userPermissions } : undefined;
+    // A tools/call the token's scopes do not cover, but the user may allow: 403 for the whole request,
+    // before anything runs (a batch mixing it with allowed calls is refused as a whole).
+    const stepUp = (messages: readonly unknown[]) => {
+      const missing = stepUpScopes(messages, { credential }, principal);
+      return missing ? () => void sendStepUp(res, stepUpChallenge({ credential }, missing), missing) : null;
+    };
 
     if (Array.isArray(body)) {
       // Batches exist in 2025-03-26 only (and a request with no version header is 2025-03-26).
@@ -154,22 +182,26 @@ export class McpController {
       }
       if (!MCP_VERSIONS[version].batching) return void (await sendRpc(res, 400, rpcError(null, RPC.INVALID_REQUEST, `Invalid Request: JSON-RPC batches are not part of protocol ${version} (only 2025-03-26)`)));
       if (body.length === 0) return void (await sendRpc(res, 400, rpcError(null, RPC.INVALID_REQUEST, 'Invalid Request: an empty batch')));
-      const out = (
-        await Promise.all(
-          body.map(async (m: unknown): Promise<RpcResponse | null> => {
-            const bad = invalid(m);
-            if (bad) return bad;
-            const msg = m as RpcMessage;
-            try {
-              const rctx = requestContext({ protocolVersion: headers.protocolVersion }, msg, credential);
-              return (await this.dispatcher.dispatch(msg, rctx, caller, userAgent, extra))?.body ?? null;
-            } catch (e) {
-              if (e instanceof McpProtocolError) return msg.id === undefined ? null : rpcError(idOf(msg) ?? null, e.code, e.message, e.data);
-              throw e;
-            }
-          }),
-        )
-      ).filter((r): r is RpcResponse => r !== null);
+      const refuse = stepUp(body.filter((m) => invalid(m) === null));
+      if (refuse) return refuse();
+      const outcomes = await Promise.all(
+        body.map(async (m: unknown): Promise<DispatchOutcome | RpcResponse | null> => {
+          const bad = invalid(m);
+          if (bad) return bad;
+          const msg = m as RpcMessage;
+          try {
+            const rctx = requestContext({ protocolVersion: headers.protocolVersion }, msg, credential);
+            return await this.dispatcher.dispatch(msg, rctx, caller, userAgent, extra);
+          } catch (e) {
+            if (e instanceof McpProtocolError) return msg.id === undefined ? null : rpcError(idOf(msg) ?? null, e.code, e.message, e.data);
+            throw e;
+          }
+        }),
+      );
+      // A token that stopped being valid during one call: the whole batch is that 401.
+      const unauthorized = outcomes.find((o): o is DispatchOutcome => o !== null && 'status' in o && o.status === 401);
+      if (unauthorized) return void (await sendRpc(res, 401, unauthorized.body, unauthorized.headers));
+      const out = outcomes.map((o) => (o !== null && 'status' in o ? o.body : o)).filter((r): r is RpcResponse => r !== null);
       if (out.length === 0) return void (await res.status(202).send());
       return void (await sendRpc(res, 200, out));
     }
@@ -184,9 +216,11 @@ export class McpController {
       if (e instanceof McpProtocolError) return void (await sendRpc(res, e.httpStatus, rpcError(idOf(msg) ?? null, e.code, e.message, e.data)));
       throw e;
     }
+    const refuse = stepUp([msg]);
+    if (refuse) return refuse();
     const out = await this.dispatcher.dispatch(msg, rctx, caller, userAgent, extra);
     if (out === null) return void (await res.status(202).send());
-    await sendRpc(res, out.status, out.body);
+    await sendRpc(res, out.status, out.body, out.headers);
   }
 
   /**

@@ -2,6 +2,7 @@
 // (structured content, summaries, the untrusted notice), the size and time
 // limits, the error table, paging of the large tools, and screenshots.
 import { McpDispatcher, toolListEntry } from '../src/mcp/mcp.dispatcher';
+import { MCP_SCOPE_IDS } from '../src/mcp/mcp.scopes';
 import { McpApiError, mapApiError, mapUnknownError } from '../src/mcp/mcp.errors';
 import { MCP_VERSIONS, type McpRequestContext } from '../src/mcp/mcp.protocol';
 import {
@@ -319,7 +320,8 @@ describe('time limits', () => {
   function dispatcher(inject: () => Promise<unknown>) {
     return new McpDispatcher({ httpAdapter: { getInstance: () => ({ inject }) } } as never);
   }
-  const rctx = (kind: string): McpRequestContext => ({ version: '2025-06-18', flags: MCP_VERSIONS['2025-06-18'], credential: { kind } as never });
+  // An OAuth token here holds every scope: the scope gate (#460) is tested in mcp-access.spec.ts.
+  const rctx = (kind: string): McpRequestContext => ({ version: '2025-06-18', flags: MCP_VERSIONS['2025-06-18'], credential: { kind, ...(kind === 'oauth' ? { scopes: [...MCP_SCOPE_IDS] } : {}) } as never });
   const call = (name: string, args: Record<string, unknown>) => ({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } });
 
   it('an OAuth call returns before 220 s with a "still working" result; a PAT call keeps waiting', async () => {

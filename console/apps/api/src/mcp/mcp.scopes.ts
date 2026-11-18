@@ -41,6 +41,12 @@ export interface McpScopeDefinition {
    * of the REST routes its tools call require (docs/mcp.md, "OAuth scopes").
    */
   permissions: readonly string[];
+  /**
+   * Scopes a token must ALSO hold for this scope's tools (#460): running
+   * JavaScript and controlling the desktop happen inside a browser session,
+   * so both need `browser:drive` too.
+   */
+  requires?: readonly McpScope[];
 }
 
 /**
@@ -113,6 +119,7 @@ export const MCP_SCOPES: readonly McpScopeDefinition[] = [
     default: false,
     // POST /browser/sessions/:id/actions (`evaluate`).
     permissions: ['runs:write'],
+    requires: ['browser:drive'],
   },
   {
     id: 'desktop:control',
@@ -122,6 +129,7 @@ export const MCP_SCOPES: readonly McpScopeDefinition[] = [
     default: false,
     // POST /browser/sessions/:id/actions (`desktop_*`); screenshots (runs:read).
     permissions: ['runs:write', 'runs:read'],
+    requires: ['browser:drive'],
   },
   {
     id: 'policies:write',
@@ -133,6 +141,16 @@ export const MCP_SCOPES: readonly McpScopeDefinition[] = [
     permissions: ['agent_policies:write'],
   },
 ];
+
+/** A scope's definition; undefined for a string that is not one of the console's scopes (ignored, never thrown on). */
+export function mcpScope(id: string): McpScopeDefinition | undefined {
+  return MCP_SCOPES.find((s) => s.id === id);
+}
+
+/** Every scope a token needs for a tool of `scope`: the scope itself, then what it requires, without repeats. */
+export function scopeWithRequirements(scope: McpScope): McpScope[] {
+  return [...new Set<McpScope>([scope, ...(mcpScope(scope)?.requires ?? [])])];
+}
 
 /** What a tool does to the user's things: the source of the MCP hints. */
 export const MCP_EFFECTS = ['read', 'write', 'destructive'] as const;

@@ -9,14 +9,19 @@
 // The root `/.well-known/...` paths are nginx's (infra/nginx/app.d/locations/
 // oauth-server.conf); this client applies the same rewrite to reach the API.
 import { randomUUID } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import { ConsoleLogger, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { OAuthServerSettingsReader } from '@marinoscar/platform-api/identity';
-import { checkOAuthSecretEgress, createOAuthTestClient, pkcePair, type OAuthTestClient } from '@marinoscar/platform-api/identity/testing';
+import { checkOAuthSecretEgress, createOAuthTestClient, mintOAuthTestToken, pkcePair, type OAuthTestClient } from '@marinoscar/platform-api/identity/testing';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
+import { FabricClient } from '../src/fabric/fabric.client';
 import { createApp } from '../src/main';
+import { FORBIDDEN_TOOL_TEXT, McpDispatcher, STEP_UP_NOTE } from '../src/mcp/mcp.dispatcher';
+import { rpcResult } from '../src/mcp/mcp.results';
+import { MCP_TOOLS } from '../src/mcp/mcp.tools';
 import { MCP_DOCS_URL, MCP_SCOPES, MCP_SCOPE_IDS } from '../src/mcp/mcp.scopes';
 import { PrismaService } from '../src/prisma/prisma.service';
 
@@ -237,11 +242,12 @@ describe('the MCP endpoint as an OAuth protected resource (#459)', () => {
     const created = await prisma.run.findFirst({ where: { userId, goal } });
     expect(created).not.toBeNull();
 
-    // task_create calls POST /api/tasks (tasks:write): the user holds it, the token's scopes do not grant it.
-    // For now a tool error; E33.2 turns it into a step-up.
-    const refused = await callTool(token.access_token, 'task_create', { name: `OAuth ${run}`, goal: 'Not allowed' });
-    expect(refused.isError).toBe(true);
-    expect(refused.content[0]!.text).toMatch(/not allowed/i);
+    // task_create needs tasks:write: the user holds the permission, the token's scopes do not grant it,
+    // so the call is a step-up (#460): HTTP 403 insufficient_scope, and nothing is created.
+    const refused = await rpc(`Bearer ${token.access_token}`, { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'task_create', arguments: { name: `OAuth ${run}`, goal: 'Not allowed' } } });
+    expect(refused.status).toBe(403);
+    expect(challengeOf(refused.headers['www-authenticate'])).toMatchObject({ error: 'insufficient_scope' });
+    expect(challengeOf(refused.headers['www-authenticate']).scope!.split(' ')).toEqual(expect.arrayContaining(['runs:read', 'runs:write', 'tasks:write']));
     expect(await prisma.task.count({ where: { userId, name: `OAuth ${run}` } })).toBe(0);
 
     // The same user's session still may (the narrowing is the token's, not the user's).
@@ -250,6 +256,209 @@ describe('the MCP endpoint as an OAuth protected resource (#459)', () => {
 
     const grant = await prisma.oAuthGrant.findFirstOrThrow({ where: { userId, clientId: client.id, revokedAt: null } });
     await app.inject({ method: 'DELETE', url: `/api/oauth/grants/${grant.id}`, headers: { authorization: `Bearer ${session}` } });
+  }, 60_000);
+
+  // --- E33.2 (#460): scope-gated tools, step-up and the finer line inside runs:write ---------------
+
+  /** A minted `oat_` token for `user` with exactly `scopes` (the platform test kit). */
+  async function mint(scopes: readonly string[], user = userId): Promise<string> {
+    // One active grant per user and client (oauth_grants_active_uniq_idx): end the previous one first.
+    await prisma.oAuthGrant.updateMany({ where: { userId: user, clientId: client.id, revokedAt: null }, data: { revokedAt: new Date() } });
+    const minted = await mintOAuthTestToken(prisma as never, { userId: user, resourceId: 'mcp', scopes, appUrl, client: { id: client.id } });
+    secrets.push(minted.token);
+    return minted.token;
+  }
+
+  const DEFAULTS = MCP_SCOPES.filter((s) => s.default).map((s) => s.id);
+  const toolsOf = async (token: string) => {
+    const r = await rpc(`Bearer ${token}`, { jsonrpc: '2.0', id: 1, method: 'tools/list' });
+    expect(r.status).toBe(200);
+    return r.json.result.tools as Array<{ name: string; description: string; securitySchemes: Array<{ type: string; scopes: string[] }> }>;
+  };
+  const callRaw = (token: string, name: string, args: Record<string, unknown> = {}) => rpc(`Bearer ${token}`, { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } });
+
+  /** A fabric that opens sessions and runs every action (no browser machine in CI). */
+  function mockFabric() {
+    return jest.spyOn(app.get(FabricClient), 'request').mockImplementation((async (method: string, path: string) => {
+      if (method === 'POST' && path === '/v1/sessions') return { id: randomUUID() };
+      if (method === 'POST' && path.endsWith('/actions')) return { id: randomUUID(), state: 'succeeded', result: { value: 42 } };
+      if (method === 'DELETE') return undefined;
+      throw new Error(`unexpected ${method} ${path}`);
+    }) as never);
+  }
+
+  it('default consent: tools/list offers the delegate tools, lists browser, JavaScript, desktop and policy writes as step-up, in a stable order', async () => {
+    const token = await mint(DEFAULTS);
+    const tools = await toolsOf(token);
+    const stepUp = tools.filter((t) => t.description.endsWith(STEP_UP_NOTE)).map((t) => t.name);
+    const callable = tools.filter((t) => !t.description.endsWith(STEP_UP_NOTE)).map((t) => t.name);
+    expect(callable).toEqual(expect.arrayContaining(['run_goal', 'run_wait', 'run_status', 'runs_list', 'task_create', 'task_run', 'tasks_list', 'inbox_list', 'inbox_answer', 'ask_human', 'policies_list', 'hosts_list']));
+    expect(callable.filter((n) => n.startsWith('browser_'))).toEqual([]);
+    expect(stepUp).toEqual(expect.arrayContaining(['browser_open', 'browser_click', 'browser_evaluate', 'browser_desktop_click', 'policy_create', 'policy_update', 'policy_set_default', 'policies_import']));
+    // Every tool says which scopes it needs (ChatGPT's per-tool securitySchemes), from the registry.
+    for (const t of tools) expect([t.name, t.securitySchemes]).toEqual([t.name, [{ type: 'oauth2', scopes: expect.arrayContaining([MCP_TOOLS.find((x) => x.name === t.name)!.scope]) }]]);
+    expect(tools.find((t) => t.name === 'browser_evaluate')!.securitySchemes[0]!.scopes).toEqual(['browser:evaluate', 'browser:drive']);
+    // The registry's order, and the same list on the next call.
+    const order = MCP_TOOLS.map((t) => t.name);
+    expect(tools.map((t) => t.name)).toEqual(order.filter((n) => tools.some((t) => t.name === n)));
+    expect((await toolsOf(token)).map((t) => t.name)).toEqual(tools.map((t) => t.name));
+    // The instructions say nothing about driving a browser.
+    const init = await rpc(`Bearer ${token}`, { jsonrpc: '2.0', id: 2, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'scripted', version: '0' } } });
+    expect(init.json.result.instructions).not.toMatch(/browser_|full authority/);
+
+    // mcp.advertiseStepUpTools off: the step-up tools are not listed at all.
+    await app.get(SystemSettingsService).patchSettings({ mcp: { advertiseStepUpTools: false } } as never, userId);
+    try {
+      const only = await toolsOf(token);
+      expect(only.map((t) => t.name).filter((n) => n.startsWith('browser_') || ['policy_create', 'policy_update', 'policy_set_default', 'policies_import'].includes(n))).toEqual([]);
+      expect(only.some((t) => t.description.endsWith(STEP_UP_NOTE))).toBe(false);
+    } finally {
+      await app.get(SystemSettingsService).patchSettings({ mcp: { advertiseStepUpTools: true } } as never, userId);
+    }
+  }, 60_000);
+
+  it('browser_open with the default consent: HTTP 403 insufficient_scope naming every granted scope plus browser:drive; nothing reaches the fabric', async () => {
+    const found = await discover();
+    const { token } = await connect(found, null);
+    const granted = token.scope.split(' ');
+    const fabric = mockFabric();
+    try {
+      const goal = `Step-up ${run}`;
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/mcp',
+        headers: { authorization: `Bearer ${token.access_token}`, 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2025-06-18' },
+        payload: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'browser_open', arguments: { goal } } }),
+      });
+      if (process.env.MCP_STEP_UP_EVIDENCE) {
+        const headers = Object.entries(res.headers).map(([k, v]) => `${k}: ${String(v)}`).join('\n');
+        writeFileSync(process.env.MCP_STEP_UP_EVIDENCE, `HTTP/1.1 ${res.statusCode} ${res.statusMessage}\n${headers}\n\n${res.body}\n`);
+      }
+      expect(res.statusCode).toBe(403);
+      const challenge = challengeOf(res.headers['www-authenticate']);
+      expect(challenge).toMatchObject({ error: 'insufficient_scope', resource_metadata: `${appUrl}/.well-known/oauth-protected-resource/api/mcp` });
+      expect(challenge.scope!.split(' ').sort()).toEqual([...new Set([...granted, 'browser:drive'])].sort());
+      expect(res.json()).toMatchObject({ error: 'insufficient_scope', error_description: expect.stringContaining('browser:drive') });
+      expect(fabric).not.toHaveBeenCalled();
+      expect(await prisma.run.count({ where: { userId, goal } })).toBe(0);
+
+      // A batch (2025-03-26) mixing an allowed call and the step-up call is refused as a whole.
+      const batch = await app.inject({
+        method: 'POST',
+        url: '/api/mcp',
+        headers: { authorization: `Bearer ${token.access_token}`, 'content-type': 'application/json', accept: 'application/json', 'mcp-protocol-version': '2025-03-26' },
+        payload: JSON.stringify([
+          { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'runs_list', arguments: {} } },
+          { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'browser_open', arguments: { goal } } },
+        ]),
+      });
+      expect(batch.statusCode).toBe(403);
+      expect(challengeOf(batch.headers['www-authenticate']).error).toBe('insufficient_scope');
+
+      // Step-up: the client re-authorizes with the challenge's scopes; the consent shows only browser:drive as new.
+      const pkce = pkcePair();
+      const query = new URLSearchParams({ response_type: 'code', client_id: client.clientId, redirect_uri: client.redirectUri, state: 'up', code_challenge: pkce.challenge, code_challenge_method: 'S256', resource: found.prm.resource, scope: challenge.scope! });
+      const authorized = await app.inject({ method: 'GET', url: `${pathOf(found.as.authorization_endpoint)}?${query}` });
+      const requestId = new URL(String(authorized.headers.location)).searchParams.get('request')!;
+      const consent = (await app.inject({ method: 'GET', url: `/api/oauth/requests/${requestId}`, headers: { authorization: `Bearer ${session}` } })).json().data as { scopes: Array<{ id: string; alreadyGranted: boolean }> };
+      expect(consent.scopes.filter((s) => !s.alreadyGranted).map((s) => s.id)).toEqual(['browser:drive']);
+      expect(consent.scopes.filter((s) => s.alreadyGranted).map((s) => s.id).sort()).toEqual(granted.filter((s) => s !== 'offline_access').sort());
+      const decision = await app.inject({ method: 'POST', url: `/api/oauth/requests/${requestId}/decision`, headers: { authorization: `Bearer ${session}`, 'content-type': 'application/json' }, payload: JSON.stringify({ decision: 'approve' }) });
+      const code = new URL(decision.json().data.redirectTo).searchParams.get('code')!;
+      const exchanged = await app.inject({
+        method: 'POST',
+        url: pathOf(found.as.token_endpoint),
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        payload: new URLSearchParams({ grant_type: 'authorization_code', client_id: client.clientId, code, redirect_uri: client.redirectUri, code_verifier: pkce.verifier }).toString(),
+      });
+      expect(exchanged.statusCode).toBe(200);
+      const wider = exchanged.json() as { access_token: string; refresh_token?: string; scope: string };
+      secrets.push(code, pkce.verifier, wider.access_token, ...(wider.refresh_token ? [wider.refresh_token] : []));
+      expect(wider.scope.split(' ').sort()).toEqual([...new Set([...granted, 'browser:drive'])].sort());
+      const grant = await prisma.oAuthGrant.findFirstOrThrow({ where: { userId, clientId: client.id, revokedAt: null } });
+      expect([...grant.scopes].sort()).toEqual([...new Set([...granted, 'browser:drive'])].sort());
+
+      // The same call now works.
+      const opened = await callTool(wider.access_token, 'browser_open', { goal });
+      expect(opened.isError).toBeFalsy();
+      expect(opened.structuredContent).toMatchObject({ session_id: expect.any(String) });
+      expect(fabric).toHaveBeenCalledWith('POST', '/v1/sessions', expect.anything());
+      await callTool(wider.access_token, 'browser_close', { session_id: opened.structuredContent!.session_id });
+      await app.inject({ method: 'DELETE', url: `/api/oauth/grants/${grant.id}`, headers: { authorization: `Bearer ${session}` } });
+    } finally {
+      fabric.mockRestore();
+    }
+  }, 60_000);
+
+  it('browser_evaluate with browser:drive only: step-up for browser:evaluate, and the REST action of kind evaluate refuses the same delegation', async () => {
+    const token = await mint(['runs:read', 'browser:drive']);
+    const fabric = mockFabric();
+    try {
+      const opened = await callTool(token, 'browser_open', { goal: `Evaluate ${run}` });
+      expect(opened.isError).toBeFalsy();
+      const sessionId = String(opened.structuredContent!.session_id);
+
+      const tool = await callRaw(token, 'browser_evaluate', { session_id: sessionId, script: '1 + 1' });
+      expect(tool.status).toBe(403);
+      expect(challengeOf(tool.headers['www-authenticate']).scope!.split(' ').sort()).toEqual(['browser:drive', 'browser:evaluate', 'runs:read']);
+
+      // The REST layer draws the same line: the route itself refuses the evaluate kind for this token's
+      // in-process delegation (the principal's credential kind is oauth), and allows a drive kind.
+      const viaDelegation = async (action: Record<string, unknown>) => {
+        let answer: { statusCode: number; headers: Record<string, unknown>; body: string } | undefined;
+        const spy = jest.spyOn(app.get(McpDispatcher), 'dispatch').mockImplementationOnce(async (_msg, _rctx, caller) => {
+          if (typeof caller === 'string') throw new Error('expected the delegation');
+          answer = await caller({ method: 'POST', url: `/api/browser/sessions/${sessionId}/actions`, headers: { 'content-type': 'application/json' }, payload: JSON.stringify({ action }) });
+          return { status: 200, body: rpcResult(1, {}) };
+        });
+        try {
+          expect((await callRaw(token, 'runs_list')).status).toBe(200);
+        } finally {
+          spy.mockRestore();
+        }
+        return answer!;
+      };
+      const evaluate = await viaDelegation({ type: 'evaluate', script: '1 + 1' });
+      expect(evaluate.statusCode).toBe(403);
+      expect(challengeOf(evaluate.headers['www-authenticate'])).toMatchObject({ error: 'insufficient_scope', scope: expect.stringContaining('browser:evaluate') });
+      const desktop = await viaDelegation({ type: 'desktop_key', key: 'Escape' });
+      expect(desktop.statusCode).toBe(403);
+      const click = await viaDelegation({ type: 'click', selector: '#ok' });
+      expect(click.statusCode).toBe(200);
+      expect(fabric.mock.calls.filter(([m, p]) => m === 'POST' && String(p).endsWith('/actions')).map(([, , o]) => (o as { body: { action: { type: string } } }).body.action.type)).toEqual(['click']);
+      await callTool(token, 'browser_close', { session_id: sessionId });
+    } finally {
+      fabric.mockRestore();
+    }
+  }, 60_000);
+
+  it('desktop:control without browser:drive is not enough', async () => {
+    const token = await mint([...DEFAULTS, 'desktop:control']);
+    const tools = await toolsOf(token);
+    expect(tools.find((t) => t.name === 'browser_desktop_screenshot')!.description.endsWith(STEP_UP_NOTE)).toBe(true);
+    const res = await callRaw(token, 'browser_desktop_screenshot', { session_id: randomUUID() });
+    expect(res.status).toBe(403);
+    const scope = challengeOf(res.headers['www-authenticate']).scope!.split(' ');
+    expect(scope).toEqual(expect.arrayContaining(['desktop:control', 'browser:drive']));
+  }, 60_000);
+
+  it('a viewer: write tools are forbidden (a tool error, HTTP 200, no challenge) and never listed', async () => {
+    const email = `mcp-oauth-viewer-${run}@example.test`;
+    // The test-only login logs its own redirect (session token included), so this session is not a tracked secret.
+    await app.inject({ method: 'POST', url: '/api/auth/test/login', payload: { email, role: 'viewer' } });
+    const viewerId = (await prisma.user.findUniqueOrThrow({ where: { email }, select: { id: true } })).id;
+    const token = await mint(DEFAULTS, viewerId);
+    const names = (await toolsOf(token)).map((t) => t.name);
+    const writes = MCP_TOOLS.filter((t) => t.effect !== 'read').map((t) => t.name);
+    expect(names.filter((n) => writes.includes(n))).toEqual([]);
+    expect(names).toEqual(expect.arrayContaining(['runs_list', 'tasks_list', 'inbox_list']));
+    const res = await callRaw(token, 'task_create', { name: `Viewer ${run}`, goal: 'Not allowed' });
+    expect(res.status).toBe(200);
+    expect(res.headers['www-authenticate']).toBeUndefined();
+    expect(res.json.result).toMatchObject({ isError: true, content: [{ type: 'text', text: expect.stringContaining(FORBIDDEN_TOOL_TEXT) }] });
+    expect(await prisma.task.count({ where: { userId: viewerId } })).toBe(0);
+    // A viewer's read tools still work.
+    expect((await callTool(token, 'runs_list', {})).isError).toBeFalsy();
   }, 60_000);
 
   it('leaks no token, code or verifier into the grants routes, the audit log or the log (secret-egress)', async () => {
