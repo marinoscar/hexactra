@@ -13,6 +13,8 @@ export const RUN_REMINDER_EVENT = 'runs.needs_you_reminder';
 export const QUESTION_ASKED_EVENT = 'questions.asked';
 /** Run retention (#422): the default rule is about to delete runs for the first time. */
 export const RUN_RETENTION_NOTICE_EVENT = 'runs.retention_notice';
+/** A chat run went over one of its usual limits and is still working (#537): once per run. */
+export const RUN_OVER_BUDGET_EVENT = 'runs.over_budget';
 
 const str = (d: unknown, k: string) => (typeof (d as Record<string, unknown>)[k] === 'string' ? String((d as Record<string, unknown>)[k]) : '');
 const trim = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -64,6 +66,11 @@ const asked: BrowserNotificationTemplate = (d) => {
 const finished: BrowserNotificationTemplate = (d) => ({
   title: str(d, 'status') === 'succeeded' ? 'Run finished' : `Run ${str(d, 'status') || 'ended'}`,
   body: trim(`${str(d, 'goal')}${str(d, 'result') ? ` — ${str(d, 'result')}` : ''}`, 180),
+  link: finishedLink(d),
+});
+const overBudget: BrowserNotificationTemplate = (d) => ({
+  title: 'Still working, over its usual limit',
+  body: trim(`${str(d, 'usedOfLimit') ? `${str(d, 'usedOfLimit')} ${str(d, 'budget')}. ` : ''}${str(d, 'goal')}`, 180),
   link: finishedLink(d),
 });
 /** Where a failing-schedule notice leads: the task's schedules (`/tasks/:id#schedule`); the Tasks list for a notice without a task id. */
@@ -128,6 +135,16 @@ export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
       defaultEnabled: true,
     },
     browserTemplate: finished,
+  },
+  {
+    event: {
+      key: RUN_OVER_BUDGET_EVENT,
+      label: 'Chat run over its usual limit',
+      description: 'A run you started from a chat went over a budget limit. It keeps working; press Stop in the chat to end it.',
+      channels: ['browser', ...PUSH],
+      defaultEnabled: true,
+    },
+    browserTemplate: overBudget,
   },
   {
     event: {
@@ -199,6 +216,7 @@ export const hexactraPushPayload: PushPayloadHook = (event, data) => {
     return { tag: id ? `question-${id}`.slice(0, 64) : 'question', urgency: 'high', ...(actions.length ? { actions } : {}) };
   }
   if (event.key === RUN_FINISHED_EVENT) return { tag: runId ? `run-${runId}` : 'run', urgency: str(data, 'status') === 'failed' ? 'high' : 'normal' };
+  if (event.key === RUN_OVER_BUDGET_EVENT) return { tag: runId ? `run-${runId}` : 'run', urgency: 'normal' };
   if (event.key === SCHEDULE_FAILING_EVENT) return { tag: `schedule-${str(data, 'scheduleId') || 'failing'}`, urgency: 'normal' };
   return null;
 };

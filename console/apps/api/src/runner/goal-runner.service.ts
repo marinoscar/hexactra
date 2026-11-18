@@ -53,6 +53,8 @@ import {
   BUDGET_STOP_REASON,
   BudgetTracker,
   computeEffectiveBudget,
+  enforcementFor,
+  overNoteLine,
   isUnlimited,
   UNLIMITED_LOG_LINE,
   usedOfLimit,
@@ -97,6 +99,8 @@ export interface RunMemory {
   warned?: BudgetKey[];
   /** Warning lines the next round's input carries (#404). */
   pendingWarnings?: string[];
+  /** Soft budgets (#537) already noticed as over their limit: each is noted and notified once per run, across jobs. */
+  overNoticed?: BudgetKey[];
   /** The tier the run is on (#405); absent until the first advance. */
   tier?: Tier;
   /** Tier escalations so far (#405). */
@@ -310,12 +314,12 @@ export class GoalRunnerService {
    * settings does not change a live run. Fall-through notes (a level that named
    * a deleted or foreign policy) go to the run's first log line.
    */
-  private async policySnapshot(db: ReturnType<PrismaService['forUser']>, run: { id: string; userId: string; taskId: string | null; policyRef: string | null; policySource: RunPolicySnapshot['source'] | null; policySnapshot: Prisma.JsonValue | null; appLimits?: Prisma.JsonValue | null; task: { policyRef: string | null } | null }, memory: RunMemory): Promise<RunPolicySnapshot> {
+  private async policySnapshot(db: ReturnType<PrismaService['forUser']>, run: { id: string; userId: string; taskId: string | null; policyRef: string | null; policySource: RunPolicySnapshot['source'] | null; policySnapshot: Prisma.JsonValue | null; appLimits?: Prisma.JsonValue | null; trigger?: string | null; task: { policyRef: string | null } | null }, memory: RunMemory): Promise<RunPolicySnapshot> {
     const stored = readSnapshot(run.policySnapshot);
     if (stored) {
       // Upgrade an older snapshot once, then never change it: the effective budget (#404) and the model tiers (#403).
       let upgraded = stored;
-      if (!upgraded.effectiveBudget) upgraded = { ...upgraded, effectiveBudget: computeEffectiveBudget(upgraded.spec.budget, await this.ceilings()) };
+      if (!upgraded.effectiveBudget) upgraded = { ...upgraded, effectiveBudget: computeEffectiveBudget(upgraded.spec.budget, await this.ceilings(), enforcementFor(run.trigger)) };
       if (upgraded.resolvedTiers === undefined && this.modelTiers) upgraded = await this.withTiers(run.userId, upgraded);
       if (upgraded !== stored) await db.run.updateMany({ where: { id: run.id }, data: { policySnapshot: upgraded as never } });
       return upgraded;
@@ -340,7 +344,8 @@ export class GoalRunnerService {
       snapshot = await this.withTiers(run.userId, snapshot);
     }
     // What the run is held to: the policy's budget under the deployment's ceilings, fixed for the run (#404).
-    snapshot = { ...snapshot, effectiveBudget: computeEffectiveBudget(snapshot.spec.budget, await this.ceilings()) };
+    // A chat run is interactive: the owner is present, so its budgets are soft, shown and never enforced (#537).
+    snapshot = { ...snapshot, effectiveBudget: computeEffectiveBudget(snapshot.spec.budget, await this.ceilings(), enforcementFor(run.trigger)) };
     // The limits of the AI app that started it (#464), recorded on the run at its start: the snapshot keeps them.
     const appLimits = readAppLimits(run.appLimits);
     if (appLimits) snapshot = { ...snapshot, appLimits };
@@ -494,6 +499,7 @@ export class GoalRunnerService {
       costKnown: run.costKnown,
       activeMs: run.activeMs,
       warned: memory.warned,
+      overNoticed: memory.overNoticed,
     });
     // Context efficiency (#406): every knob is the run's own snapshot, never a constant.
     const ctx = snapshot.spec.context;
@@ -549,8 +555,36 @@ export class GoalRunnerService {
       state.stop = 'budget';
       state.budgetKey = key;
     };
-    /** A budget newly over `warnAtPercent`: log it once and queue the line the next round's input carries. */
+    /** The owner's one "over its usual limit" notification (#537), waiting for the chunk's memory to be saved. */
+    let overNotice: { usedOfLimit: string; label: string } | null = null;
+    const sendOverNotice = async () => {
+      if (!overNotice) return;
+      const n = overNotice;
+      overNotice = null;
+      await this.notifier?.overBudget(userId, run, n.usedOfLimit, n.label);
+    };
+    /**
+     * A budget newly over `warnAtPercent`: log it once and queue the line the next round's input carries.
+     * A soft budget (a chat run, #537) never tells the model to hurry: no queued line, so the chunk goes on;
+     * a budget newly over its limit gets one neutral log line and one notification to the owner.
+     */
     const noteWarnings = (): boolean => {
+      if (tracker.enforcement === 'soft') {
+        tracker.takeWarnings();
+        memory.warned = tracker.warnedKeys();
+        const over = tracker.takeOverNotices();
+        if (over.length === 0) return false;
+        memory.overNoticed = tracker.overNoticedKeys();
+        const usedNow = tracker.used();
+        for (const k of over) memory.log.push(overNoteLine(k, usedNow[k], effective.limits[k]!));
+        // Once per run, for the first budget to go over (never a second notification); sent once the
+        // memory that records it is saved, so a retried job never sends it again.
+        if (over.length === tracker.overNoticedKeys().length) {
+          const k = over[0]!;
+          overNotice = { usedOfLimit: usedOfLimit(k, usedNow[k], effective.limits[k]!), label: BUDGET_LABEL[k] };
+        }
+        return false;
+      }
       const keys = tracker.takeWarnings();
       if (keys.length === 0) return false;
       const { percent } = tracker.state();
@@ -1302,6 +1336,7 @@ export class GoalRunnerService {
         }
       }
       await this.saveMemory(userId, run.id, memory, used.drain());
+      await sendOverNotice();
 
       const fresh = await db.run.findFirst({ where: { id: run.id }, select: { cancelRequested: true } });
       if (fresh?.cancelRequested) {

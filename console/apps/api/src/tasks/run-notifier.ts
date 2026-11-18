@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NotificationsService } from '@marinoscar/platform-api/notifications';
 import { WebhooksService } from '@marinoscar/platform-api/webhooks';
 
-import { RUN_FINISHED_EVENT, RUN_NEEDS_YOU_EVENT, RUN_REMINDER_EVENT, SCHEDULE_FAILING_EVENT, failingScheduleLink } from '../platform/notifications/hexactra.notifications';
+import { RUN_FINISHED_EVENT, RUN_NEEDS_YOU_EVENT, RUN_OVER_BUDGET_EVENT, RUN_REMINDER_EVENT, SCHEDULE_FAILING_EVENT, failingScheduleLink } from '../platform/notifications/hexactra.notifications';
 import { RunActionTokens } from './run-action-token';
 import { FINAL_WINDOW_MS, canSnooze } from './reminder-schedule';
 import { RUN_FINISHED_WEBHOOK, RUN_STARTED_WEBHOOK, RUN_WAITING_WEBHOOK, SCHEDULE_FAILING_WEBHOOK } from '../platform/webhooks/hexactra.webhook-events';
@@ -120,6 +120,15 @@ export class RunNotifier {
   async finished(userId: string, run: RunRef, status: string, result?: string | null): Promise<void> {
     await this.send(RUN_FINISHED_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), status, result: (result ?? '').slice(0, 500), ...this.at(run, `/runs/${run.id}`, 'runUrl') });
     await this.hook(RUN_FINISHED_WEBHOOK, userId, { ...this.runData(run, status), result: (result ?? '').slice(0, 2000) || null });
+  }
+
+  /**
+   * A chat run (#537) went over one of its usual limits and is still working:
+   * once per run. It leads to the chat, where the owner can press Stop. No
+   * webhook: nothing about the run's state changed.
+   */
+  async overBudget(userId: string, run: RunRef, usedOfLimit: string, label: string): Promise<void> {
+    await this.send(RUN_OVER_BUDGET_EVENT, userId, { runId: run.id, goal: run.goal.slice(0, 300), usedOfLimit, budget: label, ...this.at(run, `/runs/${run.id}`, 'runUrl') });
   }
 
   /** The notice links to the task's schedules (`/tasks/:id#schedule`, #428), where the failing one carries a warning. */

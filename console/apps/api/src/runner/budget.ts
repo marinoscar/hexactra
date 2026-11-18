@@ -74,12 +74,27 @@ export type BudgetCeilings = Partial<Record<BudgetLimitField, number | null>>;
 /** Where an effective limit came from: the policy, or the ceiling that clamped it. `null`: unlimited. */
 export type BudgetSource = 'policy' | 'ceiling' | null;
 
+/**
+ * How a run's limits apply (#537). `hard`: a used-up budget ends the run.
+ * `soft`: the run is interactive (a chat started it, the owner is present and
+ * can press Stop), so every limit is counted, shown and warned about, never
+ * enforced.
+ */
+export type BudgetEnforcement = 'hard' | 'soft';
+
 /** The limits a run is held to, written onto its policy snapshot at the first advance. */
 export interface EffectiveBudget {
   /** Per budget; `null` is unlimited. Active time is in minutes, cost in USD. */
   limits: Record<BudgetKey, number | null>;
   source: Record<BudgetKey, BudgetSource>;
   warnAtPercent: number;
+  /** Absent on snapshots written before #537: read as `hard`. */
+  enforcement: BudgetEnforcement;
+}
+
+/** A chat run is interactive: its budgets are soft (#537). Every other trigger keeps hard budgets. */
+export function enforcementFor(trigger: string | null | undefined): BudgetEnforcement {
+  return trigger === 'chat' ? 'soft' : 'hard';
 }
 
 /** `min(policy ?? inf, ceiling ?? inf)`: unlimited only when both are null. A tie names the policy. */
@@ -93,7 +108,7 @@ export function clampLimit(policy: number | null | undefined, ceiling: number | 
 }
 
 /** The effective budget of a policy under the deployment's ceilings. */
-export function computeEffectiveBudget(budget: AgentPolicySpec['budget'], ceilings: BudgetCeilings | null | undefined): EffectiveBudget {
+export function computeEffectiveBudget(budget: AgentPolicySpec['budget'], ceilings: BudgetCeilings | null | undefined, enforcement: BudgetEnforcement = 'hard'): EffectiveBudget {
   const limits = {} as Record<BudgetKey, number | null>;
   const source = {} as Record<BudgetKey, BudgetSource>;
   for (const k of BUDGET_KEYS) {
@@ -102,7 +117,7 @@ export function computeEffectiveBudget(budget: AgentPolicySpec['budget'], ceilin
     limits[k] = r.limit;
     source[k] = r.source;
   }
-  return { limits, source, warnAtPercent: budget.warnAtPercent };
+  return { limits, source, warnAtPercent: budget.warnAtPercent, enforcement };
 }
 
 /** True when no budget has a limit: only finishing, a stop or a stall ends the run. */
@@ -124,7 +139,7 @@ export function readEffectiveBudget(value: unknown): EffectiveBudget | null {
     const s = (v.source as Record<string, unknown> | undefined)?.[k];
     source[k] = s === 'policy' || s === 'ceiling' ? s : l === null ? null : 'policy';
   }
-  return { limits, source, warnAtPercent: v.warnAtPercent };
+  return { limits, source, warnAtPercent: v.warnAtPercent, enforcement: v.enforcement === 'soft' ? 'soft' : 'hard' };
 }
 
 /** What a run has used, by budget (active time in minutes, cost in USD). */
@@ -147,11 +162,15 @@ export interface BudgetDelta {
 export interface BudgetTotals extends BudgetDelta {
   /** Budgets already warned about (kept in the run's memory across jobs). */
   warned?: readonly BudgetKey[];
+  /** Budgets already noticed as over their limit (soft budgets, #537; kept in the run's memory across jobs). */
+  overNoticed?: readonly BudgetKey[];
 }
 
 export interface BudgetState {
-  /** The first exhausted budget in `BUDGET_KEYS` order, or null. */
+  /** The first exhausted budget in `BUDGET_KEYS` order, or null. Always null under `soft` enforcement: the single switch (#537). */
   exhausted: BudgetKey | null;
+  /** Every budget with `used >= limit`, in `BUDGET_KEYS` order (under either enforcement). */
+  over: BudgetKey[];
   /** Budgets at or over `warnAtPercent` (and not exhausted) that have not been warned about yet. */
   warn: BudgetKey[];
   /** Percent of each limit used; `null` for an unlimited budget. */
@@ -181,6 +200,7 @@ export class BudgetTracker {
   private activeMs: number;
   private known: boolean;
   private readonly warned: Set<BudgetKey>;
+  private readonly overNoticed: Set<BudgetKey>;
 
   constructor(
     private readonly effective: EffectiveBudget,
@@ -194,6 +214,12 @@ export class BudgetTracker {
     this.activeMs = amount(starting.activeMs);
     this.known = starting.costKnown ?? true;
     this.warned = new Set(starting.warned ?? []);
+    this.overNoticed = new Set(starting.overNoticed ?? []);
+  }
+
+  /** How the limits apply (#537). */
+  get enforcement(): BudgetEnforcement {
+    return this.effective.enforcement === 'soft' ? 'soft' : 'hard';
   }
 
   add(delta: BudgetDelta): void {
@@ -231,7 +257,7 @@ export class BudgetTracker {
   state(): BudgetState {
     const used = this.used();
     const percent = {} as Record<BudgetKey, number | null>;
-    let exhausted: BudgetKey | null = null;
+    const over: BudgetKey[] = [];
     const warn: BudgetKey[] = [];
     for (const k of BUDGET_KEYS) {
       const limit = this.effective.limits[k];
@@ -241,12 +267,13 @@ export class BudgetTracker {
       }
       percent[k] = (used[k] / limit) * 100;
       if (used[k] >= limit) {
-        if (exhausted === null) exhausted = k;
+        over.push(k);
       } else if (percent[k]! >= this.effective.warnAtPercent && !this.warned.has(k)) {
         warn.push(k);
       }
     }
-    return { exhausted, warn, percent };
+    const exhausted = this.enforcement === 'soft' ? null : (over[0] ?? null);
+    return { exhausted, over, warn, percent };
   }
 
   /** The budgets newly over the warning threshold, each returned once, ever (across jobs when `warnedKeys` is stored). */
@@ -259,6 +286,18 @@ export class BudgetTracker {
   /** Every budget warned about so far, to keep in the run's memory. */
   warnedKeys(): BudgetKey[] {
     return BUDGET_KEYS.filter((k) => this.warned.has(k));
+  }
+
+  /** The budgets newly over their limit, each returned once, ever (across jobs when `overNoticedKeys` is stored). */
+  takeOverNotices(): BudgetKey[] {
+    const fresh = this.state().over.filter((k) => !this.overNoticed.has(k));
+    for (const k of fresh) this.overNoticed.add(k);
+    return fresh;
+  }
+
+  /** Every budget noticed as over its limit so far, to keep in the run's memory. */
+  overNoticedKeys(): BudgetKey[] {
+    return BUDGET_KEYS.filter((k) => this.overNoticed.has(k));
   }
 }
 
@@ -288,6 +327,11 @@ export function wrapUpInstruction(key: BudgetKey): string {
   return `The ${BUDGET_LABEL[key]} budget is used up. Call finish now: success only if the goal is fully done; otherwise summarise exactly what was done and what remains.`;
 }
 
+/** The neutral line a soft-budget run's log carries when a budget goes over its limit (#537): it never tells the model to hurry. */
+export function overNoteLine(key: BudgetKey, used: number, limit: number): string {
+  return `Budget note: ${BUDGET_LABEL[key]} is over this chat's usual limit (${usedOfLimit(key, used, limit)}). The owner is present; keep working.`;
+}
+
 /** The first line of a run log when nothing limits the run. */
 export const UNLIMITED_LOG_LINE = 'Unlimited: this run stops when it finishes, is stopped, or stalls.';
 
@@ -300,6 +344,10 @@ export interface RunBudgetView {
   source: Record<BudgetKey, BudgetSource>;
   /** False when a call could not be priced: `used.cost` is "at least". */
   costKnown: boolean;
+  /** `soft`: a chat run, shown and warned about, never stopped by its limits (#537). */
+  enforcement: BudgetEnforcement;
+  /** The budgets at or over their limit, in `BUDGET_KEYS` order. */
+  over: BudgetKey[];
 }
 
 /** The columns of a run the budget view reads. */
@@ -331,5 +379,13 @@ export function runBudgetView(effective: EffectiveBudget, run: BudgetRunColumns,
   for (const k of BUDGET_KEYS) percent[k] = state.percent[k] === null ? null : Math.round(state.percent[k]! * 10) / 10;
   const used = tracker.used();
   used.activeMinutes = Math.round(used.activeMinutes * 100) / 100;
-  return { effective: { ...effective.limits, warnAtPercent: effective.warnAtPercent }, used, percent, source: effective.source, costKnown: tracker.costKnown };
+  return {
+    effective: { ...effective.limits, warnAtPercent: effective.warnAtPercent },
+    used,
+    percent,
+    source: effective.source,
+    costKnown: tracker.costKnown,
+    enforcement: tracker.enforcement,
+    over: state.over,
+  };
 }

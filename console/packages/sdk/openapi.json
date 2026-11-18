@@ -65626,7 +65626,7 @@
                   "maxCostUsd",
                   "warnAtPercent"
                 ],
-                "description": "What a run may spend. Every limit may be unlimited; stall detection stays on regardless."
+                "description": "What a run may spend. Every limit may be unlimited; stall detection stays on regardless. Chat runs show these limits but are not stopped by them."
               },
               "stall": {
                 "type": "object",
@@ -66675,7 +66675,7 @@
                         "maxCostUsd",
                         "warnAtPercent"
                       ],
-                      "description": "What a run may spend. Every limit may be unlimited; stall detection stays on regardless."
+                      "description": "What a run may spend. Every limit may be unlimited; stall detection stays on regardless. Chat runs show these limits but are not stopped by them."
                     },
                     "stall": {
                       "type": "object",
@@ -67190,7 +67190,7 @@
                   "maxCostUsd",
                   "warnAtPercent"
                 ],
-                "description": "What a run may spend. Every limit may be unlimited; stall detection stays on regardless."
+                "description": "What a run may spend. Every limit may be unlimited; stall detection stays on regardless. Chat runs show these limits but are not stopped by them."
               },
               "stall": {
                 "type": "object",
@@ -67492,7 +67492,7 @@
                   "maxCostUsd",
                   "warnAtPercent"
                 ],
-                "description": "What a run may spend. Every limit may be unlimited; stall detection stays on regardless."
+                "description": "What a run may spend. Every limit may be unlimited; stall detection stays on regardless. Chat runs show these limits but are not stopped by them."
               },
               "stall": {
                 "type": "object",
@@ -71530,6 +71530,29 @@
                   "costKnown": {
                     "type": "boolean",
                     "description": "False when a call could not be priced: `used.cost` is then \"at least\"."
+                  },
+                  "enforcement": {
+                    "type": "string",
+                    "enum": [
+                      "hard",
+                      "soft"
+                    ],
+                    "description": "`hard`: a used-up budget ends the run. `soft`: a chat run (trigger `chat`), whose owner is present: its limits are shown and warned about, never enforced (#537)."
+                  },
+                  "over": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "actions",
+                        "modelCalls",
+                        "activeMinutes",
+                        "inputTokens",
+                        "outputTokens",
+                        "cost"
+                      ]
+                    },
+                    "description": "The budgets at or over their limit, in check order. A soft-budget run keeps working past them."
                   }
                 },
                 "required": [
@@ -71537,7 +71560,9 @@
                   "used",
                   "percent",
                   "source",
-                  "costKnown"
+                  "costKnown",
+                  "enforcement",
+                  "over"
                 ],
                 "description": "The run budget: `null` on a run that has not started or that was snapshotted before budgets were enforced."
               },
@@ -72221,6 +72246,29 @@
                         "costKnown": {
                           "type": "boolean",
                           "description": "False when a call could not be priced: `used.cost` is then \"at least\"."
+                        },
+                        "enforcement": {
+                          "type": "string",
+                          "enum": [
+                            "hard",
+                            "soft"
+                          ],
+                          "description": "`hard`: a used-up budget ends the run. `soft`: a chat run (trigger `chat`), whose owner is present: its limits are shown and warned about, never enforced (#537)."
+                        },
+                        "over": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "actions",
+                              "modelCalls",
+                              "activeMinutes",
+                              "inputTokens",
+                              "outputTokens",
+                              "cost"
+                            ]
+                          },
+                          "description": "The budgets at or over their limit, in check order. A soft-budget run keeps working past them."
                         }
                       },
                       "required": [
@@ -72228,7 +72276,9 @@
                         "used",
                         "percent",
                         "source",
-                        "costKnown"
+                        "costKnown",
+                        "enforcement",
+                        "over"
                       ],
                       "description": "The run budget: `null` on a run that has not started or that was snapshotted before budgets were enforced."
                     },
@@ -72999,6 +73049,29 @@
                   "costKnown": {
                     "type": "boolean",
                     "description": "False when a call could not be priced: `used.cost` is then \"at least\"."
+                  },
+                  "enforcement": {
+                    "type": "string",
+                    "enum": [
+                      "hard",
+                      "soft"
+                    ],
+                    "description": "`hard`: a used-up budget ends the run. `soft`: a chat run (trigger `chat`), whose owner is present: its limits are shown and warned about, never enforced (#537)."
+                  },
+                  "over": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "actions",
+                        "modelCalls",
+                        "activeMinutes",
+                        "inputTokens",
+                        "outputTokens",
+                        "cost"
+                      ]
+                    },
+                    "description": "The budgets at or over their limit, in check order. A soft-budget run keeps working past them."
                   }
                 },
                 "required": [
@@ -73006,7 +73079,9 @@
                   "used",
                   "percent",
                   "source",
-                  "costKnown"
+                  "costKnown",
+                  "enforcement",
+                  "over"
                 ],
                 "description": "The run budget: `null` on a run that has not started or that was snapshotted before budgets were enforced."
               },
@@ -73773,6 +73848,29 @@
                   "costKnown": {
                     "type": "boolean",
                     "description": "False when a call could not be priced: `used.cost` is then \"at least\"."
+                  },
+                  "enforcement": {
+                    "type": "string",
+                    "enum": [
+                      "hard",
+                      "soft"
+                    ],
+                    "description": "`hard`: a used-up budget ends the run. `soft`: a chat run (trigger `chat`), whose owner is present: its limits are shown and warned about, never enforced (#537)."
+                  },
+                  "over": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "actions",
+                        "modelCalls",
+                        "activeMinutes",
+                        "inputTokens",
+                        "outputTokens",
+                        "cost"
+                      ]
+                    },
+                    "description": "The budgets at or over their limit, in check order. A soft-budget run keeps working past them."
                   }
                 },
                 "required": [
@@ -73780,7 +73878,9 @@
                   "used",
                   "percent",
                   "source",
-                  "costKnown"
+                  "costKnown",
+                  "enforcement",
+                  "over"
                 ],
                 "description": "The run budget: `null` on a run that has not started or that was snapshotted before budgets were enforced."
               },

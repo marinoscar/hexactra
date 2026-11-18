@@ -4,7 +4,9 @@ import {
   BudgetTracker,
   clampLimit,
   computeEffectiveBudget,
+  enforcementFor,
   isUnlimited,
+  overNoteLine,
   readEffectiveBudget,
   runBudgetView,
   warningLine,
@@ -14,10 +16,11 @@ import {
 } from '../src/runner/budget';
 
 const NONE: EffectiveBudget['limits'] = { actions: null, modelCalls: null, activeMinutes: null, inputTokens: null, outputTokens: null, cost: null };
-const eff = (limits: Partial<EffectiveBudget['limits']>, warnAtPercent = 80): EffectiveBudget => ({
+const eff = (limits: Partial<EffectiveBudget['limits']>, warnAtPercent = 80, enforcement: EffectiveBudget['enforcement'] = 'hard'): EffectiveBudget => ({
   limits: { ...NONE, ...limits },
   source: Object.fromEntries(BUDGET_KEYS.map((k) => [k, limits[k] === undefined || limits[k] === null ? null : 'policy'])) as EffectiveBudget['source'],
   warnAtPercent,
+  enforcement,
 });
 
 describe('BudgetTracker', () => {
@@ -173,5 +176,75 @@ describe('budget text and view', () => {
     expect(view.source.actions).toBe('ceiling');
     expect(view.effective).toMatchObject({ actions: 8, activeMinutes: 2, warnAtPercent: 80 });
     expect(view.costKnown).toBe(false);
+  });
+});
+
+describe('soft budgets (#537)', () => {
+  const ALL = { actions: 10, modelCalls: 10, activeMinutes: 10, inputTokens: 10, outputTokens: 10, cost: 10 };
+  const atAll = { actions: 10, modelCalls: 10, activeMs: 600_000, inputTokens: 10, outputTokens: 10, costUsd: 10 };
+
+  it('a chat run is soft, every other trigger hard', () => {
+    expect(enforcementFor('chat')).toBe('soft');
+    for (const t of ['manual', 'schedule', 'api', 'mcp', 'external', null, undefined]) expect(enforcementFor(t)).toBe('hard');
+  });
+
+  it('never exhausts, at and past every limit; over lists the budgets in order', () => {
+    const t = new BudgetTracker(eff(ALL, 80, 'soft'));
+    t.add(atAll);
+    expect(t.state().exhausted).toBeNull();
+    expect(t.state().over).toEqual([...BUDGET_KEYS]);
+    t.add(atAll);
+    expect(t.state().exhausted).toBeNull();
+    expect(t.state().over).toEqual([...BUDGET_KEYS]);
+    expect(t.state().percent.actions).toBe(200);
+  });
+
+  it('lists over in BUDGET_KEYS order whatever order they crossed in; hard exhausted is over[0]', () => {
+    const soft = new BudgetTracker(eff({ cost: 1, actions: 2 }, 80, 'soft'));
+    soft.add({ costUsd: 1 });
+    soft.add({ actions: 2 });
+    expect(soft.state().over).toEqual(['actions', 'cost']);
+    const hard = new BudgetTracker(eff({ cost: 1, actions: 2 }));
+    hard.add({ costUsd: 1, actions: 2 });
+    expect(hard.state().over).toEqual(['actions', 'cost']);
+    expect(hard.state().exhausted).toBe('actions');
+  });
+
+  it('takeOverNotices returns each budget once, ever, and carries across jobs', () => {
+    const t = new BudgetTracker(eff({ actions: 2, modelCalls: 5 }, 80, 'soft'));
+    t.add({ actions: 1 });
+    expect(t.takeOverNotices()).toEqual([]);
+    t.add({ actions: 1 });
+    expect(t.takeOverNotices()).toEqual(['actions']);
+    t.add({ actions: 5 });
+    expect(t.takeOverNotices()).toEqual([]);
+    t.add({ modelCalls: 9 });
+    expect(t.takeOverNotices()).toEqual(['modelCalls']);
+    expect(t.overNoticedKeys()).toEqual(['actions', 'modelCalls']);
+    const next = new BudgetTracker(eff({ actions: 2, modelCalls: 5 }, 80, 'soft'), { actions: 9, modelCalls: 9, overNoticed: t.overNoticedKeys() });
+    expect(next.takeOverNotices()).toEqual([]);
+  });
+
+  it('readEffectiveBudget of a snapshot without enforcement is hard; soft survives a round trip', () => {
+    const old = { limits: { ...NONE, actions: 5 }, source: { actions: 'policy' }, warnAtPercent: 80 };
+    expect(readEffectiveBudget(old)?.enforcement).toBe('hard');
+    const soft = computeEffectiveBudget({ ...balancedSpec().budget, maxActions: 3 }, null, 'soft');
+    expect(soft.enforcement).toBe('soft');
+    expect(readEffectiveBudget(JSON.parse(JSON.stringify(soft)))).toEqual(soft);
+    expect(computeEffectiveBudget(balancedSpec().budget, null).enforcement).toBe('hard');
+  });
+
+  it('the view carries enforcement and over, and percent goes past 100', () => {
+    const e = computeEffectiveBudget({ ...balancedSpec().budget, maxActions: 60 }, null, 'soft');
+    const view = runBudgetView(e, { stepCount: 64, modelCalls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, costKnown: true, activeMs: 0, activeSince: null }, 0);
+    expect(view.enforcement).toBe('soft');
+    expect(view.over).toEqual(['actions']);
+    expect(view.percent.actions).toBe(106.7);
+  });
+
+  it('the over note is neutral: it never tells the model to hurry', () => {
+    const line = overNoteLine('actions', 64, 60);
+    expect(line).toBe("Budget note: actions is over this chat's usual limit (64 of 60). The owner is present; keep working.");
+    expect(line).not.toMatch(/finish|hurry|used up/i);
   });
 });

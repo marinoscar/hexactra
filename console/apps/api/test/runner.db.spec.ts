@@ -1064,6 +1064,90 @@ describe('the goal runner enforces budgets (#404)', () => {
     expect(saved.pendingWarnings).toEqual([]);
   });
 
+  describe('a chat run: budgets warn, they never stop it (#537)', () => {
+    /** A chat run under these budgets: its stored snapshot has no effective budget yet, so the first advance fixes it, soft. */
+    async function chatRun(label: string, budget: Partial<AgentPolicySpec['budget']>, columns: Record<string, unknown> = {}) {
+      const r = await budgetRun(`soft-${label}-${stamp}@example.test`, budget);
+      const chat = await r.db.conversation.create({ data: { userId: r.userId, title: 'Soft budget' } });
+      await r.db.run.updateMany({ where: { id: r.run.id }, data: { trigger: 'chat', conversationId: chat.id, ...columns } });
+      const overBudget = jest.fn(async () => undefined);
+      const notifier = { needsYou: async () => undefined, finished: async () => undefined, started: async () => undefined, overBudget };
+      const runner = (ai: AiService) => new GoalRunnerService(r.prisma, app.get(TasksService), fakeFabric().client, ai, notifier as never, undefined, app.get(SystemSettingsService));
+      return { ...r, chatId: chat.id, overBudget, runner };
+    }
+    const inputsOf = (runTools: jest.Mock) => runTools.mock.calls.map((c) => String((c[0] as { input: string }).input)).join('\n');
+
+    it('takes more actions than maxActions and ends succeeded by finishing; one notification, a neutral log line', async () => {
+      const { userId, db, run, overBudget, runner, chatId } = await chatRun('actions', { maxActions: 3, warnAtPercent: 50 });
+      const { ai, runTools } = scriptedAi([nav(5), [...nav(2), ['finish', { success: true, result: 'Paid and checked.' }]]]);
+      expect(await runner(ai).advance(run.id, userId, null)).toBe('succeeded');
+      const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+      expect(done).toMatchObject({ status: 'succeeded', stopReason: 'finished', result: 'Paid and checked.', error: null });
+      expect(done.stepCount).toBeGreaterThan(3);
+      // The model is never told to hurry, and no wrap-up call is made.
+      const sent = inputsOf(runTools);
+      expect(sent).not.toContain('Finish the goal now');
+      expect(sent).not.toContain('budget is used up');
+      for (const c of runTools.mock.calls) expect(names(c[0] as never)).not.toEqual(['finish']);
+      const memory = done.transcript as unknown as { log: string[]; overNoticed: string[]; pendingWarnings?: string[] };
+      expect(memory.log.filter((l) => l.startsWith('Budget note:'))).toEqual(["Budget note: actions is over this chat's usual limit (3 of 3). The owner is present; keep working."]);
+      expect(memory.log.some((l) => l.startsWith('Budget warning:'))).toBe(false);
+      expect(memory.overNoticed).toEqual(['actions']);
+      expect(memory.pendingWarnings ?? []).toEqual([]);
+      // Exactly one "over its usual limit" notification, leading to the chat.
+      expect(overBudget).toHaveBeenCalledTimes(1);
+      expect(overBudget).toHaveBeenCalledWith(userId, expect.objectContaining({ id: run.id, conversationId: chatId }), '3 of 3', 'actions');
+      // The snapshot records the soft enforcement once; the view says so.
+      expect((done.policySnapshot as { effectiveBudget: { enforcement: string } }).effectiveBudget.enforcement).toBe('soft');
+    });
+
+    it('the same policy on a manual run still ends on budget_actions', async () => {
+      const { userId, prisma, db, run } = await budgetRun(`soft-manual-${stamp}@example.test`, { maxActions: 3 });
+      const { ai } = scriptedAi([nav(5), [['finish', { success: false, result: WRAP }]]]);
+      expect(await runnerOf(prisma, ai, fakeFabric()).advance(run.id, userId, null)).toBe('failed');
+      expect(await db.run.findFirstOrThrow({ where: { id: run.id } })).toMatchObject({ status: 'failed', stopReason: 'budget_actions' });
+      expect(((await db.run.findFirstOrThrow({ where: { id: run.id } })).policySnapshot as { effectiveBudget: { enforcement: string } }).effectiveBudget.enforcement).toBe('hard');
+    });
+
+    it('continues past maxModelCalls, maxCostUsd and maxActiveMinutes; one notification for all of them', async () => {
+      const admin = await loginToken(`soft-admin-${stamp}@example.test`, 'admin');
+      await setPricing(admin.token);
+      const { userId, db, run, overBudget, runner } = await chatRun('many', { maxModelCalls: 2, maxCostUsd: 1.5, maxActiveMinutes: 1 });
+      const { ai, runTools } = scriptedAi([nav(4), [...nav(2), ['finish', { success: true, result: 'Done anyway' }]]], priced);
+      const r = runner(ai);
+      let now = Date.now();
+      r.clock = () => (now += 20_000);
+      expect(await r.advance(run.id, userId, null)).toBe('succeeded');
+      const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+      expect(done).toMatchObject({ status: 'succeeded', stopReason: 'finished', result: 'Done anyway' });
+      expect(done.modelCalls).toBeGreaterThan(2);
+      expect(Number(done.costUsd)).toBeGreaterThan(1.5);
+      expect(inputsOf(runTools)).not.toMatch(/Finish the goal now|budget is used up/);
+      const memory = done.transcript as unknown as { overNoticed: string[] };
+      expect(memory.overNoticed).toEqual(expect.arrayContaining(['modelCalls', 'activeMinutes', 'cost']));
+      expect(overBudget).toHaveBeenCalledTimes(1);
+    });
+
+    it('a chat run already over its limit when a job starts goes on working (no wrap-up), and is not notified again', async () => {
+      const { userId, db, run, overBudget, runner } = await chatRun('resume', { maxActions: 4 }, { stepCount: 9, transcript: { log: [], chunks: 1, overNoticed: ['actions'], warned: ['actions'] } });
+      const { ai, runTools } = scriptedAi([[...nav(1), ['finish', { success: true, result: 'Done' }]]]);
+      expect(await runner(ai).advance(run.id, userId, null)).toBe('succeeded');
+      expect(names(runTools.mock.calls[0]![0] as never)).not.toEqual(['finish']);
+      expect(await db.run.findFirstOrThrow({ where: { id: run.id } })).toMatchObject({ status: 'succeeded', stopReason: 'finished', stepCount: 11 });
+      expect(overBudget).not.toHaveBeenCalled();
+    });
+
+    it('the run view carries enforcement soft and the budgets it is over', async () => {
+      const { userId, db, run, runner, token } = await chatRun('view', { maxActions: 2 });
+      const { ai } = scriptedAi([[...nav(3), ['finish', { success: true, result: 'Done' }]]]);
+      expect(await runner(ai).advance(run.id, userId, null)).toBe('succeeded');
+      void db;
+      const res = await app.inject({ method: 'GET', url: `/api/runs/${run.id}`, headers: as(token) });
+      expect(res.statusCode).toBe(200);
+      expect(res.json<{ data: { budget: unknown } }>().data.budget).toMatchObject({ enforcement: 'soft', over: ['actions'], percent: { actions: 200 } });
+    });
+  });
+
   it('carries no secret material in the warning, the wrap-up or the log', async () => {
     const { userId, prisma, run } = await budgetRun(`budget-secret-${stamp}@example.test`, { maxActions: 2, warnAtPercent: 50 });
     const { ai, runTools } = scriptedAi([[['type_text', { selector: '#otp', text: SECRET, submit: false }], ...nav(2)], [['finish', { success: false, result: WRAP }]]]);

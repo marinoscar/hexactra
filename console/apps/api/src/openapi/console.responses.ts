@@ -85,6 +85,10 @@ export const runBudgetSchema = z
     percent: budgetNumbers.describe('Percent of each limit used, one decimal; `null` for an unlimited budget.'),
     source: z.record(z.enum(BUDGET_KEYS), z.enum(['policy', 'ceiling']).nullable()).describe('Where each limit came from: the `policy`, or the deployment `ceiling` that clamped it. `null` when unlimited.'),
     costKnown: z.boolean().describe('False when a call could not be priced: `used.cost` is then "at least".'),
+    enforcement: z
+      .enum(['hard', 'soft'])
+      .describe('`hard`: a used-up budget ends the run. `soft`: a chat run (trigger `chat`), whose owner is present: its limits are shown and warned about, never enforced (#537).'),
+    over: z.array(z.enum(BUDGET_KEYS)).describe('The budgets at or over their limit, in check order. A soft-budget run keeps working past them.'),
   })
   .describe('The run budget: `null` on a run that has not started or that was snapshotted before budgets were enforced.');
 
