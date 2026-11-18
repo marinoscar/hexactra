@@ -50,7 +50,7 @@ export interface McpContext {
   /** Raw bytes of a GET (screenshots). */
   bytes(path: string): Promise<{ mime: string; data: Buffer }>;
   /** Which credential admitted the request (absent in unit tests: treated as a personal access token). */
-  credential?: { kind: McpCredentialKind };
+  credential?: { kind: McpCredentialKind; /** The scopes an OAuth token was granted (E33.2); absent: every scope. */ scopes?: readonly string[] };
   /** The limits of this request (absent in unit tests: the defaults). */
   limits?: McpLimits;
   /** The console's own URL (`APP_URL`), for links in results; absent: `http://localhost:3535`. */

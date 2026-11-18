@@ -1,5 +1,6 @@
 // The question contract as the web app reads it (GET /api/questions/:id and
 // GET /api/inbox; apps/api/src/questions/questions.contract.ts).
+import { answerLabel } from '@app/shared/question-rules';
 
 export type QuestionInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover';
 
@@ -108,14 +109,12 @@ export function answerText(q: Pick<Question, 'status' | 'response' | 'input' | '
   const r = q.response;
   const via = r?.channel ? ` (from ${r.channel})` : '';
   if (!r || r.outcome === 'cancelled') return `Declined${via}.`;
-  const label = (id: string) => q.options?.find((o) => o.id === id)?.label ?? id;
   if (r.valueWithheld) return `Answered${via}. The secret went to the agent and is not shown.`;
-  if (r.values) return `Answered${via}: ${r.values.map(label).join(', ')}`;
+  const words = answerLabel(q, r);
+  if (r.values) return `Answered${via}: ${words}`;
   if (r.value !== undefined) {
-    if (q.input === 'choice') return `Answered${via}: ${label(r.value)}`;
-    if (q.input === 'confirm') return r.value === 'approve' ? `Approved${via}: ${q.confirmLabel ?? 'Approve'}` : `Denied${via}: ${q.denyLabel ?? 'Deny'}`;
-    if (q.input === 'number' && q.constraints?.unit) return `Answered${via}: ${r.value} ${q.constraints.unit}`;
-    return `Answered${via}: ${r.value}`;
+    if (q.input === 'confirm') return r.value === 'approve' ? `Approved${via}: ${words}` : `Denied${via}: ${words}`;
+    return `Answered${via}: ${words}`;
   }
   return `Done${via}.`;
 }

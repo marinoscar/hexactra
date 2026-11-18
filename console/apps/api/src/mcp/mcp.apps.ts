@@ -35,6 +35,12 @@ export const OPENAI_OUTPUT_TEMPLATE_KEY = 'openai/outputTemplate';
 /** The live run card (apps/mcp-ui, `dist/run-card.html`). */
 export const RUN_CARD_URI = 'ui://hexactra/run-card';
 
+/** The question card (#467, `dist/question-card.html`): the typed form of a waiting question. */
+export const QUESTION_CARD_URI = 'ui://hexactra/question-card';
+
+/** The tasks card (#467, `dist/tasks-card.html`): the saved tasks with their next run, Run and Pause. */
+export const TASKS_CARD_URI = 'ui://hexactra/tasks-card';
+
 /** Who may call a tool (`McpUiToolMeta.visibility`): the model, the app (widget), or both (the default). */
 export type McpToolVisibility = 'model' | 'app';
 
@@ -60,6 +66,24 @@ export const MCP_UI_RESOURCES: readonly McpUiResource[] = [
     description: "A live card for one Hexactra run: the browser's screenshot, what the agent is doing, its budget, Stop and a link to the console.",
     file: 'run-card.html',
     // The widget talks only to the host: no fetch, no external script, style, font or image.
+    csp: { connectDomains: [], resourceDomains: [] },
+    prefersBorder: true,
+  },
+  {
+    uri: QUESTION_CARD_URI,
+    name: 'question_card',
+    title: 'Hexactra question',
+    description: 'What your Hexactra agents are waiting for, each as the typed form the console inbox shows: answer a choice, a number, some text or a low-risk confirmation in one tap. Codes, passwords and high-risk approvals open Hexactra instead.',
+    file: 'question-card.html',
+    csp: { connectDomains: [], resourceDomains: [] },
+    prefersBorder: true,
+  },
+  {
+    uri: TASKS_CARD_URI,
+    name: 'tasks_card',
+    title: 'Hexactra tasks',
+    description: 'Your saved Hexactra tasks with their schedule, next run and last result, with Run, Pause and Resume, and a link to each task in the console.',
+    file: 'tasks-card.html',
     csp: { connectDomains: [], resourceDomains: [] },
     prefersBorder: true,
   },
