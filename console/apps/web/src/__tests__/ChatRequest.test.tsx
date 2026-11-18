@@ -166,6 +166,27 @@ describe('a code or a password', () => {
     expect(host.requests.filter((r) => JSON.stringify(r.body ?? '').includes(SECRET))).toHaveLength(1);
   });
 
+  it('asks for a sign-in username as its own card, with a field a password manager can fill (#524)', async () => {
+    const host = mount();
+    const card = await ask(question({ kind: 'login', input: 'text', prompt: 'Your Example Bank username', confirmLabel: null, denyLabel: null, risk: null, pageTitle: 'Sign in · bank.example.test' }));
+    expect(card).toHaveTextContent('Sign-in needed');
+    const field = within(card).getByLabelText('Username or email');
+    expect(field).toHaveAttribute('autocomplete', 'username');
+    expect(field).toHaveAttribute('autocapitalize', 'none');
+    fireEvent.change(field, { target: { value: 'oscar' } });
+    fireEvent.click(within(card).getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sent(host, `/questions/${Q_ID}/answer`)[0]?.body).toEqual({ outcome: 'completed', value: 'oscar', channel: 'web' }));
+  });
+
+  it('asks for the password as a masked field that the browser does not offer to save', async () => {
+    mount();
+    const card = await ask(question({ kind: 'login', input: 'secret', prompt: 'Your Example Bank password', confirmLabel: null, denyLabel: null, risk: null }));
+    expect(card).toHaveTextContent('Password needed');
+    const field = within(card).getByLabelText(/Password/);
+    expect(field).toHaveAttribute('type', 'password');
+    expect(field).toHaveAttribute('autocomplete', 'new-password');
+  });
+
   it('offers to do the step in the browser instead', async () => {
     mount();
     const card = await ask(code());
@@ -262,6 +283,7 @@ describe('the words of a request', () => {
     expect(requestTitle({ input: 'secret', kind: 'login' })).toBe('Password needed');
     expect(requestTitle({ input: 'takeover', kind: 'captcha' })).toBe('Your help is needed in the browser');
     expect(requestTitle({ input: 'text', kind: 'other' })).toBe('A question for you');
+    expect(requestTitle({ input: 'text', kind: 'login' })).toBe('Sign-in needed');
   });
 
   it('says how it was answered, and never repeats a secret', () => {

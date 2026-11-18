@@ -275,10 +275,12 @@ export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disab
     case 'text': {
       ready = value.trim() !== '' && !error;
       const counter = c?.maxLength ? `${value.length} / ${c.maxLength}` : null;
+      // A sign-in's username (#524): the phone's password manager may offer it, and nothing "corrects" it.
+      const login = q.kind === 'login';
       field = (
         <TextField
           fullWidth
-          label="Your answer"
+          label={login ? 'Username or email' : 'Your answer'}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           disabled={disabled}
@@ -298,7 +300,7 @@ export function QuestionAnswerForm({ question: q, onSubmit, onOpenBrowser, disab
               </Box>
             ) : undefined
           }
-          slotProps={{ inputLabel: { shrink: true }, htmlInput: { maxLength: c?.maxLength, autoComplete: 'off' } }}
+          slotProps={{ inputLabel: { shrink: true }, htmlInput: { maxLength: c?.maxLength, ...(login ? { autoComplete: 'username', autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false } : { autoComplete: 'off' }) } }}
         />
       );
       break;
