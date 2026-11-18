@@ -1,13 +1,12 @@
-import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutlined';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
-import { Box, Chip, Divider, Link, Paper, Stack, Typography } from '@mui/material';
+import { Box, Chip, Divider, Paper, Stack, Typography } from '@mui/material';
 import { keyframes } from '@mui/material/styles';
-import { Link as RouterLink } from 'react-router-dom';
 
-import type { ChatMessage } from '../types/chat';
+import type { ChatMessage, ChatRun } from '../types/chat';
 import { formatTime, useProfileTimeZone } from '../ui';
+import { BrowserCard, ResultCard } from './ChatBrowser';
 import { clarifyOptions, type ThreadRow } from './chatThread';
+import type { RunFrame } from './useRunFrame';
 
 const BUBBLE_MAX = { xs: '88%', sm: '76%' } as const;
 
@@ -32,30 +31,35 @@ function Stamp({ iso, align }: { iso: string; align: 'left' | 'right' }) {
   );
 }
 
-/** A run or its result, until the Browser card (#487) and the result card take over: what it is, and a link to the run. */
-function RunRow({ message }: { message: ChatMessage }) {
-  const isResult = message.kind === 'result';
-  const status = isResult ? String((message.meta as { status?: unknown } | null)?.status ?? '') : '';
-  const title = isResult ? (status === 'succeeded' ? 'Done' : status === 'cancelled' ? 'Stopped' : status === 'failed' ? 'Could not finish' : 'Finished') : 'Started a browser run';
-  const Icon = isResult ? TaskAltIcon : PlayCircleOutlineIcon;
+/** A task the AI drafted, until its own card (#489): what it is. */
+function DraftRow({ message }: { message: ChatMessage }) {
   return (
     <Paper variant="outlined" sx={{ p: 1.5, maxWidth: BUBBLE_MAX, borderRadius: 3, bgcolor: 'background.paper' }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-        <Icon fontSize="small" color={isResult && status === 'failed' ? 'error' : 'primary'} aria-hidden />
+        <TaskAltIcon fontSize="small" color="primary" aria-hidden />
         <Typography variant="subtitle2" component="p">
-          {title}
+          Drafted a task
         </Typography>
       </Stack>
       <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
         {message.text}
       </Typography>
-      {message.runId && (
-        <Link component={RouterLink} to={`/runs/${message.runId}`} variant="body2" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mt: 1, minHeight: { xs: 44, sm: 'auto' } }}>
-          Open run <OpenInNewIcon sx={{ fontSize: 16 }} aria-hidden />
-        </Link>
-      )}
     </Paper>
   );
+}
+
+/** What the run and result cards of a thread need from the page (#487). */
+export interface ThreadCards {
+  /** The chat's newest run; the card of that run is live, every other run's card is settled. */
+  run: ChatRun | null;
+  frame: RunFrame;
+  frameHidden: boolean;
+  now: number;
+  paneOpen: boolean;
+  onOpenBrowser: () => void;
+  onCardVisible: (visible: boolean) => void;
+  /** Start the job of a finished run again; undefined when that is not possible now. */
+  onRunAgain?: (result: ChatMessage) => void;
 }
 
 export interface MessageRowProps {
@@ -63,10 +67,11 @@ export interface MessageRowProps {
   /** The suggested answers of a clarifying question can be tapped (the newest message of a chat the viewer may write to). */
   answerable: boolean;
   onAnswer: (text: string) => void;
+  cards: ThreadCards;
 }
 
 /** One message of the thread: the owner's on the right, the assistant's on the left, a system line in the middle. */
-export function MessageRow({ message, answerable, onAnswer }: MessageRowProps) {
+export function MessageRow({ message, answerable, onAnswer, cards }: MessageRowProps) {
   if (message.role === 'system') {
     return (
       <Typography role="status" variant="body2" color="text.secondary" sx={{ textAlign: 'center', my: 1, px: 2, overflowWrap: 'anywhere' }}>
@@ -78,8 +83,21 @@ export function MessageRow({ message, answerable, onAnswer }: MessageRowProps) {
   const options = clarifyOptions(message);
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: mine ? 'flex-end' : 'flex-start', my: 0.75 }} data-seq={message.seq}>
-      {message.kind === 'run' || message.kind === 'result' || message.kind === 'task_draft' ? (
-        <RunRow message={message} />
+      {message.kind === 'run' ? (
+        <BrowserCard
+          message={message}
+          run={cards.run && cards.run.id === message.runId ? cards.run : null}
+          frame={cards.frame}
+          frameHidden={cards.frameHidden}
+          now={cards.now}
+          paneOpen={cards.paneOpen}
+          onOpen={cards.onOpenBrowser}
+          onVisible={cards.onCardVisible}
+        />
+      ) : message.kind === 'result' ? (
+        <ResultCard message={message} onRunAgain={cards.onRunAgain ? () => cards.onRunAgain?.(message) : undefined} />
+      ) : message.kind === 'task_draft' ? (
+        <DraftRow message={message} />
       ) : (
         <Box
           sx={{
@@ -145,11 +163,11 @@ export function TypingIndicator() {
 }
 
 /** The rows of a thread: day separators and messages. */
-export function ThreadRows({ rows, answerableSeq, onAnswer }: { rows: readonly ThreadRow[]; answerableSeq: number | null; onAnswer: (text: string) => void }) {
+export function ThreadRows({ rows, answerableSeq, onAnswer, cards }: { rows: readonly ThreadRow[]; answerableSeq: number | null; onAnswer: (text: string) => void; cards: ThreadCards }) {
   return (
     <>
       {rows.map((row) =>
-        row.type === 'day' ? <DayRow key={row.key} label={row.label} /> : <MessageRow key={row.key} message={row.message} answerable={row.message.seq === answerableSeq} onAnswer={onAnswer} />,
+        row.type === 'day' ? <DayRow key={row.key} label={row.label} /> : <MessageRow key={row.key} message={row.message} answerable={row.message.seq === answerableSeq} onAnswer={onAnswer} cards={cards} />,
       )}
     </>
   );

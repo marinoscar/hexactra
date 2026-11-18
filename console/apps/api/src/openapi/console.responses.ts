@@ -237,6 +237,7 @@ export const inboxItemResponseSchema = z.object({
   questionId: z.uuid(),
   /** Null for a free-standing question (answer it with POST /api/questions/{id}/answer). */
   runId: z.uuid().nullable(),
+  conversationId: z.uuid().nullable().describe('The chat whose run asks (#488): the request is answered in that chat. Null for every other request.'),
   goal: z.string(),
   handoffId: z.uuid().nullable(),
   askedBy: z.string(),

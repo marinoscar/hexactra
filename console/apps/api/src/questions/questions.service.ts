@@ -279,11 +279,11 @@ export class QuestionsService {
   }
 
   /** The pending questions with their run's goal (the inbox). */
-  async pendingWithRuns(userId: string, limit = 100): Promise<(Question & { run: { goal: string } | null })[]> {
+  async pendingWithRuns(userId: string, limit = 100): Promise<(Question & { run: { goal: string; conversationId: string | null } | null })[]> {
     await this.expireDue({ ownerUserId: userId });
     return this.db(userId).question.findMany({
       where: { status: 'pending' },
-      include: { run: { select: { goal: true } } },
+      include: { run: { select: { goal: true, conversationId: true } } },
       orderBy: { createdAt: 'desc' },
       take: limit,
     });

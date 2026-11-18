@@ -112,6 +112,17 @@ describe('InboxPage', () => {
     );
   });
 
+  it("links a chat's request to its chat, where it is answered in the thread; other requests have no such link (#488)", async () => {
+    const CHAT = '88888888-8888-4888-8888-888888888888';
+    const host = createTestPlatformHost({ permissions: ['runs:read', 'runs:write'], responses: { 'GET /inbox': [{ ...confirm, conversationId: CHAT }, { ...freeStanding, conversationId: null }] } });
+    renderInbox(host);
+    const inChat = await screen.findByLabelText(`Request: ${confirm.prompt}`);
+    expect(within(inChat).getByRole('link', { name: 'Answer in chat' })).toHaveAttribute('href', `/chat/${CHAT}`);
+    // It can still be answered here: the form stays.
+    expect(within(inChat).getByRole('button', { name: /Approve|Allow|Done/ })).toBeInTheDocument();
+    expect(within(screen.getByLabelText('Request: Which sides?')).queryByRole('link', { name: 'Answer in chat' })).not.toBeInTheDocument();
+  });
+
   it('answers a free-standing question (no run); declining a browser-bound one asks first and goes through cancel', async () => {
     const host = createTestPlatformHost({
       permissions: ['runs:read', 'runs:write'],

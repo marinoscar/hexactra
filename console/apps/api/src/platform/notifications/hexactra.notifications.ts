@@ -17,18 +17,29 @@ export const RUN_RETENTION_NOTICE_EVENT = 'runs.retention_notice';
 const str = (d: unknown, k: string) => (typeof (d as Record<string, unknown>)[k] === 'string' ? String((d as Record<string, unknown>)[k]) : '');
 const trim = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
 
-/** The Inbox link of a request, with the buttons' token (shared by the request and its reminders). */
-const inboxLink = (d: unknown) =>
-  str(d, 'runId') ? `/inbox?run=${encodeURIComponent(str(d, 'runId'))}${str(d, 'actionToken') ? `&a=${encodeURIComponent(str(d, 'actionToken'))}` : ''}` : '/inbox';
+/**
+ * The link of a request, with the buttons' token (shared by the request and
+ * its reminders): the Inbox, or the chat for a run a chat started (#488), where
+ * the request is answered in the thread. Both carry `run` and `a`, which the
+ * service worker's buttons read (apps/web/src/notificationActions.ts).
+ */
+export const requestLink = (d: unknown): string => {
+  const runId = str(d, 'runId');
+  const chat = str(d, 'conversationId');
+  const page = chat ? `/chat/${encodeURIComponent(chat)}` : '/inbox';
+  return runId ? `${page}?run=${encodeURIComponent(runId)}${str(d, 'actionToken') ? `&a=${encodeURIComponent(str(d, 'actionToken'))}` : ''}` : page;
+};
+/** Where a finished run is read: its chat (the result is in the thread), else the run's page. */
+export const finishedLink = (d: unknown): string => (str(d, 'conversationId') ? `/chat/${encodeURIComponent(str(d, 'conversationId'))}` : `/runs/${str(d, 'runId')}`);
 
 const needsYou: BrowserNotificationTemplate = (d) => ({
   title: 'An agent needs you',
-  body: trim(str(d, 'prompt') || 'Answer its request in the Inbox.', 180),
+  body: trim(str(d, 'prompt') || (str(d, 'conversationId') ? 'Answer its request in the chat.' : 'Answer its request in the Inbox.'), 180),
   // A deep link to this run's request: the web app, the installed PWA and the
-  // Android app all open the Inbox with it in front.
+  // Android app all open the Inbox with it in front (the chat, for a chat's run).
   // `a`: the notification buttons' single-use token (RunActionTokens), read by
   // the service worker (apps/web/src/sw.ts); the Inbox ignores it.
-  link: inboxLink(d),
+  link: requestLink(d),
 });
 const reminder: BrowserNotificationTemplate = (d) => {
   const left = Number((d as { minutesLeft?: unknown }).minutesLeft);
@@ -36,7 +47,7 @@ const reminder: BrowserNotificationTemplate = (d) => {
   return {
     title: final ? `Expires in ${Math.max(1, Math.round(left))} min: an agent needs you` : 'Still waiting for you',
     body: trim(str(d, 'prompt') || str(d, 'goal') || 'An agent is waiting for your answer in the Inbox.', 180),
-    link: inboxLink(d),
+    link: requestLink(d),
   };
 };
 const asked: BrowserNotificationTemplate = (d) => {
@@ -53,7 +64,7 @@ const asked: BrowserNotificationTemplate = (d) => {
 const finished: BrowserNotificationTemplate = (d) => ({
   title: str(d, 'status') === 'succeeded' ? 'Run finished' : `Run ${str(d, 'status') || 'ended'}`,
   body: trim(`${str(d, 'goal')}${str(d, 'result') ? ` — ${str(d, 'result')}` : ''}`, 180),
-  link: `/runs/${str(d, 'runId')}`,
+  link: finishedLink(d),
 });
 /** Where a failing-schedule notice leads: the task's schedules (`/tasks/:id#schedule`); the Tasks list for a notice without a task id. */
 export function failingScheduleLink(taskId: string | null | undefined): string {

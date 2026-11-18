@@ -17,6 +17,8 @@ export interface CardQuestion extends AskedQuestion {
   runId: string | null;
   /** The run's goal, where the caller knows it (the Inbox does). */
   goal?: string;
+  /** The chat whose run asks (#488): the request can be answered in its thread. */
+  conversationId?: string | null;
   /** Asked through a browser handoff: declining it leaves its run without an answer. */
   browserBound: boolean;
   pageTitle: string | null;
@@ -177,6 +179,14 @@ export function QuestionCard({ question: q, now, canAnswer, onAnswer, onOpenBrow
                 {' · '}
                 <Link component={RouterLink} to={`/inbox/q/${q.id}`}>
                   Details
+                </Link>
+              </>
+            )}
+            {q.conversationId && (
+              <>
+                {' · '}
+                <Link component={RouterLink} to={`/chat/${q.conversationId}`}>
+                  Answer in chat
                 </Link>
               </>
             )}
