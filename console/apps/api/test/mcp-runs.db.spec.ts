@@ -16,6 +16,8 @@ import { QuestionsService } from '../src/questions/questions.service';
 import type { QuestionSpec } from '../src/questions/questions.contract';
 import { TasksService } from '../src/tasks/tasks.service';
 import { MCP_SCOPE_IDS } from '../src/mcp/mcp.scopes';
+import { McpSettingsReader } from '../src/mcp/mcp-settings.reader';
+import { resolveMcpSettings } from '../src/mcp/mcp.settings';
 
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
@@ -185,6 +187,8 @@ describe('run_wait', () => {
     const runId = await newRun(who.t);
     const getRun = jest.spyOn(tasks(), 'getRun');
     const listQuestions = jest.spyOn(questions(), 'list');
+    // 200 calls at once from one credential are over the default rate limit (120 a minute, #465): lift it for this test.
+    const limits = jest.spyOn(app.get(McpSettingsReader), 'read').mockResolvedValue({ ...resolveMcpSettings(null), rateLimitPerCredential: 1000, rateLimitPerUser: 1000 });
     try {
       const waiters = Array.from({ length: 200 }, () => call(who.t, 'run_wait', { run_id: runId, wait_s: 30 }));
       // Each waiter reads the run once, then waits on the bus.
@@ -201,6 +205,7 @@ describe('run_wait', () => {
     } finally {
       getRun.mockRestore();
       listQuestions.mockRestore();
+      limits.mockRestore();
     }
   });
 

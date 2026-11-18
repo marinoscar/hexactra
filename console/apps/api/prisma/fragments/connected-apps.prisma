@@ -25,6 +25,8 @@ model ConnectedAppSettings {
   dailyCostLimitUsd Decimal? @map("daily_cost_limit_usd") @db.Decimal(10, 2)
   /// Ask before risky steps (purchases, submissions) on this app's runs even when the task does not.
   confirmPurchases  Boolean  @default(true) @map("confirm_purchases")
+  /// Ask the user (a high-risk confirm in the console) before this app's sensitive browser actions (#465): secrets, payment and password forms, sensitive hosts, the desktop, network-reaching JavaScript.
+  confirmSensitiveActions Boolean @default(true) @map("confirm_sensitive_actions")
   /// Refuse new runs and sessions from this app without disconnecting it.
   paused            Boolean  @default(false)
   /// The scopes the owner was already told about (`app.connected`, `app.scope_added`), so a step-up announces only what it adds.

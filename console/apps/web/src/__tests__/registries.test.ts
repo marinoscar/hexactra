@@ -114,8 +114,8 @@ describe('browser agent cards', () => {
       ['Model prices', '/admin/settings/agent-pricing', 'system_settings:read', undefined],
       // #422, appended.
       ['Run history limit', '/admin/settings/run-history', 'system_settings:read', undefined],
-      // #464, appended.
-      ['AI app limits', '/admin/settings/ai-app-limits', 'system_settings:read', undefined],
+      // #464, appended; #465 made it "External AI apps" (same route, same permission).
+      ['External AI apps', '/admin/settings/ai-app-limits', 'system_settings:read', undefined],
     ]);
   });
 

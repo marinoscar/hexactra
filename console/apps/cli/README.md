@@ -331,11 +331,15 @@ hexactra mcp serve
 
 Agent frameworks can also use Streamable HTTP at `POST /api/mcp`. Setup and recipes: [docs/mcp.md](../../docs/mcp.md), [docs/agent-frameworks.md](../../docs/agent-frameworks.md).
 
+AI apps connected with OAuth: `hexactra apps list|show|pause|resume|disconnect|limits|check`, and `hexactra apps activity [app]` for what they did (every tool call and refusal, never what was typed or read). `hexactra apps limits <app> --no-confirm-sensitive` stops asking before its sensitive browser actions.
+
 ### Administration
 
 | Command | What it does | Who |
 |---|---|---|
 | `hexactra fabric show\|test\|set <url> --token-stdin\|clear` | The console's connection to the hexactra Fabric | Administrators |
+| `hexactra mcp status` | External AI apps: the two switches, whether `APP_URL` is a public HTTPS address, how many apps are connected | Administrators (`system_settings:read`) |
+| `hexactra mcp disable\|enable [--pat\|--all]` | The kill switch: refuse every AI app signed in with OAuth on `/api/mcp` (`503`) within a few seconds; `--pat` for personal access tokens over MCP, `--all` for both ([public-exposure runbook](../../docs/runbooks/public-exposure.md)) | Administrators (`system_settings:write`) |
 | `hexactra api <METHOD> <path>` | Call any REST endpoint, e.g. `hexactra api GET /api/auth/me`; `--data @file.json`, `--raw` for piping to `jq` | Anyone, with the route's permission |
 | `hexactra node ...` | Run this machine as a worker node for the console's job queue | Operators |
 | `hexactra deploy ...` | Check, install and update the console on a server | Operators |

@@ -99,6 +99,9 @@ export const APP_CLI_OPTIONS: CreateCliOptions = {
   // Connect the console to the bundled fabric at the end of install and update (#309).
   // Forward the remote desktop WebSockets at the shared host proxy (#359).
   deploySteps: [...EDGE_WEBSOCKETS_STEPS, ...FABRIC_CONNECT_STEPS],
+  // The MCP endpoint's tools may wait up to 200 s (run_wait, ask_human): the shared host proxy of a VPS
+  // otherwise cuts a request at 60 s. The app's own nginx gives it 300 s too (infra/nginx/app.d/locations/mcp.conf, #465).
+  proxy: { streamPaths: [{ path: '/api/mcp', timeoutSeconds: 300 }] },
   envGenerators: [BUNDLED_HOST_GENERATOR],
   envSpecFragments: [FABRIC_ENV_FRAGMENT],
 };

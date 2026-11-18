@@ -1,7 +1,7 @@
 // Connected AI apps (#464): the "AI apps" list, an app's page (limits,
 // pause, disconnect), the "Connect an AI app" guide and its preflight, and
 // "Started by" on the runs list.
-import { configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { PlatformHostProvider } from '@marinoscar/platform-web/core';
 import { createTestPlatformHost, type TestApiRequest } from '@marinoscar/platform-web/testing';
@@ -17,7 +17,7 @@ import { RecentRunsBlock } from '../components/home/blocks';
 import { NO_FILTERS, apiFilter, filtersFromParams, filtersToParams, matchesFilters } from '../components/runFilters';
 import { StartedByChip, appDisplayName, startedBy } from '../components/StartedByChip';
 import { CONNECT_GUIDES, stepsFor } from '../content/connect-ai-apps';
-import { AiAppCeilingsPage } from '../pages/AiAppCeilingsPage';
+import { ExternalAiAppsPage } from '../pages/AiAppCeilingsPage';
 import { AiAppDetailPage } from '../pages/AiAppDetailPage';
 import { AiAppsPage } from '../pages/AiAppsPage';
 import { ConnectAiAppPage } from '../pages/ConnectAiAppPage';
@@ -30,7 +30,7 @@ vi.setConfig({ testTimeout: 20_000 });
 configure({ asyncUtilTimeout: 5_000 });
 
 const CLIENT = 'aaaaaaaa-1111-4111-8111-111111111111';
-const LIMITS: AppLimits = { policyId: null, allowedPolicyIds: [], allowedDomains: [], maxConcurrentRuns: 2, dailyRunLimit: 50, dailyCostLimitUsd: null, confirmPurchases: true, paused: false };
+const LIMITS: AppLimits = { policyId: null, allowedPolicyIds: [], allowedDomains: [], maxConcurrentRuns: 2, dailyRunLimit: 50, dailyCostLimitUsd: null, confirmPurchases: true, confirmSensitiveActions: true, paused: false };
 const APP: ConnectedApp = {
   clientId: CLIENT,
   grantId: 'bbbbbbbb-2222-4222-8222-222222222222',
@@ -151,9 +151,34 @@ describe('an AI app\'s page', () => {
     [`GET /connected-apps/${CLIENT}`]: APP,
     [`PATCH /connected-apps/${CLIENT}/settings`]: (r: TestApiRequest) => ({ ...LIMITS, ...(r.body as object) }),
     [`DELETE /oauth/grants/${APP.grantId}`]: null,
+    'GET /connected-apps/activity': { items: [], nextCursor: null },
     ...POLICIES,
     ...RUNS,
     ...over,
+  });
+
+  it('Activity (#465): the app\'s own audit trail, scoped by clientId, with Load more', async () => {
+    restore = mockViewport(1440);
+    const row = (id: string, tool: string, outcome = 'ok') => ({ id, createdAt: '2026-11-18T09:00:00.000Z', userId: 'u', event: 'tool_call', credentialKind: 'oauth', clientId: CLIENT, clientName: 'chatgpt.com', tool, effect: 'write', runId: null, taskId: null, sessionId: null, questionId: null, outcome, errorCode: outcome === 'error' ? 'APP_RUN_LIMIT' : null, durationMs: 10, requestId: null, detail: tool === 'run_goal' ? { goal: 'Book a table' } : null });
+    let page = 0;
+    const host = renderAt(`/settings/ai-apps/${CLIENT}`, responses({ 'GET /connected-apps/activity': () => (page++ === 0 ? { items: [row('r1', 'run_goal')], nextCursor: 'r1' } : { items: [row('r2', 'run_status', 'error')], nextCursor: null }) }));
+    expect(await screen.findByRole('heading', { name: 'Activity' })).toBeInTheDocument();
+    expect(await screen.findByText('run_goal: Book a table')).toBeInTheDocument();
+    expect(host.requests.find((r) => r.path.startsWith('/connected-apps/activity'))!.path).toContain(`clientId=${CLIENT}`);
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    expect(await screen.findByText('run_status')).toBeInTheDocument();
+    expect(screen.getByText('Failed · APP_RUN_LIMIT')).toBeInTheDocument();
+    expect(host.requests.filter((r) => r.path.startsWith('/connected-apps/activity')).at(-1)!.path).toContain('cursor=r1');
+  });
+
+  it('confirm sensitive actions (#465): on by default, saved as confirmSensitiveActions', async () => {
+    restore = mockViewport(1440);
+    const host = renderAt(`/settings/ai-apps/${CLIENT}`, responses());
+    const toggle = await screen.findByRole('switch', { name: 'Ask me before its sensitive browser actions' });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('button', { name: 'Save limits' }));
+    await waitFor(() => expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ body: { confirmSensitiveActions: false } }));
   });
 
   it('shows the consent text of each scope, the limits, and the app\'s runs (scoped by clientId)', async () => {
@@ -366,27 +391,101 @@ describe('limits draft', () => {
   });
 });
 
-describe('AI app limits (admin)', () => {
-  it('reads the mcp ceilings and saves both with If-Match', async () => {
+describe('External AI apps (admin, #465)', () => {
+  const DOC = { version: 7, mcp: { elicitation: true, advertiseStepUpTools: true, maxConcurrentRunsPerApp: 3, externalAppsEnabled: true, patMcpEnabled: true, rateLimitPerCredential: 120, sensitiveHosts: ['bank.example.test'] } };
+  const ADMIN_APP = {
+    grantId: 'cccccccc-3333-4333-8333-333333333333',
+    clientId: CLIENT,
+    name: 'chatgpt.com',
+    displayName: 'ChatGPT',
+    user: { id: 'dddddddd-4444-4444-8444-444444444444', email: 'person.a@example.test', displayName: 'Person A' },
+    scopes: APP.scopes,
+    connectedAt: '2026-11-01T10:00:00.000Z',
+    lastUsedAt: null,
+    runs30d: 4,
+  };
+  const ACTIVITY = {
+    items: [
+      { id: 'a1', createdAt: '2026-11-18T09:00:00.000Z', userId: ADMIN_APP.user.id, event: 'tool_call', credentialKind: 'oauth', clientId: CLIENT, clientName: 'chatgpt.com', tool: 'browser_navigate', effect: 'write', runId: null, taskId: null, sessionId: 'eeeeeeee-5555-4555-8555-555555555555', questionId: null, outcome: 'confirmation_required', errorCode: 'CONFIRMATION_REQUIRED', durationMs: 40, requestId: null, detail: { host: 'bank.example.test' } },
+    ],
+    nextCursor: null,
+  };
+  const renderPage = (permissions: string[], extra: Record<string, unknown> = {}) => {
     const host = createTestPlatformHost({
-      permissions: ['system_settings:read', 'system_settings:write'],
-      responses: { 'GET /system-settings': { version: 7, mcp: { elicitation: true, maxConcurrentRunsPerApp: 3 } }, 'PATCH /system-settings': { version: 8 } },
+      permissions,
+      responses: { 'GET /system-settings': DOC, 'PATCH /system-settings': { version: 8 }, 'GET /admin/connected-apps': [ADMIN_APP], 'GET /admin/mcp/activity': ACTIVITY, ...extra },
     });
     render(
       <PlatformHostProvider host={host}>
-        <MemoryRouter>
-          <AiAppCeilingsPage />
-        </MemoryRouter>
+        <ConfirmProvider>
+          <MemoryRouter>
+            <ExternalAiAppsPage />
+          </MemoryRouter>
+        </ConfirmProvider>
       </PlatformHostProvider>,
     );
+    return host;
+  };
+
+  it('reads the mcp namespace and saves the switches, limits and sensitive sites with If-Match', async () => {
+    const host = renderPage(['system_settings:read', 'system_settings:write']);
     const conc = await screen.findByRole('spinbutton', { name: 'Runs at once per app' });
     expect(conc).toHaveValue(3);
     expect(screen.getByRole('spinbutton', { name: 'Runs per day per app' })).toHaveValue(200);
+    expect(screen.getByRole('spinbutton', { name: 'Actions per minute per app' })).toHaveValue(30);
     fireEvent.change(conc, { target: { value: '25' } });
     expect(screen.getByText('From 1 to 20')).toBeInTheDocument();
     fireEvent.change(conc, { target: { value: '4' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save limits' }));
-    await screen.findByText(/Saved\./);
-    expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ body: { mcp: { maxConcurrentRunsPerApp: 4, maxDailyRunsPerApp: 200 } } });
+    fireEvent.click(screen.getByRole('switch', { name: /AI apps signed in with OAuth/ }));
+    expect(screen.getByText('AI apps signed in with OAuth are refused.')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Sensitive sites' }), { target: { value: 'bank.example.test\nhttps://pay.example.test/x' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await screen.findByText(/takes effect within a few seconds\./);
+    const patch = host.requests.find((r) => r.method === 'PATCH');
+    expect(patch).toMatchObject({ body: { mcp: { maxConcurrentRunsPerApp: 4, maxDailyRunsPerApp: 200, externalAppsEnabled: false, patMcpEnabled: true, rateLimitPerCredential: 120, sensitiveHosts: ['bank.example.test', 'pay.example.test'] } } });
+    // Without oauth_clients:read and mcp_activity:read, the lists are not shown (nor fetched).
+    expect(screen.queryByRole('heading', { name: 'Connected apps' })).not.toBeInTheDocument();
+    expect(host.requests.some((r) => r.path?.startsWith('/admin/mcp/activity'))).toBe(false);
+    expect(screen.getByRole('link', { name: /OAuth clients/ })).toHaveAttribute('href', '/admin/settings/oauth-clients');
+  });
+
+  it('read-only without system_settings:write: no Save, controls disabled', async () => {
+    renderPage(['system_settings:read']);
+    expect(await screen.findByRole('spinbutton', { name: 'Runs at once per app' })).toBeDisabled();
+    expect(screen.getByRole('switch', { name: /AI apps signed in with OAuth/ })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+  });
+
+  it('every user\'s connected apps with Disconnect (oauth_clients:write), and their activity (mcp_activity:read)', async () => {
+    const host = renderPage(['system_settings:read', 'oauth_clients:read', 'oauth_clients:write', 'mcp_activity:read'], { [`DELETE /admin/connected-apps/grants/${ADMIN_APP.grantId}`]: null });
+    expect((await screen.findAllByText('person.a@example.test')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/browser_navigate bank\.example\.test/)).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Needs your approval').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Disconnect' })[0]!);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Disconnect ChatGPT from person.a@example.test?');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Disconnect' }));
+    await waitFor(() => expect(host.requests.some((r) => r.method === 'DELETE' && r.path === `/admin/connected-apps/grants/${ADMIN_APP.grantId}`)).toBe(true));
+  });
+
+  it('renders at 390 px (cards) and at 1440 px (tables)', async () => {
+    for (const width of [390, 1440]) {
+      const undo = mockViewport(width);
+      try {
+        renderPage(['system_settings:read', 'oauth_clients:read', 'mcp_activity:read']);
+        expect((await screen.findAllByText('person.a@example.test')).length).toBeGreaterThan(0);
+        expect(screen.queryAllByRole('table').length > 0).toBe(width === 1440);
+        cleanup();
+      } finally {
+        undo();
+      }
+    }
+  });
+
+  it('Disconnect is not offered with oauth_clients:read alone', async () => {
+    renderPage(['system_settings:read', 'oauth_clients:read']);
+    expect((await screen.findAllByText('person.a@example.test')).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Disconnect' })).not.toBeInTheDocument();
   });
 });
+

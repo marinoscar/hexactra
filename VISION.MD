@@ -1626,7 +1626,7 @@ Not included: video streaming, one browser session kept open across a chat's run
 - **Opt-in limits per task.** Allowed sites, and confirmation before purchases and irreversible steps. Both are off by default.
 - **Budgets are opt-in per policy and never reduce the agent's powers.** A policy bounds how long and how much a run spends, not what the agent may do; the owner may pick Unlimited, and an administrator's ceilings are the only hidden cap. Stop, takeover and stall detection still apply to an unlimited run.
 - **Owner-only checks go to the owner.** A code sent to the owner's phone, a passkey touch, or a CAPTCHA puzzle the agent cannot pass becomes a handoff. The agent ticks an "I am not a robot" box itself, as a person would.
-- **Page content never grants authority.** With full powers, a prompt injection in a page could act with the owner's authority. That is the main risk of this decision, and why the owner's controls above stay. Use allowed sites for tasks that visit untrusted sites.
+- **Page content never grants authority.** With full powers, a prompt injection in a page could act with the owner's authority. That is the main risk of this decision, and why the owner's controls above stay. Use allowed sites for tasks that visit untrusted sites. Hosted assistants (ChatGPT, Claude) get scoped consent, not full powers: the owner ticks what each may do, its sensitive browser actions wait for the owner's approval, and every call is on the audit trail (console `docs/security-hosted-clients.md`).
 - **Stealth.** No `--enable-automation`, no WebDriver, no CDP port, no `enable`d CDP domain, and `--silent-debugger-extension-api`: the browser looks like a person's.
 
 ### 27.3 Status

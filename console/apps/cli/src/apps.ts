@@ -17,6 +17,8 @@ export interface AppLimitsView {
   dailyRunLimit: number;
   dailyCostLimitUsd: number | null;
   confirmPurchases: boolean;
+  /** Ask before the app's sensitive browser actions (#465); absent on an older console. */
+  confirmSensitiveActions?: boolean;
   paused: boolean;
 }
 
@@ -70,11 +72,12 @@ export function limitLines(l: AppLimitsView): string[] {
     `runs per day: ${l.dailyRunLimit}`,
     `spend per day: ${l.dailyCostLimitUsd === null ? 'no limit' : usd(l.dailyCostLimitUsd)}`,
     `ask before purchases: ${l.confirmPurchases ? 'always' : 'as the task says'}`,
+    ...(l.confirmSensitiveActions !== undefined ? [`ask before sensitive browser actions: ${l.confirmSensitiveActions ? 'yes' : 'no'}`] : []),
   ];
 }
 
 /** The body of `apps limits` from its options; only what was passed. */
-export function limitsPatch(o: { policy?: string; allowPolicies?: string; maxRuns?: string; dailyRuns?: string; dailyCost?: string; sites?: string; confirm?: boolean }): Record<string, unknown> {
+export function limitsPatch(o: { policy?: string; allowPolicies?: string; maxRuns?: string; dailyRuns?: string; dailyCost?: string; sites?: string; confirm?: boolean; confirmSensitive?: boolean }): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   const int = (v: string, what: string) => {
     const n = Number.parseInt(v, 10);
@@ -96,6 +99,7 @@ export function limitsPatch(o: { policy?: string; allowPolicies?: string; maxRun
   }
   if (o.sites !== undefined) body.allowedDomains = list(o.sites);
   if (o.confirm !== undefined) body.confirmPurchases = o.confirm;
+  if (o.confirmSensitive !== undefined) body.confirmSensitiveActions = o.confirmSensitive;
   return body;
 }
 
@@ -104,4 +108,29 @@ export function startedBy(run: { origin?: string; client?: { name: string | null
   if (run.client?.name) return `${run.client.name}${run.client.verified ? '' : '?'}`;
   const words: Record<string, string> = { web: 'console', android: 'android', cli: 'cli', api: 'api', mcp: 'ai app', schedule: 'schedule', system: 'system' };
   return words[run.origin ?? ''] ?? '-';
+}
+
+/** One row of `GET /api/connected-apps/activity` (#465). */
+export interface ActivityRow {
+  createdAt: string;
+  event: string;
+  credentialKind: string;
+  clientName: string | null;
+  tool: string | null;
+  outcome: string;
+  errorCode: string | null;
+  durationMs: number;
+  runId: string | null;
+  sessionId: string | null;
+  detail: Record<string, unknown> | null;
+}
+
+/** One activity row in a line: when, who, what, how it ended. */
+export function activityLine(r: ActivityRow): string {
+  const who = r.clientName ?? (r.credentialKind === 'pat' ? 'personal access token' : r.credentialKind === 'jwt' ? 'you (console)' : 'an AI app');
+  const what = r.tool ?? r.event.replace(/_/g, ' ');
+  const target = r.runId ? ` run ${r.runId.slice(0, 8)}` : r.sessionId ? ` session ${r.sessionId.slice(0, 8)}` : '';
+  const host = typeof r.detail?.host === 'string' ? ` ${r.detail.host}` : '';
+  const ended = r.outcome === 'ok' ? 'ok' : `${r.outcome}${r.errorCode ? ` (${r.errorCode})` : ''}`;
+  return [r.createdAt.replace('T', ' ').slice(0, 19), who.padEnd(16), `${what}${target}${host}`.padEnd(40), ended].join('  ');
 }

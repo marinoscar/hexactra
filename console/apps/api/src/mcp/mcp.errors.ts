@@ -63,6 +63,9 @@ const CONFLICT_NEXT_STEP: Readonly<Record<string, string>> = {
   HANDOFF_PENDING: 'The person has not answered yet: check browser_handoff_status.',
   SESSION_ENDED: 'The session has ended: open a new one with browser_open.',
   SESSION_CANCELLED: 'The user stopped this session: do not continue it; open a new one only if they ask.',
+  CONFIRMATION_REQUIRED: 'Do not try another way around it. Tell the user what you want to do and ask them to approve it in Hexactra (Inbox), then call the same tool again with the same arguments within 2 minutes of their approval.',
+  CONFIRMATION_PENDING: 'The user has not approved it yet: wait for them to approve it in Hexactra (Inbox), then call the same tool again with the same arguments.',
+  CONFIRMATION_DENIED: 'The user said no: do not do it, and tell them.',
 };
 
 /** Codes that mean the browser machine could not be reached. */

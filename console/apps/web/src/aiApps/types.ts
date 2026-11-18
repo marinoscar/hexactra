@@ -20,6 +20,8 @@ export interface AppLimits {
   dailyRunLimit: number;
   dailyCostLimitUsd: number | null;
   confirmPurchases: boolean;
+  /** Ask before the app's sensitive browser actions (#465); absent from an older console: on. */
+  confirmSensitiveActions?: boolean;
   paused: boolean;
 }
 
@@ -97,6 +99,7 @@ export interface LimitsDraft {
   /** Empty: no cost limit. */
   dailyCostLimitUsd: string;
   confirmPurchases: boolean;
+  confirmSensitiveActions: boolean;
 }
 
 /** The highest values the API accepts (it may refuse more, above the deployment's ceilings). */
@@ -111,6 +114,7 @@ export function toDraft(l: AppLimits): LimitsDraft {
     dailyRunLimit: String(l.dailyRunLimit),
     dailyCostLimitUsd: l.dailyCostLimitUsd === null ? '' : String(l.dailyCostLimitUsd),
     confirmPurchases: l.confirmPurchases,
+    confirmSensitiveActions: l.confirmSensitiveActions ?? true,
   };
 }
 
@@ -146,10 +150,12 @@ export function draftPatch(d: LimitsDraft, saved: AppLimits): Partial<AppLimits>
     dailyRunLimit: Number(d.dailyRunLimit),
     dailyCostLimitUsd: d.dailyCostLimitUsd.trim() ? Math.round(Number(d.dailyCostLimitUsd) * 100) / 100 : null,
     confirmPurchases: d.confirmPurchases,
+    confirmSensitiveActions: d.confirmSensitiveActions,
   };
   const patch: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(next)) {
-    if (JSON.stringify(v) !== JSON.stringify(saved[k as keyof AppLimits])) patch[k] = v;
+    const before = k === 'confirmSensitiveActions' ? (saved.confirmSensitiveActions ?? true) : saved[k as keyof AppLimits];
+    if (JSON.stringify(v) !== JSON.stringify(before)) patch[k] = v;
   }
   return patch as Partial<AppLimits>;
 }

@@ -850,7 +850,7 @@
     },
     {
       "id": "apps.manage",
-      "description": "AI apps connected to the account with OAuth (ChatGPT, Claude, ...): list them with what they may do and their 30-day usage, show one, change its limits (policy, allowed policies, sites, runs at once, runs and spend per day, confirm purchases), pause and resume it, disconnect it (the platform's grant revocation)",
+      "description": "AI apps connected to the account with OAuth (ChatGPT, Claude, ...): list them with what they may do and their 30-day usage, show one, change its limits (policy, allowed policies, sites, runs at once, runs and spend per day, confirm purchases, confirm sensitive browser actions), pause and resume it, disconnect it (the platform's grant revocation)",
       "rest": [
         "GET /api/connected-apps",
         "GET /api/connected-apps/{clientId}",
@@ -890,6 +890,45 @@
         "none": "A one-off setup step; the CLI command and the web guide cover it"
       },
       "web": "/settings/ai-apps/connect"
+    },
+    {
+      "id": "apps.activity",
+      "description": "What external AI apps did with the account (#465): one sanitized row per tool call from an app signed in with OAuth or a personal access token, and per refusal (kill switch, rate limit, step-up) and limit change; filterable by app, tool, effect and outcome",
+      "rest": [
+        "GET /api/connected-apps/activity"
+      ],
+      "cli": [
+        "apps activity"
+      ],
+      "mcp": {
+        "none": "An app does not read the audit trail of itself: it is the user's record of what the apps did"
+      },
+      "tui": {
+        "none": "Read rarely, after something looked wrong; the CLI command and the web page cover it"
+      },
+      "web": "/settings/ai-apps/:clientId"
+    },
+    {
+      "id": "apps.admin",
+      "description": "External AI apps, for an administrator (#465): the kill switches of OAuth apps and of personal access tokens over MCP, the rate limits and per-app ceilings, the sensitive hosts, every user's connected apps with Disconnect, every user's AI app activity, and the status (public URL, counts)",
+      "rest": [
+        "GET /api/admin/mcp/status",
+        "GET /api/admin/connected-apps",
+        "DELETE /api/admin/connected-apps/grants/{grantId}",
+        "GET /api/admin/mcp/activity"
+      ],
+      "cli": [
+        "mcp status",
+        "mcp disable",
+        "mcp enable"
+      ],
+      "mcp": {
+        "none": "An app never switches itself or other apps on or off"
+      },
+      "tui": {
+        "none": "An administrator's settings task; the CLI commands are the operator's kill switch, the web page the rest"
+      },
+      "web": "/admin/settings/ai-app-limits"
     }
   ]
 }

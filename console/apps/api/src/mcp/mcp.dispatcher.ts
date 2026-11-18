@@ -40,6 +40,10 @@ import {
 import { MCP_TOOLS, instructionsFor, toolAnnotations, type McpTool } from './mcp.tools';
 import { challengeScopes, isScopeGated, missingScopes, scopeUsable, toolAccess, toolScopes, type GatePrincipal, type ToolAccess } from './mcp.access';
 import { MCP_OAUTH_RESOURCE_ID } from './mcp.scopes';
+import { McpActivityService, activityDetail, activityTargets, type McpActivityOutcome } from './mcp-activity.service';
+import { redactToolResult } from './mcp.redact';
+import { RequestClientService } from '../connected-apps/request-client';
+import { FabricClient } from '../fabric/fabric.client';
 import {
   MCP_APP_MIME,
   MCP_APPS_EXTENSION_ID,
@@ -214,6 +218,18 @@ export interface DispatchExtra {
   userPermissions?: readonly string[];
   /** Aborted when the client disconnects: a waiting tool stops waiting. */
   signal?: AbortSignal;
+  /** The organization the request acts in (the audit row, #465). */
+  orgId?: string | null;
+  /** The request id (the audit row, #465). */
+  requestId?: string | null;
+}
+
+/** What one `tools/call` leaves for its audit row (#465). */
+interface ToolCallTrace {
+  tool?: string;
+  args?: Record<string, unknown>;
+  result?: McpToolResult;
+  timedOut?: boolean;
 }
 
 /** An `ElicitResult` from a retry's `inputResponses`, or undefined when it is not one. */
@@ -253,7 +269,55 @@ export class McpDispatcher {
     @Optional() private readonly runEvents?: RunEvents,
     @Optional() private readonly questionEvents?: QuestionEvents,
     @Optional() private readonly settings?: SystemSettingsService,
+    @Optional() private readonly activity?: McpActivityService,
+    @Optional() private readonly clients?: RequestClientService,
+    @Optional() private readonly fabric?: FabricClient,
   ) {}
+
+  /** Exact secret values a result must never carry: the fabric's service token, when configured (#465). */
+  private async secretValues(): Promise<string[]> {
+    try {
+      const c = await this.fabric?.config();
+      return c?.token ? [c.token] : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * The audit row of one `tools/call` from an OAuth app or a personal access
+   * token (#465): who, which tool, its targets, the outcome and how long; of
+   * the arguments only what `activityDetail` keeps. Never the result.
+   */
+  private async audit(rctx: McpRequestContext, extra: DispatchExtra, call: ToolCallTrace, out: DispatchOutcome | null, durationMs: number): Promise<void> {
+    const c = rctx.credential;
+    if (!this.activity || !extra.userId || !McpActivityService.audited(c)) return;
+    const result = call.result;
+    const code = typeof result?.structuredContent?.code === 'string' ? result.structuredContent.code : /\[([A-Z_]+)\]$/.exec(result?.content.find((x) => x.type === 'text')?.text ?? '')?.[1];
+    let outcome: McpActivityOutcome = 'ok';
+    if (!out || out.status === 401 || out.body.error) outcome = 'error';
+    else if (code === 'CONFIRMATION_REQUIRED' || code === 'CONFIRMATION_PENDING') outcome = 'confirmation_required';
+    else if (call.timedOut) outcome = 'still_working';
+    else if (!result || result.isError || (out.body.result as McpToolResult | undefined)?.isError) outcome = 'error';
+    const oauth = c?.kind === 'oauth';
+    const clientId = oauth ? (c as { clientId?: string }).clientId ?? null : null;
+    const clientName = oauth && clientId ? await this.clients?.displayName(clientId).catch(() => null) : (rctx.clientInfo?.name ?? null);
+    await this.activity.record({
+      userId: extra.userId,
+      orgId: extra.orgId ?? null,
+      credentialKind: c!.kind,
+      clientId,
+      clientName: clientName ?? null,
+      grantId: oauth ? ((c as { grantId?: string }).grantId ?? null) : null,
+      tool: call.tool ?? null,
+      ...activityTargets(call.tool ?? '', call.args ?? {}, result?.structuredContent ?? null),
+      outcome,
+      errorCode: outcome === 'error' || outcome === 'confirmation_required' ? (code ?? (out?.body.error ? `RPC_${out.body.error.code}` : null)) : null,
+      durationMs,
+      requestId: extra.requestId ?? null,
+      detail: call.tool && call.args ? activityDetail(call.tool, call.args) : null,
+    });
+  }
 
   /** The event sources a waiting tool listens on (no database access); empty without a run event source. */
   private runSources(): RunEventSource[] {
@@ -391,7 +455,8 @@ export class McpDispatcher {
     const { flags } = rctx;
     const principal: GatePrincipal | undefined = extra.userPermissions ? { permissions: extra.userPermissions } : undefined;
     // The instructions name only what the caller can use (#460): everything, except for an OAuth app.
-    const instructions = instructionsFor((scope) => scopeUsable(scope, rctx.credential, principal));
+    // An app signed in with OAuth (a hosted model) is also told not to take orders from page text (#465).
+    const instructions = instructionsFor((scope) => scopeUsable(scope, rctx.credential, principal), { hosted: isScopeGated(rctx.credential) });
     const ok = (result: Record<string, unknown>, cacheable = false): DispatchOutcome => ({ status: 200, body: rpcResult(id, this.decorate(result, rctx, cacheable)) });
     // 2026-07-28 answers an unknown method with HTTP 404 (transport rule); earlier revisions inside a 200.
     const notFound = (message: string, data?: unknown): DispatchOutcome => ({ status: flags.perRequestMeta ? 404 : 200, body: rpcError(id, RPC.METHOD_NOT_FOUND, message, data) });
@@ -427,68 +492,11 @@ export class McpDispatcher {
         return ok({ tools }, true);
       }
       case 'tools/call': {
-        const params = (msg.params ?? {}) as { name?: unknown; arguments?: unknown; inputResponses?: unknown; requestState?: unknown };
-        const name = String(params.name ?? '');
-        const tool = MCP_TOOLS.find((t) => t.name === name);
-        if (!tool) return { status: 200, body: rpcError(id, RPC.INVALID_PARAMS, `Unknown tool ${name}`) };
-        const kind = credentialKindOf(rctx);
-        const limits = limitsFor(kind);
-        const finalize = (r: McpToolResult) => finalizeResult(r, { structured: flags.structuredContent, limits });
-        // The scope gate (#460). The transport answers `needs_scope` with `403 insufficient_scope` before
-        // dispatching; reaching here with it (a direct dispatch) is refused as a tool error all the same.
-        const access = toolAccess(tool, rctx.credential, principal);
-        if (access === 'forbidden') return ok({ ...finalize(errorResult(FORBIDDEN_TOOL_TEXT)) });
-        if (access === 'needs_scope') {
-          return ok({ ...finalize(errorResult(`${tool.name} needs extra permission (${missingScopes(tool, rctx.credential).join(' ')}): reconnect the app and allow it.`)) });
-        }
-        const args = tool.input.safeParse(params.arguments ?? {});
-        if (!args.success) return ok({ ...finalize(errorResult(`Invalid arguments: ${args.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`)) });
-        const data = args.data as Record<string, unknown>;
-        // Multi round-trip elicitation (2026-07-28 only): whether this call may ask, and a retry's verified state and answer.
-        let elicitation: McpElicitationContext | undefined;
-        if (flags.multiRoundTrip && ELICITING_TOOLS.has(tool.name)) {
-          const available = clientCanElicitForm(rctx.clientCapabilities) && (await this.elicitationEnabled());
-          elicitation = { available };
-          if (params.requestState !== undefined) {
-            const state = openState(params.requestState, { sub: extra.userId ?? '', tool: tool.name, args: argsDigest(data) });
-            if (!state) {
-              return { status: 200, body: rpcError(id, RPC.INVALID_PARAMS, 'Invalid requestState: it was altered, has expired, or belongs to another call or user. Call the tool again without it.') };
-            }
-            const responses = params.inputResponses !== null && typeof params.inputResponses === 'object' ? (params.inputResponses as Record<string, unknown>) : {};
-            const response = elicitResponseOf(responses[ELICIT_KEY]);
-            elicitation.resume = { runId: state.runId, questionId: state.questionId, cursor: state.cursor, ...(response ? { response } : {}) };
-          }
-        }
-        // An OAuth token that stops being valid while the tool works (its grant revoked): the whole request is a 401.
-        let tokenGone = false;
-        const work = tool.call(data, this.toolContext(caller, toolCredential(rctx), limits, { client: extra.client, clientName: rctx.clientInfo?.name ?? (extra.client && extra.client !== 'other' ? extra.client : null), signal: extra.signal, elicitation })).catch((e: unknown) => {
-          if (e instanceof McpApiError && e.status === 401 && kind === 'oauth') tokenGone = true;
-          if (e instanceof McpApiError) {
-            // The original answer stays in the log (with its request id); the model gets a sentence.
-            this.log.warn(`mcp tool ${tool.name} failed: ${e.status} ${e.code} ${e.message.slice(0, 300)}${e.requestId ? ` request=${e.requestId}` : ''}`);
-          } else {
-            this.log.error(`mcp tool ${tool.name} threw: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}`);
-          }
-          return mapUnknownError(e, tool.name);
-        });
-        const result = await withDeadline(work, limits.deadlineMs, () => stillWorking(tool, limits));
-        if (tokenGone) return tokenRevoked(id);
-        if (result.inputRequired && flags.multiRoundTrip) {
-          // Ask the client's user (MRTR): the request state is signed, bound to the caller, this call and an expiry.
-          const st = result.inputRequired.state;
-          const requestState = sealState({ v: 1, tool: tool.name, args: argsDigest(data), sub: extra.userId ?? '', exp: Number.isFinite(st.expiresAt) ? st.expiresAt : Date.now() + 15 * 60_000, runId: st.runId, questionId: st.questionId, cursor: st.cursor });
-          return {
-            status: 200,
-            body: rpcResult(id, { resultType: 'input_required', inputRequests: result.inputRequired.inputRequests, requestState, _meta: { [META.serverInfo]: serverInfo() } }),
-          };
-        }
-        // The output schemas are checked by the tests against real REST answers; outside production a
-        // mismatch is logged (never refused: the answer is still useful).
-        if (tool.output && result.structuredContent && !result.isError && process.env.NODE_ENV !== 'production') {
-          const check = tool.output.safeParse(result.structuredContent);
-          if (!check.success) this.log.warn(`mcp tool ${tool.name}: structuredContent does not match its output schema: ${check.error.issues.slice(0, 3).map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
-        }
-        return ok({ ...finalize(withCardKey(tool, withoutSchemaBreakingError(tool, result))) });
+        const started = Date.now();
+        const call: ToolCallTrace = {};
+        const out = await this.toolsCall(msg, id, rctx, caller, extra, principal, ok, call);
+        await this.audit(rctx, extra, call, out, Date.now() - started);
+        return out;
       }
       case 'resources/list': {
         // MCP Apps (#466): the `ui://` resources a tool this caller is offered links to, when built.
@@ -517,6 +525,92 @@ export class McpDispatcher {
         return notFound(`Method not found: ${method}`);
     }
   }
+
+  /** One `tools/call`; `call` collects what the audit row needs (the tool, the parsed arguments, the result). */
+  private async toolsCall(
+    msg: RpcMessage,
+    id: RpcId,
+    rctx: McpRequestContext,
+    caller: McpCaller,
+    extra: DispatchExtra & { client?: string },
+    principal: GatePrincipal | undefined,
+    ok: (result: Record<string, unknown>, cacheable?: boolean) => DispatchOutcome,
+    call: ToolCallTrace,
+  ): Promise<DispatchOutcome> {
+    const { flags } = rctx;
+    const params = (msg.params ?? {}) as { name?: unknown; arguments?: unknown; inputResponses?: unknown; requestState?: unknown };
+    const name = String(params.name ?? '');
+    const tool = MCP_TOOLS.find((t) => t.name === name);
+    if (!tool) return { status: 200, body: rpcError(id, RPC.INVALID_PARAMS, `Unknown tool ${name}`) };
+    call.tool = tool.name;
+    const kind = credentialKindOf(rctx);
+    const limits = limitsFor(kind);
+    const finalize = (r: McpToolResult) => finalizeResult(r, { structured: flags.structuredContent, limits });
+    // The scope gate (#460). The transport answers `needs_scope` with `403 insufficient_scope` before
+    // dispatching; reaching here with it (a direct dispatch) is refused as a tool error all the same.
+    const access = toolAccess(tool, rctx.credential, principal);
+    if (access === 'forbidden') return ok({ ...finalize(errorResult(FORBIDDEN_TOOL_TEXT)) });
+    if (access === 'needs_scope') {
+      return ok({ ...finalize(errorResult(`${tool.name} needs extra permission (${missingScopes(tool, rctx.credential).join(' ')}): reconnect the app and allow it.`)) });
+    }
+    const args = tool.input.safeParse(params.arguments ?? {});
+    if (!args.success) return ok({ ...finalize(errorResult(`Invalid arguments: ${args.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`)) });
+    const data = args.data as Record<string, unknown>;
+    call.args = data;
+    // Multi round-trip elicitation (2026-07-28 only): whether this call may ask, and a retry's verified state and answer.
+    let elicitation: McpElicitationContext | undefined;
+    if (flags.multiRoundTrip && ELICITING_TOOLS.has(tool.name)) {
+      const available = clientCanElicitForm(rctx.clientCapabilities) && (await this.elicitationEnabled());
+      elicitation = { available };
+      if (params.requestState !== undefined) {
+        const state = openState(params.requestState, { sub: extra.userId ?? '', tool: tool.name, args: argsDigest(data) });
+        if (!state) {
+          return { status: 200, body: rpcError(id, RPC.INVALID_PARAMS, 'Invalid requestState: it was altered, has expired, or belongs to another call or user. Call the tool again without it.') };
+        }
+        const responses = params.inputResponses !== null && typeof params.inputResponses === 'object' ? (params.inputResponses as Record<string, unknown>) : {};
+        const response = elicitResponseOf(responses[ELICIT_KEY]);
+        elicitation.resume = { runId: state.runId, questionId: state.questionId, cursor: state.cursor, ...(response ? { response } : {}) };
+      }
+    }
+    // An OAuth token that stops being valid while the tool works (its grant revoked): the whole request is a 401.
+    let tokenGone = false;
+    const work = tool.call(data, this.toolContext(caller, toolCredential(rctx), limits, { client: extra.client, clientName: rctx.clientInfo?.name ?? (extra.client && extra.client !== 'other' ? extra.client : null), signal: extra.signal, elicitation })).catch((e: unknown) => {
+      if (e instanceof McpApiError && e.status === 401 && kind === 'oauth') tokenGone = true;
+      if (e instanceof McpApiError) {
+        // The original answer stays in the log (with its request id); the model gets a sentence.
+        this.log.warn(`mcp tool ${tool.name} failed: ${e.status} ${e.code} ${e.message.slice(0, 300)}${e.requestId ? ` request=${e.requestId}` : ''}`);
+      } else {
+        this.log.error(`mcp tool ${tool.name} threw: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}`);
+      }
+      return mapUnknownError(e, tool.name);
+    });
+    let timedOut = false;
+    const raw = await withDeadline(work, limits.deadlineMs, () => {
+      timedOut = true;
+      return stillWorking(tool, limits);
+    });
+    // No result carries the console's own tokens (#465): a page can hold one, and browser_evaluate reads anything.
+    const result = redactToolResult(raw, await this.secretValues());
+    call.result = result;
+    call.timedOut = timedOut;
+    if (tokenGone) return tokenRevoked(id);
+    if (result.inputRequired && flags.multiRoundTrip) {
+      // Ask the client's user (MRTR): the request state is signed, bound to the caller, this call and an expiry.
+      const st = result.inputRequired.state;
+      const requestState = sealState({ v: 1, tool: tool.name, args: argsDigest(data), sub: extra.userId ?? '', exp: Number.isFinite(st.expiresAt) ? st.expiresAt : Date.now() + 15 * 60_000, runId: st.runId, questionId: st.questionId, cursor: st.cursor });
+      return {
+        status: 200,
+        body: rpcResult(id, { resultType: 'input_required', inputRequests: result.inputRequired.inputRequests, requestState, _meta: { [META.serverInfo]: serverInfo() } }),
+      };
+    }
+    // The output schemas are checked by the tests against real REST answers; outside production a
+    // mismatch is logged (never refused: the answer is still useful).
+    if (tool.output && result.structuredContent && !result.isError && process.env.NODE_ENV !== 'production') {
+      const check = tool.output.safeParse(result.structuredContent);
+      if (!check.success) this.log.warn(`mcp tool ${tool.name}: structuredContent does not match its output schema: ${check.error.issues.slice(0, 3).map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
+    }
+    return ok({ ...finalize(withCardKey(tool, withoutSchemaBreakingError(tool, result))) });
+        }
 
   /** What the server offers: tools, the `ui://` resources and the MCP Apps extension (#466); no tasks extension. */
   private capabilities(): Record<string, unknown> {

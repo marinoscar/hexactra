@@ -22,6 +22,19 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import { AppLimitError } from '../connected-apps/connected-apps.errors';
+import { friendlyAppName } from '../connected-apps/request-client';
+import { McpSettingsReader } from '../mcp/mcp-settings.reader';
+import {
+  APPROVAL_QUESTION_TIMEOUT_MS,
+  APPROVAL_TTL_MS,
+  DENIAL_TTL_MS,
+  approvalKey,
+  classifySensitiveAction,
+  snapshotOf,
+  type ApprovalEntry,
+  type PageSnapshot,
+  type SensitiveVerdict,
+} from './sensitive-actions';
 import { ConnectedAppsService } from '../connected-apps/connected-apps.service';
 import { RequestClientService, clientColumns } from '../connected-apps/request-client';
 import { FabricClient, FabricError } from '../fabric/fabric.client';
@@ -64,6 +77,18 @@ class ActionDto extends createZodDto(actionSchema) {}
  * body is built by `handoffBody`). `choices` (bare strings or option
  * objects) is the historical name of `options`; `kind` is required here.
  */
+/** What an external session keeps in `runs.transcript`. */
+interface SessionTranscript {
+  log?: unknown[];
+  chunks?: number;
+  allowedDomains?: string[];
+  appAllowedDomains?: string[];
+  /** The page as its last element list showed it (#465): for an AI app's sensitive-action rules. */
+  page?: PageSnapshot | null;
+  /** Approval requests of sensitive actions (#465). */
+  approvals?: ApprovalEntry[];
+}
+
 const handoffSchema = questionSpecObject.extend({
   kind: z.enum(QUESTION_KINDS),
   input: z.enum(QUESTION_INPUTS).default('none'),
@@ -103,7 +128,89 @@ export class ExternalBrowserController {
     @Optional() private readonly questions?: QuestionsService,
     @Optional() private readonly clients?: RequestClientService,
     @Optional() private readonly apps?: ConnectedAppsService,
+    @Optional() private readonly mcpSettings?: McpSettingsReader,
   ) {}
+
+  /**
+   * Whether this action of an AI app signed in with OAuth needs the user's
+   * approval first (#465, `sensitive-actions.ts`): only when the app's
+   * `confirmSensitiveActions` is on (the default). Any other caller (the
+   * console, a personal access token, the runner) is never asked here.
+   */
+  private async sensitive(userId: string, credential: AuthCredentialInfo | null | undefined, transcript: SessionTranscript, action: Record<string, unknown>): Promise<SensitiveVerdict | null> {
+    if (credential?.kind !== 'oauth' || !this.apps) return null;
+    const limits = await this.apps.limits(userId, credential.clientId);
+    if (!limits.confirmSensitiveActions) return null;
+    const sensitiveHosts = (await this.mcpSettings?.read())?.sensitiveHosts ?? [];
+    return classifySensitiveAction(action, { page: transcript.page ?? null, sensitiveHosts });
+  }
+
+  /** Writes the session's transcript only if nobody changed it meanwhile; false when someone did. */
+  private async casTranscript(userId: string, runId: string, before: SessionTranscript, next: SessionTranscript): Promise<boolean> {
+    const { count } = await this.prisma.forUser({ userId }).run.updateMany({ where: { id: runId, transcript: { equals: before as never } }, data: { transcript: next as never } });
+    return count === 1;
+  }
+
+  /**
+   * The approval gate of a sensitive action (#465). The approval is a
+   * `confirm` question with risk high in the user's inbox, so only a channel
+   * where the person is signed in can approve it (never the app itself through
+   * `inbox_answer`). It is bound to the session, the action kind and the
+   * target, lets exactly that action through once, and only within two minutes
+   * of the approval. Throws (409) until then; nothing reaches the fabric.
+   */
+  private async requireApproval(userId: string, run: { id: string; transcript: unknown; clientId: string | null; clientName: string | null; grantId: string | null; goal: string }, v: SensitiveVerdict, action: string, started: number): Promise<void> {
+    const transcript = (run.transcript ?? {}) as SessionTranscript;
+    const key = approvalKey(run.id, v);
+    const approvals = transcript.approvals ?? [];
+    const entry = [...approvals].reverse().find((a) => a.key === key && !a.usedAt);
+    const now = Date.now();
+    if (entry) {
+      const q = await this.prisma.forUser({ userId }).question.findFirst({ where: { id: entry.questionId }, select: { status: true, response: true, answeredAt: true, expiresAt: true } });
+      const response = (q?.response ?? null) as { outcome?: string; value?: unknown } | null;
+      const answeredAt = q?.answeredAt?.getTime() ?? 0;
+      if (q?.status === 'answered' && response?.outcome === 'completed' && response.value === 'approve' && now - answeredAt <= APPROVAL_TTL_MS) {
+        const next = { ...transcript, approvals: approvals.map((a) => (a === entry ? { ...a, usedAt: new Date(now).toISOString() } : a)) };
+        // Exactly once: a second retry racing this one finds the approval used.
+        if (await this.casTranscript(userId, run.id, transcript, next)) {
+          await this.record(run.id, userId, 'action', action, null, true, `approved by the user: ${v.describe}`.slice(0, 300), started);
+          return;
+        }
+        throw new ConflictException({ code: 'CONFIRMATION_REQUIRED', message: 'This approval was already used. Ask the user again.' });
+      }
+      if (q?.status === 'pending' && q.expiresAt.getTime() > now) {
+        throw new ConflictException({ code: 'CONFIRMATION_PENDING', message: `Waiting for the user to approve: ${v.describe}.`, details: { questionId: entry.questionId } });
+      }
+      const declined = q && (q.status === 'cancelled' || (q.status === 'answered' && !(response?.outcome === 'completed' && response.value === 'approve')));
+      if (declined && now - answeredAt <= DENIAL_TTL_MS) {
+        throw new ConflictException({ code: 'CONFIRMATION_DENIED', message: `The user did not approve this: ${v.describe}.`, details: { questionId: entry.questionId } });
+      }
+    }
+    if (!this.questions) throw new ConflictException({ code: 'CONFIRMATION_REQUIRED', message: `This needs the user's approval, and no inbox is available: ${v.describe}.` });
+    const appName = friendlyAppName(run.clientName);
+    const spec = questionSpecSchema.parse({
+      kind: 'confirmation',
+      input: 'confirm',
+      risk: 'high',
+      prompt: `${appName} wants to ${v.describe}, in its browser session "${run.goal.slice(0, 200)}". Approve only if you asked it to. The approval lets this one action through within 2 minutes.\n\nStarted by ${appName}.`.slice(0, 2000),
+      confirmLabel: 'Allow once',
+      denyLabel: 'Block',
+      timeoutMs: APPROVAL_QUESTION_TIMEOUT_MS,
+    });
+    const q = await this.questions.create({ id: userId }, spec, {
+      askedBy: 'system:sensitive-action',
+      runId: run.id,
+      client: { clientId: run.clientId, clientName: run.clientName, grantId: run.grantId },
+    });
+    const next: SessionTranscript = { ...transcript, approvals: [...approvals.filter((a) => a.key !== key || a.usedAt), { key, questionId: q.id }].slice(-20) };
+    await this.prisma.forUser({ userId }).run.update({ where: { id: run.id }, data: { transcript: next as never } });
+    await this.record(run.id, userId, 'action', action, null, false, `paused: needs the user's approval (${v.rule}): ${v.describe}`.slice(0, 300), started);
+    throw new ConflictException({
+      code: 'CONFIRMATION_REQUIRED',
+      message: `${v.describe.charAt(0).toUpperCase()}${v.describe.slice(1)}: this needs the user's approval. It is waiting in their Hexactra inbox (only they can approve it, where they are signed in).`,
+      details: { questionId: q.id, rule: v.rule },
+    });
+  }
 
   private async liveRun(userId: string, runId: string) {
     const run = await this.prisma.forUser({ userId }).run.findFirst({ where: { id: runId, trigger: 'external' } });
@@ -151,7 +258,11 @@ export class ExternalBrowserController {
     });
     let sessionId: string;
     try {
-      sessionId = await new FabricSession(this.fabric).create({ profile: body.profile, hostId: body.hostId ?? null, label: `${body.actor}: run ${run.id}` });
+      // The sites the session may visit reach the fabric's session request (#465): an AI app's own list when it
+      // has one (the narrower rule an OAuth app is held to), otherwise the session's.
+      const appSites = decision?.appLimits?.allowedDomains ?? [];
+      const sites = appSites.length ? appSites : body.allowedDomains;
+      sessionId = await new FabricSession(this.fabric).create({ profile: body.profile, hostId: body.hostId ?? null, label: `${body.actor}: run ${run.id}`, allowedDomains: sites });
     } catch (e) {
       await this.tasks.transition(userId, run.id, 'failed', { error: e instanceof Error ? e.message : String(e), stopReason: 'error' });
       if (e instanceof FabricError && e.status === 404) throw new NotFoundException({ code: 'PROFILE_NOT_FOUND', message: e.message });
@@ -191,6 +302,10 @@ export class ExternalBrowserController {
       await this.record(runId, userId, 'action', type, action, false, "refused by the app's limits: site not allowed", started);
       throw new AppLimitError('APP_DOMAIN_NOT_ALLOWED', { site: redactUrl(action.url) });
     }
+
+    // A sensitive action of an AI app (#465): the user approves it first, in the console.
+    const verdict = await this.sensitive(userId, credential, (run.transcript ?? {}) as SessionTranscript, action);
+    if (verdict) await this.requireApproval(userId, run, verdict, type, started);
 
     // Type the secret a person gave through a handoff; the agent never sees it.
     if (type === 'type_handoff_secret') {
@@ -234,11 +349,28 @@ export class ExternalBrowserController {
               ? `${(result.elements as unknown[] | undefined)?.length ?? 0} interactive elements`
               : 'done';
     await this.record(runId, userId, 'action', type, action, op.state === 'succeeded', summary, started);
+    // What the page holds, for an AI app's sensitive-action rules (#465): kept from its element lists, forgotten when it changes.
+    if (credential?.kind === 'oauth' && op.state === 'succeeded') await this.rememberPage(userId, runId, type, result);
     // A screenshot is returned by handle; fetch it from this console.
     if ((type === 'screenshot' || type === 'desktop_screenshot') && typeof result.artifact_id === 'string') {
       return { ...op, result: { ...result, url_path: `/api/browser/sessions/${runId}/artifacts/${result.artifact_id}` } };
     }
     return op;
+  }
+
+  /** Keeps (or forgets) the page snapshot of an OAuth app's session. Never fails the action. */
+  private async rememberPage(userId: string, runId: string, type: string, result: Record<string, unknown>): Promise<void> {
+    const navigates = ['navigate', 'new_tab', 'back', 'forward', 'reload', 'activate_tab', 'close_tab'].includes(type);
+    if (type !== 'elements' && !navigates) return;
+    try {
+      const db = this.prisma.forUser({ userId });
+      const row = await db.run.findFirst({ where: { id: runId }, select: { transcript: true } });
+      const t = (row?.transcript ?? {}) as SessionTranscript;
+      const page: PageSnapshot = type === 'elements' ? snapshotOf(result as { url?: unknown; elements?: unknown }) : { url: typeof result.url === 'string' ? result.url : null, password: false, payment: false, links: {} };
+      await db.run.update({ where: { id: runId }, data: { transcript: { ...t, page } as never } });
+    } catch (e) {
+      this.log.warn(`run ${runId}: could not keep the page snapshot: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   /** Screenshot bytes by handle (short-lived; proxied from the fabric). */

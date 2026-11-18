@@ -17,6 +17,9 @@ import { STORAGE_OPTIONS, simpleUploadFileSizeLimit, type ResolvedStorageModuleO
 
 import { AppModule } from './app.module';
 import { registerMcpTransport } from './mcp/mcp.controller';
+import { McpSettingsReader } from './mcp/mcp-settings.reader';
+import { MCP_RATE_LIMITER, McpUnauthenticatedLimit, type McpRateLimiter } from './mcp/mcp.rate-limit';
+import { McpMetrics } from './mcp/mcp.metrics';
 import { isSliceEnabled } from './platform/slices/manifest';
 import { PrismaService } from './prisma/prisma.service';
 
@@ -46,8 +49,16 @@ export async function createApp(): Promise<NestFastifyApplication> {
   // Route and caller attributes on the HTTP server span (`http.route`, `app.route.matched`),
   // first so it runs ahead of every other hook. Only when the SDK is installed.
   registerRequestSpanAttributes(app.getHttpAdapter().getInstance(), sdk !== null);
-  // The MCP endpoint's transport rules (Origin, CORS, 405, 406, JSON-RPC parse errors), ahead of authentication.
-  registerMcpTransport(app.getHttpAdapter().getInstance(), app.get(ConfigService).get<string>('appUrl'));
+  // The MCP endpoint's transport rules (Origin, CORS, 405, 406, JSON-RPC parse errors), ahead of authentication,
+  // and the per-address limit of its unauthenticated answers (#465).
+  const mcpSettings = app.get(McpSettingsReader);
+  const mcpMetrics = app.get(McpMetrics);
+  const unauthenticated = new McpUnauthenticatedLimit(
+    app.get<McpRateLimiter>(MCP_RATE_LIMITER),
+    async () => (await mcpSettings.read()).rateLimitUnauthenticated,
+    (client) => mcpMetrics.rateLimited({ keyKind: 'unauthenticated', client }),
+  );
+  registerMcpTransport(app.getHttpAdapter().getInstance(), app.get(ConfigService).get<string>('appUrl'), { unauthenticated });
   await app.register(fastifyCookie, { secret: process.env.COOKIE_SECRET || process.env.JWT_SECRET });
   if (isSliceEnabled('storage')) {
     // The simple (single request) upload route reads multipart bodies; its size
