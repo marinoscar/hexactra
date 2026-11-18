@@ -228,6 +228,19 @@ describe('the other modes', () => {
     expect(await db.run.findFirstOrThrow({ where: { id: run.id } })).toMatchObject({ status: 'failed', stopReason: 'stalled', result: 'Could not get past the button' });
   });
 
+  it('a chat run over its (soft) budget still follows onStall: fail ends it as stalled, never on the budget (#537)', async () => {
+    const spec = specOf({ onStall: 'fail' });
+    spec.budget = { ...spec.budget, maxActions: 1, maxModelCalls: 1 };
+    const { userId, prisma, db, run } = await newRun('soft-fail', spec, tiers(), { trigger: 'chat' });
+    const chat = await db.conversation.create({ data: { userId, title: 'Soft and stuck' } });
+    await db.run.updateMany({ where: { id: run.id }, data: { conversationId: chat.id } });
+    const m = scripted([click(), click(), click(), finish(false, 'Could not get past the button')]);
+    expect(await runnerOf(prisma, fabricOf(), m.ai).advance(run.id, userId, null)).toBe('failed');
+    const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
+    expect(done).toMatchObject({ status: 'failed', stopReason: 'stalled', result: 'Could not get past the button' });
+    expect((done.policySnapshot as { effectiveBudget: { enforcement: string } }).effectiveBudget.enforcement).toBe('soft');
+  });
+
   it('ask_human: opens a takeover handoff that summarises the last actions, then waits; the answer starts the counters over', async () => {
     const { userId, prisma, db, run } = await newRun('human', specOf({ onStall: 'ask_human' }));
     const fabric = fabricOf();

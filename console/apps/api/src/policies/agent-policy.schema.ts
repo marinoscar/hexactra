@@ -62,7 +62,7 @@ const budgetSchema = z
     maxCostUsd: z.number().positive().max(100_000).nullable().describe('Most a run may cost in US dollars. `null` means unlimited.'),
     warnAtPercent: z.number().int().min(10).max(95).describe('Warn the owner when any set budget reaches this percentage.'),
   })
-  .describe('What a run may spend. Every limit may be unlimited; stall detection stays on regardless.');
+  .describe('What a run may spend. Every limit may be unlimited; stall detection stays on regardless. Chat runs show these limits but are not stopped by them.');
 
 const stallSchema = z
   .object({

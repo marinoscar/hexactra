@@ -14,7 +14,7 @@ export interface FieldHelp {
 
 export const SECTION_HELP = {
   models: 'Which models a run uses, and how it moves between tiers.',
-  budget: 'What a run may spend. Every limit may be unlimited; stall detection stays on regardless.',
+  budget: 'What a run may spend. Every limit may be unlimited; stall detection stays on regardless. Chat runs show these limits but are not stopped by them.',
   stall: 'Stall and loop detection. Always on.',
   context: 'Context efficiency: how much the model sees each round.',
 } as const;

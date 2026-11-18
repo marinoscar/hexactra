@@ -1,10 +1,13 @@
 import { BadRequestException, Controller, Injectable, NotFoundException, Param, ParseUUIDPipe, Query, Sse, UseGuards, type CanActivate, type ExecutionContext, type MessageEvent } from '@nestjs/common';
 import { ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
+import type { Prisma } from '@prisma/client';
 import { Observable } from 'rxjs';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { toQuestionView, type QuestionView } from '../questions/questions.service';
+import { readSnapshot, snapshotBudgetView } from '../policies/policy-snapshot';
+import type { RunBudgetView } from '../runner/budget';
 import { withCost } from '../tasks/run-cost';
 import { LIVE_RUN_STATUSES } from '../tasks/runs.schemas';
 import './chat.errors';
@@ -36,6 +39,18 @@ export interface ChatRunView {
   createdAt: Date;
   startedAt: Date | null;
   finishedAt: Date | null;
+  /** The run's budget (#404, #537): a chat run's limits are soft, shown and warned about, never enforced. Null before its first advance. */
+  budget: RunBudgetView | null;
+}
+
+/**
+ * What decides whether the `run` event is sent again: the run without the
+ * parts of its budget that move every tick (active time); the page ticks those itself.
+ */
+export function chatRunStateKey(run: ChatRunView | null): unknown {
+  if (!run) return null;
+  const { budget, ...rest } = run;
+  return { ...rest, budget: budget ? { enforcement: budget.enforcement, over: budget.over, effective: budget.effective } : null };
 }
 
 /** One look at a chat: what is new since `afterSeq`, and its current state. */
@@ -78,6 +93,35 @@ export class ChatOwnerGuard implements CanActivate {
   }
 }
 
+/** The live columns of a chat's run plus its budget view; never the policy snapshot, the token counts or the active clock. */
+function chatRunView(row: {
+  id: string;
+  status: string;
+  goal: string;
+  stepCount: number;
+  activity: unknown;
+  result: string | null;
+  error: string | null;
+  stopReason: string | null;
+  cancelRequested: boolean;
+  hostId: string | null;
+  costUsd: Prisma.Decimal;
+  costKnown: boolean;
+  createdAt: Date;
+  startedAt: Date | null;
+  finishedAt: Date | null;
+  modelCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  activeMs: number;
+  activeSince: Date | null;
+  policySnapshot: unknown;
+}): ChatRunView {
+  const { modelCalls: _m, inputTokens: _i, outputTokens: _o, activeMs: _a, activeSince: _s, policySnapshot, ...live } = row;
+  const budget = snapshotBudgetView(readSnapshot(policySnapshot), { ...row, costUsd: Number(row.costUsd) });
+  return { ...withCost(live), budget };
+}
+
 /** Reads what the stream sends. Apart from the controller so it can be read without holding a stream open. */
 @Injectable()
 export class ChatStreamService {
@@ -93,7 +137,30 @@ export class ChatStreamService {
       db.run.findFirst({
         where: { conversationId: c.id },
         orderBy: { createdAt: 'desc' },
-        select: { id: true, status: true, goal: true, stepCount: true, activity: true, result: true, error: true, stopReason: true, cancelRequested: true, hostId: true, costUsd: true, costKnown: true, createdAt: true, startedAt: true, finishedAt: true },
+        select: {
+          id: true,
+          status: true,
+          goal: true,
+          stepCount: true,
+          activity: true,
+          result: true,
+          error: true,
+          stopReason: true,
+          cancelRequested: true,
+          hostId: true,
+          costUsd: true,
+          costKnown: true,
+          createdAt: true,
+          startedAt: true,
+          finishedAt: true,
+          // The budget's inputs only: the snapshot itself is never sent.
+          modelCalls: true,
+          inputTokens: true,
+          outputTokens: true,
+          activeMs: true,
+          activeSince: true,
+          policySnapshot: true,
+        },
       }),
     ]);
     // Only a run that waits for its person has a request to show.
@@ -108,7 +175,7 @@ export class ChatStreamService {
       chat: { title: c.title, status: c.status },
       messages: rows.map((m) => ({ id: m.id, seq: m.seq, role: m.role, kind: m.kind, text: m.text, runId: m.runId, meta: m.meta, createdAt: m.createdAt })),
       thinking: c.turnLeaseUntil !== null && c.turnLeaseUntil > new Date(),
-      run: newest ? withCost(newest) : null,
+      run: newest ? chatRunView(newest) : null,
       // A pending question has no response; the field is cleared all the same, so a stream can never carry one.
       question: pending ? { ...toQuestionView(pending), response: null, answeredAt: null } : null,
     };
@@ -155,8 +222,8 @@ export class ChatStreamController {
           const snap = await this.reader.snapshot(userId, id, lastSeq);
           if (!snap) return void observer.complete();
           let sent = false;
-          const state = (key: keyof typeof last, type: string, data: unknown) => {
-            const now = JSON.stringify(data);
+          const state = (key: keyof typeof last, type: string, data: unknown, compare: unknown = data) => {
+            const now = JSON.stringify(compare);
             if (now === last[key]) return;
             last[key] = now;
             observer.next({ type, data: data as object });
@@ -170,7 +237,7 @@ export class ChatStreamController {
           }
           state('turn', 'turn', { thinking: snap.thinking });
           // `null` is sent as a value, so the page can tell "no run" from "nothing new".
-          state('run', 'run', { run: snap.run });
+          state('run', 'run', { run: snap.run }, { run: chatRunStateKey(snap.run) });
           state('question', 'question', { question: snap.question });
           state('guidance', 'guidance', { guidance: snap.guidance });
           if (sent) sinceBeat = 0;

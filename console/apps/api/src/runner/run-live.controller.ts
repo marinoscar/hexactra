@@ -100,7 +100,7 @@ export class RunLiveController {
           }
           const view = this.liveView(run);
           // Not the budget itself: its active time moves every tick (the page ticks it on its own).
-          const state = JSON.stringify([run.status, run.stepCount, run.result, run.error, run.handoffId, run.cancelRequested, run.activity, run.costUsd, run.modelCalls, run.stopReason, run.inputTokens, run.outputTokens, view.tier, run.currentTier, run.escalations]);
+          const state = JSON.stringify([run.status, run.stepCount, run.result, run.error, run.handoffId, run.cancelRequested, run.activity, run.costUsd, run.modelCalls, run.stopReason, run.inputTokens, run.outputTokens, view.tier, run.currentTier, run.escalations, view.budget?.over ?? null]);
           if (state !== lastState) {
             observer.next({ type: 'run', data: view });
             lastState = state;

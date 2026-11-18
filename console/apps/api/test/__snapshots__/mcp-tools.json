@@ -12,7 +12,7 @@
       "openWorldHint": true
     },
     "inputSchema": "598c2026b404ec09",
-    "outputSchema": "48c0422f1506b33c"
+    "outputSchema": "7e3487ad2a2276e8"
   },
   {
     "name": "run_status",
@@ -27,7 +27,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ccc45f61684b506f",
-    "outputSchema": "3349040cc7a1cf8c"
+    "outputSchema": "d6aea67e8041c2f3"
   },
   {
     "name": "run_wait",
@@ -57,7 +57,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ba6a4bcb152ad3e3",
-    "outputSchema": "908aa1bdd749d7e3"
+    "outputSchema": "fb71ca3d882fedb7"
   },
   {
     "name": "run_cancel",
@@ -72,7 +72,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "48c0422f1506b33c"
+    "outputSchema": "7e3487ad2a2276e8"
   },
   {
     "name": "tasks_list",
@@ -132,7 +132,7 @@
       "openWorldHint": true
     },
     "inputSchema": "9d76478a6c60541f",
-    "outputSchema": "48c0422f1506b33c"
+    "outputSchema": "7e3487ad2a2276e8"
   },
   {
     "name": "schedule_create",
@@ -297,7 +297,7 @@
       "openWorldHint": false
     },
     "inputSchema": "137c4def79c3d9a2",
-    "outputSchema": "a9a525da4ff47120"
+    "outputSchema": "f0db1dfe2ac2bf39"
   },
   {
     "name": "policy_create",
@@ -311,8 +311,8 @@
       "idempotentHint": false,
       "openWorldHint": false
     },
-    "inputSchema": "d919ccb5fdb7d13f",
-    "outputSchema": "a9a525da4ff47120"
+    "inputSchema": "90de1e1cc88ee6ec",
+    "outputSchema": "f0db1dfe2ac2bf39"
   },
   {
     "name": "policy_update",
@@ -326,8 +326,8 @@
       "idempotentHint": false,
       "openWorldHint": false
     },
-    "inputSchema": "4b1976e1ea2eb19b",
-    "outputSchema": "a9a525da4ff47120"
+    "inputSchema": "2fd2fdb867682310",
+    "outputSchema": "f0db1dfe2ac2bf39"
   },
   {
     "name": "policy_set_default",
@@ -837,7 +837,7 @@
       "openWorldHint": false
     },
     "inputSchema": "5b0d5bd2f2456d07",
-    "outputSchema": "48c0422f1506b33c"
+    "outputSchema": "7e3487ad2a2276e8"
   },
   {
     "name": "question_card_answer",

@@ -17,6 +17,10 @@ export interface RunBudget {
   source: Record<BudgetKey, 'policy' | 'ceiling' | null>;
   /** False when a call could not be priced: `used.cost` is "at least". */
   costKnown: boolean;
+  /** `soft`: a chat run, whose limits are shown and never enforced (#537). Absent (hard) on older responses. */
+  enforcement?: 'hard' | 'soft';
+  /** The budgets at or over their limit, in check order. */
+  over?: BudgetKey[];
 }
 
 export type Tier = 'fast' | 'standard' | 'frontier';
@@ -116,7 +120,16 @@ export function formatBudget(key: BudgetKey, n: number, costKnown = true): strin
   }
 }
 
-export type MeterTone = 'primary' | 'warning' | 'error';
+/** `over`: a soft budget (a chat run, #537) past its limit: the bar is full and the run keeps working. */
+export type MeterTone = 'primary' | 'warning' | 'error' | 'over';
+
+/** The palette colour of a tone (`over` reads as a warning, never as an error: nothing stopped). */
+export function toneColor(tone: MeterTone): 'primary' | 'warning' | 'error' {
+  return tone === 'over' ? 'warning' : tone;
+}
+
+/** The caption under the meter of a soft budget. */
+export const SOFT_BUDGET_CAPTION = 'Limits are shown for reference. A chat run is not stopped by them.';
 
 /** One bar of the meter. */
 export interface MeterRow {
@@ -134,10 +147,10 @@ export interface MeterRow {
   ceiling: boolean;
 }
 
-/** Warning from `warnAtPercent`, error at 100%. */
-export function meterTone(percent: number | null, warnAtPercent: number): MeterTone {
+/** Warning from `warnAtPercent`, error at 100% (`over` for a soft budget, which keeps working). */
+export function meterTone(percent: number | null, warnAtPercent: number, soft = false): MeterTone {
   if (percent === null) return 'primary';
-  if (percent >= 100) return 'error';
+  if (percent >= 100) return soft ? 'over' : 'error';
   if (percent >= warnAtPercent) return 'warning';
   return 'primary';
 }
@@ -153,8 +166,53 @@ export function meterRows(budget: RunBudget, extraActiveMinutes = 0): MeterRow[]
     const percent = limit === null ? null : limit > 0 ? Math.round((used / limit) * 1000) / 10 : 100;
     const known = key === 'cost' ? budget.costKnown : true;
     const text = limit === null ? `${formatBudget(key, used, known)} used` : `${formatBudget(key, used, known)} / ${formatBudget(key, limit)}`;
-    return { key, label: BUDGET_LABEL[key], used, limit, percent, tone: meterTone(percent, budget.effective.warnAtPercent), text, ceiling: budget.source[key] === 'ceiling' };
+    return { key, label: BUDGET_LABEL[key], used, limit, percent, tone: meterTone(percent, budget.effective.warnAtPercent, budget.enforcement === 'soft'), text, ceiling: budget.source[key] === 'ceiling' };
   });
+}
+
+/** "64 of 60 actions", "$2.10 of $2.00", "21 min of 20 min of active time": a budget's use in words. */
+export function usedOfLimitText(key: BudgetKey, used: number, limit: number, costKnown = true): string {
+  const figures = `${formatBudget(key, used, key === 'cost' ? costKnown : true)} of ${formatBudget(key, limit)}`;
+  switch (key) {
+    case 'cost':
+      return figures;
+    case 'activeMinutes':
+      return `${figures} of active time`;
+    default:
+      return `${figures} ${BUDGET_LABEL[key].toLowerCase()}`;
+  }
+}
+
+/** The budget closest to its limit, or furthest over it; null when none is limited. */
+export function closestBudget(budget: RunBudget): { key: BudgetKey; percent: number; used: number; limit: number } | null {
+  let best: { key: BudgetKey; percent: number; used: number; limit: number } | null = null;
+  for (const key of BUDGET_KEYS) {
+    const limit = budget.effective[key];
+    const percent = budget.percent[key];
+    if (limit === null || percent === null) continue;
+    if (!best || percent > best.percent) best = { key, percent, used: budget.used[key] ?? 0, limit };
+  }
+  return best;
+}
+
+/** The chat card's line about a soft budget (#537): near the limit, or over it and still working; null otherwise. */
+export function softBudgetNotice(budget: RunBudget | null | undefined): { tone: 'near' | 'over'; text: string } | null {
+  if (!budget || budget.enforcement !== 'soft') return null;
+  const top = closestBudget(budget);
+  if (!top) return null;
+  const words = usedOfLimitText(top.key, top.used, top.limit, budget.costKnown);
+  if (top.percent >= 100) return { tone: 'over', text: `Over the usual limit: ${words}. Still working. Press Stop to end it.` };
+  if (top.percent >= budget.effective.warnAtPercent) return { tone: 'near', text: `Close to this chat's usual limit: ${words}.` };
+  return null;
+}
+
+/** The plain line of a finished run that went over a soft limit without being stopped by it (#537); null otherwise. */
+export function overLimitLine(run: StopReasonRun): string | null {
+  const b = run.budget;
+  if (!b || b.enforcement !== 'soft' || !b.over?.length) return null;
+  if (run.stopReason && STOP_REASON_BUDGET[run.stopReason]) return null;
+  const top = closestBudget(b);
+  return top && top.percent >= 100 ? `Went over its usual limit: ${usedOfLimitText(top.key, top.used, top.limit, b.costKnown)}.` : null;
 }
 
 /** "policy: Balanced v3 · default". */

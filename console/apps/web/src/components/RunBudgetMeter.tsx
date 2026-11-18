@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, AlertTitle, Box, Button, Chip, LinearProgress, Paper, Stack, Tooltip, Typography } from '@mui/material';
 
-import { meterRows, type MeterRow, policyChipLabel, spendLine, stopLine, TIER_LABEL, tierChip, type RunBudget, type RunPolicy, type RunTier, type StopReasonRun, type TaskSpend } from './runBudget';
+import { meterRows, overLimitLine, SOFT_BUDGET_CAPTION, toneColor, type MeterRow, policyChipLabel, spendLine, stopLine, TIER_LABEL, tierChip, type RunBudget, type RunPolicy, type RunTier, type StopReasonRun, type TaskSpend } from './runBudget';
 
 /** `policy: Balanced v1 · default`, `tier: Standard → Frontier` (highlighted once escalated) and `model: …`. */
 export function RunHeaderChips({ policy, tier }: { policy?: RunPolicy | null; tier?: RunTier | null }) {
@@ -70,7 +70,7 @@ export function RunBudgetMeter({ budget, ticking, now, collapsible = false, maxC
                 {r.label}
                 {r.ceiling ? ' (ceiling)' : ''}
               </Typography>
-              <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }} color={r.tone === 'primary' ? 'text.primary' : `${r.tone}.main`}>
+              <Typography variant="caption" sx={{ fontVariantNumeric: 'tabular-nums' }} color={r.tone === 'primary' ? 'text.primary' : `${toneColor(r.tone)}.main`}>
                 {r.text}
                 {r.percent !== null ? ` · ${Math.floor(r.percent)}%` : ''}
               </Typography>
@@ -83,7 +83,7 @@ export function RunBudgetMeter({ budget, ticking, now, collapsible = false, maxC
             {r.percent !== null ? (
               <LinearProgress
                 variant="determinate"
-                color={r.tone}
+                color={toneColor(r.tone)}
                 value={Math.min(100, r.percent)}
                 aria-label={`${r.label} budget`}
                 sx={{ height: 6, borderRadius: 3 }}
@@ -94,6 +94,11 @@ export function RunBudgetMeter({ budget, ticking, now, collapsible = false, maxC
           </Box>
         ))}
       </Box>
+      {budget.enforcement === 'soft' && (
+        <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 1 }} data-testid="budget-soft-caption">
+          {SOFT_BUDGET_CAPTION}
+        </Typography>
+      )}
     </Paper>
   );
 }
@@ -101,7 +106,26 @@ export function RunBudgetMeter({ budget, ticking, now, collapsible = false, maxC
 /** "Stopped: cost budget reached ($2.00)." with the agent's summary, for a run that has a stop reason. */
 export function RunStopReason({ run }: { run: StopReasonRun }) {
   const line = stopLine(run);
-  if (!line) return null;
+  // A chat run that went over a soft limit and was not stopped by it (#537): plain information.
+  const over = overLimitLine(run);
+  if (!line) return over ? <OverLimitNote text={over} /> : null;
+  return (
+    <>
+      <StopAlert line={line} />
+      {over && <OverLimitNote text={over} />}
+    </>
+  );
+}
+
+function OverLimitNote({ text }: { text: string }) {
+  return (
+    <Typography variant="body2" color="text.secondary" sx={{ my: 1 }} data-testid="over-limit-line">
+      {text}
+    </Typography>
+  );
+}
+
+function StopAlert({ line }: { line: NonNullable<ReturnType<typeof stopLine>> }) {
   return (
     <Alert severity={line.severity} sx={{ my: 2 }} data-testid="stop-reason">
       <AlertTitle>{line.title}</AlertTitle>

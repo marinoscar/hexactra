@@ -13457,7 +13457,7 @@ export interface components {
                         frontier?: string | null;
                     };
                 };
-                /** @description What a run may spend. Every limit may be unlimited; stall detection stays on regardless. */
+                /** @description What a run may spend. Every limit may be unlimited; stall detection stays on regardless. Chat runs show these limits but are not stopped by them. */
                 budget: {
                     /** @description Most browser actions a run may take. `null` means unlimited. */
                     maxActions: number | null;
@@ -13667,7 +13667,7 @@ export interface components {
                             frontier?: string | null;
                         };
                     };
-                    /** @description What a run may spend. Every limit may be unlimited; stall detection stays on regardless. */
+                    /** @description What a run may spend. Every limit may be unlimited; stall detection stays on regardless. Chat runs show these limits but are not stopped by them. */
                     budget: {
                         /** @description Most browser actions a run may take. `null` means unlimited. */
                         maxActions: number | null;
@@ -13801,7 +13801,7 @@ export interface components {
                         frontier?: string | null;
                     };
                 };
-                /** @description What a run may spend. Every limit may be unlimited; stall detection stays on regardless. */
+                /** @description What a run may spend. Every limit may be unlimited; stall detection stays on regardless. Chat runs show these limits but are not stopped by them. */
                 budget: {
                     /** @description Most browser actions a run may take. `null` means unlimited. */
                     maxActions: number | null;
@@ -13883,7 +13883,7 @@ export interface components {
                         frontier?: string | null;
                     };
                 };
-                /** @description What a run may spend. Every limit may be unlimited; stall detection stays on regardless. */
+                /** @description What a run may spend. Every limit may be unlimited; stall detection stays on regardless. Chat runs show these limits but are not stopped by them. */
                 budget: {
                     /** @description Most browser actions a run may take. `null` means unlimited. */
                     maxActions: number | null;
@@ -14957,6 +14957,13 @@ export interface components {
                 };
                 /** @description False when a call could not be priced: `used.cost` is then "at least". */
                 costKnown: boolean;
+                /**
+                 * @description `hard`: a used-up budget ends the run. `soft`: a chat run (trigger `chat`), whose owner is present: its limits are shown and warned about, never enforced (#537).
+                 * @enum {string}
+                 */
+                enforcement: "hard" | "soft";
+                /** @description The budgets at or over their limit, in check order. A soft-budget run keeps working past them. */
+                over: ("actions" | "modelCalls" | "activeMinutes" | "inputTokens" | "outputTokens" | "cost")[];
             } | null;
             tier: {
                 /**
@@ -15102,6 +15109,13 @@ export interface components {
                     };
                     /** @description False when a call could not be priced: `used.cost` is then "at least". */
                     costKnown: boolean;
+                    /**
+                     * @description `hard`: a used-up budget ends the run. `soft`: a chat run (trigger `chat`), whose owner is present: its limits are shown and warned about, never enforced (#537).
+                     * @enum {string}
+                     */
+                    enforcement: "hard" | "soft";
+                    /** @description The budgets at or over their limit, in check order. A soft-budget run keeps working past them. */
+                    over: ("actions" | "modelCalls" | "activeMinutes" | "inputTokens" | "outputTokens" | "cost")[];
                 } | null;
                 tier: {
                     /**
@@ -15266,6 +15280,13 @@ export interface components {
                 };
                 /** @description False when a call could not be priced: `used.cost` is then "at least". */
                 costKnown: boolean;
+                /**
+                 * @description `hard`: a used-up budget ends the run. `soft`: a chat run (trigger `chat`), whose owner is present: its limits are shown and warned about, never enforced (#537).
+                 * @enum {string}
+                 */
+                enforcement: "hard" | "soft";
+                /** @description The budgets at or over their limit, in check order. A soft-budget run keeps working past them. */
+                over: ("actions" | "modelCalls" | "activeMinutes" | "inputTokens" | "outputTokens" | "cost")[];
             } | null;
             tier: {
                 /**
@@ -15428,6 +15449,13 @@ export interface components {
                 };
                 /** @description False when a call could not be priced: `used.cost` is then "at least". */
                 costKnown: boolean;
+                /**
+                 * @description `hard`: a used-up budget ends the run. `soft`: a chat run (trigger `chat`), whose owner is present: its limits are shown and warned about, never enforced (#537).
+                 * @enum {string}
+                 */
+                enforcement: "hard" | "soft";
+                /** @description The budgets at or over their limit, in check order. A soft-budget run keeps working past them. */
+                over: ("actions" | "modelCalls" | "activeMinutes" | "inputTokens" | "outputTokens" | "cost")[];
             } | null;
             tier: {
                 /**
