@@ -46,9 +46,11 @@
 | **Android app**: a Trusted Web Activity with deep links and actionable notifications | [console/docs/runbooks/android-app.md](console/docs/runbooks/android-app.md) |
 | **CLI and terminal UI**: `hexactra tasks`, `runs`, `inbox`, `fleet`, ... | [console/apps/cli/README.md](console/apps/cli/README.md) |
 | **REST API**, OpenAPI at `/api/docs`, with a generated TypeScript SDK | `console/packages/sdk` |
-| **MCP** for agent frameworks: `POST /api/mcp` (Streamable HTTP) or `hexactra mcp serve` (stdio) | [console/docs/mcp.md](console/docs/mcp.md), [console/docs/agent-frameworks.md](console/docs/agent-frameworks.md) |
-| **MCP for hosted assistants (ChatGPT, Claude): OAuth, scoped consent, in-chat cards** | [console/docs/hosted-clients.md](console/docs/hosted-clients.md) |
+| **MCP** for agent frameworks (Hermes Agent, OpenClaw, Pi) with a personal access token: `POST /api/mcp` (Streamable HTTP) or `hexactra mcp serve` (stdio) | [console/docs/agent-frameworks.md](console/docs/agent-frameworks.md), reference [console/docs/mcp.md](console/docs/mcp.md) |
+| **MCP for hosted assistants (ChatGPT, Claude, Claude Code): OAuth, scoped consent, in-chat cards** | Enable and use it: [console/README.md](console/README.md#use-hexactra-from-chatgpt-claude-and-other-assistants); per-client steps: [console/docs/hosted-clients.md](console/docs/hosted-clients.md) |
 | **Chrome extension**: the hand inside each browser, and a standalone AI assistant | [apps/chrome-extension/DEMO_GUIDE.md](apps/chrome-extension/DEMO_GUIDE.md) |
+
+**Use it from ChatGPT or Claude.** An administrator puts the console on a public HTTPS address and turns on sign-in for AI apps ([Enable it](console/README.md#enable-it-deployment-owner-or-administrator)); then anyone adds `https://<console>/api/mcp` as a connector, signs in on the console and ticks what the app may do ([Use it](console/README.md#use-it-everyone-with-an-account)).
 
 `console/packages/shared/capabilities.json` is the parity registry: each surface's tests fail when a capability is missing from it without a recorded reason.
 

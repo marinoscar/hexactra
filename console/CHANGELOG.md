@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **Enable it, then use it: ChatGPT, Claude and other assistants** (console 1.52.2). The README chapter "Use Hexactra from ChatGPT, Claude and other assistants" now opens with an eight-step **Enable it** checklist for the deployment owner (public HTTPS and `APP_URL`, the sign-in paths, Administration → OAuth clients, allowed client hosts, shared rate limits for several replicas, External AI apps, allowed sites enforced by the browser, and how to verify) and a six-step **Use it** section for everyone (add the connector, consent, what to ask, see what it did, limit, pause or disconnect). `docs/hosted-clients.md`, `docs/mcp.md`, the public-exposure runbook and the root README point to it and use the console's real labels. The Connect an AI app check for Claude Code now names the platform's setting **Allow apps that run on the person's own computer** instead of the old "Allow loopback clients".
+
 ### Changed
 
 - **Platform 0.1.0-next.36, and the console uses its new seams** (#520, console 1.52.1). The MCP endpoint tells "ask for more access" from "not allowed" with the platform's `userPermissionsOf` (EnterpriseAppBase #1194) instead of re-deriving the permissions from platform internals, and the admin **Disconnect** of a user's AI app calls the platform's `revokeGrantAsAdmin` (EnterpriseAppBase #1195). Behaviour is unchanged: same status codes, the same `oauth:grant.revoke` audit with the administrator as actor, and the app is signed out on its next call. The platform's own admin routes `GET`/`DELETE /api/admin/oauth/grants` are now available too.
