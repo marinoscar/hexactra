@@ -30,6 +30,10 @@ The console drives the **Hexactra Fabric**: the Rust control plane and its brows
 | Take over a host's desktop: the agent's next steps wait until you release it; keyboard and mouse pass only while you hold the lease | Desktop page **Take over** / **Release** | `/api/fleet/hosts/{id}/takeover` (GET, POST, renew, DELETE) | `hexactra fleet takeover\|release <host>` | `fleet:desktop` |
 | Alerts: a browser host offline (or the fabric unreachable), a schedule failing 3+ runs in a row, a user's runs over their token, cost or budget limits, a user's runs stalling, one expensive run ([Watching a run's spend](#watching-a-runs-spend)); incidents fire, notify the holders of `alerts:read` (and `alerts.alert.*` webhooks) and resolve on their own | Administration → Alerts | `/api/admin/alerts/…` (the platform slice) | — | `alerts:read` / `alerts:write` |
 
+**In-chat run card.** In AI apps that render [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) (Claude on the web, desktop and mobile, and ChatGPT), a run started or followed over MCP appears in the chat as a live card. The card shows the browser's latest screenshot, what the agent is doing, its budget, **Stop**, and **Open in Hexactra**. It updates itself through the AI app, never by contacting the console directly. It is one self-contained HTML file (`apps/mcp-ui`, under 300 KB) served as the resource `ui://hexactra/run-card`. Clients without MCP Apps get the same text results as before. Details: [docs/mcp-apps.md](docs/mcp-apps.md).
+
+![The live run card in the MCP Apps reference host (ext-apps basic-host), against a local console](docs/images/mcp-run-card.png)
+
 Run it all on a VPS (console, fabric and an optional browser host in one stack): [docs/runbooks/vps-stack.md](docs/runbooks/vps-stack.md). Run the browsers on **nodes** at home, which keep a residential IP and connect outbound over HTTPS: [../docs/nodes.md](../docs/nodes.md).
 
 **Deleting runs** ([docs/runs.md](docs/runs.md#deleting-runs)):

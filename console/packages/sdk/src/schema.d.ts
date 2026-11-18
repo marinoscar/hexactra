@@ -13700,8 +13700,12 @@ export interface components {
             budget: {
                 /** @description The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD. */
                 effective: {
-                    [key: string]: number | null;
-                } & {
+                    actions: number | null;
+                    modelCalls: number | null;
+                    activeMinutes: number | null;
+                    inputTokens: number | null;
+                    outputTokens: number | null;
+                    cost: number | null;
                     warnAtPercent: number;
                 };
                 /** @description What the run has used so far, in the same units (active time includes the stretch in progress). */
@@ -13826,8 +13830,12 @@ export interface components {
                 budget: {
                     /** @description The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD. */
                     effective: {
-                        [key: string]: number | null;
-                    } & {
+                        actions: number | null;
+                        modelCalls: number | null;
+                        activeMinutes: number | null;
+                        inputTokens: number | null;
+                        outputTokens: number | null;
+                        cost: number | null;
                         warnAtPercent: number;
                     };
                     /** @description What the run has used so far, in the same units (active time includes the stretch in progress). */
@@ -13971,8 +13979,12 @@ export interface components {
             budget: {
                 /** @description The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD. */
                 effective: {
-                    [key: string]: number | null;
-                } & {
+                    actions: number | null;
+                    modelCalls: number | null;
+                    activeMinutes: number | null;
+                    inputTokens: number | null;
+                    outputTokens: number | null;
+                    cost: number | null;
                     warnAtPercent: number;
                 };
                 /** @description What the run has used so far, in the same units (active time includes the stretch in progress). */
@@ -14114,8 +14126,12 @@ export interface components {
             budget: {
                 /** @description The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD. */
                 effective: {
-                    [key: string]: number | null;
-                } & {
+                    actions: number | null;
+                    modelCalls: number | null;
+                    activeMinutes: number | null;
+                    inputTokens: number | null;
+                    outputTokens: number | null;
+                    cost: number | null;
                     warnAtPercent: number;
                 };
                 /** @description What the run has used so far, in the same units (active time includes the stretch in progress). */

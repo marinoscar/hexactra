@@ -12,7 +12,7 @@
       "openWorldHint": true
     },
     "inputSchema": "598c2026b404ec09",
-    "outputSchema": "b5bebcbbfb3492b4"
+    "outputSchema": "fe774b3db4967336"
   },
   {
     "name": "run_status",
@@ -27,7 +27,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ccc45f61684b506f",
-    "outputSchema": "a2e4018736803484"
+    "outputSchema": "868220c4a7214653"
   },
   {
     "name": "run_wait",
@@ -57,7 +57,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ba6a4bcb152ad3e3",
-    "outputSchema": "83b9b6eca1249eb7"
+    "outputSchema": "b612cc2b1cd3c81e"
   },
   {
     "name": "run_cancel",
@@ -72,7 +72,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "b5bebcbbfb3492b4"
+    "outputSchema": "fe774b3db4967336"
   },
   {
     "name": "tasks_list",
@@ -132,7 +132,7 @@
       "openWorldHint": true
     },
     "inputSchema": "9d76478a6c60541f",
-    "outputSchema": "b5bebcbbfb3492b4"
+    "outputSchema": "fe774b3db4967336"
   },
   {
     "name": "schedule_create",
@@ -823,5 +823,20 @@
     },
     "inputSchema": "af07dc68dfed55e6",
     "outputSchema": null
+  },
+  {
+    "name": "run_card_poll",
+    "title": "Refresh a run card",
+    "scope": "runs:read",
+    "effect": "read",
+    "annotations": {
+      "title": "Refresh a run card",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "5b0d5bd2f2456d07",
+    "outputSchema": "fe774b3db4967336"
   }
 ]

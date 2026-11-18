@@ -58,12 +58,27 @@ export const runActivitySchema = z
   .describe('What a running run is doing right now; null when it is not running');
 
 const budgetNumbers = z.record(z.enum(BUDGET_KEYS), z.number().nullable());
+/**
+ * The effective limits plus `warnAtPercent`, as one object. (A record of the
+ * budget keys intersected with `{ warnAtPercent }` gave a JSON Schema no
+ * value can match: its `propertyNames` enum refuses `warnAtPercent`, and MCP
+ * clients that check `structuredContent` against `outputSchema` refused
+ * every run with a budget, #466.)
+ */
+const effectiveBudget = z.object({
+  actions: z.number().nullable(),
+  modelCalls: z.number().nullable(),
+  activeMinutes: z.number().nullable(),
+  inputTokens: z.number().nullable(),
+  outputTokens: z.number().nullable(),
+  cost: z.number().nullable(),
+  warnAtPercent: z.number().int(),
+}) satisfies z.ZodType<Record<(typeof BUDGET_KEYS)[number], number | null> & { warnAtPercent: number }>;
 
 /** What a run may spend and has spent (#404). */
 export const runBudgetSchema = z
   .object({
-    effective: budgetNumbers
-      .and(z.object({ warnAtPercent: z.number().int() }))
+    effective: effectiveBudget
       .describe('The limits the run is held to, fixed at its start: the policy budget clamped by the deployment ceilings. `null` is unlimited. Active time is in minutes, cost in USD.'),
     used: z.record(z.enum(BUDGET_KEYS), z.number()).describe('What the run has used so far, in the same units (active time includes the stretch in progress).'),
     percent: budgetNumbers.describe('Percent of each limit used, one decimal; `null` for an unlimited budget.'),
