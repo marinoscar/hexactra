@@ -8,13 +8,15 @@ The protocol details (scopes, step-up, limits, revisions) are in [mcp.md](mcp.md
 
 ## Before you start
 
+The administrator's checklist (public address, sign-in paths, OAuth clients, allowed hosts, replicas, guardrails, verification) is [Enable it](../README.md#enable-it-deployment-owner-or-administrator) in the console README; the short version for each person connecting an app:
+
 1. **The console is on a public HTTPS address.** ChatGPT and Claude call from their own servers, so `https://<console>/api/mcp` and the sign-in paths (`/.well-known/oauth-*`, `/api/oauth/*`, `/oauth/consent`) must answer from the internet, and `APP_URL` must be exactly that public address. The three supported shapes (VPS, tunnel, split) are in [runbooks/public-exposure.md](runbooks/public-exposure.md). Claude Code is the exception: it runs on your computer, so a console your computer can reach is enough.
-2. **An administrator turned on sign-in for AI apps.** Administration → **OAuth clients**: turn the server on and allow the hosts the apps sign in from:
+2. **An administrator turned on sign-in for AI apps.** Administration → Access → **OAuth clients**: **Let other apps connect with OAuth** is on, and under **Allowed client hosts** the hosts the apps sign in from are allowed:
 
    | Client | Host to allow | Why (as documented) |
    |---|---|---|
    | Claude (web, desktop, phone) | `claude.ai` | Claude's client metadata document and its callback `https://claude.ai/api/mcp/auth_callback` are on `claude.ai`. |
-   | Claude Code | `claude.ai` | It identifies itself with a metadata document on `claude.ai` and is sent back to a loopback page (`http://localhost:<port>/callback` or `http://127.0.0.1:<port>/callback`) on your computer. With client metadata documents turned off it registers itself instead, and **Allow loopback clients** must be on. |
+   | Claude Code | `claude.ai` | It identifies itself with a metadata document on `claude.ai` and is sent back to a loopback page (`http://localhost:<port>/callback` or `http://127.0.0.1:<port>/callback`) on your computer. With **Accept client metadata documents** turned off it registers itself instead, and **Allow apps that run on the person's own computer** must be on. |
    | ChatGPT | `chatgpt.com` | Its callback is on `chatgpt.com` (as recorded in the epic, #458; *verify during acceptance*). |
    | Other OAuth client | its own host | The host of its `client_id` document, or of its redirect URIs. |
 

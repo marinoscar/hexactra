@@ -2,7 +2,7 @@
 
 ChatGPT and Claude call MCP servers **from their vendors' servers**, not from your browser. A console that only your LAN or tailnet can reach works for the CLI, the Android app, Claude Code and agent frameworks on your own machines, but a hosted assistant cannot reach it. This runbook makes the console reachable for them while exposing as little as possible, and keeps you in control: the per-address limits at the edge, the API's rate limits, a kill switch, approval of sensitive browser actions, and an audit trail of every call ([docs/security-hosted-clients.md](../security-hosted-clients.md) is the threat model behind each).
 
-In the examples the console is `https://console.example.test`; use your own name.
+In the examples the console is `https://console.example.test`; use your own name. This runbook is the detail behind steps 1, 2 and 5 of the administrator's checklist, [Enable it](../../README.md#enable-it-deployment-owner-or-administrator) in the console README.
 
 ## 1. What must be public, and what need not be
 
@@ -27,7 +27,7 @@ The [VPS stack](vps-stack.md) is public through the shared host proxy, with TLS 
 
 1. Check `APP_URL` in `infra/compose/.env` is the public address exactly (`https://console.example.test`, no trailing slash): the OAuth `issuer` and the `resource` of every token derive from it.
 2. `hexactra deploy update` once after upgrading to 1.45.0: the host proxy's vhost then gives `/api/mcp` a 300 s timeout (the CLI declares it, `apps/cli/src/app.ts`); without it the host proxy cuts a tool that waits longer than 60 s.
-3. Administration → **OAuth clients**: turn the OAuth server on and accept the hosts `chatgpt.com` and `claude.ai`.
+3. Administration → Access → **OAuth clients**: switch on **Let other apps connect with OAuth** and, under **Allowed client hosts**, allow `chatgpt.com` and `claude.ai`.
 4. Administration → **Doctor**: `mcp.endpoint`, `mcp.public_reachability`, `mcp.exposure`, `oauth.public_url` and `oauth.well_known` should pass.
 5. Check the headers from outside: `curl -sI https://console.example.test/` shows `Strict-Transport-Security`, and `curl -s -X POST https://console.example.test/api/mcp -H 'content-type: application/json' -H 'accept: application/json' -d '{}' -i` answers `401` with `WWW-Authenticate: Bearer resource_metadata="https://console.example.test/.well-known/oauth-protected-resource/api/mcp"`.
 
@@ -109,7 +109,7 @@ The API limits are in Administration → **External AI apps** (`mcp` system sett
 
 - [ ] HTTPS only; `http://` redirects; `Strict-Transport-Security` is sent (the platform's nginx sends it; check a tunnel or proxy in front does not strip it).
 - [ ] `APP_URL` equals the public URL exactly (scheme, host, no path, no trailing slash). The OAuth `issuer` and every token's `resource` derive from it.
-- [ ] Administration → OAuth clients: only the client hosts you use are allowed (`chatgpt.com`, `claude.ai`), "allow any host" is off.
+- [ ] Administration → OAuth clients: only the client hosts you use are allowed (`chatgpt.com`, `claude.ai`), **Allow apps from any host** is off.
 - [ ] Users connect with the **default scopes** unless they need more; `browser:drive`, `browser:evaluate`, `desktop:control` and `policies:write` are opt-ins for a reason. Doctor `mcp.high_risk_grants` counts them.
 - [ ] Every user's AI apps keep **Ask me before its sensitive browser actions** on (Settings → AI apps → the app); add your banks and payment providers to Administration → External AI apps → **Sensitive sites**.
 - [ ] Review Settings → **AI apps** (each user) and Administration → External AI apps → **Connected apps** (every user) **monthly**; disconnect what is not used.

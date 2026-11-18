@@ -107,7 +107,7 @@ export class ConnectedAppsPreflight {
             id: 'claude-code',
             allowed: loopback,
             hosts: ['loopback'],
-            detail: !enabled ? 'Sign-in for AI apps is off.' : loopback ? 'Claude Code may connect from your computer.' : ask('Allow loopback clients in Administration → OAuth clients.'),
+            detail: !enabled ? 'Sign-in for AI apps is off.' : loopback ? 'Claude Code may connect from your computer.' : ask(`Turn on "Allow apps that run on the person's own computer" in Administration → OAuth clients.`),
           },
       { id: 'other', allowed: null, hosts: [], detail: enabled ? "The app's host must be allowed in Administration → OAuth clients, or use a personal access token." : 'Use a personal access token, or turn on sign-in for AI apps.' },
     ];
