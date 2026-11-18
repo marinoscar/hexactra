@@ -19,6 +19,8 @@ export const chatResponseSchema = z.object({
   hostId: z.uuid().nullable().describe("The machine the chat's runs prefer; null lets the console choose"),
   hostFallback: z.boolean(),
   policyId: z.string().nullable().describe("The agent policy of the chat's runs (a UUID or `builtin:<key>`); null follows the user's default"),
+  allowedDomains: z.array(z.string()).describe("Sites the chat's runs may visit; empty is any site"),
+  confirmRiskyActions: z.boolean().describe('Ask the owner before a purchase or another step that is hard to undo'),
   lastMessageAt: iso,
   createdAt: iso,
   updatedAt: iso,
@@ -54,5 +56,6 @@ export const chatDetailResponseSchema = chatResponseSchema.extend({
   messages: z.array(chatMessageResponseSchema),
   hasMore: z.boolean().describe('True when more messages follow the last one returned: read on with `afterSeq`'),
   liveRun,
+  thinking: z.boolean().describe('True while the AI is working on its reply to the newest message'),
 });
 export class ChatDetailResponseDto extends createZodDto(chatDetailResponseSchema) {}

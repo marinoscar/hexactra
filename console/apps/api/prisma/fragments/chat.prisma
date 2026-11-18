@@ -44,6 +44,14 @@ model Conversation {
   hostFallback  Boolean            @default(true) @map("host_fallback")
   /// Agent policy for the chat's runs: a UUID or `builtin:<key>`; null is the user's default.
   policyRef     String?            @map("policy_ref") @db.VarChar(64)
+  /// Opt-in limits of the chat's runs, as on a task: sites the agent may visit (empty: any).
+  allowedDomains      String[]     @default([]) @map("allowed_domains")
+  /// Ask the owner before a purchase or another step that is hard to undo. On by default in a chat.
+  confirmRiskyActions Boolean      @default(true) @map("confirm_risky_actions")
+  /// The highest `seq` of an owner message the turn engine has taken up (#484).
+  answeredSeq   Int                @default(0) @map("answered_seq")
+  /// Held while a turn is working on this chat, so two turns never run at once; a crashed turn's lease expires.
+  turnLeaseUntil DateTime?         @map("turn_lease_until") @db.Timestamptz
   /// The next message's `seq`; bumped in the same statement that reserves it.
   nextSeq       Int                @default(1) @map("next_seq")
   lastMessageAt DateTime           @default(now()) @map("last_message_at") @db.Timestamptz

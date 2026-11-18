@@ -14772,6 +14772,10 @@ export interface components {
                 hostFallback: boolean;
                 /** @description The agent policy of the chat's runs (a UUID or `builtin:<key>`); null follows the user's default */
                 policyId: string | null;
+                /** @description Sites the chat's runs may visit; empty is any site */
+                allowedDomains: string[];
+                /** @description Ask the owner before a purchase or another step that is hard to undo */
+                confirmRiskyActions: boolean;
                 /** @description ISO 8601 timestamp */
                 lastMessageAt: string;
                 /** @description ISO 8601 timestamp */
@@ -14818,6 +14822,10 @@ export interface components {
             hostFallback: boolean;
             /** @description The agent policy of the chat's runs (a UUID or `builtin:<key>`); null follows the user's default */
             policyId: string | null;
+            /** @description Sites the chat's runs may visit; empty is any site */
+            allowedDomains: string[];
+            /** @description Ask the owner before a purchase or another step that is hard to undo */
+            confirmRiskyActions: boolean;
             /** @description ISO 8601 timestamp */
             lastMessageAt: string;
             /** @description ISO 8601 timestamp */
@@ -14835,6 +14843,10 @@ export interface components {
             hostFallback?: boolean;
             /** @description The agent policy of the chat's runs: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy. */
             policyId?: string | null;
+            /** @description Sites the chat's runs may visit, as on a task; empty (the default) is any site. */
+            allowedDomains?: string[];
+            /** @description Ask the owner before a purchase or another step that is hard to undo. On by default in a chat. */
+            confirmRiskyActions?: boolean;
         };
         ChatDetailResponseDto: {
             /** Format: uuid */
@@ -14853,6 +14865,10 @@ export interface components {
             hostFallback: boolean;
             /** @description The agent policy of the chat's runs (a UUID or `builtin:<key>`); null follows the user's default */
             policyId: string | null;
+            /** @description Sites the chat's runs may visit; empty is any site */
+            allowedDomains: string[];
+            /** @description Ask the owner before a purchase or another step that is hard to undo */
+            confirmRiskyActions: boolean;
             /** @description ISO 8601 timestamp */
             lastMessageAt: string;
             /** @description ISO 8601 timestamp */
@@ -14889,6 +14905,8 @@ export interface components {
                 /** @enum {string} */
                 status: "queued" | "running" | "waiting_human";
             } | null;
+            /** @description True while the AI is working on its reply to the newest message */
+            thinking: boolean;
         };
         UpdateChatDto: {
             title?: string;
@@ -14902,6 +14920,10 @@ export interface components {
             hostFallback?: boolean;
             /** @description The agent policy of the chat's runs: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy. */
             policyId?: string | null;
+            /** @description Sites the chat's runs may visit, as on a task; empty (the default) is any site. */
+            allowedDomains?: string[];
+            /** @description Ask the owner before a purchase or another step that is hard to undo. On by default in a chat. */
+            confirmRiskyActions?: boolean;
         };
         ChatMessageResponseDto: {
             /** Format: uuid */

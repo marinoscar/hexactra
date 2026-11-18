@@ -71017,6 +71017,17 @@
                     "null"
                   ]
                 },
+                "allowedDomains": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Sites the chat's runs may visit; empty is any site"
+                },
+                "confirmRiskyActions": {
+                  "type": "boolean",
+                  "description": "Ask the owner before a purchase or another step that is hard to undo"
+                },
                 "lastMessageAt": {
                   "type": "string",
                   "description": "ISO 8601 timestamp"
@@ -71109,6 +71120,8 @@
                 "hostId",
                 "hostFallback",
                 "policyId",
+                "allowedDomains",
+                "confirmRiskyActions",
                 "lastMessageAt",
                 "createdAt",
                 "updatedAt",
@@ -71177,6 +71190,17 @@
               "null"
             ]
           },
+          "allowedDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sites the chat's runs may visit; empty is any site"
+          },
+          "confirmRiskyActions": {
+            "type": "boolean",
+            "description": "Ask the owner before a purchase or another step that is hard to undo"
+          },
           "lastMessageAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -71198,6 +71222,8 @@
           "hostId",
           "hostFallback",
           "policyId",
+          "allowedDomains",
+          "confirmRiskyActions",
           "lastMessageAt",
           "createdAt",
           "updatedAt"
@@ -71245,6 +71271,19 @@
               }
             ],
             "description": "The agent policy of the chat's runs: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."
+          },
+          "allowedDomains": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
+            },
+            "description": "Sites the chat's runs may visit, as on a task; empty (the default) is any site."
+          },
+          "confirmRiskyActions": {
+            "type": "boolean",
+            "description": "Ask the owner before a purchase or another step that is hard to undo. On by default in a chat."
           }
         }
       },
@@ -71294,6 +71333,17 @@
               "string",
               "null"
             ]
+          },
+          "allowedDomains": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sites the chat's runs may visit; empty is any site"
+          },
+          "confirmRiskyActions": {
+            "type": "boolean",
+            "description": "Ask the owner before a purchase or another step that is hard to undo"
           },
           "lastMessageAt": {
             "type": "string",
@@ -71418,6 +71468,10 @@
               }
             ],
             "description": "The chat's live run (queued, running or waiting for a person); null when it has none"
+          },
+          "thinking": {
+            "type": "boolean",
+            "description": "True while the AI is working on its reply to the newest message"
           }
         },
         "required": [
@@ -71428,12 +71482,15 @@
           "hostId",
           "hostFallback",
           "policyId",
+          "allowedDomains",
+          "confirmRiskyActions",
           "lastMessageAt",
           "createdAt",
           "updatedAt",
           "messages",
           "hasMore",
-          "liveRun"
+          "liveRun",
+          "thinking"
         ]
       },
       "UpdateChatDto": {
@@ -71486,6 +71543,19 @@
               }
             ],
             "description": "The agent policy of the chat's runs: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."
+          },
+          "allowedDomains": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(\\*\\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
+            },
+            "description": "Sites the chat's runs may visit, as on a task; empty (the default) is any site."
+          },
+          "confirmRiskyActions": {
+            "type": "boolean",
+            "description": "Ask the owner before a purchase or another step that is hard to undo. On by default in a chat."
           }
         }
       },

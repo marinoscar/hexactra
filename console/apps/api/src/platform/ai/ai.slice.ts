@@ -31,6 +31,8 @@ export const aiSlice: ApiSlice = {
     registerAiFeature(NOTES_SUMMARY_FEATURE);
     const { BROWSER_AGENT_FEATURE } = require('../../runner/browser-agent.feature') as typeof import('../../runner/browser-agent.feature');
     registerAiFeature(BROWSER_AGENT_FEATURE);
+    const { CHAT_ORCHESTRATOR_FEATURE } = require('../../chat/chat-orchestrator.feature') as typeof import('../../chat/chat-orchestrator.feature');
+    registerAiFeature(CHAT_ORCHESTRATOR_FEATURE);
   },
   modules: () => {
     const { AiModule } = require('./ai.config') as typeof import('./ai.config');

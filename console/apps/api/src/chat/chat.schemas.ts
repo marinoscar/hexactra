@@ -4,6 +4,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import { policyRefSchema } from '../policies/policies.schemas';
+import { domainSchema } from '../tasks/tasks.schemas';
 
 export const CHAT_STATUSES = ['active', 'archived'] as const;
 export const CHAT_TITLE_MAX = 200;
@@ -18,6 +19,8 @@ const runSettings = {
   hostId: z.uuid().nullable().describe('The machine the chat\'s runs prefer; `null` lets the console choose.'),
   hostFallback: z.boolean().describe('Whether a run may use another machine when the preferred one is offline.'),
   policyId: policyRefSchema.nullable().describe("The agent policy of the chat's runs: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."),
+  allowedDomains: z.array(domainSchema).max(50).describe("Sites the chat's runs may visit, as on a task; empty (the default) is any site."),
+  confirmRiskyActions: z.boolean().describe('Ask the owner before a purchase or another step that is hard to undo. On by default in a chat.'),
 };
 
 /** `GET /chats`. */
@@ -34,6 +37,8 @@ export const createChatSchema = z.object({
   hostId: runSettings.hostId.optional(),
   hostFallback: runSettings.hostFallback.optional(),
   policyId: runSettings.policyId.optional(),
+  allowedDomains: runSettings.allowedDomains.optional(),
+  confirmRiskyActions: runSettings.confirmRiskyActions.optional(),
 });
 
 /** `PATCH /chats/:id`: at least one field. `status` archives and unarchives. */
@@ -45,6 +50,8 @@ export const updateChatSchema = z
     hostId: runSettings.hostId.optional(),
     hostFallback: runSettings.hostFallback.optional(),
     policyId: runSettings.policyId.optional(),
+  allowedDomains: runSettings.allowedDomains.optional(),
+  confirmRiskyActions: runSettings.confirmRiskyActions.optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: 'Nothing to update' });
 

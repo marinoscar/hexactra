@@ -6,6 +6,7 @@ import { JobHandlerRegistry, JobsService, enqueueHousekeepingJob, type Job, type
 import { FabricClient } from '../fabric/fabric.client';
 import { PrismaService } from '../prisma/prisma.service';
 import { QuestionsService } from '../questions/questions.service';
+import { RunEndHooks } from '../tasks/run-end-hooks';
 import { RunEvents } from '../tasks/run-events';
 import { FabricSession } from './fabric-session';
 import { GOAL_RUN_JOB, GOAL_RUN_MAX_RUNTIME_MS, HANDOFF_CHECK_JOB, enqueueGoalRun, enqueueGoalRunContinuation, type GoalRunPayload } from './goal-run.enqueue';
@@ -32,6 +33,7 @@ export class GoalRunHandler implements JobHandler, OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly jobs: JobsService,
     @Optional() private readonly events?: RunEvents,
+    @Optional() private readonly endHooks?: RunEndHooks,
   ) {}
 
   onModuleInit(): void {
@@ -53,6 +55,7 @@ export class GoalRunHandler implements JobHandler, OnModuleInit {
         data: { status: 'failed', error: message.slice(0, 1_900), stopReason: e instanceof AiError && /^No model selected/.test(e.message) ? 'no_model' : 'error', finishedAt: new Date() },
       });
       await this.events?.publish({ type: 'run.status', runId: p.runId, ownerUserId: p.userId, status: 'failed' });
+      await this.endHooks?.fire(p.userId, p.runId);
       if (e instanceof AiError) throw e.toRateLimitError() ?? e;
       throw e;
     }
