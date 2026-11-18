@@ -26,6 +26,12 @@ What each client can do with the capabilities of epic E33 (#458): connected apps
 |---|---|---|---|---|---|---|---|
 | Memories: list, read, add, edit, supersede, archive, delete, export (`memories.read`, `memories.write`, `memories.delete`, `memories.export`, #551, [memories.md](memories.md)) | **Implemented.** `/api/memories`, `/api/memories/{id}`, `…/supersede`, `…/archive`, `…/unarchive`, `GET /api/memories/export` | **Not offered, because** memories are personal data the owner keeps for their own agent: hosted AI apps cannot read or write them (decision of epic #549). A later tool needs its own scope, effect and title | **Implemented.** `hexactra memories list\|show\|add\|rm\|export` (values from flags, never a prompt) | **Not offered, because** the TUI is for watching and answering | Typed through `hx.api` | **Implemented.** Settings → Browser agent → Memories (`/settings/memories`), avatar menu | Through the web app |
 
+## What saved approvals added (E36)
+
+| Capability (registry id) | REST | MCP | CLI | TUI | SDK | Web | Android |
+|---|---|---|---|---|---|---|---|
+| Saved approvals: list, narrow, disable, delete, Pause all (`approvals.list`, `approvals.manage`, #554, [approvals.md](approvals.md)) | **Implemented.** `GET /api/approval-rules`, `GET\|PATCH\|DELETE /api/approval-rules/{id}`, `PUT /api/approval-rules/paused`; **no route creates a rule** | **Not offered, because** a hosted AI app must never read, create or change the owner's standing approvals (a test fails if a tool appears) | **Not offered, because** rules are reviewed beside the requests that make them; no command may create or widen one | **Not offered, because** the TUI is for watching and answering | Typed through `hx.api` | **Implemented.** Settings → Saved approvals (`/settings/approvals`) | Through the web app |
+
 ## The Android column
 
 The Android app opens the console in a Trusted Web Activity, so every page above is there.

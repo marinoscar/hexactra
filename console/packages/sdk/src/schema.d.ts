@@ -5795,6 +5795,84 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/approval-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your saved approvals
+         * @description Steps you told the agent not to ask about again, newest first, and whether "Pause all" is on (`paused`). A rule matches only on its site (the registrable domain of the page's real address), its kind and category and the exact label of the element (digits compared as `#`), within its limits. Rules are made only by ticking "Don't ask again" on a request; nothing here creates one.
+         *
+         *     **Requires:** authentication, plus permission `approvals:read`.
+         */
+        get: operations["approvalRules_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/approval-rules/paused": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Pause or resume every saved approval
+         * @description Body `{ paused }`. While paused, no rule matches: every step and question is asked again. The rules themselves are kept.
+         *
+         *     **Requires:** authentication, plus permission `approvals:write`.
+         */
+        put: operations["approvalRules_setPaused"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/approval-rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one saved approval
+         * @description The rule with its newest 20 uses (run and time).
+         *
+         *     **Requires:** authentication, plus permission `approvals:read`.
+         */
+        get: operations["approvalRules_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a saved approval
+         * @description Permanent. The next time the step comes up, you are asked again.
+         *
+         *     **Requires:** authentication, plus permission `approvals:write`.
+         */
+        delete: operations["approvalRules_remove"];
+        options?: never;
+        head?: never;
+        /**
+         * Narrow, disable or re-enable a saved approval
+         * @description Only `enabled`, `maxAmount`, `expiresAt`, `taskId` and `conversationId`, and only to narrow: set or lower the amount limit, set or bring forward the expiry, add a task or chat scope, or disable. Re-enabling a rule you disabled is allowed. A looser rule is made by answering a new request.
+         *
+         *     **Requires:** authentication, plus permission `approvals:write`.
+         */
+        patch: operations["approvalRules_patch"];
+        trace?: never;
+    };
     "/api/connected-apps": {
         parameters: {
             query?: never;
@@ -7759,6 +7837,10 @@ export interface components {
              * @example WEBHOOK_EVENT_UNKNOWN
              * @example WEBHOOK_EVENT_NOT_PERMITTED
              * @example WEBHOOK_LIMIT_REACHED
+             * @example APPROVAL_RULE_NOT_FOUND
+             * @example RULE_CANNOT_WIDEN
+             * @example APPROVAL_RULE_INVALID
+             * @example APPROVAL_RULE_DUPLICATE
              * @example CHAT_NOT_FOUND
              * @example CHAT_ARCHIVED
              * @example CHAT_RUN_LIVE
@@ -8726,6 +8808,10 @@ export interface components {
                 /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                 noticeSentAt?: string | null;
             };
+            approvals?: {
+                /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
+                paused: boolean;
+            };
             notifications?: {
                 [key: string]: {
                     [key: string]: boolean;
@@ -8800,6 +8886,10 @@ export interface components {
                 keepFailedDays: number | null;
                 /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                 noticeSentAt?: string | null;
+            };
+            approvals?: {
+                /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
+                paused: boolean;
             };
             notifications?: {
                 [key: string]: {
@@ -8877,6 +8967,9 @@ export interface components {
                 keepFailedDays?: number | null;
                 /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                 noticeSentAt?: string | null;
+            } | null;
+            approvals?: {
+                paused?: boolean;
             } | null;
             notifications?: {
                 [key: string]: {
@@ -9946,6 +10039,10 @@ export interface components {
                     keepFailedDays: number | null;
                     /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                     noticeSentAt?: string | null;
+                };
+                approvals?: {
+                    /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
+                    paused: boolean;
                 };
                 notifications?: {
                     [key: string]: {
@@ -14309,6 +14406,141 @@ export interface components {
             aliases?: string[];
             /** @description Free text you add. At most 1000 characters. Shown as plain text. */
             note?: string | null;
+        };
+        ApprovalRulesListResponseDto: {
+            /** @description Whether "Pause all" is on: while it is, no rule matches. */
+            paused: boolean;
+            rules: {
+                /** Format: uuid */
+                id: string;
+                /**
+                 * @description `gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own.
+                 * @enum {string}
+                 */
+                kind: "gate" | "ask";
+                /** @description The registrable domain it applies on. */
+                host: string;
+                /** @description For `gate`: payment, purchase, send, delete or submit. */
+                category: string | null;
+                /** @description For `gate`: the element's label, normalised (digits as `#`). For `ask`: the topic. */
+                matchKey: string;
+                /** @description What the rule allows, in plain words: "Press 'Pay' on bankofamerica.com". */
+                summary: string;
+                /** @description When set, only runs of this task. */
+                taskId: string | null;
+                /** @description The task's name, when the scope's task still exists. */
+                taskName: string | null;
+                /** @description When set, only runs of this chat. */
+                conversationId: string | null;
+                /** @description When set, only steps whose amount is known and not larger. */
+                maxAmount: number | null;
+                expiresAt: string | null;
+                enabled: boolean;
+                /** @description The question whose answer made the rule. */
+                createdFromQuestionId: string | null;
+                useCount: number;
+                lastUsedAt: string | null;
+                /** @description The run that last used it, while that run exists. */
+                lastUsedRunId: string | null;
+                createdAt: string;
+                updatedAt: string;
+            }[];
+        };
+        ApprovalsPausedResponseDto: {
+            paused: boolean;
+        };
+        SetApprovalsPausedDto: {
+            /** @description `true` turns every saved approval off until it is set back to `false`. */
+            paused: boolean;
+        };
+        ApprovalRuleDetailResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description `gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own.
+             * @enum {string}
+             */
+            kind: "gate" | "ask";
+            /** @description The registrable domain it applies on. */
+            host: string;
+            /** @description For `gate`: payment, purchase, send, delete or submit. */
+            category: string | null;
+            /** @description For `gate`: the element's label, normalised (digits as `#`). For `ask`: the topic. */
+            matchKey: string;
+            /** @description What the rule allows, in plain words: "Press 'Pay' on bankofamerica.com". */
+            summary: string;
+            /** @description When set, only runs of this task. */
+            taskId: string | null;
+            /** @description The task's name, when the scope's task still exists. */
+            taskName: string | null;
+            /** @description When set, only runs of this chat. */
+            conversationId: string | null;
+            /** @description When set, only steps whose amount is known and not larger. */
+            maxAmount: number | null;
+            expiresAt: string | null;
+            enabled: boolean;
+            /** @description The question whose answer made the rule. */
+            createdFromQuestionId: string | null;
+            useCount: number;
+            lastUsedAt: string | null;
+            /** @description The run that last used it, while that run exists. */
+            lastUsedRunId: string | null;
+            createdAt: string;
+            updatedAt: string;
+            /** @description The newest 20 uses. */
+            uses: {
+                /** @description The run, while it exists. */
+                runId: string | null;
+                stepSeq: number | null;
+                usedAt: string;
+            }[];
+        };
+        ApprovalRuleResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description `gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own.
+             * @enum {string}
+             */
+            kind: "gate" | "ask";
+            /** @description The registrable domain it applies on. */
+            host: string;
+            /** @description For `gate`: payment, purchase, send, delete or submit. */
+            category: string | null;
+            /** @description For `gate`: the element's label, normalised (digits as `#`). For `ask`: the topic. */
+            matchKey: string;
+            /** @description What the rule allows, in plain words: "Press 'Pay' on bankofamerica.com". */
+            summary: string;
+            /** @description When set, only runs of this task. */
+            taskId: string | null;
+            /** @description The task's name, when the scope's task still exists. */
+            taskName: string | null;
+            /** @description When set, only runs of this chat. */
+            conversationId: string | null;
+            /** @description When set, only steps whose amount is known and not larger. */
+            maxAmount: number | null;
+            expiresAt: string | null;
+            enabled: boolean;
+            /** @description The question whose answer made the rule. */
+            createdFromQuestionId: string | null;
+            useCount: number;
+            lastUsedAt: string | null;
+            /** @description The run that last used it, while that run exists. */
+            lastUsedRunId: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        PatchApprovalRuleDto: {
+            /** @description Disable (`false`) or re-enable (`true`) the rule. */
+            enabled?: boolean;
+            /** @description The largest amount the rule allows. May be set or lowered; `null` (removing it) is refused when one is set. */
+            maxAmount?: number | null;
+            /** @description When the rule stops matching. May be set or brought forward; `null` (removing it) is refused when one is set. */
+            expiresAt?: string | null;
+            /** @description Limit the rule to one task. May be added; removing or changing a scope is refused. */
+            taskId?: string | null;
+            /** @description Limit the rule to one chat. May be added; removing or changing a scope is refused. */
+            conversationId?: string | null;
         };
         ConnectedAppListResponseDto: {
             /** @description `oauth_clients.id` */
@@ -36341,6 +36573,290 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    approvalRules_list: {
+        parameters: {
+            query?: {
+                /** @description Only rules for this registrable domain ("bankofamerica.com"). */
+                host?: string;
+                /** @description Only enabled (`true`) or disabled (`false`) rules. */
+                enabled?: "true" | "false";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ApprovalRulesListResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    approvalRules_setPaused: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetApprovalsPausedDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ApprovalsPausedResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    approvalRules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ApprovalRuleDetailResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `APPROVAL_RULE_NOT_FOUND`: no such rule, or it is another user's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    approvalRules_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted, with its uses. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `APPROVAL_RULE_NOT_FOUND`: no such rule, or it is another user's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    approvalRules_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchApprovalRuleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ApprovalRuleResponseDto"];
+                    };
+                };
+            };
+            /** @description `RULE_CANNOT_WIDEN`: the patch would loosen the rule (raise or remove a limit, lengthen or remove the expiry, remove or change a scope). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `APPROVAL_RULE_NOT_FOUND`: no such rule, or it is another user's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {

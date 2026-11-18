@@ -1,6 +1,7 @@
 import { Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
 
 import { FabricClient, FabricError } from '../fabric/fabric.client';
+import { ApprovalRulesService } from '../approvals/approval-rules.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BUDGET_STOP_REASONS } from '../runner/budget';
 import { RUN_BUDGET_ERROR_LIST } from '../runner/run-budget-errors';
@@ -23,6 +24,7 @@ export class HexactraAlertsService implements OnApplicationBootstrap, OnModuleDe
   constructor(
     private readonly fabric: FabricClient,
     private readonly prisma: PrismaService,
+    private readonly approvals: ApprovalRulesService,
   ) {}
 
   readonly sources: AlertSources = {
@@ -97,6 +99,7 @@ export class HexactraAlertsService implements OnApplicationBootstrap, OnModuleDe
       });
       return rows.map((r) => ({ runId: r.id, userId: r.userId, taskName: r.task?.name ?? null, goal: r.goal, costUsd: Number(r.costUsd), costKnown: r.costKnown }));
     },
+    busyApprovals: (minUses, since) => this.approvals.busyRules(minUses, since),
   };
 
   async onApplicationBootstrap(): Promise<void> {

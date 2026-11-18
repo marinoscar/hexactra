@@ -1,0 +1,70 @@
+// Saved approvals (#554): the owner's standing answer to one kind of question,
+// "on this site, do not ask me before this step". A rule is created ONLY by the
+// owner's own tick on a question the server issued
+// (`ApprovalRulesService.createFromAnswer`, used by #555): no route, CLI command
+// or MCP tool creates one. The server matches it (src/approvals/approval-match.ts)
+// on the page's registrable domain, the gate's category and the element's
+// normalised label: never on anything a model or a page says.
+// Registered in the user-owned data registry (src/approvals/approvals.ownership.ts).
+
+/// `gate`: a step the server would stop for (a commitment). `ask`: a question the agent would ask on its own.
+enum ApprovalRuleKind {
+  gate
+  ask
+
+  @@map("approval_rule_kind")
+}
+
+// @extensible
+model ApprovalRule {
+  id                    String           @id @default(uuid()) @db.Uuid
+  userId                String           @map("user_id") @db.Uuid
+  kind                  ApprovalRuleKind
+  /// Registrable domain of the page, lower-case: "bankofamerica.com". Never empty, never a wildcard.
+  host                  String           @db.VarChar(253)
+  /// For `gate`: the gate's category (payment, purchase, send, delete, submit). Empty for `ask` (part of the unique key).
+  category              String           @default("") @db.VarChar(20)
+  /// For `gate`: the element's label, normalised. For `ask`: the topic key.
+  matchKey              String           @map("match_key") @db.VarChar(200)
+  /// What the owner reads: "Press 'Pay' on bankofamerica.com".
+  summary               String           @db.VarChar(300)
+  /// Owner-chosen limits; all optional. A scope id is a plain id (not a foreign key): an empty string means "everywhere" (part of the unique key).
+  taskId                String           @default("") @map("task_id") @db.VarChar(36)
+  conversationId        String           @default("") @map("conversation_id") @db.VarChar(36)
+  maxAmount             Decimal?         @map("max_amount") @db.Decimal(12, 2)
+  expiresAt             DateTime?        @map("expires_at") @db.Timestamptz
+  enabled               Boolean          @default(true)
+  createdFromQuestionId String?          @map("created_from_question_id") @db.Uuid
+  useCount              Int              @default(0) @map("use_count")
+  lastUsedAt            DateTime?        @map("last_used_at") @db.Timestamptz
+  /// A plain id: cleared when the run is deleted (src/tasks/run-delete.service.ts).
+  lastUsedRunId         String?          @map("last_used_run_id") @db.Uuid
+  createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt             DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  uses ApprovalRuleUse[]
+
+  @@unique([userId, kind, host, category, matchKey, taskId, conversationId])
+  @@index([userId, host, enabled])
+  @@map("approval_rules")
+}
+
+/// One use of a saved approval: the newest 200 per rule are kept.
+model ApprovalRuleUse {
+  id      String   @id @default(uuid()) @db.Uuid
+  ruleId  String   @map("rule_id") @db.Uuid
+  /// A plain id: cleared when the run is deleted; the use stays in the rule's history.
+  runId   String?  @map("run_id") @db.Uuid
+  stepSeq Int?     @map("step_seq")
+  usedAt  DateTime @default(now()) @map("used_at") @db.Timestamptz
+
+  rule ApprovalRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId, usedAt])
+  @@map("approval_rule_uses")
+}
+
+extend model User {
+  approvalRules ApprovalRule[]
+}

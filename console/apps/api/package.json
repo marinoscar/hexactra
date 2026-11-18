@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.63.0",
+  "version": "1.65.0",
   "private": true,
   "engines": {
     "node": ">=24"
@@ -53,6 +53,7 @@
     "pdfmake": "^0.3.14",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "tldts": "^7.5.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
