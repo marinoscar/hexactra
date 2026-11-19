@@ -15554,9 +15554,9 @@ export interface components {
             accountEmail: string;
             accountName: string | null;
             /** @description The switches that are on. */
-            capabilities: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            capabilities: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
             /** @description What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected. */
-            granted: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            granted: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
             defaultFor: ("mail" | "calendar" | "docs")[];
             /** @enum {string} */
             status: "active" | "paused" | "needs_reconnect" | "revoked";
@@ -15582,6 +15582,32 @@ export interface components {
                 supported: boolean;
                 note: string;
             }[];
+            /** @description The kinds of account the capability matrix distinguishes at this provider. */
+            matrixColumns: ("google" | "microsoft_work" | "microsoft_personal")[];
+            /** @description What each kind of account can do, per method. A method marked `unsupported` fails with `NOT_SUPPORTED`; do not offer it. */
+            capabilityMatrix: {
+                /** @description `mail.search`, `calendar.createEvent`, `documents.appendRows`, ... */
+                method: string;
+                /** @enum {string} */
+                service: "mail" | "calendar" | "documents";
+                /** @enum {string} */
+                effect: "read" | "write";
+                /**
+                 * @description The switch the method needs.
+                 * @enum {string}
+                 */
+                capability: "mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write";
+                /** @description Per matrix column: whether the method works, and how it is limited or why it is not supported. */
+                support: {
+                    [key: string]: {
+                        /** @enum {string} */
+                        support: "supported" | "limited" | "unsupported";
+                        note?: string;
+                    };
+                };
+            }[];
+            /** @description Microsoft: the address an administrator of the owner's organization opens to approve the app for everyone. Null elsewhere. */
+            adminConsentUrl: string | null;
         };
         AuthorizeResponseDto: {
             /** @description Send the browser here: the provider's consent screen. The flow is bound to this browser by an HttpOnly cookie set on this response. */
@@ -15596,7 +15622,7 @@ export interface components {
              */
             provider: "google" | "microsoft";
             /** @description What the account may be used for. A write capability brings its read capability. */
-            capabilities: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            capabilities: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
             /** @description What you call it ("Work", "Personal"). Defaults to the provider and the account. */
             label?: string;
             /** @description The account to pre-select at the provider (the email). Connecting the same account again updates its connection. */
@@ -15613,9 +15639,9 @@ export interface components {
             accountEmail: string;
             accountName: string | null;
             /** @description The switches that are on. */
-            capabilities: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            capabilities: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
             /** @description What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected. */
-            granted: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            granted: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
             defaultFor: ("mail" | "calendar" | "docs")[];
             /** @enum {string} */
             status: "active" | "paused" | "needs_reconnect" | "revoked";
@@ -15642,9 +15668,9 @@ export interface components {
                 accountEmail: string;
                 accountName: string | null;
                 /** @description The switches that are on. */
-                capabilities: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+                capabilities: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
                 /** @description What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected. */
-                granted: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+                granted: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
                 defaultFor: ("mail" | "calendar" | "docs")[];
                 /** @enum {string} */
                 status: "active" | "paused" | "needs_reconnect" | "revoked";
@@ -15665,7 +15691,7 @@ export interface components {
         UpdateConnectionDto: {
             label?: string;
             /** @description The full set of switches. Turning one off is immediate; adding one the provider has not granted starts an incremental consent (`consent.authorizeUrl`). */
-            capabilities?: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            capabilities?: ("mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
             /** @description The groups (`mail`, `calendar`, `docs`) this account is the default for. At most one default per provider and group: it is taken from the other account. */
             defaultFor?: ("mail" | "calendar" | "docs")[];
             /** @description A path on this console to return to after the consent (default `/settings/connections`). */
@@ -15674,7 +15700,7 @@ export interface components {
         TestConnectionResponseDto: {
             results: {
                 /** @enum {string} */
-                capability: "mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write";
+                capability: "mail_read" | "mail_send" | "mail_modify" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write";
                 ok: boolean;
                 /** @description A closed reason code when it failed (`UNAUTHORIZED`, `FORBIDDEN`, `UNAVAILABLE`, ...). */
                 code: string | null;
@@ -39766,7 +39792,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Back to the page that started the connection (`/settings/connections` by default) with `connect=connected` (plus `connection=<id>` and `missing=<capabilities the provider did not grant>`), or `connect=<reason>` (`denied`, `expired`, `state_invalid`, `binding_invalid`, `exchange_failed`, `account_mismatch`, `nothing_granted`, ...). */
+            /** @description Back to the page that started the connection (`/settings/connections` by default) with `connect=connected` (plus `connection=<id>` and `missing=<capabilities the provider did not grant>`), or `connect=<reason>` (`denied`, `admin_consent_required`, `expired`, `state_invalid`, `binding_invalid`, `exchange_failed`, `account_mismatch`, `nothing_granted`, ...). */
             302: {
                 headers: {
                     [name: string]: unknown;

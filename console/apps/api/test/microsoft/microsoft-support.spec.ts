@@ -5,7 +5,7 @@ import { deflateRawSync } from 'node:zlib';
 import { appendToDocx, buildDocx, buildXlsx, columnName, columnNumber, docxToText, escapeXml, unescapeXml } from '../../src/connections/microsoft/ooxml';
 import { a1, driveName, instantOf, isoZ, odataString, parseA1, seg, sheetRef, wallTime } from '../../src/connections/microsoft/microsoft.support';
 import { crc32, readZip, writeZip, ZipError } from '../../src/connections/microsoft/zip';
-import { retryAfterMs } from '../../src/connections/microsoft/graph-client';
+import { decodePageToken, encodePageToken, retryAfterMs } from '../../src/connections/microsoft/graph-client';
 
 describe('zip', () => {
   it('writes and reads entries back, with a valid checksum, UTF-8 names and both stored and deflated data', () => {
@@ -138,5 +138,31 @@ describe('ranges, zones, names and numbers', () => {
     expect(retryAfterMs('Tue, 02 Mar 2026 10:00:10 GMT', Date.parse('2026-03-02T10:00:00Z'))).toBe(10_000);
     expect(retryAfterMs('Tue, 02 Mar 2026 09:00:00 GMT', Date.parse('2026-03-02T10:00:00Z'))).toBe(0);
     expect(retryAfterMs('soon')).toBeUndefined();
+  });
+});
+
+describe('page tokens', () => {
+  const base = 'https://graph.microsoft.com/v1.0';
+  const token = (link: string) => encodePageToken(`${base}${link}`, base)!;
+
+  it('keeps the next link as a path under the Graph base, and nothing else', () => {
+    expect(encodePageToken(`${base}/me/messages?$skip=10`, base)).toEqual(expect.any(String));
+    expect(encodePageToken('https://evil.example.test/me/messages?$skip=10', base)).toBeNull();
+    expect(encodePageToken(undefined, base)).toBeNull();
+    expect(decodePageToken(token('/me/messages?$skip=10'), '/me/messages?')).toBe('/me/messages?$skip=10');
+  });
+
+  it('reads the forms Graph may write a next link in as the user\'s own path, so a token never addresses someone else', () => {
+    expect(decodePageToken(token("/users('abc-123')/messages?$skip=10"), '/me/messages?')).toBe('/me/messages?$skip=10');
+    expect(decodePageToken(token('/users/abc-123/messages?$skip=10'), '/me/messages?')).toBe('/me/messages?$skip=10');
+    expect(decodePageToken(token("/me/mailFolders('AAMk-1=')/messages?$skip=10"), '/me/mailFolders/AAMk-1=/messages?')).toBe('/me/mailFolders/AAMk-1=/messages?$skip=10');
+    expect(decodePageToken(token("/users('x')/calendars('CAL-1')/calendarView?startDateTime=a"), '/me/calendars/CAL-1/calendarView?')).toBe('/me/calendars/CAL-1/calendarView?startDateTime=a');
+    expect(decodePageToken(token("/drives/b!xyz/items/01ABC/children?$skiptoken=t"), '/me/drive/')).toBe('/me/drive/items/01ABC/children?$skiptoken=t');
+    expect(decodePageToken(token("/drives/b!xyz/root/children?$skiptoken=t"), '/me/drive/')).toBe('/me/drive/root/children?$skiptoken=t');
+  });
+
+  it('refuses a token for another operation, a doubled slash, a line break or a backslash', () => {
+    for (const bad of ['/me/drive/root/children?x=1', '//evil.example.test/me/messages?', '/me/messages?x=1\r\nHost: evil', '/me/messages?x=\\evil']) expect(() => decodePageToken(Buffer.from(bad).toString('base64url'), '/me/messages?')).toThrow();
+    expect(() => decodePageToken('%%%', '/me/messages?')).toThrow();
   });
 });

@@ -320,8 +320,9 @@ export function encodePageToken(nextLink: unknown, base: string): string | null 
 
 /**
  * The relative path a token stands for, or INVALID_INPUT when it was not issued for this operation (a caller cannot aim a token at
- * another endpoint). Graph sometimes writes `/me/` as `/users('<id>')/` in a next link; that is read back as `/me/`, so a token can
- * never address another user's mailbox.
+ * another endpoint). Graph sometimes writes a next link in its canonical form instead of the one that was asked: `/users('<id>')/`
+ * or `/drives/<id>/` for `/me/`, and `mailFolders('<id>')` for `mailFolders/<id>`. These are read back as the user's own `/me/...`
+ * form, so a token can never address another user's mailbox, and the prefix of the operation is checked on the normalized path.
  */
 export function decodePageToken(token: string, allowedPrefix: string): string {
   let path = '';
@@ -330,7 +331,10 @@ export function decodePageToken(token: string, allowedPrefix: string): string {
   } catch {
     path = '';
   }
-  path = path.replace(/^\/users(?:\('[^']{1,200}'\)|\/[^/?]{1,200})\//, '/me/');
+  path = path
+    .replace(/^\/users(?:\('[^']{1,200}'\)|\/[^/?]{1,200})\//, '/me/')
+    .replace(/^\/drives\/[^/?]{1,200}\//, '/me/drive/')
+    .replace(/\/(mailFolders|calendars|items)\('([^'/?]{1,512})'\)/g, '/$1/$2');
   if (!path.startsWith(allowedPrefix) || path.startsWith('//') || /[\r\n\\]/.test(path)) throw new CapabilityError('INVALID_INPUT', { issues: ['pageToken'] });
   return path;
 }

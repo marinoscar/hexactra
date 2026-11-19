@@ -277,3 +277,4 @@ None of this was observed on a real account, and the pages that would settle it 
 6. The scopes Microsoft returns after an incremental consent (only the added ones, or all consented), and the refresh-token inactivity of personal accounts.
 7. The admin-consent error codes and the "needs admin approval" redirect, and the tenants whose policy blocks user consent.
 8. That a personal account's mailbox accepts `Mail.ReadWrite` drafts and the calendar-view reads that replace free/busy for it, and that localized folder names do not matter (well-known folder aliases are used, never display names).
+9. The form of Graph's next links (`/users('<id>')/`, `/drives/<id>/`, `mailFolders('<id>')` are read back as the user's own `/me/...` path; a form not listed there would make a page token fail with `INVALID_INPUT`).
