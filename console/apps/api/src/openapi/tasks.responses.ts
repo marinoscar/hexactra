@@ -47,6 +47,7 @@ export const taskSummarySchema = z
       })
       .nullable()
       .describe("The agent policy a run started now would use: the task's, else the user's default, else `builtin:balanced` (a deleted policy falls through). Null only when it could not be resolved."),
+    mailTriggers: z.number().int().describe('Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`.'),
   })
   .describe('Schedule and run facts of the task, present with `include=summary`');
 

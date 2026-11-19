@@ -1316,6 +1316,46 @@
         "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
       },
       "web": "/admin/settings/connections"
+    },
+    {
+      "id": "mail_triggers.read",
+      "description": "List a task's email triggers (rules, account, status, runs today) and what a trigger did with each message it saw",
+      "rest": [
+        "GET /api/tasks/{id}/mail-triggers",
+        "GET /api/mail-triggers/{id}/events"
+      ],
+      "cli": "tasks triggers list",
+      "mcp": {
+        "none": "Deliberate: a hosted AI app must not be able to make the owner's mailbox start tasks. A trigger is made in the console; tasks_list only shows that a task has one (E39.8, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": [
+        "/tasks/:id"
+      ]
+    },
+    {
+      "id": "mail_triggers.write",
+      "description": "Start a task when a matching email arrives: create, change, switch on or off and delete a trigger, and preview what would match without starting anything",
+      "rest": [
+        "POST /api/tasks/{id}/mail-triggers",
+        "PATCH /api/mail-triggers/{id}",
+        "DELETE /api/mail-triggers/{id}",
+        "POST /api/mail-triggers/{id}/test"
+      ],
+      "cli": {
+        "none": "Deliberate for now: the form is in the web app; `tasks triggers list` reads them (E39.8)"
+      },
+      "mcp": {
+        "none": "Deliberate: a hosted AI app must not be able to make the owner's mailbox start tasks. A trigger is made in the console; tasks_list only shows that a task has one (E39.8, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; this needs a form, so use the CLI or the web app"
+      },
+      "web": [
+        "/tasks/:id"
+      ]
     }
   ]
 }
