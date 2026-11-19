@@ -38,7 +38,7 @@ export const PROVIDER_INFO: Record<ConnectionProviderId, ProviderInfo> = {
   microsoft: {
     displayName: 'Microsoft',
     accountTypes: [
-      { id: 'personal', label: 'Personal Microsoft account', supported: true, note: 'Outlook.com, Hotmail and Live accounts. Some document features may be limited on personal OneDrive.' },
+      { id: 'personal', label: 'Personal Microsoft account', supported: true, note: 'Outlook.com, Hotmail and Live accounts. Reading and adding rows to Excel spreadsheets is not supported on a personal OneDrive yet, free time is worked out from the calendar, and video meetings are not available.' },
       { id: 'work_same_tenant', label: 'Work or school account in the same organization as the app', supported: true, note: "Depending on the organization's settings, a user may need an administrator's approval; the administrator can approve for everyone." },
       { id: 'work_other_tenant', label: 'Work or school account of another organization', supported: true, note: 'That organization\'s administrator has to approve the app once; until then the account sees "needs admin approval".' },
     ],

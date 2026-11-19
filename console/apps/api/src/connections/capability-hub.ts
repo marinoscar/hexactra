@@ -48,6 +48,8 @@ export interface CapabilityConnection {
   provider: ConnectionProviderId;
   label: string;
   accountEmail: string;
+  /** The provider's stable account id, when the lookup has it. */
+  accountId?: string;
   /** The switches that are on. */
   capabilities: Capability[];
   /** What the provider granted. */
@@ -134,7 +136,7 @@ export class CapabilityHub {
       checkInputLimits(service, method, parsed.data, this.limits);
 
       const provider: CapabilityProvider | undefined = this.deps.providers.get(conn.provider);
-      const cctx: CapabilityContext = { ...ctx, limits: this.limits, connection: { provider: conn.provider, label: conn.label, accountEmail: conn.accountEmail, capabilities: conn.capabilities } };
+      const cctx: CapabilityContext = { ...ctx, limits: this.limits, connection: { provider: conn.provider, label: conn.label, accountEmail: conn.accountEmail, capabilities: conn.capabilities, accountId: conn.accountId } };
       const impl = provider?.[service]?.(cctx) as Record<string, (...a: unknown[]) => Promise<unknown>> | undefined;
       const fn = impl?.[method];
       if (!fn) throw new CapabilityError('NOT_SUPPORTED', { reason: provider ? 'OPERATION' : 'PROVIDER' });

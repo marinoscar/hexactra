@@ -52,7 +52,7 @@ export const FILE_NAME_MAX = 120;
 
 /**
  * The closed set of reasons a delivery failed or was skipped. Never a provider's text (it can carry the very content the owner trusted
- * us with). The first thirteen are the capability errors (connections/capabilities.ts) carried through unchanged.
+ * us with). The first sixteen are the capability errors (connections/capabilities.ts) carried through unchanged.
  */
 export const DELIVERY_ERROR_CODES = [
   'CONNECTION_NEEDS_RECONNECT',
@@ -68,6 +68,10 @@ export const DELIVERY_ERROR_CODES = [
   'INVALID_INPUT',
   'NOT_SUPPORTED',
   'ABORTED',
+  // Additions of the Microsoft provider (E39.4), carried through unchanged.
+  'CONFLICT',
+  'NOTIFY_REQUIRED',
+  'ADMIN_CONSENT_REQUIRED',
   /** A write whose request was sent and got no definite answer: it may have happened, and it was not repeated. */
   'OUTCOME_UNKNOWN',
   'NETWORK_ERROR',
@@ -105,6 +109,9 @@ export const DELIVERY_ERROR_TEXT: Record<DeliveryErrorCode, string> = {
   INVALID_INPUT: 'the request was not valid',
   NOT_SUPPORTED: 'the provider does not support this',
   ABORTED: 'the send was cancelled',
+  CONFLICT: 'the item changed in the meantime',
+  NOTIFY_REQUIRED: 'the change would email other people, which a delivery does not do',
+  ADMIN_CONSENT_REQUIRED: 'an administrator of the account\'s organization has to approve the app first',
   OUTCOME_UNKNOWN: 'it is not known whether it was sent; it was not repeated so as not to send it twice',
   NETWORK_ERROR: 'the destination could not be reached',
   TIMEOUT: 'the destination did not answer in time',

@@ -31170,7 +31170,7 @@
         ],
         "responses": {
           "302": {
-            "description": "Back to the page that started the connection (`/settings/connections` by default) with `connect=connected` (plus `connection=<id>` and `missing=<capabilities the provider did not grant>`), or `connect=<reason>` (`denied`, `expired`, `state_invalid`, `binding_invalid`, `exchange_failed`, `account_mismatch`, `nothing_granted`, ...)."
+            "description": "Back to the page that started the connection (`/settings/connections` by default) with `connect=connected` (plus `connection=<id>` and `missing=<capabilities the provider did not grant>`), or `connect=<reason>` (`denied`, `admin_consent_required`, `expired`, `state_invalid`, `binding_invalid`, `exchange_failed`, `account_mismatch`, `nothing_granted`, ...)."
           },
           "default": {
             "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
@@ -76426,6 +76426,99 @@
               ]
             },
             "description": "Which kinds of account work, and what to know before starting."
+          },
+          "matrixColumns": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "google",
+                "microsoft_work",
+                "microsoft_personal"
+              ]
+            },
+            "description": "The kinds of account the capability matrix distinguishes at this provider."
+          },
+          "capabilityMatrix": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "description": "`mail.search`, `calendar.createEvent`, `documents.appendRows`, ..."
+                },
+                "service": {
+                  "type": "string",
+                  "enum": [
+                    "mail",
+                    "calendar",
+                    "documents"
+                  ]
+                },
+                "effect": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "write"
+                  ]
+                },
+                "capability": {
+                  "type": "string",
+                  "enum": [
+                    "mail_read",
+                    "mail_send",
+                    "mail_modify",
+                    "calendar_read",
+                    "calendar_write",
+                    "docs_read",
+                    "docs_write"
+                  ],
+                  "description": "The switch the method needs."
+                },
+                "support": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "support": {
+                        "type": "string",
+                        "enum": [
+                          "supported",
+                          "limited",
+                          "unsupported"
+                        ]
+                      },
+                      "note": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "support"
+                    ]
+                  },
+                  "description": "Per matrix column: whether the method works, and how it is limited or why it is not supported."
+                }
+              },
+              "required": [
+                "method",
+                "service",
+                "effect",
+                "capability",
+                "support"
+              ]
+            },
+            "description": "What each kind of account can do, per method. A method marked `unsupported` fails with `NOT_SUPPORTED`; do not offer it."
+          },
+          "adminConsentUrl": {
+            "description": "Microsoft: the address an administrator of the owner's organization opens to approve the app for everyone. Null elsewhere.",
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -76433,7 +76526,10 @@
           "displayName",
           "ready",
           "reason",
-          "accountTypes"
+          "accountTypes",
+          "matrixColumns",
+          "capabilityMatrix",
+          "adminConsentUrl"
         ]
       },
       "AuthorizeResponseDto": {
@@ -96304,6 +96400,9 @@
                   "INVALID_INPUT",
                   "NOT_SUPPORTED",
                   "ABORTED",
+                  "CONFLICT",
+                  "NOTIFY_REQUIRED",
+                  "ADMIN_CONSENT_REQUIRED",
                   "OUTCOME_UNKNOWN",
                   "NETWORK_ERROR",
                   "TIMEOUT",
@@ -96414,6 +96513,9 @@
                   "INVALID_INPUT",
                   "NOT_SUPPORTED",
                   "ABORTED",
+                  "CONFLICT",
+                  "NOTIFY_REQUIRED",
+                  "ADMIN_CONSENT_REQUIRED",
                   "OUTCOME_UNKNOWN",
                   "NETWORK_ERROR",
                   "TIMEOUT",

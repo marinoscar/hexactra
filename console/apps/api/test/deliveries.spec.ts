@@ -1,5 +1,6 @@
 // Deliveries (E39.6, #603), the pure parts: templates and file names, the run's facts and the `when` filters, what a webhook and a
 // spreadsheet row carry, the signed links, and the configuration schemas. Invented data only.
+import { CAPABILITY_ERROR_CODES } from '../src/connections/capabilities';
 import { MASKED_OUTPUT } from '@app/shared/task-fields';
 
 import { CONFIG_SCHEMAS, columnSourceSchema, createDeliverySchema } from '../src/deliveries/delivery.schemas';
@@ -254,6 +255,12 @@ describe('signed links', () => {
     // A token made for another purpose does not open a report.
     expect(links.verify(signToken('unsubscribe', { u, r }, 3600))).toBeNull();
     expect(verifyToken('report', token, Date.now(), 'another-secret')).toBeNull();
+  });
+});
+
+describe('capability errors', () => {
+  it('every code a capability call can raise is one a delivery can record', () => {
+    for (const c of CAPABILITY_ERROR_CODES) expect(DELIVERY_ERROR_CODES).toContain(c);
   });
 });
 

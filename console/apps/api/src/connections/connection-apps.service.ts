@@ -11,6 +11,7 @@ import { CONNECTION_PROVIDER_IDS, type ConnectionProviderId } from './connection
 import { CONNECTION_AUDIT, ConnectionEvents } from './connections.events';
 import { resolveConnectionsSystemSettings, type ResolvedConnectionsSystemSettings } from './connections.settings';
 import { ConnectionProviderRegistry } from './connection-provider.registry';
+import { COLUMNS_OF_PROVIDER, matrixRows, type MatrixColumn, type MatrixRow } from './capability-matrix';
 import { PROVIDER_INFO, type ProviderInfo } from './provider-info';
 import type { ProviderApp } from './provider';
 
@@ -27,6 +28,12 @@ export interface ProviderAvailability {
   /** Why it cannot be connected: the adapter is not installed, the administrator switched it off or did not finish the setup. */
   reason: Exclude<ProviderReadiness, 'ready'> | null;
   accountTypes: ProviderInfo['accountTypes'];
+  /** The kinds of account the capability matrix has a column for at this provider (Google: one; Microsoft: work or school, and personal). */
+  matrixColumns: readonly MatrixColumn[];
+  /** For every method of the mail, calendar and documents interfaces: supported, limited (and how) or not supported, per column. The Connect dialog and the task UI never offer an unsupported choice. */
+  capabilityMatrix: MatrixRow[];
+  /** Microsoft: the address an administrator of the owner's organization opens to approve the app for everyone (an owner who sees "needs admin approval" sends it on). Null elsewhere or until configured. */
+  adminConsentUrl: string | null;
 }
 
 /** What the administrator sees per provider: the client id (not secret) and whether a secret is stored, never the secret. */
@@ -116,9 +123,27 @@ export class ConnectionApps {
     const out: ProviderAvailability[] = [];
     for (const provider of CONNECTION_PROVIDER_IDS) {
       const readiness = await this.readiness(provider);
-      out.push({ provider, displayName: PROVIDER_INFO[provider].displayName, ready: readiness === 'ready', reason: readiness === 'ready' ? null : readiness, accountTypes: PROVIDER_INFO[provider].accountTypes });
+      const columns = COLUMNS_OF_PROVIDER[provider];
+      out.push({
+        provider,
+        displayName: PROVIDER_INFO[provider].displayName,
+        ready: readiness === 'ready',
+        reason: readiness === 'ready' ? null : readiness,
+        accountTypes: PROVIDER_INFO[provider].accountTypes,
+        matrixColumns: columns,
+        capabilityMatrix: matrixRows(columns),
+        adminConsentUrl: readiness === 'ready' ? await this.adminConsentUrl(provider) : null,
+      });
     }
     return out;
+  }
+
+  /** The client id is not a secret, so the link is built from the settings without reading the secret. */
+  private async adminConsentUrl(provider: ConnectionProviderId): Promise<string | null> {
+    const s = (await this.system())[provider];
+    const adapter = this.registry.get(provider);
+    if (!s.clientId || !adapter?.adminConsentUrl) return null;
+    return adapter.adminConsentUrl({ clientId: s.clientId, clientSecret: '', tenant: this.tenantOf(s), redirectUri: this.redirectUri(provider) });
   }
 
   // ---- the administrator ----

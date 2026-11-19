@@ -428,6 +428,21 @@ describe('spreadsheet row', () => {
     expect(row).not.toContain(RUN);
   });
 
+  it('a provider that does not offer spreadsheets (a personal Microsoft account) is a closed failure, not a crash', async () => {
+    const h = harness();
+    const { id } = withSheet(h);
+    h.fake.without.add('documents');
+    const err = await sender(h).send(h.ctx({ kind: 'sheet_row', config: sheetCfg(h, id) })).catch((e: DeliveryFailure) => e);
+    expect(err).toBeInstanceOf(DeliveryFailure);
+    expect(err).toMatchObject({ code: 'NOT_SUPPORTED', retryable: false });
+    expect(JSON.stringify((err as DeliveryFailure).detail)).not.toContain('Loan');
+    // createIfMissing hits the same wall on its first call.
+    const h2 = harness();
+    h2.fake.without.add('documents');
+    const cfg = CONFIG_SCHEMAS.sheet_row.parse({ connectionId: h2.docsConn.id, createIfMissing: true, columns: [{ header: 'S', value: { kind: 'field', field: 'status' } }] });
+    await expect(sender(h2).send(h2.ctx({ kind: 'sheet_row', config: cfg }))).rejects.toMatchObject({ code: 'NOT_SUPPORTED' });
+  });
+
   it('fails with the connection\'s code, without sending, when the account must be reconnected or the file is gone', async () => {
     const h = harness();
     const { id } = withSheet(h);
@@ -495,6 +510,15 @@ describe('folder', () => {
     expect(up[0]!.name).toMatch(/TEST\.txt$/);
     expect(up[0]!.contentType).toBe('text/plain');
     expect(h.files.calls).toEqual([]);
+  });
+
+  it('a provider without file storage is a closed failure, and an email without mail the same', async () => {
+    const h = harness();
+    h.fake.without.add('documents');
+    await expect(sender(h).send(h.ctx({ kind: 'folder', config: folderCfg(h) }))).rejects.toMatchObject({ code: 'NOT_SUPPORTED', retryable: false });
+    const m = harness();
+    m.fake.without.add('mail');
+    await expect(emailSender(m).sender.send(m.ctx({ kind: 'email', config: viaConn(m) }))).rejects.toMatchObject({ code: 'NOT_SUPPORTED' });
   });
 
   it('fails with the folder\'s code, and records what was already uploaded', async () => {

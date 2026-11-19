@@ -106,6 +106,8 @@ export function outcomeBanner(outcome: string, label: string | null, missing: re
     }
     case 'denied':
       return { severity: 'info', text: 'You did not allow access, so nothing was connected.' };
+    case 'admin_consent_required':
+      return { severity: 'warning', text: "Your organization requires an administrator to approve this app before you can connect. Send them the approval link from your administrator's Connections page, then connect again." };
     case 'expired':
       return { severity: 'error', text: 'That took too long (more than 10 minutes). Start again.' };
     case 'account_mismatch':
