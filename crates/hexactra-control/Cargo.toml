@@ -7,6 +7,12 @@ license.workspace = true
 repository.workspace = true
 description.workspace = true
 
+[features]
+default = []
+# The fixed-fixture secrets provider (`kind: "test"`) for dev and tests.
+# Never enable it in a release build.
+test-provider = ["hexactra-credential-resolver/test-provider"]
+
 [[bin]]
 name = "hexactra-control"
 path = "src/main.rs"
@@ -49,8 +55,12 @@ zeroize = "1"
 
 hexactra-core = { path = "../hexactra-core", features = ["openapi"] }
 hexactra-telemetry = { path = "../hexactra-telemetry" }
+hexactra-credential-resolver = { path = "../hexactra-credential-resolver" }
 
 [dev-dependencies]
+# Integration tests register the fixture provider over HTTP.
+hexactra-control = { path = ".", features = ["test-provider"] }
+hexactra-credential-resolver = { path = "../hexactra-credential-resolver", features = ["test-provider"] }
 tokio-tungstenite.workspace = true
 serde_yaml = "0.9"
 hexactra-client = { path = "../hexactra-client" }

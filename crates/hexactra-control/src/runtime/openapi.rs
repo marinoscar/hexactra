@@ -35,6 +35,7 @@ list!(DeliveryList, deliveries, WebhookDelivery);
 list!(HostCommandList, commands, HostCommandView);
 list!(EnrollmentList, enrollments, EnrollmentView);
 list!(ServiceTokenList, service_tokens, ServiceTokenView);
+list!(SecretsProviderList, providers, SecretsProviderView);
 
 struct Bearer;
 
@@ -82,6 +83,9 @@ impl Modify for Bearer {
         super::host_commands_api::list_commands,
         super::host_commands_api::get_command,
         super::host_commands_api::post_result,
+        super::secrets_api::register,
+        super::secrets_api::remove,
+        super::secrets_api::list,
         super::events_api::events,
         super::handoff_api::create,
         super::handoff_api::list,
@@ -119,6 +123,7 @@ impl Modify for Bearer {
         (name = "webhooks", description = "Channels that reach a person"),
         (name = "events", description = "Server-sent event stream"),
         (name = "artifacts", description = "Short-lived screenshot bytes"),
+        (name = "secrets", description = "Per-owner secrets providers the fabric types stored secrets from"),
         (name = "credentials", description = "Host enrollment and service tokens"),
         (name = "agent", description = "Routes used by host agents"),
         (name = "desktop", description = "Remote desktop tunnels to a node (the WebSocket legs are `GET /v1/desktop/{tunnel_id}/connect` and `GET /v1/hosts/{host_id}/desktop/{tunnel_id}`)"),

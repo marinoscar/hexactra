@@ -1,0 +1,1097 @@
+//! Secrets providers and the fabric path (#590), over real HTTP: the fabric
+//! asks the session owner's provider for a value, types it with trusted input
+//! and wipes it; nothing else ever holds it.
+//!
+//! The browser is a fake extension: it answers `tabs` with a scripted URL,
+//! `evaluate` with a scripted frame probe, and records every action it
+//! receives, which is the only place the typed value may appear.
+
+use std::collections::VecDeque;
+use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+use hexactra_client::{ControlClient, HostClient};
+use hexactra_control::runtime::persist::StateDb;
+use hexactra_control::runtime::secrets::SecretsProviders;
+use hexactra_control::runtime::webhooks::Webhooks;
+use hexactra_control::runtime::{self, ApiState, RuntimeStore};
+use hexactra_core::remote::{
+    CreateSessionRequest, ItemKind, OperationResult, OperationState, OperationView,
+    RegisterHostRequest, RemoteAction, SecretField, SecretPurpose, SecretsProviderKind,
+    ViewportPoint, REDACTED_TEXT,
+};
+use hexactra_credential_resolver::test_provider::{
+    TestItem, TestProvider, FIXTURE_CODE, FIXTURE_ITEM_ID, FIXTURE_ORIGIN, FIXTURE_PASSWORD,
+    FIXTURE_SITE_ITEM_ID, FIXTURE_USERNAME,
+};
+use hexactra_credential_resolver::ProviderError;
+use serde_json::{json, Value};
+use tracing_subscriber::fmt::format::FmtSpan;
+use uuid::Uuid;
+
+const TOKEN: &str = "secret-test-token-0123456789abcdef";
+const OWNER: &str = "user-a";
+const TAB: i64 = 7;
+
+// ------------------------------------------------------------------ helpers
+
+#[derive(Clone, Default)]
+struct LogBuf(Arc<Mutex<Vec<u8>>>);
+
+impl Write for LogBuf {
+    fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(b);
+        Ok(b.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogBuf {
+    type Writer = LogBuf;
+    fn make_writer(&'a self) -> Self::Writer {
+        self.clone()
+    }
+}
+
+/// The browser: scripted tab URLs and frame probe, everything it receives.
+#[derive(Clone)]
+struct Ext {
+    /// The URL `tabs` reports; each call pops the next one while more than
+    /// one is left, so a test can navigate between two reads.
+    urls: Arc<Mutex<VecDeque<String>>>,
+    /// What the frame probe (`evaluate`) answers.
+    frame: Arc<Mutex<Value>>,
+    received: Arc<Mutex<Vec<RemoteAction>>>,
+    /// While set, `type` and `type_keys` wait before answering.
+    hold: Arc<AtomicBool>,
+}
+
+impl Ext {
+    fn typed(&self) -> Vec<RemoteAction> {
+        self.received
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|a| matches!(a, RemoteAction::Type { .. } | RemoteAction::TypeKeys { .. }))
+            .cloned()
+            .collect()
+    }
+
+    fn kinds(&self) -> Vec<&'static str> {
+        self.received
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|a| a.kind())
+            .collect()
+    }
+
+    fn goto(&self, urls: &[&str]) {
+        *self.urls.lock().unwrap() = urls.iter().map(|u| u.to_string()).collect();
+    }
+}
+
+struct Fabric {
+    url: String,
+    store: RuntimeStore,
+    state: ApiState,
+    client: ControlClient,
+    host: HostClient,
+    host_id: Uuid,
+    ext: Ext,
+}
+
+async fn start_with(webhooks: Webhooks) -> Fabric {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let store = RuntimeStore::new();
+    let state = ApiState::with_webhooks(store.clone(), TOKEN, webhooks);
+    tokio::spawn(runtime::serve(
+        listener,
+        state.clone(),
+        std::future::pending(),
+    ));
+    let host = HostClient::new(&url, TOKEN).unwrap();
+    let host_id = host
+        .register(&RegisterHostRequest {
+            name: "h".into(),
+            version: "0".into(),
+            host_id: None,
+            viewer_url: None,
+            mode: None,
+            desktop: false,
+        })
+        .await
+        .unwrap()
+        .host_id;
+    host.next(host_id, true, Duration::from_millis(10))
+        .await
+        .unwrap();
+    let ext = Ext {
+        urls: Arc::new(Mutex::new(VecDeque::from([
+            FIXTURE_ORIGIN.to_string() + "/signin"
+        ]))),
+        frame: Arc::new(Mutex::new(
+            json!({"found": true, "frame": false, "same_origin": true}),
+        )),
+        received: Default::default(),
+        hold: Default::default(),
+    };
+    {
+        let (host, ext) = (host.clone(), ext.clone());
+        tokio::spawn(async move {
+            loop {
+                let Ok(Some(op)) = host.next(host_id, true, Duration::from_millis(100)).await
+                else {
+                    continue;
+                };
+                ext.received.lock().unwrap().push(op.action.clone());
+                let result = match &op.action {
+                    RemoteAction::Tabs => {
+                        let url = {
+                            let mut q = ext.urls.lock().unwrap();
+                            if q.len() > 1 {
+                                q.pop_front().unwrap()
+                            } else {
+                                q.front().cloned().unwrap_or_default()
+                            }
+                        };
+                        json!({"tabs": [
+                            {"id": 3, "window_id": 2, "url": "https://other.example.test/", "title": "other", "active": false},
+                            {"id": TAB, "window_id": 1, "url": url, "title": "page", "active": true},
+                        ]})
+                    }
+                    RemoteAction::Evaluate { .. } => {
+                        json!({"value": ext.frame.lock().unwrap().clone()})
+                    }
+                    RemoteAction::Type { .. } | RemoteAction::TypeKeys { .. } => {
+                        while ext.hold.load(Ordering::SeqCst) {
+                            tokio::time::sleep(Duration::from_millis(10)).await;
+                        }
+                        json!({})
+                    }
+                    _ => json!({}),
+                };
+                let _ = host
+                    .report(
+                        host_id,
+                        op.id,
+                        &OperationResult {
+                            navigation_blocked: Vec::new(),
+                            ok: true,
+                            result: Some(result),
+                            error: None,
+                        },
+                    )
+                    .await;
+            }
+        });
+    }
+    Fabric {
+        client: ControlClient::new(&url, TOKEN).unwrap(),
+        url,
+        store,
+        state,
+        host,
+        host_id,
+        ext,
+    }
+}
+
+async fn start() -> Fabric {
+    start_with(Webhooks::in_memory()).await
+}
+
+impl Fabric {
+    /// Register the fixture provider for `OWNER` over HTTP.
+    async fn register_test(&self, settings: Value) -> reqwest::Response {
+        self.put_provider(
+            OWNER,
+            "test",
+            json!({"kind": "test", "access_token": "token-registered", "settings": settings}),
+        )
+        .await
+    }
+
+    async fn put_provider(&self, owner: &str, provider: &str, body: Value) -> reqwest::Response {
+        reqwest::Client::new()
+            .put(format!(
+                "{}/v1/secrets-providers/{owner}/{provider}",
+                self.url
+            ))
+            .bearer_auth(TOKEN)
+            .json(&body)
+            .send()
+            .await
+            .unwrap()
+    }
+
+    async fn session(&self, owner: Option<&str>) -> Uuid {
+        self.client
+            .create_session(&CreateSessionRequest {
+                owner_id: owner.map(Into::into),
+                ..Default::default()
+            })
+            .await
+            .unwrap()
+            .id
+    }
+
+    async fn act(&self, session: Uuid, action: RemoteAction) -> OperationView {
+        self.client
+            .act(session, action, Some(Duration::from_secs(10)))
+            .await
+            .unwrap()
+    }
+
+    fn events(&self, kind: &str) -> Vec<Value> {
+        self.store
+            .log
+            .recent()
+            .into_iter()
+            .filter(|e| e.kind == kind)
+            .map(|e| e.data)
+            .collect()
+    }
+}
+
+fn lookup() -> RemoteAction {
+    RemoteAction::SecretsLookup {
+        kind: ItemKind::Login,
+        provider: None,
+        run_id: Some("run-1".into()),
+        client_label: Some("Console".into()),
+        tab_id: None,
+    }
+}
+
+fn type_from(item: &str, field: SecretField, selector: &str) -> RemoteAction {
+    RemoteAction::TypeFromProvider {
+        item_id: item.into(),
+        field,
+        selector: Some(selector.into()),
+        point: None,
+        purpose: SecretPurpose::Login,
+        clear: true,
+        submit: false,
+        provider: None,
+        run_id: Some("run-1".into()),
+        client_label: Some("Console".into()),
+        tab_id: None,
+    }
+}
+
+fn type_code(item: &str, selector: &str) -> RemoteAction {
+    RemoteAction::TypeCodeFromProvider {
+        item_id: item.into(),
+        selector: Some(selector.into()),
+        point: None,
+        clear: false,
+        submit: true,
+        provider: None,
+        run_id: Some("run-1".into()),
+        client_label: Some("Console".into()),
+        tab_id: None,
+    }
+}
+
+fn failed_with(op: &OperationView, code: &str) {
+    assert_eq!(op.state, OperationState::Failed, "{op:?}");
+    let e = op.error.as_deref().unwrap_or_default();
+    assert!(
+        e.starts_with(&format!("{code}: ")),
+        "expected {code}, got {e:?}"
+    );
+}
+
+fn text_of(v: &impl serde::Serialize) -> String {
+    serde_json::to_string(v).unwrap()
+}
+
+// -------------------------------------------------------------------- tests
+
+#[tokio::test]
+async fn the_registration_resource_never_returns_or_keeps_a_token() {
+    let f = start().await;
+    let r = f.register_test(json!({})).await;
+    assert_eq!(r.status(), 200);
+    assert_eq!(r.headers()["cache-control"], "no-store");
+    let body = r.text().await.unwrap();
+    assert!(!body.contains("token-registered"), "{body}");
+    let v: Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        (
+            v["owner_id"].as_str(),
+            v["provider"].as_str(),
+            v["kind"].as_str()
+        ),
+        (Some(OWNER), Some("test"), Some("test"))
+    );
+
+    let list = reqwest::Client::new()
+        .get(format!("{}/v1/secrets-providers/{OWNER}", f.url))
+        .bearer_auth(TOKEN)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(list.status(), 200);
+    let list = list.text().await.unwrap();
+    assert!(list.contains("\"provider\":\"test\"") && !list.contains("token-registered"));
+
+    // Bad input, kinds that do not exist yet, and no token.
+    assert_eq!(
+        f.put_provider(OWNER, "Bad Id", json!({"kind": "test"}))
+            .await
+            .status(),
+        400
+    );
+    assert_eq!(
+        f.put_provider(
+            OWNER,
+            "test",
+            json!({"kind": "test", "base_url": "http://vault.example.test"})
+        )
+        .await
+        .status(),
+        400
+    );
+    let vault = f
+        .put_provider(
+            OWNER,
+            "vault",
+            json!({"kind": "vault", "base_url": "https://vault.example.test", "access_token": "t"}),
+        )
+        .await;
+    assert_eq!(vault.status(), 501);
+    assert!(vault
+        .text()
+        .await
+        .unwrap()
+        .contains("provider_kind_unsupported"));
+    assert_eq!(
+        reqwest::Client::new()
+            .put(format!("{}/v1/secrets-providers/{OWNER}/test", f.url))
+            .json(&json!({"kind": "test"}))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        401
+    );
+
+    // Removing is idempotent, and the provider is gone.
+    for _ in 0..2 {
+        let d = reqwest::Client::new()
+            .delete(format!("{}/v1/secrets-providers/{OWNER}/test", f.url))
+            .bearer_auth(TOKEN)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(d.status(), 204);
+    }
+    let s = f.session(Some(OWNER)).await;
+    failed_with(&f.act(s, lookup()).await, "no_provider");
+}
+
+#[tokio::test]
+async fn lookup_returns_summaries_only() {
+    let f = start().await;
+    assert_eq!(f.register_test(json!({})).await.status(), 200);
+    let s = f.session(Some(OWNER)).await;
+    let op = f.act(s, lookup()).await;
+    assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
+    let r = op.result.clone().unwrap();
+    assert_eq!(r["origin"], FIXTURE_ORIGIN);
+    assert_eq!(r["provider"], "test");
+    let items = r["items"].as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(
+        (items[0]["id"].as_str(), items[0]["match_kind"].as_str()),
+        (Some(FIXTURE_ITEM_ID), Some("exact"))
+    );
+    assert_eq!(items[0]["username"], FIXTURE_USERNAME);
+    assert_eq!(items[0]["has_code"], true);
+    assert_eq!(
+        (items[1]["id"].as_str(), items[1]["match_kind"].as_str()),
+        (Some(FIXTURE_SITE_ITEM_ID), Some("site"))
+    );
+    let shown = text_of(&op);
+    assert!(
+        !shown.contains(FIXTURE_PASSWORD) && !shown.contains(FIXTURE_CODE),
+        "{shown}"
+    );
+    // The tab listing read for the origin does not stay readable.
+    let tabs_ops: Vec<_> = f
+        .events("operation.succeeded")
+        .into_iter()
+        .filter(|e| e["kind"] == "tabs")
+        .collect();
+    assert!(!tabs_ops.is_empty());
+    let probe = f
+        .client
+        .operation(tabs_ops[0]["op_id"].as_str().unwrap().parse().unwrap())
+        .await
+        .unwrap();
+    assert!(probe.result.is_none(), "{probe:?}");
+    // Only the lookup reached the provider: no value was released.
+    assert_eq!(f.ext.kinds(), vec!["tabs"]);
+}
+
+#[tokio::test]
+async fn type_from_provider_types_the_value_and_reports_none() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    let op = f
+        .act(s, type_from(FIXTURE_ITEM_ID, SecretField::Password, "#pw"))
+        .await;
+    assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
+    assert_eq!(op.result, Some(json!({"typed": true})));
+
+    // The browser got a trusted `type`, pinned to the tab the origin came from.
+    assert_eq!(
+        f.ext.typed(),
+        vec![RemoteAction::Type {
+            selector: "#pw".into(),
+            text: FIXTURE_PASSWORD.into(),
+            clear: true,
+            submit: false,
+            sensitive: true,
+            tab_id: Some(TAB),
+        }]
+    );
+    // The origin was read twice (before the release and right before typing).
+    assert_eq!(f.ext.kinds(), vec!["tabs", "tabs", "type"]);
+
+    // The operation, and the operation of the typing step, show no value.
+    for what in [
+        text_of(&op),
+        text_of(&f.client.operation(op.id).await.unwrap()),
+    ] {
+        assert!(!what.contains(FIXTURE_PASSWORD), "{what}");
+    }
+    let typing = f
+        .events("operation.succeeded")
+        .into_iter()
+        .find(|e| e["kind"] == "type")
+        .unwrap();
+    let typing = f
+        .client
+        .operation(typing["op_id"].as_str().unwrap().parse().unwrap())
+        .await
+        .unwrap();
+    assert!(text_of(&typing).contains(REDACTED_TEXT));
+    assert!(!text_of(&typing).contains(FIXTURE_PASSWORD));
+}
+
+#[tokio::test]
+async fn type_code_from_provider_types_a_fresh_code() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    let op = f.act(s, type_code(FIXTURE_ITEM_ID, "#otp")).await;
+    assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
+    let r = op.result.clone().unwrap();
+    assert_eq!(r["typed"], true);
+    assert!(r["expires_at"].is_string());
+    assert!(!text_of(&op).contains(FIXTURE_CODE));
+    assert_eq!(
+        f.ext.typed(),
+        vec![RemoteAction::Type {
+            selector: "#otp".into(),
+            text: FIXTURE_CODE.into(),
+            clear: false,
+            submit: true,
+            sensitive: true,
+            tab_id: Some(TAB),
+        }]
+    );
+    // An item without a code is "not found", as in Vault.
+    f.ext.goto(&["https://app.example.test/"]);
+    failed_with(
+        &f.act(s, type_code(FIXTURE_SITE_ITEM_ID, "#otp")).await,
+        "not_found",
+    );
+}
+
+#[tokio::test]
+async fn a_page_on_another_origin_gets_nothing() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+
+    // Looked up on the login page, then the tab navigated to a look-alike
+    // before typing: the provider is asked with the origin read at that moment.
+    assert_eq!(f.act(s, lookup()).await.state, OperationState::Succeeded);
+    f.ext.goto(&["https://login.example.test.evil.test/signin"]);
+    let op = f
+        .act(s, type_from(FIXTURE_ITEM_ID, SecretField::Password, "#pw"))
+        .await;
+    failed_with(&op, "origin_mismatch");
+    // A site match is not enough either.
+    f.ext.goto(&["https://app.example.test/"]);
+    failed_with(
+        &f.act(s, type_from(FIXTURE_ITEM_ID, SecretField::Password, "#pw"))
+            .await,
+        "origin_mismatch",
+    );
+    assert!(
+        f.ext.typed().is_empty(),
+        "nothing may be typed: {:?}",
+        f.ext.typed()
+    );
+
+    // The tab moves after the provider answered: caught by the second read,
+    // the value is dropped and nothing is typed.
+    f.ext.goto(&[
+        &format!("{FIXTURE_ORIGIN}/signin"),
+        "https://evil.example.test/",
+    ]);
+    let op = f
+        .act(s, type_from(FIXTURE_ITEM_ID, SecretField::Password, "#pw"))
+        .await;
+    failed_with(&op, "origin_mismatch");
+    assert!(f.ext.typed().is_empty());
+    let ev = f.events("secrets.release");
+    assert_eq!(ev.last().unwrap()["outcome"], "origin_mismatch");
+    assert_eq!(ev.last().unwrap()["released"], true);
+
+    // A page that is not https (or loopback http) has no origin to bind to.
+    f.ext.goto(&["chrome://settings/passwords"]);
+    failed_with(
+        &f.act(s, type_from(FIXTURE_ITEM_ID, SecretField::Password, "#pw"))
+            .await,
+        "origin_unavailable",
+    );
+}
+
+#[tokio::test]
+async fn point_targets_refuse_frames_of_another_origin() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    let by_point = |clear: bool, submit: bool| RemoteAction::TypeFromProvider {
+        item_id: FIXTURE_ITEM_ID.into(),
+        field: SecretField::Password,
+        selector: None,
+        point: Some(ViewportPoint { x: 120, y: 340 }),
+        purpose: SecretPurpose::Login,
+        clear,
+        submit,
+        provider: None,
+        run_id: None,
+        client_label: None,
+        tab_id: Some(TAB),
+    };
+
+    // The point is inside a cross-origin frame: refused before the value is fetched.
+    *f.ext.frame.lock().unwrap() = json!({"found": true, "frame": true, "same_origin": false});
+    failed_with(
+        &f.act(s, by_point(false, false)).await,
+        "cross_origin_frame",
+    );
+    assert!(f.ext.typed().is_empty());
+    assert!(!f.ext.kinds().contains(&"click_at"));
+    assert!(f.events("secrets.release").last().unwrap()["released"] == false);
+
+    // Nothing at the point.
+    *f.ext.frame.lock().unwrap() = json!({"found": false});
+    failed_with(&f.act(s, by_point(false, false)).await, "typing_failed");
+
+    // A same-origin frame, or the top document, is fine: click, wipe, type, submit.
+    *f.ext.frame.lock().unwrap() = json!({"found": true, "frame": true, "same_origin": true});
+    let op = f.act(s, by_point(true, true)).await;
+    assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
+    let kinds = f.ext.kinds();
+    // Probe the frame, read the origin again, click, wipe, type, submit.
+    let tail: Vec<&str> = kinds[kinds.len() - 7..].to_vec();
+    assert_eq!(
+        tail,
+        [
+            "evaluate",
+            "tabs",
+            "click_at",
+            "key",
+            "key",
+            "type_keys",
+            "key"
+        ]
+    );
+    assert_eq!(
+        f.ext.typed(),
+        vec![RemoteAction::TypeKeys {
+            text: FIXTURE_PASSWORD.into(),
+            sensitive: true,
+            tab_id: Some(TAB),
+        }]
+    );
+    assert!(!text_of(&op).contains(FIXTURE_PASSWORD));
+}
+
+#[tokio::test]
+async fn takeover_and_owners_are_respected() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+
+    // Another owner's session has no provider; neither has one without an owner.
+    let other = f.session(Some("user-b")).await;
+    failed_with(&f.act(other, lookup()).await, "no_provider");
+    failed_with(
+        &f.act(
+            other,
+            type_from(FIXTURE_ITEM_ID, SecretField::Password, "#pw"),
+        )
+        .await,
+        "no_provider",
+    );
+    let none = f.session(None).await;
+    failed_with(&f.act(none, lookup()).await, "no_provider");
+    assert!(f.ext.typed().is_empty());
+
+    // While a person holds the desktop every provider action is refused at
+    // the door, like any other action.
+    let t = reqwest::Client::new()
+        .post(format!("{}/v1/hosts/{}/takeover", f.url, f.host_id))
+        .bearer_auth(TOKEN)
+        .json(&json!({"actor": {"user_id": "person-a"}, "ttl_s": 60}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(t.status(), 201);
+    for action in [
+        lookup(),
+        type_from(FIXTURE_ITEM_ID, SecretField::Password, "#pw"),
+        type_code(FIXTURE_ITEM_ID, "#otp"),
+    ] {
+        let err = f
+            .client
+            .act(s, action, Some(Duration::from_secs(2)))
+            .await
+            .unwrap_err();
+        assert_eq!(err.status(), Some(409));
+        assert!(err.to_string().contains("takeover_active"), "{err}");
+    }
+    assert!(f.ext.typed().is_empty());
+}
+
+#[tokio::test]
+async fn provider_failures_map_to_their_codes() {
+    let f = start().await;
+    let s = f.session(Some(OWNER)).await;
+    for (mode, code) in [
+        ("unavailable", "unavailable"),
+        ("rate_limited", "rate_limited"),
+        ("disabled", "disabled"),
+        ("unauthorized", "unauthorized"),
+    ] {
+        assert_eq!(f.register_test(json!({"mode": mode})).await.status(), 200);
+        failed_with(&f.act(s, lookup()).await, code);
+        failed_with(
+            &f.act(s, type_from(FIXTURE_ITEM_ID, SecretField::Password, "#pw"))
+                .await,
+            code,
+        );
+        failed_with(&f.act(s, type_code(FIXTURE_ITEM_ID, "#otp")).await, code);
+    }
+    let op = {
+        f.register_test(json!({"mode": "rate_limited"})).await;
+        f.act(s, lookup()).await
+    };
+    assert!(op.error.unwrap().contains("retry in 7 s"));
+    assert!(f.ext.typed().is_empty());
+
+    // An unknown item and an unsupported field.
+    f.register_test(json!({})).await;
+    failed_with(
+        &f.act(s, type_from("nope", SecretField::Password, "#pw"))
+            .await,
+        "not_found",
+    );
+    failed_with(
+        &f.act(
+            s,
+            type_from(FIXTURE_ITEM_ID, SecretField::CardNumber, "#pw"),
+        )
+        .await,
+        "refused",
+    );
+    // The provider named does not exist.
+    let mut named = type_from(FIXTURE_ITEM_ID, SecretField::Password, "#pw");
+    if let RemoteAction::TypeFromProvider { provider, .. } = &mut named {
+        *provider = Some("vault".into());
+    }
+    failed_with(&f.act(s, named).await, "no_provider");
+    assert!(f.ext.typed().is_empty());
+}
+
+#[tokio::test]
+async fn a_failed_typing_is_reported_without_the_value() {
+    // A host that cannot type (no such element) fails the action.
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    f.state.secrets.remove(OWNER, "test");
+    let provider = Arc::new(TestProvider::with_fixture());
+    f.state.secrets.register_provider(
+        OWNER,
+        "test",
+        provider.clone(),
+        SecretsProviderKind::Test,
+        None,
+    );
+    // Make the fake browser fail the typing step by pinning a missing tab.
+    let mut a = type_from(FIXTURE_ITEM_ID, SecretField::Password, "#pw");
+    if let RemoteAction::TypeFromProvider { tab_id, .. } = &mut a {
+        *tab_id = Some(999);
+    }
+    failed_with(&f.act(s, a).await, "origin_unavailable");
+    // The provider was never asked for a value.
+    assert!(provider.calls().iter().all(|c| c.op != "release"));
+}
+
+#[tokio::test]
+async fn no_screenshot_while_a_secret_is_being_typed() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    f.ext.hold.store(true, Ordering::SeqCst);
+    let typing = {
+        let (client, action) = (
+            f.client.clone(),
+            type_from(FIXTURE_ITEM_ID, SecretField::Password, "#pw"),
+        );
+        tokio::spawn(async move { client.act(s, action, Some(Duration::from_secs(10))).await })
+    };
+    for _ in 0..200 {
+        if !f.ext.typed().is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    assert!(!f.ext.typed().is_empty(), "the typing never started");
+
+    // The value is out of the provider and not yet typed: no picture.
+    for shot in [
+        RemoteAction::Screenshot {
+            marks: false,
+            mask: false,
+            tab_id: None,
+        },
+        RemoteAction::Screenshot {
+            marks: false,
+            mask: true,
+            tab_id: None,
+        },
+        RemoteAction::DesktopScreenshot,
+    ] {
+        let err = f
+            .client
+            .act(s, shot, Some(Duration::from_secs(1)))
+            .await
+            .unwrap_err();
+        assert_eq!(err.status(), Some(409), "{err}");
+        assert!(err.to_string().contains("no screenshot"), "{err}");
+    }
+    f.ext.hold.store(false, Ordering::SeqCst);
+    let done = typing.await.unwrap().unwrap();
+    assert_eq!(done.state, OperationState::Succeeded);
+    // After the typing a picture is allowed again.
+    let shot = f
+        .client
+        .act(
+            s,
+            RemoteAction::Screenshot {
+                marks: false,
+                mask: true,
+                tab_id: None,
+            },
+            Some(Duration::from_secs(5)),
+        )
+        .await
+        .unwrap();
+    assert_eq!(shot.state, OperationState::Succeeded, "{shot:?}");
+}
+
+#[tokio::test]
+async fn the_host_cannot_report_a_provider_operation() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    // Hold the origin read so the operation stays open, then try to report it.
+    let r = reqwest::Client::new()
+        .post(format!("{}/v1/sessions/{s}/actions?async=true", f.url))
+        .bearer_auth(TOKEN)
+        .json(&json!({"action": {"type": "secrets_lookup"}}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), 202);
+    let op: OperationView = r.json().await.unwrap();
+    assert_eq!(op.action.kind(), "secrets_lookup");
+    let err = f
+        .host
+        .report(
+            f.host_id,
+            op.id,
+            &OperationResult {
+                navigation_blocked: Vec::new(),
+                ok: true,
+                result: Some(
+                    json!({"origin": "https://evil.test", "provider": "test", "items": []}),
+                ),
+                error: None,
+            },
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(err.status(), Some(404), "{err}");
+    // It finishes on its own.
+    for _ in 0..200 {
+        if f.client.operation(op.id).await.unwrap().state.is_terminal() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    assert_eq!(
+        f.client.operation(op.id).await.unwrap().state,
+        OperationState::Succeeded
+    );
+}
+
+#[tokio::test]
+async fn lookups_and_releases_leave_audit_events_without_a_value() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    f.act(s, lookup()).await;
+    f.act(s, type_from(FIXTURE_ITEM_ID, SecretField::Password, "#pw"))
+        .await;
+    f.act(s, type_code(FIXTURE_ITEM_ID, "#otp")).await;
+    f.ext.goto(&["https://evil.example.test/"]);
+    f.act(s, type_from(FIXTURE_ITEM_ID, SecretField::Username, "#u"))
+        .await;
+
+    let lookups = f.events("secrets.lookup");
+    assert_eq!(lookups.len(), 1);
+    let l = &lookups[0];
+    assert_eq!(l["owner_id"], OWNER);
+    assert_eq!(l["session_id"], s.to_string());
+    assert_eq!(l["run_id"], "run-1");
+    assert_eq!(l["provider"], "test");
+    assert_eq!(l["origin"], FIXTURE_ORIGIN);
+    assert_eq!(l["kind"], "login");
+    assert_eq!(l["count"], 2);
+    assert_eq!(l["outcome"], "ok");
+
+    let releases = f.events("secrets.release");
+    assert_eq!(releases.len(), 3);
+    let r = &releases[0];
+    assert_eq!(r["owner_id"], OWNER);
+    assert_eq!(r["run_id"], "run-1");
+    assert_eq!(r["client_label"], "Console");
+    assert_eq!(r["provider"], "test");
+    assert_eq!(r["item_id"], FIXTURE_ITEM_ID);
+    assert_eq!(r["field"], "password");
+    assert_eq!(r["origin"], FIXTURE_ORIGIN);
+    assert_eq!(r["purpose"], "login");
+    assert_eq!(r["outcome"], "typed");
+    assert_eq!(r["released"], true);
+    assert_eq!(releases[1]["field"], "one_time_code");
+    assert_eq!(releases[1]["purpose"], "mfa");
+    // A refusal is audited too, with the origin it was refused for.
+    assert_eq!(releases[2]["outcome"], "origin_mismatch");
+    assert_eq!(releases[2]["origin"], "https://evil.example.test");
+    assert_eq!(releases[2]["released"], false);
+    let all = text_of(&f.events("secrets.release")) + &text_of(&lookups);
+    for v in [FIXTURE_PASSWORD, FIXTURE_CODE] {
+        assert!(!all.contains(v), "{all}");
+    }
+    // The registration is audited without its token.
+    let reg = f.events("secrets.provider_registered");
+    assert_eq!(reg.len(), 1);
+    assert!(!text_of(&reg).contains("token-registered"));
+}
+
+// ------------------------------------------------------------ canary scan
+
+/// Values only the providers know. If any of them shows up anywhere but the
+/// browser's received action, the path leaks.
+const CANARY_PASSWORD: &str = "cnry-pw-5d41402abc4b2a76b9719d911017c592";
+const CANARY_CODE: &str = "cnry-otp-7b774effe4a349c6dd82ad4f4f21d34c";
+const CANARY_TOKEN: &str = "cnry-token-098f6bcd4621d373cade4e832627b4f6";
+
+#[tokio::test]
+async fn canary_scan_over_logs_state_results_and_events() {
+    let logs = LogBuf::default();
+    tracing_subscriber::fmt()
+        .with_writer(logs.clone())
+        .with_max_level(tracing::Level::DEBUG)
+        .with_span_events(FmtSpan::FULL)
+        .with_ansi(false)
+        .init();
+
+    let f = start().await;
+
+    // Register over HTTP (the token is a canary too), then replace the
+    // provider by one holding canary values.
+    let r = f
+        .put_provider(OWNER, "test", json!({"kind": "test", "access_token": CANARY_TOKEN, "expires_at": "2999-01-01T00:00:00Z"}))
+        .await;
+    assert_eq!(r.status(), 200);
+    assert!(!r.text().await.unwrap().contains(CANARY_TOKEN));
+    let provider = Arc::new(TestProvider::empty().with_item(TestItem {
+        id: "canary-item".into(),
+        name: "Canary login".into(),
+        username: "canary-user@example.test".into(),
+        password: CANARY_PASSWORD.into(),
+        code: Some(CANARY_CODE.into()),
+        origins: vec![FIXTURE_ORIGIN.into()],
+    }));
+    f.state.secrets.register_provider(
+        OWNER,
+        "test",
+        provider.clone(),
+        SecretsProviderKind::Test,
+        None,
+    );
+
+    // A scripted session: look up, type the username, the password and a
+    // code, submit, fail once, end.
+    let s = f.session(Some(OWNER)).await;
+    let mut ops = Vec::new();
+    ops.push(f.act(s, lookup()).await);
+    ops.push(
+        f.act(s, type_from("canary-item", SecretField::Password, "#pw"))
+            .await,
+    );
+    ops.push(f.act(s, type_code("canary-item", "#otp")).await);
+    f.ext.goto(&["https://login.example.test.evil.test/"]);
+    ops.push(
+        f.act(s, type_from("canary-item", SecretField::Password, "#pw"))
+            .await,
+    );
+    f.ext.goto(&[&format!("{FIXTURE_ORIGIN}/")]);
+    *f.ext.frame.lock().unwrap() = json!({"found": true, "frame": false, "same_origin": true});
+    ops.push(
+        f.act(
+            s,
+            RemoteAction::TypeFromProvider {
+                item_id: "canary-item".into(),
+                field: SecretField::Password,
+                selector: None,
+                point: Some(ViewportPoint { x: 10, y: 10 }),
+                purpose: SecretPurpose::Login,
+                clear: true,
+                submit: true,
+                provider: None,
+                run_id: None,
+                client_label: None,
+                tab_id: None,
+            },
+        )
+        .await,
+    );
+    provider.set_failure(Some(ProviderError::Unavailable));
+    ops.push(
+        f.act(s, type_from("canary-item", SecretField::Password, "#pw"))
+            .await,
+    );
+    f.client.end_session(s).await.unwrap();
+
+    // The browser is the one place the values reached.
+    let typed = f.ext.typed();
+    assert!(typed
+        .iter()
+        .any(|a| matches!(a, RemoteAction::Type { text, .. } if text == CANARY_PASSWORD)));
+    assert!(typed
+        .iter()
+        .any(|a| matches!(a, RemoteAction::Type { text, .. } if text == CANARY_CODE)));
+    assert!(typed
+        .iter()
+        .any(|a| matches!(a, RemoteAction::TypeKeys { text, .. } if text == CANARY_PASSWORD)));
+    assert_eq!(
+        ops.iter()
+            .filter(|o| o.state == OperationState::Succeeded)
+            .count(),
+        4
+    );
+    // Positive control: the scan below does find a value where it is.
+    assert!(text_of(&typed).contains(CANARY_PASSWORD));
+
+    // Every operation the fabric knows, as a caller reads it.
+    let mut results = vec![text_of(&ops)];
+    let mut seen = std::collections::HashSet::new();
+    for e in f.store.log.recent() {
+        if let Some(id) = e.data.get("op_id").and_then(Value::as_str) {
+            if seen.insert(id.to_string()) {
+                results.push(text_of(
+                    &f.client.operation(id.parse().unwrap()).await.unwrap(),
+                ));
+            }
+        }
+    }
+    assert!(
+        seen.len() > 12,
+        "too few operations were read: {}",
+        seen.len()
+    );
+    results.push(text_of(&f.client.sessions().await.unwrap()));
+
+    // The state database (and its WAL), after a save.
+    let dir = tempfile::tempdir().unwrap();
+    let db = StateDb::open(&dir.path().join("state.db")).unwrap();
+    db.flush(&f.store, &f.state.credentials);
+    let mut files = Vec::new();
+    for entry in std::fs::read_dir(dir.path()).unwrap() {
+        files.push((entry.unwrap().path(), ()));
+    }
+    assert!(!files.is_empty());
+
+    let events = text_of(&f.store.log.recent());
+    assert!(
+        events.contains("secrets.release"),
+        "events were not captured"
+    );
+    let logs = String::from_utf8(logs.0.lock().unwrap().clone()).unwrap();
+    assert!(
+        logs.contains("provider action started"),
+        "logs were not captured"
+    );
+
+    for canary in [CANARY_PASSWORD, CANARY_CODE, CANARY_TOKEN] {
+        for (what, text) in [("events", &events), ("logs", &logs)] {
+            assert!(!text.contains(canary), "{what} leak {canary}");
+        }
+        for r in &results {
+            assert!(
+                !r.contains(canary),
+                "an operation or session leaks {canary}: {r}"
+            );
+        }
+        for (path, _) in &files {
+            let bytes = std::fs::read(path).unwrap();
+            assert!(
+                !bytes.windows(canary.len()).any(|w| w == canary.as_bytes()),
+                "{} leaks {canary}",
+                path.display()
+            );
+        }
+    }
+    // The provider saw owners, origins and fields, never a value to log.
+    assert!(provider
+        .calls()
+        .iter()
+        .any(|c| c.op == "release" && c.field == Some("password")));
+}
+
+#[test]
+fn the_registry_is_a_plain_value() {
+    // The registry can be built and shared without a server.
+    let r = SecretsProviders::default();
+    assert!(r.list("nobody").is_empty());
+}

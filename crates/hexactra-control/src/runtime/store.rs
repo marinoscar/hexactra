@@ -100,6 +100,9 @@ struct OperationEntry {
     /// the view (which shows `[secret]`) until the host takes it, and
     /// dropped (zeroed) when the operation ends without being dispatched.
     secret_text: Option<Zeroizing<String>>,
+    /// Answered by the control plane itself (a secrets provider action,
+    /// #590): never in a host's queue, and no host may report it.
+    internal: bool,
 }
 
 /// The action a host runs: `type_secret` and sensitive `type` actions get
@@ -130,6 +133,11 @@ fn host_action(view: &RemoteAction, secret: Option<Zeroizing<String>>) -> Remote
             sensitive: true,
             tab_id: *tab_id,
         },
+        RemoteAction::TypeKeys { tab_id, .. } => RemoteAction::TypeKeys {
+            text: String::clone(&text),
+            sensitive: true,
+            tab_id: *tab_id,
+        },
         other => other.clone(),
     }
 }
@@ -141,6 +149,9 @@ pub(super) struct Inner {
     operations: HashMap<Uuid, OperationEntry>,
     pub(super) handoffs: HashMap<Uuid, HandoffEntry>,
     pub(super) commands: HashMap<Uuid, super::host_commands::CommandEntry>,
+    /// Sessions with a provider-fetched secret between its release and the
+    /// end of typing, with how many (#590): no picture is taken then.
+    secret_in_flight: HashMap<Uuid, usize>,
 }
 
 #[cfg(test)]
@@ -182,6 +193,25 @@ pub(crate) struct StoreSnapshot {
 
 /// Ended sessions older than this are not kept across restarts.
 const ENDED_SESSION_RETENTION_DAYS: i64 = 7;
+
+/// While alive, the session takes no screenshot (see
+/// [`RuntimeStore::secret_guard`]).
+pub(super) struct SecretGuard {
+    store: RuntimeStore,
+    session_id: Uuid,
+}
+
+impl Drop for SecretGuard {
+    fn drop(&mut self) {
+        let mut inner = self.store.lock();
+        if let Some(n) = inner.secret_in_flight.get_mut(&self.session_id) {
+            *n -= 1;
+            if *n == 0 {
+                inner.secret_in_flight.remove(&self.session_id);
+            }
+        }
+    }
+}
 
 /// Shared runtime store.
 #[derive(Clone)]
@@ -651,6 +681,28 @@ impl RuntimeStore {
         create_profile: bool,
         allowed_domains: &[String],
     ) -> Result<SessionView, StoreError> {
+        self.create_session_owned(
+            host_id,
+            label,
+            profile,
+            create_profile,
+            allowed_domains,
+            None,
+        )
+    }
+
+    /// [`Self::create_session_with`] for a session that belongs to an owner
+    /// (the console's user id), whose registered secrets providers its
+    /// provider actions use (#590).
+    pub fn create_session_owned(
+        &self,
+        host_id: Option<Uuid>,
+        label: Option<String>,
+        profile: Option<String>,
+        create_profile: bool,
+        allowed_domains: &[String],
+        owner_id: Option<String>,
+    ) -> Result<SessionView, StoreError> {
         let allowed_domains =
             hexactra_core::site_policy::normalize_allowed_domains(allowed_domains)
                 .map_err(StoreError::Invalid)?;
@@ -750,6 +802,7 @@ impl RuntimeStore {
             created_at: now,
             ended_at: None,
             allowed_domains,
+            owner_id,
         };
         inner.sessions.insert(session.id, session.clone());
         self.log.emit(
@@ -838,6 +891,11 @@ impl RuntimeStore {
                 text,
                 sensitive: true,
                 ..
+            }
+            | RemoteAction::TypeKeys {
+                text,
+                sensitive: true,
+                ..
             } => Some(Zeroizing::new(std::mem::replace(
                 text,
                 REDACTED_TEXT.to_string(),
@@ -867,6 +925,19 @@ impl RuntimeStore {
             if !looks_only || Self::handoff_asks_secret(&inner, h) {
                 return Err(StoreError::HandoffPending(h));
             }
+        }
+        // Not while a value a provider released is being typed (#590): a
+        // picture then could show it. The host runs a session's actions in
+        // order, so a picture queued earlier still runs before the typing.
+        if inner.secret_in_flight.contains_key(&session_id)
+            && matches!(
+                action,
+                RemoteAction::Screenshot { .. } | RemoteAction::DesktopScreenshot
+            )
+        {
+            return Err(StoreError::Conflict(
+                "a secret is being typed into this session: no screenshot until it is done".into(),
+            ));
         }
         let host_id = session.host_id;
         if let Some(until) = inner
@@ -920,6 +991,7 @@ impl RuntimeStore {
                 inline_artifacts,
                 traceparent: hexactra_otel::current_traceparent(),
                 secret_text,
+                internal: false,
             },
         );
         let host = inner
@@ -939,6 +1011,142 @@ impl RuntimeStore {
             Self::prune(&mut inner, now);
         }
         Ok((view, rx))
+    }
+
+    /// Whose session this is (the console's user id), if it has an owner.
+    pub fn session_owner(&self, session_id: Uuid) -> Result<Option<String>, StoreError> {
+        self.lock()
+            .sessions
+            .get(&session_id)
+            .map(|s| s.owner_id.clone())
+            .ok_or(StoreError::NotFound("session"))
+    }
+
+    /// Start an operation the control plane answers itself (a secrets
+    /// provider action, #590). It is checked like any action (session
+    /// active, no handoff pending, no takeover) but never queued for a host:
+    /// the caller runs it and ends it with [`Self::finish_internal`].
+    pub(super) fn begin_internal(
+        &self,
+        session_id: Uuid,
+        action: RemoteAction,
+        timeout: Duration,
+    ) -> Result<OperationView, StoreError> {
+        let mut inner = self.lock();
+        let session = inner
+            .sessions
+            .get(&session_id)
+            .ok_or(StoreError::NotFound("session"))?;
+        if session.status != RemoteSessionStatus::Active {
+            return Err(StoreError::Conflict("session has ended".into()));
+        }
+        if let Some(h) = Self::pending_handoff(&inner, session_id) {
+            return Err(StoreError::HandoffPending(h));
+        }
+        let host_id = session.host_id;
+        let now = Utc::now();
+        if let Some(until) = inner
+            .hosts
+            .get(&host_id)
+            .and_then(|h| h.takeover.as_ref())
+            .filter(|l| l.expires_at > now)
+            .map(|l| l.expires_at)
+        {
+            return Err(StoreError::TakeoverActive(until));
+        }
+        if !inner.hosts.contains_key(&host_id) {
+            return Err(StoreError::NotFound("host"));
+        }
+        let view = OperationView {
+            id: Uuid::new_v4(),
+            session_id,
+            host_id,
+            action,
+            state: OperationState::Dispatched,
+            result: None,
+            error: None,
+            created_at: now,
+            completed_at: None,
+            navigation_blocked: Vec::new(),
+        };
+        let (tx, _rx) = watch::channel(OperationState::Dispatched);
+        inner.operations.insert(
+            view.id,
+            OperationEntry {
+                view: view.clone(),
+                deadline: now + chrono::Duration::from_std(timeout).unwrap_or_default(),
+                tx,
+                inline_artifacts: false,
+                traceparent: hexactra_otel::current_traceparent(),
+                secret_text: None,
+                internal: true,
+            },
+        );
+        self.log.emit("operation.queued", op_event(&view));
+        self.log.emit("operation.dispatched", op_event(&view));
+        if inner.operations.len() > PRUNE_THRESHOLD {
+            Self::prune(&mut inner, now);
+        }
+        Ok(view)
+    }
+
+    /// End an operation started with [`Self::begin_internal`]: `Ok(result)`
+    /// succeeds it, `Err(error)` fails it (the error is `<code>: <message>`).
+    pub(super) fn finish_internal(
+        &self,
+        op_id: Uuid,
+        outcome: Result<serde_json::Value, String>,
+    ) -> Result<OperationView, StoreError> {
+        let mut inner = self.lock();
+        let op = inner
+            .operations
+            .get_mut(&op_id)
+            .filter(|o| o.internal)
+            .ok_or(StoreError::NotFound("operation"))?;
+        if op.view.state.is_terminal() {
+            return Ok(op.view.clone());
+        }
+        let state = match outcome {
+            Ok(result) => {
+                op.view.result = Some(result);
+                OperationState::Succeeded
+            }
+            Err(error) => {
+                op.view.error = Some(error);
+                OperationState::Failed
+            }
+        };
+        op.view.state = state;
+        op.view.completed_at = Some(Utc::now());
+        let _ = op.tx.send(state);
+        super::metrics::operation_finished(&op.view);
+        self.log.emit(
+            if state == OperationState::Succeeded {
+                "operation.succeeded"
+            } else {
+                "operation.failed"
+            },
+            op_event(&op.view),
+        );
+        Ok(op.view.clone())
+    }
+
+    /// Drop a finished operation's result (a tab listing read only to learn
+    /// one origin does not need to stay readable).
+    pub(super) fn discard_result(&self, op_id: Uuid) {
+        if let Some(op) = self.lock().operations.get_mut(&op_id) {
+            op.view.result = None;
+        }
+    }
+
+    /// Mark a session as having a secret between release and typed (#590)
+    /// until the guard drops, on every path.
+    pub(super) fn secret_guard(&self, session_id: Uuid) -> SecretGuard {
+        *self.lock().secret_in_flight.entry(session_id).or_default() += 1;
+        SecretGuard {
+            store: self.clone(),
+            session_id,
+        }
     }
 
     fn prune(inner: &mut Inner, now: DateTime<Utc>) {
@@ -982,7 +1190,7 @@ impl RuntimeStore {
             .operations
             .get_mut(&op_id)
             .ok_or(StoreError::NotFound("operation"))?;
-        if op.view.host_id != host_id {
+        if op.view.host_id != host_id || op.internal {
             return Err(StoreError::NotFound("operation"));
         }
         if op.view.state != OperationState::Dispatched {
