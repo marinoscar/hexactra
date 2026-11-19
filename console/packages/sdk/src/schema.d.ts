@@ -17756,6 +17756,36 @@ export interface components {
             policyId: string | null;
             allowedDomains: string[];
             confirmRiskyActions: boolean;
+            /** @description The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies. */
+            parameters: {
+                /** @description The placeholder's key (`Phone Number` → `phone_number`) */
+                key: string;
+                label: string;
+                /** @enum {string} */
+                type: "text" | "number" | "money" | "date" | "choice" | "phone" | "email";
+                required: boolean;
+                /** @description choice: the options */
+                options?: string[];
+                help?: string;
+                /** @description A fixed value, or an attribute of one of the owner's memories resolved when the task runs */
+                default?: {
+                    value: string;
+                } | {
+                    memory: {
+                        /** Format: uuid */
+                        id: string;
+                        attribute: string;
+                    };
+                };
+                constraints?: {
+                    min?: number;
+                    max?: number;
+                    maxLength?: number;
+                    pattern?: string;
+                };
+                /** @description Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model */
+                sensitive?: boolean;
+            }[];
         };
         LinkTaskDto: {
             /**

@@ -19,6 +19,7 @@ const WRAP = { overflowWrap: 'anywhere', wordBreak: 'break-word', minWidth: 0 } 
 
 /** What a request is, in a few words, and its icon. */
 export function requestTitle(q: Pick<Question, 'input' | 'kind'>): string {
+  if (q.input === 'form') return 'A few details to start';
   if (q.input === 'confirm' || q.kind === 'confirmation') return 'Approval needed';
   if (q.input === 'secret') return `${secretLabel(q.kind)} needed`;
   if (q.input === 'takeover') return 'Your help is needed in the browser';
@@ -46,6 +47,7 @@ export function settledText(q: Pick<Question, 'input'>, answer: AnswerBody): str
   if (answer.rememberRule && (q.input === 'none' || answer.value === 'approve')) return "Allowed · won't ask again";
   if (q.input === 'confirm') return answer.value === 'approve' ? 'Allowed' : 'Denied';
   if (q.input === 'takeover' || q.input === 'none') return 'Done';
+  if (q.input === 'form') return 'Provided';
   return 'Sent';
 }
 

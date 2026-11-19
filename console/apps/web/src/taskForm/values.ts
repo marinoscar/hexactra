@@ -8,6 +8,7 @@
 import { isPlatformApiError } from '@marinoscar/platform-web/core';
 
 import { draftFromSchedule, draftToItem, newScheduleDraft, type ScheduleDraft, type ScheduleItemInput } from '../schedule/draft';
+import { cleanParameters, syncParameters, type TaskParameter } from '../taskParams/model';
 import type { Task } from '../types/tasks';
 
 export const NAME_MAX = 200;
@@ -38,6 +39,12 @@ export interface TaskFormValues {
   policyId: string | null;
   allowedDomains: string[];
   confirmRiskyActions: boolean;
+  /**
+   * The definitions of the goal's `{{Name}}` parameters (#556). It may hold
+   * definitions whose placeholder left the goal (so an undo restores them);
+   * what is saved is this list kept in step with the goal.
+   */
+  parameters: TaskParameter[];
   /** Each carries an optional `policyId` override. */
   schedules: ScheduleDraft[];
 }
@@ -48,12 +55,12 @@ export type TaskFieldValues = Omit<TaskFormValues, 'schedules'>;
 /** A task as `GET /tasks/:id?include=summary` returns it: the form reads its schedules. */
 export interface TaskWithSchedules extends Task {
   summary?: {
-    schedules: { id: string; cron: string; timezone: string; enabled: boolean; concurrency?: 'skip' | 'queue'; policyId?: string | null; description?: string; nextRunAt?: string | null; consecutiveFailures?: number }[];
+    schedules: { id: string; cron: string; timezone: string; enabled: boolean; concurrency?: 'skip' | 'queue'; policyId?: string | null; description?: string; nextRunAt?: string | null; consecutiveFailures?: number; inputs?: Record<string, string> | null }[];
   };
 }
 
 export function emptyValues(): TaskFormValues {
-  return { name: '', goal: '', profile: DEFAULT_PROFILE, hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, schedules: [] };
+  return { name: '', goal: '', profile: DEFAULT_PROFILE, hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, parameters: [], schedules: [] };
 }
 
 /** The form values of a saved task. */
@@ -67,6 +74,7 @@ export function valuesFromTask(task: TaskWithSchedules): TaskFormValues {
     policyId: task.policyId ?? null,
     allowedDomains: [...task.allowedDomains],
     confirmRiskyActions: task.confirmRiskyActions,
+    parameters: (task.parameters ?? []).map((p) => ({ ...p })),
     schedules: (task.summary?.schedules ?? []).map(draftFromSchedule),
   };
 }
@@ -159,11 +167,18 @@ export interface CreateTaskBody {
   confirmRiskyActions: boolean;
   /** Present only when the viewer may pick a policy (`agent_policies:read`) and the policies loaded. */
   policyId?: string | null;
+  /** The goal's parameters (#556): present only when the goal has a placeholder. */
+  parameters?: TaskParameter[];
   /** Present only when the form has schedules. */
   schedules?: ScheduleItemInput[];
 }
 
-function fieldBody(values: TaskFieldValues): Omit<CreateTaskBody, 'policyId' | 'schedules'> {
+/** The parameters the form saves: one per placeholder of the goal, cleaned. */
+export function savedParameters(values: Pick<TaskFieldValues, 'goal' | 'parameters'>): TaskParameter[] {
+  return cleanParameters(syncParameters(values.goal.trim(), values.parameters).parameters);
+}
+
+function fieldBody(values: TaskFieldValues): Omit<CreateTaskBody, 'policyId' | 'schedules' | 'parameters'> & { parameters: TaskParameter[] } {
   return {
     name: values.name.trim(),
     goal: values.goal.trim(),
@@ -172,6 +187,7 @@ function fieldBody(values: TaskFieldValues): Omit<CreateTaskBody, 'policyId' | '
     hostFallback: values.hostFallback,
     allowedDomains: [...values.allowedDomains],
     confirmRiskyActions: values.confirmRiskyActions,
+    parameters: savedParameters(values),
   };
 }
 
@@ -181,8 +197,10 @@ export function scheduleItems(schedules: readonly ScheduleDraft[]): ScheduleItem
 
 /** The body of `POST /tasks`: the task and its schedules in one request. */
 export function createBody(values: TaskFormValues, options: { sendPolicy: boolean }): CreateTaskBody {
+  const { parameters, ...fields } = fieldBody(values);
   return {
-    ...fieldBody(values),
+    ...fields,
+    ...(parameters.length > 0 ? { parameters } : {}),
     ...(options.sendPolicy ? { policyId: values.policyId } : {}),
     ...(values.schedules.length > 0 ? { schedules: scheduleItems(values.schedules) } : {}),
   };
@@ -222,7 +240,7 @@ export interface MappedError {
   banner: string | null;
 }
 
-const TASK_FIELDS = ['name', 'goal', 'profile', 'hostId', 'hostFallback', 'policyId', 'allowedDomains', 'confirmRiskyActions'];
+const TASK_FIELDS = ['name', 'goal', 'profile', 'hostId', 'hostFallback', 'policyId', 'allowedDomains', 'confirmRiskyActions', 'parameters'];
 
 /** `allowedDomains.2` (zod) and `schedules[1].cron` (the schedule checks) in one spelling: `a[2]`, `schedules[1].cron`. */
 export function normalizePath(path: unknown): string {
@@ -235,6 +253,7 @@ export function fieldOfPath(path: string): string | null {
   const schedule = /^schedules\[(\d+)\]/.exec(path);
   if (schedule) return `schedules[${schedule[1]}]`;
   if (path === 'schedules') return 'schedules';
+  // A parameter's definition (`parameters[2].default`) is that parameter's row only when the key is known: the caller maps it.
   const head = path.split(/[.[]/)[0] ?? '';
   return TASK_FIELDS.includes(head) ? head : null;
 }
@@ -255,12 +274,21 @@ export function mapApiError(error: unknown, fallback: string): MappedError {
   if (!isPlatformApiError(error)) return { fields: {}, banner: message };
   const details = (error.details && typeof error.details === 'object' ? error.details : {}) as { path?: unknown; issues?: { path?: unknown; message?: unknown }[] };
   const issues: { path: string; message: string }[] = [];
-  if (Array.isArray(details.issues)) {
-    for (const issue of details.issues) issues.push({ path: normalizePath(issue?.path), message: typeof issue?.message === 'string' ? issue.message : message });
-  }
-  if (issues.length === 0 && details.path !== undefined) issues.push({ path: normalizePath(details.path), message });
-
   const fields: FieldErrors = {};
+  if (Array.isArray(details.issues)) {
+    for (const issue of details.issues as { path?: unknown; key?: unknown; message?: unknown }[]) {
+      // A parameter's problem (#552) names its key: it goes on that parameter's row.
+      if (typeof issue?.key === 'string' && issue.path === undefined) {
+        const field = `param:${issue.key}`;
+        if (!(field in fields)) fields[field] = typeof issue.message === 'string' ? issue.message : message;
+        continue;
+      }
+      issues.push({ path: normalizePath(issue?.path), message: typeof issue?.message === 'string' ? issue.message : message });
+    }
+  }
+  if (error.code === 'INVALID_GOAL') return { fields: { goal: message }, banner: null };
+  if (issues.length === 0 && Object.keys(fields).length === 0 && details.path !== undefined) issues.push({ path: normalizePath(details.path), message });
+
   const unplaced: string[] = [];
   for (const issue of issues) {
     const field = fieldOfPath(issue.path);
@@ -268,6 +296,7 @@ export function mapApiError(error: unknown, fallback: string): MappedError {
     if (!field) unplaced.push(issue.path ? `${issue.path}: ${text}` : text);
     else if (!(field in fields)) fields[field] = field === 'allowedDomains' && /\[\d+\]/.test(issue.path) ? `Site ${Number(/\[(\d+)\]/.exec(issue.path)![1]) + 1}: ${text}` : text;
   }
+  if (issues.length === 0 && Object.keys(fields).length > 0) return { fields, banner: null };
   if (issues.length === 0) {
     if (error.code === 'POLICY_REF_INVALID') fields.policyId = 'This policy is not available. Choose another.';
     else if (error.code === 'SCHEDULE_LIMIT' || error.code === 'SCHEDULE_NOT_IN_TASK') fields.schedules = message;

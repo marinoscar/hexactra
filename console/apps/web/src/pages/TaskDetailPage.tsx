@@ -14,6 +14,8 @@ import { taskPaths } from '../components/taskList';
 import { TaskSchedulesSection } from '../components/TaskSchedulesSection';
 import { TaskStats } from '../components/TaskStats';
 import { useTaskActions } from '../components/useTaskActions';
+import { useRunInputs } from '../taskParams/RunInputsDialog';
+import { savedValueText } from '../taskParams/model';
 import { policyLine, startModel } from '../policies/format';
 import { usePolicyCatalog, type PolicyCatalog } from '../policies/usePolicyCatalog';
 import { machineState, type FleetHost } from '../types/fleet';
@@ -192,6 +194,7 @@ export function TaskDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const actions = useTaskActions();
+  const runInputs = useRunInputs();
   const canWrite = viewer.hasPermission('tasks:write');
   const canRun = viewer.hasPermission('runs:write');
   const canReadRuns = viewer.hasPermission('runs:read');
@@ -314,7 +317,9 @@ export function TaskDetailPage() {
     setError(null);
     setBusy(true);
     try {
-      const started = await actions.run(task, policyId);
+      // Values still missing are asked for first (#556); Cancel starts nothing.
+      const started = await runInputs.ask(task, (inputs) => actions.run(task, policyId, inputs));
+      if (!started) return setBusy(false);
       // Unlike the list, the task page follows the run it started.
       navigate(taskPaths.run(started.id));
     } catch (e) {
@@ -420,6 +425,17 @@ export function TaskDetailPage() {
               <Box component="dl" sx={{ m: 0 }}>
                 {canReadPolicies && <PolicyRows task={task} catalog={catalog} />}
                 <MachineRow task={task} hosts={hosts} />
+                {(task.parameters?.length ?? 0) > 0 && (
+                  <Row term="Parameters">
+                    <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+                      {task.parameters!.map((p) => (
+                        <li key={p.key}>
+                          {p.label}: {p.sensitive ? 'asked every time, never stored' : savedValueText(p)}
+                        </li>
+                      ))}
+                    </Box>
+                  </Row>
+                )}
                 <Row term="Browser profile">{task.profile}</Row>
                 <Row term="Allowed sites">
                   {task.allowedDomains.length === 0 ? (
@@ -440,6 +456,7 @@ export function TaskDetailPage() {
           </Section>
         </Stack>
       </Box>
+      {runInputs.dialog}
     </PageContainer>
   );
 }

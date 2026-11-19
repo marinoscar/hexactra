@@ -83936,6 +83936,117 @@
           },
           "confirmRiskyActions": {
             "type": "boolean"
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "description": "The placeholder's key (`Phone Number` → `phone_number`)"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "number",
+                    "money",
+                    "date",
+                    "choice",
+                    "phone",
+                    "email"
+                  ]
+                },
+                "required": {
+                  "type": "boolean"
+                },
+                "options": {
+                  "description": "choice: the options",
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "help": {
+                  "type": "string"
+                },
+                "default": {
+                  "description": "A fixed value, or an attribute of one of the owner's memories resolved when the task runs",
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "value"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "memory": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "attribute": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "attribute"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "memory"
+                      ]
+                    }
+                  ]
+                },
+                "constraints": {
+                  "type": "object",
+                  "properties": {
+                    "min": {
+                      "type": "number"
+                    },
+                    "max": {
+                      "type": "number"
+                    },
+                    "maxLength": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "pattern": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "sensitive": {
+                  "description": "Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "key",
+                "label",
+                "type",
+                "required"
+              ]
+            },
+            "description": "The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies."
           }
         },
         "required": [
@@ -83946,7 +84057,8 @@
           "hostFallback",
           "policyId",
           "allowedDomains",
-          "confirmRiskyActions"
+          "confirmRiskyActions",
+          "parameters"
         ]
       },
       "LinkTaskDto": {
