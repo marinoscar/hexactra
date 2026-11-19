@@ -237,7 +237,7 @@ impl SecretsProviders {
         v
     }
 
-    pub(super) fn resolve(
+    fn resolve(
         &self,
         owner: Option<&str>,
         wanted: Option<&str>,
