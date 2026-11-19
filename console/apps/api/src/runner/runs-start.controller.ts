@@ -115,7 +115,7 @@ export class RunsStartController {
         ...(decision.appLimits ? { appLimits: decision.appLimits as never } : {}),
         ...(policyId ? { policyRef: policyId, policySource: 'run' as const } : {}),
       },
-      omit: { transcript: true },
+      omit: { transcript: true, spanId: true, traceIds: true },
     });
     await enqueueGoalRun(this.jobs, { runId: run.id, userId: user.id, orgId: user.activeOrgId ?? null }, 'run_started');
     await this.apps.afterStart(user.id, client, run);

@@ -24,6 +24,7 @@ import { UsedSavedLogins } from '../components/UsedSavedLogins';
 import { UsedSavedIdentity } from '../components/UsedSavedIdentity';
 import { UsedSavedCards } from '../components/UsedSavedCards';
 import { RunTimeline } from '../components/RunTimeline';
+import { RunTraceId } from '../components/RunTraceId';
 import { withStreamedSteps } from '../components/runTimeline';
 import type { Run, RunStep } from '../types/runs';
 import { StartedByChip } from '../components/StartedByChip';
@@ -317,6 +318,7 @@ export function RunDetailPage() {
       <UsedSavedLogins logins={run.usedSavedLogins} />
       <UsedSavedIdentity details={run.usedSavedIdentity} />
       <UsedSavedCards cards={run.usedSavedCards} />
+      <RunTraceId traceId={run.traceId} />
     </>
   );
   // A typed stop reason (#404) says why in one line; older runs keep the plain result and error.

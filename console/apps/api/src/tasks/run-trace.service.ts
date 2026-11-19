@@ -150,6 +150,7 @@ export class RunTraceService {
         policySnapshot: true,
         policySource: true,
         currentTier: true,
+        traceIds: true,
         task: { select: { name: true } },
         steps: {
           orderBy: { seq: 'asc' },
@@ -229,6 +230,7 @@ export class RunTraceService {
         taskName: run.task?.name ?? null,
         conversationId: run.conversationId,
         profile: run.profile,
+        traceIds: run.traceIds,
         host: run.hostId ? { id: run.hostId, name: await this.hostName(run.hostId) } : null,
         createdAt: run.createdAt.toISOString(),
         startedAt: iso(run.startedAt),

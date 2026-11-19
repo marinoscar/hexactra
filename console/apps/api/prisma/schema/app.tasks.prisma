@@ -230,6 +230,12 @@ model Run {
   /// The saved cards the run paid with (E37.7): `[{ provider, itemName, brand, last4, merchant, origin, currency, declaredAmount,
   /// confirmedAmount, mismatch, at }]`, at most 10. Brand, last four and amounts: never a number, an expiry or a code.
   usedSavedCards Json?           @map("used_saved_cards")
+  /// The OpenTelemetry trace of the latest job of the run (E38.4, #585): the root span's trace id (32 hex) and span id (16 hex).
+  /// Null with the telemetry slice off. An operator goes from a run id to its trace with it; a resumed job links back to this span.
+  traceId          String?       @map("trace_id") @db.VarChar(32)
+  spanId           String?       @map("span_id") @db.VarChar(16)
+  /// Every job's trace id, oldest first, the newest 100 (the export lists them).
+  traceIds         String[]      @default([]) @map("trace_ids") @db.VarChar(32)
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   task         Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)

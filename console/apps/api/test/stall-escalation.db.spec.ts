@@ -12,6 +12,8 @@ import { TasksService } from '../src/tasks/tasks.service';
 import { balancedSpec, builtinPolicy } from '../src/policies/builtin-policies';
 import type { AgentPolicySpec, Tier } from '../src/policies/agent-policy.schema';
 import type { ResolvedTier } from '../src/policies/model-tiers.schema';
+import { ATTR } from '../src/runner/trace-attributes';
+import { installMemoryTracing } from './helpers/otel-memory';
 
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
@@ -349,6 +351,30 @@ describe('provider fallback', () => {
     // The fallback is not an escalation, and the run stays on its tier.
     expect(done).toMatchObject({ escalations: 0, currentTier: 'standard' });
     expect(done.stepCount).toBe(4);
+  });
+
+  it('traces the failed call, and flags the model calls of the fallback round (E38.4)', async () => {
+    const otel = installMemoryTracing();
+    try {
+      const { userId, prisma, run } = await newRun('fbtrace', specOf({}, { allowProviderFallback: true }, { callsPerChunk: 2 }), withFallback());
+      const m = scripted([{ throw: new AiError('AI_PROVIDER_UNAVAILABLE', 'The provider returned 503') }, click('#a'), click('#b'), click('#c'), finish()]);
+      expect(await runnerOf(prisma, fabricOf(), m.ai).advance(run.id, userId, null)).toBe('succeeded');
+      const chats = otel
+        .spans()
+        .filter((sp) => sp.name.startsWith('chat '))
+        .sort((a, b) => a.startTime[0] * 1e9 + a.startTime[1] - (b.startTime[0] * 1e9 + b.startTime[1]));
+      // The 503 on the primary, then the fallback round's two calls, then the primary again.
+      expect(chats.map((c) => [c.attributes[ATTR.errorType] ?? null, c.attributes[ATTR.fallbackModel]])).toEqual([
+        ['AI_PROVIDER_UNAVAILABLE', false],
+        [null, true],
+        [null, true],
+        [null, false],
+        [null, false],
+      ]);
+      expect(chats[0]!.status.code).toBe(2);
+    } finally {
+      await otel.uninstall();
+    }
   });
 
   it('a rate limit uses the fallback too', async () => {

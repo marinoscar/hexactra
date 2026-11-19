@@ -123,7 +123,7 @@ export class RunsQueryService {
       where: after ? { AND: [filter, after] } : filter,
       orderBy: [{ createdAt: q.order }, { id: q.order }],
       take: q.limit + 1,
-      omit: { transcript: true, policySnapshot: true },
+      omit: { transcript: true, policySnapshot: true, spanId: true, traceIds: true },
       include: { task: { select: { name: true } } },
     });
     const page = rows.slice(0, q.limit);

@@ -69,6 +69,8 @@ import {
 } from './budget';
 import { actionTarget, runActivity, type ActivityTarget, type RunActivityPhase } from './activity';
 import { ACTION_TIMEOUT_MS, FabricSession, handoffOutcome, type CreatedHandoff } from './fabric-session';
+import { AgentTrace, type StepFacts } from './agent-trace';
+import { AGENT, ATTR } from './trace-attributes';
 import { approvalCovers, classifyTarget, domainAllowed, fabricAllowedSites, hostOf, type GateTarget, type TargetFacts } from './policy';
 import { maxElementsFor, PLATFORM_MAX_CALLS_PER_CHUNK, ScreenshotWindow, shotHash } from './context-settings';
 import { appendConfirmedAction, noReportResult } from './confirmed-actions';
@@ -568,10 +570,24 @@ export class GoalRunnerService {
    * Returns what the caller (the job) should do next.
    */
   async advance(runId: string, userId: string, orgId: string | null): Promise<RunOutcome> {
+    // One OpenTelemetry trace per job (E38.4, runner/agent-trace.ts): a no-op with the telemetry slice off.
+    const tr = AgentTrace.start(AGENT.browser, this.tasks.metrics, { [ATTR.runId]: runId });
+    try {
+      const outcome = await tr.within(() => this.advanceLeased(runId, userId, orgId, tr));
+      const final = tr.recording ? await this.prisma.forUser({ userId }).run.findFirst({ where: { id: runId }, select: { status: true, stopReason: true } }) : null;
+      tr.end({ outcome, status: final?.status, stopReason: final?.stopReason });
+      return outcome;
+    } catch (e) {
+      tr.end({ error: e });
+      throw e;
+    }
+  }
+
+  private async advanceLeased(runId: string, userId: string, orgId: string | null, tr: AgentTrace): Promise<RunOutcome> {
     // The job holds the run (E38.3): a job that finds another token later stops without touching the run.
     const lease = await RunLease.claim(this.prisma, userId, runId);
     try {
-      return await this.advanceRun(runId, userId, orgId, lease);
+      return await this.advanceRun(runId, userId, orgId, lease, tr);
     } catch (e) {
       // A job that lost the run stops quietly, whatever it tripped on: its error must not fail a run another job now drives.
       if (!(e instanceof LeaseLost) && (await lease.held().catch(() => true))) throw e;
@@ -582,12 +598,13 @@ export class GoalRunnerService {
     }
   }
 
-  private async advanceRun(runId: string, userId: string, orgId: string | null, lease: RunLease): Promise<RunOutcome> {
+  private async advanceRun(runId: string, userId: string, orgId: string | null, lease: RunLease, tr: AgentTrace): Promise<RunOutcome> {
     const jobStartedAt = this.clock();
     const db = this.prisma.forUser({ userId });
     const run = await db.run.findFirst({ where: { id: runId }, include: { task: true, conversation: { select: { allowedDomains: true, confirmRiskyActions: true, useSavedLogins: true, useSavedIdentity: true, useSavedCards: true } } } });
     if (!run) return 'failed';
     if (run.status === 'succeeded' || run.status === 'failed' || run.status === 'cancelled') return run.status;
+    await tr.beginRun(run, (data) => db.run.updateMany({ where: { id: run.id }, data }));
     const session = new FabricSession(this.fabric);
     // The run row as last written: its active-time fields drive the time budget (#399).
     let current: { activeMs: number; activeSince: Date | null } = run;
@@ -630,6 +647,8 @@ export class GoalRunnerService {
     const startTier = snapshot.spec.models.startTier;
     let tier: Tier = memory.tier ?? startTier;
     memory.tier = tier;
+    tr.setTier(tier);
+    tr.setPolicy(snapshot.ref);
     const stall = (memory.stall = readStallState(memory.stall));
     if (run.currentTier !== tier) await db.run.updateMany({ where: { id: run.id }, data: { currentTier: tier } });
     // A tier with no usable model fails the run now, before a browser is allocated (#403).
@@ -660,6 +679,7 @@ export class GoalRunnerService {
       const q = await db.question.findFirst({ where: { handoffId: h.id }, select: { id: true, response: true, options: true, constraints: true, input: true, rememberLabel: true, prompt: true, gate: true } });
       const resp = (q?.response as unknown as QuestionResponse | null) ?? null;
       const outcome = resp?.outcome ?? handoffOutcome(h);
+      tr.answered({ kind: h.kind, input: (q?.input as string | undefined) ?? h.input, channel: resp?.channel ?? h.response?.channel ?? null, outcome: outcome ?? h.status, waitedMs: run.waitingSince ? this.clock() - run.waitingSince.getTime() : null });
       if (h.status === 'completed' && outcome === 'completed') {
         const line = answerLine({
           input: (q?.input as QuestionInputType | undefined) ?? h.input,
@@ -1017,6 +1037,7 @@ export class GoalRunnerService {
       const seq = intentSeq ?? ++state.seq;
       tracker.add({ actions: 1 });
       this.tasks.metrics.step(kind, ok);
+      tr.stepRecorded({ seq, ok, action, url: args?.url });
       if (action && args && (kind === 'action' || action === 'look')) feedStall(action, args, ok, extra ?? {});
       memory.log.push(logLine(action, kind, args, ok, summary));
       memory.lastSeq = Math.max(memory.lastSeq ?? 0, seq);
@@ -1196,6 +1217,7 @@ export class GoalRunnerService {
         return false;
       }
       await record('handoff', null, { kind: spec.kind, input: spec.input }, true, `asked a person (${spec.kind}): ${trim(spec.prompt, 300)}`, started);
+      tr.asked({ kind: spec.kind, input: spec.input });
       if (questionId) await this.prisma.runStep.updateMany({ where: { runId: run.id, seq: state.seq }, data: { questionId } });
       if (pre) await attachShot(state.seq, questionMoment(spec.kind), pre);
       state.handoffAsk = { prompt: spec.prompt, kind: spec.kind, input: spec.input };
@@ -1248,6 +1270,7 @@ export class GoalRunnerService {
       if (!policy.confirmRisky) return null;
       const verdict = classifyTarget(facts ?? {});
       if (!verdict.risky || !verdict.category) return null;
+      tr.gated(verdict.category);
       return { category: verdict.category, label: verdict.label, host: await currentHost(), why: verdict.why ?? 'a commitment' };
     };
 
@@ -1826,7 +1849,7 @@ export class GoalRunnerService {
     const cardPayCtx = cardCtx;
     const savedCardTools: AiDefinedTool[] = savedCardsOn ? buildSavedCardTools(cardCtx) : [];
 
-    const tools: AiDefinedTool[] = [
+    const tools: AiDefinedTool[] = tr.wrapTools([
       defineTool({
         name: 'observe_elements',
         description: 'List the interactive elements of the current page with CSS selectors.',
@@ -2222,7 +2245,7 @@ export class GoalRunnerService {
           return 'Finished.';
         },
       }),
-    ];
+    ]);
 
     const goal = run.goal;
     // The owner's memories (#553): information for the model, after the goal, in the stable prefix (#406).
@@ -2233,9 +2256,10 @@ export class GoalRunnerService {
     const used = new RunUsage();
     const provider = () => this.ai.forUser(userId, { feature: BROWSER_AGENT_FEATURE_ID, ...(orgId ? { orgId } : {}) });
     /** Count one model call in the usage totals (saved per chunk) and in the budget. */
-    const countCall = (step: { response: { provider?: string; model?: string; usage?: { inputTokens?: number; outputTokens?: number; cachedInputTokens?: number } } }) => {
+    const countCall = (step: StepFacts) => {
       const usd = used.add(step.response.provider, step.response.model || tierRequest(snapshot, tier).modelLabel || undefined, step.response.usage, prices);
       tracker.add({ modelCalls: 1, inputTokens: step.response.usage?.inputTokens, outputTokens: step.response.usage?.outputTokens, costUsd: usd ?? 0, costKnown: usd !== null });
+      tr.modelCall(step, { model: step.response.model || tierRequest(snapshot, tier).modelLabel || 'unknown', usd });
     };
 
     /** The tier a stall would escalate to, or null: none left, the limit is reached, or the next tier is no different. */
@@ -2414,16 +2438,18 @@ export class GoalRunnerService {
       const input = [`Goal: ${goal}`, memory.log.length ? `Progress so far (latest last):\n${memory.log.slice(-LOG_LINES).join('\n')}` : '', instruction].filter(Boolean).join('\n\n');
       await setActivity('thinking');
       try {
-        await provider().runTools({
-          // The current tier's model and effort (#403); the wrap-up keeps its own small output cap.
-          ...(({ modelLabel: _label, ...req }) => req)(tierRequest(snapshot, tier)),
-          instructions: INSTRUCTIONS,
-          input,
-          tools: finishTool,
-          maxSteps: 1,
-          maxOutputTokens: WRAP_UP_MAX_OUTPUT_TOKENS,
-          onStep: (step) => countCall(step),
-        });
+        await tr.within(() =>
+          provider().runTools({
+            // The current tier's model and effort (#403); the wrap-up keeps its own small output cap.
+            ...(({ modelLabel: _label, ...req }) => req)(tierRequest(snapshot, tier)),
+            instructions: INSTRUCTIONS,
+            input,
+            tools: finishTool,
+            maxSteps: 1,
+            maxOutputTokens: WRAP_UP_MAX_OUTPUT_TOKENS,
+            onStep: (step) => countCall(step),
+          }),
+        );
       } catch (e) {
         this.log.warn(`run ${run.id}: the wrap-up call failed: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -2493,6 +2519,7 @@ export class GoalRunnerService {
       // A chunk boundary: the only place the model changes, so provider caching holds within a chunk (#405).
       await maybeDeEscalate();
       memory.chunks += 1;
+      tr.chunkStart(memory.chunks, tier);
       state.stop = null;
       state.stall = null;
       const stepsBefore = state.stepCount;
@@ -2569,7 +2596,7 @@ export class GoalRunnerService {
       await setActivity('thinking');
       const tierReq = tierRequest(snapshot, tier);
       const call = (withImage: boolean, req: TierRequest) =>
-        provider().runTools({
+        tr.within(() => provider().runTools({
           // The model, effort and output cap of the run's current tier, from the snapshot (#403).
           ...(({ modelLabel: _label, ...r }) => r)(req),
           instructions: INSTRUCTIONS,
@@ -2589,7 +2616,7 @@ export class GoalRunnerService {
             }
             if (state.stop) throw new StopLoop(state.stop);
           },
-        });
+        }));
       const isFallbackError = (e: unknown): e is AiError => e instanceof AiError && FALLBACK_CODES.has(e.code);
       const attempt = async (req: TierRequest): Promise<AiToolLoopResult> => {
         try {
@@ -2603,6 +2630,7 @@ export class GoalRunnerService {
           return call(false, req);
         }
       };
+      let tracedModel = tierReq.modelLabel ?? tier;
       try {
         try {
           result = await attempt(tierReq);
@@ -2611,11 +2639,15 @@ export class GoalRunnerService {
           const fallback = isFallbackError(e) && snapshot.spec.models.allowProviderFallback ? fallbackRequest(snapshot, tier) : null;
           if (!fallback || !isFallbackError(e)) throw e;
           memory.log.push(`(The ${TIER_LABEL[tier]} model could not be reached (${e.code}): this round runs on its fallback model.)`);
+          tr.modelFailed(e, tracedModel);
+          tr.useFallback();
+          tracedModel = fallback.modelLabel ?? 'fallback';
           await recordRouting(tierReq.modelLabel ?? tier, fallback.modelLabel ?? 'fallback', e.code, { kind: 'fallback', tier });
           result = await attempt(fallback);
         }
       } catch (e) {
         if (!(e instanceof StopLoop)) {
+          tr.modelFailed(e, tracedModel);
           await this.saveMemory(userId, run.id, memory, used.drain(), lease);
           throw e;
         }

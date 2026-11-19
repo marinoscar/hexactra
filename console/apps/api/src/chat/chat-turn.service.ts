@@ -8,7 +8,9 @@ import { MemoryContext } from '../memories/memory-context';
 import { MemoryProposals } from '../memories/memory-proposals.service';
 import { readConfirmedActions } from '../runner/confirmed-actions';
 import { PrismaService } from '../prisma/prisma.service';
+import { AgentTrace } from '../runner/agent-trace';
 import { enqueueGoalRun } from '../runner/goal-run.enqueue';
+import { AGENT, ATTR } from '../runner/trace-attributes';
 import { TaskRunStarter } from '../questions/task-run-starter';
 import { maskRunGoal } from '../tasks/task-params';
 import { LIVE_RUN_STATUSES } from '../tasks/runs.schemas';
@@ -174,9 +176,23 @@ export class ChatTurnService {
     return `Several tasks match "${want}": ${like.map((t) => t.name).join('; ')}. Ask the owner which one.`;
   }
 
+  /** One turn is one OpenTelemetry trace, `invoke_agent hexactra.chat_orchestrator` (E38.4); the run it starts links back to it. */
   private async answer(c: Conversation, userId: string, orgId: string | null): Promise<void> {
+    const tr = AgentTrace.start(AGENT.chat, this.tasks.metrics, { [ATTR.conversationId]: c.id });
+    try {
+      await tr.within(() => this.answerTurn(c, userId, orgId, tr));
+      tr.end({ outcome: 'answered' });
+    } catch (e) {
+      tr.end({ error: e });
+      throw e;
+    }
+  }
+
+  private async answerTurn(c: Conversation, userId: string, orgId: string | null, tr: AgentTrace): Promise<void> {
     const state = { done: false, wrote: false, stopped: false, proposals: 0 };
-    const tools: AiDefinedTool[] = [
+    // The trace the run is made under: the run's first job links to this turn (runs.trace_id holds it until that job writes its own).
+    const turnTrace = () => (tr.traceId && tr.spanId ? { traceId: tr.traceId, spanId: tr.spanId } : {});
+    const tools: AiDefinedTool[] = tr.wrapTools([
       defineTool({
         name: 'ask_user',
         description: 'Ask the owner one clarifying question and wait for the answer. Only when the answer changes what would be done.',
@@ -210,6 +226,7 @@ export class ChatTurnService {
               ...(c.policyRef ? { policyRef: c.policyRef, policySource: 'run' as const } : {}),
               // A follow-up starts with what the chat's last job did (#490); the runner shows it after the goal.
               ...(context ? { transcript: { log: [], chunks: 0, context } } : {}),
+              ...turnTrace(),
             },
             select: { id: true, goal: true },
           });
@@ -241,7 +258,7 @@ export class ChatTurnService {
                   started = await this.starter!.start({ id: userId, activeOrgId: orgId }, found, {
                     inputs: given,
                     reason: 'run_started',
-                    data: { conversationId: c.id, trigger: 'chat', origin: 'web', ...(c.policyRef ? { policyRef: c.policyRef, policySource: 'run' as const } : {}) },
+                    data: { conversationId: c.id, trigger: 'chat', origin: 'web', ...(c.policyRef ? { policyRef: c.policyRef, policySource: 'run' as const } : {}), ...turnTrace() },
                   });
                 } catch (e) {
                   const r = e instanceof BadRequestException ? (e.getResponse() as { message?: string }) : null;
@@ -324,22 +341,27 @@ export class ChatTurnService {
             }),
           ]
         : []),
-    ];
+    ]);
 
     let text = '';
     try {
-      const result = await this.ai.forUser(userId, { feature: CHAT_ORCHESTRATOR_FEATURE_ID, ...(orgId ? { orgId } : {}) }).runTools({
-        instructions: CHAT_INSTRUCTIONS,
-        input: await this.buildInput(userId, c.id),
-        tools,
-        maxSteps: MAX_MODEL_STEPS,
-        onStep: () => {
-          if (state.done) throw new TurnDone();
-        },
-      });
+      const input = await this.buildInput(userId, c.id);
+      const result = await tr.within(() =>
+        this.ai.forUser(userId, { feature: CHAT_ORCHESTRATOR_FEATURE_ID, ...(orgId ? { orgId } : {}) }).runTools({
+          instructions: CHAT_INSTRUCTIONS,
+          input,
+          tools,
+          maxSteps: MAX_MODEL_STEPS,
+          onStep: (step) => {
+            tr.modelCall(step, { model: step.response.model || 'unknown', usd: null });
+            if (state.done) throw new TurnDone();
+          },
+        }),
+      );
       text = result.final?.outputText?.trim() ?? '';
     } catch (e) {
       if (!(e instanceof TurnDone)) {
+        if (e instanceof AiError) tr.modelFailed(e, 'unknown');
         // The owner sees why nothing happened; the job still fails, so an administrator sees it too.
         if (!state.wrote) await this.chats.append(c.id, { role: 'system', kind: 'text', text: failureText(e) });
         throw e;

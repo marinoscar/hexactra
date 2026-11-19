@@ -278,6 +278,7 @@ The built-ins' screenshots and calls per chunk are in the table above; all use 6
 - The instructions and tool definitions contain no per-run value, so they are byte-identical for every run (a test hashes them). The round input is ordered goal and allowed sites, step log, screenshots, then the volatile tail (what the screenshot shows, steps used).
 - Provider cache hints: the platform exposes only an untyped `providerOptions` escape hatch and documents no cache option, so none is set. Providers with automatic prefix caching benefit from the stable prefix; explicit hints (for example a cache key or breakpoints) need an EnterpriseAppBase seam request.
 - Each model call records `app.runs.input_tokens_per_call` (histogram) in the "Browser agents" telemetry.
+- Each model call and tool call is also a span of the run's OpenTelemetry trace, with the model, tokens and cost on the call: [Reading a run's trace](docs/runbooks/operations.md#reading-a-runs-trace).
 
 **Measurement.** A deterministic fixture (`apps/api/test/context-efficiency.db.spec.ts`): the same scripted run of 30 actions on a large page, a fake model that reports input tokens as the size of everything it would be sent (characters / 4, plus 850 per image), run under the old settings and under Balanced. It measures context size, not provider prices or task success on real sites: real-provider benchmarking was not possible in the build environment.
 

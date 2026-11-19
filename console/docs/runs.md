@@ -213,6 +213,10 @@ The console shows the trace on the run's page (#544; README, "A run's page"): ea
 |---|
 | ![The Export menu opened from the run page's sticky bar on a phone: PDF report, JSON trace, Include screenshots and the note](images/run-export-phone.png) |
 
+## Traces (OpenTelemetry)
+
+With the telemetry slice on, every job of a run is one OpenTelemetry trace (E38.4, #585): the job, its chunks, each model call, each tool call, each fabric action and each question, in the deployment's own collector. The run keeps the ids: `GET /api/runs/{id}` has `traceId` (the latest job's; null before the first job and with the slice off), the run page shows it as a copyable **Trace id**, and the JSON export lists every job's in `run.traceIds` (the newest 100). A queued chat run holds the chat turn's trace id until its first job starts. The span tree, the attributes, how to find a run by id and what a trace never holds are in the operations runbook, [Reading a run's trace](runbooks/operations.md#reading-a-runs-trace). A trace is telemetry, not the audit trail: the durable record is the steps above.
+
 ## What is masked
 
 A run's trace, its JSON export, its PDF report and the extension's screenshot masking hide sensitive text with one pattern table, so they cannot disagree. The table is `console/packages/shared/sensitive-patterns.js` (`@app/shared/sensitive-patterns`, version `SENSITIVE_PATTERNS_VERSION`); the API applies it with `maskSensitive(text)` and `maskValue(value)` (`apps/api/src/tasks/mask.ts`), and the extension reads a generated copy, `packages/contracts/sensitive-patterns.json` at the repository root (`node scripts/gen-sensitive-patterns.mjs` writes it; CI fails when it is stale). Masking hides text in what is shown and exported; it does not change what the model sees during a run.
@@ -274,7 +278,7 @@ The same file from the other clients: `hexactra runs export <id> [--no-screensho
 |---|---|
 | `exportedAt`, `partial`, `console.version` | When, whether the run was live, and which console wrote it |
 | `masking` | `applied: true`, the pattern table's `patternsVersion`, and `hits`: how many matches of each pattern were masked (patterns with none are left out) |
-| `run` | `id`, `goal`, `status`, `stopReason`, `result`, `error`, `trigger`, `origin`, `client` (the AI app's name, never its grant), `taskId`, `taskName`, `conversationId`, `profile`, `host: { id, name }`, the three times, `confirmedActions` (#540) and `usage` (steps, model calls, tokens, cost, active time) |
+| `run` | `id`, `goal`, `status`, `stopReason`, `result`, `error`, `trigger`, `origin`, `client` (the AI app's name, never its grant), `taskId`, `taskName`, `conversationId`, `profile`, `traceIds` (the OpenTelemetry trace ids of the run's jobs, oldest first: [Traces](#traces-opentelemetry)), `host: { id, name }`, the three times, `confirmedActions` (#540) and `usage` (steps, model calls, tokens, cost, active time) |
 | `policy` | The agent policy as snapshotted at the run's start: `id`, `name`, `version`, `builtin`, `source`, `spec` |
 | `budget` | The run budget: effective limits, use, percent, source, enforcement, `over` |
 | `models` | The tiers the run used, in order, with their model; `calls` is the run's model calls when it used one tier, `null` when it used several (calls are counted per run) |

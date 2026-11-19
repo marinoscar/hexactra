@@ -175,6 +175,7 @@ export const runResponseSchema = z.object({
   tier: runTierSchema.nullable(),
   currentTier: z.enum(['fast', 'standard', 'frontier']).nullable().describe('The model tier the run is on now. It moves up when the run stalls and back down after progress. Null before the run starts.'),
   escalations: z.number().int().describe('How many times the run moved to a stronger tier because it stalled'),
+  traceId: z.string().nullable().describe("The OpenTelemetry trace id (32 hex characters) of the run's latest job, to find the run in the deployment's trace collector (docs/runbooks/operations.md, \"Reading a run's trace\"). Null before the first job and with the telemetry slice off. A queued chat run holds the chat turn's trace until its first job starts."),
   cachedInputTokens: z.number().int().describe('Input tokens the provider served from its cache (part of inputTokens)'),
   modelCalls: z.number().int().describe('Model calls (provider round trips) made so far'),
   costUsd: z.number().describe('USD spent on model calls, from the admin price table (agentPricing); a lower bound while costKnown is false'),

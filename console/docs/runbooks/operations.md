@@ -84,7 +84,7 @@ Measured numbers, and how to size a machine: [capacity.md](capacity.md).
 ## 6. Watching it
 
 - **Alerts.** Administration → Alerts. It ships rules for a browser host offline (or the fabric unreachable), a schedule failing 3+ runs in a row, a user's runs over their token, cost or budget limits, a user's runs stalling, and one expensive run (off by default); see [the run budget meter, stop reasons and cost alerts](#the-run-budget-meter-stop-reasons-and-cost-alerts).
-- **Telemetry.** Administration → Telemetry. The Browser agents group charts runs, steps, waits for a person and model tokens. To trace across console and fabric, set `HEXACTRA_FABRIC_OTLP_ENDPOINT` ([vps-stack.md](vps-stack.md)).
+- **Telemetry.** Administration → Telemetry. The Browser agents group charts runs, steps, waits for a person and model tokens. To trace across console and fabric, set `HEXACTRA_FABRIC_OTLP_ENDPOINT` ([vps-stack.md](vps-stack.md)). With the telemetry slice on, every run job is also one OpenTelemetry trace: see [Reading a run's trace](#reading-a-runs-trace).
 - **Doctor.** Administration → Doctor. It runs the `fabric.*` checks: reachability, token, hosts online, event stream; and `runs.retention`: when the nightly run retention job last succeeded ([run-retention.md](run-retention.md)).
 - **About.** Administration → About (`system_settings:read`). What is deployed: the console version, the deployment mode, the record `hexactra deploy` leaves on disk (commit, ref, install and update times, the last run's outcome and failed step, the proxy and certificate expiry, the host, the deploy history), database liveness, and a **Hexactra Fabric** section (URL, fabric version, reachable, browser hosts online and with a browser connected). The service token is never shown. API: `GET /api/admin/about`.
 
@@ -188,6 +188,35 @@ A restart of the API during a run is safe: the run keeps its progress after ever
 - **What you see.** The run page shows "The run was interrupted and continued" in the agent's log and `runs.recoveries` goes up; the counter `app.runs.recovered` and a warning log line (`recovered after an interruption`) record it. More than three recoveries of one run raises "Run keeps being interrupted": look at why the worker keeps dying (memory, deploys, a page that crashes the runner).
 - **A step marked unknown.** `SELECT seq, action, phase, summary FROM run_steps WHERE run_id = '<id>' ORDER BY seq` lists the phases. A step in `unknown` was a click or typed secret that may or may not have gone through when the job died. The agent is told not to repeat it and the owner is asked again before the same button is pressed. Check the site (the order, the account's recent activity) before approving a repeat.
 - **A run that does nothing after a restart.** `runs.worker_token` not null on a `running` run whose job is gone means the retry has not started yet (the job queue's lease must expire first, up to the job's runtime limit). It starts by itself; do not cancel and re-run a run that may have paid.
+
+### Reading a run's trace
+
+With the telemetry slice on and collection turned on at Administration → Telemetry, every **job** of a run is one OpenTelemetry trace, sent to the deployment's OTLP collector with the rest of the API's telemetry. Standard OpenTelemetry only: there is no viewer in the console, so open the trace in whatever the collector feeds (Grafana Tempo, Jaeger, Honeycomb, the Greptime explorer). With the slice off the spans are the API's no-op: nothing is created, and `traceId` is null.
+
+**Find a run's trace.**
+
+- The run page shows **Trace id** under its details, with a copy button. `GET /api/runs/{id}` has the same `traceId` (the latest job's), and the run's JSON export lists every job's in `run.traceIds`.
+- A run has several traces when it waited for a person or ran long: one trace per job, oldest first in `traceIds`. Each job's root carries a **span link** to the previous job's root (`hexactra.link.type = previous_job`), so a viewer can hop from one to the next. The first job of a chat run links to the chat turn that started it (`started_by`).
+- From a run id without the page: search the collector for the attribute `hexactra.run.id = <run id>` on the root span.
+
+**The tree.**
+
+| Span | Name | What it tells you |
+|---|---|---|
+| Job | `invoke_agent hexactra.browser_agent` | `hexactra.run.id`, `.run.trigger`, `.run.origin`, `.policy.id`, `.tier`, `.job.reason` (`started`, `resumed`, `continued`), and at the end `.run.status`, `.run.stop_reason`, `.job.outcome` |
+| Chunk | `hexactra.chunk` | `.chunk.number`, `.tier`, `.chunk.model_calls`, `.chunk.tool_calls`. A new chunk is the only place the model changes |
+| Model call | `chat <model>` (client) | `gen_ai.request.model`, `.response.model`, `.provider.name`, `.usage.input_tokens`, `.usage.output_tokens`, `.usage.cache_read.input_tokens`, `.response.finish_reasons`, `hexactra.cost_usd` (when the model is priced), `hexactra.model.fallback` (true on the tier's fallback model), `error.type` and an error status on a failed call. The platform's own `ai.request` span for the same round trip sits beside it |
+| Tool call | `execute_tool <tool>` | `gen_ai.tool.name`, `.tool.call.id`, `hexactra.step.seq` (the run page's step number), `.step.ok`, `.action.type`, `.page.host` (the host only), `.gate.category` when a confirmation gate applied, `error.type` and an error status when the tool failed, timed out or was called with bad arguments |
+| Fabric action | `hexactra.fabric <action>` (client) | `hexactra.fabric.action`, `.fabric.operation_id`, `.fabric.state`. The W3C `traceparent` goes to the fabric, so with `HEXACTRA_FABRIC_OTLP_ENDPOINT` set the fabric's own spans continue the same trace |
+| Question | `hexactra.ask_human` | A span event when the question is asked (`hexactra.question.kind`, `.input`) and one in the **resumed** job when it was answered (`.channel`, `.outcome`, `.waited_ms`). The wait itself is never an open span |
+
+The chat orchestrator is the same in small: `invoke_agent hexactra.chat_orchestrator` with its `chat <model>` and `execute_tool` spans. The run it starts is linked from its first job.
+
+**Reading it.** A slow run: sort the chunk's children by duration. A model call that dominates means a big context (compare `usage.input_tokens` with [the token check above](#a-run-that-seems-to-burn-tokens-what-to-check)); a `hexactra.fabric` span that dominates means the browser, not the model. An expensive run: add up `hexactra.cost_usd` per tier. A failed run: look for the spans with `error.type`; the root's `hexactra.run.stop_reason` says why it stopped.
+
+**What is never in a trace.** No prompt, model output, typed text, page text, URL beyond its host, selector, question or answer, memory, parameter value or secret: spans carry names, counts, sizes, durations and outcomes. There is no switch that records message content. A test (`apps/api/test/agent-trace.db.spec.ts`) types, reads and asks with marker strings and fails if one reaches a span, event, link or metric label. A trace is **not** the audit trail: the durable record of what a run did is its steps and the audit log.
+
+**Metrics alongside** (Administration → Telemetry): `app.runs.model_call_duration` and `app.runs.model_call_tokens` by model and tier, `app.runs.tool_duration` by tool name and outcome. The platform's metric registry only accepts `app.` names, so the GenAI metric names themselves are not used. Attribute names follow the GenAI semantic conventions (version in `apps/api/src/runner/trace-attributes.ts`, the one file that spells them; the conventions are still marked "Development").
 
 ## 9. External AI apps
 

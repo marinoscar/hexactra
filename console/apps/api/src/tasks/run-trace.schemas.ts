@@ -96,6 +96,7 @@ export const runTraceSchema = z
       taskName: z.string().nullable(),
       conversationId: z.uuid().nullable(),
       profile: z.string(),
+      traceIds: z.array(z.string()).describe("The OpenTelemetry trace ids of the run's jobs (32 hex characters each), oldest first, the newest 100: one trace per job. Empty with the telemetry slice off. Find them in the deployment's trace collector."),
       host: z.object({ id: z.uuid(), name: z.string().nullable() }).nullable().describe('The machine the run used; `name` null when the fabric could not be asked'),
       createdAt: iso,
       startedAt: iso.nullable(),
