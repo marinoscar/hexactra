@@ -78,36 +78,7 @@ Body:
 
 ### Goals
 
-#### Create Goal
-```
-POST /goals
-Scopes: goals:write
-```
-
-Body:
-```json
-{
-  "session_id": "uuid",
-  "actions": [
-    {
-      "type": "navigate",
-      "url": "https://example.com"
-    }
-  ]
-}
-```
-
-#### List Goals
-```
-GET /goals
-Scopes: goals:read
-```
-
-#### Get Goal
-```
-GET /goals/{goalId}
-Scopes: goals:read
-```
+The fabric has no goals API. The early `POST /goals`, `GET /goals` and `GET /goals/{goalId}` routes (scopes `goals:read` and `goals:write`) were stubs that the router never mounted, and they have been removed together with the Rust planning loop. A goal is delegated to the console's agent loop (`POST /api/runs`, the `run_goal` MCP tool, `hexactra runs start`); the fabric only executes the browser actions that loop sends. See [decisions/one-agent-loop.md](decisions/one-agent-loop.md).
 
 ### Operations
 
@@ -139,9 +110,6 @@ The following MCP tools are available:
 
 - `create_session` - Create a new browser session
 - `list_sessions` - List active sessions
-- `create_goal` - Create a goal to execute
-- `get_goal_status` - Get goal status
-- `list_goals` - List goals for a session
 - `browser_request_human` - Ask a person for help (a human handoff)
 - `browser_type_secret` - Type the answer of a `secret` handoff into the page
 - `get_operation_status` - Get operation status
@@ -149,7 +117,7 @@ The following MCP tools are available:
 
 ### The console's MCP endpoint
 
-The tools above are the standalone Rust `hexactra-mcp` server (stdio, against a bare fabric). The Hexactra Console has its own MCP endpoint, `POST /api/mcp` (Streamable HTTP, stateless), with its own tool set: delegating goals (`run_goal`, `run_wait`, `run_status`, `run_cancel`, `task_*`, `schedule_*`), questions (`ask_human`, `inbox_*`), agent policies (`policy_*`), machines (`hosts_list`) and browser driving (`browser_*`, `browser_desktop_*`).
+The tools above are the standalone Rust `hexactra-mcp` server (stdio, against a bare fabric; `api/mcp-schemas.json` is its authoritative tool list). It has no goal tools: goals are the console's. The Hexactra Console has its own MCP endpoint, `POST /api/mcp` (Streamable HTTP, stateless), with its own tool set: delegating goals (`run_goal`, `run_wait`, `run_status`, `run_cancel`, `task_*`, `schedule_*`), questions (`ask_human`, `inbox_*`), agent policies (`policy_*`), machines (`hosts_list`) and browser driving (`browser_*`, `browser_desktop_*`).
 - **Authentication.** A personal access token (`pat_`) keeps every tool and the user's full authority. Hosted assistants (ChatGPT, Claude) sign in with OAuth 2.1 and receive an `oat_` token limited to the scopes the owner consented to; each tool names the scope that offers it, and a tool outside the consent starts a step-up (`403 insufficient_scope`). The server's OAuth is off until an administrator turns it on.
 - **Contract.** Every tool has a title, a scope, an effect (`read`, `write`, `destructive`) and explicit annotations. The generated tool and scope tables, the protocol revisions, limits and errors are in [console/docs/mcp.md](../console/docs/mcp.md); the OAuth recipes per client are in [console/docs/hosted-clients.md](../console/docs/hosted-clients.md). `api/mcp-schemas.json` describes the standalone server only.
 

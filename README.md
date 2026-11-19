@@ -81,7 +81,7 @@ flowchart LR
 ```
 
 - **The Console** is the single user-facing control point. It holds identity, roles, tasks, runs and the AI goal runner, and it is the only client that holds the fabric's service token.
-- **The Fabric** is the browser execution layer: a Rust control plane with durable state, and host agents that keep one browser per profile.
+- **The Fabric** is the browser execution layer: a Rust control plane with durable state, and host agents that keep one browser per profile. It runs what it is told and has no agent loop: the one loop (observe, reason, act, verify) is the console's goal runner, `console/apps/api/src/runner/` ([decision record](docs/decisions/one-agent-loop.md)).
 - **Nodes** are where the host agents run. The primary node is a machine on your residential network (a mini PC at home), connected outbound over HTTPS, in unattended or attended mode, or both. A browser host bundled on the VPS is optional, and expect more challenges from sites there. See [docs/nodes.md](docs/nodes.md).
 - Architecture in depth: [VISION.MD §26](VISION.MD) (console and fabric) and §5 to §6.
 
@@ -164,8 +164,6 @@ tests/              end-to-end tests
 | `hexactra-mcp` | MCP server (stdio) exposing the fabric's browsers as tools |
 | `hexactra-client` | HTTP client for the `/v1` API |
 | `hexactra-core` | Core types and traits |
-| `hexactra-agent-run`, `hexactra-planning-loop`, `hexactra-execution` | Durable run state machine; observe, reason, act, verify loop; execution policy, budgets, retries and takeover |
-| `hexactra-model-adapter` | OpenAI-compatible model adapter |
 | `hexactra-credential-resolver`, `hexactra-notification-delivery` | Secret resolution; notification delivery |
 | `hexactra-provider-sdk`, `hexactra-provider-tests`, `hexactra-demo-provider` | Provider SDK, conformance tests and a demo provider |
 | `hexactra-desktop-input` | Desktop input driver |

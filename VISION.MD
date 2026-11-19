@@ -202,6 +202,8 @@ flowchart TB
 
 ### 6.1 Ownership boundaries
 
+> **As built:** the control plane below is the fabric. The goal-level loop (observe, reason, act, verify) is not in it; it is the console's goal runner (Section 26.3), a client of the control plane's `/v1` API.
+
 | Component | Owns | Does not own |
 |---|---|---|
 | Control plane | Authentication/authorization, policies, sessions, leases, HITL, job states, audit | Local keyboard/mouse hardware |
@@ -1456,9 +1458,9 @@ flowchart TB
   LOCAL --> EXT["Chrome extension action/observation driver"]
   EXT <--> CHROME["Local Chrome and tabs"]
 
-  CLIENT["Remote SDK / CLI / MCP"] --> CORE["Rust control plane"]
-  CORE --> MANAGED["Rust managed AI goal runner"]
-  MANAGED --> WORKER["Rust Linux host agent/session worker"]
+  CLIENT["Remote SDK / CLI / MCP"] --> MANAGED["Console goal runner (TypeScript)"]
+  MANAGED --> CORE["Rust control plane (fabric)"]
+  CORE --> WORKER["Rust Linux host agent/session worker"]
   WORKER --> NATIVE["Rust Native Messaging host"]
   NATIVE --> REXT["Same extension driver"]
   REXT <--> REMOTEBROWSER["Remote graphical Chrome/persistent profile"]
@@ -1469,18 +1471,20 @@ flowchart TB
   MANAGED -. "server HITL broker" .-> CORE
 ~~~
 
+> **As built (issue #588):** the managed goal runner is the console's TypeScript runner (`console/apps/api/src/runner/`, Section 26.3), not a Rust component. The Rust control plane is the fabric: it executes actions and holds sessions, leases and handoffs, and has no agent loop. The Rust planning loop sketched here was removed; see [docs/decisions/one-agent-loop.md](docs/decisions/one-agent-loop.md). Where this section says "Rust managed AI goal runner", read "console goal runner".
+
 | Responsibility | Local extension mode | Managed remote mode |
 |---|---|---|
-| Goal orchestration | TypeScript extension agent | Rust managed AI goal runner |
-| AI provider | TypeScript OpenAI-compatible adapter | Rust OpenAI-compatible adapter |
+| Goal orchestration | TypeScript extension agent | Console goal runner (TypeScript, on the console, not on the host) |
+| AI provider | TypeScript OpenAI-compatible adapter | The console's platform AI service |
 | Browser actuator | Chrome extension | Same extension, Native Messaging and session worker |
 | Lifecycle | Existing Chrome/browser session | Boot-time daemon, persistent sessions and host control |
-| Persistence | Extension storage/IndexedDB | SQLite operation state and profile volumes |
+| Persistence | Extension storage/IndexedDB | Console database for runs; the fabric's SQLite for sessions and operations; profile volumes |
 | HITL | Secure extension-controlled human prompt/takeover | Durable server Human Interaction Broker/dashboard |
 | Telemetry | Local diagnostics and optional permitted export | OTel traces/metrics/logs and durable audit |
 | SDK/MCP | Not required | Full HTTP/SDK/CLI/MCP access |
 
-Define and version the same **Goal, Observation, BrowserAction, ActionResult, RunStatus, ProviderCapabilities, HITLRequest and VerificationResult** schemas for both runtimes. Implement conformance tests to prevent TypeScript and Rust agent behavior from drifting. Avoid requiring Node.js on the managed Linux daemon merely to use the built-in AI goal runner.
+Define and version the same **Goal, Observation, BrowserAction, ActionResult, RunStatus, ProviderCapabilities, HITLRequest and VerificationResult** schemas for both runtimes. The two TypeScript runners (the extension's and the console's) share these contracts; the Rust side carries no agent behavior, so there is no TypeScript-versus-Rust drift to test. The managed Linux daemon needs no Node.js: the goal runner runs in the console.
 
 ### 25.8 Interactions with Human in the Loop
 
@@ -1489,6 +1493,8 @@ The AI may detect that it needs a username/password, SMS/email OTP, TOTP code fr
 **V1:** use the built-in human prompt/UI in standalone extension mode and the existing durable Human Interaction Broker/dashboard in managed mode. **Later:** use the planned credential vault, email/SMS/push/messaging integration hooks without changing AI browser-action protocols. An authenticator requiring user presence must be completed by the human on the appropriate device; the AI must not claim to have defeated or reproduced that authentication mechanism.
 
 ### 25.9 Managed AI goal API and MCP
+
+> **As built:** this contract was delivered by the console, not by the control plane, and under other names. A goal is started with `POST /api/runs` (MCP `run_goal`, CLI `hexactra runs start`); status, events, cancel and takeover are the run's routes, MCP tools and CLI commands (Section 26.3, `console/docs/api-tasks-runs.md`). The `/api/v1/agent-runs` routes, the `hexactra agent run` commands and the `hexactra_agent_*` tools below were never built and are kept only as the original proposal.
 
 In addition to low-level browser actions, the managed service must offer a goal-level contract:
 
@@ -1529,7 +1535,7 @@ The Phase 2 extension milestone in Section 19 must therefore include **Side Pane
 ### 25.11 Additional architecture questions to resolve in ADRs
 
 - Precise OpenAI-compatible baseline and tool-schema fallback; optional Responses API support.
-- Versioned conformance suite shared by TypeScript local runner and Rust managed runner.
+- Versioned conformance suite shared by the TypeScript local runner and the console's managed runner (the Rust runner this item assumed does not exist).
 - Chrome extension permission grants, restricted debugging domains, side-panel lifecycle and HTTP access to user-selected inference servers.
 - Safe BYOK API-key storage modes in the standalone extension and transition to future OS vaults.
 - Which agent-generated actions require explicit approval even inside a broad natural-language request.
@@ -1572,6 +1578,8 @@ Every capability is a REST operation under `/api` (the OpenAPI document is at `/
 The TypeScript SDK (`console/packages/sdk`) is generated from the same OpenAPI document. Recipes for three agent frameworks (Hermes Agent, OpenClaw and Pi) are run against a live console in CI.
 
 ### 26.3 The goal runner
+
+This is the repository's only agent loop. The fabric (`crates/`) has none: it executes the actions the runner sends (decision record: [docs/decisions/one-agent-loop.md](docs/decisions/one-agent-loop.md)).
 
 - **Runs are durable state machines** (`queued → running → waiting_human → running → succeeded | failed | cancelled`).
 - **Each advance is a queue job.** The runner calls the model in chunks, with the transcript persisted after each chunk.

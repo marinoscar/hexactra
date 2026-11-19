@@ -12,7 +12,7 @@ Hexactra consists of several components:
 ┌─────────────────────────────────────────────────────────────┐
 │                    Control Plane (Rust)                     │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │ Identity │  │  Sessions│  │   Goals  │  │   HITL   │   │
+│  │ Identity │  │  Sessions│  │  Leases  │  │   HITL   │   │
 │  │  Manager │  │ Manager  │  │ Manager  │  │ Broker   │   │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
 └─────────────────────────────────────────────────────────────┘
