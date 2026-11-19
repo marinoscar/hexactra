@@ -151,8 +151,8 @@ Deployment configuration, off by default (`infra/compose/app.env.example`; read 
 | Variable | |
 |---|---|
 | `SECRETS_STORE_ENABLED` | `true` loads the slice. Unset or false: **no Vault package is loaded**, the app starts without the key, every existing route and test is unchanged. |
-| `SECRETS_STORE_KEY` | Required when on: 32 random bytes as 64 hex characters or base64 (`openssl rand -base64 32`). Missing or malformed, the API **refuses to start** with one error naming the variable (never the value). The deploy wizard never generates it for you. |
-| `SECRETS_STORE_KEY_PREVIOUS` | Only during a rotation. |
+| `SECRETS_STORE_KEY` | Required when on: 32 random bytes as 64 hex characters or base64 (`openssl rand -base64 32`). Missing or malformed, the API **refuses to start** with one error naming the variable (never the value). It is not in the env template (the installer asks for every secret a template declares): **add the line to `infra/compose/.env` yourself when you switch the store on, and back it up separately.** |
+| `SECRETS_STORE_KEY_PREVIOUS` | Only during a rotation: add the line to `infra/compose/.env` yourself (also not in the template). |
 | `SECRETS_STORE_CALLBACK_URL` | The address of the API as the fabric reaches it (default `http://api:3000`). |
 
 The slice needs the credential store and notifications slices, like the Vault connection. These are deployment secrets, not runtime configuration: a key that protects a database cannot live in it (the "never an environment variable" rule is for runtime-configured features such as storage and AI). Enabling it also needs `npm run prisma:migrate` (the Vault tables and `secrets_store_data_keys` ship in every build) and a restart; the `Credential` secret type is created at start-up.
