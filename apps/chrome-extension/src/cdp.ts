@@ -187,13 +187,19 @@ export async function pressKey(tabId: number, name: string, modifiers: string[] 
 /** Above this length, text is inserted at once rather than key by key. */
 export const KEY_BY_KEY_MAX = 300;
 
-/** Trusted typing at the focus: key events per character, or one insert for long text. */
-export async function typeText(tabId: number, text: string) {
+/**
+ * Trusted typing at the focus: key events per character, or one insert for long text.
+ * `beforeKey` runs before the insert and before each character (the origin guard of a sensitive typing): when it throws,
+ * the rest is not typed.
+ */
+export async function typeText(tabId: number, text: string, beforeKey?: () => Promise<void>) {
   if (text.length > KEY_BY_KEY_MAX) {
+    await beforeKey?.();
     await send(tabId, 'Input.insertText', { text });
     return;
   }
   for (const ch of text) {
+    await beforeKey?.();
     if (ch === '\n') {
       await pressKey(tabId, 'Enter');
     } else if (ch === '\t') {

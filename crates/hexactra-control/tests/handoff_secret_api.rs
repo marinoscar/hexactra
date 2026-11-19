@@ -237,6 +237,7 @@ async fn type_secret_types_the_answer_without_returning_it() {
             clear: true,
             submit: true,
             sensitive: true,
+            expect_origin: None,
             tab_id: None,
         }
     );
@@ -339,6 +340,7 @@ async fn sensitive_type_text_is_reported_as_redacted() {
                 clear: false,
                 submit: false,
                 sensitive: true,
+                expect_origin: None,
                 tab_id: None,
             },
             Some(Duration::from_millis(200)),

@@ -23,7 +23,7 @@ type Button = 'left' | 'middle' | 'right';
 export type RemoteAction =
   | { type: 'navigate'; url: string; tab_id?: number }
   | { type: 'click'; selector: string; tab_id?: number }
-  | { type: 'type'; selector: string; text: string; clear?: boolean; submit?: boolean; tab_id?: number }
+  | { type: 'type'; selector: string; text: string; clear?: boolean; submit?: boolean; expect_origin?: string; tab_id?: number }
   | { type: 'press'; key: string; selector?: string; tab_id?: number }
   | { type: 'scroll'; dx?: number; dy?: number; selector?: string; tab_id?: number }
   | { type: 'screenshot'; marks?: boolean; mask?: boolean; tab_id?: number }
@@ -32,7 +32,7 @@ export type RemoteAction =
   | { type: 'mouse'; op: 'move' | 'down' | 'up'; x: number; y: number; button?: Button; tab_id?: number }
   | { type: 'drag'; from_x: number; from_y: number; to_x: number; to_y: number; steps?: number; tab_id?: number }
   | { type: 'scroll_at'; x: number; y: number; dx?: number; dy?: number; tab_id?: number }
-  | { type: 'type_keys'; text: string; tab_id?: number }
+  | { type: 'type_keys'; text: string; expect_origin?: string; tab_id?: number }
   | { type: 'key'; key: string; modifiers?: string[]; tab_id?: number }
   | { type: 'text'; selector?: string; max_chars?: number; tab_id?: number }
   | { type: 'elements'; max_elements?: number; tab_id?: number }
@@ -105,6 +105,32 @@ async function resolveTab(tabId?: number): Promise<chrome.tabs.Tab> {
     return any;
   }
   return tab;
+}
+
+/** The `origin_mismatch` refusal of the origin guard: the error text the control plane maps to its `origin_mismatch` code. */
+export const ORIGIN_MISMATCH = 'origin_mismatch: the tab is no longer on the page the value was released for; nothing was typed';
+
+/** `scheme://host[:port]` of a URL, or null when it has none (about:blank, data:, an unreadable URL). */
+export function originOf(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    const o = new URL(url).origin;
+    return o === 'null' ? null : o;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The origin guard of a sensitive `type` / `type_keys` (E37.10, #625): the
+ * control plane sends the origin it verified as `expect_origin`, and the tab's
+ * top-level document must still be on it now. A tab that moved (a redirect, a
+ * script, a click) types nothing. Without `expect_origin` (an ordinary `type`)
+ * there is no check. The tab's URL is not echoed: it can carry a token.
+ */
+export function assertTabOrigin(tab: { url?: string }, expect: string | undefined): void {
+  if (expect === undefined) return;
+  if (originOf(tab.url) !== originOf(expect)) throw new ActionError(ORIGIN_MISMATCH);
 }
 
 /** Wait until a tab finishes loading (status "complete") or the deadline passes. */
@@ -184,7 +210,11 @@ export function pageClick(selector: string) {
   return {};
 }
 
-export function pageType(selector: string, text: string, clear: boolean, submit: boolean) {
+export function pageType(selector: string, text: string, clear: boolean, submit: boolean, expectOrigin: string | null = null) {
+  // The origin guard again, inside the page and in the same synchronous step as the typing (E37.10): nothing can navigate in between.
+  if (expectOrigin !== null && location.origin !== expectOrigin) {
+    return { __error: 'origin_mismatch: the tab is no longer on the page the value was released for; nothing was typed' };
+  }
   const el = document.querySelector(selector) as HTMLElement | null;
   if (!el) return { __error: `no element matches ${selector}` };
   el.scrollIntoView({ block: 'center' });
@@ -585,7 +615,8 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
     }
     case 'type': {
       const tab = await resolveTab(action.tab_id);
-      return inPage(tab.id!, pageType, [action.selector, action.text, !!action.clear, !!action.submit]);
+      assertTabOrigin(tab, action.expect_origin);
+      return inPage(tab.id!, pageType, [action.selector, action.text, !!action.clear, !!action.submit, action.expect_origin ?? null]);
     }
     case 'press': {
       const tab = await resolveTab(action.tab_id);
@@ -645,7 +676,12 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
     }
     case 'type_keys': {
       const tab = await resolveTab(action.tab_id);
-      await viaCdp(() => cdp.typeText(tab.id!, action.text));
+      const expect = action.expect_origin;
+      assertTabOrigin(tab, expect);
+      // Keystrokes go to whatever has focus, one event at a time: the tab is checked again before each, so a page that
+      // navigates part-way stops the typing (the rest is not sent).
+      const guard = expect === undefined ? undefined : async () => assertTabOrigin(await resolveTab(tab.id), expect);
+      await viaCdp(() => cdp.typeText(tab.id!, action.text, guard));
       return {};
     }
     case 'key': {

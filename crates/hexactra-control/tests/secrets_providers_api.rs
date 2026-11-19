@@ -76,17 +76,31 @@ struct Ext {
     /// What the next card-target probes answer (the last one stays), instead
     /// of `frame`; empty: `frame`.
     card_probe: Arc<Mutex<VecDeque<Value>>>,
+    /// What the next password-target probes answer (the last one stays); empty:
+    /// a password field.
+    password_probe: Arc<Mutex<VecDeque<Value>>>,
+    /// The `type` and `type_keys` actions the fake extension carried out: its
+    /// origin guard (E37.10) passed. Anything it refused is in `refused`.
+    typed_ok: Arc<Mutex<Vec<RemoteAction>>>,
+    refused: Arc<Mutex<Vec<RemoteAction>>>,
+}
+
+/// `scheme://host[:port]` of a URL, as the extension's guard compares them.
+fn origin_of(url: &str) -> String {
+    let (scheme, rest) = url.split_once("://").unwrap_or(("", url));
+    let host = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    format!("{scheme}://{host}")
 }
 
 impl Ext {
+    /// The typing actions the browser carried out (not those its origin guard
+    /// refused).
     fn typed(&self) -> Vec<RemoteAction> {
-        self.received
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|a| matches!(a, RemoteAction::Type { .. } | RemoteAction::TypeKeys { .. }))
-            .cloned()
-            .collect()
+        self.typed_ok.lock().unwrap().clone()
+    }
+
+    fn refused(&self) -> Vec<RemoteAction> {
+        self.refused.lock().unwrap().clone()
     }
 
     fn kinds(&self) -> Vec<&'static str> {
@@ -152,6 +166,9 @@ async fn start_with(webhooks: Webhooks) -> Fabric {
             json!({"found": true, "select": true, "options": []}),
         )),
         card_probe: Default::default(),
+        password_probe: Default::default(),
+        typed_ok: Default::default(),
+        refused: Default::default(),
     };
     {
         let (host, ext) = (host.clone(), ext.clone());
@@ -198,10 +215,55 @@ async fn start_with(webhooks: Webhooks) -> Fabric {
                         };
                         json!({"value": v})
                     }
+                    // The probe of a login's password target (E37.10).
+                    RemoteAction::Evaluate { script, .. }
+                        if script.contains("hexactra:password-target") =>
+                    {
+                        let mut q = ext.password_probe.lock().unwrap();
+                        let v = match q.len() {
+                            0 => json!({"found": true, "password": true}),
+                            1 => q.front().cloned().unwrap(),
+                            _ => q.pop_front().unwrap(),
+                        };
+                        json!({"value": v})
+                    }
                     RemoteAction::Evaluate { .. } => {
                         json!({"value": ext.frame.lock().unwrap().clone()})
                     }
-                    RemoteAction::Type { .. } | RemoteAction::TypeKeys { .. } => {
+                    RemoteAction::Type { expect_origin, .. }
+                    | RemoteAction::TypeKeys { expect_origin, .. } => {
+                        // The real extension's guard: the tab's top-level
+                        // origin at the moment of typing.
+                        let now = ext
+                            .urls
+                            .lock()
+                            .unwrap()
+                            .front()
+                            .cloned()
+                            .unwrap_or_default();
+                        if expect_origin
+                            .as_deref()
+                            .is_some_and(|want| want != origin_of(&now))
+                        {
+                            ext.refused.lock().unwrap().push(op.action.clone());
+                            let _ = host
+                                .report(
+                                    host_id,
+                                    op.id,
+                                    &OperationResult {
+                                        navigation_blocked: Vec::new(),
+                                        ok: false,
+                                        result: None,
+                                        error: Some(
+                                            "origin_mismatch: the tab is no longer on the page the value was released for; nothing was typed"
+                                                .into(),
+                                        ),
+                                    },
+                                )
+                                .await;
+                            continue;
+                        }
+                        ext.typed_ok.lock().unwrap().push(op.action.clone());
                         while ext.hold.load(Ordering::SeqCst) {
                             tokio::time::sleep(Duration::from_millis(10)).await;
                         }
@@ -486,8 +548,15 @@ async fn lookup_returns_summaries_only() {
         .await
         .unwrap();
     assert!(probe.result.is_none(), "{probe:?}");
-    // Only the lookup reached the provider: no value was released.
-    assert_eq!(f.ext.kinds(), vec!["tabs"]);
+    // Only the lookup reached the provider: no value was released. A login's
+    // lookup also notes the password inputs now on the page (E37.10), so a
+    // "show password" toggle later does not hide them.
+    assert_eq!(f.ext.kinds(), vec!["tabs", "evaluate"]);
+    assert!(f.ext.received.lock().unwrap().iter().any(|a| matches!(
+        a,
+        RemoteAction::Evaluate { script, .. } if script.contains("hexactra:password-mark")
+            && !script.contains(FIXTURE_PASSWORD)
+    )));
 }
 
 #[tokio::test]
@@ -510,11 +579,16 @@ async fn type_from_provider_types_the_value_and_reports_none() {
             clear: true,
             submit: false,
             sensitive: true,
+            expect_origin: Some(FIXTURE_ORIGIN.into()),
             tab_id: Some(TAB),
         }]
     );
-    // The origin was read twice (before the release and right before typing).
-    assert_eq!(f.ext.kinds(), vec!["tabs", "tabs", "type"]);
+    // The origin was read twice (before the release and right before typing),
+    // and the password field checked each time.
+    assert_eq!(
+        f.ext.kinds(),
+        vec!["tabs", "evaluate", "tabs", "evaluate", "type"]
+    );
 
     // The operation, and the operation of the typing step, show no value.
     for what in [
@@ -556,6 +630,7 @@ async fn type_code_from_provider_types_a_fresh_code() {
             clear: false,
             submit: true,
             sensitive: true,
+            expect_origin: Some(FIXTURE_ORIGIN.into()),
             tab_id: Some(TAB),
         }]
     );
@@ -619,6 +694,176 @@ async fn a_page_on_another_origin_gets_nothing() {
 }
 
 #[tokio::test]
+async fn the_browser_refuses_to_type_when_the_tab_moved_after_the_last_origin_read() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    let moved = [
+        &format!("{FIXTURE_ORIGIN}/signin"),
+        &format!("{FIXTURE_ORIGIN}/signin"),
+        "https://evil.example.test/",
+    ];
+
+    // The fabric's two origin reads both say the saved origin; the tab then
+    // navigates before the browser types. The `type` carries the origin the
+    // value was released for, the extension compares it with the tab's URL at
+    // that moment and types nothing.
+    f.ext.goto(&moved);
+    let op = f
+        .act(s, type_from(FIXTURE_ITEM_ID, SecretField::Password, "#pw"))
+        .await;
+    failed_with(&op, "origin_mismatch");
+    assert!(f.ext.typed().is_empty(), "{:?}", f.ext.typed());
+    let refused = f.ext.refused();
+    assert!(matches!(
+        refused.as_slice(),
+        [RemoteAction::Type { expect_origin: Some(o), sensitive: true, .. }] if o == FIXTURE_ORIGIN
+    ));
+    let ev = f.events("secrets.release");
+    assert_eq!(ev.last().unwrap()["outcome"], "origin_mismatch");
+    assert_eq!(ev.last().unwrap()["released"], true);
+    assert!(!text_of(&op).contains(FIXTURE_PASSWORD));
+
+    // The same for a code, and for keystrokes at a point (`type_keys`).
+    f.ext.goto(&moved);
+    failed_with(
+        &f.act(s, type_code(FIXTURE_ITEM_ID, "#otp")).await,
+        "origin_mismatch",
+    );
+    f.ext.goto(&moved);
+    let by_point = RemoteAction::TypeFromProvider {
+        item_id: FIXTURE_ITEM_ID.into(),
+        field: SecretField::Password,
+        selector: None,
+        point: Some(ViewportPoint { x: 120, y: 340 }),
+        purpose: SecretPurpose::Login,
+        clear: false,
+        submit: true,
+        provider: None,
+        run_id: None,
+        client_label: None,
+        tab_id: Some(TAB),
+    };
+    let op = f.act(s, by_point).await;
+    failed_with(&op, "origin_mismatch");
+    assert!(f.ext.typed().is_empty(), "{:?}", f.ext.typed());
+    assert!(f
+        .ext
+        .refused()
+        .iter()
+        .any(|a| matches!(a, RemoteAction::TypeKeys { expect_origin: Some(o), .. } if o == FIXTURE_ORIGIN)));
+    // Submit (Enter) is never pressed after a refused typing.
+    assert_eq!(f.ext.kinds().last(), Some(&"type_keys"));
+
+    // Back on the page it is for, the same call types.
+    f.ext.goto(&[&format!("{FIXTURE_ORIGIN}/signin")]);
+    let op = f
+        .act(s, type_from(FIXTURE_ITEM_ID, SecretField::Password, "#pw"))
+        .await;
+    assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
+    assert_eq!(f.ext.typed().len(), 1);
+}
+
+#[tokio::test]
+async fn a_login_password_is_typed_only_into_a_password_field() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    let probes = || {
+        f.ext
+            .received
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|a| matches!(a, RemoteAction::Evaluate { script, .. } if script.contains("hexactra:password-target")))
+            .count()
+    };
+
+    // The model names a plain text box (a comment, a profile field, a search
+    // box): refused before the provider is asked, and the run is told why.
+    *f.ext.password_probe.lock().unwrap() = [json!({"found": true, "password": false})].into();
+    let op = f
+        .act(
+            s,
+            type_from(FIXTURE_ITEM_ID, SecretField::Password, "#comment"),
+        )
+        .await;
+    failed_with(&op, "target_not_password");
+    assert!(f.ext.typed().is_empty() && f.ext.refused().is_empty());
+    let ev = f.events("secrets.release");
+    assert_eq!(ev.last().unwrap()["outcome"], "target_not_password");
+    assert_eq!(ev.last().unwrap()["released"], false);
+    assert!(!text_of(&op).contains(FIXTURE_PASSWORD));
+    // The same for a point.
+    let by_point = RemoteAction::TypeFromProvider {
+        item_id: FIXTURE_ITEM_ID.into(),
+        field: SecretField::Password,
+        selector: None,
+        point: Some(ViewportPoint { x: 12, y: 34 }),
+        purpose: SecretPurpose::Login,
+        clear: false,
+        submit: false,
+        provider: None,
+        run_id: None,
+        client_label: None,
+        tab_id: Some(TAB),
+    };
+    failed_with(&f.act(s, by_point).await, "target_not_password");
+    assert!(!f.ext.kinds().contains(&"click_at"));
+    assert!(f.ext.typed().is_empty());
+
+    // A username (or any other field) goes into a text box: no password probe.
+    let before = probes();
+    let op = f
+        .act(
+            s,
+            type_from(FIXTURE_ITEM_ID, SecretField::Username, "#user"),
+        )
+        .await;
+    assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
+    assert_eq!(probes(), before);
+
+    // A password input, or a text input the page shows as a password through a
+    // "show password" toggle (the probe says so), gets the password.
+    f.ext.password_probe.lock().unwrap().clear();
+    let op = f
+        .act(s, type_from(FIXTURE_ITEM_ID, SecretField::Password, "#pw"))
+        .await;
+    assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
+    assert!(f.ext.typed().iter().any(
+        |a| matches!(a, RemoteAction::Type { selector, text, .. } if selector == "#pw" && text == FIXTURE_PASSWORD)
+    ));
+
+    // No element: a typing failure, not a verdict.
+    *f.ext.password_probe.lock().unwrap() = [json!({"found": false})].into();
+    failed_with(
+        &f.act(
+            s,
+            type_from(FIXTURE_ITEM_ID, SecretField::Password, "#nope"),
+        )
+        .await,
+        "typing_failed",
+    );
+
+    // The page swaps the field for a text box while the provider answers: the
+    // check is made again before typing and the value is dropped.
+    let typed_before = f.ext.typed().len();
+    *f.ext.password_probe.lock().unwrap() = [
+        json!({"found": true, "password": true}),
+        json!({"found": true, "password": false}),
+    ]
+    .into();
+    let op = f
+        .act(s, type_from(FIXTURE_ITEM_ID, SecretField::Password, "#pw"))
+        .await;
+    failed_with(&op, "target_not_password");
+    assert_eq!(f.ext.typed().len(), typed_before);
+    let ev = f.events("secrets.release");
+    assert_eq!(ev.last().unwrap()["outcome"], "target_not_password");
+    assert_eq!(ev.last().unwrap()["released"], true);
+}
+
+#[tokio::test]
 async fn point_targets_refuse_frames_of_another_origin() {
     let f = start().await;
     f.register_test(json!({})).await;
@@ -656,13 +901,13 @@ async fn point_targets_refuse_frames_of_another_origin() {
     let op = f.act(s, by_point(true, true)).await;
     assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
     let kinds = f.ext.kinds();
-    // Probe the frame, read the origin again, click, wipe, type, submit.
+    // Re-read the origin, re-check the password field, click, wipe, type, submit.
     let tail: Vec<&str> = kinds[kinds.len() - 7..].to_vec();
     assert_eq!(
         tail,
         [
-            "evaluate",
             "tabs",
+            "evaluate",
             "click_at",
             "key",
             "key",
@@ -675,6 +920,7 @@ async fn point_targets_refuse_frames_of_another_origin() {
         vec![RemoteAction::TypeKeys {
             text: FIXTURE_PASSWORD.into(),
             sensitive: true,
+            expect_origin: Some(FIXTURE_ORIGIN.into()),
             tab_id: Some(TAB),
         }]
     );
@@ -1103,6 +1349,7 @@ async fn a_non_sensitive_field_types_on_any_site_a_sensitive_one_only_on_its_all
             clear: true,
             submit: false,
             sensitive: true,
+            expect_origin: Some("https://other.example.test".into()),
             tab_id: Some(TAB),
         }]
     );
@@ -2165,6 +2412,7 @@ mod vault_provider {
             clear,
             submit,
             sensitive: true,
+            expect_origin: Some(SHOP_ORIGIN.into()),
             tab_id: Some(TAB),
         };
         assert_eq!(

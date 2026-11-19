@@ -201,6 +201,7 @@ export type SecretsErrorCode =
   | 'limit_reached'
   | 'cards_disabled'
   | 'frame_unknown'
+  | 'target_not_password'
   | 'unsupported'
   | 'timed_out'
   | 'cancelled'
@@ -228,6 +229,7 @@ export const SECRETS_ERROR_CODES: readonly SecretsErrorCode[] = [
   'limit_reached',
   'cards_disabled',
   'frame_unknown',
+  'target_not_password',
   'unsupported',
   'timed_out',
   'cancelled',
@@ -257,6 +259,7 @@ export function secretsErrorAction(code: SecretsErrorCode): SecretsErrorAction {
     case 'not_found':
     case 'no_provider':
     case 'provider_required':
+    case 'target_not_password':
       return 'ask_person';
     case 'unauthorized':
       return 'reconnect';
