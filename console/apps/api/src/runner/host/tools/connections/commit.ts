@@ -42,7 +42,7 @@ export async function commitCall<S extends Service, T>(ctx: HostContext, spec: W
   const started = Date.now();
   await ctx.setActivity('acting', { action: { type: spec.tool }, timeoutMs: 60_000 });
   const seqBefore = ctx.state.seq;
-  const intent = await openCallIntent(ctx, spec.tool, conn.id, spec.stepArgs, spec.what);
+  const intent = await openCallIntent(ctx, spec.tool, conn.id, spec.stepArgs, `${spec.what}; before anything else, ${spec.check}`);
   if (intent === null) return LEASE_LOST_TEXT;
   noteCall(ctx, conn.provider, spec.capability, 'write');
   try {

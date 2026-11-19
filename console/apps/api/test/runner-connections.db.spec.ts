@@ -4,6 +4,8 @@
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 
 import { createApp } from '../src/main';
+import { CapabilityError } from '../src/connections/capabilities';
+import { CapabilityProviderRegistry } from '../src/connections/capability-provider.registry';
 import { balancedSpec } from '../src/policies/builtin-policies';
 import { installMemoryTracing } from './helpers/otel-memory';
 import { connectionKit, fakeFabric, login, scriptedModel, type Call, type Kit } from './support/connection-run-kit';
@@ -475,5 +477,210 @@ describe('the step rows hold no content', () => {
     } finally {
       await trace.uninstall();
     }
+  });
+});
+
+describe('a crash around a send', () => {
+  it('never sends twice: the step is unknown, the model is told to check the Sent folder, and the gate asks again', async () => {
+    const registry = app.get(CapabilityProviderRegistry);
+    const r = await setup('crash', [['Work', ALL, 'read_write']]);
+    const a = kit.fake.account(r.conns[0]!.id);
+    const call = SEND(['person-b@example.test'], 'Invoice', 'Here is the invoice.');
+    const first = kit.runner(scriptedModel([[call]]), fakeFabric());
+    await first.advance(r.run.id, r.userId, null);
+    await kit.answer(r.userId, r.run.id, { outcome: 'completed', value: 'approve' });
+
+    // The job dies after the message left the mailbox and before its result was recorded.
+    let hung!: () => void;
+    const reached = new Promise<void>((resolve) => (hung = resolve));
+    const realMail = kit.fake.mail.bind(kit.fake);
+    registry.register({
+      ...kit.fake,
+      provider: 'google',
+      mail: (ctx: never) => {
+        const m = realMail(ctx);
+        return {
+          ...m,
+          send: async (x: never) => {
+            const out = await m.send(x);
+            hung();
+            await new Promise(() => undefined);
+            return out;
+          },
+        };
+      },
+      calendar: kit.fake.calendar.bind(kit.fake),
+      documents: kit.fake.documents.bind(kit.fake),
+    } as never);
+    const dying = kit.runner(scriptedModel([[call]]), fakeFabric()).advance(r.run.id, r.userId, null);
+    dying.catch(() => undefined);
+    await reached;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    registry.register(kit.fake);
+    expect(a.sent).toHaveLength(1);
+    const before = (await kit.prisma.runStep.findMany({ where: { runId: r.run.id, action: 'mail_send' } })).map((s) => s.phase);
+    expect(before).toEqual(['intent']);
+
+    // The retried job: the model would send again; the step is unknown and the owner is asked, not the mailbox.
+    const retry = scriptedModel([[call]]);
+    expect(await kit.runner(retry, fakeFabric()).advance(r.run.id, r.userId, null)).toBe('waiting_human');
+    expect(a.sent).toHaveLength(1);
+    expect(retry.inputs[0]).toMatch(/Step \d+ \(send an email from Work to 1 recipient \(subject: Invoice\); before anything else, look in the Sent folder with mail_search\) may or may not have happened\. Do not repeat it\./);
+    expect(retry.outputs[0]).toMatch(/^Asked the owner to approve this/);
+    const steps = await kit.prisma.runStep.findMany({ where: { runId: r.run.id, action: 'mail_send' }, orderBy: { seq: 'asc' } });
+    expect(steps.map((s) => s.phase)).toEqual(['unknown']);
+  });
+
+  it('does not let a saved approval cover a call whose last attempt may have happened', async () => {
+    const r = await setup('crash-rule', [['Work', ALL, 'read_write']]);
+    const a = kit.fake.account(r.conns[0]!.id);
+    await kit.prisma.approvalRule.create({ data: { userId: r.userId, kind: 'connection', host: r.conns[0]!.id, matchKey: 'mail_send', summary: 'Send mail with Work', recipients: ['person-b@example.test'] } });
+    const registry = app.get(CapabilityProviderRegistry);
+    let hung!: () => void;
+    const reached = new Promise<void>((resolve) => (hung = resolve));
+    const realMail = kit.fake.mail.bind(kit.fake);
+    registry.register({
+      ...kit.fake,
+      provider: 'google',
+      mail: (ctx: never) => {
+        const m = realMail(ctx);
+        return { ...m, send: async (x: never) => (await m.send(x), hung(), new Promise(() => undefined)) };
+      },
+      calendar: kit.fake.calendar.bind(kit.fake),
+      documents: kit.fake.documents.bind(kit.fake),
+    } as never);
+    const call = SEND(['person-b@example.test'], 'Invoice', 'Here is the invoice.');
+    kit.runner(scriptedModel([[call]]), fakeFabric()).advance(r.run.id, r.userId, null).catch(() => undefined);
+    await reached;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    registry.register(kit.fake);
+    expect(a.sent).toHaveLength(1);
+    const retry = scriptedModel([[call]]);
+    expect(await kit.runner(retry, fakeFabric()).advance(r.run.id, r.userId, null)).toBe('waiting_human');
+    expect(a.sent).toHaveLength(1);
+    expect(retry.outputs[0]).toMatch(/^Asked the owner/);
+  });
+});
+
+describe('runs without a browser', () => {
+  it('allocates no fabric session and no node for a run that only uses connections, and ends without one', async () => {
+    const r = await setup('nobrowser', [['Work', READ, 'read']], { goal: "What's on my plate today?" });
+    kit.fake.account(r.conns[0]!.id).addMessage({ subject: 'Standup notes' });
+    const fabric = fakeFabric();
+    const model = scriptedModel([[['mail_search', { connection: null, from: null, to: null, subject: null, text: null, after: null, before: null, unread: null, has_attachment: null, label: null, limit: null, page_token: null }], ['finish', { success: true, result: 'One email: Standup notes.' }]]]);
+    expect(await kit.runner(model, fabric).advance(r.run.id, r.userId, null)).toBe('succeeded');
+    expect(fabric.sessions()).toBe(0);
+    expect(fabric.ended()).toBe(0);
+    expect(fabric.request).not.toHaveBeenCalledWith('POST', '/v1/sessions', expect.anything());
+    const run = await r.db.run.findFirstOrThrow({ where: { id: r.run.id } });
+    expect(run).toMatchObject({ status: 'succeeded', sessionId: null, result: 'One email: Standup notes.' });
+    // The browser tools are still on the list (the run may need one), and no screenshot was taken.
+    expect(model.offered[0]).toEqual(expect.arrayContaining(['navigate', 'click', 'finish']));
+    expect(fabric.actions).toEqual([]);
+  });
+
+  it('opens a browser at the first browser tool call, once, and ends it with the run', async () => {
+    const r = await setup('lazy', [['Work', READ, 'read']]);
+    const fabric = fakeFabric();
+    const model = scriptedModel([[['connections_list', {}], ['navigate', { url: 'https://example.test/form', reason: 'fill the form' }], ['navigate', { url: 'https://example.test/form2', reason: 'next' }], FINISH]]);
+    expect(await kit.runner(model, fabric).advance(r.run.id, r.userId, null)).toBe('succeeded');
+    expect(fabric.sessions()).toBe(1);
+    expect(fabric.actions.filter((x) => x.type === 'navigate')).toHaveLength(2);
+    expect(fabric.ended()).toBe(1);
+    const run = await r.db.run.findFirstOrThrow({ where: { id: r.run.id } });
+    expect(run.sessionId).not.toBeNull();
+  });
+
+  it('reports "no node available" only when a browser is actually needed', async () => {
+    const r = await setup('nonode', [['Work', READ, 'read']]);
+    const fabric = fakeFabric({ failSession: true });
+    const model = scriptedModel([[['connections_list', {}], ['navigate', { url: 'https://example.test/', reason: 'open it' }], ['finish', { success: true, result: 'Could not open the page, but the account was read.' }]]]);
+    expect(await kit.runner(model, fabric).advance(r.run.id, r.userId, null)).toBe('succeeded');
+    expect(model.outputs[0]).toContain('connections');
+    expect(model.outputs[1]).toMatch(/No browser available: no node available/);
+  });
+
+  it("opens the browser at the start for needsBrowser 'always' and never offers one for 'never'", async () => {
+    const always = await setup('always', [['Work', READ, 'read']], { needsBrowser: 'always' });
+    const fabricA = fakeFabric();
+    await kit.runner(scriptedModel([[FINISH]]), fabricA).advance(always.run.id, always.userId, null);
+    expect(fabricA.sessions()).toBe(1);
+
+    const never = await setup('never', [['Work', READ, 'read']], { needsBrowser: 'never' });
+    const fabricN = fakeFabric();
+    const modelN = scriptedModel([[FINISH]]);
+    await kit.runner(modelN, fabricN).advance(never.run.id, never.userId, null);
+    expect(fabricN.sessions()).toBe(0);
+    expect(modelN.offered[0]!.filter((n) => !CONNECTION_TOOLS.includes(n))).toEqual(['request_human', 'finish']);
+  });
+
+  it('still opens a browser at the start for a run without connections', async () => {
+    const plain = await setup('plain', []);
+    const fabric = fakeFabric();
+    await kit.runner(scriptedModel([[FINISH]]), fabric).advance(plain.run.id, plain.userId, null);
+    expect(fabric.sessions()).toBe(1);
+  });
+});
+
+describe('what goes wrong becomes an instruction', () => {
+  const SEARCH: Call = ['mail_search', { connection: null, from: null, to: null, subject: null, text: null, after: null, before: null, unread: null, has_attachment: null, label: null, limit: null, page_token: null }];
+
+  it('tells the model when an account must be connected again or is paused', async () => {
+    const r = await setup('reconnect', [['Work', READ, 'read']]);
+    await kit.prisma.connection.update({ where: { id: r.conns[0]!.id }, data: { status: 'needs_reconnect', statusReason: 'GRANT_REVOKED' } });
+    const model = scriptedModel([[SEARCH, ['connections_list', {}], FINISH]]);
+    await kit.runner(model, fakeFabric()).advance(r.run.id, r.userId, null);
+    expect(model.outputs[0]).toMatch(/The account "Work" must be connected again by the owner\. Tell the owner and continue without it, or finish\./);
+    expect(JSON.parse(model.outputs[1]!).connections[0]).toMatchObject({ status: 'must be connected again by the owner', can: [] });
+    await kit.prisma.connection.update({ where: { id: r.conns[0]!.id }, data: { status: 'paused' } });
+    const run2 = await r.db.run.create({ data: { userId: r.userId, taskId: r.task.id, goal: r.task.goal } });
+    const model2 = scriptedModel([[SEARCH, FINISH]]);
+    await kit.runner(model2, fakeFabric()).advance(run2.id, r.userId, null);
+    expect(model2.outputs[0]).toMatch(/is paused by the owner/);
+  });
+
+  it('says this task may not do it when the capability was switched off after the run started', async () => {
+    const r = await setup('capoff', [['Work', READ, 'read']]);
+    // The run started with the mail switch on (its snapshot); the owner has switched it off since.
+    const spec = balancedSpec();
+    await r.db.run.update({ where: { id: r.run.id }, data: { policySnapshot: { schemaVersion: 1, ref: 'builtin:balanced', name: 'Balanced', version: 1, builtin: true, source: 'system_default', spec, tiers: null, takenAt: new Date().toISOString(), connections: [{ connectionId: r.conns[0]!.id, access: 'read', label: 'Work', provider: 'google', capabilities: READ }] } as never } });
+    await kit.prisma.connection.update({ where: { id: r.conns[0]!.id }, data: { capabilities: ['calendar_read'] } });
+    const model = scriptedModel([[SEARCH, FINISH]]);
+    await kit.runner(model, fakeFabric()).advance(r.run.id, r.userId, null);
+    expect(model.outputs[0]).toBe('This task is not allowed to do that with this account.');
+  });
+
+  it('waits once for a rate limit, then retries, and does not loop', async () => {
+    const r = await setup('rate', [['Work', READ, 'read']]);
+    kit.fake.account(r.conns[0]!.id).addMessage({ subject: 'Hello' });
+    kit.fake.failNext('mail.search', new CapabilityError('RATE_LIMITED', { retryAfterMs: 20 }), 1);
+    const model = scriptedModel([[SEARCH, FINISH]]);
+    await kit.runner(model, fakeFabric()).advance(r.run.id, r.userId, null);
+    expect(model.outputs[0]).toContain('Hello');
+    expect(kit.fake.callsOf('mail.search').length).toBeGreaterThanOrEqual(2);
+
+    const r2 = await setup('rate2', [['Work', READ, 'read']]);
+    kit.fake.failNext('mail.search', new CapabilityError('RATE_LIMITED', { retryAfterMs: 20 }), 5);
+    const before = kit.fake.callsOf('mail.search').length;
+    const model2 = scriptedModel([[SEARCH, FINISH]]);
+    await kit.runner(model2, fakeFabric()).advance(r2.run.id, r2.userId, null);
+    expect(model2.outputs[0]).toMatch(/asked to slow down and still refuses/);
+    expect(kit.fake.callsOf('mail.search').length - before).toBe(2);
+  });
+
+  it('treats a provider failure of a send as an unknown outcome: not repeated, the owner\'s approval is spent', async () => {
+    const r = await setup('unknown', [['Work', ALL, 'read_write']]);
+    const a = kit.fake.account(r.conns[0]!.id);
+    const call = SEND(['person-b@example.test'], 'Invoice', 'Here it is.');
+    const model = scriptedModel([[call], [call, call]]);
+    const runner = kit.runner(model, fakeFabric());
+    await runner.advance(r.run.id, r.userId, null);
+    await kit.answer(r.userId, r.run.id, { outcome: 'completed', value: 'approve' });
+    kit.fake.failNext('mail.send', new CapabilityError('PROVIDER_ERROR', { status: 0 }), 1);
+    expect(await runner.advance(r.run.id, r.userId, null)).toBe('waiting_human');
+    expect(model.outputs[1]).toMatch(/may or may not have happened\. Do not repeat it blindly: look in the Sent folder with mail_search first/);
+    expect(a.sent).toHaveLength(0);
+    // The approval was spent: the retry in the same run asks again.
+    expect(model.outputs[2]).toMatch(/^Asked the owner/);
   });
 });
