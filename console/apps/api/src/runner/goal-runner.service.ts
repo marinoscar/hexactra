@@ -17,10 +17,9 @@ import { RUN_ARTIFACT_STORE, type RunArtifactStore } from '../tasks/run-delete.s
 import { RunNotifier } from '../tasks/run-notifier';
 import { TasksService } from '../tasks/tasks.service';
 import { AgentTrace } from './agent-trace';
-import { browserInstructions } from './browser/instructions';
+import { browserInstructions } from '@marinoscar/hexactra-browser-agent/instructions';
 import { LeaseLost, RunLease } from './lease';
-import type { RunOutcome } from './harness';
-import { runLoop } from './harness/engine';
+import type { RunOutcome } from '@marinoscar/hexactra-agent';
 import { RunStopSignal } from './stop-signal';
 import { AGENT, ATTR } from './trace-attributes';
 import { beforeLoop } from './host/before-loop';
@@ -29,9 +28,9 @@ import type { HostDeps } from './host/deps';
 import { policySnapshot } from './host/policy-snapshot';
 import { startRun } from './host/start';
 
-export { GUIDANCE_PREFIX } from './harness/engine';
-export { describeScript } from './browser/page';
-export { answerLine, requestHumanSpec, type RequestHumanArgs } from './browser/request-human-spec';
+export { GUIDANCE_PREFIX } from '@marinoscar/hexactra-agent/engine';
+export { describeScript } from '@marinoscar/hexactra-browser-agent/page';
+export { answerLine, requestHumanSpec, type RequestHumanArgs } from '@marinoscar/hexactra-browser-agent/request-human-spec';
 export { pausedFor } from './host/paused-for';
 export type { RunMemory, SaveLoginMemory, RunOutcome } from './host/run-memory';
 
@@ -150,9 +149,9 @@ export class GoalRunnerService {
     const deps = this.deps();
     const started = await startRun(deps, runId, userId, orgId, lease, tr, stop);
     if (typeof started === 'string') return started;
-    const { ctx, profile } = await buildRun(deps, started);
+    const { loop, ctx, profile } = await buildRun(deps, started);
     const early = await beforeLoop(ctx);
     if (early) return early;
-    return runLoop(ctx as never, profile as never);
+    return loop.run(profile as never);
   }
 }

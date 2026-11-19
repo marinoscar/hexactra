@@ -6,7 +6,7 @@
 // so, and "Run again" asks before it repeats the job.
 import { maskSensitive } from '../tasks/mask';
 
-import { noReportResult as noReportText } from './harness/outcome-text';
+import { noReportResult as noReportText } from '@marinoscar/hexactra-agent';
 
 /** One confirmed action, as stored. The prompt is cut and masked; never a typed value or a secret. */
 export interface ConfirmedAction {

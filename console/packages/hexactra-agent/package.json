@@ -1,0 +1,100 @@
+{
+  "name": "@marinoscar/hexactra-agent",
+  "version": "0.1.0-next.0",
+  "description": "A generic agent harness behind ports: the tool-calling loop, the tool registry, the one wrapper around every tool call, checkpoints and crash recovery, budgets, stall detection and the question interface (CommonJS). Knows nothing about browsers, a database or a framework.",
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marinoscar/hexactra.git",
+    "directory": "console/packages/hexactra-agent"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./engine": {
+      "types": "./dist/engine.d.ts",
+      "default": "./dist/engine.js"
+    },
+    "./ports": {
+      "types": "./dist/ports/index.d.ts",
+      "default": "./dist/ports/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    },
+    "./activity": {
+      "types": "./dist/activity.d.ts",
+      "default": "./dist/activity.js"
+    },
+    "./active-time": {
+      "types": "./dist/active-time.d.ts",
+      "default": "./dist/active-time.js"
+    },
+    "./budget": {
+      "types": "./dist/budget.d.ts",
+      "default": "./dist/budget.js"
+    },
+    "./budget-errors": {
+      "types": "./dist/budget-errors.d.ts",
+      "default": "./dist/budget-errors.js"
+    },
+    "./cost": {
+      "types": "./dist/cost.d.ts",
+      "default": "./dist/cost.js"
+    },
+    "./intent": {
+      "types": "./dist/intent.d.ts",
+      "default": "./dist/intent.js"
+    },
+    "./reconcile": {
+      "types": "./dist/reconcile.d.ts",
+      "default": "./dist/reconcile.js"
+    },
+    "./stall": {
+      "types": "./dist/stall.d.ts",
+      "default": "./dist/stall.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prebuild": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "prepack": "node ../../scripts/copy-license.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit",
+    "test": "jest --config ./test/jest.config.js",
+    "test:run": "jest --config ./test/jest.config.js --ci"
+  },
+  "peerDependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.15.32",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.12",
+    "typescript": "^6.0.3",
+    "zod": "^4.4.3"
+  }
+}

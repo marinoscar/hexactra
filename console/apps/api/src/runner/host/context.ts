@@ -2,8 +2,8 @@
 // collaborators an app tool may use. These tools live in the host layer because they reach console services; they are still tools: they take
 // everything from the context and import neither the loop nor another tool.
 import type { FabricSession } from '../fabric-session';
-import type { BrowserExt } from '../browser/context';
-import type { RunContext } from '../harness';
+import type { BrowserExt } from '@marinoscar/hexactra-browser-agent/context';
+import type { RunContext } from '@marinoscar/hexactra-agent';
 import type { UsedSavedCard } from '../saved-cards';
 import type { UsedSavedIdentity } from '../saved-identity';
 import type { UsedSavedLogin } from '../saved-logins';

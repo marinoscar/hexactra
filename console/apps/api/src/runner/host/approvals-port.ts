@@ -3,7 +3,7 @@ import type { ApprovalRule } from '@prisma/client';
 
 import { normaliseLabel } from '../../approvals/approval-match';
 import { askRememberable, askTopicOf, askTopicsLine, gateRememberable, knownAmount, siteOf } from '../../approvals/approval-runner';
-import type { ApprovalPort } from '../harness';
+import type { ApprovalPort } from '@marinoscar/hexactra-agent';
 import type { HostDeps } from './deps';
 
 export interface ApprovalContext {

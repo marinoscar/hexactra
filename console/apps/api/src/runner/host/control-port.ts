@@ -1,6 +1,6 @@
 // ControlPort over the job's stop signal (E38.1, E38.2) and the run's flags in the database.
 import type { PrismaService } from '../../prisma/prisma.service';
-import type { ControlPort } from '../harness';
+import type { ControlPort } from '@marinoscar/hexactra-agent';
 import type { RunStopSignal } from '../stop-signal';
 
 export function controlPort(stop: RunStopSignal, db: ReturnType<PrismaService['forUser']>, runId: string): ControlPort {

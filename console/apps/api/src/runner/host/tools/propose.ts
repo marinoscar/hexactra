@@ -1,8 +1,8 @@
 // The tools that offer something to the owner without the run waiting: a memory (#553) and saving the sign-in they typed (E37.4b).
 import { z } from 'zod';
 
-import { defineRunnerTool, type RunnerTool } from '../../harness';
-import { ACTION_TIMEOUT_MS } from '../../browser/browser-port';
+import { defineRunnerTool, type RunnerTool } from '@marinoscar/hexactra-agent';
+import { ACTION_TIMEOUT_MS } from '@marinoscar/hexactra-browser-agent/browser-port';
 import { ownerBacked } from '../../../memories/memory-proposals.service';
 import type { HostContext } from '../context';
 

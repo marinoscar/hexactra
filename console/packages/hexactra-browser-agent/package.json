@@ -1,0 +1,105 @@
+{
+  "name": "@marinoscar/hexactra-browser-agent",
+  "version": "0.1.0-next.0",
+  "description": "The Hexactra browser toolset for @marinoscar/hexactra-agent: the browser and desktop tools, screenshots and marks, the site and risk gates, the browser instructions and a BrowserPort (CommonJS).",
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marinoscar/hexactra.git",
+    "directory": "console/packages/hexactra-browser-agent"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "default": "./dist/testing/index.js"
+    },
+    "./browser-port": {
+      "types": "./dist/browser-port.d.ts",
+      "default": "./dist/browser-port.js"
+    },
+    "./context": {
+      "types": "./dist/context.d.ts",
+      "default": "./dist/context.js"
+    },
+    "./context-settings": {
+      "types": "./dist/context-settings.d.ts",
+      "default": "./dist/context-settings.js"
+    },
+    "./instructions": {
+      "types": "./dist/instructions.d.ts",
+      "default": "./dist/instructions.js"
+    },
+    "./page": {
+      "types": "./dist/page.d.ts",
+      "default": "./dist/page.js"
+    },
+    "./policy": {
+      "types": "./dist/policy.d.ts",
+      "default": "./dist/policy.js"
+    },
+    "./request-human-spec": {
+      "types": "./dist/request-human-spec.d.ts",
+      "default": "./dist/request-human-spec.js"
+    },
+    "./round": {
+      "types": "./dist/round.d.ts",
+      "default": "./dist/round.js"
+    },
+    "./vision": {
+      "types": "./dist/vision.d.ts",
+      "default": "./dist/vision.js"
+    },
+    "./tools": {
+      "types": "./dist/tools/index.d.ts",
+      "default": "./dist/tools/index.js"
+    },
+    "./gates": {
+      "types": "./dist/gates/index.d.ts",
+      "default": "./dist/gates/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prebuild": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "prepack": "node ../../scripts/copy-license.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit",
+    "test": "jest --config ./test/jest.config.js",
+    "test:run": "jest --config ./test/jest.config.js --ci"
+  },
+  "dependencies": {
+    "@marinoscar/hexactra-agent": "0.1.0-next.0"
+  },
+  "peerDependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.15.32",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.12",
+    "typescript": "^6.0.3",
+    "zod": "^4.4.3"
+  }
+}

@@ -1,7 +1,7 @@
 // What the saved-login, saved-identity and saved-card tools share: the run's memory for each, the persistence of it, and the
 // refusals. A value never reaches this process, a step, the memory or the model: only names, masked usernames and origins do.
 import { SecretsProviderError } from '../../../secrets/secrets-provider.port';
-import { currentUrl } from '../../browser/page';
+import { currentUrl } from '@marinoscar/hexactra-browser-agent/page';
 import { pageOf, noteFilled, type SavedIdentityMemory } from '../../saved-identity';
 import type { SavedLoginsMemory } from '../../saved-logins';
 import type { HostContext } from '../context';
