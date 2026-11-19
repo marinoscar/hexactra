@@ -41,7 +41,7 @@ export const INLINE_ATTACHMENT_BYTES = 3 * 1024 * 1024;
 export const UPLOAD_CHUNK_BYTES = 320 * 1024 * 10;
 
 export const MAIL_FIELDS = 'id,conversationId,from,toRecipients,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,categories,parentFolderId,isDraft';
-export const MESSAGE_FIELDS = `${MAIL_FIELDS},ccRecipients,replyTo,internetMessageId,body,uniqueBody`;
+export const MESSAGE_FIELDS = `${MAIL_FIELDS},ccRecipients,replyTo,internetMessageId,body`;
 
 export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';

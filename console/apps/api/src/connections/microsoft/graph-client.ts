@@ -110,6 +110,7 @@ class Semaphore {
       this.active++;
       return;
     }
+    // A slot handed over by `release` is already counted: the waiter does not add one, so the limit can never be exceeded.
     await new Promise<void>((resolve, reject) => {
       const grant = () => {
         signal?.removeEventListener('abort', onAbort);
@@ -123,12 +124,12 @@ class Semaphore {
       this.waiting.push(grant);
       signal?.addEventListener('abort', onAbort, { once: true });
     });
-    this.active++;
   }
 
   release(): void {
-    this.active--;
-    this.waiting.shift()?.();
+    const next = this.waiting.shift();
+    if (next) next();
+    else this.active--;
   }
 
   get idle(): boolean {

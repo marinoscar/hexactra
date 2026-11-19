@@ -280,6 +280,17 @@ export class FakeGraph {
     return code;
   }
 
+  /**
+   * What the browser does at Microsoft: the account consents to the URL's scopes (minus `deny`, the ones the owner unticked) and the
+   * redirect carries the code and the `state`. Checks the URL the way Microsoft would: client id, PKCE method, a redirect URI.
+   */
+  consent(authorizeUrl: string, account: FakeAccount, o: { deny?: string[] } = {}): { code: string; state: string } {
+    const p = new URL(authorizeUrl).searchParams;
+    if (p.get('client_id') !== this.clientId || p.get('response_type') !== 'code' || p.get('code_challenge_method') !== 'S256' || !p.get('redirect_uri')) throw new Error('Microsoft would refuse this authorization request');
+    const scopes = (p.get('scope') ?? '').split(' ').filter((x) => x && !(o.deny ?? []).includes(x));
+    return { code: this.authorizeCode(account, { scopes, codeChallenge: p.get('code_challenge') ?? '' }), state: p.get('state') ?? '' };
+  }
+
   /** An access token for an account, as a refresh would give. */
   issue(account: FakeAccount, scopes: string[] = account.scopes): string {
     const token = `AT-${account.objectId.slice(0, 8)}-${++this.tokenSeq}`;
