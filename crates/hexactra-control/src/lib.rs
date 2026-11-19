@@ -8,7 +8,6 @@ pub mod redact;
 pub mod routes {
     pub mod durable_actions;
     pub mod fleet;
-    pub mod goals;
     pub mod hosts;
     pub mod mcp;
     pub mod operations;
