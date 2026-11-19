@@ -60,6 +60,7 @@ async function run(...args: string[]): Promise<string> {
 }
 
 const RUN = '66666666-6666-4666-8666-666666666666';
+const PAUSED = '77777777-7777-4777-8777-777777777777';
 const TASK = '77777777-7777-4777-8777-777777777777';
 const finished = { id: RUN, status: 'failed', goal: 'Find a fare', stepCount: 4 };
 const sent = (calls: Call[], method: string) => calls.filter((c) => c.method === method).map((c) => c.path);
@@ -138,6 +139,39 @@ describe('tasks pause and resume', () => {
     expect(await run('tasks', 'pause', TASK)).toBe('paused 2 schedules\n');
     expect(await run('tasks', 'resume', TASK)).toBe('resumed 2 schedules: next 2026-11-18T08:00:00.000Z\n');
     expect(sent(calls, 'POST')).toEqual([`/tasks/${TASK}/schedules/pause`, `/tasks/${TASK}/schedules/resume`]);
+  });
+});
+
+describe('runs pause and resume (E38.2)', () => {
+  it('pause posts to the run and says whether it is paused or pausing; resume says the run is queued again', async () => {
+    const calls = fakeApi({
+      [`POST /runs/${RUN}/pause`]: { id: RUN, status: 'running', pauseRequested: true },
+      [`POST /runs/${PAUSED}/pause`]: { id: PAUSED, status: 'paused', pauseRequested: true },
+      [`POST /runs/${PAUSED}/resume`]: { id: PAUSED, status: 'queued', pauseRequested: false },
+    });
+    expect(await run('runs', 'pause', RUN)).toMatch(/^pausing \(running: it pauses after its current step/);
+    expect(await run('runs', 'pause', PAUSED)).toBe('paused\n');
+    expect(await run('runs', 'resume', PAUSED)).toBe('queued\n');
+    expect(sent(calls, 'POST')).toEqual([`/runs/${RUN}/pause`, `/runs/${PAUSED}/pause`, `/runs/${PAUSED}/resume`]);
+  });
+
+  it('a paused run is live: delete refuses it and names the way out', async () => {
+    fakeApi({ [`GET /runs/${PAUSED}`]: { id: PAUSED, status: 'paused', goal: 'g', stepCount: 1 } });
+    await expect(run('runs', 'delete', PAUSED, '--yes')).rejects.toThrow(/is paused: cancel it first/);
+  });
+
+  it('the screen pauses the selected running run with p and resumes a paused one with u', async () => {
+    const rows = [{ id: RUN, status: 'running', goal: 'Goal running', stepCount: 1 }];
+    const calls = fakeApi({ 'GET /runs': () => ({ items: rows, nextCursor: null }), [`POST /runs/${RUN}/pause`]: {}, [`POST /runs/${RUN}/resume`]: {} });
+    const screen = await renderTuiScreen(RunsScreen, { columns: 100 });
+    await screen.waitForFrame((f) => stripAnsi(f).includes('Goal running'));
+    await screen.press('p');
+    await screen.waitForFrame(() => sent(calls, 'POST').includes(`/runs/${RUN}/pause`));
+    rows[0]!.status = 'paused';
+    await screen.waitForFrame((f) => stripAnsi(f).includes('paused'), 6_000);
+    await screen.press('u');
+    await screen.waitForFrame(() => sent(calls, 'POST').includes(`/runs/${RUN}/resume`));
+    screen.unmount();
   });
 });
 

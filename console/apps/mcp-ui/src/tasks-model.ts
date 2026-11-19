@@ -100,6 +100,7 @@ export const RUN_STATUS_LABEL: Readonly<Record<string, string>> = {
   queued: 'Queued',
   running: 'Running',
   waiting_human: 'Needs you',
+  paused: 'Paused',
   succeeded: 'Finished',
   failed: 'Failed',
   cancelled: 'Stopped',

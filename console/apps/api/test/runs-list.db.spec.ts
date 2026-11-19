@@ -386,15 +386,15 @@ describe('GET /runs: filters, counts and row shape', () => {
     type Counts = { total: number; live: number; byStatus: Record<string, number>; costUsd: number | null; costKnown: boolean };
     const all = await get<Counts>(user.token, '/runs/counts');
     const manual = await prisma.run.groupBy({ by: ['status'], where: { userId: user.userId }, _count: { _all: true } });
-    expect(all.byStatus).toEqual({ queued: 0, running: 0, waiting_human: 0, succeeded: 0, failed: 0, cancelled: 0, ...Object.fromEntries(manual.map((g) => [g.status, g._count._all])) });
+    expect(all.byStatus).toEqual({ queued: 0, running: 0, waiting_human: 0, paused: 0, succeeded: 0, failed: 0, cancelled: 0, ...Object.fromEntries(manual.map((g) => [g.status, g._count._all])) });
     expect(all).toMatchObject({ total: 8, live: 3, byStatus: { queued: 1, running: 1, waiting_human: 1, succeeded: 1, failed: 3, cancelled: 1 }, costKnown: false });
     expect(all.costUsd).toBeCloseTo(0.25 + 1.5 + 2.000001 + 0.01, 6);
 
-    expect(await get<Counts>(user.token, `/runs/counts?taskId=${taskB}`)).toEqual({ total: 2, live: 1, byStatus: { queued: 0, running: 0, waiting_human: 1, succeeded: 1, failed: 0, cancelled: 0 }, costUsd: 1.5, costKnown: true });
+    expect(await get<Counts>(user.token, `/runs/counts?taskId=${taskB}`)).toEqual({ total: 2, live: 1, byStatus: { queued: 0, running: 0, waiting_human: 1, paused: 0, succeeded: 1, failed: 0, cancelled: 0 }, costUsd: 1.5, costKnown: true });
     expect(await get<Counts>(user.token, '/runs/counts?stopReason=budget&q=FARE')).toMatchObject({ total: 1, live: 0, byStatus: { failed: 1 }, costUsd: 0.01, costKnown: true });
     // No counted run made a model call: there is no cost to show.
     expect(await get<Counts>(user.token, '/runs/counts?trigger=external')).toMatchObject({ total: 1, costUsd: null, costKnown: true });
-    expect(await get<Counts>(user.token, '/runs/counts?q=no-such-goal')).toEqual({ total: 0, live: 0, byStatus: { queued: 0, running: 0, waiting_human: 0, succeeded: 0, failed: 0, cancelled: 0 }, costUsd: null, costKnown: true });
+    expect(await get<Counts>(user.token, '/runs/counts?q=no-such-goal')).toEqual({ total: 0, live: 0, byStatus: { queued: 0, running: 0, waiting_human: 0, paused: 0, succeeded: 0, failed: 0, cancelled: 0 }, costUsd: null, costKnown: true });
     // The counts are per status: a status filter is not part of them.
     expect((await get<Counts>(user.token, '/runs/counts?status=failed&state=live')).total).toBe(8);
 

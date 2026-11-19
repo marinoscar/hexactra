@@ -38,6 +38,7 @@ describe('cardState', () => {
     expect(st('queued')).toBe('queued');
     expect(st('running')).toBe('running');
     expect(st('waiting_human')).toBe('waiting');
+    expect(st('paused')).toBe('paused');
     expect(st('succeeded', 'finished')).toBe('succeeded');
     expect(st('failed', 'error')).toBe('failed');
     expect(st('cancelled', 'cancelled')).toBe('cancelled');

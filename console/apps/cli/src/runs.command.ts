@@ -310,6 +310,21 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
       out(`${label(r.status)}${r.status === 'running' ? ' (stopping)' : ''}`);
     });
 
+  runs
+    .command('pause <id>')
+    .description('freeze a run: it finishes its current step, then nothing happens until `runs resume` (its browser stays as it is; no budget time runs)')
+    .action(async (id: string) => {
+      const r = await consoleApi().post<Run>(`/runs/${id}/pause`, {});
+      out(r.status === 'paused' ? 'paused' : `pausing (${label(r.status)}: it pauses after its current step or once its question is answered)`);
+    });
+  runs
+    .command('resume <id>')
+    .description('continue a paused run; the agent looks at the page again before it acts')
+    .action(async (id: string) => {
+      const r = await consoleApi().post<Run>(`/runs/${id}/resume`, {});
+      out(label(r.status));
+    });
+
   const schedules = program.command('schedules').description('Run tasks on a schedule (cron + time zone)');
   schedules
     .command('list')

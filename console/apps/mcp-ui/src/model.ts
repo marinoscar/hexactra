@@ -125,8 +125,8 @@ export function snapshotOf(r: ToolResultLike | undefined | null): Snapshot | und
 
 export const TERMINAL = new Set(['succeeded', 'failed', 'cancelled']);
 
-/** The eight states the card draws. */
-export type CardState = 'queued' | 'running' | 'waiting' | 'succeeded' | 'failed' | 'cancelled' | 'budget' | 'stalled';
+/** The states the card draws. */
+export type CardState = 'queued' | 'running' | 'waiting' | 'paused' | 'succeeded' | 'failed' | 'cancelled' | 'budget' | 'stalled';
 
 /** The card state of a run: a budget or a stall stop is its own state, whatever the final status. */
 export function cardState(p: CardProgress, run?: CardRun): CardState {
@@ -136,6 +136,7 @@ export function cardState(p: CardProgress, run?: CardRun): CardState {
     if (reason === 'stalled' || (p.stop_reason ?? '').startsWith('Stopped: it was stuck')) return 'stalled';
     return p.status as CardState;
   }
+  if (p.status === 'paused') return 'paused';
   if (p.status === 'waiting_human' || p.needs_human) return 'waiting';
   if (p.status === 'queued') return 'queued';
   return 'running';
@@ -145,6 +146,7 @@ export const STATE_LABEL: Readonly<Record<CardState, string>> = {
   queued: 'Queued',
   running: 'Running',
   waiting: 'Needs you',
+  paused: 'Paused',
   succeeded: 'Finished',
   failed: 'Failed',
   cancelled: 'Stopped',

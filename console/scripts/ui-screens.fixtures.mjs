@@ -14,6 +14,8 @@ export const IDS = {
   finishedRun: '33333334-3333-4333-8333-333333333333',
   chatRun: '33333335-3333-4333-8333-333333333333',
   traceRun: '33333336-3333-4333-8333-333333333333',
+  pausedRun: '33333337-3333-4333-8333-333333333333',
+  pausedChat: '88888888-8888-4888-8888-888888888884',
   question: '55555555-5555-4555-8555-555555555555',
   policy: '66666666-6666-4666-8666-666666666666',
   group: '77777777-7777-4777-8777-777777777777',
@@ -99,6 +101,11 @@ const finishedRun = run(IDS.finishedRun, 'failed', {
     { provider: 'vault', itemName: 'Everyday card', brand: 'visa', last4: '4242', merchant: 'checkout.shop.example.com', origin: 'https://checkout.shop.example.com', currency: 'USD', declaredAmount: '42.50', confirmedAmount: '42.50', mismatch: false, at: iso(-3_000_000) },
     { provider: 'vault', itemName: 'Virtual card', brand: 'mastercard', last4: '4444', merchant: 'a-very-long-shop-name-for-narrow-screens.example.co.uk', origin: 'https://a-very-long-shop-name-for-narrow-screens.example.co.uk', currency: 'USD', declaredAmount: '18.00', confirmedAmount: '24.99', mismatch: true, at: iso(-2_000_000) },
   ],
+});
+/** A run the owner paused (E38.2): live, with its browser kept; the run page shows the banner with Resume and Stop. */
+const pausedRun = run(IDS.pausedRun, 'paused', {
+  trigger: 'chat', taskId: null, pauseRequested: true, pausedAt: iso(-300_000), startedAt: iso(-900_000), activity: null,
+  goal: 'Book 2 tickets for the 7:30 PM showing of the new space film tonight',
 });
 /** A chat run over its soft action limit that still finished (#537). */
 const chatRun = run(IDS.chatRun, 'succeeded', {
@@ -280,12 +287,13 @@ const runRows = [
   listRun(2, 'failed', { stopReason: 'budget_cost', costUsd: 2.01, trigger: 'schedule', policy: { id: IDS.policy, name: 'Careful shopping with a rather long policy name', version: 3, source: 'task', builtin: false } }),
   listRun(3, 'failed', { stopReason: 'stalled', costUsd: 0.74, costKnown: false, trigger: 'mcp', origin: 'mcp', client: { id: IDS.app, name: 'chatgpt.com', verified: true } }),
   listRun(4, 'cancelled', { stopReason: 'cancelled', costUsd: null, trigger: 'api', origin: 'cli' }),
+  listRun(6, 'paused', { stopReason: null, finishedAt: null, pauseRequested: true, pausedAt: iso(-1_200_000) }),
   listRun(5, 'succeeded', {
     taskId: null, taskName: null, stopReason: 'finished', costUsd: 0.12,
     goal: 'Open the supplier portal at https://portal.example.test/orders/2026/11/overview?tab=open&sort=due, export the open orders as a spreadsheet and say how many are due this week',
   }),
 ];
-const LIVE = new Set(['queued', 'running', 'waiting_human']);
+const LIVE = new Set(['queued', 'running', 'waiting_human', 'paused']);
 /** `GET /runs`: a page with `envelope` (the live subset for `state=live`), the plain array without (what the audit's older pages read). */
 const runsList = (url) => {
   if (!url.searchParams.has('envelope')) return runs;
@@ -294,7 +302,7 @@ const runsList = (url) => {
   const items = runRows.filter((r) => (state === 'live' ? LIVE.has(r.status) : state === 'finished' ? !LIVE.has(r.status) : true) && (!taskId || r.taskId === taskId));
   return { items, nextCursor: null };
 };
-const runCounts = { total: 5_012, live: 2, byStatus: { queued: 0, running: 1, waiting_human: 1, succeeded: 4_180, failed: 702, cancelled: 128 }, costUsd: 1_284.37, costKnown: false };
+const runCounts = { total: 5_013, live: 3, byStatus: { queued: 0, running: 1, waiting_human: 1, paused: 1, succeeded: 4_180, failed: 702, cancelled: 128 }, costUsd: 1_284.37, costKnown: false };
 
 const weekDays = Array.from({ length: 7 }, (_, i) => ({ date: iso(-(6 - i) * 86_400_000).slice(0, 10), succeeded: 3 + ((i * 5) % 4), failed: i % 3 === 0 ? 2 : 0, cancelled: i === 4 ? 1 : 0, costUsd: 0.6 + i * 0.2 }));
 /** `GET /home/summary`: every block with data (a question, two live runs, firings, finished runs, a week, machines). */
@@ -517,6 +525,8 @@ export const RESPONSES = {
   [`GET /runs/${IDS.liveRun}/viewer`]: { hostId: IDS.host, hostName: 'mini-pc', desktop: true },
   [`GET /runs/${IDS.finishedRun}`]: finishedRun,
   [`GET /runs/${IDS.chatRun}`]: chatRun,
+  [`GET /runs/${IDS.pausedRun}`]: pausedRun,
+  [`GET /runs/${IDS.pausedRun}/viewer`]: { hostId: IDS.host, hostName: 'mini-pc', desktop: true },
   [`GET /runs/${IDS.traceRun}`]: traceRun,
   'GET /fleet/hosts': hosts,
   [`GET /fleet/hosts/${IDS.host}`]: hosts[0],
@@ -524,6 +534,10 @@ export const RESPONSES = {
   [`POST /fleet/hosts/${IDS.host}/viewer-session`]: { hostId: IDS.host, wsPath: `/viewer/${IDS.host}/websockify`, expiresAt: iso(3_600_000) },
   'POST /fleet/enrollments': { enrollmentToken: 'hxe_placeholder', expiresAt: iso(900_000), command: 'curl -fsSL https://console.example.test/install.sh | sh -s -- agent install --url https://console.example.test --enrollment-token hxe_placeholder_0123456789abcdef --mode unattended' },
   'GET /chats': (url) => ({ items: url.searchParams.get('status') === 'archived' ? [] : chatRows, nextCursor: null }),
+  [`GET /chats/${IDS.pausedChat}`]: {
+    ...chatBase, id: IDS.pausedChat, title: 'Book two cinema tickets (paused)', lastMessageAt: iso(-120_000), hasMore: false, thinking: false, liveRun: { id: IDS.pausedRun, status: 'paused' },
+    messages: [chatMessage(1, 'user', 'text', 'Book two cinema tickets for the new space film tonight.'), chatMessage(2, 'assistant', 'run', pausedRun.goal, { runId: IDS.pausedRun }), chatMessage(3, 'user', 'text', 'Hold on a second')],
+  },
   [`GET /chats/${IDS.chat}`]: { ...chatBase, id: IDS.chat, title: chatRows[0].title, lastMessageAt: iso(-120_000), messages: chatMessages, hasMore: false, liveRun: { id: IDS.liveRun, status: 'running' }, thinking: false },
   'GET /inbox': [question, confirmation, cardConfirmation, memoryProposal, saveLogin],
   [`GET /questions/${IDS.question}`]: question,
@@ -590,4 +604,4 @@ RESPONSES[`GET /runs/${IDS.paramRun}`] = paramRun;
 RESPONSES['GET /inbox'] = [formQuestion, ...RESPONSES['GET /inbox']];
 
 /** The ids a mock run puts in the parameterized routes. */
-export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, saveLoginQuestion: saveLogin.id };
+export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, pausedRun: IDS.pausedRun, pausedChat: IDS.pausedChat, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, saveLoginQuestion: saveLogin.id };
