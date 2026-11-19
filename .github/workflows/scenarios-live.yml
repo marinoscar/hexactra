@@ -1,0 +1,98 @@
+name: Replay suite (live model)
+
+# The LIVE mode of the replay suite (E38.6, #587, console/docs/runner.md "Testing a change to the agent"): a real model against the fake
+# sites. It costs money, so it runs only when someone starts it (workflow_dispatch): never on a push or a pull request, and it is not a
+# required check. The job stops at the spend cap.
+#
+# It needs a console database that already has AI configured at runtime (a key, the model tiers, the agent price table) and an account in
+# it, named by repository secrets. Nothing here creates a key or writes to a production database: point it at a staging copy.
+#   SCENARIOS_LIVE_POSTGRES_HOST, SCENARIOS_LIVE_POSTGRES_PORT, SCENARIOS_LIVE_POSTGRES_USER, SCENARIOS_LIVE_POSTGRES_PASSWORD,
+#   SCENARIOS_LIVE_POSTGRES_DB, SCENARIOS_LIVE_SECRETS_ENCRYPTION_KEY (the staging copy's own), SCENARIOS_LIVE_USER_EMAIL
+on:
+  workflow_dispatch:
+    inputs:
+      tier:
+        description: The tier the runs start on
+        type: choice
+        options: [fast, standard, frontier]
+        default: standard
+      runs:
+        description: Runs per scenario
+        default: '3'
+      cap_usd:
+        description: Spend cap in USD (the job stops at it)
+        default: '2'
+      filter:
+        description: Only scenarios whose name or file contains this text (optional)
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scenarios-live
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: Live replay
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: console
+    env:
+      POSTGRES_HOST: ${{ secrets.SCENARIOS_LIVE_POSTGRES_HOST }}
+      POSTGRES_PORT: ${{ secrets.SCENARIOS_LIVE_POSTGRES_PORT }}
+      POSTGRES_USER: ${{ secrets.SCENARIOS_LIVE_POSTGRES_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.SCENARIOS_LIVE_POSTGRES_PASSWORD }}
+      POSTGRES_DB: ${{ secrets.SCENARIOS_LIVE_POSTGRES_DB }}
+      POSTGRES_SSL: 'true'
+      SECRETS_ENCRYPTION_KEY: ${{ secrets.SCENARIOS_LIVE_SECRETS_ENCRYPTION_KEY }}
+      JWT_SECRET: scenarios-live-jwt-secret-not-used-00000000
+      COOKIE_SECRET: scenarios-live-cookie-secret-not-used
+      GOOGLE_CLIENT_ID: not-used
+      GOOGLE_CLIENT_SECRET: not-used
+      GOOGLE_CALLBACK_URL: http://127.0.0.1:3000/api/auth/google/callback
+      INITIAL_ADMIN_EMAIL: admin@example.test
+      OTEL_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: console/package-lock.json
+      - name: Check the secrets are there
+        env:
+          HAVE_DB: ${{ secrets.SCENARIOS_LIVE_POSTGRES_HOST != '' && secrets.SCENARIOS_LIVE_POSTGRES_DB != '' && secrets.SCENARIOS_LIVE_USER_EMAIL != '' }}
+        run: |
+          if [ "$HAVE_DB" != "true" ]; then
+            echo "::error::The SCENARIOS_LIVE_* secrets are not set: this workflow needs a console database with AI configured (see the header of this file)."
+            exit 1
+          fi
+      - run: npm ci
+      - run: npm run prisma:generate --workspace=api
+      - name: Run the scenarios against the live model
+        env:
+          RUNS: ${{ inputs.runs }}
+          CAP_USD: ${{ inputs.cap_usd }}
+          TIER: ${{ inputs.tier }}
+          FILTER: ${{ inputs.filter }}
+          USER_EMAIL: ${{ secrets.SCENARIOS_LIVE_USER_EMAIL }}
+        run: |
+          args=(--tier "$TIER" --runs "$RUNS" --cap-usd "$CAP_USD" --user "$USER_EMAIL")
+          if [ -n "$FILTER" ]; then args+=(--filter "$FILTER"); fi
+          npm run scenarios:live --workspace=api -- "${args[@]}" | tee "$RUNNER_TEMP/live.log"
+      - name: Summary
+        if: always()
+        run: |
+          if [ -f apps/api/test-results/live-${{ inputs.tier }}.md ]; then cat apps/api/test-results/live-${{ inputs.tier }}.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scenarios-live-${{ inputs.tier }}
+          path: |
+            console/apps/api/test-results/live-${{ inputs.tier }}.json
+            console/apps/api/test-results/live-${{ inputs.tier }}.md
+          if-no-files-found: warn
