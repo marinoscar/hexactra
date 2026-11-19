@@ -56,6 +56,7 @@ export const STATUS_WORDS: Record<ConnectionStatus, string> = { active: 'Active'
 /** Why a connection is in its state, in a sentence. */
 export function reasonWords(c: Pick<Connection, 'status' | 'statusReason'>): string | null {
   if (c.status === 'paused') return 'Paused: no task, chat or delivery uses it until you resume it.';
+  if (c.status === 'needs_reconnect' && c.statusReason === 'AUTH_REFUSED') return 'The server no longer accepts the sign-in. Give it a new one to use it again.';
   if (c.status === 'needs_reconnect') {
     const why: Record<string, string> = {
       GRANT_REVOKED: 'The provider no longer accepts it (you removed the app there, changed the password, or the sign-in expired).',
@@ -64,7 +65,7 @@ export function reasonWords(c: Pick<Connection, 'status' | 'statusReason'>): str
     };
     return `${why[c.statusReason ?? ''] ?? 'The provider no longer accepts it.'} Connect it again to use it.`;
   }
-  if (c.status === 'active' && c.statusReason) return 'The provider could not be reached the last time; it will try again.';
+  if (c.status === 'active' && c.statusReason) return 'The provider or server could not be reached the last time; it will try again.';
   return null;
 }
 

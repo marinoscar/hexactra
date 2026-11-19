@@ -23,6 +23,47 @@ export interface Connection {
   connectedAt: string;
   lastUsedAt: string | null;
   lastRefreshAt: string | null;
+  /** An MCP server (`provider: mcp`): where it points, how it signs in and what its tools stand at. Never a secret. */
+  mcp?: McpInfo;
+}
+
+export type McpAuthKind = 'none' | 'bearer' | 'header' | 'oauth';
+export type McpToolMode = 'off' | 'read' | 'write';
+
+export interface McpInfo {
+  url: string;
+  auth: McpAuthKind;
+  serverName: string | null;
+  tools: { total: number; enabled: number; needsReview: number };
+  toolsFetchedAt: string | null;
+}
+
+/** A tool of an MCP server. The description is the server's own text, already plain; render it as text only. */
+export interface McpTool {
+  id: string;
+  name: string;
+  title: string | null;
+  description: string;
+  parameters: { name: string; type: string | null; required: boolean }[];
+  /** What the server claims: a hint is not a guarantee. */
+  hints: { readOnly: boolean | null; destructive: boolean | null; idempotent: boolean | null; openWorld: boolean | null };
+  suggested: 'read' | 'write';
+  mode: McpToolMode;
+  review: 'new' | 'changed' | null;
+}
+
+export interface McpCatalog {
+  tools: McpTool[];
+  needsReview: number;
+  fetchedAt: string | null;
+}
+
+export type McpAuthInput = { kind: 'none' } | { kind: 'bearer'; token: string } | { kind: 'header'; header: string; value: string } | { kind: 'oauth'; clientId?: string | null; clientSecret?: string | null };
+
+export interface McpAdmin {
+  enabled: boolean;
+  allowedHosts: string[];
+  blockedHosts: string[];
 }
 
 export interface ConnectionUsage {
@@ -91,3 +132,17 @@ export const removeConnection = (api: PlatformApiClient, id: string) => api.dele
 export const getAdminApps = (api: PlatformApiClient) => api.get<AdminProvider[]>('/connections/admin/apps');
 export const saveAdminApp = (api: PlatformApiClient, provider: Provider, body: { enabled?: boolean; clientId?: string | null; clientSecret?: string; tenant?: string }) => api.put<AdminProvider[]>(`/connections/admin/apps/${provider}`, body);
 export const removeAdminApp = (api: PlatformApiClient, provider: Provider) => api.delete<AdminProvider[]>(`/connections/admin/apps/${provider}`);
+
+
+// ---- MCP servers (E39.9, #606) ----
+
+export const getMcpStatus = (api: PlatformApiClient) => api.get<{ enabled: boolean; restricted: boolean }>('/connections/mcp/status');
+export const addMcpServer = (api: PlatformApiClient, body: { url: string; label?: string; auth: McpAuthInput; returnTo?: string }) =>
+  api.post<{ connection: Connection | null; catalog: McpCatalog | null; consent: Consent | null }>('/connections/mcp', body);
+export const getMcpTools = (api: PlatformApiClient, id: string) => api.get<McpCatalog>(`/connections/${id}/tools`);
+export const refreshMcpTools = (api: PlatformApiClient, id: string) => api.post<McpCatalog>(`/connections/${id}/tools/refresh`, {});
+export const setMcpToolMode = (api: PlatformApiClient, id: string, toolId: string, mode: McpToolMode) => api.patch<McpTool>(`/connections/${id}/tools/${toolId}`, { mode });
+export const reauthMcp = (api: PlatformApiClient, id: string, auth: McpAuthInput, returnTo?: string) => api.post<{ connection: Connection; consent: Consent | null }>(`/connections/${id}/mcp-auth`, { auth, ...(returnTo ? { returnTo } : {}) });
+
+export const getAdminMcp = (api: PlatformApiClient) => api.get<McpAdmin>('/connections/admin/mcp');
+export const saveAdminMcp = (api: PlatformApiClient, body: Partial<McpAdmin>) => api.put<McpAdmin>('/connections/admin/mcp', body);

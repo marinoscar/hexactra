@@ -3,7 +3,7 @@ import { Alert, Box, Button, FormControlLabel, FormHelperText, IconButton, Input
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 
-import { getAdminApps, removeAdminApp, saveAdminApp, type AdminProvider } from '../connections/api';
+import { getAdminApps, getAdminMcp, removeAdminApp, saveAdminApp, saveAdminMcp, type AdminProvider, type McpAdmin } from '../connections/api';
 import { CardSkeleton, ErrorBanner, PageContainer, PageHeader, toast, useApiAction, useConfirm } from '../ui';
 
 const TOUCH = { minHeight: { xs: 44, sm: 'auto' } } as const;
@@ -145,17 +145,82 @@ function ProviderCard({ provider, canWrite, onChange }: { provider: AdminProvide
   );
 }
 
+const toLines = (v: string): string[] => [...new Set(v.split(/[\s,]+/).map((x) => x.trim().toLowerCase()).filter(Boolean))];
+
+/** MCP servers (E39.9): the deployment switch (off by default) and the allow-list and block-list of hosts. */
+function McpCard({ settings, canWrite, onChange }: { settings: McpAdmin; canWrite: boolean; onChange: (s: McpAdmin) => void }) {
+  const { api } = usePlatformHost();
+  const action = useApiAction('Could not save the MCP settings');
+  const id = useId();
+  const [enabled, setEnabled] = useState(settings.enabled);
+  const [allowed, setAllowed] = useState(settings.allowedHosts.join('\n'));
+  const [blocked, setBlocked] = useState(settings.blockedHosts.join('\n'));
+  useEffect(() => {
+    setEnabled(settings.enabled);
+    setAllowed(settings.allowedHosts.join('\n'));
+    setBlocked(settings.blockedHosts.join('\n'));
+  }, [settings]);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const saved = await action.run('save', () => saveAdminMcp(api, { enabled, allowedHosts: toLines(allowed), blockedHosts: toLines(blocked) }));
+    if (saved) {
+      onChange(saved);
+      toast('MCP settings saved');
+    }
+  };
+
+  return (
+    <Paper variant="outlined" component="section" aria-labelledby={`${id}-title`} sx={{ p: { xs: 2, sm: 3 } }}>
+      <Typography id={`${id}-title`} variant="h6" component="h2">
+        MCP servers
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+        Lets users add an MCP server (Streamable HTTP only) as a connection, so the agent can use its tools. Every tool starts off, a tool that changes something asks the user first, and nothing runs on this server or a node: Hexactra only makes https requests. Their servers, tools and sign-ins are never visible here.
+      </Typography>
+      <ErrorBanner error={action.error} onClose={action.clearError} />
+      <Box component="form" onSubmit={(e: FormEvent) => void submit(e)} sx={{ mt: 2 }}>
+        <Stack spacing={2}>
+          <FormControlLabel control={<Switch checked={enabled} onChange={(e) => setEnabled(e.target.checked)} disabled={!canWrite} />} label="Let users add and use MCP servers" />
+          <TextField
+            label="Allowed hosts"
+            value={allowed}
+            onChange={(e) => setAllowed(e.target.value)}
+            disabled={!canWrite}
+            multiline
+            minRows={2}
+            fullWidth
+            placeholder={'mcp.example.test\n*.example.test'}
+            helperText="One per line: a host name or *.domain. Empty: any public host. Private and internal addresses are never allowed."
+          />
+          <TextField label="Blocked hosts" value={blocked} onChange={(e) => setBlocked(e.target.value)} disabled={!canWrite} multiline minRows={2} fullWidth helperText="One per line. A blocked host is refused even when the allowed list names it." />
+          {canWrite && (
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+              <Button type="submit" variant="contained" disabled={action.busy !== null} sx={TOUCH}>
+                Save
+              </Button>
+            </Stack>
+          )}
+        </Stack>
+      </Box>
+    </Paper>
+  );
+}
+
 /** `/admin/settings/connections` (E39.2, #599): the deployment's apps at Google and Microsoft. It never shows a user's connections. */
 export function AdminConnectionsPage() {
   const { api, viewer } = usePlatformHost();
   const action = useApiAction('Could not load the providers');
   const canWrite = viewer.hasPermission('system_settings:write');
   const [providers, setProviders] = useState<AdminProvider[] | null>(null);
+  const [mcp, setMcp] = useState<McpAdmin | null>(null);
   const { setError } = action;
 
   const load = useCallback(async () => {
     try {
-      setProviders(await getAdminApps(api));
+      const [apps, mcpSettings] = await Promise.all([getAdminApps(api), getAdminMcp(api).catch(() => null)]);
+      setProviders(apps);
+      setMcp(mcpSettings);
     } catch (e) {
       setError(e instanceof Error && e.message ? e.message : 'Could not load the providers');
       setProviders([]);
@@ -167,13 +232,14 @@ export function AdminConnectionsPage() {
 
   return (
     <PageContainer width="narrow">
-      <PageHeader title="Connections" subtitle="The apps your users connect their Google and Microsoft accounts through. Create each at the provider, then set it here." back={{ to: '/admin/settings', label: 'Administration' }} />
+      <PageHeader title="Connections" subtitle="The apps your users connect their Google and Microsoft accounts through (create each at the provider, then set it here), and whether they may add MCP servers." back={{ to: '/admin/settings', label: 'Administration' }} />
       <ErrorBanner error={action.error} onClose={action.clearError} onRetry={() => void load()} />
       {providers === null && <CardSkeleton />}
       <Stack spacing={3}>
         {providers?.map((p) => (
           <ProviderCard key={p.provider} provider={p} canWrite={canWrite} onChange={setProviders} />
         ))}
+        {mcp && <McpCard settings={mcp} canWrite={canWrite} onChange={setMcp} />}
       </Stack>
     </PageContainer>
   );
