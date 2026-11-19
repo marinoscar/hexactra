@@ -1,6 +1,6 @@
 // What the saved-card tools need of the run (E37.7): closures over the run's own helpers, so the tools reach for nothing else.
 import { pageOf } from '../saved-identity';
-import { currentUrl } from '../browser/page';
+import { currentUrl } from '@marinoscar/hexactra-browser-agent/page';
 import type { SavedCardToolsContext } from '../saved-card-tools';
 import type { HostContext } from './context';
 import { loginOpts, noteFilledInput, persistSavedSecrets } from './tools/secrets-support';

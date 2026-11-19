@@ -1,9 +1,9 @@
 // ReadMasking: inputs the browser host filled from a provider (an identity detail, a saved login's password, a card field) are never read back
 // (E37.6, E37.7). The run knows WHICH inputs were filled (a selector or a point, never a value) and keeps them out of everything the model
 // can read back: element listings, page text, script results and screenshots.
-import type { BrowserPort } from '../browser/browser-port';
-import { ACTION_TIMEOUT_MS } from '../browser/browser-port';
-import type { ReadMasking } from '../browser/context';
+import type { BrowserPort } from '@marinoscar/hexactra-browser-agent/browser-port';
+import { ACTION_TIMEOUT_MS } from '@marinoscar/hexactra-browser-agent/browser-port';
+import type { ReadMasking } from '@marinoscar/hexactra-browser-agent/context';
 import { FILLED_MARKER, filledOn, maskElements, pageOf, scriptMayReadValues } from '../saved-identity';
 import type { RunMemory } from './run-memory';
 

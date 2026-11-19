@@ -3,7 +3,7 @@
 // answer step. No I/O.
 import { maskSensitive } from '../tasks/mask';
 
-import { isSecretInput, questionMoment, TRACE_MOMENTS, type TraceMoment } from './harness/moments';
+import { isSecretInput, questionMoment, TRACE_MOMENTS, type TraceMoment } from '@marinoscar/hexactra-agent';
 
 export { isSecretInput, questionMoment, TRACE_MOMENTS, type TraceMoment };
 

@@ -1,2 +1,2 @@
 // Moved into the harness layer (E38.5); kept so existing imports keep working.
-export * from './harness/active-time';
+export * from '@marinoscar/hexactra-agent/active-time';

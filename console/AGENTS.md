@@ -38,19 +38,22 @@ A run's models and limits come from its agent policy ([README, Agent policies](R
 
 1. **Every browser-agent model call goes through the snapshot's resolved tiers.** The runner builds each call's provider, model, reasoning effort and output cap with `tierRequest(snapshot, tier)` (`apps/api/src/runner/tier-request.ts`), or `fallbackRequest` for a tier's fallback model. Never hard-code a model, never read `task.model` or `ai.defaultModel` in the runner, and never leave the model to the platform default for a `browser_agent` call.
 2. **The runner reads only `runs.policy_snapshot`.** It never re-reads the policy row, the user's settings or the ceilings during a run: the snapshot (written once at the run's first step by `policySnapshot` in `runner/host/policy-snapshot.ts`) holds the spec, the effective budget and the resolved tiers.
-3. **A new budget is added in two places together:** a nullable field in `budgetSchema` of `agentPolicySpecSchema` (`apps/api/src/policies/agent-policy.schema.ts`, with `BUDGET_LIMIT_KEYS`) and a key in `BudgetTracker` (`apps/api/src/runner/harness/budget.ts`, with `BUDGET_KEYS`, its stop reason and the ceilings schema). `null` always means unlimited, and every budget stop writes a typed `stop_reason`.
+3. **A new budget is added in two places together:** a nullable field in `budgetSchema` of `agentPolicySpecSchema` (`apps/api/src/policies/agent-policy.schema.ts`, with `BUDGET_LIMIT_KEYS`) and a key in `BudgetTracker` (`packages/hexactra-agent/src/budget.ts`, with `BUDGET_KEYS`, its stop reason and the ceilings schema). `null` always means unlimited, and every budget stop writes a typed `stop_reason`.
 4. **Stall detection stays on for every policy, including Unlimited.** Do not add a way to switch it off. `stall.ts` keeps only digests, never typed text, secrets or images.
 5. **A policy never widens the task's opt-ins** (allowed sites, confirmation before purchases) and never holds a secret. Built-ins are code in `builtin-policies.ts`: change a value by bumping its `version`.
 6. **The export format is versioned** (`hexactra.agent-policies`, `formatVersion`): a change to the spec that older files cannot satisfy bumps `schemaVersion` and keeps the importer reading the old one.
 
-## MANDATORY: The goal runner layers
+## MANDATORY: The agent packages and the goal runner host
 
-The runner is three layers under `apps/api/src/runner/` ([docs/runner.md](docs/runner.md)); `apps/api/test/runner-layering.spec.ts` enforces them.
+The agent harness and the browser toolset are workspace packages that the API **hosts** (E38.9, [decision record](docs/decisions/agent-packages.md), [docs/runner.md](docs/runner.md)): `@marinoscar/hexactra-agent` (`packages/hexactra-agent`, the generic harness) and `@marinoscar/hexactra-browser-agent` (`packages/hexactra-browser-agent`, the browser and desktop tools, the site and risk gates, vision). `apps/api/src/runner/` keeps only the host: the bindings of the ports, the app's own tool families and the job entry point.
 
-1. **`harness/` is generic.** It imports only itself, `zod`, `@opentelemetry/api` and `node:` built-ins, and reaches the outside through the ports in `harness/ports/`. No NestJS, Prisma, platform package, fabric client or console module. `browser/` imports only `harness/` and itself. `host/` is the only layer that imports console services.
-2. **A tool is a `RunnerTool`** (`harness/tool-def.ts`): one file per tool or small family, `execute(ctx, args)` returning the text the model reads, the step recorded through `ctx.record` (never a database call of its own). A tool imports **neither the loop nor another tool**. Every call goes through `executeTool`; nothing bypasses the gates or Stop.
-3. **No change in behaviour hides in a move.** A prompt, a tool name or description, a step text or the order of the offered tools changes what the agent does: it needs its own issue, and `test/runner-characterisation.db.spec.ts` (tool list and schemas, the input of each round, fabric actions, step rows, the final run row) is updated deliberately and the diff read.
-4. **No runner file is over 400 lines**, and `goal-runner.service.ts` stays a thin service (under 250). Adding a tool: the checklist in [docs/runner.md](docs/runner.md#how-to-add-a-tool).
+1. **A new tool, gate or loop behaviour goes in a package, with its test in the package. The app only binds ports.** A tool for a console service (a provider, a mailbox, a memory) is the one exception and lives in `apps/api/src/runner/host/tools/`. `apps/api/test/architecture/no-agent-logic.spec.ts` fails when a tool, a gate or loop code comes back into `apps/api/src/`.
+2. **The harness package never imports a framework, a database client, the fabric, a provider SDK, a platform package or console code.** It imports only itself, `zod`, `@opentelemetry/api` and `node:` built-ins, and reaches the outside through the ports of `@marinoscar/hexactra-agent/ports`. A test scans the built output (`packages/hexactra-agent/test/imports.spec.ts`). The browser toolset imports only the harness.
+3. **A tool is a `RunnerTool`** (`defineRunnerTool`): one file per tool or small family, `execute(ctx, args)` returning the text the model reads, the step recorded through `ctx.record` (never a database call of its own). A tool imports **neither the loop nor another tool**. Every call goes through `executeTool`; nothing bypasses the gates or Stop.
+4. **No change in behaviour hides in a move.** A prompt, a tool name or description, a step text or the order of the offered tools changes what the agent does: it needs its own issue, and `test/runner-characterisation.db.spec.ts` (tool list and schemas, the input of each round, fabric actions, step rows, the final run row) is updated deliberately and the diff read.
+5. **A host proves its bindings** with `runHarnessHostConformance` (`@marinoscar/hexactra-agent/testing`); the console runs it in `apps/api/test/agent-host-conformance.db.spec.ts`. A change to a port or to a binding keeps it green.
+6. **The apps import the packages' built output.** Run `npm run build:packages` (from `console/`) after `npm ci` and after any change in `packages/hexactra-*`; the root `build`, `typecheck` and `test` scripts do it first, CI runs `build:packages`, `typecheck:packages` and `test:packages` before the apps, and the API image builds them. `npm run check:package-pack` dry-runs `npm pack`; publishing is off.
+7. **No runner file is over 400 lines**, and `goal-runner.service.ts` stays a thin service (under 250). Adding a tool: the checklist in [docs/runner.md](docs/runner.md#how-to-add-a-tool).
 
 ## MANDATORY: MCP tools
 
@@ -85,7 +88,9 @@ The packages enforce these in their own code; your code must not undo them. `app
 ```bash
 npm run setup                          # build the CLI and write infra/compose/.env
 npm run platform:check                 # migrations, composed schema and infra fragments equal the packages'
-npm run typecheck                      # all three workspaces (or --workspace=api|web|cli)
+npm run build:packages                 # the agent packages (packages/hexactra-*): first after npm ci; typecheck, test and build run it for you
+npm run test:packages                  # their own tests; npm run check:package-pack dry-runs the tarballs
+npm run typecheck                      # the packages and all three workspaces (or --workspace=api|web|cli)
 npm test                               # API (with runPlatformConformance), web and CLI
 npm run test:db --workspace=api        # real-Postgres tier (*.db.spec.ts)
 npm run test:run --workspace=web       # Vitest, single run

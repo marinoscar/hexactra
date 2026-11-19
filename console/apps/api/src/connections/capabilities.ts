@@ -240,7 +240,7 @@ export const mailMessage = mailSummary.extend({
   /**
    * Whether the provider's own sender authentication (SPF, DKIM, DMARC as the receiving server recorded it) vouches for the `From`
    * address (E39.8, #605): `pass`, `fail`, or `unknown` when the provider exposes nothing or the message carries no result. Absent is
-   * `unknown`. A mail trigger refuses a `fail`; it never treats `pass` as more than "the From domain signed it".
+   * `unknown`. A mail trigger refuses a `fail`; it never treats `pass` as more than "the From domain signed it". See `mail-auth.ts`.
    */
   senderAuth: z.enum(['pass', 'fail', 'unknown']).optional(),
 });

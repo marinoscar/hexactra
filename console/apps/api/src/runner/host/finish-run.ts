@@ -4,13 +4,13 @@ import { ConflictException } from '@nestjs/common';
 import type { RunMemory } from './run-memory';
 import { savedApprovalsLine } from '../../approvals/approval-runner';
 import { LeaseLost, type RunLease } from '../lease';
-import { hostOf } from '../browser/policy';
+import { hostOf } from '@marinoscar/hexactra-browser-agent/policy';
 import type { FabricSession, CreatedHandoff } from '../fabric-session';
 import type { RunPatch } from '../../tasks/tasks.service';
 import type { QuestionSpec } from '../../questions/questions.contract';
 import { answerSummary } from '../trace';
 import { readUsedSavedLogins } from '../saved-logins';
-import { RunUsage, type RunStopReason, type RunOutcome, type UsageDelta } from '../harness';
+import { RunUsage, type RunStopReason, type RunOutcome, type UsageDelta } from '@marinoscar/hexactra-agent';
 import type { HostDeps } from './deps';
 
 /** Record the handoff in the question broker (the inbox and the channels read it there). Never fails the run. Returns the question's id, so the step that asked it links to it (#541); null without the broker or on a failure. */

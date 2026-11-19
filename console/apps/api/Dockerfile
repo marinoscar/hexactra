@@ -15,6 +15,9 @@ COPY packages/shared ./packages/shared/
 # The SDK and the MCP Apps widgets are workspaces too: npm ci needs their manifests to match the lockfile.
 COPY packages/sdk/package.json ./packages/sdk/
 COPY apps/mcp-ui/package.json ./apps/mcp-ui/
+# The agent packages (E38.9) are workspace dependencies of the API: their manifests are needed to install, their sources to build.
+COPY packages/hexactra-agent/package.json ./packages/hexactra-agent/
+COPY packages/hexactra-browser-agent/package.json ./packages/hexactra-browser-agent/
 RUN npm ci --workspace=api --include-workspace-root
 # The PDF report (#543) runs pdfmake on Node only: drop the browser bundles,
 # the bundled Roboto fonts and the source maps of pdfmake, pdfkit and fontkit,
@@ -47,6 +50,9 @@ RUN npm run build --workspace=mcp-ui
 FROM base AS development
 COPY --from=deps /app ./
 COPY tsconfig.base.json ./
+COPY packages/hexactra-agent ./packages/hexactra-agent
+COPY packages/hexactra-browser-agent ./packages/hexactra-browser-agent
+RUN npm run build:packages
 COPY apps/api ./apps/api
 COPY --from=widgets /app/apps/mcp-ui/dist ./apps/mcp-ui/dist
 WORKDIR /app/apps/api
@@ -56,6 +62,10 @@ CMD ["npm", "run", "start:dev"]
 FROM base AS build
 COPY --from=deps /app ./
 COPY tsconfig.base.json ./
+# The API imports the packages' built output: harness first, then the browser toolset (npm run build:packages).
+COPY packages/hexactra-agent ./packages/hexactra-agent
+COPY packages/hexactra-browser-agent ./packages/hexactra-browser-agent
+RUN npm run build:packages
 COPY apps/api ./apps/api
 WORKDIR /app/apps/api
 RUN npm run build
@@ -65,6 +75,8 @@ ENV NODE_ENV=production
 COPY --from=deps /app ./
 COPY tsconfig.base.json ./
 COPY --from=build /app/apps/api/dist ./apps/api/dist
+COPY --from=build /app/packages/hexactra-agent/dist ./packages/hexactra-agent/dist
+COPY --from=build /app/packages/hexactra-browser-agent/dist ./packages/hexactra-browser-agent/dist
 # The seed (`npm run prisma:seed`) reads the permission catalog and settings
 # registry from src/, so the image carries them with prisma/.
 COPY apps/api ./apps/api
