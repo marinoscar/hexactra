@@ -1,6 +1,6 @@
 # Hexactra — Product Vision and Technical Architecture
 
-> **Status:** Foundational vision and proposed architecture (not a statement of shipped capabilities). Sections 26 and 27, and the status notes in Section 11, record what is implemented in this repository.  
+> **Status:** Foundational vision and proposed architecture (not a statement of shipped capabilities). Sections 26 and 27, and the status notes in Sections 11 and 12.2, record what is implemented in this repository; implemented does not mean proven on a deployed stack.  
 > **Repository:** https://github.com/marinoscar/hexactra  
 > **Document version:** 1.2  
 > **Date:** November 16, 2026  
@@ -588,6 +588,17 @@ For username, password, OTP, and recovery codes, what ships:
 
 **Security reality:** any website receiving credentials can observe those values; Hexactra cannot guarantee that a compromised site or browser will not capture them. Keep the trust boundary explicit. Offer browser takeover as the preferred path when safer than relaying sensitive values through the runtime. Zeroization is best effort; the managed runtimes (the console's Node process) cannot promise perfect memory erasure.
 
+**Stored secrets (epic E37, #579).** The owner may also *save* a secret instead of typing it each time: a login and its authenticator code, identity details, and a payment card. The handling rules above carry over unchanged, and the provider model of Section 12.2 is how they are met:
+
+1. A saved secret lives in the owner's **provider**: their own Vault, or a built-in store the console embeds (logins only). The model, the console's database (apart from the built-in store's ciphertext), logs, spans, screenshots and exports never hold a value.
+2. **The fabric is the only component that holds a value, and only to type it.** The agent names an item by a per-run reference and a field by its key; the control plane asks the provider, types with trusted input and wipes. The model never sees a value or its length. On the Vault path the console never sees one either.
+3. **The origin a secret is released for is read from the browser at the moment of typing**, never from model or page text, and only an exact match is used; otherwise the owner is asked.
+4. **A card needs the owner's approval per merchant with an amount limit.** No rule covers every merchant. A bank's own verification step is never passed.
+5. **An unreachable provider makes the agent ask the owner**; it does not fail a run by itself.
+6. **Unattended use is a choice per task**, never a default, and a run that signed in unattended keeps the confirmation before payments on unless the task says otherwise.
+
+Status: implemented in this repository and tested against a fake Vault and fake extensions; **not yet proven on a deployed stack with a real Vault and node** (acceptance, #624). Reference: `console/docs/secrets.md`; threat model: `console/docs/security-secrets.md`. Residual risk: see Section 27.2.
+
 ### 11.7 HITL sequence: SMS/email OTP
 
 ~~~mermaid
@@ -659,7 +670,22 @@ Post-v1 channels: Slack, Teams and Telegram adapters (#293), SMS and custom self
 
 ### 12.2 CredentialProvider
 
-*Future.* Not implemented.
+**Implemented for saved logins, identity details and cards, as the secrets provider of epic E37 (#579);** this supersedes the earlier post-v1 vault epic E11 (#70) for logins. The design below was the target; what shipped differs in one respect that matters: the provider does not *resolve a credential for the agent*, it releases **one field to the fabric for typing** and the agent only names the item.
+
+In the fabric (`crates/hexactra-credential-resolver`) the contract is the `SecretsProvider` trait:
+
+~~~rust
+trait SecretsProvider {
+    fn id(&self) -> &str;                         // "vault", "builtin", "test"
+    async fn lookup(owner, origin, kind)  -> Vec<ItemSummary>;   // never a value
+    async fn release(ReleaseRequest)      -> SecretValue;        // one field, one origin, one purpose
+    async fn one_time_code(CodeRequest)   -> (SecretValue, expires_at);
+}
+~~~
+
+Providers: the owner's **Vault** (over its agent credential API, OAuth, exact-origin binding, a per-item opt-in) and the console's **built-in store** (the same rules, embedding Vault's packages, logins only). `SecretValue` is a zeroizing buffer with no `Debug`, `Clone` or `Serialize`. The owner's provider is registered with the control plane per owner, in memory only, with a short-lived token; a session reaches only its own owner's provider. Not built: other password managers (#628), moving logins between providers (#626), identity details and cards in the built-in store (#627). Details: `console/docs/secrets.md`, `docs/remote-control-api.md` ("Secrets from a provider").
+
+The original sketch, kept for the extension points it names:
 
 ~~~typescript
 interface CredentialProvider {
@@ -669,7 +695,7 @@ interface CredentialProvider {
 }
 ~~~
 
-Possible later providers: local encrypted credential store, operating-system keychain, 1Password, Bitwarden, HashiCorp Vault, cloud secret managers, or a user-supplied provider adapter.
+Possible later providers: operating-system keychain, 1Password, Bitwarden, HashiCorp Vault, cloud secret managers, or a user-supplied provider adapter.
 
 **Design constraints for future vaults:**
 - Resolve by **logical credential reference + origin + principal + approved purpose**, not by asking an agent for an arbitrary password.
@@ -695,11 +721,11 @@ QuestionChannelRegistry (console)
   ├── chat (Slack, Teams, Telegram) [post-v1, #293]
   └── sms / custom                  [future]
 
-CredentialResolver
-  ├── NoVaultProvider               [v1]
-  ├── LocalSecureStoreProvider      [future]
-  ├── ExternalVaultProvider         [future]
-  └── CustomCredentialProvider      [future]
+SecretsProvider (fabric, E37)
+  ├── vault                         [implemented: the owner's Vault, OAuth]
+  ├── builtin                       [implemented: the console's embedded store, logins only]
+  ├── test                          [implemented: tests and development]
+  └── other password managers       [future, #628]
 ~~~
 
 No third-party connector is silently enabled, and no incoming webhook can supply a secret: a webhook answer token is issued only for public answers and answers one question once.
@@ -746,6 +772,7 @@ The control plane authorizes **who may perform which action on which session/pro
 - Log denial/approval decisions without logging sensitive values.
 - The agent acts as its owner, with the owner's accounts and authority (Section 27). It is not a tool for defeating identity checks. A code sent to the owner, a passkey, a password it was not given, or a CAPTCHA puzzle it cannot pass goes to the owner as a handoff. Ticking an "I am not a robot" box, as a person would, is fine.
 - Page content is never a source of authority. With full powers, a prompt injection could act with the owner's authority, so the owner's controls stay available: Stop, takeover, the audit trail, and per-task allowed sites and purchase confirmation (opt-in).
+- A stored secret is fetched and typed by the fabric. It never enters the console's database, a model's context, a step, a log, a span, a screenshot or an export. The origin it is released for is read from the browser at the moment of typing and only an exact match is used. A card needs the owner's approval per merchant with an amount limit. A provider that is unreachable makes the agent ask the owner (Section 11.6, "Stored secrets"; `console/docs/security-secrets.md`).
 
 ### 13.4 Recommended v1 exposure model
 
@@ -753,7 +780,7 @@ Nodes reach the console over its authenticated HTTPS endpoint (only the host pro
 
 ### 13.5 Audit is not telemetry
 
-Every sensitive authorization, takeover, secret request completion (metadata only), action invocation, state transition, and credential-provider use should have an independently durable audit record. Audit capture is not optional just because telemetry export is turned off. The console's run trace (Section 26.8) is a masked record for people to read and export; it does not replace the audit record.
+Every sensitive authorization, takeover, secret request completion (metadata only), action invocation, state transition, and credential-provider use should have an independently durable audit record. Audit capture is not optional just because telemetry export is turned off. The console's run trace (Section 26.8) is a masked record for people to read and export; it does not replace the audit record. Provider use is audited three ways, none of them the console's run trace: the fabric emits a value-free `secrets.lookup` or `secrets.release` event for every provider action (kept in memory, the newest 2,000), the console copies a whitelist of those fields into a durable table the owner reads as **Activity** (180 days), and the provider keeps its own record (Vault's agent activity).
 
 ---
 
@@ -1642,6 +1669,8 @@ Detail: `console/docs/runs.md` and `console/docs/chat.md`.
 - **Owner-only checks go to the owner.** A code sent to the owner's phone, a passkey touch, or a CAPTCHA puzzle the agent cannot pass becomes a handoff. The agent ticks an "I am not a robot" box itself, as a person would.
 - **Page content never grants authority.** With full powers, a prompt injection in a page could act with the owner's authority. That is the main risk of this decision, and why the owner's controls above stay. Use allowed sites for tasks that visit untrusted sites. Hosted assistants (ChatGPT, Claude) get scoped consent, not full powers: the owner ticks what each may do, its sensitive browser actions wait for the owner's approval, and every call is on the audit trail (console `docs/security-hosted-clients.md`).
 - **Remembered approvals are another owner-controlled setting** (console, epic #549). The owner may tick "Don't ask again" on any approval, payments included; the server then lets the same step through on the same site without asking. The residual risk is named on the card: an agent steered by a page on that same site could reach the remembered button. Brakes: exact host and label matching, optional limits (amount, scope, expiry), every use recorded and notified, an alert on unusual use, and **Pause all**.
+- **Saved secrets are opt-in per task** (epic E37, #579). Saved logins (and their authenticator codes), identity details and payment cards are each a separate switch on a task or a chat, each off by default, all behind the owner's own switch and the deployment's. A scheduled task signs in from a saved login with nobody present only if the owner turned that on for that task. **Unattended payment is a further, separate choice** (`unattendedPayments: allow`), and a card is then typed only at a merchant the owner approved, under an amount limit they set. Even with every switch on, the model never sees a value: the fabric types it (Section 11.6).
+- **The residual risk is stated plainly.** A saved login plus a remembered approval plus a schedule moves money with nobody watching. Origin binding stops a look-alike site; it does not stop a real page steering the agent, and a compromised console, node or provider token reaches what the owner opened to agents. The brakes are the ones above (allowed sites, purchase confirmation, Pause all, Stop, takeover, the Activity list and the audit record) plus the per-merchant limit for cards and a virtual card with its own limit from the bank. Threat by threat, what stops it and what does not: `console/docs/security-secrets.md`.
 - **Stealth.** No `--enable-automation`, no WebDriver, no CDP port, no `enable`d CDP domain, and `--silent-debugger-extension-api`: the browser looks like a person's.
 
 ### 27.3 Status
@@ -1649,5 +1678,7 @@ Detail: `console/docs/runs.md` and `console/docs/chat.md`.
 Shipped in epic #366 (E29): the contract (#367), the extension (#368), the host agent's desktop driver (#369), the console goal runner, external API and MCP (#370), and these documents (#371).
 
 Upstream seam: image tool outputs in the platform's `runTools` (marinoscar/EnterpriseAppBase#1175). Until it ships, the console carries the screenshot in the next round's input.
+
+Epic E37 (#579) adds saved logins, identity details and cards the agent uses without seeing them (Sections 11.6, 12.2, 13.3 and the bullets above); it is implemented and tested against fakes, and its acceptance session on the owner's deployed stack is still to be recorded (#624).
 
 The desktop needs `xdotool` and `imagemagick` on the node. `hexactra agent install` installs them in every mode that has an X11 desktop, and `hexactra agent update` adds them on older nodes (#373).
