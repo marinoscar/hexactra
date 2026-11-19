@@ -33,7 +33,7 @@ export const APP_USER_DATA_CATEGORIES: readonly UserDataCategoryDef[] = [
   { id: 'documents', label: 'Documents', description: 'Every document you wrote.', content: true },
   { id: 'memories', label: 'Memories', description: 'Every fact you let the agent use (people, accounts, preferences), with their earlier versions.', content: true },
   { id: 'saved-logins', label: 'Saved logins', description: "The logins you saved in Hexactra's built-in store, their earlier versions and your encryption key. Deleting them is permanent: nothing can decrypt them afterwards.", content: true },
-  { id: 'browser-tasks', label: 'Browser tasks and runs', description: 'Your browser tasks, their runs, the steps the agents took, the questions they asked you, your chats, your agent policies, your limits for connected AI apps and what those apps did, and your saved approvals.', content: true },
+  { id: 'browser-tasks', label: 'Browser tasks and runs', description: 'Your browser tasks, their runs, the steps the agents took, the questions they asked you, your chats, your agent policies, your limits for connected AI apps and what those apps did, your saved approvals, and your email triggers with what they did.', content: true },
 ];
 
 /** One keep-or-delete decision per user-owned model. */
@@ -64,6 +64,8 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
   { model: 'SecretsActivity', category: 'credentials' },
   { model: 'Connection', category: 'credentials' },
   { model: 'ConnectionFlow', category: 'credentials' },
+  { model: 'MailTrigger', category: 'browser-tasks' },
+  { model: 'MailTriggerEvent', category: 'browser-tasks' },
 ];
 
 /** Narrow scopes, such as "delete my notes" (none by default: the built-in scopes cover every category). */
