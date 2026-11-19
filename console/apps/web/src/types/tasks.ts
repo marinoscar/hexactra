@@ -1,6 +1,7 @@
 // A task and its schedules, as the API returns them (`taskResponseSchema` and
 // the schedule response in apps/api/src/openapi/console.responses.ts).
 
+import type { TaskOutput } from '@app/shared/task-fields';
 import type { TaskParameter } from '@app/shared/task-params';
 
 import type { TaskSpend } from '../components/runBudget';
@@ -29,6 +30,8 @@ export interface Task {
   policyId: string | null;
   /** The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none. */
   parameters?: TaskParameter[] | null;
+  /** The values a run must return when it finishes (E39.5, #600); empty or null when the task has none. */
+  outputs?: TaskOutput[] | null;
   createdAt?: string;
   /** When the task was last edited. */
   updatedAt?: string;
