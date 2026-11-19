@@ -129,6 +129,8 @@ export function ChatPage() {
   const liveRun = run && isLive(run.status) ? run : null;
   const guidance = useMemo(() => new Map(state.guidance.map((g) => [g.seq, g.state])), [state.guidance]);
   const liveRunId = liveRun?.id ?? null;
+  // Stop was pressed on this run (E38.1): shown at once, before the run's own `cancelRequested` arrives.
+  const [stoppingRunId, setStoppingRunId] = useState<string | null>(null);
   const [browserOpen, setBrowserOpen] = useState(false);
   const [cardVisible, setCardVisible] = useState(false);
   const [viewerOf, setViewerOf] = useState<{ runId: string; viewer: RunViewer } | null>(null);
@@ -169,12 +171,15 @@ export function ChatPage() {
   const takeOver = where?.desktop && where.hostId ? { to: `/fleet/hosts/${where.hostId}/desktop`, label: `Take over${where.hostName ? ` on ${where.hostName}` : ''}` } : null;
   const stopRun = async () => {
     if (!liveRun) return;
-    const ok = await confirm({ title: 'Stop this run?', body: 'The agent stops after its current step. What it already did is not undone.', confirmLabel: 'Stop', destructive: true });
+    const ok = await confirm({ title: 'Stop this run?', body: 'The agent stops within a few seconds and does nothing more. What it already did is not undone.', confirmLabel: 'Stop', destructive: true });
     if (!ok) return;
+    // At once, before the server answers (E38.1): the button says "Stopping…" and cannot be pressed twice.
+    setStoppingRunId(liveRun.id);
     try {
       await api.post(`/runs/${liveRun.id}/cancel`, {});
       toast('Stopping the run');
     } catch (e) {
+      setStoppingRunId(null);
       toast(e instanceof Error ? e.message : 'Could not stop the run', 'error');
     }
   };
@@ -442,7 +447,7 @@ export function ChatPage() {
   }
 
   const browserPane = paneOpen && liveRun && (
-    <BrowserPane run={liveRun} frame={frame} frameHidden={frameHidden} now={now} canStop={viewer.hasPermission('runs:write')} onStop={() => void stopRun()} takeOver={takeOver} onClose={() => setBrowserOpen(false)} />
+    <BrowserPane run={stoppingRunId === liveRun.id && !liveRun.cancelRequested ? { ...liveRun, cancelRequested: true } : liveRun} frame={frame} frameHidden={frameHidden} now={now} canStop={viewer.hasPermission('runs:write')} onStop={() => void stopRun()} takeOver={takeOver} onClose={() => setBrowserOpen(false)} />
   );
 
   const thread = (

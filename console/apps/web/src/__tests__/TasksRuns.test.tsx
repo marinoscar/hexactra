@@ -103,6 +103,11 @@ describe('RunDetailPage', () => {
     expect(await screen.findByText(/waiting on the browser for 1 min/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel run' }));
     expect(host.requests.map((r) => `${r.method} ${r.path}`)).toContain(`POST /runs/${run.id}/cancel`);
+    // Stop (E38.1): the button says "Stopping…" at once, cannot be pressed twice, and the activity says so.
+    const stopping = await screen.findByRole('button', { name: 'Stopping…' });
+    expect(stopping).toBeDisabled();
+    fireEvent.click(stopping);
+    expect(host.requests.filter((r) => r.method === 'POST' && r.path === `/runs/${run.id}/cancel`)).toHaveLength(1);
   });
 });
 

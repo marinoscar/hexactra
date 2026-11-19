@@ -16497,6 +16497,8 @@ export interface components {
             result: string | null;
             error: string | null;
             cancelRequested: boolean;
+            /** @description When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure. */
+            cancelRequestedAt: string | null;
             stepCount: number;
             activity: {
                 /** @enum {string} */
@@ -16713,6 +16715,8 @@ export interface components {
                 result: string | null;
                 error: string | null;
                 cancelRequested: boolean;
+                /** @description When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure. */
+                cancelRequestedAt: string | null;
                 stepCount: number;
                 activity: {
                     /** @enum {string} */
@@ -17233,6 +17237,8 @@ export interface components {
             result: string | null;
             error: string | null;
             cancelRequested: boolean;
+            /** @description When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure. */
+            cancelRequestedAt: string | null;
             stepCount: number;
             activity: {
                 /** @enum {string} */
@@ -17516,6 +17522,8 @@ export interface components {
             result: string | null;
             error: string | null;
             cancelRequested: boolean;
+            /** @description When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure. */
+            cancelRequestedAt: string | null;
             stepCount: number;
             activity: {
                 /** @enum {string} */

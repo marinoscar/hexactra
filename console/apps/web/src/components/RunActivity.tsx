@@ -143,16 +143,17 @@ export function useNow(enabled: boolean, ms = 1_000): number {
 }
 
 /** "Doing: click_at (612, 340) — Enter the MileagePlus number · 23 s / 45 s", plus a stall warning. */
-export function RunActivityBar({ activity, now }: { activity: RunActivity; now: number }) {
+export function RunActivityBar({ activity, now, stopping = false }: { activity: RunActivity; now: number; stopping?: boolean }) {
   const elapsed = activityElapsed(activity, now);
-  const stall = stallMessage(activity, now);
+  // Stop was pressed (E38.1): the run is ending, so no stall warning telling the owner to cancel it.
+  const stall = stopping ? null : stallMessage(activity, now);
   const progress = activity.timeoutMs ? Math.min(100, (elapsed / activity.timeoutMs) * 100) : null;
   return (
     <Box sx={{ mb: 2 }}>
       <Paper variant="outlined" role="status" aria-label="Now" sx={{ px: 2, py: 1.5 }}>
         <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline' }}>
           <Typography variant="subtitle2" sx={{ flexGrow: 1, wordBreak: 'break-word' }}>
-            {describeActivity(activity)}
+            {stopping ? 'Stopping…' : describeActivity(activity)}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
             {formatDuration(elapsed)}

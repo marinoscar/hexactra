@@ -165,6 +165,7 @@ export const runResponseSchema = z.object({
   result: z.string().nullable(),
   error: z.string().nullable(),
   cancelRequested: z.boolean(),
+  cancelRequestedAt: iso.nullable().describe('When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure.'),
   stepCount: z.number().int(),
   activity: runActivitySchema.nullable(),
   inputTokens: z.number().int(),

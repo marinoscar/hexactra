@@ -74,6 +74,7 @@ import { AGENT, ATTR } from './trace-attributes';
 import { approvalCovers, classifyTarget, domainAllowed, fabricAllowedSites, hostOf, type GateTarget, type TargetFacts } from './policy';
 import { maxElementsFor, PLATFORM_MAX_CALLS_PER_CHUNK, ScreenshotWindow, shotHash } from './context-settings';
 import { appendConfirmedAction, noReportResult } from './confirmed-actions';
+import { RunStopSignal, stoppable, stoppedResult, STOPPED_TEXT, withinMs } from './stop-signal';
 import { captureScreen, captureTrace, markCenter, roundInput, TraceCaptureError, type Screen, type ScreenMark, type ScreenView, type TraceNote, type TraceShot } from './vision';
 import { answerSummary, guidanceSummary, isSecretInput, questionMoment, traceAllowed, traceKeyParts, type TraceMoment } from './trace';
 import { RUN_ARTIFACT_STORE, type RunArtifactStore } from '../tasks/run-delete.service';
@@ -241,6 +242,9 @@ class StopLoop extends Error {
 
 /** The most memories one run may propose (#553). */
 const MAX_RUN_PROPOSALS = 3;
+
+/** How long a Stop waits for the closing trace picture (E38.1): after that the run ends without one. */
+const STOP_FINAL_SHOT_MS = 2_000;
 
 export const INSTRUCTIONS = `You are the user's hands and eyes on their own computer. You operate a real Chrome browser, and the desktop it runs on, to reach their goal the way a skilled person sitting at the machine would. You act with the user's full authority.
 
@@ -597,19 +601,28 @@ export class GoalRunnerService {
   private async advanceLeased(runId: string, userId: string, orgId: string | null, tr: AgentTrace): Promise<RunOutcome> {
     // The job holds the run (E38.3): a job that finds another token later stops without touching the run.
     const lease = await RunLease.claim(this.prisma, userId, runId);
+    // The owner's Stop (E38.1): one signal for the job, fed by the `run.cancel` event and a poll of the flag, disposed with the job.
+    const events = this.tasks.events;
+    const owned = this.prisma.forUser({ userId });
+    const stop = RunStopSignal.start({
+      runId,
+      isRequested: async () => (await owned.run.findFirst({ where: { id: runId }, select: { cancelRequested: true } }))?.cancelRequested === true,
+      ...(events ? { subscribe: (h) => events.subscribe(h) } : {}),
+    });
     try {
-      return await this.advanceRun(runId, userId, orgId, lease, tr);
+      return await this.advanceRun(runId, userId, orgId, lease, tr, stop);
     } catch (e) {
       // A job that lost the run stops quietly, whatever it tripped on: its error must not fail a run another job now drives.
       if (!(e instanceof LeaseLost) && (await lease.held().catch(() => true))) throw e;
       this.log.warn(`run ${runId}: stopped, another job took over the run`);
       return 'superseded';
     } finally {
+      await stop.dispose();
       await lease.release().catch(() => undefined);
     }
   }
 
-  private async advanceRun(runId: string, userId: string, orgId: string | null, lease: RunLease, tr: AgentTrace): Promise<RunOutcome> {
+  private async advanceRun(runId: string, userId: string, orgId: string | null, lease: RunLease, tr: AgentTrace, stop: RunStopSignal): Promise<RunOutcome> {
     const jobStartedAt = this.clock();
     const db = this.prisma.forUser({ userId });
     const run = await db.run.findFirst({ where: { id: runId }, include: { task: true, conversation: { select: { allowedDomains: true, confirmRiskyActions: true, useSavedLogins: true, useSavedIdentity: true, useSavedCards: true } } } });
@@ -1094,6 +1107,11 @@ export class GoalRunnerService {
         state.stop = 'lease';
         return LEASE_LOST_TEXT;
       }
+      // Stop was pressed (E38.1): nothing is sent to the browser and nothing is recorded.
+      if (stop.requested) {
+        state.stop = 'cancel';
+        return STOPPED_TEXT;
+      }
       const spent = budgetCheck();
       if (spent) {
         stopForBudget(spent);
@@ -1116,8 +1134,14 @@ export class GoalRunnerService {
     const runAction = async (action: Record<string, unknown>, type: string, started: number, reason?: string, intent: number | null = null): Promise<string> => {
       let op;
       try {
-        op = await session.act(sessionId!, action, ACTION_TIMEOUT_MS);
+        op = await session.act(sessionId!, action, ACTION_TIMEOUT_MS, { signal: stop.abortSignal });
       } catch (e) {
+        // Stop ended the wait (E38.1): the host finishes the action by itself, so its effect is not known.
+        if (e instanceof FabricError && e.kind === 'aborted') {
+          state.stop = 'cancel';
+          await record('action', type, action, false, 'Stopped by the owner while this was running; its effect on the page is not known.', started, reason);
+          return STOPPED_TEXT;
+        }
         const msg = e instanceof FabricError ? e.message : String(e);
         await record('action', type, action, false, msg, started, reason, undefined, intent);
         return `Error: ${msg}`;
@@ -1884,7 +1908,7 @@ export class GoalRunnerService {
     const cardPayCtx = cardCtx;
     const savedCardTools: AiDefinedTool[] = savedCardsOn ? buildSavedCardTools(cardCtx) : [];
 
-    const tools: AiDefinedTool[] = tr.wrapTools([
+    const toolList: AiDefinedTool[] = tr.wrapTools([
       defineTool({
         name: 'observe_elements',
         description: 'List the interactive elements of the current page with CSS selectors.',
@@ -2308,6 +2332,11 @@ export class GoalRunnerService {
         },
       }),
     ]);
+    // The one seam around tool execution: a tool chosen before Stop was pressed is not carried out (E38.1). It is the outermost
+    // wrapper, so a refused tool is neither traced nor recorded; other wrappers (a pause check) compose beside it.
+    const tools: AiDefinedTool[] = stoppable(toolList, stop, () => {
+      state.stop = 'cancel';
+    });
 
     const goal = run.goal;
     // The owner's memories (#553): information for the model, after the goal, in the stable prefix (#406).
@@ -2400,11 +2429,19 @@ export class GoalRunnerService {
     const closeRun = async (to: 'succeeded' | 'failed' | 'cancelled', patch: { result?: string; error?: string; stopReason?: RunStopReason }) => {
       try {
         const seq = await recordNote('end', null, `The run ended: ${to}`, { ok: to === 'succeeded' });
-        await attachShot(seq, 'final', await shoot('final'));
+        // A Stop never waits long for the closing picture (E38.1).
+        const final = to === 'cancelled' ? await withinMs(shoot('final'), STOP_FINAL_SHOT_MS, { note: 'unavailable' as TraceNote }) : await shoot('final');
+        await attachShot(seq, 'final', final);
       } catch (e) {
         this.log.debug(`run ${run.id}: no closing step: ${e instanceof Error ? e.message : String(e)}`);
       }
       await this.finish(userId, run.id, sessionId, session, to, patch);
+    };
+
+    /** Stop was pressed (E38.1): the memory and usage are already saved; end the run `cancelled`, saying what the last completed step was. */
+    const cancelRun = async (): Promise<RunOutcome> => {
+      await closeRun('cancelled', { result: stoppedResult(memory.log), error: 'Cancelled by the user', stopReason: 'cancelled' });
+      return 'cancelled';
     };
 
     /** Move the run to another tier, at a chunk boundary. */
@@ -2510,12 +2547,14 @@ export class GoalRunnerService {
             maxSteps: 1,
             maxOutputTokens: WRAP_UP_MAX_OUTPUT_TOKENS,
             onStep: (step) => countCall(step),
-          }),
+          }, { signal: stop.abortSignal }),
         );
       } catch (e) {
-        this.log.warn(`run ${run.id}: the wrap-up call failed: ${e instanceof Error ? e.message : String(e)}`);
+        if (!stop.requested) this.log.warn(`run ${run.id}: the wrap-up call failed: ${e instanceof Error ? e.message : String(e)}`);
       }
       await this.saveMemory(userId, run.id, memory, used.drain(), lease);
+      // Stop during the wrap-up call (E38.1): the run ends cancelled, whatever the model said.
+      if (stop.requested) return cancelRun();
       const done = state.finished as { success: boolean; result: string } | null;
       if (done?.success) {
         await closeRun('succeeded', { result: done.result, stopReason });
@@ -2573,6 +2612,8 @@ export class GoalRunnerService {
 
     let idleChunks = 0;
     for (;;) {
+      // Stop first: nothing more is asked of the model or the browser once the owner pressed it (E38.1).
+      if (stop.requested) return cancelRun();
       // Everything is checked before each chunk, active time included (#399, #404).
       const spent = budgetCheck();
       if (spent) return wrapUp(spent);
@@ -2657,7 +2698,16 @@ export class GoalRunnerService {
       let result: AiToolLoopResult | null = null;
       await setActivity('thinking');
       const tierReq = tierRequest(snapshot, tier);
-      const call = (withImage: boolean, req: TierRequest) =>
+      const call = async (withImage: boolean, req: TierRequest) => {
+        try {
+          return await callTools(withImage, req);
+        } catch (e) {
+          // Stop aborted the model call (E38.1): the platform rejects with an AiError, which is not a provider failure to fall back from.
+          if (stop.requested && !(e instanceof StopLoop)) throw new StopLoop('cancel');
+          throw e;
+        }
+      };
+      const callTools = (withImage: boolean, req: TierRequest) =>
         tr.within(() => provider().runTools({
           // The model, effort and output cap of the run's current tier, from the snapshot (#403).
           ...(({ modelLabel: _label, ...r }) => r)(req),
@@ -2668,6 +2718,8 @@ export class GoalRunnerService {
           onStep: (step) => {
             countCall(step);
             this.tasks.metrics.inputTokensPerCall(step.response.usage?.inputTokens ?? 0);
+            // Stop ends the chunk before anything else decides (E38.1).
+            if (stop.requested) state.stop = 'cancel';
             // A finish, a pause for a person, a look or a stall already ends the chunk; otherwise the budget decides.
             if (!state.stop) {
               const key = budgetCheck();
@@ -2678,7 +2730,7 @@ export class GoalRunnerService {
             }
             if (state.stop) throw new StopLoop(state.stop);
           },
-        }));
+        }, { signal: stop.abortSignal }));
       const isFallbackError = (e: unknown): e is AiError => e instanceof AiError && FALLBACK_CODES.has(e.code);
       const attempt = async (req: TierRequest): Promise<AiToolLoopResult> => {
         try {
@@ -2719,11 +2771,8 @@ export class GoalRunnerService {
       await this.saveMemory(userId, run.id, memory, used.drain(), lease);
       await sendOverNotice();
 
-      const fresh = await db.run.findFirst({ where: { id: run.id }, select: { cancelRequested: true } });
-      if (fresh?.cancelRequested) {
-        await closeRun('cancelled', { error: 'Cancelled by the user', stopReason: 'cancelled' });
-        return 'cancelled';
-      }
+      // Stop (E38.1): the signal heard it, or the flag is set (the signal's poll has not run yet).
+      if (stop.requested || (await db.run.findFirst({ where: { id: run.id }, select: { cancelRequested: true } }))?.cancelRequested) return cancelRun();
       if (state.stop === 'pause' && state.handoffId) return pauseForPerson();
       if (state.stop === 'finish' && state.finished) {
         const to = state.finished.success ? 'succeeded' : 'failed';

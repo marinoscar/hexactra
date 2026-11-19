@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -44,6 +44,8 @@ export interface RunPatch {
  */
 @Injectable()
 export class TasksService {
+  private readonly log = new Logger(TasksService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     @Optional() readonly metrics: RunMetrics = new RunMetrics(),
@@ -196,7 +198,7 @@ export class TasksService {
   async transition(userId: string, id: string, to: RunStatus, patch: RunPatch = {}) {
     const db = this.db(userId);
     for (let attempt = 0; attempt < 5; attempt++) {
-      const run = await db.run.findFirst({ where: { id }, select: { status: true, startedAt: true, createdAt: true, trigger: true, activeMs: true, activeSince: true, result: true, confirmedActions: true } });
+      const run = await db.run.findFirst({ where: { id }, select: { status: true, startedAt: true, createdAt: true, trigger: true, activeMs: true, activeSince: true, result: true, confirmedActions: true, cancelRequestedAt: true } });
       if (!run) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
       assertTransition(run.status as RunStatus, to);
       const now = new Date();
@@ -236,6 +238,12 @@ export class TasksService {
         if (isTerminal(to)) {
           this.metrics.finished(to, run.trigger, (now.getTime() - (run.startedAt ?? run.createdAt).getTime()) / 1000);
           if (saved.modelCalls > 0 && saved.costKnown) this.metrics.cost(to, Number(saved.costUsd));
+          // Stop was pressed (E38.1): how long it took from the request to the end. A metric and one log line; no goal, page text or user.
+          if (run.cancelRequestedAt) {
+            const ms = Math.max(0, now.getTime() - run.cancelRequestedAt.getTime());
+            this.metrics.stopLatency(to, ms);
+            this.log.log(`run ${id}: Stop took ${ms} ms (${to})`);
+          }
           // After the write: whoever follows the run's end (a chat writes the result into its thread).
           await this.endHooks?.fire(userId, id);
         }
@@ -245,10 +253,15 @@ export class TasksService {
     throw new ConflictException({ code: 'RUN_BUSY', message: 'The run changed while it was being updated; try again' });
   }
 
-  /** Cancel: at once while queued; otherwise flag it for the runner, which stops between steps. */
+  /**
+   * Cancel: at once while queued or waiting for a person; otherwise flag it for the runner and tell it now (`run.cancel`,
+   * E38.1): the runner stops before its next action and aborts the model call or wait in flight, within about two seconds.
+   * The first press stamps `cancelRequestedAt`, the start of the stop-latency measure; a second press changes nothing.
+   */
   async cancel(userId: string, id: string) {
     const run = await this.getRun(userId, id);
     if (isTerminal(run.status as RunStatus)) return run;
+    await this.db(userId).run.updateMany({ where: { id, cancelRequestedAt: null }, data: { cancelRequestedAt: new Date() } });
     if (run.status === 'queued') return this.transition(userId, id, 'cancelled', { error: 'Cancelled before it started', stopReason: 'cancelled' });
     // Waiting for a person, nothing is running to see the flag: withdraw the
     // request, end the browser session and cancel now (best effort on the fabric).
@@ -258,6 +271,8 @@ export class TasksService {
       return this.transition(userId, id, 'cancelled', { error: 'Cancelled by the user', stopReason: 'cancelled' });
     }
     await this.db(userId).run.updateMany({ where: { id }, data: { cancelRequested: true } });
+    // After the write, so the worker that hears it finds the flag set; the poll covers a lost event.
+    await this.events?.publish({ type: 'run.cancel', runId: id, ownerUserId: userId });
     return this.getRun(userId, id);
   }
 }

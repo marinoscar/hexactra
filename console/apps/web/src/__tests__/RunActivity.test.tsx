@@ -91,3 +91,13 @@ describe('where the agent acts (#381)', () => {
     expect(marker).toHaveStyle({ position: 'absolute', left: '50.000%', top: '25.000%' });
   });
 });
+
+describe('the activity bar while Stop is pending (E38.1)', () => {
+  it('says "Stopping…" instead of the action, and gives no stall warning to cancel the run', () => {
+    render(<RunActivityBar activity={acting} now={at + 90_000} stopping />);
+    const bar = screen.getByRole('status', { name: 'Now' });
+    expect(bar).toHaveTextContent('Stopping…');
+    expect(bar).not.toHaveTextContent('click_at');
+    expect(screen.queryByText(/waiting on the browser/)).not.toBeInTheDocument();
+  });
+});

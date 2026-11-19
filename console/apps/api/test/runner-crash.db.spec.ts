@@ -19,18 +19,29 @@ import { HexactraAlertsService } from '../src/alerts/hexactra-alerts.service';
 import { HEXACTRA_ALERT_KINDS, runRecoveredKind, setAlertSources } from '../src/alerts/hexactra-alert-kinds';
 import { RUN_READING_ALERT_KINDS } from '../src/alerts/run-alert-kinds';
 import { defineRunTool, inCommitTool } from '../src/runner/intent';
+import { RunStopSignal } from '../src/runner/stop-signal';
 import { z } from 'zod';
 
 let app: NestFastifyApplication;
 const stamp = `${Date.now()}`;
 const SITE = 'https://secure.pay.example.com/review';
 
+// An abandoned job (the simulated crash) never disposes its stop signal (E38.1): its poll is stopped here, before the app closes.
+const stopSignals: RunStopSignal[] = [];
+
 beforeAll(async () => {
+  const start = RunStopSignal.start.bind(RunStopSignal);
+  jest.spyOn(RunStopSignal, 'start').mockImplementation((source) => {
+    const signal = start(source);
+    stopSignals.push(signal);
+    return signal;
+  });
   app = await createApp();
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
 });
 afterAll(async () => {
+  await Promise.all(stopSignals.map((s) => s.dispose()));
   await app?.close();
 });
 

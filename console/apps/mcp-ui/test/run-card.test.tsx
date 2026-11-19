@@ -306,7 +306,9 @@ describe('actions', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stop run' }));
     await advance(0);
     expect(m.host.callTool).toHaveBeenCalledWith('run_cancel', { run_id: RUN_ID });
-    expect(screen.getByText('Stopping after the current step.')).toBeInTheDocument();
+    expect(screen.getByText('The run is stopping.')).toBeInTheDocument();
+    // The button says so and cannot be pressed again (E38.1).
+    expect(screen.getByRole('button', { name: 'Stopping…' })).toBeDisabled();
   });
 
   it('Open in Hexactra opens the run page through the host', async () => {

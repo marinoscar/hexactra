@@ -113,6 +113,8 @@ export function RunDetailPage() {
   /** The frame's pixel size, to place where the agent acts on it (#381). */
   const [shotSize, setShotSize] = useState<{ width: number; height: number } | null>(null);
   const [watch, setWatch] = useState(true);
+  // Stop was pressed here (E38.1): shown at once, before the server says so.
+  const [stopRequested, setStopRequested] = useState(false);
   const [where, setWhere] = useState<RunViewer | null>(null);
   useProfileTimeZone();
   /** Export (#544): the header's menu from `md` up, the sticky bar's below. */
@@ -261,7 +263,18 @@ export function RunDetailPage() {
   }
   const finished = !isLive;
   const canCancel = viewer.hasPermission('runs:write');
-  const cancel = () => void api.post(`/runs/${run.id}/cancel`, {}).then(load);
+  const stopping = run.cancelRequested || stopRequested;
+  const cancel = () => {
+    if (stopping) return;
+    setStopRequested(true);
+    api
+      .post(`/runs/${run.id}/cancel`, {})
+      .then(load)
+      .catch((e: unknown) => {
+        setStopRequested(false);
+        setActionError(e instanceof Error ? e.message : 'Could not stop the run');
+      });
+  };
   const takeOverHost = where?.desktop && where.hostId && viewer.hasPermission('fleet:desktop') ? where.hostId : null;
   const takeOver = () => navigate(`/fleet/hosts/${takeOverHost}/desktop`);
   const takeOverLabel = `Take over${where?.hostName ? ` on ${where.hostName}` : ''}`;
@@ -336,8 +349,8 @@ export function RunDetailPage() {
   const actions = isLive && !compact && (
     <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
       {canCancel && (
-        <Button color="error" variant="outlined" disabled={run.cancelRequested} onClick={cancel}>
-          {run.cancelRequested ? 'Cancelling…' : 'Cancel run'}
+        <Button color="error" variant="outlined" disabled={stopping} onClick={cancel}>
+          {stopping ? 'Stopping…' : 'Cancel run'}
         </Button>
       )}
       <Button variant="outlined" onClick={() => setWatch((w) => !w)}>
@@ -352,7 +365,7 @@ export function RunDetailPage() {
   );
   // A phone shows the budget closest to its limit and expands to the rest; the narrower right pane takes two bars a row.
   const meter = run.budget && <RunBudgetMeter budget={run.budget} ticking={run.status === 'running'} now={now} collapsible={compact} maxColumns={twoPane ? 2 : 3} />;
-  const activity = run.status === 'running' && run.activity && <RunActivityBar activity={run.activity} now={now} />;
+  const activity = run.status === 'running' && run.activity && <RunActivityBar activity={run.activity} now={now} stopping={stopping} />;
   const caption = frameCaption(shotAt, shotFailing, now);
   const frameBody = (shot || shotFailing) && (
     <Box sx={{ mb: 2 }}>
@@ -423,7 +436,7 @@ export function RunDetailPage() {
       // Sticks above the phone's bottom bar (and the safe area) while the page scrolls; it is the page's last element, so at the end it rests in place.
       sx={{ position: 'sticky', bottom: aboveBottomBar(8), zIndex: 'speedDial', mt: 2, p: 0.5, display: 'flex', gap: 0.5, borderRadius: 2 }}
     >
-      {isLive && canCancel && <BarAction label={run.cancelRequested ? 'Cancelling…' : 'Cancel run'} short={run.cancelRequested ? 'Cancelling…' : 'Cancel'} Icon={CancelOutlinedIcon} color="error" disabled={run.cancelRequested} onClick={cancel} />}
+      {isLive && canCancel && <BarAction label={stopping ? 'Stopping…' : 'Cancel run'} short={stopping ? 'Stopping…' : 'Cancel'} Icon={CancelOutlinedIcon} color="error" disabled={stopping} onClick={cancel} />}
       {isLive && <BarAction label={watch ? 'Stop watching' : 'Watch the browser'} short={watch ? 'Stop watching' : 'Watch'} Icon={watch ? VisibilityOffOutlinedIcon : VisibilityOutlinedIcon} onClick={() => setWatch((w) => !w)} />}
       {isLive && takeOverHost && <BarAction label={takeOverLabel} short="Take over" Icon={PanToolOutlinedIcon} onClick={takeOver} />}
       {exporter.canExport && (

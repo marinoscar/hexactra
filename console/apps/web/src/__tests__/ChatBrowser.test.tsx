@@ -265,7 +265,14 @@ describe('Stop and Take over', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Stop' }));
     await waitFor(() => expect(sent(host, 'POST', `/runs/${RUN_ID}/cancel`)).toHaveLength(1));
 
-    // The run says it is stopping: the button says so and cannot be pressed twice.
+    // At once (E38.1), before the run says anything: the button says it is stopping and cannot be pressed twice.
+    const stopping = await within(p).findByRole('button', { name: 'Stopping…' });
+    expect(stopping).toBeDisabled();
+    fireEvent.click(stopping);
+    expect(sent(host, 'POST', `/runs/${RUN_ID}/cancel`)).toHaveLength(1);
+    expect(within(p).getByRole('status')).toHaveTextContent('Stopping…');
+
+    // The run then says so itself: the same.
     runEvent({ cancelRequested: true });
     expect(await within(p).findByRole('button', { name: 'Stopping…' })).toBeDisabled();
   });
