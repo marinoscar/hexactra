@@ -117,6 +117,8 @@ export class FakeControl implements ControlPort {
 export class FakeQuestions implements QuestionPort {
   opened: QuestionSpec[] = [];
   failToOpen = false;
+  /** Ask without a browser (E39.7): the question has no handoff and the run waits on it by its own id. */
+  noHandoff = false;
   parse(raw: Record<string, unknown>) {
     if (typeof raw.prompt !== 'string' || !raw.prompt) return { ok: false as const, message: 'prompt: required' };
     return { ok: true as const, spec: raw as unknown as QuestionSpec };
@@ -127,7 +129,7 @@ export class FakeQuestions implements QuestionPort {
   async open(spec: QuestionSpec): Promise<OpenedQuestion> {
     if (this.failToOpen) throw new Error('nobody to ask');
     this.opened.push(spec);
-    return { handoffId: `handoff-${this.opened.length}`, expiresAt: null, questionId: `question-${this.opened.length}` };
+    return { handoffId: this.noHandoff ? null : `handoff-${this.opened.length}`, expiresAt: null, questionId: `question-${this.opened.length}` };
   }
 }
 

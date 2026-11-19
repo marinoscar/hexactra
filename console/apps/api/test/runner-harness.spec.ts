@@ -146,6 +146,20 @@ describe('executeTool: the one wrapper around every tool call', () => {
     expect(run.ctx.state).toMatchObject({ stop: 'pause', handoffId: 'handoff-1' });
   });
 
+  it('waits on a question that has no browser handoff, and records only its one-line summary (E39.7)', async () => {
+    const run = fakeRun();
+    run.questions.noHandoff = true;
+    const ask: Gate<Ctx> = { name: 'connection', check: async () => ({ kind: 'ask', question: { kind: 'confirmation', input: 'confirm', prompt: 'To: person-b@example.test\nMessage: PRIVATE-BODY-TEXT', stepSummary: 'approval of: send an email from Work to 1 recipient', action: { tool: 'mail_send' } }, text: 'Asked the owner.' }) };
+    const tool = defineRunnerTool({ name: 'mail_send', group: 'connection', description: '', parameters: z.object({}), gated: { connection: () => 1 }, execute: () => 'sent' });
+    expect(await executeTool(run.ctx, tool as never, {}, pipelineOf(ask) as never)).toBe('Asked the owner.');
+    // The run is to wait for the person even though there is no handoff id to wait on.
+    expect(run.ctx.state).toMatchObject({ stop: 'pause', handoffId: null, handoffAsk: { prompt: 'approval of: send an email from Work to 1 recipient', kind: 'confirmation', input: 'confirm' } });
+    expect(run.ctx.memory.askedPrompt).toBe('approval of: send an email from Work to 1 recipient');
+    const dump = JSON.stringify(run.store.rows());
+    expect(dump).toContain('approval of: send an email from Work to 1 recipient');
+    expect(dump).not.toContain('PRIVATE-BODY-TEXT');
+  });
+
   it('marks a commit-class tool for the duration of its call and no other', async () => {
     const run = fakeRun();
     const seen: Record<string, boolean> = {};
