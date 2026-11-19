@@ -18,6 +18,7 @@ import {
   resolveWebhookTarget,
   signedHeaders,
   systemHostResolver,
+  userAgentToken,
   type HostResolver,
   type ResolvedWebhooksModuleOptions,
   type WebhookTransport,
@@ -70,7 +71,7 @@ export class WebhookSender implements DeliverySender {
     const reportUrl = ctx.test ? null : this.links.url(ctx.delivery.userId, ctx.facts.runId);
     const data = webhookData(ctx.facts, cfg, { runUrl, reportUrl }, ctx.test ? { test: true } : {});
     const body = JSON.stringify(buildEnvelope({ eventId: ctx.idempotencyKey, eventKey: ctx.test ? TEST_EVENT_TYPE : RUN_EVENT_TYPE, orgId: null, data, occurredAt: ctx.facts.finishedAt ?? new Date() }));
-    const headers = await signedHeaders({ id: ctx.idempotencyKey, timestamp: Math.floor(Date.now() / 1000), body, secrets: [secret], userAgent: `${APP_NAME}-Webhooks/1.0` });
+    const headers = await signedHeaders({ id: ctx.idempotencyKey, timestamp: Math.floor(Date.now() / 1000), body, secrets: [secret], userAgent: `${this.options?.appName?.() ?? userAgentToken(APP_NAME)}-Webhooks/1.0` });
 
     let res;
     try {

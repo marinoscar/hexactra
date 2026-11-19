@@ -108,6 +108,21 @@ describe('email through a connection', () => {
     expect(fakeRecipientsOf(h)).toEqual([OWN]);
   });
 
+  it('says what to check after a step the owner confirmed, links to the run, and loads no remote image', async () => {
+    const h = harness({ run: { status: 'failed', result: null, error: 'It failed.', confirmedActions: [{ seq: 4, prompt: 'Pay now?', action: 'click', at: '2026-11-18T17:58:00.000Z' }], outputsComplete: false } });
+    const { sender } = emailSender(h);
+    await sender.send(h.ctx({ kind: 'email', config: viaConn(h) }));
+    const m = h.fake.account(h.mailConn.id).sent[0]!;
+    expect(m.subject).toBe('Pay the car loan: failed on 2026-11-18');
+    expect(m.html).toContain('What to check');
+    expect(m.html).toContain('A step you confirmed was carried out');
+    expect(m.text).toContain('What to check: A step you confirmed was carried out');
+    expect(m.html).toContain(`https://console.example.test/runs/${RUN}`);
+    expect(m.html).toContain('Open the run');
+    expect(m.html).not.toMatch(/<img[^>]+src="https?:/i);
+    expect(m.html).not.toMatch(/url\(\s*['"]?https?:/i);
+  });
+
   it('an attachment too large for the sender is replaced by the signed link, and says so', async () => {
     const h = harness({ files: { pdf: Buffer.alloc(30 * 1024 * 1024, 1) } });
     const { sender } = emailSender(h);
