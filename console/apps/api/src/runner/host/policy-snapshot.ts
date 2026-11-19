@@ -5,8 +5,8 @@ import { balancedSpec, builtinPolicy, SYSTEM_DEFAULT_POLICY_REF } from '../../po
 import { readAppLimits, readSnapshot, type RunPolicySnapshot } from '../../policies/policy-snapshot';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { priceTableOf } from '../agent-pricing.settings';
-import { computeEffectiveBudget, enforcementFor, isUnlimited, UNLIMITED_LOG_LINE, type BudgetCeilings } from '../harness';
-import type { PriceTable } from '../harness';
+import { computeEffectiveBudget, enforcementFor, isUnlimited, UNLIMITED_LOG_LINE, type BudgetCeilings } from '@marinoscar/hexactra-agent';
+import type { PriceTable } from '@marinoscar/hexactra-agent';
 import type { RunMemory } from './run-memory';
 import { runConnections } from './connections/run-connections';
 import type { HostDeps } from './deps';

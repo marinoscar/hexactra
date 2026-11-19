@@ -2,7 +2,7 @@
 // instructions (the `usage` note), so a run without a connection never reads them.
 import { z } from 'zod';
 
-import { defineRunnerTool, type RunnerTool } from '../../../harness';
+import { defineRunnerTool, type RunnerTool } from '@marinoscar/hexactra-agent';
 import type { HostContext } from '../../context';
 import { liveConnections, recordStep, refOf } from './support';
 

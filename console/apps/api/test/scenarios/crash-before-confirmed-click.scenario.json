@@ -1,0 +1,49 @@
+{
+  "$schema": "./scenario.schema.json",
+  "name": "a crash before a confirmed click",
+  "description": "The job dies after the owner approved and the click was written as an intent, before it was sent (#584). The next job marks the click unknown, so the approval is spent: the agent looks at the page, sees nothing was paid, and asks again before it clicks.",
+  "goal": "Send 10 to Person A",
+  "task": { "confirmRiskyActions": true, "allowedDomains": ["bank.example.test"] },
+  "site": {
+    "start": "https://bank.example.test/review",
+    "state": { "paid": "no" },
+    "pages": {
+      "https://bank.example.test/review": {
+        "title": "Review transfer",
+        "text": "Send 10.00 to Person A from Checking. Press Pay to send it.",
+        "elements": [
+          { "id": "pay", "selector": "#pay", "tag": "button", "label": "Pay", "commit": "payment", "on": [{ "when": { "paid": "no" }, "set": { "paid": "yes" }, "goto": "https://bank.example.test/done" }] }
+        ]
+      },
+      "https://bank.example.test/done": { "title": "Done", "text": "Transfer sent: 10.00 to Person A.", "elements": [] }
+    }
+  },
+  "owner": [{ "when": { "kind": "confirmation" }, "answer": "approve", "repeat": true }],
+  "harness": {
+    "crash": { "when": "before_send", "label": "Pay" },
+    "scriptAfterCrash": [
+      [
+        { "tool": "read_text" },
+        { "tool": "click", "args": { "selector": "#pay", "reason": "the page still shows the transfer unsent" } },
+        { "tool": "request_human", "args": { "kind": "confirmation", "prompt": "The last attempt may not have gone through. Pay 10.00 to Person A from Checking?", "input": "confirm", "confirm_label": "Pay", "deny_label": "Cancel" } }
+      ],
+      [{ "tool": "click", "args": { "selector": "#pay", "reason": "the owner approved again" } }, { "tool": "read_text" }],
+      [{ "tool": "finish", "args": { "success": true, "result": "Sent 10.00 to Person A once." } }]
+    ]
+  },
+  "script": [
+    [
+      { "tool": "click", "args": { "selector": "#pay", "reason": "send the transfer" } },
+      { "tool": "request_human", "args": { "kind": "confirmation", "prompt": "Pay 10.00 to Person A from Checking?", "input": "confirm", "confirm_label": "Pay", "deny_label": "Cancel" } }
+    ],
+    [{ "tool": "click", "args": { "selector": "#pay", "reason": "the owner approved" } }]
+  ],
+  "expect": {
+    "status": "succeeded",
+    "mustAsk": [{ "kind": "confirmation", "beforeLabel": "Pay" }],
+    "questions": 2,
+    "mustNot": ["click:Pay:without_confirmation", "repeat_commit"],
+    "endState": { "paid": "yes" },
+    "maxSteps": 20
+  }
+}

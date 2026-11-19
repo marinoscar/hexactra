@@ -6,9 +6,9 @@ import { z } from 'zod';
 import { FabricError } from '../../../fabric/fabric.client';
 import { questionSpecSchema } from '../../../questions/questions.contract';
 import { SecretsProviderError } from '../../../secrets/secrets-provider.port';
-import { actionTarget, defineRunnerTool, type RunnerTool } from '../../harness';
-import { hostOf } from '../../browser/policy';
-import { currentUrl } from '../../browser/page';
+import { actionTarget, defineRunnerTool, type RunnerTool } from '@marinoscar/hexactra-agent';
+import { hostOf } from '@marinoscar/hexactra-browser-agent/policy';
+import { currentUrl } from '@marinoscar/hexactra-browser-agent/page';
 import {
   appendUsedSavedLogin,
   failureOf,

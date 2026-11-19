@@ -8,7 +8,7 @@
 //      not have happened is never covered by one;
 //   4. otherwise the owner is asked, on a card the server built from the validated arguments. The run waits for the answer with no browser.
 import { normaliseRecipient } from '../../../approvals/approval-match';
-import { clip, targetUnknown, type Gate, type GateVerdict } from '../../harness';
+import { clip, targetUnknown, type Gate, type GateVerdict } from '@marinoscar/hexactra-agent';
 import type { HostContext } from '../context';
 import { CONNECTION_GATE, intentTarget, type ConnectionDecision, type ConnectionGateRequest } from '../tools/connections/support';
 

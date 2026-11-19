@@ -1,9 +1,9 @@
 // What a browser run keeps between chunks and across a handoff (`runs.transcript`): the harness's fields, the browser toolset's, and the
 // app's (saved logins, identity details, cards, memory proposals). Never secrets.
-import type { BrowserMemory } from '../browser/context';
-import type { Screen } from '../browser/vision';
-import type { BudgetKey, StallState, Tier, UnknownStep } from '../harness';
-import type { GateTarget } from '../browser/policy';
+import type { BrowserMemory } from '@marinoscar/hexactra-browser-agent/context';
+import type { Screen } from '@marinoscar/hexactra-browser-agent/vision';
+import type { BudgetKey, StallState, Tier, UnknownStep } from '@marinoscar/hexactra-agent';
+import type { GateTarget } from '@marinoscar/hexactra-browser-agent/policy';
 import type { SavedCardsMemory } from '../saved-cards';
 import type { SavedIdentityMemory } from '../saved-identity';
 import type { SavedLoginsMemory } from '../saved-logins';
@@ -98,4 +98,4 @@ export interface SaveLoginMemory {
   signIn?: { handoffId: string; origin: string; offered: boolean } | null;
 }
 
-export type { RunOutcome } from '../harness';
+export type { RunOutcome } from '@marinoscar/hexactra-agent';

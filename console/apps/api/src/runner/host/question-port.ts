@@ -2,7 +2,7 @@
 import { withAppOrigin } from '../../connected-apps/app-origin';
 import { questionSpecSchema, type QuestionSpec as BrokerSpec } from '../../questions/questions.contract';
 import type { FabricSession } from '../fabric-session';
-import type { QuestionPort, QuestionSpec } from '../harness';
+import type { QuestionPort, QuestionSpec } from '@marinoscar/hexactra-agent';
 import { QUESTION_TIMEOUT } from '../../questions/questions.contract';
 import type { HostDeps } from './deps';
 import { mirror } from './finish-run';

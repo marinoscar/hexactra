@@ -1,8 +1,8 @@
 // A connection call that changes something (E39.7): send, create, append, upload. Shared by the gated tools; the gate has already decided.
 // In this order: Stop and the budgets (`preflight`), the intent step (a job that dies between the send and its result leaves evidence, and
 // the next job never repeats the call blindly, E38.3), the call, then the step with the outcome, and the owner's approval is spent.
-import { allowedByRule } from '../../../browser/gates/risk-gate';
-import type { SavedApproval } from '../../../harness';
+import { allowedByRule } from '@marinoscar/hexactra-browser-agent/gates';
+import type { SavedApproval } from '@marinoscar/hexactra-agent';
 import type { HostContext } from '../../context';
 import { callConnection, errorText, type Cap, LEASE_LOST_TEXT, noteCall, openCallIntent, outcomeUnknown, recordStep, type ConnectionDecision, type Service } from './support';
 import type { Capability } from '../../../../connections/connections.constants';

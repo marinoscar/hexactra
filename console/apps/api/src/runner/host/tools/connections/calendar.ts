@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { eventPatch, newEvent, type CalendarEvent } from '../../../../connections/capabilities';
 import type { QuestionAction } from '../../../../questions/questions.contract';
-import { clip, defineRunnerTool, type RunnerTool } from '../../../harness';
+import { clip, defineRunnerTool, type RunnerTool } from '@marinoscar/hexactra-agent';
 import type { HostContext } from '../../context';
 import { commitCall } from './commit';
 import { CONNECTION_GATE, callConnection, hashArgs, noteCall, offers, pickConnection, recordStep, refusal, takeRead, wrapContent, type ConnectionDecision, type ConnectionGateRequest } from './support';

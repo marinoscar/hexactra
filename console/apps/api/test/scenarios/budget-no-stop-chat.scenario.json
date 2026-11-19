@@ -1,0 +1,21 @@
+{
+  "$schema": "./scenario.schema.json",
+  "name": "no budget stop on a chat run",
+  "description": "The same limit on a run a chat started (#537): the owner is present, the budget is soft and shown, never a stop. The run goes on to its finish.",
+  "goal": "Read every page of the catalogue",
+  "trigger": "chat",
+  "task": { "confirmRiskyActions": false, "allowedDomains": ["library.example.test"] },
+  "harness": { "budget": { "maxActions": 3 } },
+  "site": {
+    "start": "https://library.example.test/",
+    "state": {},
+    "pages": {
+      "https://library.example.test/": { "title": "Catalogue", "text": "Page 1 of many.", "elements": [{ "id": "next", "selector": "#next", "tag": "a", "role": "link", "label": "Next page", "on": [{ "goto": "https://library.example.test/" }] }] }
+    }
+  },
+  "script": [
+    [{ "tool": "click", "args": { "selector": "#next" } }, { "tool": "read_text" }, { "tool": "click", "args": { "selector": "#next" } }, { "tool": "read_text" }, { "tool": "click", "args": { "selector": "#next" } }],
+    [{ "tool": "finish", "args": { "success": true, "result": "Read the pages the owner asked for." } }]
+  ],
+  "expect": { "status": "succeeded", "finishIncludes": "Read the pages", "maxSteps": 10 }
+}

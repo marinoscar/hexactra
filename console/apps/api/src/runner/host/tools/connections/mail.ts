@@ -6,7 +6,7 @@ import { z } from 'zod';
 
 import { outgoingMail, type OutgoingAttachment } from '../../../../connections/capabilities';
 import type { QuestionAction } from '../../../../questions/questions.contract';
-import { clip, defineRunnerTool, type RunnerTool } from '../../../harness';
+import { clip, defineRunnerTool, type RunnerTool } from '@marinoscar/hexactra-agent';
 import type { HostContext } from '../../context';
 import { loadRunArtifact, type RunArtifactRef } from './artifacts';
 import { commitCall } from './commit';

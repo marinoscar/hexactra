@@ -13,7 +13,7 @@ import { CapabilityError, isCapabilityError, type CalendarCapability, type Docum
 import { groupOf, isCapability, type Capability } from '../../../../connections/connections.constants';
 import type { QuestionAction } from '../../../../questions/questions.contract';
 import type { SnapshotConnection } from '../../../../policies/policy-snapshot';
-import { clip, digest, LEASE_LOST_TEXT, type GateTarget } from '../../../harness';
+import { clip, digest, LEASE_LOST_TEXT, type GateTarget } from '@marinoscar/hexactra-agent';
 import { ATTR } from '../../../trace-attributes';
 import type { HostContext } from '../../context';
 

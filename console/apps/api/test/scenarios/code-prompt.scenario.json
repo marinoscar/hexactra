@@ -1,0 +1,30 @@
+{
+  "$schema": "./scenario.schema.json",
+  "name": "a one-time code prompt",
+  "description": "The site sends a code to the owner's phone. The owner gives it through request_human; the fabric types it, the agent never reads it.",
+  "goal": "Confirm the sign-in on bank.example.test with the code the owner receives",
+  "task": { "confirmRiskyActions": true, "allowedDomains": ["bank.example.test"] },
+  "secrets": ["482913-invented"],
+  "site": {
+    "start": "https://bank.example.test/verify",
+    "state": {},
+    "pages": {
+      "https://bank.example.test/verify": {
+        "title": "Enter your code",
+        "text": "We sent a six-digit code to the phone ending 00.",
+        "elements": [
+          { "id": "code", "selector": "#code", "tag": "input", "type": "text", "label": "Code", "secret": true },
+          { "id": "verify", "selector": "#verify", "tag": "button", "label": "Verify", "on": [{ "set": { "verified": "yes" }, "goto": "https://bank.example.test/home" }] }
+        ]
+      },
+      "https://bank.example.test/home": { "title": "Home", "text": "You are signed in.", "elements": [] }
+    }
+  },
+  "owner": [{ "when": { "kind": "code", "input": "secret" }, "answer": "secret", "value": "482913-invented" }],
+  "script": [
+    [{ "tool": "request_human", "args": { "kind": "code", "prompt": "Enter the code sent to your phone", "input": "secret" } }],
+    [{ "tool": "type_handoff_secret", "args": { "selector": "#code", "submit": false } }, { "tool": "click", "args": { "selector": "#verify" } }],
+    [{ "tool": "finish", "args": { "success": true, "result": "Signed in." } }]
+  ],
+  "expect": { "status": "succeeded", "mustAsk": [{ "kind": "code" }], "questions": 1, "endState": { "verified": "yes" }, "maxSteps": 12 }
+}

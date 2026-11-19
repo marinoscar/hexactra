@@ -1,8 +1,8 @@
 // PolicyPort over the run's policy snapshot (#401): the loop reads limits, tiers and models only from here.
 import type { RunPolicySnapshot } from '../../policies/policy-snapshot';
 import { maskSensitive } from '../../tasks/mask';
-import { PLATFORM_MAX_CALLS_PER_CHUNK } from '../browser/context-settings';
-import { computeEffectiveBudget, type ModelRoute, type PolicyPort } from '../harness';
+import { PLATFORM_MAX_CALLS_PER_CHUNK } from '@marinoscar/hexactra-browser-agent/context-settings';
+import { computeEffectiveBudget, type ModelRoute, type PolicyPort } from '@marinoscar/hexactra-agent';
 import { fallbackRequest, sameTierRequest, tierHasVision, tierProblem, tierRequest, type TierRequest } from '../tier-request';
 
 const routeOf = ({ modelLabel, ...params }: TierRequest): ModelRoute => ({ label: modelLabel, params });

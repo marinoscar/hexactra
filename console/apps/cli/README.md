@@ -203,6 +203,14 @@ hexactra tasks resume <task-id>
 - **A paused task still runs when you start it.** `tasks pause` only stops its schedules; `tasks run` keeps working.
 - **The Runs screen** of the terminal UI shows the 30 most recent runs; `m` loads the next 30.
 
+### Developer tools: the replay suite
+
+```bash
+hexactra dev scenario-from-trace <trace.json>            # a scripted replay scenario skeleton from an exported run trace (--out <file>, "-" prints it, --force)
+```
+
+`dev scenario-from-trace` turns a file written by `runs export` into `<trace name>.scenario.json`: the goal, the policy, the owner's answers and the action sequence as the script, with a fake site guessed from the steps (every host becomes `site-N.example.test`; a typed value is a `TODO`; nothing is unmasked) and the list of what is left to finish on stderr. It is a starting point, not a recording. See docs/runner.md, "Testing a change to the agent".
+
 ### Agent policies
 
 An **agent policy** sets what a run may spend (actions, model calls, active minutes, tokens, cost; `unlimited` is a limit left empty) and which model tiers it uses. Four built-ins exist (`economy`, `balanced`, `thorough`, `unlimited`); you can add your own in the web app or by importing a file.

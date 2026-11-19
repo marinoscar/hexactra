@@ -1,7 +1,7 @@
 // BrowserPort over the fabric session of one run.
 import { FabricError, type FabricClient } from '../../fabric/fabric.client';
-import { BrowserAborted, BrowserError, type ActionOp, type BrowserPort } from '../browser/browser-port';
-import { captureScreen, captureTrace, type Screen, type ScreenView, type TraceShot } from '../browser/vision';
+import { BrowserAborted, BrowserError, type ActionOp, type BrowserPort } from '@marinoscar/hexactra-browser-agent/browser-port';
+import { captureScreen, captureTrace, type Screen, type ScreenView, type TraceShot } from '@marinoscar/hexactra-browser-agent/vision';
 import { ACTION_TIMEOUT_MS, type FabricSession } from '../fabric-session';
 
 /** Stop ended the wait: `BrowserAborted`; any other fabric failure keeps its message; anything else is not the fabric's and passes through. */

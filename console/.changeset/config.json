@@ -1,0 +1,15 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [["@marinoscar/hexactra-agent", "@marinoscar/hexactra-browser-agent"]],
+  "linked": [],
+  "access": "public",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": ["api", "web", "cli", "mcp-ui", "@app/shared", "@hexactra/console-sdk"],
+  "privatePackages": {
+    "version": false,
+    "tag": false
+  }
+}

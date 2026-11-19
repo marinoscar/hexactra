@@ -1,6 +1,6 @@
 {
   "name": "api",
-  "version": "1.84.0",
+  "version": "1.85.0",
   "private": true,
   "engines": {
     "node": ">=24"
@@ -19,6 +19,9 @@
     "prisma:migrate:dev": "node scripts/prisma-env.js migrate dev",
     "prisma:seed": "node scripts/prisma-env.js db seed",
     "seed:runs": "ts-node --transpile-only scripts/seed-runs.ts",
+    "scenarios": "ts-node --transpile-only scripts/scenarios.ts",
+    "scenarios:schema": "ts-node --transpile-only scripts/scenarios.ts --write-schema",
+    "scenarios:live": "ts-node --transpile-only scripts/scenarios-live.ts",
     "db:compose": "platform db compose",
     "db:compose:check": "platform db compose --check",
     "db:sync": "platform db sync",
@@ -29,6 +32,8 @@
     "@app/shared": "*",
     "@fastify/cookie": "~11.0.2",
     "@fastify/multipart": "^10.0.0",
+    "@marinoscar/hexactra-agent": "0.1.0-next.0",
+    "@marinoscar/hexactra-browser-agent": "0.1.0-next.0",
     "@marinoscar/platform-api": "^0.1.0-next.39",
     "@marinoscar/platform-contract": "^0.1.0-next.39",
     "@marinoscar/platform-db": "^0.1.0-next.39",

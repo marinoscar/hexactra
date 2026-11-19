@@ -5,7 +5,7 @@ import { z } from 'zod';
 
 import { cell, type Cell, type FileInfo } from '../../../../connections/capabilities';
 import type { QuestionAction } from '../../../../questions/questions.contract';
-import { clip, defineRunnerTool, type RunnerTool } from '../../../harness';
+import { clip, defineRunnerTool, type RunnerTool } from '@marinoscar/hexactra-agent';
 import type { HostContext } from '../../context';
 import { loadRunArtifact } from './artifacts';
 import { commitCall } from './commit';

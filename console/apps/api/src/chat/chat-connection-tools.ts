@@ -13,7 +13,7 @@ import type { HostDeps } from '../runner/host/deps';
 import { mailRead, mailSearch } from '../runner/host/tools/connections/mail';
 import { calendarFreeBusy, calendarList } from '../runner/host/tools/connections/calendar';
 import { docsRead, docsSearch, sheetRead } from '../runner/host/tools/connections/docs';
-import type { RunnerTool } from '../runner/harness';
+import type { RunnerTool } from '@marinoscar/hexactra-agent';
 
 /** The only tools a chat turn has: reading. Pinned by a test; a write tool here would bypass the gates. */
 export const CHAT_CONNECTION_TOOLS: RunnerTool<HostContext>[] = [mailSearch, mailRead, calendarList, calendarFreeBusy, docsSearch, docsRead, sheetRead];

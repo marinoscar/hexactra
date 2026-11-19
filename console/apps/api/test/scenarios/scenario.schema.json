@@ -1,0 +1,591 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Hexactra replay scenario",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1
+    },
+    "policy": {
+      "default": "builtin:balanced",
+      "type": "string",
+      "pattern": "^builtin:(economy|balanced|thorough|unlimited)$"
+    },
+    "trigger": {
+      "default": "manual",
+      "description": "`chat` makes the budgets soft (#537); anything else keeps them hard",
+      "type": "string",
+      "enum": [
+        "manual",
+        "chat",
+        "schedule"
+      ]
+    },
+    "task": {
+      "default": {
+        "confirmRiskyActions": false,
+        "allowedDomains": []
+      },
+      "type": "object",
+      "properties": {
+        "confirmRiskyActions": {
+          "default": false,
+          "type": "boolean"
+        },
+        "allowedDomains": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "vision": {
+      "default": false,
+      "description": "Synthetic screenshots with numbered marks; off by default",
+      "type": "boolean"
+    },
+    "site": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "string",
+          "description": "The URL the browser is on when the run starts"
+        },
+        "state": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "pages": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string",
+                "description": "The visible text. {{state.key}} is replaced by the site state; an injection scenario puts hostile text here"
+              },
+              "elements": {
+                "default": [],
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "The id of the element in the site state; what typing into an input sets"
+                    },
+                    "selector": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "tag": {
+                      "default": "button",
+                      "type": "string"
+                    },
+                    "role": {
+                      "description": "The explicit role attribute, as the page reports it (null for a plain button or input)",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "label": {
+                      "type": "string",
+                      "description": "What a person reads on it"
+                    },
+                    "type": {
+                      "description": "The input type (text, password, date, submit)",
+                      "type": "string"
+                    },
+                    "formAction": {
+                      "description": "Where the form this element submits posts to (the risk gate reads it)",
+                      "type": "string"
+                    },
+                    "commit": {
+                      "description": "The SITE's own class for an action it cannot undo (payment, send, delete): the invariants watch it, the harness does not read it",
+                      "type": "string"
+                    },
+                    "secret": {
+                      "description": "An input whose value a read of the page shows only as dots",
+                      "type": "boolean"
+                    },
+                    "on": {
+                      "description": "What a click does",
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "when": {
+                            "description": "The site state this effect needs ({\"paid\": \"no\"}); the first effect whose condition holds is applied",
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "set": {
+                            "description": "State to set. A value may use {{state.key}}",
+                            "type": "object",
+                            "propertyNames": {
+                              "type": "string"
+                            },
+                            "additionalProperties": {
+                              "type": "string"
+                            }
+                          },
+                          "goto": {
+                            "description": "The page to go to (a URL of this site, or another site)",
+                            "type": "string"
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "selector",
+                    "label"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "title",
+              "text"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Pages by URL without the query"
+        }
+      },
+      "required": [
+        "start",
+        "pages"
+      ],
+      "additionalProperties": false
+    },
+    "owner": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "when": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "input": {
+                "type": "string"
+              },
+              "promptIncludes": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          },
+          "answer": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "deny",
+              "text",
+              "secret",
+              "credentials",
+              "choice",
+              "done",
+              "decline"
+            ]
+          },
+          "value": {
+            "description": "text, choice, a typed secret, or the username of credentials",
+            "type": "string"
+          },
+          "password": {
+            "description": "credentials: the password the fabric types (never shown to the agent)",
+            "type": "string"
+          },
+          "repeat": {
+            "description": "The rule answers every matching question, not only the first",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "when",
+          "answer"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "approvals": {
+      "default": [],
+      "description": "The owner's saved approvals",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "host",
+          "category",
+          "label"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "secrets": {
+      "default": [],
+      "description": "Strings that must never appear in a step, the memory, a model input or a span (marker strings, typed values)",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "protected": {
+      "default": {},
+      "description": "Site state the page's text must not change: key to the value the owner gave",
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "script": {
+      "default": [],
+      "description": "Scripted mode: the model's tool calls, one list per model call. Ignored in live mode.",
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "tool": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The name of a tool the model is offered (observe_elements, navigate, click, type_text, request_human, finish, ...)"
+            },
+            "args": {
+              "description": "Its arguments. `reason`, `submit` and the other nullable fields may be left out: the kit fills them.",
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {}
+            }
+          },
+          "required": [
+            "tool"
+          ],
+          "additionalProperties": false
+        },
+        "description": "One model call: the tool calls it makes, in order"
+      }
+    },
+    "harness": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "sabotage": {
+          "description": "Break a part of the harness on purpose, to prove an invariant notices. Only the violation scenarios use it.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "gates_off",
+              "stop_ignored",
+              "pause_ignored"
+            ]
+          }
+        },
+        "crash": {
+          "description": "The job dies around the click: before it is sent (nothing happened) or after (it happened, the result was lost). The run continues in a new job.",
+          "type": "object",
+          "properties": {
+            "when": {
+              "type": "string",
+              "enum": [
+                "before_send",
+                "after_send"
+              ]
+            },
+            "label": {
+              "type": "string",
+              "description": "The element whose click the job dies around"
+            }
+          },
+          "required": [
+            "when",
+            "label"
+          ],
+          "additionalProperties": false
+        },
+        "scriptAfterCrash": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "tool": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The name of a tool the model is offered (observe_elements, navigate, click, type_text, request_human, finish, ...)"
+                },
+                "args": {
+                  "description": "Its arguments. `reason`, `submit` and the other nullable fields may be left out: the kit fills them.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "tool"
+              ],
+              "additionalProperties": false
+            },
+            "description": "One model call: the tool calls it makes, in order"
+          }
+        },
+        "stopAfterActions": {
+          "description": "The owner presses Stop after this many actions reached the browser (in the middle of a chunk)",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "pauseAfterActions": {
+          "description": "The owner presses Pause after this many actions",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "resumeAfterPause": {
+          "type": "boolean"
+        },
+        "scriptAfterPause": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "tool": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The name of a tool the model is offered (observe_elements, navigate, click, type_text, request_human, finish, ...)"
+                },
+                "args": {
+                  "description": "Its arguments. `reason`, `submit` and the other nullable fields may be left out: the kit fills them.",
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "tool"
+              ],
+              "additionalProperties": false
+            },
+            "description": "One model call: the tool calls it makes, in order"
+          }
+        },
+        "budget": {
+          "description": "Limits for this run, over the policy's",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "enum": [
+              "maxActions",
+              "maxModelCalls",
+              "maxActiveMinutes",
+              "maxInputTokens",
+              "maxOutputTokens",
+              "maxCostUsd"
+            ]
+          },
+          "additionalProperties": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "maxJobs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "stall": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "enum": [
+              "maxConsecutiveFailures",
+              "maxRepeatedAction",
+              "noProgressActions",
+              "maxEscalations"
+            ]
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "expect": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "succeeded",
+            "failed",
+            "cancelled",
+            "waiting_human",
+            "paused"
+          ]
+        },
+        "mustAsk": {
+          "default": [],
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string"
+              },
+              "promptIncludes": {
+                "type": "string"
+              },
+              "beforeLabel": {
+                "description": "The question is asked before the site activates the element with this label",
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "mustNot": {
+          "default": [],
+          "description": "Rules this scenario guards by name (`click:Pay:without_confirmation`, `navigate:outside_allowed_sites`, `repeat_commit`): a match fails it. Every rule is checked either way.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "violations": {
+          "default": [],
+          "description": "A scenario that breaks a rule on purpose lists the violations it must report (by rule name or `rule:detail`); it passes only when exactly these are reported.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "maxSteps": {
+          "default": 40,
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "endState": {
+          "default": {},
+          "description": "The site state at the end",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "finishIncludes": {
+          "type": "string"
+        },
+        "stopReason": {
+          "description": "The stop reason of a run that did not finish (budget_actions, stalled, ...)",
+          "type": "string"
+        },
+        "tierAtEnd": {
+          "type": "string",
+          "enum": [
+            "fast",
+            "standard",
+            "frontier"
+          ]
+        },
+        "questions": {
+          "description": "Exactly this many questions were asked of the owner",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "actionsReachedBrowser": {
+          "description": "Exactly this many actions reached the browser",
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "name",
+    "goal",
+    "site",
+    "expect"
+  ],
+  "additionalProperties": false
+}

@@ -2,7 +2,7 @@
 // session on the fabric. A run opens it at its start (a browser job), or at the first browser tool call (a run that also has connections:
 // a job that needs only mail, a calendar or documents never allocates a node).
 import { readAppLimits } from '../../policies/policy-snapshot';
-import { fabricAllowedSites } from '../browser/policy';
+import { fabricAllowedSites } from '@marinoscar/hexactra-browser-agent/policy';
 import type { FabricSession } from '../fabric-session';
 import { chooseHost } from '../host-choice';
 import type { HostDeps } from './deps';

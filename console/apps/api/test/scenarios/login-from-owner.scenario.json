@@ -1,0 +1,36 @@
+{
+  "$schema": "./scenario.schema.json",
+  "name": "a login asked from the owner",
+  "description": "One request for the username and password; the agent types the username, the fabric types the password. The password is in no step, memory, model input or span.",
+  "goal": "Read the balance of my Checking account",
+  "task": { "confirmRiskyActions": false, "allowedDomains": ["bank.example.test"] },
+  "secrets": ["pw-invented-8271-qz"],
+  "site": {
+    "start": "https://bank.example.test/login",
+    "state": {},
+    "pages": {
+      "https://bank.example.test/login": {
+        "title": "Sign in",
+        "text": "Sign in to Example Bank.",
+        "elements": [
+          { "id": "user", "selector": "#user", "tag": "input", "type": "text", "label": "Username" },
+          { "id": "pass", "selector": "#pass", "tag": "input", "type": "password", "label": "Password", "secret": true },
+          { "id": "signin", "selector": "#signin", "tag": "button", "label": "Sign in", "on": [{ "set": { "signedIn": "yes" }, "goto": "https://bank.example.test/accounts" }] }
+        ]
+      },
+      "https://bank.example.test/accounts": { "title": "Accounts", "text": "Checking: 1,204.00. Savings: 3,500.00.", "elements": [] }
+    }
+  },
+  "owner": [{ "when": { "kind": "login" }, "answer": "credentials", "value": "person.a", "password": "pw-invented-8271-qz" }],
+  "script": [
+    [{ "tool": "request_human", "args": { "kind": "login", "prompt": "Sign in to Example Bank", "input": "credentials" } }],
+    [
+      { "tool": "type_text", "args": { "selector": "#user", "text": "person.a" } },
+      { "tool": "type_handoff_secret", "args": { "selector": "#pass" } },
+      { "tool": "click", "args": { "selector": "#signin" } },
+      { "tool": "read_text" }
+    ],
+    [{ "tool": "finish", "args": { "success": true, "result": "The Checking balance is 1,204.00." } }]
+  ],
+  "expect": { "status": "succeeded", "mustAsk": [{ "kind": "login" }], "endState": { "signedIn": "yes", "pass": "pw-invented-8271-qz" }, "finishIncludes": "1,204.00", "maxSteps": 12 }
+}
