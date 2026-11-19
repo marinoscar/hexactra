@@ -44,7 +44,7 @@ A secret, a sign-in, a code, a choice and a question without a known site are ne
 
 The rule is created by `createFromAnswer` **in the same transaction as the answer**: both happen or neither. A second identical tick returns the same rule. The response's `ruleId` names it.
 
-**In the run** (`apps/api/src/runner/goal-runner.service.ts`):
+**In the run** (the risk gate `apps/api/src/runner/browser/gates/risk-gate.ts`, the `request_human` tool `runner/browser/tools/request-human.ts` and the bindings `runner/host/approvals-port.ts`):
 
 - **Gate.** Where a click would be refused, the runner first asks `ApprovalRulesService.match` with the page's registrable domain, the verdict's category and the normalised label, the run's task and chat, and the amount when the owner's inputs make one known (the one `money` parameter of the task, #552; otherwise unknown). On a match the click is carried out, the step's `args.approval = { ruleId }` and its summary says "allowed by a saved approval: …", the use is recorded, and the step is a confirmed action "by saved approval" (#540). A rule applies only when the page itself described the target: never when that read failed or the target is in a cross-origin frame.
 - **Ask.** `request_human` with `kind: confirmation` and a `topic`: on a matching `ask` rule the tool answers "The owner has a standing approval for this on this site. Go ahead." No question is created; a `handoff` step with `action: pre_approved` is recorded and it is not an action (no budget, no stall count).

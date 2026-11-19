@@ -1,6 +1,9 @@
 import type { AiDefinedTool } from '@marinoscar/platform-api/ai';
 
 import { maskSensitive } from '../tasks/mask';
+import { stoppedResult as stoppedText } from './harness/outcome-text';
+import { PAUSED_TEXT, STOPPED_TEXT } from './harness/types';
+import { withinMs } from './harness/time';
 import type { RunEvent } from '../tasks/run-events';
 
 /** Thrown by `throwIfRequested`: the owner pressed Stop. */
@@ -19,11 +22,7 @@ export class RunPauseRequested extends Error {
   }
 }
 
-/** What the model reads when a tool is not carried out because the owner pressed Stop. */
-export const STOPPED_TEXT = 'Stopped by the owner.';
-
-/** What the model reads when a tool is not carried out because the owner paused the run (E38.2). The chunk ends; nothing was done. */
-export const PAUSED_TEXT = 'The owner paused the run. This was not done.';
+export { PAUSED_TEXT, STOPPED_TEXT };
 
 /** How often the database flag is read while a job works (the guarantee when the API and the worker are not one process). */
 export const STOP_POLL_MS = 1_000;
@@ -178,17 +177,7 @@ export function stoppable(
 
 /** The result of a run its owner stopped: what the last completed step was, masked. */
 export function stoppedResult(log: readonly string[]): string {
-  const last = [...log].reverse().find((l) => /^\d+\. /.test(l));
-  if (!last) return 'Stopped by the owner before any step was completed.';
-  return `Stopped by the owner. The last completed step was: ${maskSensitive(last.length > 400 ? `${last.slice(0, 399)}…` : last).text}`;
+  return stoppedText(log, (l) => maskSensitive(l).text);
 }
 
-/** Resolve with `fallback` when `work` takes longer than `ms`: a slow extra never delays a Stop. */
-export async function withinMs<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([work, new Promise<T>((resolve) => (timer = setTimeout(() => resolve(fallback), ms)))]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
+export { withinMs };
