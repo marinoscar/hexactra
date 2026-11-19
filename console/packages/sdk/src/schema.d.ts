@@ -5645,6 +5645,234 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/memories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your memories
+         * @description Active memories by default (`status` picks others). `kind` filters; `q` searches the label, the aliases and the attribute values, ignoring case.
+         *
+         *     **Requires:** authentication, plus permission `memories:read`.
+         */
+        get: operations["memories_list"];
+        put?: never;
+        /**
+         * Add a memory
+         * @description Its `source` is always `owner`. Refused with `422 MEMORY_HOLDS_SECRET` when a field looks like a password, a code or a full card, account or Social Security number; `409 MEMORY_LABEL_TAKEN` and `409 MEMORY_LIMIT` (500 active).
+         *
+         *     **Requires:** authentication, plus permission `memories:write`.
+         */
+        post: operations["memories_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memories/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export your memories as a JSON file
+         * @description A `hexactra.memories` file (`formatVersion` 1) of your active and archived memories: kind, label, aliases, attributes, note, status, source and dates. No ids of the memory, a run or a chat.
+         *
+         *     **Requires:** authentication, plus permission `memories:read`.
+         */
+        get: operations["memories_export"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one memory
+         * @description With `history`: the older versions it superseded, newest first.
+         *
+         *     **Requires:** authentication, plus permission `memories:read`.
+         */
+        get: operations["memories_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a memory
+         * @description Permanently, with its older versions.
+         *
+         *     **Requires:** authentication, plus permission `memories:write`.
+         */
+        delete: operations["memories_remove"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit a memory
+         * @description The label, aliases, note and kind. A value changes through `POST /memories/{id}/supersede`, which keeps the old version in the history.
+         *
+         *     **Requires:** authentication, plus permission `memories:write`.
+         */
+        patch: operations["memories_update"];
+        trace?: never;
+    };
+    "/api/memories/{id}/supersede": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace a memory with a new version
+         * @description Creates the new version with these attributes and marks the old one `superseded`, in one transaction. A superseded version is never given to the agent.
+         *
+         *     **Requires:** authentication, plus permission `memories:write`.
+         */
+        post: operations["memories_supersede"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memories/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a memory
+         * @description An archived memory is kept but not given to the agent.
+         *
+         *     **Requires:** authentication, plus permission `memories:write`.
+         */
+        post: operations["memories_archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memories/{id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unarchive a memory
+         * @description Makes it active again (the label rule and the limit apply).
+         *
+         *     **Requires:** authentication, plus permission `memories:write`.
+         */
+        post: operations["memories_unarchive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/approval-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your saved approvals
+         * @description Steps you told the agent not to ask about again, newest first, and whether "Pause all" is on (`paused`). A rule matches only on its site (the registrable domain of the page's real address), its kind and category and the exact label of the element (digits compared as `#`), within its limits. Rules are made only by ticking "Don't ask again" on a request; nothing here creates one.
+         *
+         *     **Requires:** authentication, plus permission `approvals:read`.
+         */
+        get: operations["approvalRules_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/approval-rules/paused": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Pause or resume every saved approval
+         * @description Body `{ paused }`. While paused, no rule matches: every step and question is asked again. The rules themselves are kept.
+         *
+         *     **Requires:** authentication, plus permission `approvals:write`.
+         */
+        put: operations["approvalRules_setPaused"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/approval-rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one saved approval
+         * @description The rule with its newest 20 uses (run and time).
+         *
+         *     **Requires:** authentication, plus permission `approvals:read`.
+         */
+        get: operations["approvalRules_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a saved approval
+         * @description Permanent. The next time the step comes up, you are asked again.
+         *
+         *     **Requires:** authentication, plus permission `approvals:write`.
+         */
+        delete: operations["approvalRules_remove"];
+        options?: never;
+        head?: never;
+        /**
+         * Narrow, disable or re-enable a saved approval
+         * @description Only `enabled`, `maxAmount`, `expiresAt`, `taskId` and `conversationId`, and only to narrow: set or lower the amount limit, set or bring forward the expiry, add a task or chat scope, or disable. Re-enabling a rule you disabled is allowed. A looser rule is made by answering a new request.
+         *
+         *     **Requires:** authentication, plus permission `approvals:write`.
+         */
+        patch: operations["approvalRules_patch"];
+        trace?: never;
+    };
     "/api/connected-apps": {
         parameters: {
             query?: never;
@@ -6038,8 +6266,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Export a run as a JSON trace file
-         * @description A `hexactra.run-trace` file (`formatVersion` 1): the run, its policy, budget and models, every step with its question and answer, the masked trace screenshots (`screenshots=embed`, the default; `none` leaves the images out) and the messages of its chat. Every string is masked (`masking.hits` counts what was); there is no unmasked export. Never the transcript, a token, a withheld answer or an AI app's grant. A live run exports with `partial: true`. 404 `RUN_NOT_FOUND` for a run that is not yours; 413 `EXPORT_TOO_LARGE` over 50 MB (use `screenshots=none`); 429 `EXPORT_RATE_LIMITED` past 10 exports a minute.
+         * Export a run as a JSON trace file or a PDF report
+         * @description A `hexactra.run-trace` file (`formatVersion` 1): the run, its policy, budget and models, every step with its question and answer, the masked trace screenshots (`screenshots=embed`, the default; `none` leaves the images out) and the messages of its chat. Every string is masked (`masking.hits` counts what was); there is no unmasked export. Never the transcript, a token, a withheld answer or an AI app's grant. A live run exports with `partial: true`. `format=pdf` renders the same masked trace as a PDF report (`application/pdf`; `paper=a4`, the default, or `letter`): the goal and outcome, the confirmed steps, the questions and answers, the budget, the timeline with the key-moment screenshots, and a footer on every page; a live run prints a partial-report banner. 404 `RUN_NOT_FOUND` for a run that is not yours; 413 `EXPORT_TOO_LARGE` over 50 MB of screenshots (use `screenshots=none`); 429 `EXPORT_RATE_LIMITED` past 10 exports a minute (JSON and PDF together).
          *
          *     **Requires:** authentication, plus permission `runs:read`.
          */
@@ -7561,6 +7789,18 @@ export interface components {
              * @example INTERNAL_ERROR
              * @example ROLE_NOT_ASSIGNABLE
              * @example INVALID_RETURN_URI
+             * @example MEMORY_NOT_FOUND
+             * @example MEMORY_LABEL_TAKEN
+             * @example MEMORY_LIMIT
+             * @example MEMORY_NOT_ACTIVE
+             * @example MEMORY_HOLDS_SECRET
+             * @example INVALID_CRON
+             * @example INVALID_TIMEZONE
+             * @example CRON_TOO_FREQUENT
+             * @example SCHEDULE_NOT_IN_TASK
+             * @example INVALID_TASK_CURSOR
+             * @example SCHEDULE_LIMIT
+             * @example NO_SCHEDULES
              * @example POLICY_PIN_INVALID
              * @example POLICY_REF_INVALID
              * @example POLICY_BUILTIN_READONLY
@@ -7592,13 +7832,6 @@ export interface components {
              * @example COUNT_CHANGED
              * @example EXPORT_TOO_LARGE
              * @example EXPORT_RATE_LIMITED
-             * @example INVALID_CRON
-             * @example INVALID_TIMEZONE
-             * @example CRON_TOO_FREQUENT
-             * @example SCHEDULE_NOT_IN_TASK
-             * @example INVALID_TASK_CURSOR
-             * @example SCHEDULE_LIMIT
-             * @example NO_SCHEDULES
              * @example CONFIRMATION_REQUIRED
              * @example CONFIRMATION_PENDING
              * @example CONFIRMATION_DENIED
@@ -7609,6 +7842,10 @@ export interface components {
              * @example WEBHOOK_EVENT_UNKNOWN
              * @example WEBHOOK_EVENT_NOT_PERMITTED
              * @example WEBHOOK_LIMIT_REACHED
+             * @example APPROVAL_RULE_NOT_FOUND
+             * @example RULE_CANNOT_WIDEN
+             * @example APPROVAL_RULE_INVALID
+             * @example APPROVAL_RULE_DUPLICATE
              * @example CHAT_NOT_FOUND
              * @example CHAT_ARCHIVED
              * @example CHAT_RUN_LIVE
@@ -8561,6 +8798,10 @@ export interface components {
                     };
                 };
             };
+            memories?: {
+                /** @description Let the agent suggest memories for you to approve. On by default. */
+                suggest: boolean;
+            };
             runs?: {
                 /** @description Finished runs older than this many days are deleted. `null`: no age limit. */
                 keepDays: number | null;
@@ -8570,6 +8811,10 @@ export interface components {
                 keepFailedDays: number | null;
                 /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                 noticeSentAt?: string | null;
+            };
+            approvals?: {
+                /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
+                paused: boolean;
             };
             notifications?: {
                 [key: string]: {
@@ -8636,6 +8881,10 @@ export interface components {
                     };
                 };
             };
+            memories?: {
+                /** @description Let the agent suggest memories for you to approve. On by default. */
+                suggest: boolean;
+            };
             runs?: {
                 /** @description Finished runs older than this many days are deleted. `null`: no age limit. */
                 keepDays: number | null;
@@ -8645,6 +8894,10 @@ export interface components {
                 keepFailedDays: number | null;
                 /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                 noticeSentAt?: string | null;
+            };
+            approvals?: {
+                /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
+                paused: boolean;
             };
             notifications?: {
                 [key: string]: {
@@ -8713,6 +8966,10 @@ export interface components {
                     };
                 } | null;
             } | null;
+            memories?: {
+                /** @description Let the agent suggest memories for you to approve. On by default. */
+                suggest?: boolean;
+            } | null;
             runs?: {
                 /** @description Finished runs older than this many days are deleted. `null`: no age limit. */
                 keepDays?: number | null;
@@ -8722,6 +8979,9 @@ export interface components {
                 keepFailedDays?: number | null;
                 /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                 noticeSentAt?: string | null;
+            } | null;
+            approvals?: {
+                paused?: boolean;
             } | null;
             notifications?: {
                 [key: string]: {
@@ -9782,6 +10042,10 @@ export interface components {
                         };
                     };
                 };
+                memories?: {
+                    /** @description Let the agent suggest memories for you to approve. On by default. */
+                    suggest: boolean;
+                };
                 runs?: {
                     /** @description Finished runs older than this many days are deleted. `null`: no age limit. */
                     keepDays: number | null;
@@ -9791,6 +10055,10 @@ export interface components {
                     keepFailedDays: number | null;
                     /** @description Set by the server: when the user chose a rule, or was told that the default rule starts deleting. Until then the nightly job deletes nothing. */
                     noticeSentAt?: string | null;
+                };
+                approvals?: {
+                    /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
+                    paused: boolean;
                 };
                 notifications?: {
                     [key: string]: {
@@ -13980,6 +14248,316 @@ export interface components {
             /** @description Unique among the user's policies. */
             name: string;
         };
+        MemoryResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description `person`, `account`, `preference` or `fact`.
+             * @enum {string}
+             */
+            kind: "person" | "account" | "preference" | "fact";
+            label: string;
+            aliases: string[];
+            attributes: {
+                [key: string]: string;
+            };
+            note: string | null;
+            /** @enum {string} */
+            status: "active" | "superseded" | "archived";
+            /**
+             * @description `owner`: you typed it. `agent_proposed`: the agent suggested it and you approved it.
+             * @enum {string}
+             */
+            source: "owner" | "agent_proposed";
+            /** @description The run an agent-proposed memory came from; the run may have been deleted since. */
+            sourceRunId: string | null;
+            /** @description The chat an agent-proposed memory came from; it may have been deleted since. */
+            sourceConversationId: string | null;
+            /** @description The newer version, for a superseded memory. */
+            supersededById: string | null;
+            lastUsedAt: string | null;
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            /** @description ISO 8601 timestamp */
+            updatedAt: string;
+        };
+        /** @description Your memories (active and archived; not the superseded versions) as a portable JSON file: no ids, no user, nothing secret. */
+        MemoryFileDto: {
+            /** @constant */
+            kind: "hexactra.memories";
+            /** @description Version of this file format. */
+            formatVersion: number;
+            /** @description ISO 8601 timestamp of the export. */
+            exportedAt: string;
+            memories: {
+                /** @enum {string} */
+                kind: "person" | "account" | "preference" | "fact";
+                label: string;
+                aliases: string[];
+                attributes: {
+                    [key: string]: string;
+                };
+                note: string | null;
+                /** @enum {string} */
+                status: "active" | "archived";
+                /** @enum {string} */
+                source: "owner" | "agent_proposed";
+                lastUsedAt: string | null;
+                createdAt: string;
+            }[];
+        };
+        MemoryDetailResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description `person`, `account`, `preference` or `fact`.
+             * @enum {string}
+             */
+            kind: "person" | "account" | "preference" | "fact";
+            label: string;
+            aliases: string[];
+            attributes: {
+                [key: string]: string;
+            };
+            note: string | null;
+            /** @enum {string} */
+            status: "active" | "superseded" | "archived";
+            /**
+             * @description `owner`: you typed it. `agent_proposed`: the agent suggested it and you approved it.
+             * @enum {string}
+             */
+            source: "owner" | "agent_proposed";
+            /** @description The run an agent-proposed memory came from; the run may have been deleted since. */
+            sourceRunId: string | null;
+            /** @description The chat an agent-proposed memory came from; it may have been deleted since. */
+            sourceConversationId: string | null;
+            /** @description The newer version, for a superseded memory. */
+            supersededById: string | null;
+            lastUsedAt: string | null;
+            /** @description ISO 8601 timestamp */
+            createdAt: string;
+            /** @description ISO 8601 timestamp */
+            updatedAt: string;
+            /** @description The older versions this one replaced, newest first. */
+            history: {
+                /** Format: uuid */
+                id: string;
+                /**
+                 * @description `person`, `account`, `preference` or `fact`.
+                 * @enum {string}
+                 */
+                kind: "person" | "account" | "preference" | "fact";
+                label: string;
+                aliases: string[];
+                attributes: {
+                    [key: string]: string;
+                };
+                note: string | null;
+                /** @enum {string} */
+                status: "active" | "superseded" | "archived";
+                /**
+                 * @description `owner`: you typed it. `agent_proposed`: the agent suggested it and you approved it.
+                 * @enum {string}
+                 */
+                source: "owner" | "agent_proposed";
+                /** @description The run an agent-proposed memory came from; the run may have been deleted since. */
+                sourceRunId: string | null;
+                /** @description The chat an agent-proposed memory came from; it may have been deleted since. */
+                sourceConversationId: string | null;
+                /** @description The newer version, for a superseded memory. */
+                supersededById: string | null;
+                lastUsedAt: string | null;
+                /** @description ISO 8601 timestamp */
+                createdAt: string;
+                /** @description ISO 8601 timestamp */
+                updatedAt: string;
+            }[];
+        };
+        CreateMemoryDto: {
+            /**
+             * @description `person`, `account`, `preference` or `fact`.
+             * @enum {string}
+             */
+            kind: "person" | "account" | "preference" | "fact";
+            /** @description What you call it: "My wife", "Checking account". Unique among your active memories, ignoring case. */
+            label: string;
+            /** @description Other words that mean the same ("wife", "paula"). Stored lower-cased; at most 10. */
+            aliases?: string[];
+            /**
+             * @description Named values: `{ "name": "…", "phone": "…" }`. At most 20 keys, 500 characters a value. Never a password, a code or a full card, account or Social Security number: keep the last four digits.
+             * @default {}
+             */
+            attributes?: {
+                [key: string]: string;
+            };
+            /** @description Free text you add. At most 1000 characters. Shown as plain text. */
+            note?: string | null;
+        };
+        UpdateMemoryDto: {
+            /**
+             * @description `person`, `account`, `preference` or `fact`.
+             * @enum {string}
+             */
+            kind?: "person" | "account" | "preference" | "fact";
+            /** @description What you call it: "My wife", "Checking account". Unique among your active memories, ignoring case. */
+            label?: string;
+            /** @description Other words that mean the same ("wife", "paula"). Stored lower-cased; at most 10. */
+            aliases?: string[];
+            /** @description Free text you add. At most 1000 characters. Shown as plain text. */
+            note?: string | null;
+        };
+        SupersedeMemoryDto: {
+            /** @description Named values: `{ "name": "…", "phone": "…" }`. At most 20 keys, 500 characters a value. Never a password, a code or a full card, account or Social Security number: keep the last four digits. */
+            attributes: {
+                [key: string]: string;
+            };
+            /**
+             * @description `person`, `account`, `preference` or `fact`.
+             * @enum {string}
+             */
+            kind?: "person" | "account" | "preference" | "fact";
+            /** @description What you call it: "My wife", "Checking account". Unique among your active memories, ignoring case. */
+            label?: string;
+            /** @description Other words that mean the same ("wife", "paula"). Stored lower-cased; at most 10. */
+            aliases?: string[];
+            /** @description Free text you add. At most 1000 characters. Shown as plain text. */
+            note?: string | null;
+        };
+        ApprovalRulesListResponseDto: {
+            /** @description Whether "Pause all" is on: while it is, no rule matches. */
+            paused: boolean;
+            rules: {
+                /** Format: uuid */
+                id: string;
+                /**
+                 * @description `gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own.
+                 * @enum {string}
+                 */
+                kind: "gate" | "ask";
+                /** @description The registrable domain it applies on. */
+                host: string;
+                /** @description For `gate`: payment, purchase, send, delete or submit. */
+                category: string | null;
+                /** @description For `gate`: the element's label, normalised (digits as `#`). For `ask`: the topic. */
+                matchKey: string;
+                /** @description What the rule allows, in plain words: "Press 'Pay' on bankofamerica.com". */
+                summary: string;
+                /** @description When set, only runs of this task. */
+                taskId: string | null;
+                /** @description The task's name, when the scope's task still exists. */
+                taskName: string | null;
+                /** @description When set, only runs of this chat. */
+                conversationId: string | null;
+                /** @description When set, only steps whose amount is known and not larger. */
+                maxAmount: number | null;
+                expiresAt: string | null;
+                enabled: boolean;
+                /** @description The question whose answer made the rule. */
+                createdFromQuestionId: string | null;
+                useCount: number;
+                lastUsedAt: string | null;
+                /** @description The run that last used it, while that run exists. */
+                lastUsedRunId: string | null;
+                createdAt: string;
+                updatedAt: string;
+            }[];
+        };
+        ApprovalsPausedResponseDto: {
+            paused: boolean;
+        };
+        SetApprovalsPausedDto: {
+            /** @description `true` turns every saved approval off until it is set back to `false`. */
+            paused: boolean;
+        };
+        ApprovalRuleDetailResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description `gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own.
+             * @enum {string}
+             */
+            kind: "gate" | "ask";
+            /** @description The registrable domain it applies on. */
+            host: string;
+            /** @description For `gate`: payment, purchase, send, delete or submit. */
+            category: string | null;
+            /** @description For `gate`: the element's label, normalised (digits as `#`). For `ask`: the topic. */
+            matchKey: string;
+            /** @description What the rule allows, in plain words: "Press 'Pay' on bankofamerica.com". */
+            summary: string;
+            /** @description When set, only runs of this task. */
+            taskId: string | null;
+            /** @description The task's name, when the scope's task still exists. */
+            taskName: string | null;
+            /** @description When set, only runs of this chat. */
+            conversationId: string | null;
+            /** @description When set, only steps whose amount is known and not larger. */
+            maxAmount: number | null;
+            expiresAt: string | null;
+            enabled: boolean;
+            /** @description The question whose answer made the rule. */
+            createdFromQuestionId: string | null;
+            useCount: number;
+            lastUsedAt: string | null;
+            /** @description The run that last used it, while that run exists. */
+            lastUsedRunId: string | null;
+            createdAt: string;
+            updatedAt: string;
+            /** @description The newest 20 uses. */
+            uses: {
+                /** @description The run, while it exists. */
+                runId: string | null;
+                stepSeq: number | null;
+                usedAt: string;
+            }[];
+        };
+        ApprovalRuleResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description `gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own.
+             * @enum {string}
+             */
+            kind: "gate" | "ask";
+            /** @description The registrable domain it applies on. */
+            host: string;
+            /** @description For `gate`: payment, purchase, send, delete or submit. */
+            category: string | null;
+            /** @description For `gate`: the element's label, normalised (digits as `#`). For `ask`: the topic. */
+            matchKey: string;
+            /** @description What the rule allows, in plain words: "Press 'Pay' on bankofamerica.com". */
+            summary: string;
+            /** @description When set, only runs of this task. */
+            taskId: string | null;
+            /** @description The task's name, when the scope's task still exists. */
+            taskName: string | null;
+            /** @description When set, only runs of this chat. */
+            conversationId: string | null;
+            /** @description When set, only steps whose amount is known and not larger. */
+            maxAmount: number | null;
+            expiresAt: string | null;
+            enabled: boolean;
+            /** @description The question whose answer made the rule. */
+            createdFromQuestionId: string | null;
+            useCount: number;
+            lastUsedAt: string | null;
+            /** @description The run that last used it, while that run exists. */
+            lastUsedRunId: string | null;
+            createdAt: string;
+            updatedAt: string;
+        };
+        PatchApprovalRuleDto: {
+            /** @description Disable (`false`) or re-enable (`true`) the rule. */
+            enabled?: boolean;
+            /** @description The largest amount the rule allows. May be set or lowered; `null` (removing it) is refused when one is set. */
+            maxAmount?: number | null;
+            /** @description When the rule stops matching. May be set or brought forward; `null` (removing it) is refused when one is set. */
+            expiresAt?: string | null;
+            /** @description Limit the rule to one task. May be added; removing or changing a scope is refused. */
+            taskId?: string | null;
+            /** @description Limit the rule to one chat. May be added; removing or changing a scope is refused. */
+            conversationId?: string | null;
+        };
         ConnectedAppListResponseDto: {
             /** @description `oauth_clients.id` */
             clientId: string;
@@ -15302,6 +15880,8 @@ export interface components {
                 /** @enum {string} */
                 source: "provided" | "default" | "memory" | "asked" | "schedule";
             }[] | null;
+            /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
+            memoryIds: string[];
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -15465,6 +16045,8 @@ export interface components {
                     /** @enum {string} */
                     source: "provided" | "default" | "memory" | "asked" | "schedule";
                 }[] | null;
+                /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
+                memoryIds: string[];
                 /** @description ISO 8601 timestamp */
                 createdAt: string;
                 startedAt: string | null;
@@ -15938,6 +16520,8 @@ export interface components {
                 /** @enum {string} */
                 source: "provided" | "default" | "memory" | "asked" | "schedule";
             }[] | null;
+            /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
+            memoryIds: string[];
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -15995,6 +16579,14 @@ export interface components {
                 durationMs: number | null;
                 /** @description ISO 8601 timestamp */
                 createdAt: string;
+            }[];
+            /** @description The memories of `memoryIds` that still exist, with their labels (#553): the run page says "Used: …" */
+            memories: {
+                /** Format: uuid */
+                id: string;
+                label: string;
+                /** @enum {string} */
+                status: "active" | "superseded" | "archived";
             }[];
         };
         RunResponseDto: {
@@ -16160,6 +16752,8 @@ export interface components {
                 /** @enum {string} */
                 source: "provided" | "default" | "memory" | "asked" | "schedule";
             }[] | null;
+            /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
+            memoryIds: string[];
             /** @description ISO 8601 timestamp */
             createdAt: string;
             startedAt: string | null;
@@ -16173,8 +16767,11 @@ export interface components {
             runId: string | null;
             handoffId: string | null;
             browserBound: boolean;
-            /** @enum {string} */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "form";
+            /**
+             * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes; only the server creates one
+             * @enum {string}
+             */
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "memory" | "form";
             kind: string;
             prompt: string;
             options: {
@@ -16214,6 +16811,12 @@ export interface components {
                     pattern?: string;
                 };
             }[] | null;
+            /** @description The commitment the confirmation gate stopped (#550): the page host the browser reported, the category and the element label. Set by the server only. */
+            gate: {
+                host: string | null;
+                category: string;
+                label: string | null;
+            } | null;
             /** @enum {string} */
             status: "pending" | "answered" | "cancelled" | "expired";
             response: {
@@ -16230,6 +16833,11 @@ export interface components {
                 fields?: {
                     [key: string]: string;
                 };
+                /**
+                 * Format: uuid
+                 * @description memory (#553): the memory the approved proposal saved
+                 */
+                memoryId?: string;
                 channel?: string;
                 /** @description Who answered, e.g. user:<id> */
                 by?: string;
@@ -16252,10 +16860,25 @@ export interface components {
                 /** @description False: a name an MCP client gave itself over a personal access token */
                 verified: boolean;
             } | null;
+            /** @description False for a question no run waits on: a memory proposal (#553) */
+            blocking: boolean;
+            proposal: {
+                /** @enum {string} */
+                kind: "person" | "account" | "preference" | "fact";
+                label: string;
+                aliases: string[];
+                attributes: {
+                    [key: string]: string;
+                };
+                /** @description The active memory whose values this would replace */
+                supersedes: string | null;
+            } | null;
+            /** @description The chat a memory proposal came from (#553) */
+            conversationId: string | null;
         };
         CreateQuestionDto: {
             /** @enum {string} */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "form";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
             /**
              * @default other
              * @enum {string}
@@ -16304,6 +16927,15 @@ export interface components {
             fields?: {
                 [key: string]: string | number;
             };
+            memory?: {
+                /** @enum {string} */
+                kind?: "person" | "account" | "preference" | "fact";
+                label: string;
+                aliases?: string[];
+                attributes: {
+                    [key: string]: string;
+                };
+            };
             channel?: string;
         };
         /** @default {} */
@@ -16322,6 +16954,15 @@ export interface components {
             remember?: boolean;
             fields?: {
                 [key: string]: string | number;
+            };
+            memory?: {
+                /** @enum {string} */
+                kind?: "person" | "account" | "preference" | "fact";
+                label: string;
+                aliases?: string[];
+                attributes: {
+                    [key: string]: string;
+                };
             };
         };
         OpenDto: {
@@ -16349,7 +16990,7 @@ export interface components {
              * @default none
              * @enum {string}
              */
-            input?: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "form";
+            input?: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials";
             /** @enum {string} */
             kind: "captcha" | "code" | "passkey" | "login" | "confirmation" | "other";
             prompt: string;
@@ -16397,8 +17038,11 @@ export interface components {
             askedBy: string;
             kind: string;
             prompt: string;
-            /** @enum {string} */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "form";
+            /**
+             * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes; only the server creates one
+             * @enum {string}
+             */
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "memory" | "form";
             choices: string[];
             options: {
                 id: string;
@@ -16443,6 +17087,19 @@ export interface components {
             createdAt: string;
             /** @description ISO 8601 timestamp */
             expiresAt: string;
+            /** @description False for a memory proposal (#553): no run waits on it; the Inbox lists it in its own group */
+            blocking: boolean;
+            proposal: {
+                /** @enum {string} */
+                kind: "person" | "account" | "preference" | "fact";
+                label: string;
+                aliases: string[];
+                attributes: {
+                    [key: string]: string;
+                };
+                /** @description The active memory whose values this would replace */
+                supersedes: string | null;
+            } | null;
         };
         OkResponseDto: {
             /** @constant */
@@ -35589,6 +36246,748 @@ export interface operations {
             };
         };
     };
+    memories_list: {
+        parameters: {
+            query?: {
+                /** @description `person`, `account`, `preference` or `fact`. */
+                kind?: "person" | "account" | "preference" | "fact";
+                /** @description `active` (the default), `superseded`, `archived` or `all`. */
+                status?: "active" | "superseded" | "archived" | "all";
+                /** @description Searches the label, the aliases and the attribute values, ignoring case. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MemoryResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    memories_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMemoryDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MemoryResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    memories_export: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The memories as a `hexactra.memories` JSON file (not wrapped in the `data` envelope), sent as an attachment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MemoryFileDto"];
+                        /** @description Present when the endpoint supplies it (pagination) or when the global response interceptor adds it (`{ timestamp }`). Not every response carries one. */
+                        meta?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    memories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MemoryDetailResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    memories_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    memories_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMemoryDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MemoryResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    memories_supersede: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupersedeMemoryDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MemoryResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    memories_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MemoryResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    memories_unarchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["MemoryResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    approvalRules_list: {
+        parameters: {
+            query?: {
+                /** @description Only rules for this registrable domain ("bankofamerica.com"). */
+                host?: string;
+                /** @description Only enabled (`true`) or disabled (`false`) rules. */
+                enabled?: "true" | "false";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ApprovalRulesListResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    approvalRules_setPaused: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetApprovalsPausedDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ApprovalsPausedResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    approvalRules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ApprovalRuleDetailResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `APPROVAL_RULE_NOT_FOUND`: no such rule, or it is another user's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    approvalRules_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted, with its uses. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `APPROVAL_RULE_NOT_FOUND`: no such rule, or it is another user's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    approvalRules_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatchApprovalRuleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ApprovalRuleResponseDto"];
+                    };
+                };
+            };
+            /** @description `RULE_CANNOT_WIDEN`: the patch would loosen the rule (raise or remove a limit, lengthen or remove the expiry, remove or change a scope). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `APPROVAL_RULE_NOT_FOUND`: no such rule, or it is another user's. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
     connectedApps_list: {
         parameters: {
             query?: never;
@@ -36846,10 +38245,12 @@ export interface operations {
     runs_export: {
         parameters: {
             query?: {
-                /** @description `json` (the only format of this route; the PDF report is its own route). */
-                format?: "json";
-                /** @description `embed` (the default) puts each masked trace picture in `steps[].screenshot.data` as base64; `none` keeps the picture facts and leaves the images out (a much smaller file). */
+                /** @description `json` (the default): the run trace file. `pdf`: the run report (#543), rendered from the same masked trace. */
+                format?: "json" | "pdf";
+                /** @description `embed` (the default) puts each masked trace picture in the file (`steps[].screenshot.data` as base64, or in the report after its step); `none` leaves the images out (a much smaller file). */
                 screenshots?: "embed" | "none";
+                /** @description The PDF report's paper: `a4` (the default) or `letter`. Ignored for `json`. */
+                paper?: "a4" | "letter";
             };
             header?: never;
             path: {
@@ -36859,7 +38260,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The run trace file (not wrapped in the `data` envelope), sent as an attachment `hexactra-run-<first 8 of id>-<yyyymmdd>.json`. */
+            /** @description The run trace file (`format=json`, not wrapped in the `data` envelope) or the PDF report (`format=pdf`), sent as an attachment `hexactra-run-<first 8 of id>-<yyyymmdd>.json` or `.pdf`. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -36872,6 +38273,7 @@ export interface operations {
                             [key: string]: unknown;
                         };
                     };
+                    "application/pdf": string;
                 };
             };
             /** @description Unauthorized - Invalid or missing token */
@@ -36881,6 +38283,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorDto"];
+                    "application/pdf": components["schemas"]["ErrorDto"];
                 };
             };
             /** @description Forbidden - Insufficient permissions */
@@ -36890,6 +38293,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorDto"];
+                    "application/pdf": components["schemas"]["ErrorDto"];
                 };
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */

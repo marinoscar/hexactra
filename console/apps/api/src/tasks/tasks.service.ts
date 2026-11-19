@@ -173,8 +173,10 @@ export class TasksService {
       include: { steps: { orderBy: { seq: 'asc' }, include: { question: { select: STEP_QUESTION_SELECT } } } },
     });
     if (!r) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
+    // The memories it used (#553), by label: the ones that still exist.
+    const memories = r.memoryIds.length ? await this.db(userId).memory.findMany({ where: { id: { in: r.memoryIds } }, select: { id: true, label: true, status: true }, orderBy: { label: 'asc' } }) : [];
     // Steps carry the masked question and whether they have a trace picture, never its object key (#541).
-    return withCost({ ...r, steps: r.steps.map(stepView), confirmedActions: readConfirmedActions(r.confirmedActions) });
+    return withCost({ ...r, steps: r.steps.map(stepView), confirmedActions: readConfirmedActions(r.confirmedActions), memories });
   }
 
   /**
@@ -214,7 +216,8 @@ export class TasksService {
       });
       if (count === 1) {
         // A finished run asks nothing any more: withdraw its pending questions.
-        if (isTerminal(to)) await this.prisma.question.updateMany({ where: { runId: id, status: 'pending' }, data: { status: 'cancelled' } });
+        // A memory proposal (#553) is not a request of the run: it stays for its owner to answer.
+        if (isTerminal(to)) await this.prisma.question.updateMany({ where: { runId: id, status: 'pending', blocking: true }, data: { status: 'cancelled' } });
         if (to === 'running' && !run.startedAt) this.metrics.started(run.trigger);
         if (to === 'waiting_human') this.metrics.handoff();
         const saved = await db.run.findFirstOrThrow({ where: { id }, omit: { transcript: true } });

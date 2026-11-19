@@ -169,6 +169,46 @@ describe('the task draft the AI writes', () => {
     expect(await prisma.task.count({ where: { userId: alice.userId } })).toBe(0);
   });
 
+  it("defaults a person's phone from the owner's own memory, read from the memories table, and never shows the model its values (#556)", async () => {
+    const alice = await login('zelle-memory');
+    const bob = await login('zelle-memory-other');
+    const wife = await prisma.memory.create({ data: { userId: alice.userId, kind: 'person', label: 'My wife', aliases: ['wife'], attributes: { name: 'Person A', phone: '555-010-6020' }, source: 'owner' } });
+    // Archived and other people's memories are never offered.
+    await prisma.memory.create({ data: { userId: alice.userId, kind: 'person', label: 'Old contact', attributes: { phone: '555-010-1111' }, source: 'owner', status: 'archived' } });
+    await prisma.memory.create({ data: { userId: bob.userId, kind: 'person', label: 'Bob only', attributes: { phone: '555-010-2222' }, source: 'owner' } });
+    const chat = await chats.create(alice.userId, { title: 'Zelle' });
+    await chats.postUserMessage(alice.userId, chat.id, 'Send my wife $10 with Zelle');
+    const goal = 'Send {{Amount}} today to {{Recipient phone}} using Zelle';
+    const model = writer(
+      JSON.stringify({
+        name: 'Zelle to my wife',
+        goal,
+        parameters: [
+          { name: 'Amount', type: 'money' },
+          // Named by an alias: matched like the label.
+          { name: 'Recipient phone', type: 'phone', default: '555-010-6020', memory: 'wife', attribute: 'phone' },
+        ],
+      }),
+    );
+    const draft = await new ChatTaskDraftService(prisma, model.ai).draft(alice.userId, chat.id, null);
+    expect(draft.parameters).toEqual([
+      { key: 'amount', label: 'Amount', type: 'money', required: true },
+      { key: 'recipient_phone', label: 'Recipient phone', type: 'phone', required: true, default: { memory: { id: wife.id, attribute: 'phone' } } },
+    ]);
+    const input = model.asked[0]!.input;
+    expect(input).toContain('- My wife: name, phone');
+    expect(input).not.toContain('Old contact');
+    expect(input).not.toContain('Bob only');
+    // Labels and value names only: never a value.
+    expect(input).not.toContain('555-010-6020');
+    expect(input).not.toContain('Person A');
+
+    // Saved as drafted, the task's run resolves the phone from the memory: only the amount is missing.
+    const saved = await post<{ id: string; parameters: unknown[] }>(alice, '/tasks', { name: draft.name, goal: draft.goal, parameters: draft.parameters, confirmRiskyActions: true });
+    expect(saved.statusCode).toBe(201);
+    expect(saved.data.parameters).toEqual(draft.parameters);
+  });
+
   it('a draft whose parameters do not pass the checks keeps the placeholders, then none (#556)', async () => {
     const alice = await login('badparams');
     const { chat } = await finishedChat(alice);

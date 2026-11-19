@@ -5,7 +5,7 @@
 //
 // What goes with a run: its steps and its questions (foreign keys with ON
 // DELETE CASCADE), the `lastRunId` of a schedule that pointed at it (a plain
-// column, cleared here; so are the run and session ids of AI app activity rows, #465) and the stored screenshots of its steps (removed after
+// column, cleared here; so are the run and session ids of AI app activity rows, #465, the source run of a memory, #551, and the run ids of saved approvals and their uses, #554) and the stored screenshots of its steps (removed after
 // the commit). Its cost and stop reason go too, so task spend and the alert
 // counts, which are computed from `runs`, drop accordingly.
 import { createHash } from 'node:crypto';
@@ -276,6 +276,11 @@ export class RunDeleteService {
       if (goneIds.length > 0) {
         await tx.mcpActivity.updateMany({ where: { userId, runId: { in: goneIds } }, data: { runId: null } });
         await tx.mcpActivity.updateMany({ where: { userId, sessionId: { in: goneIds } }, data: { sessionId: null } });
+        // A memory the agent proposed in the run (#551) is the owner's and stays; only its pointer to the run goes.
+        await tx.memory.updateMany({ where: { userId, sourceRunId: { in: goneIds } }, data: { sourceRunId: null } });
+        // Saved approvals (#554) outlive the run: the last use and the use history forget it.
+        await tx.approvalRule.updateMany({ where: { userId, lastUsedRunId: { in: goneIds } }, data: { lastUsedRunId: null } });
+        await tx.approvalRuleUse.updateMany({ where: { runId: { in: goneIds }, rule: { userId } }, data: { runId: null } });
       }
       return {
         ids: goneIds,

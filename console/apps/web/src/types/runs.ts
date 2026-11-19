@@ -30,7 +30,53 @@ export interface RunStep {
   reasoning: string | null;
   durationMs?: number | null;
   createdAt: string;
+  /** The step has a masked trace picture (#541): `GET /runs/{id}/steps/{seq}/screenshot`. */
+  hasScreenshot?: boolean;
+  /** The key moment the picture records. */
+  screenshotMoment?: ScreenshotMoment | null;
+  /** How many areas were masked in the picture. */
+  screenshotMasked?: number | null;
+  /** Why a key moment has no picture. */
+  screenshotNote?: 'unavailable' | 'masked_failed' | 'no_storage' | 'capped' | null;
+  /** The question the step asked or answered. */
+  questionId?: string | null;
+  /** That question, masked (#541); null for any other step. */
+  question?: StepQuestion | null;
 }
+
+/** The key moments a run stores a picture of (#541). */
+export const SCREENSHOT_MOMENTS = ['question', 'before_confirmed', 'after_confirmed', 'failure', 'final'] as const;
+export type ScreenshotMoment = (typeof SCREENSHOT_MOMENTS)[number];
+
+/** How a question was answered (#541): the value is masked, and absent when it is withheld (a secret, a sign-in). */
+export interface StepAnswer {
+  /** `completed` or `cancelled`. */
+  outcome: string;
+  value?: string;
+  valueWithheld: boolean;
+  /** Where the person answered: web, cli, push, mcp…, api, webhook. */
+  channel: string | null;
+  answeredAt: string | null;
+}
+
+/** The question a step asked or answered, as the run's trace shows it (#541). */
+export interface StepQuestion {
+  id: string;
+  /** captcha, code, passkey, login, confirmation, other. */
+  kind: string;
+  /** none, text, secret, choice, multi_choice, number, confirm, takeover, credentials. */
+  input: string;
+  /** The full prompt, masked. */
+  prompt: string;
+  options: { id: string; label: string }[] | null;
+  risk: string | null;
+  /** pending, answered, cancelled, expired. */
+  status: string;
+  answer: StepAnswer | null;
+}
+
+/** What `GET /runs/{id}/export` writes (#542, #543). */
+export type RunExportFormat = 'json' | 'pdf';
 
 export interface Run {
   id: string;
@@ -82,6 +128,10 @@ export interface Run {
    * the count on a list row. "Run again" asks before repeating such a run.
    */
   confirmedActions?: ConfirmedAction[] | number;
+  /** The owner's memories this run used (#553). */
+  memoryIds?: string[];
+  /** `GET /runs/:id`: the used memories that still exist, with their labels (#553). */
+  memories?: { id: string; label: string; status: 'active' | 'superseded' | 'archived' }[];
 }
 
 /** One step the owner confirmed that a run carried out (#540). The prompt is masked. */

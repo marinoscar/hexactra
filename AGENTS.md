@@ -125,6 +125,7 @@ Design invariants to preserve when writing docs or code:
 - Large artifacts move via short-lived authorized handles, not inside control messages.
 - Telemetry (OTel) is not the audit trail; durable sanitized Execution Events are.
 - Secret Material (passwords, OTPs, tokens) has stricter handling than ordinary task input (§11–§13): the model never sees a handoff secret; the fabric types it (`type_secret`).
+- A stored run-trace image is masked at capture, in the page (`screenshot` with `mask: true`); there is no unmasked trace image and no unmasked export, for any role (§26.8, epic #536). The trace is not the audit trail.
 - Desktop and input drivers never go through a shell: `xdotool` gets an argument vector. There is no "run a command on the node" action.
 - The public API must not be tied to Chrome or Linux; drivers are pluggable.
 - The Agent Experience Framework (AEF) is an independent, optional product boundary that only consumes redacted outcomes (§17).

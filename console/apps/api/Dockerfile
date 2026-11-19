@@ -16,6 +16,13 @@ COPY packages/shared ./packages/shared/
 COPY packages/sdk/package.json ./packages/sdk/
 COPY apps/mcp-ui/package.json ./apps/mcp-ui/
 RUN npm ci --workspace=api --include-workspace-root
+# The PDF report (#543) runs pdfmake on Node only: drop the browser bundles,
+# the bundled Roboto fonts and the source maps of pdfmake, pdfkit and fontkit,
+# brotli's unused encoder, and unpdf (a test-only PDF reader). About 25 MB.
+RUN rm -rf node_modules/pdfmake/build node_modules/pdfmake/src node_modules/pdfmake/fonts \
+      node_modules/pdfkit/js/*.map node_modules/pdfkit/js/pdfkit.standalone.js node_modules/pdfkit/js/pdfkit.browser.* node_modules/pdfkit/js/pdfkit.old.js \
+      node_modules/fontkit/dist/*.map node_modules/fontkit/dist/browser* node_modules/fontkit/src \
+      node_modules/brotli/build node_modules/brotli/enc node_modules/unpdf
 COPY apps/api/prisma ./apps/api/prisma/
 COPY apps/api/prisma.config.ts ./apps/api/
 RUN cd apps/api && DATABASE_URL="postgresql://build:build@localhost:5432/build" npx prisma generate

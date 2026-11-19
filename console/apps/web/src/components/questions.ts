@@ -2,7 +2,7 @@
 // GET /api/inbox; apps/api/src/questions/questions.contract.ts).
 import { answerLabel } from '@app/shared/question-rules';
 
-export type QuestionInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover' | 'credentials' | 'form';
+export type QuestionInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover' | 'credentials' | 'form' | 'memory';
 
 /** A field of a `form` question (#552): one missing value of a task run, asked before it starts. */
 export interface FormField {
@@ -14,6 +14,16 @@ export interface FormField {
   help?: string;
   constraints?: { min?: number; max?: number; maxLength?: number; pattern?: string };
   sensitive?: boolean;
+}
+
+/** A memory the agent proposes (#553): what the card shows and the owner may edit before saving. */
+export interface MemoryProposal {
+  kind: 'person' | 'account' | 'preference' | 'fact';
+  label: string;
+  aliases: string[];
+  attributes: Record<string, string>;
+  /** The active memory whose values this would replace. */
+  supersedes: string | null;
 }
 
 export interface QuestionOption {
@@ -48,6 +58,10 @@ export interface AskedQuestion {
   rememberLabel?: string | null;
   /** form (#552): the values to fill. */
   fields?: FormField[] | null;
+  /** memory (#553): the proposed memory. */
+  proposal?: MemoryProposal | null;
+  /** False for a memory proposal (#553): no run waits on it. */
+  blocking?: boolean;
 }
 
 export interface QuestionResponse {
@@ -59,6 +73,8 @@ export interface QuestionResponse {
   remember?: boolean;
   /** form (#552): the values given, masked. */
   fields?: Record<string, string>;
+  /** memory (#553): the memory the approved proposal saved. */
+  memoryId?: string;
   channel?: string;
   by?: string;
   answeredAt: string;
@@ -109,6 +125,8 @@ export interface AnswerBody {
   remember?: boolean;
   /** form (#552): the value of each field, by key. */
   fields?: Record<string, string>;
+  /** memory (#553): the memory as the owner saves it, edited on the card. */
+  memory?: { kind?: MemoryProposal['kind']; label: string; aliases?: string[]; attributes: Record<string, string> };
 }
 
 export const KIND_LABEL: Record<string, string> = {
@@ -117,6 +135,7 @@ export const KIND_LABEL: Record<string, string> = {
   passkey: 'Passkey',
   login: 'Sign-in',
   confirmation: 'Confirm',
+  memory: 'Memory',
   other: 'Question',
 };
 
@@ -126,6 +145,7 @@ export function askerText(askedBy: string): string {
   const name = rest.join(':');
   if (who === 'agent') return name || 'an agent';
   if (who === 'run') return 'your browser agent';
+  if (who === 'chat') return 'your chat';
   if (who === 'user') return 'you';
   return askedBy;
 }
@@ -133,8 +153,9 @@ export function askerText(askedBy: string): string {
 /** The final state of a settled question, in words (a secret is never shown). */
 export function answerText(q: Pick<Question, 'status' | 'response' | 'input' | 'options' | 'constraints' | 'confirmLabel' | 'denyLabel'> & { fields?: FormField[] | null }): string {
   if (q.status === 'pending') return 'Waiting for an answer';
-  if (q.status === 'expired') return 'This question expired before anyone answered.';
+  if (q.status === 'expired') return q.input === 'memory' ? 'This suggestion expired. Nothing was saved.' : 'This question expired before anyone answered.';
   const r = q.response;
+  if (q.input === 'memory') return r?.outcome === 'completed' ? 'Saved to Memories.' : 'Not saved.';
   const via = r?.channel ? ` (from ${r.channel})` : '';
   if (!r || r.outcome === 'cancelled') return `Declined${via}.`;
   if (r.valueWithheld) return `Answered${via}. The secret went to the agent and is not shown.`;
@@ -172,6 +193,8 @@ export function remaining(iso: string, now: number): string {
   if (!(ms > 0)) return 'expired';
   const s = Math.floor(ms / 1000);
   const h = Math.floor(s / 3600);
+  // A memory suggestion waits for days (#553): count them.
+  if (h >= 48) return `${Math.floor(h / 24)} days`;
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
   if (h) return `${h} h ${String(m).padStart(2, '0')} min`;

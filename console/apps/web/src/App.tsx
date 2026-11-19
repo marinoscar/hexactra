@@ -64,10 +64,13 @@ import { TaskEditPage } from './pages/TaskEditPage';
 import { TasksPage } from './pages/TasksPage';
 import { NotesPage } from './pages/NotesPage';
 import { AgentPoliciesPage } from './pages/AgentPoliciesPage';
+import { MemoriesPage } from './pages/MemoriesPage';
+import { MemoriesMenuItem } from './memories/MemoriesMenuItem';
 import { AgentPolicyEditorPage } from './pages/AgentPolicyEditorPage';
 import { ModelTiersPage } from './pages/ModelTiersPage';
 import { AgentCeilingsPage } from './pages/AgentCeilingsPage';
 import { RunHistorySettingsPage } from './pages/RunHistorySettingsPage';
+import { SavedApprovalsPage } from './pages/SavedApprovalsPage';
 import { AiAppCeilingsPage } from './pages/AiAppCeilingsPage';
 import { AiAppDetailPage } from './pages/AiAppDetailPage';
 import { AiAppsPage } from './pages/AiAppsPage';
@@ -159,7 +162,7 @@ function AppShell() {
           userMenu={
             <ShellUserMenu
               navigation={NAVIGATION}
-              items={(close) => sliceUserMenuItems.map((item, index) => <Fragment key={index}>{item(close)}</Fragment>)}
+              items={(close) => [<MemoriesMenuItem key="memories" onDone={close} />, ...sliceUserMenuItems.map((item, index) => <Fragment key={index}>{item(close)}</Fragment>)]}
             />
           }
         />
@@ -273,9 +276,12 @@ export function AppRoutes() {
           <Route path="admin/settings/agent-model-tiers" element={<Gate permission="system_settings:read"><ModelTiersPage scope="deployment" /></Gate>} />
           <Route path="admin/settings/agent-ceilings" element={<Gate permission="system_settings:read"><AgentCeilingsPage /></Gate>} />
           <Route path="admin/settings/agent-pricing" element={<Gate permission="system_settings:read"><AgentPricingPage /></Gate>} />
+          {/* Memories (#551): `memories:read` is what /api/memories enforces; writes are gated in the page. */}
+          <Route path="settings/memories" element={<Gate permission="memories:read"><MemoriesPage /></Gate>} />
           <Route path="settings/run-history" element={<Gate permission="runs:delete"><RunHistorySettingsPage /></Gate>} />
           {/* Connected AI apps (#464): `connected_apps:read` is what /api/connected-apps enforces. */}
           <Route path="settings/ai-apps" element={<Gate permission="connected_apps:read"><AiAppsPage /></Gate>} />
+          <Route path="settings/approvals" element={<Gate permission="approvals:read"><SavedApprovalsPage /></Gate>} />
           <Route path="settings/ai-apps/connect" element={<Gate permission="connected_apps:read"><ConnectAiAppPage /></Gate>} />
           <Route path="settings/ai-apps/:clientId" element={<Gate permission="connected_apps:read"><AiAppDetailPage /></Gate>} />
           <Route path="admin/settings/ai-app-limits" element={<Gate permission="system_settings:read"><AiAppCeilingsPage /></Gate>} />

@@ -28519,6 +28519,1244 @@
         }
       }
     },
+    "/api/memories": {
+      "get": {
+        "description": "Active memories by default (`status` picks others). `kind` filters; `q` searches the label, the aliases and the attribute values, ignoring case.\n\n**Requires:** authentication, plus permission `memories:read`.",
+        "operationId": "memories_list",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": false,
+            "in": "query",
+            "description": "`person`, `account`, `preference` or `fact`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "person",
+                "account",
+                "preference",
+                "fact"
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "`active` (the default), `superseded`, `archived` or `all`.",
+            "schema": {
+              "default": "active",
+              "type": "string",
+              "enum": [
+                "active",
+                "superseded",
+                "archived",
+                "all"
+              ]
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Searches the label, the aliases and the attribute values, ignoring case.",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MemoryResponseDto"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "List your memories",
+        "tags": [
+          "Memories"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "memories:read"
+          ]
+        }
+      },
+      "post": {
+        "description": "Its `source` is always `owner`. Refused with `422 MEMORY_HOLDS_SECRET` when a field looks like a password, a code or a full card, account or Social Security number; `409 MEMORY_LABEL_TAKEN` and `409 MEMORY_LIMIT` (500 active).\n\n**Requires:** authentication, plus permission `memories:write`.",
+        "operationId": "memories_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMemoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MemoryResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Add a memory",
+        "tags": [
+          "Memories"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "memories:write"
+          ]
+        }
+      }
+    },
+    "/api/memories/export": {
+      "get": {
+        "description": "A `hexactra.memories` file (`formatVersion` 1) of your active and archived memories: kind, label, aliases, attributes, note, status, source and dates. No ids of the memory, a run or a chat.\n\n**Requires:** authentication, plus permission `memories:read`.",
+        "operationId": "memories_export",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "The memories as a `hexactra.memories` JSON file (not wrapped in the `data` envelope), sent as an attachment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MemoryFileDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "description": "Present when the endpoint supplies it (pagination) or when the global response interceptor adds it (`{ timestamp }`). Not every response carries one.",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Export your memories as a JSON file",
+        "tags": [
+          "Memories"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "memories:read"
+          ]
+        }
+      }
+    },
+    "/api/memories/{id}": {
+      "get": {
+        "description": "With `history`: the older versions it superseded, newest first.\n\n**Requires:** authentication, plus permission `memories:read`.",
+        "operationId": "memories_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MemoryDetailResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Get one memory",
+        "tags": [
+          "Memories"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "memories:read"
+          ]
+        }
+      },
+      "patch": {
+        "description": "The label, aliases, note and kind. A value changes through `POST /memories/{id}/supersede`, which keeps the old version in the history.\n\n**Requires:** authentication, plus permission `memories:write`.",
+        "operationId": "memories_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMemoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MemoryResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Edit a memory",
+        "tags": [
+          "Memories"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "memories:write"
+          ]
+        }
+      },
+      "delete": {
+        "description": "Permanently, with its older versions.\n\n**Requires:** authentication, plus permission `memories:write`.",
+        "operationId": "memories_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Delete a memory",
+        "tags": [
+          "Memories"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "memories:write"
+          ]
+        }
+      }
+    },
+    "/api/memories/{id}/supersede": {
+      "post": {
+        "description": "Creates the new version with these attributes and marks the old one `superseded`, in one transaction. A superseded version is never given to the agent.\n\n**Requires:** authentication, plus permission `memories:write`.",
+        "operationId": "memories_supersede",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupersedeMemoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MemoryResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Replace a memory with a new version",
+        "tags": [
+          "Memories"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "memories:write"
+          ]
+        }
+      }
+    },
+    "/api/memories/{id}/archive": {
+      "post": {
+        "description": "An archived memory is kept but not given to the agent.\n\n**Requires:** authentication, plus permission `memories:write`.",
+        "operationId": "memories_archive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MemoryResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Archive a memory",
+        "tags": [
+          "Memories"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "memories:write"
+          ]
+        }
+      }
+    },
+    "/api/memories/{id}/unarchive": {
+      "post": {
+        "description": "Makes it active again (the label rule and the limit apply).\n\n**Requires:** authentication, plus permission `memories:write`.",
+        "operationId": "memories_unarchive",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MemoryResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Unarchive a memory",
+        "tags": [
+          "Memories"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "memories:write"
+          ]
+        }
+      }
+    },
+    "/api/approval-rules": {
+      "get": {
+        "description": "Steps you told the agent not to ask about again, newest first, and whether \"Pause all\" is on (`paused`). A rule matches only on its site (the registrable domain of the page's real address), its kind and category and the exact label of the element (digits compared as `#`), within its limits. Rules are made only by ticking \"Don't ask again\" on a request; nothing here creates one.\n\n**Requires:** authentication, plus permission `approvals:read`.",
+        "operationId": "approvalRules_list",
+        "parameters": [
+          {
+            "name": "host",
+            "required": false,
+            "in": "query",
+            "description": "Only rules for this registrable domain (\"bankofamerica.com\").",
+            "schema": {
+              "maxLength": 253,
+              "type": "string"
+            }
+          },
+          {
+            "name": "enabled",
+            "required": false,
+            "in": "query",
+            "description": "Only enabled (`true`) or disabled (`false`) rules.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ApprovalRulesListResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "List your saved approvals",
+        "tags": [
+          "Saved approvals"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "approvals:read"
+          ]
+        }
+      }
+    },
+    "/api/approval-rules/paused": {
+      "put": {
+        "description": "Body `{ paused }`. While paused, no rule matches: every step and question is asked again. The rules themselves are kept.\n\n**Requires:** authentication, plus permission `approvals:write`.",
+        "operationId": "approvalRules_setPaused",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetApprovalsPausedDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ApprovalsPausedResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Pause or resume every saved approval",
+        "tags": [
+          "Saved approvals"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "approvals:write"
+          ]
+        }
+      }
+    },
+    "/api/approval-rules/{id}": {
+      "get": {
+        "description": "The rule with its newest 20 uses (run and time).\n\n**Requires:** authentication, plus permission `approvals:read`.",
+        "operationId": "approvalRules_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ApprovalRuleDetailResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`APPROVAL_RULE_NOT_FOUND`: no such rule, or it is another user's."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Get one saved approval",
+        "tags": [
+          "Saved approvals"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "approvals:read"
+          ]
+        }
+      },
+      "patch": {
+        "description": "Only `enabled`, `maxAmount`, `expiresAt`, `taskId` and `conversationId`, and only to narrow: set or lower the amount limit, set or bring forward the expiry, add a task or chat scope, or disable. Re-enabling a rule you disabled is allowed. A looser rule is made by answering a new request.\n\n**Requires:** authentication, plus permission `approvals:write`.",
+        "operationId": "approvalRules_patch",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchApprovalRuleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ApprovalRuleResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`RULE_CANNOT_WIDEN`: the patch would loosen the rule (raise or remove a limit, lengthen or remove the expiry, remove or change a scope)."
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`APPROVAL_RULE_NOT_FOUND`: no such rule, or it is another user's."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Narrow, disable or re-enable a saved approval",
+        "tags": [
+          "Saved approvals"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "approvals:write"
+          ]
+        }
+      },
+      "delete": {
+        "description": "Permanent. The next time the step comes up, you are asked again.\n\n**Requires:** authentication, plus permission `approvals:write`.",
+        "operationId": "approvalRules_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted, with its uses."
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`APPROVAL_RULE_NOT_FOUND`: no such rule, or it is another user's."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Delete a saved approval",
+        "tags": [
+          "Saved approvals"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "approvals:write"
+          ]
+        }
+      }
+    },
     "/api/connected-apps": {
       "get": {
         "description": "Your active OAuth grants to the MCP endpoint, one per app, with the scopes in words, your limits for the app and its usage over 30 days (counted from runs).\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
@@ -30947,7 +32185,7 @@
     },
     "/api/runs/{id}/export": {
       "get": {
-        "description": "A `hexactra.run-trace` file (`formatVersion` 1): the run, its policy, budget and models, every step with its question and answer, the masked trace screenshots (`screenshots=embed`, the default; `none` leaves the images out) and the messages of its chat. Every string is masked (`masking.hits` counts what was); there is no unmasked export. Never the transcript, a token, a withheld answer or an AI app's grant. A live run exports with `partial: true`. 404 `RUN_NOT_FOUND` for a run that is not yours; 413 `EXPORT_TOO_LARGE` over 50 MB (use `screenshots=none`); 429 `EXPORT_RATE_LIMITED` past 10 exports a minute.\n\n**Requires:** authentication, plus permission `runs:read`.",
+        "description": "A `hexactra.run-trace` file (`formatVersion` 1): the run, its policy, budget and models, every step with its question and answer, the masked trace screenshots (`screenshots=embed`, the default; `none` leaves the images out) and the messages of its chat. Every string is masked (`masking.hits` counts what was); there is no unmasked export. Never the transcript, a token, a withheld answer or an AI app's grant. A live run exports with `partial: true`. `format=pdf` renders the same masked trace as a PDF report (`application/pdf`; `paper=a4`, the default, or `letter`): the goal and outcome, the confirmed steps, the questions and answers, the budget, the timeline with the key-moment screenshots, and a footer on every page; a live run prints a partial-report banner. 404 `RUN_NOT_FOUND` for a run that is not yours; 413 `EXPORT_TOO_LARGE` over 50 MB of screenshots (use `screenshots=none`); 429 `EXPORT_RATE_LIMITED` past 10 exports a minute (JSON and PDF together).\n\n**Requires:** authentication, plus permission `runs:read`.",
         "operationId": "runs_export",
         "parameters": [
           {
@@ -30962,12 +32200,13 @@
             "name": "format",
             "required": false,
             "in": "query",
-            "description": "`json` (the only format of this route; the PDF report is its own route).",
+            "description": "`json` (the default): the run trace file. `pdf`: the run report (#543), rendered from the same masked trace.",
             "schema": {
               "default": "json",
               "type": "string",
               "enum": [
-                "json"
+                "json",
+                "pdf"
               ]
             }
           },
@@ -30975,7 +32214,7 @@
             "name": "screenshots",
             "required": false,
             "in": "query",
-            "description": "`embed` (the default) puts each masked trace picture in `steps[].screenshot.data` as base64; `none` keeps the picture facts and leaves the images out (a much smaller file).",
+            "description": "`embed` (the default) puts each masked trace picture in the file (`steps[].screenshot.data` as base64, or in the report after its step); `none` leaves the images out (a much smaller file).",
             "schema": {
               "default": "embed",
               "type": "string",
@@ -30984,11 +32223,25 @@
                 "none"
               ]
             }
+          },
+          {
+            "name": "paper",
+            "required": false,
+            "in": "query",
+            "description": "The PDF report's paper: `a4` (the default) or `letter`. Ignored for `json`.",
+            "schema": {
+              "default": "a4",
+              "type": "string",
+              "enum": [
+                "a4",
+                "letter"
+              ]
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "The run trace file (not wrapped in the `data` envelope), sent as an attachment `hexactra-run-<first 8 of id>-<yyyymmdd>.json`.",
+            "description": "The run trace file (`format=json`, not wrapped in the `data` envelope) or the PDF report (`format=pdf`), sent as an attachment `hexactra-run-<first 8 of id>-<yyyymmdd>.json` or `.pdf`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -31007,6 +32260,12 @@
                     }
                   }
                 }
+              },
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
               }
             }
           },
@@ -31017,6 +32276,11 @@
                 "schema": {
                   "$ref": "#/components/schemas/ErrorDto"
                 }
+              },
+              "application/pdf": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
               }
             }
           },
@@ -31024,6 +32288,11 @@
             "description": "Forbidden - Insufficient permissions",
             "content": {
               "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              },
+              "application/pdf": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorDto"
                 }
@@ -31049,7 +32318,7 @@
             "PAT-auth": []
           }
         ],
-        "summary": "Export a run as a JSON trace file",
+        "summary": "Export a run as a JSON trace file or a PDF report",
         "tags": [
           "Runs"
         ],
@@ -39081,6 +40350,18 @@
               "INTERNAL_ERROR",
               "ROLE_NOT_ASSIGNABLE",
               "INVALID_RETURN_URI",
+              "MEMORY_NOT_FOUND",
+              "MEMORY_LABEL_TAKEN",
+              "MEMORY_LIMIT",
+              "MEMORY_NOT_ACTIVE",
+              "MEMORY_HOLDS_SECRET",
+              "INVALID_CRON",
+              "INVALID_TIMEZONE",
+              "CRON_TOO_FREQUENT",
+              "SCHEDULE_NOT_IN_TASK",
+              "INVALID_TASK_CURSOR",
+              "SCHEDULE_LIMIT",
+              "NO_SCHEDULES",
               "POLICY_PIN_INVALID",
               "POLICY_REF_INVALID",
               "POLICY_BUILTIN_READONLY",
@@ -39112,13 +40393,6 @@
               "COUNT_CHANGED",
               "EXPORT_TOO_LARGE",
               "EXPORT_RATE_LIMITED",
-              "INVALID_CRON",
-              "INVALID_TIMEZONE",
-              "CRON_TOO_FREQUENT",
-              "SCHEDULE_NOT_IN_TASK",
-              "INVALID_TASK_CURSOR",
-              "SCHEDULE_LIMIT",
-              "NO_SCHEDULES",
               "CONFIRMATION_REQUIRED",
               "CONFIRMATION_PENDING",
               "CONFIRMATION_DENIED",
@@ -39129,6 +40403,10 @@
               "WEBHOOK_EVENT_UNKNOWN",
               "WEBHOOK_EVENT_NOT_PERMITTED",
               "WEBHOOK_LIMIT_REACHED",
+              "APPROVAL_RULE_NOT_FOUND",
+              "RULE_CANNOT_WIDEN",
+              "APPROVAL_RULE_INVALID",
+              "APPROVAL_RULE_DUPLICATE",
               "CHAT_NOT_FOUND",
               "CHAT_ARCHIVED",
               "CHAT_RUN_LIVE",
@@ -42012,6 +43290,18 @@
               "defaultPolicyRef"
             ]
           },
+          "memories": {
+            "type": "object",
+            "properties": {
+              "suggest": {
+                "type": "boolean",
+                "description": "Let the agent suggest memories for you to approve. On by default."
+              }
+            },
+            "required": [
+              "suggest"
+            ]
+          },
           "runs": {
             "type": "object",
             "properties": {
@@ -42072,6 +43362,18 @@
               "keepDays",
               "keepPerTask",
               "keepFailedDays"
+            ]
+          },
+          "approvals": {
+            "type": "object",
+            "properties": {
+              "paused": {
+                "type": "boolean",
+                "description": "When true, no saved approval matches: every question is asked again until it is turned off."
+              }
+            },
+            "required": [
+              "paused"
             ]
           },
           "notifications": {
@@ -42397,6 +43699,18 @@
               "defaultPolicyRef"
             ]
           },
+          "memories": {
+            "type": "object",
+            "properties": {
+              "suggest": {
+                "type": "boolean",
+                "description": "Let the agent suggest memories for you to approve. On by default."
+              }
+            },
+            "required": [
+              "suggest"
+            ]
+          },
           "runs": {
             "type": "object",
             "properties": {
@@ -42457,6 +43771,18 @@
               "keepDays",
               "keepPerTask",
               "keepFailedDays"
+            ]
+          },
+          "approvals": {
+            "type": "object",
+            "properties": {
+              "paused": {
+                "type": "boolean",
+                "description": "When true, no saved approval matches: every question is asked again until it is turned off."
+              }
+            },
+            "required": [
+              "paused"
             ]
           },
           "notifications": {
@@ -42816,6 +44142,22 @@
               }
             ]
           },
+          "memories": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "suggest": {
+                    "type": "boolean",
+                    "description": "Let the agent suggest memories for you to approve. On by default."
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "runs": {
             "anyOf": [
               {
@@ -42872,6 +44214,21 @@
                         "type": "null"
                       }
                     ]
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "approvals": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "paused": {
+                    "type": "boolean"
                   }
                 }
               },
@@ -47878,6 +49235,18 @@
                   "defaultPolicyRef"
                 ]
               },
+              "memories": {
+                "type": "object",
+                "properties": {
+                  "suggest": {
+                    "type": "boolean",
+                    "description": "Let the agent suggest memories for you to approve. On by default."
+                  }
+                },
+                "required": [
+                  "suggest"
+                ]
+              },
               "runs": {
                 "type": "object",
                 "properties": {
@@ -47938,6 +49307,18 @@
                   "keepDays",
                   "keepPerTask",
                   "keepFailedDays"
+                ]
+              },
+              "approvals": {
+                "type": "object",
+                "properties": {
+                  "paused": {
+                    "type": "boolean",
+                    "description": "When true, no saved approval matches: every question is asked again until it is turned off."
+                  }
+                },
+                "required": [
+                  "paused"
                 ]
               },
               "notifications": {
@@ -67802,6 +69183,1283 @@
           "name"
         ]
       },
+      "MemoryResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "person",
+              "account",
+              "preference",
+              "fact"
+            ],
+            "description": "`person`, `account`, `preference` or `fact`."
+          },
+          "label": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "attributes": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "superseded",
+              "archived"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "agent_proposed"
+            ],
+            "description": "`owner`: you typed it. `agent_proposed`: the agent suggested it and you approved it."
+          },
+          "sourceRunId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The run an agent-proposed memory came from; the run may have been deleted since."
+          },
+          "sourceConversationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The chat an agent-proposed memory came from; it may have been deleted since."
+          },
+          "supersededById": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newer version, for a superseded memory."
+          },
+          "lastUsedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "aliases",
+          "attributes",
+          "note",
+          "status",
+          "source",
+          "sourceRunId",
+          "sourceConversationId",
+          "supersededById",
+          "lastUsedAt",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "MemoryFileDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "hexactra.memories"
+          },
+          "formatVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Version of this file format."
+          },
+          "exportedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp of the export."
+          },
+          "memories": {
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "person",
+                    "account",
+                    "preference",
+                    "fact"
+                  ]
+                },
+                "label": {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                "aliases": {
+                  "maxItems": 10,
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "attributes": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "note": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 1000
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "archived"
+                  ]
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "owner",
+                    "agent_proposed"
+                  ]
+                },
+                "lastUsedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "createdAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "label",
+                "aliases",
+                "attributes",
+                "note",
+                "status",
+                "source",
+                "lastUsedAt",
+                "createdAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "formatVersion",
+          "exportedAt",
+          "memories"
+        ],
+        "description": "Your memories (active and archived; not the superseded versions) as a portable JSON file: no ids, no user, nothing secret.",
+        "additionalProperties": false
+      },
+      "MemoryDetailResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "person",
+              "account",
+              "preference",
+              "fact"
+            ],
+            "description": "`person`, `account`, `preference` or `fact`."
+          },
+          "label": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "attributes": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "superseded",
+              "archived"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "agent_proposed"
+            ],
+            "description": "`owner`: you typed it. `agent_proposed`: the agent suggested it and you approved it."
+          },
+          "sourceRunId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The run an agent-proposed memory came from; the run may have been deleted since."
+          },
+          "sourceConversationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The chat an agent-proposed memory came from; it may have been deleted since."
+          },
+          "supersededById": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The newer version, for a superseded memory."
+          },
+          "lastUsedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "updatedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "person",
+                    "account",
+                    "preference",
+                    "fact"
+                  ],
+                  "description": "`person`, `account`, `preference` or `fact`."
+                },
+                "label": {
+                  "type": "string"
+                },
+                "aliases": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "attributes": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "note": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "superseded",
+                    "archived"
+                  ]
+                },
+                "source": {
+                  "type": "string",
+                  "enum": [
+                    "owner",
+                    "agent_proposed"
+                  ],
+                  "description": "`owner`: you typed it. `agent_proposed`: the agent suggested it and you approved it."
+                },
+                "sourceRunId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The run an agent-proposed memory came from; the run may have been deleted since."
+                },
+                "sourceConversationId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The chat an agent-proposed memory came from; it may have been deleted since."
+                },
+                "supersededById": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The newer version, for a superseded memory."
+                },
+                "lastUsedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "createdAt": {
+                  "type": "string",
+                  "description": "ISO 8601 timestamp"
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "description": "ISO 8601 timestamp"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "label",
+                "aliases",
+                "attributes",
+                "note",
+                "status",
+                "source",
+                "sourceRunId",
+                "sourceConversationId",
+                "supersededById",
+                "lastUsedAt",
+                "createdAt",
+                "updatedAt"
+              ]
+            },
+            "description": "The older versions this one replaced, newest first."
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "label",
+          "aliases",
+          "attributes",
+          "note",
+          "status",
+          "source",
+          "sourceRunId",
+          "sourceConversationId",
+          "supersededById",
+          "lastUsedAt",
+          "createdAt",
+          "updatedAt",
+          "history"
+        ]
+      },
+      "CreateMemoryDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "person",
+              "account",
+              "preference",
+              "fact"
+            ],
+            "description": "`person`, `account`, `preference` or `fact`."
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "What you call it: \"My wife\", \"Checking account\". Unique among your active memories, ignoring case."
+          },
+          "aliases": {
+            "description": "Other words that mean the same (\"wife\", \"paula\"). Stored lower-cased; at most 10.",
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          },
+          "attributes": {
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "description": "Named values: `{ \"name\": \"…\", \"phone\": \"…\" }`. At most 20 keys, 500 characters a value. Never a password, a code or a full card, account or Social Security number: keep the last four digits."
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Free text you add. At most 1000 characters. Shown as plain text."
+          }
+        },
+        "required": [
+          "kind",
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "UpdateMemoryDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "person",
+              "account",
+              "preference",
+              "fact"
+            ],
+            "description": "`person`, `account`, `preference` or `fact`."
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "What you call it: \"My wife\", \"Checking account\". Unique among your active memories, ignoring case."
+          },
+          "aliases": {
+            "description": "Other words that mean the same (\"wife\", \"paula\"). Stored lower-cased; at most 10.",
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Free text you add. At most 1000 characters. Shown as plain text."
+          }
+        },
+        "additionalProperties": false
+      },
+      "SupersedeMemoryDto": {
+        "type": "object",
+        "properties": {
+          "attributes": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "description": "Named values: `{ \"name\": \"…\", \"phone\": \"…\" }`. At most 20 keys, 500 characters a value. Never a password, a code or a full card, account or Social Security number: keep the last four digits."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "person",
+              "account",
+              "preference",
+              "fact"
+            ],
+            "description": "`person`, `account`, `preference` or `fact`."
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "description": "What you call it: \"My wife\", \"Checking account\". Unique among your active memories, ignoring case."
+          },
+          "aliases": {
+            "description": "Other words that mean the same (\"wife\", \"paula\"). Stored lower-cased; at most 10.",
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            }
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Free text you add. At most 1000 characters. Shown as plain text."
+          }
+        },
+        "required": [
+          "attributes"
+        ],
+        "additionalProperties": false
+      },
+      "ApprovalRulesListResponseDto": {
+        "type": "object",
+        "properties": {
+          "paused": {
+            "type": "boolean",
+            "description": "Whether \"Pause all\" is on: while it is, no rule matches."
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "gate",
+                    "ask"
+                  ],
+                  "description": "`gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own."
+                },
+                "host": {
+                  "type": "string",
+                  "description": "The registrable domain it applies on."
+                },
+                "category": {
+                  "description": "For `gate`: payment, purchase, send, delete or submit.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "matchKey": {
+                  "type": "string",
+                  "description": "For `gate`: the element's label, normalised (digits as `#`). For `ask`: the topic."
+                },
+                "summary": {
+                  "type": "string",
+                  "description": "What the rule allows, in plain words: \"Press 'Pay' on bankofamerica.com\"."
+                },
+                "taskId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "When set, only runs of this task."
+                },
+                "taskName": {
+                  "description": "The task's name, when the scope's task still exists.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "conversationId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "When set, only runs of this chat."
+                },
+                "maxAmount": {
+                  "description": "When set, only steps whose amount is known and not larger.",
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "expiresAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "createdFromQuestionId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The question whose answer made the rule."
+                },
+                "useCount": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "lastUsedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "lastUsedRunId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The run that last used it, while that run exists."
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "kind",
+                "host",
+                "category",
+                "matchKey",
+                "summary",
+                "taskId",
+                "taskName",
+                "conversationId",
+                "maxAmount",
+                "expiresAt",
+                "enabled",
+                "createdFromQuestionId",
+                "useCount",
+                "lastUsedAt",
+                "lastUsedRunId",
+                "createdAt",
+                "updatedAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "paused",
+          "rules"
+        ]
+      },
+      "ApprovalsPausedResponseDto": {
+        "type": "object",
+        "properties": {
+          "paused": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "paused"
+        ]
+      },
+      "SetApprovalsPausedDto": {
+        "type": "object",
+        "properties": {
+          "paused": {
+            "type": "boolean",
+            "description": "`true` turns every saved approval off until it is set back to `false`."
+          }
+        },
+        "required": [
+          "paused"
+        ],
+        "additionalProperties": false
+      },
+      "ApprovalRuleDetailResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "gate",
+              "ask"
+            ],
+            "description": "`gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own."
+          },
+          "host": {
+            "type": "string",
+            "description": "The registrable domain it applies on."
+          },
+          "category": {
+            "description": "For `gate`: payment, purchase, send, delete or submit.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "matchKey": {
+            "type": "string",
+            "description": "For `gate`: the element's label, normalised (digits as `#`). For `ask`: the topic."
+          },
+          "summary": {
+            "type": "string",
+            "description": "What the rule allows, in plain words: \"Press 'Pay' on bankofamerica.com\"."
+          },
+          "taskId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When set, only runs of this task."
+          },
+          "taskName": {
+            "description": "The task's name, when the scope's task still exists.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conversationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When set, only runs of this chat."
+          },
+          "maxAmount": {
+            "description": "When set, only steps whose amount is known and not larger.",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "createdFromQuestionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The question whose answer made the rule."
+          },
+          "useCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "lastUsedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastUsedRunId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The run that last used it, while that run exists."
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "uses": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "runId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The run, while it exists."
+                },
+                "stepSeq": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "usedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "runId",
+                "stepSeq",
+                "usedAt"
+              ]
+            },
+            "description": "The newest 20 uses."
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "host",
+          "category",
+          "matchKey",
+          "summary",
+          "taskId",
+          "taskName",
+          "conversationId",
+          "maxAmount",
+          "expiresAt",
+          "enabled",
+          "createdFromQuestionId",
+          "useCount",
+          "lastUsedAt",
+          "lastUsedRunId",
+          "createdAt",
+          "updatedAt",
+          "uses"
+        ]
+      },
+      "ApprovalRuleResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "gate",
+              "ask"
+            ],
+            "description": "`gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own."
+          },
+          "host": {
+            "type": "string",
+            "description": "The registrable domain it applies on."
+          },
+          "category": {
+            "description": "For `gate`: payment, purchase, send, delete or submit.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "matchKey": {
+            "type": "string",
+            "description": "For `gate`: the element's label, normalised (digits as `#`). For `ask`: the topic."
+          },
+          "summary": {
+            "type": "string",
+            "description": "What the rule allows, in plain words: \"Press 'Pay' on bankofamerica.com\"."
+          },
+          "taskId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When set, only runs of this task."
+          },
+          "taskName": {
+            "description": "The task's name, when the scope's task still exists.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conversationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When set, only runs of this chat."
+          },
+          "maxAmount": {
+            "description": "When set, only steps whose amount is known and not larger.",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "expiresAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "createdFromQuestionId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The question whose answer made the rule."
+          },
+          "useCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "lastUsedAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastUsedRunId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The run that last used it, while that run exists."
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "host",
+          "category",
+          "matchKey",
+          "summary",
+          "taskId",
+          "taskName",
+          "conversationId",
+          "maxAmount",
+          "expiresAt",
+          "enabled",
+          "createdFromQuestionId",
+          "useCount",
+          "lastUsedAt",
+          "lastUsedRunId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PatchApprovalRuleDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Disable (`false`) or re-enable (`true`) the rule.",
+            "type": "boolean"
+          },
+          "maxAmount": {
+            "description": "The largest amount the rule allows. May be set or lowered; `null` (removing it) is refused when one is set.",
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 9999999999.99
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "expiresAt": {
+            "description": "When the rule stops matching. May be set or brought forward; `null` (removing it) is refused when one is set.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "taskId": {
+            "description": "Limit the rule to one task. May be added; removing or changing a scope is refused.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "conversationId": {
+            "description": "Limit the rule to one chat. May be added; removing or changing a scope is refused.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "ConnectedAppListResponseDto": {
         "type": "array",
         "items": {
@@ -72904,6 +75562,15 @@
               }
             ]
           },
+          "memoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -72972,6 +75639,7 @@
           "costUsd",
           "costKnown",
           "confirmedActions",
+          "memoryIds",
           "createdAt",
           "startedAt",
           "finishedAt",
@@ -73669,6 +76337,15 @@
                     }
                   ]
                 },
+                "memoryIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
+                },
                 "createdAt": {
                   "type": "string",
                   "description": "ISO 8601 timestamp"
@@ -73737,6 +76414,7 @@
                 "costUsd",
                 "costKnown",
                 "confirmedActions",
+                "memoryIds",
                 "createdAt",
                 "startedAt",
                 "finishedAt",
@@ -75842,6 +78520,15 @@
               }
             ]
           },
+          "memoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -76140,6 +78827,36 @@
                 "createdAt"
               ]
             }
+          },
+          "memories": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "superseded",
+                    "archived"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "status"
+              ]
+            },
+            "description": "The memories of `memoryIds` that still exist, with their labels (#553): the run page says \"Used: …\""
           }
         },
         "required": [
@@ -76176,10 +78893,12 @@
           "costUsd",
           "costKnown",
           "confirmedActions",
+          "memoryIds",
           "createdAt",
           "startedAt",
           "finishedAt",
-          "steps"
+          "steps",
+          "memories"
         ]
       },
       "RunResponseDto": {
@@ -76894,6 +79613,15 @@
               }
             ]
           },
+          "memoryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "description": "The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id."
+          },
           "createdAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -76955,6 +79683,7 @@
           "costUsd",
           "costKnown",
           "confirmedActions",
+          "memoryIds",
           "createdAt",
           "startedAt",
           "finishedAt"
@@ -77011,8 +79740,10 @@
               "confirm",
               "takeover",
               "credentials",
+              "memory",
               "form"
-            ]
+            ],
+            "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes; only the server creates one"
           },
           "kind": {
             "type": "string"
@@ -77197,6 +79928,39 @@
             ],
             "description": "form (#552): the missing values of a task run, asked at once before it starts; answer with `fields: { key: value }`"
           },
+          "gate": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "host": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "host",
+                  "category",
+                  "label"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The commitment the confirmation gate stopped (#550): the page host the browser reported, the category and the element label. Set by the server only."
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -77245,6 +80009,12 @@
                     "additionalProperties": {
                       "type": "string"
                     }
+                  },
+                  "memoryId": {
+                    "description": "memory (#553): the memory the approved proposal saved",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                   },
                   "channel": {
                     "type": "string"
@@ -77336,6 +80106,83 @@
               }
             ],
             "description": "The AI app that asked; null when no app did"
+          },
+          "blocking": {
+            "type": "boolean",
+            "description": "False for a question no run waits on: a memory proposal (#553)"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "person",
+                      "account",
+                      "preference",
+                      "fact"
+                    ]
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "attributes": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "supersedes": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The active memory whose values this would replace"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "label",
+                  "aliases",
+                  "attributes",
+                  "supersedes"
+                ],
+                "description": "memory (#553): the proposed memory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "conversationId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The chat a memory proposal came from (#553)"
           }
         },
         "required": [
@@ -77354,6 +80201,7 @@
           "risk",
           "rememberLabel",
           "fields",
+          "gate",
           "status",
           "response",
           "pageTitle",
@@ -77361,7 +80209,10 @@
           "createdAt",
           "expiresAt",
           "answeredAt",
-          "client"
+          "client",
+          "blocking",
+          "proposal",
+          "conversationId"
         ]
       },
       "CreateQuestionDto": {
@@ -77378,8 +80229,7 @@
               "number",
               "confirm",
               "takeover",
-              "credentials",
-              "form"
+              "credentials"
             ]
           },
           "kind": {
@@ -77607,6 +80457,52 @@
               ]
             }
           },
+          "memory": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "person",
+                  "account",
+                  "preference",
+                  "fact"
+                ]
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "aliases": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                }
+              },
+              "attributes": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                }
+              }
+            },
+            "required": [
+              "label",
+              "attributes"
+            ],
+            "additionalProperties": false
+          },
           "channel": {
             "type": "string",
             "pattern": "^[a-z0-9][a-z0-9_.-]{0,39}$"
@@ -77680,6 +80576,52 @@
                 }
               ]
             }
+          },
+          "memory": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "person",
+                  "account",
+                  "preference",
+                  "fact"
+                ]
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "aliases": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                }
+              },
+              "attributes": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                }
+              }
+            },
+            "required": [
+              "label",
+              "attributes"
+            ],
+            "additionalProperties": false
           }
         },
         "additionalProperties": false
@@ -77800,8 +80742,7 @@
               "number",
               "confirm",
               "takeover",
-              "credentials",
-              "form"
+              "credentials"
             ]
           },
           "kind": {
@@ -78049,8 +80990,10 @@
               "confirm",
               "takeover",
               "credentials",
+              "memory",
               "form"
-            ]
+            ],
+            "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes; only the server creates one"
           },
           "choices": {
             "type": "array",
@@ -78254,6 +81197,70 @@
           "expiresAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
+          },
+          "blocking": {
+            "type": "boolean",
+            "description": "False for a memory proposal (#553): no run waits on it; the Inbox lists it in its own group"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "person",
+                      "account",
+                      "preference",
+                      "fact"
+                    ]
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "attributes": {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "supersedes": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The active memory whose values this would replace"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "label",
+                  "aliases",
+                  "attributes",
+                  "supersedes"
+                ],
+                "description": "memory (#553): the proposed memory"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -78276,7 +81283,9 @@
           "pageTitle",
           "viewerUrl",
           "createdAt",
-          "expiresAt"
+          "expiresAt",
+          "blocking",
+          "proposal"
         ]
       },
       "OkResponseDto": {

@@ -166,7 +166,7 @@ export class ChatStreamService {
     // Only a run that waits for its person has a request to show.
     const pending =
       newest?.status === 'waiting_human'
-        ? await db.question.findFirst({ where: { runId: newest.id, status: 'pending', expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' } })
+        ? await db.question.findFirst({ where: { runId: newest.id, status: 'pending', blocking: true, expiresAt: { gt: new Date() } }, orderBy: { createdAt: 'desc' } })
         : null;
     const guidance = await this.prisma.runGuidance.findMany({ where: { conversationId: c.id }, orderBy: { createdAt: 'desc' }, take: GUIDANCE_SHOWN, select: { messageSeq: true, deliveredAt: true, run: { select: { status: true } } } });
     const live = new Set<string>(LIVE_RUN_STATUSES);

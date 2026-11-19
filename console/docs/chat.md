@@ -100,6 +100,7 @@ When the agent asks you to confirm an irreversible step (a payment, an order, a 
 - **A follow-up knows.** The next job's context says the previous job carried out a confirmed step, and the assistant asks you before starting a job that would repeat it.
 - **A wrap-up without words.** When a stopped run's last model call reports nothing, its result is "Stopped before the agent could report. Last steps: …" with the last five steps, masked, instead of only the stop message.
 - **API.** `GET /api/runs/{id}` carries `confirmedActions` (the list); a list row carries the count. The run page marks the step "Confirmed by you".
+- **Keep or share it.** The result card has **Export** beside **Open run**: the run's masked JSON trace or its PDF report ([docs/runs.md](runs.md#exporting-a-run)). Turn screenshots off before sharing it outside.
 
 ## Steering and follow-ups
 
@@ -109,6 +110,10 @@ When the agent asks you to confirm an irreversible step (a payment, an order, a 
 ## Notifications
 
 A chat run's notifications (the request, its reminders, "Run finished") open the chat at the run instead of the Inbox; their buttons (Approve, Stop run, Remind me in 15 min) work as before. The service worker shows no notification for a chat that is open and in front in a focused window.
+
+## Memories (#553)
+
+The chat reads your saved memories (people, accounts, preferences) before the thread, and puts the facts a job needs into the run's goal: "send my wife $10" starts a run without asking who she is. When no memory covers a person or an account the job needs, it asks once, for everything at once. After you give such a fact, it may propose remembering it: a **Remember this?** card in the thread (Save, or Not now); nothing is saved without you. A proposal never pauses a run. **Suggest memories** in Chat settings turns proposals off (a setting of yours, for every chat). Details: [memories.md](memories.md#how-the-agent-uses-them-553).
 
 ## Save as task
 

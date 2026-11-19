@@ -14,6 +14,7 @@ import { TaskEditPage } from '../pages/TaskEditPage';
 import { goalPieces, nameProblem } from '../taskParams/GoalField';
 import { cleanParameters, issuesByKey, missingParameters, previewGoal, savedValueText, syncParameters, type TaskParameter } from '../taskParams/model';
 import type { TaskWithSchedules } from '../taskForm/values';
+import { toMemoryOptions } from '../taskParams/useMemoryOptions';
 import { ConfirmProvider, ToastHost, dismissToast } from '../ui';
 import { POLICY_READS } from './policyFixtures';
 
@@ -54,7 +55,8 @@ function mount(path: string, responses: Record<string, unknown> = {}, permission
     permissions,
     responses: {
       ...POLICY_READS,
-      'GET /memories': MEMORIES,
+      // The Memories page's own client (#551): active ones only.
+      'GET /memories?status=active': MEMORIES,
       'POST /tasks': { ...TASK, id: NEW_ID },
       [`GET /tasks/${TASK_ID}?include=summary`]: TASK,
       [`PATCH /tasks/${TASK_ID}`]: TASK,
@@ -265,11 +267,33 @@ describe('the Parameters section of the task form', () => {
     expect((sent('POST', '/tasks')[0]!.body as { parameters: unknown }).parameters).toEqual([{ key: 'phone', label: 'Phone', type: 'text', required: true, default: { memory: { id: MEMORY_ID, attribute: 'phone' } } }]);
   });
 
-  it('hides "From a memory" without memories:read, and when the memories cannot be read', async () => {
-    mount('/tasks/new', {}, ['tasks:read', 'tasks:write']);
+  it('hides "From a memory" without memories:read', async () => {
+    const { host } = mount('/tasks/new', {}, ['tasks:read', 'tasks:write']);
     await screen.findByRole('form', { name: 'New task' });
     setGoal('Call {{Phone}}');
     expect(within(row('Phone')).queryByRole('radio', { name: 'From a memory' })).not.toBeInTheDocument();
+    expect(host.requests.some((r) => r.path.startsWith('/memories'))).toBe(false);
+  });
+
+  it('hides "From a memory" when the memories cannot be read', async () => {
+    const { host } = mount('/tasks/new', { 'GET /memories?status=active': () => Promise.reject(createTestApiError(500, 'down')) });
+    await screen.findByRole('form', { name: 'New task' });
+    await waitFor(() => expect(host.requests.some((r) => r.path.startsWith('/memories'))).toBe(true));
+    setGoal('Call {{Phone}}');
+    expect(within(row('Phone')).queryByRole('radio', { name: 'From a memory' })).not.toBeInTheDocument();
+  });
+
+  it('offers the active memories by label with their value names, never their values', () => {
+    expect(
+      toMemoryOptions([
+        { id: 'b', label: 'My wife', status: 'active', attributes: { name: 'Person A', phone: '555-010-6020' } },
+        { id: 'a', label: 'Checking account', status: 'active', attributes: { ending: '0659' } },
+        { id: 'c', label: 'Old address', status: 'archived', attributes: { city: 'X' } },
+      ]),
+    ).toEqual([
+      { id: 'a', label: 'Checking account', attributes: ['ending'] },
+      { id: 'b', label: 'My wife', attributes: ['name', 'phone'] },
+    ]);
   });
 
   it('shows the server\'s problem on the parameter it names', async () => {

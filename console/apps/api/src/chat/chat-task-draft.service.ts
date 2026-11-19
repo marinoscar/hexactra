@@ -82,6 +82,8 @@ export function parseDraft(text: string): { name: string; goal: string; paramete
 export interface DraftMemory {
   id: string;
   label: string;
+  /** Other words for it (#551), matched like the label. */
+  aliases?: string[];
   attributes: string[];
 }
 
@@ -96,7 +98,8 @@ export interface DraftMemory {
 export function draftDefinitions(goal: string, proposed: readonly DraftParameter[], memories: readonly DraftMemory[]): TaskParameter[] {
   const defs = proposed.map((p) => {
     const def: Partial<TaskParameter> = { key: paramKey(p.name), label: p.name, type: p.type, required: true };
-    const m = p.memory ? memories.find((x) => x.label.toLowerCase() === p.memory!.toLowerCase()) : undefined;
+    const wanted = p.memory?.toLowerCase();
+    const m = wanted ? memories.find((x) => x.label.toLowerCase() === wanted || (x.aliases ?? []).some((a) => a.toLowerCase() === wanted)) : undefined;
     const attribute = m?.attributes.find((a) => a.toLowerCase() === p.attribute?.toLowerCase());
     if (m && attribute) def.default = { memory: { id: m.id, attribute } };
     else if (p.default) def.default = { value: p.default };
@@ -138,18 +141,18 @@ export class ChatTaskDraftService {
   }
 
   /**
-   * The owner's active memories (#551) for a memory-backed default, by label
-   * and value names. A console without the memories model reads none.
+   * The owner's active memories (#551) for a memory-backed default: label,
+   * aliases and value names, never the values. Read through the owner's
+   * scoped client; the newest used first, at most 100.
    */
   async memories(userId: string): Promise<DraftMemory[]> {
-    const db = this.prisma.forUser({ userId }) as unknown as { memory?: { findMany: (q: unknown) => Promise<{ id: string; label: string; attributes: unknown }[]> } };
-    if (!db.memory) return [];
-    try {
-      const rows = await db.memory.findMany({ where: { userId, status: 'active' }, select: { id: true, label: true, attributes: true }, take: 100 });
-      return rows.map((r) => ({ id: r.id, label: r.label, attributes: r.attributes && typeof r.attributes === 'object' ? Object.keys(r.attributes as object) : [] }));
-    } catch {
-      return [];
-    }
+    const rows = await this.prisma.forUser({ userId }).memory.findMany({
+      where: { status: 'active' },
+      select: { id: true, label: true, aliases: true, attributes: true },
+      orderBy: [{ lastUsedAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+      take: 100,
+    });
+    return rows.map((r) => ({ id: r.id, label: r.label, aliases: r.aliases, attributes: r.attributes && typeof r.attributes === 'object' ? Object.keys(r.attributes as object) : [] }));
   }
 
   private async fallback(c: Conversation): Promise<{ name: string; goal: string; parameters?: DraftParameter[] }> {

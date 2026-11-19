@@ -64,12 +64,13 @@ export class NotificationsQuestionChannel implements QuestionChannel, OnModuleIn
   }
 
   async deliver(q: QuestionView, ctx: QuestionChannelContext): Promise<void> {
-    if (!this.notifications || q.runId) return;
+    // A run's own requests are notified by the run (run-notifier.ts); a memory proposal (#553) never pauses its run, so it is notified here, without values.
+    if (!this.notifications || (q.runId && q.input !== 'memory')) return;
     await this.notifications.notify(QUESTION_ASKED_EVENT, ctx.ownerUserId, this.payload(q, ctx.ownerUserId));
   }
 
   async withdraw(q: QuestionView, ctx: QuestionChannelContext): Promise<void> {
-    if (q.runId) return;
+    if (q.runId && q.input !== 'memory') return;
     const now = new Date();
     await this.prisma.notification.updateMany({
       where: { userId: ctx.ownerUserId, eventKey: QUESTION_ASKED_EVENT, link: { startsWith: questionPath(q.id) }, dismissedAt: null },

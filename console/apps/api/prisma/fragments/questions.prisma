@@ -19,6 +19,8 @@ enum QuestionInput {
   credentials
   /// Several typed fields at once (#552): the missing parameters of a task run, asked before it starts.
   form
+  /// A memory the agent proposes (#553): answered only in the signed-in web and app; the answer writes the memory.
+  memory
 
   @@map("question_input")
 }
@@ -58,6 +60,9 @@ model Question {
   risk             String?        @db.VarChar(8)
   /// credentials and secret: the site's "remember me" option in the page's words (#527).
   rememberLabel    String?        @map("remember_label") @db.VarChar(80)
+  /// The commitment the server's confirmation gate stopped (#550): `{ host, category, label }`. Set by the
+  /// server only, from the clicked element and the page the fabric reports; never from model text.
+  gate             Json?
   /// The page the agent was on (browser-bound), for display.
   pageTitle        String?        @map("page_title") @db.VarChar(500)
   /// The fabric's viewer of the host's browser, when it has one.
@@ -74,6 +79,14 @@ model Question {
   clientId         String?        @map("client_id") @db.Uuid
   clientName       String?        @map("client_name") @db.VarChar(64)
   grantId          String?        @map("grant_id") @db.Uuid
+  /// False for a question no run waits on (a memory proposal, #553): it never pauses a run, a run's end leaves it pending.
+  blocking         Boolean        @default(true)
+  /// memory: the proposed memory `{ kind, label, aliases, attributes, supersedes? }`; the owner edits it on the card.
+  proposal         Json?
+  /// memory: a hash of the proposal's kind and label, so a recently declined proposal is not made again.
+  proposalKey      String?        @map("proposal_key") @db.VarChar(64)
+  /// The chat a memory proposal came from (#553). A plain id: deleting the chat does not delete the question.
+  conversationId   String?        @map("conversation_id") @db.Uuid
   createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz
   updatedAt        DateTime       @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -85,6 +98,7 @@ model Question {
   @@index([ownerUserId, status, createdAt])
   @@index([status, expiresAt])
   @@index([runId])
+  @@index([ownerUserId, proposalKey])
   @@map("questions")
 }
 

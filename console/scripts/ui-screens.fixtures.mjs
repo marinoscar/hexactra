@@ -13,6 +13,7 @@ export const IDS = {
   liveRun: '33333331-3333-4333-8333-333333333333',
   finishedRun: '33333334-3333-4333-8333-333333333333',
   chatRun: '33333335-3333-4333-8333-333333333333',
+  traceRun: '33333336-3333-4333-8333-333333333333',
   question: '55555555-5555-4555-8555-555555555555',
   policy: '66666666-6666-4666-8666-666666666666',
   group: '77777777-7777-4777-8777-777777777777',
@@ -22,15 +23,17 @@ export const IDS = {
   paramTask: '11111111-1111-4111-8111-111111111119',
   formQuestion: '55555555-5555-4555-8555-555555555559',
   paramRun: '33333339-3333-4333-8333-333333333333',
-  memory: '99999999-9999-4999-8999-999999999991',
+  // The memory `GET /memories` lists as "My wife".
+  memory: 'a1000000-0000-4000-8000-000000000001',
 };
 
 const PERMISSIONS = [
   'chat:read', 'chat:write', 'tasks:read', 'tasks:write', 'runs:read', 'runs:write', 'runs:delete', 'fleet:read', 'fleet:write', 'fleet:desktop', 'notes:read', 'notes:write',
-  'agent_policies:read', 'agent_policies:write', 'system_settings:read', 'system_settings:write', 'fabric_config:read', 'fabric_config:write',
+  'agent_policies:read', 'agent_policies:write', 'approvals:read', 'approvals:write', 'system_settings:read', 'system_settings:write', 'fabric_config:read', 'fabric_config:write',
   'users:read', 'allowlist:read', 'jobs:read', 'webhooks:read', 'system_webhooks:read', 'alerts:read', 'ai:use', 'ai_config:read', 'storage_config:read',
   'db_backup:read', 'telemetry:read', 'push:read', 'broadcasts:read', 'groups:read', 'organizations:read',
-  'connected_apps:read', 'connected_apps:write', 'oauth_clients:read', 'oauth_clients:write', 'memories:read',
+  'connected_apps:read', 'connected_apps:write', 'oauth_clients:read', 'oauth_clients:write',
+  'memories:read', 'memories:write',
 ];
 
 const limits = { maxActions: 60, maxModelCalls: 120, maxActiveMinutes: 20, maxInputTokens: null, maxOutputTokens: null, maxCostUsd: 2 };
@@ -88,12 +91,60 @@ const liveRun = run(IDS.liveRun, 'running', {
 const finishedRun = run(IDS.finishedRun, 'failed', {
   stopReason: 'budget_cost', result: 'Compared 3 of 5 fares; the cheapest so far is 120 on the 9:00 departure.', error: 'Cost budget exhausted',
   finishedAt: iso(-60_000), budget: { ...budget, used: { ...budget.used, cost: 2.01 }, percent: { ...budget.percent, cost: 100.5 } },
+  // The memories its goal used (#553): the run page says "Used: …".
+  memoryIds: ['aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaaa'],
+  memories: [{ id: 'aaaaaaa1-aaaa-4aaa-8aaa-aaaaaaaaaaaa', label: 'My partner', status: 'active' }, { id: 'aaaaaaa2-aaaa-4aaa-8aaa-aaaaaaaaaaaa', label: 'Checking account', status: 'active' }],
 });
 /** A chat run over its soft action limit that still finished (#537). */
 const chatRun = run(IDS.chatRun, 'succeeded', {
   trigger: 'chat', taskId: null, stopReason: 'finished', result: 'Sent the payment and checked it shows as completed.', finishedAt: iso(-30_000), stepCount: 64,
   budget: { ...budget, used: { ...budget.used, actions: 64 }, percent: { ...budget.percent, actions: 106.7 }, enforcement: 'soft', over: ['actions'] },
 });
+/**
+ * A chat run's trace (#544): two questions with their answers, the owner's guidance, a confirmed
+ * step and five masked key-moment pictures (drawn by ui-screens.mjs from TRACE_FRAMES).
+ */
+const traceQ1 = '5555555a-5555-4555-8555-555555555555';
+const traceQ2 = '5555555b-5555-4555-8555-555555555555';
+const traceStep = (seq, kind, action, summary, extra = {}) => ({
+  ...step(seq, kind, action, summary), hasScreenshot: false, screenshotMoment: null, screenshotMasked: null, screenshotNote: null, questionId: null, question: null, ...extra,
+});
+const confirmQuestion = {
+  id: traceQ1, kind: 'confirmation', input: 'confirm', risk: 'high', status: 'answered', options: null,
+  prompt: 'Pay $42.00 to Example Utilities from the checking account ending 0659? The bill covers October and November; the payment is sent today and cannot be cancelled once it is processed.',
+  answer: { outcome: 'completed', value: 'approve', valueWithheld: false, channel: 'web', answeredAt: iso(-540_000 + 38_000) },
+};
+const signInQuestion = {
+  id: traceQ2, kind: 'login', input: 'credentials', risk: null, status: 'answered', options: null,
+  prompt: 'Sign in to bills.example.test to see the latest bill.',
+  answer: { outcome: 'completed', valueWithheld: true, channel: 'cli', answeredAt: iso(-585_000) },
+};
+const traceSteps = [
+  traceStep(1, 'action', 'navigate', 'Opened https://bills.example.test/account'),
+  traceStep(2, 'handoff', 'ask', 'Sign in to bills.example.test to see the latest bill.', { questionId: traceQ2, question: signInQuestion, hasScreenshot: true, screenshotMoment: 'question', screenshotMasked: 1 }),
+  traceStep(3, 'handoff', 'answered', 'The owner provided the sign-in', { questionId: traceQ2, question: signInQuestion }),
+  traceStep(4, 'observe', 'text', 'Read the bill'),
+  traceStep(5, 'guidance', null, 'The owner added: pay it from checking, not the card'),
+  traceStep(6, 'handoff', 'confirm', confirmQuestion.prompt.slice(0, 120), { questionId: traceQ1, question: confirmQuestion, hasScreenshot: true, screenshotMoment: 'before_confirmed', screenshotMasked: 2 }),
+  traceStep(7, 'handoff', 'answered', 'The owner allowed it', { questionId: traceQ1, question: confirmQuestion }),
+  traceStep(8, 'action', 'click', 'Clicked "Pay $42.00"', { hasScreenshot: true, screenshotMoment: 'after_confirmed', screenshotMasked: 2 }),
+  traceStep(9, 'action', 'click', 'The receipt link did not respond', { ok: false, hasScreenshot: true, screenshotMoment: 'failure', screenshotMasked: 0 }),
+  traceStep(10, 'end', null, 'The run ended', { hasScreenshot: true, screenshotMoment: 'final', screenshotMasked: 2 }),
+];
+const traceRun = run(IDS.traceRun, 'succeeded', {
+  trigger: 'chat', taskId: null, goal: 'Pay the electricity bill from the checking account', profile: 'default',
+  stopReason: 'finished', result: 'Paid $42.00 to Example Utilities; the confirmation number is on the final screen.', finishedAt: iso(-480_000),
+  stepCount: 7, steps: traceSteps, budget: null, costUsd: 0.38,
+  confirmedActions: [{ seq: 8, prompt: 'Pay $42.00 to Example Utilities from the checking account ending 0659?', action: 'click', at: iso(-530_000) }],
+});
+/** The placeholder pictures of the trace run, by step: a title, a header colour and the masked boxes. */
+export const TRACE_FRAMES = {
+  2: { title: 'bills.example.test: sign in', header: '#00695c', masks: [[400, 360, 480, 60]] },
+  6: { title: 'bills.example.test: pay $42.00?', header: '#3949ab', masks: [[120, 250, 300, 40], [700, 250, 300, 40]] },
+  8: { title: 'bills.example.test: payment sent', header: '#2e7d32', masks: [[120, 250, 300, 40], [120, 370, 240, 40]] },
+  9: { title: 'bills.example.test: receipt', header: '#c62828', masks: [] },
+  10: { title: 'bills.example.test: done', header: '#455a64', masks: [[120, 250, 300, 40], [120, 490, 260, 40]] },
+};
 const runs = [liveRun, run('33333332-3333-4333-8333-333333333333', 'waiting_human'), run('33333333-3333-4333-8333-333333333333', 'succeeded', { stopReason: 'finished', result: 'Held the 9:00 fare.' }), finishedRun]
   .map(({ steps: _steps, ...rest }) => rest);
 
@@ -107,6 +158,14 @@ const confirmation = {
   ...question, questionId: '55555555-5555-4555-8555-555555555556', id: '55555555-5555-4555-8555-555555555556', runId: null, goal: '', handoffId: null,
   askedBy: 'agent:packer', browserBound: false, prompt: 'Book the 9:00 departure for 120?', pageTitle: null, kind: 'confirmation', input: 'confirm',
   constraints: null, confirmLabel: 'Book it', denyLabel: 'Do not book', risk: 'high',
+};
+
+/** A memory the agent proposes (#553): a quiet, non-blocking request, in the chat and the Inbox. */
+const memoryProposal = {
+  ...question, questionId: '5555555a-5555-4555-8555-555555555555', id: '5555555a-5555-4555-8555-555555555555', runId: null, goal: 'The agent suggests remembering something.', handoffId: null,
+  askedBy: `chat:${IDS.chat}`, browserBound: false, prompt: 'The agent suggests remembering something.', pageTitle: null, kind: 'memory', input: 'memory', constraints: null,
+  expiresAt: iso(7 * 86_400_000), blocking: false, conversationId: IDS.chat,
+  proposal: { kind: 'person', label: 'My partner', aliases: ['partner'], attributes: { name: 'Person B', phone: '555-010-6020', relation: 'partner' }, supersedes: null },
 };
 
 const hosts = [
@@ -306,6 +365,8 @@ const chatMessages = [
   chatMessage(7, 'user', 'text', '7:30 PM, somewhere in the middle of the room please. If the middle rows are full, the row right behind them is fine too.'),
   // The live run: its Browser card shows the run's picture (the mocked screenshot).
   chatMessage(8, 'assistant', 'run', 'Book 2 tickets for the 7:30 PM showing of the new space film tonight at the usual cinema, middle rows preferred, otherwise the row right behind them.', { runId: IDS.liveRun }),
+  // The agent offers to remember a person the owner named (#553): the "Remember this?" card.
+  chatMessage(9, 'assistant', 'memory', 'Suggested remembering: My partner', { meta: { questionId: memoryProposal.id } }),
 ];
 const chatRow = (id, title, extra = {}) => ({ ...chatBase, id, title, lastMessageAt: iso(-120_000), preview: { role: 'assistant', kind: 'run', text: 'Book 2 tickets for the 7:30 PM showing of the new space film tonight.' }, liveRun: null, ...extra });
 const chatRows = [
@@ -315,7 +376,25 @@ const chatRows = [
   chatRow('88888888-8888-4888-8888-888888888883', '', { lastMessageAt: iso(-9 * 86_400_000), preview: null }),
 ];
 
+/** Saved approvals (#554). */
+const approvalRules = [
+  { id: '5a000000-0000-4000-8000-000000000001', kind: 'gate', host: 'bank.example.com', category: 'payment', matchKey: 'pay', summary: "Press 'Pay' on bank.example.com", taskId: null, taskName: null, conversationId: null, maxAmount: null, expiresAt: null, enabled: true, createdFromQuestionId: null, useCount: 4, lastUsedAt: iso(-2 * 86_400_000), lastUsedRunId: IDS.finishedRun, createdAt: iso(-20 * 86_400_000), updatedAt: iso(-20 * 86_400_000) },
+  { id: '5a000000-0000-4000-8000-000000000002', kind: 'ask', host: 'bank.example.com', category: null, matchKey: 'choose_date', summary: 'Choose dates on bank.example.com', taskId: null, taskName: null, conversationId: null, maxAmount: null, expiresAt: null, enabled: true, createdFromQuestionId: null, useCount: 0, lastUsedAt: null, lastUsedRunId: null, createdAt: iso(-10 * 86_400_000), updatedAt: iso(-10 * 86_400_000) },
+  { id: '5a000000-0000-4000-8000-000000000003', kind: 'gate', host: 'a-very-long-shop-name-for-narrow-screens.example.co.uk', category: 'purchase', matchKey: 'place your order', summary: "Press 'Place your order and pay with the saved card ending 1111' on a-very-long-shop-name-for-narrow-screens.example.co.uk", taskId: IDS.task, taskName: 'Weekly groceries', conversationId: null, maxAmount: 50, expiresAt: iso(40 * 86_400_000), enabled: false, createdFromQuestionId: null, useCount: 1, lastUsedAt: iso(-30 * 86_400_000), lastUsedRunId: null, createdAt: iso(-60 * 86_400_000), updatedAt: iso(-5 * 86_400_000) },
+];
+
 /** `"<METHOD> <path>"` to the response `data`. A function gets the request URL and its JSON body. */
+const memory = (id, kind, label, attributes, extra = {}) => ({
+  id, kind, label, aliases: [], attributes, note: null, status: 'active', source: 'owner', sourceRunId: null, sourceConversationId: null,
+  supersededById: null, lastUsedAt: null, createdAt: '2026-11-10T09:00:00.000Z', updatedAt: '2026-11-10T09:00:00.000Z', ...extra,
+});
+const memories = [
+  memory('a1000000-0000-4000-8000-000000000001', 'person', 'My wife', { name: 'Person A', phone: '555-010-6020', relation: 'wife' }, { aliases: ['wife', 'person a'], lastUsedAt: '2026-11-17T18:00:00.000Z' }),
+  memory('a1000000-0000-4000-8000-000000000002', 'account', 'Checking account', { bank: 'Bank of Example', ending: '0659' }, { source: 'agent_proposed', sourceConversationId: IDS.chat, note: 'The account the household bills are paid from; a longer note that has to wrap on a narrow phone screen.' }),
+  memory('a1000000-0000-4000-8000-000000000003', 'preference', 'Seat', { seat: 'aisle', class: 'economy' }),
+  memory('a1000000-0000-4000-8000-000000000004', 'fact', 'Old address', { city: 'Example City' }, { status: 'archived' }),
+];
+
 export const RESPONSES = {
   'POST /auth/refresh': { accessToken: 'ui-screens-token', expiresIn: 900 },
   'GET /auth/providers': { providers: [{ name: 'google', enabled: true }] },
@@ -344,6 +423,7 @@ export const RESPONSES = {
   [`GET /runs/${IDS.liveRun}/viewer`]: { hostId: IDS.host, hostName: 'mini-pc', desktop: true },
   [`GET /runs/${IDS.finishedRun}`]: finishedRun,
   [`GET /runs/${IDS.chatRun}`]: chatRun,
+  [`GET /runs/${IDS.traceRun}`]: traceRun,
   'GET /fleet/hosts': hosts,
   [`GET /fleet/hosts/${IDS.host}`]: hosts[0],
   [`GET /fleet/hosts/${IDS.host}/takeover`]: null,
@@ -351,14 +431,19 @@ export const RESPONSES = {
   'POST /fleet/enrollments': { enrollmentToken: 'hxe_placeholder', expiresAt: iso(900_000), command: 'curl -fsSL https://console.example.test/install.sh | sh -s -- agent install --url https://console.example.test --enrollment-token hxe_placeholder_0123456789abcdef --mode unattended' },
   'GET /chats': (url) => ({ items: url.searchParams.get('status') === 'archived' ? [] : chatRows, nextCursor: null }),
   [`GET /chats/${IDS.chat}`]: { ...chatBase, id: IDS.chat, title: chatRows[0].title, lastMessageAt: iso(-120_000), messages: chatMessages, hasMore: false, liveRun: { id: IDS.liveRun, status: 'running' }, thinking: false },
-  'GET /inbox': [question, confirmation],
+  'GET /inbox': [question, confirmation, memoryProposal],
   [`GET /questions/${IDS.question}`]: question,
+  [`GET /questions/${memoryProposal.id}`]: memoryProposal,
   'GET /agent-policies': policies,
   [`GET /agent-policies/${IDS.policy}`]: policies[2],
   'GET /agent-policies/default': { policyId: 'builtin:balanced' },
   'GET /agent-policies/model-tiers/effective': { policy: null, tiers: { fast: effectiveTier('provider-a:model-small'), standard: effectiveTier('provider-a:model-mid'), frontier: effectiveTier('provider-a:model-large-2026') } },
   'GET /fabric/connection': { url: 'http://fabric-control:8787', tokenSet: true, source: 'settings', updatedAt: iso(-86_400_000) },
   'GET /connected-apps': connectedApps,
+  // Memories (#551): a person, an account suggested by the agent, a preference and an archived fact.
+  'GET /memories': (url) => (url.searchParams.get('status') === 'all' ? memories : memories.filter((m) => m.status === 'active')),
+  // Saved approvals (#554): three rules on two sites, one limited, one off.
+  'GET /approval-rules': { paused: false, rules: approvalRules },
   'GET /connected-apps/preflight': preflight,
   [`GET /connected-apps/${IDS.app}`]: connectedApps[0],
   'GET /notes': [{ id: 'note-1', title: 'A first note', body: '', archived: false }, { id: 'note-2', title: 'A note with a long title that has to wrap on a narrow phone screen', body: '', archived: true }],
@@ -377,10 +462,6 @@ const paramTask = task(IDS.paramTask, 'Zelle to my wife', {
   createdAt: iso(-2 * 86_400_000), updatedAt: iso(-86_400_000),
   summary: { ...taskSummary, schedules: [taskSchedule('33333333-3333-4333-8333-333333333339', 'Every month on day 1 at 09:00', { inputs: { amount: '25' } })] },
 });
-const memories = [
-  { id: IDS.memory, kind: 'person', label: 'My wife', aliases: ['wife'], attributes: { name: 'Person A', phone: '555-010-6020' }, note: null, status: 'active', source: 'owner', sourceRunId: null, sourceConversationId: null, supersededById: null, lastUsedAt: null, createdAt: iso(-86_400_000), updatedAt: iso(-86_400_000) },
-  { id: '99999999-9999-4999-8999-999999999992', kind: 'account', label: 'Checking account', aliases: [], attributes: { bank: 'Bank X', ending: '0659' }, note: null, status: 'active', source: 'owner', sourceRunId: null, sourceConversationId: null, supersededById: null, lastUsedAt: null, createdAt: iso(-86_400_000), updatedAt: iso(-86_400_000) },
-];
 const formQuestion = {
   ...question, questionId: IDS.formQuestion, id: IDS.formQuestion, runId: IDS.paramRun, goal: ZELLE_GOAL, handoffId: null, askedBy: `run:${IDS.paramRun}`, browserBound: false,
   prompt: 'A few details to start "Zelle to my wife": Amount, When', pageTitle: null, kind: 'other', input: 'form', options: null, constraints: null, viewerUrl: null, risk: null,
@@ -401,10 +482,9 @@ const paramRun = run(IDS.paramRun, 'succeeded', {
 });
 RESPONSES[`GET /tasks/${IDS.paramTask}`] = paramTask;
 RESPONSES[`GET /tasks/${IDS.paramTask}/stats`] = RESPONSES[`GET /tasks/${IDS.task}/stats`];
-RESPONSES['GET /memories'] = memories;
 RESPONSES[`GET /questions/${IDS.formQuestion}`] = formQuestion;
 RESPONSES[`GET /runs/${IDS.paramRun}`] = paramRun;
 RESPONSES['GET /inbox'] = [formQuestion, ...RESPONSES['GET /inbox']];
 
 /** The ids a mock run puts in the parameterized routes. */
-export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun };
+export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun };

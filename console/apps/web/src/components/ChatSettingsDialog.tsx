@@ -9,6 +9,7 @@ import type { Chat, ChatSettings } from '../types/chat';
 import { AllowedSitesInput } from './AllowedSitesInput';
 import { MachinePicker, useFleetHosts } from './MachinePicker';
 import { ProfilePicker } from './ProfilePicker';
+import { SuggestMemoriesSwitch } from '../memories/SuggestMemoriesSwitch';
 
 export interface ChatSettingsDialogProps {
   open: boolean;
@@ -73,6 +74,10 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
             control={<Switch checked={values.confirmRiskyActions} disabled={busy} onChange={(e) => setValues((v) => ({ ...v, confirmRiskyActions: e.target.checked }))} />}
             label="Ask me before a purchase or another step that is hard to undo"
           />
+          {/* A setting of the owner, not of this chat (#553): saved as soon as it is switched. */}
+          <div>
+            <SuggestMemoriesSwitch disabled={busy} />
+          </div>
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>

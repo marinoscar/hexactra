@@ -23,6 +23,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { numberError, numberHint, selectionBounds, selectionHelp, selectionOk, textError } from '@app/shared/question-rules';
 
 import { FormQuestion } from '../taskParams/FormQuestion';
+import { MemoryProposalForm } from './MemoryProposalForm';
 import { digitsOnly, secretLabel, type AnswerBody, type AskedQuestion, type QuestionOption } from './questions';
 
 export interface QuestionAnswerFormProps {
@@ -104,10 +105,14 @@ function OptionsBox({ count, children }: { count: number; children: ReactNode })
 export function QuestionAnswerForm(props: QuestionAnswerFormProps) {
   // A task run's missing values (#552, #556): its own form of typed fields, one Send.
   if (props.question.input === 'form') return <FormQuestion fields={props.question.fields ?? []} onSubmit={props.onSubmit} disabled={props.disabled} busy={props.busy} />;
-  return <SingleAnswerForm {...props} />;
+  // A memory the agent proposes (#553): its own card, Save or Not now.
+  if (props.question.input === 'memory') {
+    return props.question.proposal ? <MemoryProposalForm proposal={props.question.proposal} onSubmit={props.onSubmit} disabled={props.disabled} busy={props.busy} /> : null;
+  }
+  return <TypedAnswerForm {...props} />;
 }
 
-function SingleAnswerForm({ question: q, onSubmit, onOpenBrowser, disabled: off, busy = false }: QuestionAnswerFormProps) {
+function TypedAnswerForm({ question: q, onSubmit, onOpenBrowser, disabled: off, busy = false }: QuestionAnswerFormProps) {
   const disabled = Boolean(off) || busy;
   const [value, setValue] = useState('');
   const [picked, setPicked] = useState<string[]>([]);

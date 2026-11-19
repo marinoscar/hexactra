@@ -75,6 +75,7 @@ import {
   type RunView,
 } from './runFilters';
 import { ORIGIN_LABEL, StartedByChip, appDisplayName } from './StartedByChip';
+import { useRunExport } from './RunExport';
 import { RUN_MENU_LABEL, rowCost, runAgain, runAgainQuestionFor, runDuration, runMenuActions, triggerWords, type RunMenuAction } from './runRow';
 import { useRunList } from './useRunList';
 
@@ -341,7 +342,9 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
   // ---- The row menu ----
   const [menu, setMenu] = useState<{ anchor: HTMLElement; run: RunListItem } | null>(null);
   const [withMenu, setWithMenu] = useState<{ anchor: HTMLElement; run: RunListItem } | null>(null);
-  const menuPermissions = { canWrite, canDelete, canPickPolicy: canReadPolicies && catalog.policies.length > 0 };
+  // Export PDF and Export JSON (#544), with the "Include screenshots" choice remembered from the run page's menu.
+  const exporter = useRunExport();
+  const menuPermissions = { canWrite, canDelete, canPickPolicy: canReadPolicies && catalog.policies.length > 0, canExport: exporter.canExport };
   const pick = (kind: RunMenuAction) => {
     if (!menu) return;
     const { run, anchor } = menu;
@@ -349,6 +352,7 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
     if (kind === 'open') navigate(`/runs/${run.id}`);
     else if (kind === 'again') void again(run);
     else if (kind === 'againWith') setWithMenu({ anchor, run });
+    else if (kind === 'exportPdf' || kind === 'exportJson') void exporter.start(run.id, kind === 'exportPdf' ? 'pdf' : 'json');
     else if (kind === 'cancel') void cancel(run);
     else void deleteOne(run);
   };
@@ -659,6 +663,12 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
       )}
 
       <ErrorBanner error={action.error} onClose={action.clearError} />
+      <ErrorBanner error={exporter.error} onClose={exporter.clearError} />
+      {exporter.busy && (
+        <Typography variant="body2" color="text.secondary" role="status" sx={{ mb: 1 }}>
+          Preparing the {exporter.busy === 'pdf' ? 'PDF report' : 'JSON trace'}…
+        </Typography>
+      )}
       <ErrorBanner error={list.error} onRetry={reload} />
       {background && (
         <Alert severity="info" icon={<CircularProgress size={18} />} sx={{ mb: 2 }} role="status">
@@ -777,7 +787,7 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
       <Menu anchorEl={menu?.anchor ?? null} open={menu !== null} onClose={() => setMenu(null)}>
         {menu &&
           runMenuActions(menu.run, menuPermissions).map((kind) => (
-            <MenuItem key={kind} onClick={() => pick(kind)} sx={{ minHeight: 44, color: kind === 'delete' ? 'error.main' : undefined }}>
+            <MenuItem key={kind} onClick={() => pick(kind)} disabled={(kind === 'exportPdf' || kind === 'exportJson') && exporter.busy !== null} sx={{ minHeight: 44, color: kind === 'delete' ? 'error.main' : undefined }}>
               {RUN_MENU_LABEL[kind]}
             </MenuItem>
           ))}

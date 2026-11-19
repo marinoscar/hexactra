@@ -268,7 +268,7 @@
     },
     {
       "id": "runs.export",
-      "description": "Export a run as one masked JSON trace file: the run, its policy, budget, steps, questions and answers, trace screenshots and chat",
+      "description": "Export a run as one masked JSON trace file (the run, its policy, budget, steps, questions and answers, trace screenshots and chat) or as a PDF report",
       "rest": [
         "GET /api/runs/{id}/export"
       ],
@@ -277,9 +277,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; a file is written with the CLI"
       },
-      "web": {
-        "none": "The Export button on the run page comes with E35.8; until then use the CLI, the SDK or the route"
-      }
+      "web": "/runs/:id"
     },
     {
       "id": "runs.delete",
@@ -945,6 +943,111 @@
         "none": "An administrator's settings task; the CLI commands are the operator's kill switch, the web page the rest"
       },
       "web": "/admin/settings/ai-app-limits"
+    },
+    {
+      "id": "memories.read",
+      "description": "List, search and read your memories (facts the agent may use) with their history",
+      "rest": [
+        "GET /api/memories",
+        "GET /api/memories/{id}"
+      ],
+      "cli": [
+        "memories list",
+        "memories show"
+      ],
+      "mcp": {
+        "none": "Hosted AI apps and agents cannot read or write memories (#551, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; memories are kept in the web app or the CLI"
+      },
+      "web": "/settings/memories"
+    },
+    {
+      "id": "memories.write",
+      "description": "Add, edit, supersede, archive and unarchive a memory",
+      "rest": [
+        "POST /api/memories",
+        "PATCH /api/memories/{id}",
+        "POST /api/memories/{id}/supersede",
+        "POST /api/memories/{id}/archive",
+        "POST /api/memories/{id}/unarchive"
+      ],
+      "cli": "memories add",
+      "mcp": {
+        "none": "Hosted AI apps and agents cannot read or write memories (#551, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; memories are kept in the web app or the CLI"
+      },
+      "web": "/settings/memories"
+    },
+    {
+      "id": "memories.delete",
+      "description": "Delete a memory and its history permanently",
+      "rest": [
+        "DELETE /api/memories/{id}"
+      ],
+      "cli": "memories rm",
+      "mcp": {
+        "none": "Hosted AI apps and agents cannot read or write memories (#551, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; memories are kept in the web app or the CLI"
+      },
+      "web": "/settings/memories"
+    },
+    {
+      "id": "memories.export",
+      "description": "Export your memories as a hexactra.memories JSON file",
+      "rest": [
+        "GET /api/memories/export"
+      ],
+      "cli": "memories export",
+      "mcp": {
+        "none": "Hosted AI apps and agents cannot read or write memories (#551, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; memories are kept in the web app or the CLI"
+      },
+      "web": "/settings/memories"
+    },
+    {
+      "id": "approvals.list",
+      "description": "Saved approvals: the steps the owner told the agent not to ask about again, with their limits and recent uses, and whether Pause all is on",
+      "rest": [
+        "GET /api/approval-rules",
+        "GET /api/approval-rules/{id}"
+      ],
+      "cli": {
+        "none": "Saved approvals are reviewed in the web app, beside the requests that make them"
+      },
+      "mcp": {
+        "none": "Deliberate: hosted AI apps cannot read the owner's standing approvals (#554)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; use the web app"
+      },
+      "web": "/settings/approvals"
+    },
+    {
+      "id": "approvals.manage",
+      "description": "Narrow, disable, re-enable or delete a saved approval, and pause them all. Nothing creates one: only the owner's tick on a request does (#555)",
+      "rest": [
+        "PATCH /api/approval-rules/{id}",
+        "DELETE /api/approval-rules/{id}",
+        "PUT /api/approval-rules/paused"
+      ],
+      "cli": {
+        "none": "Saved approvals are changed in the web app; no CLI command creates or widens one"
+      },
+      "mcp": {
+        "none": "Deliberate: no MCP tool reads, creates or changes a saved approval (#554)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; use the web app"
+      },
+      "web": "/settings/approvals"
     }
   ]
 }

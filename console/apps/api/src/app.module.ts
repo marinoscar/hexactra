@@ -23,7 +23,9 @@ import { QuestionsModule } from './questions/questions.module';
 import { RunnerModule } from './runner/runner.module';
 import { SchedulesModule } from './schedules/schedules.module';
 import { PoliciesModule } from './policies/policies.module';
+import { ApprovalsModule } from './approvals/approvals.module';
 import { TasksModule } from './tasks/tasks.module';
+import { MemoriesModule } from './memories/memories.module';
 import { NotesModule } from './notes/notes.module';
 import { PLATFORM_MODULES } from './platform/platform';
 import { isSliceEnabled } from './platform/slices/manifest';
@@ -46,6 +48,10 @@ import { PrismaModule } from './prisma/prisma.service';
     FabricModule,
     FleetModule,
     PoliciesModule,
+    // Memories (#551): the owner's saved facts.
+    MemoriesModule,
+    // Saved approvals (#554): rules the owner can see, narrow, pause and revoke.
+    ApprovalsModule,
     // Connected AI apps (#464): the request's client context and the per-app limits (global).
     ConnectedAppsModule,
     TasksModule,

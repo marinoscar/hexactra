@@ -16,6 +16,7 @@ import { TaskRunStarter, VALUES_NOT_PROVIDED } from '../src/questions/task-run-s
 import { GoalRunnerService } from '../src/runner/goal-runner.service';
 import { SchedulesService } from '../src/schedules/schedules.service';
 import { TaskSchedulesService } from '../src/tasks/task-schedules.service';
+import { MEMORY_VALUE_RESOLVER, type MemoryValueResolver } from '../src/tasks/task-params';
 import { TasksService } from '../src/tasks/tasks.service';
 
 let app: NestFastifyApplication;
@@ -108,7 +109,7 @@ async function startLocal(userId: string, taskId: string, inputs: Record<string,
   return localStarter().start({ id: userId }, task, { inputs, reason: 'run_started', data: { trigger: 'manual' } });
 }
 function localQuestions(fabric: FabricClient = fakeFabric().client) {
-  return new QuestionsService(app.get(PrismaService), fabric, noJobs, new QuestionEvents(), localStarter());
+  return new QuestionsService(app.get(PrismaService), fabric, noJobs, new QuestionEvents(), undefined, localStarter());
 }
 
 async function zelleTask(token: string, extra: Record<string, unknown> = {}) {
@@ -267,28 +268,54 @@ describe('task parameters (#552)', () => {
     expect([run.status, run.error]).toEqual(['cancelled', VALUES_NOT_PROVIDED]);
   });
 
-  it('a memory-backed default resolves from the memory; when the memory is gone, the value is asked for', async () => {
+  it("a memory-backed default resolves from the owner's memory (#551); archiving it, superseding it or a missing attribute makes the value asked for", async () => {
     const { token, userId } = await login(`params-memory-${stamp}@example.test`);
+    const prisma = app.get(PrismaService);
+    const created = await app.inject({ method: 'POST', url: '/api/memories', headers: as(token), payload: { kind: 'person', label: 'My wife', attributes: { name: 'Person A', phone: '555-010-6020' } } });
+    expect(created.statusCode).toBe(201);
+    const memory = body<{ id: string; lastUsedAt: string | null }>(created);
+    expect(memory.lastUsedAt).toBeNull();
     const res = await app.inject({
       method: 'POST',
       url: '/api/tasks',
       headers: as(token),
-      payload: { name: 'Pay', goal: 'Send {{Amount}} to {{Phone}}', parameters: [{ key: 'phone', type: 'phone', default: { memory: { id: randomUUID(), attribute: 'phone' } } }] },
+      payload: { name: 'Pay', goal: 'Send {{Amount}} to {{Phone}}', parameters: [{ key: 'phone', type: 'phone', default: { memory: { id: memory.id, attribute: 'Phone' } } }] },
     });
-    const task = (await app.get(PrismaService).forUser({ userId }).task.findFirstOrThrow({ where: { id: body<{ id: string }>(res).id } })) as Task;
-    let stored: string | null = '555-010-6020';
-    const resolver = { resolve: jest.fn(async () => stored) };
-    const starter = new TaskRunStarter(app.get(PrismaService), { enqueue: async () => undefined } as never, new QuestionEvents(), app.get(TasksService), app.get(TaskSchedulesService), undefined, resolver);
-    const found = await starter.start({ id: userId }, task, { inputs: { amount: '10' }, reason: 'run_started', data: { trigger: 'manual' } });
+    expect(res.statusCode).toBe(201);
+    const task = (await prisma.forUser({ userId }).task.findFirstOrThrow({ where: { id: body<{ id: string }>(res).id } })) as Task;
+    // The starter the app wires: MEMORY_VALUE_RESOLVER is bound to the memories (#551).
+    const starter = new TaskRunStarter(prisma, noJobs, new QuestionEvents(), app.get(TasksService), app.get(TaskSchedulesService), undefined, app.get(MEMORY_VALUE_RESOLVER) as MemoryValueResolver);
+    const start = () => starter.start({ id: userId }, task, { inputs: { amount: '10' }, reason: 'run_started', data: { trigger: 'manual' } });
+
+    const found = await start();
     expect(found.formQuestionId).toBeNull();
     expect(found.run.goal).toBe('Send ⟦10⟧ to ⟦555-010-6020⟧');
     expect((found.run.inputs as { values: Record<string, { source: string }> }).values.phone!.source).toBe('memory');
-    stored = null; // archived or deleted
-    const asked = await starter.start({ id: userId }, task, { inputs: { amount: '10' }, reason: 'run_started', data: { trigger: 'manual' } });
-    expect(asked.formQuestionId).not.toBeNull();
-    expect(asked.run.status).toBe('waiting_human');
-    // Without a memory resolver (the memories module is not installed), a memory default is asked for.
-    const bare = new TaskRunStarter(app.get(PrismaService), { enqueue: async () => undefined } as never, new QuestionEvents(), app.get(TasksService), app.get(TaskSchedulesService));
+    expect((await prisma.forUser({ userId }).memory.findFirstOrThrow({ where: { id: memory.id } })).lastUsedAt).not.toBeNull();
+
+    // Archived: the value is asked for, in the form.
+    expect((await app.inject({ method: 'POST', url: `/api/memories/${memory.id}/archive`, headers: as(token) })).statusCode).toBeLessThan(300);
+    const archived = await start();
+    expect(archived.run.status).toBe('waiting_human');
+    expect((await prisma.question.findFirstOrThrow({ where: { id: archived.formQuestionId! } })).fields).toEqual([expect.objectContaining({ key: 'phone' })]);
+
+    // Back, then superseded: the old version is never read.
+    await app.inject({ method: 'POST', url: `/api/memories/${memory.id}/unarchive`, headers: as(token) });
+    expect((await start()).formQuestionId).toBeNull();
+    const sup = await app.inject({ method: 'POST', url: `/api/memories/${memory.id}/supersede`, headers: as(token), payload: { attributes: { name: 'Person A', phone: '555-010-7777' } } });
+    expect(sup.statusCode).toBeLessThan(300);
+    expect((await start()).formQuestionId).not.toBeNull();
+
+    // Another user's memory, or a missing attribute, is never read.
+    const other = await login(`params-memory-other-${stamp}@example.test`);
+    const theirs = body<{ id: string }>(await app.inject({ method: 'POST', url: '/api/memories', headers: as(other.token), payload: { kind: 'person', label: 'Friend', attributes: { phone: '555-010-1111' } } }));
+    const resolver = app.get(MEMORY_VALUE_RESOLVER) as MemoryValueResolver;
+    expect(await resolver.resolve(userId, { id: theirs.id, attribute: 'phone' })).toBeNull();
+    expect(await resolver.resolve(other.userId, { id: theirs.id, attribute: 'email' })).toBeNull();
+    expect(await resolver.resolve(other.userId, { id: theirs.id, attribute: 'phone' })).toBe('555-010-1111');
+
+    // Without a resolver, a memory default is asked for.
+    const bare = new TaskRunStarter(prisma, noJobs, new QuestionEvents(), app.get(TasksService), app.get(TaskSchedulesService));
     expect((await bare.start({ id: userId }, task, { inputs: { amount: '10' }, reason: 'run_started', data: { trigger: 'manual' } })).formQuestionId).not.toBeNull();
   });
 
