@@ -26,6 +26,7 @@ import {
   type TestResult,
 } from '../connections/api';
 import { ConnectDialog } from '../connections/ConnectDialog';
+import { ConnectionDetails } from '../connections/ConnectionDetails';
 import { CapabilitiesDialog, DefaultsDialog, RenameDialog, TestDialog } from '../connections/ConnectionDialogs';
 import { GROUPS, GROUP_NAME, PROVIDER_NAME, STATUS_WORDS, levelOf, outcomeBanner, reasonWords, type Outcome } from '../connections/words';
 import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, RelativeTime, toast, useApiAction, useConfirm } from '../ui';
@@ -44,6 +45,7 @@ function ProviderMark({ provider }: { provider: Connection['provider'] }) {
 interface RowProps {
   connection: Connection;
   canWrite: boolean;
+  canReadRuns: boolean;
   busy: boolean;
   onRename: () => void;
   onCapabilities: () => void;
@@ -55,7 +57,7 @@ interface RowProps {
 }
 
 /** One account: the mark, the label, the email, what it may do, its state and defaults, when it was last used. */
-function ConnectionRow({ connection: c, canWrite, busy, onRename, onCapabilities, onDefaults, onTest, onTogglePause, onReconnect, onDisconnect }: RowProps) {
+function ConnectionRow({ connection: c, canWrite, canReadRuns, busy, onRename, onCapabilities, onDefaults, onTest, onTogglePause, onReconnect, onDisconnect }: RowProps) {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const close = () => setAnchor(null);
   const pick = (fn: () => void) => () => {
@@ -97,6 +99,7 @@ function ConnectionRow({ connection: c, canWrite, busy, onRename, onCapabilities
         <Typography variant="caption" color="text.secondary" component="p" sx={{ mt: 0.5 }}>
           {c.lastUsedAt ? <RelativeTime iso={c.lastUsedAt} prefix="Last used " /> : 'Not used yet'}
         </Typography>
+        <ConnectionDetails connectionId={c.id} canReadRuns={canReadRuns} />
         {c.status === 'needs_reconnect' && canWrite && (
           <Button variant="contained" color="warning" size="small" onClick={onReconnect} disabled={busy} sx={{ mt: 1, ...TOUCH }}>
             Reconnect
@@ -284,6 +287,7 @@ export function ConnectionsPage() {
       key={c.id}
       connection={c}
       canWrite={canWrite}
+      canReadRuns={viewer.hasPermission('runs:read')}
       busy={action.busy?.endsWith(c.id) === true}
       onRename={() => setRenaming(c)}
       onCapabilities={() => setChanging(c)}

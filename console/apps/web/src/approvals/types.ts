@@ -1,7 +1,7 @@
 // Saved approvals (#554): the shapes `/api/approval-rules` answers, and the
 // pure helpers the page uses (grouping, the limit text, narrowing checks).
 
-export type ApprovalRuleKind = 'gate' | 'ask';
+export type ApprovalRuleKind = 'gate' | 'ask' | 'connection';
 
 /** The Saved approvals page's route. */
 export const SAVED_APPROVALS_PATH = '/settings/approvals';
@@ -23,6 +23,8 @@ export interface ApprovalRule {
   maxAmount: number | null;
   /** A saved card (E37.7): `<provider>:<item id>`; the rule pays with that one card on this site, up to `maxAmount` in the currency of its match key. Null for every other rule. */
   cardRef?: string | null;
+  /** `connection` rules that reach people (E39.7): the approved addresses or `@domain`s. */
+  recipients?: string[];
   expiresAt: string | null;
   enabled: boolean;
   createdFromQuestionId: string | null;
@@ -46,6 +48,7 @@ export const AMOUNT_CATEGORIES: readonly string[] = ['payment', 'purchase', 'sen
 /** The chip of a rule: its gate category, or "Question" for an ask. */
 export function categoryLabel(r: Pick<ApprovalRule, 'kind' | 'category'> & { cardRef?: string | null }): string {
   if (r.kind === 'ask') return 'Question';
+  if (r.kind === 'connection') return 'Account';
   if (r.cardRef) return 'Card payment';
   const c = r.category ?? 'submit';
   return c.charAt(0).toUpperCase() + c.slice(1);
@@ -74,6 +77,7 @@ export function cardCurrency(r: Pick<ApprovalRule, 'cardRef' | 'matchKey'>): str
 export function limitsText(r: ApprovalRule, formatDate: (iso: string) => string = (iso) => new Date(iso).toLocaleDateString()): string {
   const parts: string[] = [];
   if (r.maxAmount !== null) parts.push(r.cardRef ? `up to ${r.maxAmount.toFixed(2)} ${cardCurrency(r) ?? ''}`.trim() : `up to ${money(r.maxAmount)}`);
+  if (r.recipients && r.recipients.length > 0) parts.push(`to ${r.recipients.join(', ')}`);
   if (r.taskId) parts.push(r.taskName ? `only in the task ${r.taskName}` : 'only in one task');
   if (r.conversationId) parts.push('only in one chat');
   if (r.expiresAt) parts.push(`until ${formatDate(r.expiresAt)}`);
