@@ -140,6 +140,7 @@ export const calendarCreateEvent = tool({
         connectionId: picked.live.id,
         connectionLabel: picked.live.label,
         tool: 'calendar_create_event',
+        summary: `create the event "${clip(a.title, 80)}" in ${picked.live.label}${people.length ? ` with ${people.length} attendee${people.length === 1 ? '' : 's'}` : ''}`,
         lines: [
           { label: 'Title', value: clip(a.title, 300) },
           { label: 'When', value: `${a.start} to ${a.end}${a.time_zone ? ` (${a.time_zone})` : ''}` },
@@ -195,6 +196,7 @@ export const calendarUpdateEvent = tool({
         connectionId: picked.live.id,
         connectionLabel: picked.live.label,
         tool: 'calendar_update_event',
+        summary: `change an event in ${picked.live.label}`,
         lines: [{ label: 'Event', value: a.event_id }, { label: 'Change', value: changes }, { label: 'Attendees told', value: a.notify_attendees ? (people?.join(', ') ?? 'the event\'s attendees') : 'no one' }],
         hash: hashArgs({ tool: 'calendar_update_event', connection: picked.live.id, id: a.event_id, patch }),
       };
@@ -235,6 +237,7 @@ export const calendarDeleteEvent = tool({
         connectionId: picked.live.id,
         connectionLabel: picked.live.label,
         tool: 'calendar_delete_event',
+        summary: `delete an event in ${picked.live.label}`,
         lines: [{ label: 'Event', value: a.event_id }, { label: 'Attendees told', value: a.notify_attendees ? 'the event\'s attendees' : 'no one' }],
         hash: hashArgs({ tool: 'calendar_delete_event', connection: picked.live.id, id: a.event_id, calendar: a.calendar_id, notify: a.notify_attendees }),
       };

@@ -114,7 +114,9 @@ export function createRunContext<M extends HarnessMemory, X>(init: RunContextIni
       const spec = ports.questions.prepare(asked);
       // A new request supersedes a confirmation not yet acted on (#540); its prompt is what an approval allows.
       memory.pendingConfirmation = null;
-      memory.askedPrompt = spec.prompt;
+      // A question with a card of its own (a connection call) is recorded by its one-line summary: the details are the owner's to read, not the trace's.
+      const shown = spec.stepSummary ?? spec.prompt;
+      memory.askedPrompt = shown;
       // The screen the person is asked about (#541), before the handoff opens; never for a secret or a sign-in (#525).
       const moment: TraceMoment = questionMoment(spec.kind);
       const pre = isSecretInput(spec.input) ? null : await ctx.shoot(moment);
@@ -128,11 +130,11 @@ export function createRunContext<M extends HarnessMemory, X>(init: RunContextIni
         await ctx.record('handoff', null, null, false, `could not ask a person: ${e instanceof Error ? e.message : String(e)}`, started);
         return false;
       }
-      await ctx.record('handoff', null, { kind: spec.kind, input: spec.input }, true, `asked a person (${spec.kind}): ${clip(spec.prompt, 300)}`, started);
+      await ctx.record('handoff', null, { kind: spec.kind, input: spec.input }, true, `asked a person (${spec.kind}): ${clip(shown, 300)}`, started);
       ports.telemetry.asked({ kind: spec.kind, input: spec.input });
       if (questionId) await ports.store.patchStep(state.seq, { questionId });
       if (pre) await ctx.attachShot(state.seq, moment, pre);
-      state.handoffAsk = { prompt: spec.prompt, kind: spec.kind, input: spec.input };
+      state.handoffAsk = { prompt: shown, kind: spec.kind, input: spec.input };
       state.stop = 'pause';
       resetStall(ctx.stall);
       memory.stallsHere = 0;

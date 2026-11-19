@@ -378,6 +378,7 @@ const questionAction = z
     connectionLabel: z.string(),
     tool: z.string().describe('The tool the agent called: `mail_send`, `calendar_create_event`, `sheet_append_rows`, ...'),
     lines: z.array(z.object({ label: z.string(), value: z.string() })).describe('The labelled facts the card shows: from, to, subject, a body preview, an event\'s time and attendees, a file\'s name and the cells'),
+    summary: z.string().describe('What it does in one line, with no body and no cells: what the run\'s step and the notifications say'),
     body: z.string().optional().describe('The whole text for "show all" (at most 20,000 characters)'),
     hash: z.string().optional().describe('A hash of the validated arguments the card shows; only that exact call goes through once approved'),
   })

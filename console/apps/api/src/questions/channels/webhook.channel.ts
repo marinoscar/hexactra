@@ -51,7 +51,8 @@ export class WebhookQuestionChannel implements QuestionChannel, OnModuleInit {
   private question(q: QuestionView) {
     return {
       id: q.id,
-      prompt: q.prompt,
+      // A call through a connection (E39.7): the card holds the details; a webhook receiver is told what it is, never the message or the cells.
+      prompt: q.action ? q.action.summary : q.prompt,
       input: q.input,
       kind: q.kind,
       options: q.options,

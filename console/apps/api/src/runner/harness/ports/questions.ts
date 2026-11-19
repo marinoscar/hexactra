@@ -18,6 +18,8 @@ export interface QuestionSpec {
    * arguments, never from model text. Such a question needs no browser.
    */
   action?: unknown;
+  /** One line with no content that stands for the question in the run's step, its memory and the owner's notifications (the card itself shows the details). */
+  stepSummary?: string;
 }
 
 export interface OpenedQuestion {

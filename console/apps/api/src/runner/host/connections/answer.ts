@@ -39,7 +39,7 @@ export function foldConnectionAnswer(memory: RunMemory, q: { id: string; prompt:
   const action = (q.action ?? null) as QuestionAction | null;
   if (!action) return null;
   const mem = (memory.connections ??= {});
-  const asked: ConnectionAsk = { questionId: q.id, connectionId: action.connectionId, tool: action.tool, argsHash: action.hash ?? '', prompt: q.prompt };
+  const asked: ConnectionAsk = { questionId: q.id, connectionId: action.connectionId, tool: action.tool, argsHash: action.hash ?? '', prompt: action.summary };
   if (approved) {
     // The owner decided again about a call that may have happened (E38.3): it is no longer unknown.
     clearUnknown(memory, intentTarget(asked.tool, asked.connectionId));

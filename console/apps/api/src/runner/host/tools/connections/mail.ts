@@ -253,6 +253,7 @@ async function planSend(ctx: HostContext, a: SendArgs): Promise<SendPlan | strin
     connectionId: live.id,
     connectionLabel: live.label,
     tool: 'mail_send',
+    summary: `send an email from ${live.label} to ${recipients.length} recipient${recipients.length === 1 ? '' : 's'} (subject: ${clip(subject, 120)})`,
     lines: [
       { label: 'From', value: live.accountEmail },
       ...shown('To', to),
@@ -328,6 +329,7 @@ export const mailModify = tool({
         connectionId: picked.live.id,
         connectionLabel: picked.live.label,
         tool: 'mail_modify',
+        summary: `change a message in ${picked.live.label}`,
         lines: [{ label: 'Message', value: a.message_id }, { label: 'Change', value: changes }],
         hash: hashArgs({ tool: 'mail_modify', connection: picked.live.id, id: a.message_id, read: a.mark_read, archive: a.archive, add: a.add_labels, remove: a.remove_labels }),
       };

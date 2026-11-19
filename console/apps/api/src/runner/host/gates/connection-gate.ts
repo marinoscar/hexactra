@@ -48,7 +48,7 @@ export const connectionGate: Gate<HostContext> = {
     const prompt = cardPrompt(action);
     const parsed = ctx.ports.questions.parse({ kind: 'confirmation', input: 'confirm', prompt, confirmLabel: 'Approve', denyLabel: 'Decline', risk: 'high' });
     if (!parsed.ok) return { kind: 'refuse', text: `Could not ask the owner: ${parsed.message}.` };
-    const spec = { ...parsed.spec, action, prompt };
+    const spec = { ...parsed.spec, action, prompt, stepSummary: `approval of: ${action.summary}` };
     // "Don't ask again" (#555): what the owner may remember is the server's own record of this call, never the model's.
     // A call that reaches people we cannot name (an event's existing attendees) cannot be remembered: no rule would cover them.
     const namable = (r.recipients ?? []).every((x) => normaliseRecipient(x) !== null);

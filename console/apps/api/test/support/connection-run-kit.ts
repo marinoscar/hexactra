@@ -25,7 +25,7 @@ export async function login(app: NestFastifyApplication, email: string): Promise
 }
 
 /** An in-memory fabric that counts the sessions it was asked to open and records every action. */
-export function fakeFabric(opts: { failSession?: boolean } = {}) {
+export function fakeFabric(opts: { failSession?: boolean; pageText?: string } = {}) {
   const actions: Record<string, unknown>[] = [];
   let sessions = 0;
   let ended = 0;
@@ -42,6 +42,7 @@ export function fakeFabric(opts: { failSession?: boolean } = {}) {
       if (action.type === 'evaluate') return { id: 'op', state: 'succeeded', result: { type: 'object', value: null } };
       actions.push(action);
       if (action.type === 'navigate') return { id: 'op', state: 'succeeded', result: { url: action.url, title: 'Page' } };
+      if (action.type === 'text') return { id: 'op', state: 'succeeded', result: { text: opts.pageText ?? 'A page.' } };
       return { id: 'op', state: 'succeeded', result: {} };
     }
     throw new Error(`unexpected fabric call ${method} ${path}`);

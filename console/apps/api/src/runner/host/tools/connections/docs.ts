@@ -142,7 +142,7 @@ export const docsCreate = tool({
     [CONNECTION_GATE]: async (ctx, a): Promise<ConnectionGateRequest> => {
       const picked = await pickConnection(ctx, a.connection, 'docs_write', true);
       if (!picked.ok) return refusal('docs_create', picked.text);
-      const action: QuestionAction = { connectionId: picked.live.id, connectionLabel: picked.live.label, tool: 'docs_create', lines: [{ label: 'Title', value: clip(a.title, 300) }, { label: 'Text', value: preview(a.text) }, ...(a.folder_id ? [{ label: 'Folder', value: a.folder_id }] : [])], body: a.text.slice(0, CARD_BODY_MAX), hash: hashArgs({ tool: 'docs_create', connection: picked.live.id, title: a.title, text: shortHash(a.text), folder: a.folder_id }) };
+      const action: QuestionAction = { connectionId: picked.live.id, connectionLabel: picked.live.label, tool: 'docs_create', summary: `create the document "${clip(a.title, 80)}" in ${picked.live.label}`, lines: [{ label: 'Title', value: clip(a.title, 300) }, { label: 'Text', value: preview(a.text) }, ...(a.folder_id ? [{ label: 'Folder', value: a.folder_id }] : [])], body: a.text.slice(0, CARD_BODY_MAX), hash: hashArgs({ tool: 'docs_create', connection: picked.live.id, title: a.title, text: shortHash(a.text), folder: a.folder_id }) };
       return target(picked.live, 'docs_create', 'docs_write', `Create documents with ${picked.live.label}`, action);
     },
   },
@@ -176,7 +176,7 @@ export const docsAppend = tool({
       if (!picked.ok) return refusal('docs_append', picked.text);
       const file = await fileName(ctx, picked.live, a.file_id);
       if ('text' in file) return refusal('docs_append', file.text);
-      const action: QuestionAction = { connectionId: picked.live.id, connectionLabel: picked.live.label, tool: 'docs_append', lines: [{ label: 'Document', value: file.name }, { label: 'Adds', value: preview(a.text) }], body: a.text.slice(0, CARD_BODY_MAX), hash: hashArgs({ tool: 'docs_append', connection: picked.live.id, id: a.file_id, text: shortHash(a.text) }) };
+      const action: QuestionAction = { connectionId: picked.live.id, connectionLabel: picked.live.label, tool: 'docs_append', summary: `add text to a document in ${picked.live.label}`, lines: [{ label: 'Document', value: file.name }, { label: 'Adds', value: preview(a.text) }], body: a.text.slice(0, CARD_BODY_MAX), hash: hashArgs({ tool: 'docs_append', connection: picked.live.id, id: a.file_id, text: shortHash(a.text) }) };
       return target(picked.live, 'docs_append', 'docs_write', `Add to documents with ${picked.live.label}`, action);
     },
   },
@@ -216,6 +216,7 @@ export const sheetAppendRows = tool({
         connectionId: picked.live.id,
         connectionLabel: picked.live.label,
         tool: 'sheet_append_rows',
+        summary: `add ${a.rows.length} row${a.rows.length === 1 ? '' : 's'} to a spreadsheet in ${picked.live.label}`,
         lines: [{ label: 'Spreadsheet', value: file.name }, ...(a.sheet ? [{ label: 'Tab', value: a.sheet }] : []), { label: `Rows (${a.rows.length})`, value: clip(shown.join(' / ') + (a.rows.length > 5 ? ` / … ${a.rows.length - 5} more` : ''), 600) }],
         body: JSON.stringify(a.rows).slice(0, CARD_BODY_MAX),
         hash: hashArgs({ tool: 'sheet_append_rows', connection: picked.live.id, id: a.file_id, sheet: a.sheet, rows: a.rows }),
@@ -255,7 +256,7 @@ export const sheetCreate = tool({
     [CONNECTION_GATE]: async (ctx, a): Promise<ConnectionGateRequest> => {
       const picked = await pickConnection(ctx, a.connection, 'docs_write', true);
       if (!picked.ok) return refusal('sheet_create', picked.text);
-      const action: QuestionAction = { connectionId: picked.live.id, connectionLabel: picked.live.label, tool: 'sheet_create', lines: [{ label: 'Title', value: clip(a.title, 300) }, ...(a.headers?.length ? [{ label: 'Header row', value: clip(a.headers.join(' | '), 400) }] : []), ...(a.folder_id ? [{ label: 'Folder', value: a.folder_id }] : [])], hash: hashArgs({ tool: 'sheet_create', connection: picked.live.id, title: a.title, headers: a.headers, folder: a.folder_id }) };
+      const action: QuestionAction = { connectionId: picked.live.id, connectionLabel: picked.live.label, tool: 'sheet_create', summary: `create the spreadsheet "${clip(a.title, 80)}" in ${picked.live.label}`, lines: [{ label: 'Title', value: clip(a.title, 300) }, ...(a.headers?.length ? [{ label: 'Header row', value: clip(a.headers.join(' | '), 400) }] : []), ...(a.folder_id ? [{ label: 'Folder', value: a.folder_id }] : [])], hash: hashArgs({ tool: 'sheet_create', connection: picked.live.id, title: a.title, headers: a.headers, folder: a.folder_id }) };
       return target(picked.live, 'sheet_create', 'docs_write', `Create spreadsheets with ${picked.live.label}`, action);
     },
   },
@@ -291,7 +292,7 @@ export const fileUpload = tool({
       const art = await loadRunArtifact(ctx, { source: a.source, step: a.step });
       if (!art.ok) return refusal('file_upload', art.text);
       const name = (a.name ?? art.name).trim() || art.name;
-      const action: QuestionAction = { connectionId: picked.live.id, connectionLabel: picked.live.label, tool: 'file_upload', lines: [{ label: 'File', value: `${clip(name, 200)} (${sizeText(art.bytes.length)})` }, { label: 'From', value: a.source === 'report' ? "this run's PDF report" : `the screenshot of step ${a.step}` }, ...(a.folder_id ? [{ label: 'Folder', value: a.folder_id }] : [])], hash: hashArgs({ tool: 'file_upload', connection: picked.live.id, source: a.source, step: a.step, name, folder: a.folder_id, bytes: shortHash(art.bytes.toString('base64')) }) };
+      const action: QuestionAction = { connectionId: picked.live.id, connectionLabel: picked.live.label, tool: 'file_upload', summary: `save the file "${clip(name, 80)}" to ${picked.live.label}`, lines: [{ label: 'File', value: `${clip(name, 200)} (${sizeText(art.bytes.length)})` }, { label: 'From', value: a.source === 'report' ? "this run's PDF report" : `the screenshot of step ${a.step}` }, ...(a.folder_id ? [{ label: 'Folder', value: a.folder_id }] : [])], hash: hashArgs({ tool: 'file_upload', connection: picked.live.id, source: a.source, step: a.step, name, folder: a.folder_id, bytes: shortHash(art.bytes.toString('base64')) }) };
       return target(picked.live, 'file_upload', 'docs_write', `Save files with ${picked.live.label}`, action);
     },
   },

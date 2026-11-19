@@ -162,6 +162,8 @@ export interface QuestionAction {
   tool: string;
   lines: { label: string; value: string }[];
   body?: string;
+  /** What it does, in one line with no content (no body, no cells): what the run's step, its memory and the notifications and webhooks say instead of the card. */
+  summary: string;
   /** A hash of the validated arguments the card shows: only that exact call goes through once approved. */
   hash?: string;
 }

@@ -23,10 +23,10 @@ export async function runConnections(
   if (appLimits && appLimits.allowConnections !== true) return [];
   const include = { connection: { select: { id: true, userId: true, label: true, provider: true, capabilities: true } } } as const;
   const rows = run.taskId
-    ? await d.prisma.taskConnection.findMany({ where: { taskId: run.taskId, task: { userId: run.userId } }, include, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+    ? await d.prisma.taskConnection.findMany({ where: { taskId: run.taskId, task: { userId: run.userId } }, include, orderBy: [{ connection: { label: 'asc' } }, { id: 'asc' }] })
     : appLimits || !run.conversationId
       ? []
-      : await d.prisma.conversationConnection.findMany({ where: { conversationId: run.conversationId, conversation: { userId: run.userId } }, include, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+      : await d.prisma.conversationConnection.findMany({ where: { conversationId: run.conversationId, conversation: { userId: run.userId } }, include, orderBy: [{ connection: { label: 'asc' } }, { id: 'asc' }] });
   return rows
     .filter((r) => r.connection.userId === run.userId && r.connection.provider !== 'mcp')
     .map((r) => ({
