@@ -17,6 +17,7 @@ import {
   type OutgoingMail,
   type Page,
 } from '../capabilities';
+import { senderAuthFrom } from '../mail-auth';
 import { buildGmailQuery } from './gmail-query';
 import { GOOGLE } from './google.constants';
 import { GoogleHttp, type TokenSource } from './google-http';
@@ -70,12 +71,19 @@ const iso = (ms: string | undefined): string | null => {
   return Number.isFinite(n) && n > 0 ? new Date(n).toISOString() : null;
 };
 
+/** Every `Authentication-Results` header, top to bottom: Gmail prepends its own, so only the first is trusted (and only when `mx.google.com` wrote it). */
+const authResults = (p: GPart | undefined): string[] => (p?.headers ?? []).filter((h) => h.name?.toLowerCase() === 'authentication-results').map((h) => h.value ?? '');
+const isGoogleServer = (id: string): boolean => id === 'mx.google.com' || id.endsWith('.google.com');
+
 function toSummary(m: GMessage): MailSummary {
   const labels = m.labelIds ?? [];
+  const from = parseAddressList(header(m.payload, 'From'))[0] ?? null;
   return {
     id: m.id,
     threadId: m.threadId ?? null,
-    from: parseAddressList(header(m.payload, 'From'))[0] ?? null,
+    from,
+    // The receiving server's own SPF, DKIM and DMARC result for the From address (E39.8): the mail trigger refuses a `fail`.
+    senderAuth: senderAuthFrom(authResults(m.payload), from?.address, { trusted: isGoogleServer }),
     to: parseAddressList(header(m.payload, 'To')),
     subject: headerValue(header(m.payload, 'Subject')),
     snippet: decodeEntities(m.snippet ?? ''),

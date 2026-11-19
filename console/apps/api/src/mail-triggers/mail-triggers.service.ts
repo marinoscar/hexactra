@@ -87,6 +87,7 @@ export class MailTriggersService {
       afterStart: t.afterStart,
       pollSeconds: t.pollSeconds,
       maxRunsPerDay: t.maxRunsPerDay,
+      acceptUnverified: t.acceptUnverified,
       status: t.status as (typeof import('./mail-triggers.constants').MAIL_TRIGGER_STATUSES)[number],
       statusReason: t.statusReason,
       lastCheckedAt: t.lastCheckedAt?.toISOString() ?? null,
@@ -127,6 +128,7 @@ export class MailTriggersService {
         afterStart,
         pollSeconds,
         maxRunsPerDay: input.maxRunsPerDay ?? DEFAULT_MAX_RUNS_PER_DAY,
+        acceptUnverified: input.acceptUnverified ?? false,
         activeSince: now,
         nextPollAt: now,
       },
@@ -153,6 +155,7 @@ export class MailTriggersService {
     if (patch.afterStart !== undefined) data.afterStart = patch.afterStart;
     if (patch.pollSeconds !== undefined) data.pollSeconds = patch.pollSeconds;
     if (patch.maxRunsPerDay !== undefined) data.maxRunsPerDay = patch.maxRunsPerDay;
+    if (patch.acceptUnverified !== undefined) data.acceptUnverified = patch.acceptUnverified;
     if (patch.enabled !== undefined) data.enabled = patch.enabled;
     // A different account is a different mailbox: its own start, with no cursor.
     if (patch.connectionId !== undefined && patch.connectionId !== t.connectionId) Object.assign(data, { connectionId: patch.connectionId, cursor: null, activeSince: now, nextPollAt: now, status: 'ok', statusReason: null, statusNotifiedAt: null, consecutiveErrors: 0 });
@@ -208,7 +211,7 @@ export class MailTriggersService {
         const auth = full.senderAuth ?? 'unknown';
         const before = !m.date || new Date(m.date) < t.activeSince;
         const own = isOwnMessage(m, conn.accountEmail);
-        const reason = before ? 'before_enabled' : own ? 'own_message' : auth === 'fail' ? 'sender_not_verified' : null;
+        const reason = before ? 'before_enabled' : own ? 'own_message' : auth === 'fail' ? 'sender_not_verified' : auth === 'unknown' && !t.acceptUnverified ? 'sender_not_checked' : null;
         messages.push({ date: m.date, subject: m.subject.slice(0, TEST_SUBJECT_CHARS), from: m.from?.address ?? null, wouldStart: reason === null, reason, senderVerified: auth });
       }
       return { messages, note: messages.length === 0 ? 'No recent message matches these rules.' : null };

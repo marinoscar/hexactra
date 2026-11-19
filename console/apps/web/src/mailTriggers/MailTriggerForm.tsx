@@ -154,6 +154,11 @@ export function MailTriggerForm({ draft, onChange, connections, parameters, erro
         />
       </Stack>
 
+      <FormControlLabel
+        control={<Switch checked={draft.acceptUnverified} onChange={(e) => set({ acceptUnverified: e.target.checked })} disabled={disabled} />}
+        label="Also accept mail the provider could not verify. Off is safer: only mail that passed the provider's sender check starts the task. A message that failed it never does."
+      />
+
       <FormControlLabel control={<Switch checked={draft.enabled} onChange={(e) => set({ enabled: e.target.checked })} disabled={disabled} />} label="On. Only mail that arrives after it is switched on counts." />
     </Stack>
   );

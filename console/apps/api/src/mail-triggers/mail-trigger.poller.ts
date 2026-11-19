@@ -217,9 +217,12 @@ export class MailTriggerPoller {
       throw e;
     }
     if (!matchMessage(match, full, { activeSince: t.activeSince, text: full.text }).ok) return null;
-    if (full.senderAuth === 'fail') {
+    // Fail closed: a sender that FAILED the provider's check never starts a run, and one the provider could not check (`unknown`) starts one
+    // only when the owner turned `acceptUnverified` on for this trigger (off by default).
+    const auth = full.senderAuth ?? 'unknown';
+    if (auth === 'fail' || (auth === 'unknown' && !t.acceptUnverified)) {
       this.events.skipped('unverified');
-      const outcome = await this.record(t, summary.id, 'skipped_unverified', 'SENDER_NOT_VERIFIED', messageAt);
+      const outcome = await this.record(t, summary.id, 'skipped_unverified', auth === 'fail' ? 'SENDER_NOT_VERIFIED' : 'SENDER_NOT_CHECKED', messageAt);
       await this.notifyDaily(t, 'unverifiedNotifiedOn', 'unverified', now, task.name);
       return outcome;
     }

@@ -10,6 +10,7 @@ export interface MailTriggerView {
   afterStart: string;
   pollSeconds: number;
   maxRunsPerDay: number;
+  acceptUnverified?: boolean;
   status: string;
   statusReason: string | null;
   lastCheckedAt: string | null;
@@ -39,5 +40,6 @@ export function matchText(m: MailTriggerView['match']): string {
 export function triggerLine(t: MailTriggerView): string {
   const state = !t.enabled ? 'off' : (STATUS_WORDS[t.status] ?? t.status);
   const after = t.afterStart === 'none' ? '' : `  after: ${t.afterStart.replace('_', ' ')}`;
-  return `${t.id.slice(0, 8)}  ${t.name}  [${state}]  ${t.connectionLabel ?? 'account removed'}  ${matchText(t.match)}  every ${Math.round(t.pollSeconds / 60)} min  ${t.runsToday}/${t.maxRunsPerDay} runs today${after}`;
+  const unverified = t.acceptUnverified ? '  accepts unverified senders' : '';
+  return `${t.id.slice(0, 8)}  ${t.name}  [${state}]  ${t.connectionLabel ?? 'account removed'}  ${matchText(t.match)}  every ${Math.round(t.pollSeconds / 60)} min  ${t.runsToday}/${t.maxRunsPerDay} runs today${after}${unverified}`;
 }

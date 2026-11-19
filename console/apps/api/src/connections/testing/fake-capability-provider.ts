@@ -180,7 +180,7 @@ const page = <T>(all: T[], q: { pageSize?: number; pageToken?: string }): Page<T
 };
 
 const has = (hay: string, needle: string | undefined): boolean => !needle || hay.toLowerCase().includes(needle.toLowerCase());
-const summary = (m: FakeMessage): MailSummary => ({ id: m.id, threadId: m.threadId, from: m.from, to: m.to, subject: m.subject, snippet: m.text.slice(0, 100), date: m.date, unread: m.unread, hasAttachments: m.attachments.length > 0, labels: m.labels });
+const summary = (m: FakeMessage): MailSummary => ({ id: m.id, threadId: m.threadId, from: m.from, to: m.to, subject: m.subject, snippet: m.text.slice(0, 100), date: m.date, unread: m.unread, hasAttachments: m.attachments.length > 0, labels: m.labels, ...(m.senderAuth ? { senderAuth: m.senderAuth } : {}) });
 
 export class FakeCapabilityProvider implements CapabilityProvider {
   /** Every call, in order (the arguments are the validated ones). */

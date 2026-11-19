@@ -14,6 +14,7 @@ const afterStart = z
   .describe('What happens to the message after a run was queued: `none`, `mark_read` or `add_label:<label id>`. The last two need the connection\'s `mail_modify` switch.');
 const name = z.string().trim().min(1).max(120);
 const pollSeconds = z.number().int().min(60).max(86_400).describe('How often to look for mail, in seconds: 300 by default, never under the deployment minimum (60 unless the administrator raised it).');
+const acceptUnverified = z.boolean().describe("Also start for a message whose sender the provider could not check (`unknown`). Off by default: only a message that passed the provider's SPF, DKIM or DMARC check starts a run, and one that failed it never does.");
 const maxRunsPerDay = z.number().int().min(1).max(MAX_RUNS_PER_DAY_CEILING).describe('The most runs this trigger starts in a UTC day (10 by default). The owner\'s own daily cap across triggers also applies.');
 
 export const createMailTriggerSchema = z
@@ -25,6 +26,7 @@ export const createMailTriggerSchema = z
     afterStart: afterStart.optional(),
     pollSeconds: pollSeconds.optional(),
     maxRunsPerDay: maxRunsPerDay.optional(),
+    acceptUnverified: acceptUnverified.optional(),
     enabled: z.boolean().optional(),
   })
   .strict();
@@ -40,6 +42,7 @@ export const updateMailTriggerSchema = z
     afterStart: afterStart.optional(),
     pollSeconds: pollSeconds.optional(),
     maxRunsPerDay: maxRunsPerDay.optional(),
+    acceptUnverified: acceptUnverified.optional(),
     enabled: z.boolean().optional().describe('Enabling again starts from now: mail that arrived while it was off never fires.'),
   })
   .strict();
@@ -63,6 +66,7 @@ export const mailTriggerResponseSchema = z.object({
   afterStart: z.string(),
   pollSeconds: z.number().int(),
   maxRunsPerDay: z.number().int(),
+  acceptUnverified: z.boolean(),
   status: z.enum(MAIL_TRIGGER_STATUSES),
   statusReason: z.string().nullable(),
   lastCheckedAt: iso.nullable(),
@@ -76,7 +80,7 @@ export class MailTriggerResponseDto extends createZodDto(mailTriggerResponseSche
 export const mailTriggerEventResponseSchema = z.object({
   id: z.uuid(),
   outcome: z.enum(MAIL_TRIGGER_OUTCOMES),
-  reason: z.string().nullable().describe('`SENDER_NOT_VERIFIED`, `TRIGGER_DAILY_LIMIT`, `USER_DAILY_LIMIT`, `OWN_MESSAGE`, `START_FAILED`.'),
+  reason: z.string().nullable().describe('`SENDER_NOT_VERIFIED`, `SENDER_NOT_CHECKED`, `TRIGGER_DAILY_LIMIT`, `USER_DAILY_LIMIT`, `OWN_MESSAGE`, `START_FAILED`.'),
   runId: z.uuid().nullable(),
   messageAt: iso.nullable(),
   createdAt: iso,
@@ -90,8 +94,8 @@ export const mailTriggerTestResponseSchema = z.object({
         date: iso.nullable(),
         subject: z.string().describe('The first 60 characters of the subject.'),
         from: z.string().nullable(),
-        wouldStart: z.boolean().describe('False when it arrived before the trigger was enabled, came from the account itself, or failed the sender check.'),
-        reason: z.enum(['before_enabled', 'own_message', 'sender_not_verified']).nullable(),
+        wouldStart: z.boolean().describe('False when it arrived before the trigger was enabled, came from the account itself, failed the sender check, or could not be checked while the trigger does not accept unverified senders.'),
+        reason: z.enum(['before_enabled', 'own_message', 'sender_not_verified', 'sender_not_checked']).nullable(),
         senderVerified: z.enum(['pass', 'fail', 'unknown']),
       }),
     )

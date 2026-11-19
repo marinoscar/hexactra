@@ -29,6 +29,9 @@ model MailTrigger {
   /// Only messages that arrived after this count: set when the trigger is created and each time it is enabled again.
   activeSince   DateTime  @default(now()) @map("active_since") @db.Timestamptz
   pollSeconds   Int       @default(300) @map("poll_seconds")
+  /// Also start for a message whose sender the provider could not check (`unknown`). Off by default: a message must have passed the provider's
+  /// SPF, DKIM or DMARC check, and one that failed it never starts a run whatever this says.
+  acceptUnverified Boolean @default(false) @map("accept_unverified")
   maxRunsPerDay Int       @default(10) @map("max_runs_per_day")
   /// When the poller looks at this trigger next (spread by a per-trigger offset so many triggers do not poll in the same second).
   nextPollAt    DateTime? @map("next_poll_at") @db.Timestamptz

@@ -6,7 +6,7 @@ export const MAIL_TRIGGER_STATUSES = ['ok', 'needs_reconnect', 'failing', 'rate_
 export type MailTriggerStatus = (typeof MAIL_TRIGGER_STATUSES)[number];
 
 /** Stable reason codes of a skip or a failure (never a message: nothing from the mail is recorded). */
-export const MAIL_TRIGGER_REASONS = ['SENDER_NOT_VERIFIED', 'TRIGGER_DAILY_LIMIT', 'USER_DAILY_LIMIT', 'OWN_MESSAGE', 'START_FAILED', 'NOT_FOUND'] as const;
+export const MAIL_TRIGGER_REASONS = ['SENDER_NOT_VERIFIED', 'SENDER_NOT_CHECKED', 'TRIGGER_DAILY_LIMIT', 'USER_DAILY_LIMIT', 'OWN_MESSAGE', 'START_FAILED', 'NOT_FOUND'] as const;
 export type MailTriggerReason = (typeof MAIL_TRIGGER_REASONS)[number];
 
 export const DEFAULT_POLL_SECONDS = 300;

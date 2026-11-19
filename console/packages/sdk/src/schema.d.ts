@@ -15863,6 +15863,7 @@ export interface components {
             afterStart: string;
             pollSeconds: number;
             maxRunsPerDay: number;
+            acceptUnverified: boolean;
             /** @enum {string} */
             status: "ok" | "needs_reconnect" | "failing" | "rate_limited" | "connection_paused" | "connection_removed";
             statusReason: string | null;
@@ -15918,6 +15919,8 @@ export interface components {
             pollSeconds?: number;
             /** @description The most runs this trigger starts in a UTC day (10 by default). The owner's own daily cap across triggers also applies. */
             maxRunsPerDay?: number;
+            /** @description Also start for a message whose sender the provider could not check (`unknown`). Off by default: only a message that passed the provider's SPF, DKIM or DMARC check starts a run, and one that failed it never does. */
+            acceptUnverified?: boolean;
             enabled?: boolean;
         };
         UpdateMailTriggerDto: {
@@ -15958,6 +15961,8 @@ export interface components {
             pollSeconds?: number;
             /** @description The most runs this trigger starts in a UTC day (10 by default). The owner's own daily cap across triggers also applies. */
             maxRunsPerDay?: number;
+            /** @description Also start for a message whose sender the provider could not check (`unknown`). Off by default: only a message that passed the provider's SPF, DKIM or DMARC check starts a run, and one that failed it never does. */
+            acceptUnverified?: boolean;
             /** @description Enabling again starts from now: mail that arrived while it was off never fires. */
             enabled?: boolean;
         };
@@ -15968,9 +15973,9 @@ export interface components {
                 /** @description The first 60 characters of the subject. */
                 subject: string;
                 from: string | null;
-                /** @description False when it arrived before the trigger was enabled, came from the account itself, or failed the sender check. */
+                /** @description False when it arrived before the trigger was enabled, came from the account itself, failed the sender check, or could not be checked while the trigger does not accept unverified senders. */
                 wouldStart: boolean;
-                reason: ("before_enabled" | "own_message" | "sender_not_verified") | null;
+                reason: ("before_enabled" | "own_message" | "sender_not_verified" | "sender_not_checked") | null;
                 /** @enum {string} */
                 senderVerified: "pass" | "fail" | "unknown";
             }[];
@@ -15981,7 +15986,7 @@ export interface components {
             id: string;
             /** @enum {string} */
             outcome: "started" | "skipped_limit" | "skipped_unverified" | "skipped_loop" | "failed";
-            /** @description `SENDER_NOT_VERIFIED`, `TRIGGER_DAILY_LIMIT`, `USER_DAILY_LIMIT`, `OWN_MESSAGE`, `START_FAILED`. */
+            /** @description `SENDER_NOT_VERIFIED`, `SENDER_NOT_CHECKED`, `TRIGGER_DAILY_LIMIT`, `USER_DAILY_LIMIT`, `OWN_MESSAGE`, `START_FAILED`. */
             reason: string | null;
             runId: string | null;
             messageAt: string | null;

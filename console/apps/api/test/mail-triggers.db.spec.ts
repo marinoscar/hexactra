@@ -129,7 +129,8 @@ async function task(s: Session, over: Record<string, unknown> = {}) {
   return res.data;
 }
 
-const base = (connectionId: string, extra: Record<string, unknown> = {}) => ({ connectionId, match: { from: [BILLING] }, ...extra });
+// The double reports no sender check (`unknown`), so most tests accept unverified senders; the ones about the check say otherwise.
+const base = (connectionId: string, extra: Record<string, unknown> = {}) => ({ connectionId, match: { from: [BILLING] }, acceptUnverified: true, ...extra });
 
 async function createTrigger(s: Session, taskId: string, body: Record<string, unknown>) {
   const res = await call<{ id: string; status: string }>(s, 'POST', `/api/tasks/${taskId}/mail-triggers`, body);
@@ -303,6 +304,36 @@ describe('what starts a run', () => {
     box.addMessage({ from: BILLING, subject: 'Spoofed 4', senderAuth: 'fail', date: isoNow(20 * 3_600_000) });
     await poll(trig.id, new Date(Date.now() + 36 * 3_600_000));
     expect(await notes(s.userId, 'unverified')).toBe(2);
+  });
+});
+
+describe('fail closed on the sender check', () => {
+  it('a sender the provider could not check starts nothing unless the trigger accepts unverified senders; a failed check never starts one', async () => {
+    const s = await login('closed');
+    const c = await connection(s);
+    const t = await task(s);
+    const strict = await createTrigger(s, t.id, base(c.id, { acceptUnverified: undefined }));
+    expect((await call<{ acceptUnverified: boolean }[]>(s, 'GET', `/api/tasks/${t.id}/mail-triggers`)).data[0]!.acceptUnverified).toBe(false);
+    const box = mailbox(c.id);
+    box.addMessage({ from: BILLING, subject: 'Unknown', date: isoNow() });
+    box.addMessage({ from: BILLING, subject: 'Fail', senderAuth: 'fail', date: isoNow() });
+    box.addMessage({ from: BILLING, subject: 'Pass', senderAuth: 'pass', date: isoNow() });
+    // The preview says so before anything happens.
+    const preview = await call<{ messages: { subject: string; wouldStart: boolean; reason: string | null }[] }>(s, 'POST', `/api/mail-triggers/${strict.id}/test`, {});
+    expect(Object.fromEntries(preview.data.messages.map((m) => [m.subject, [m.wouldStart, m.reason]]))).toEqual({ Unknown: [false, 'sender_not_checked'], Fail: [false, 'sender_not_verified'], Pass: [true, null] });
+    expect(await poll(strict.id)).toMatchObject({ started: 1, skipped: 2 });
+    const events = await eventsOf(strict.id);
+    expect(events.map((e) => [e.outcome, e.reason]).sort()).toEqual([['skipped_unverified', 'SENDER_NOT_CHECKED'], ['skipped_unverified', 'SENDER_NOT_VERIFIED'], ['started', null]].sort());
+    expect(await runsOf(strict.id)).toHaveLength(1);
+    // Switched on: an unchecked message starts a run, a failed one still never does.
+    const on = await call<{ acceptUnverified: boolean }>(s, 'PATCH', `/api/mail-triggers/${strict.id}`, { acceptUnverified: true });
+    expect(on.data.acceptUnverified).toBe(true);
+    await new Promise((r) => setTimeout(r, 10));
+    box.addMessage({ from: BILLING, subject: 'Unknown 2', date: isoNow() });
+    box.addMessage({ from: BILLING, subject: 'Fail 2', senderAuth: 'fail', date: isoNow() });
+    expect(await poll(strict.id, new Date(Date.now() + 301_000))).toMatchObject({ started: 1, skipped: 1 });
+    expect(await runsOf(strict.id)).toHaveLength(2);
+    expect(await notes(s.userId, 'unverified')).toBe(1);
   });
 });
 

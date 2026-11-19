@@ -76092,6 +76092,9 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "acceptUnverified": {
+            "type": "boolean"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -76158,6 +76161,7 @@
           "afterStart",
           "pollSeconds",
           "maxRunsPerDay",
+          "acceptUnverified",
           "status",
           "statusReason",
           "lastCheckedAt",
@@ -76330,6 +76334,10 @@
             "maximum": 100,
             "description": "The most runs this trigger starts in a UTC day (10 by default). The owner's own daily cap across triggers also applies."
           },
+          "acceptUnverified": {
+            "type": "boolean",
+            "description": "Also start for a message whose sender the provider could not check (`unknown`). Off by default: only a message that passed the provider's SPF, DKIM or DMARC check starts a run, and one that failed it never does."
+          },
           "enabled": {
             "type": "boolean"
           }
@@ -76500,6 +76508,10 @@
             "maximum": 100,
             "description": "The most runs this trigger starts in a UTC day (10 by default). The owner's own daily cap across triggers also applies."
           },
+          "acceptUnverified": {
+            "type": "boolean",
+            "description": "Also start for a message whose sender the provider could not check (`unknown`). Off by default: only a message that passed the provider's SPF, DKIM or DMARC check starts a run, and one that failed it never does."
+          },
           "enabled": {
             "description": "Enabling again starts from now: mail that arrived while it was off never fires.",
             "type": "boolean"
@@ -76538,7 +76550,7 @@
                 },
                 "wouldStart": {
                   "type": "boolean",
-                  "description": "False when it arrived before the trigger was enabled, came from the account itself, or failed the sender check."
+                  "description": "False when it arrived before the trigger was enabled, came from the account itself, failed the sender check, or could not be checked while the trigger does not accept unverified senders."
                 },
                 "reason": {
                   "anyOf": [
@@ -76547,7 +76559,8 @@
                       "enum": [
                         "before_enabled",
                         "own_message",
-                        "sender_not_verified"
+                        "sender_not_verified",
+                        "sender_not_checked"
                       ]
                     },
                     {
@@ -76606,7 +76619,7 @@
             ]
           },
           "reason": {
-            "description": "`SENDER_NOT_VERIFIED`, `TRIGGER_DAILY_LIMIT`, `USER_DAILY_LIMIT`, `OWN_MESSAGE`, `START_FAILED`.",
+            "description": "`SENDER_NOT_VERIFIED`, `SENDER_NOT_CHECKED`, `TRIGGER_DAILY_LIMIT`, `USER_DAILY_LIMIT`, `OWN_MESSAGE`, `START_FAILED`.",
             "type": [
               "string",
               "null"

@@ -38,6 +38,7 @@ export interface TriggerDraft {
   labelId: string;
   pollMinutes: number;
   maxRunsPerDay: number;
+  acceptUnverified: boolean;
   enabled: boolean;
   mappings: Record<string, MappingDraft>;
 }
@@ -53,6 +54,7 @@ export const newDraft = (connectionId = ''): TriggerDraft => ({
   labelId: '',
   pollMinutes: 5,
   maxRunsPerDay: 10,
+  acceptUnverified: false,
   enabled: true,
   mappings: {},
 });
@@ -100,6 +102,7 @@ export function draftFromTrigger(t: MailTrigger): TriggerDraft {
     labelId: after === 'add_label' ? t.afterStart.slice('add_label:'.length) : '',
     pollMinutes: Math.max(1, Math.round(t.pollSeconds / 60)),
     maxRunsPerDay: t.maxRunsPerDay,
+    acceptUnverified: t.acceptUnverified,
     enabled: t.enabled,
     mappings: Object.fromEntries(Object.entries(t.inputs ?? {}).map(([k, s]) => [k, toMapping(s)])),
   };
@@ -142,6 +145,7 @@ export function draftToBody(d: TriggerDraft): TriggerBody {
     afterStart: d.afterStart === 'add_label' ? `add_label:${d.labelId.trim()}` : d.afterStart,
     pollSeconds: d.pollMinutes * 60,
     maxRunsPerDay: d.maxRunsPerDay,
+    acceptUnverified: d.acceptUnverified,
     enabled: d.enabled,
   };
 }
@@ -168,6 +172,7 @@ export const STATUS_TEXT: Record<MailTrigger['status'], { label: string; color: 
 
 const REASON_TEXT: Record<string, string> = {
   SENDER_NOT_VERIFIED: 'sender not verified',
+  SENDER_NOT_CHECKED: 'the provider could not check the sender',
   TRIGGER_DAILY_LIMIT: "this trigger's daily limit",
   USER_DAILY_LIMIT: 'your daily limit',
   OWN_MESSAGE: 'sent from the account itself',
@@ -186,5 +191,6 @@ const PREVIEW_REASON: Record<NonNullable<PreviewMessage['reason']>, string> = {
   before_enabled: 'arrived before the trigger was switched on',
   own_message: 'sent from the account itself',
   sender_not_verified: 'the sender did not pass the provider\'s check',
+  sender_not_checked: 'the provider could not check the sender (allow unverified senders to accept these)',
 };
 export const previewReason = (m: Pick<PreviewMessage, 'wouldStart' | 'reason'>): string => (m.wouldStart ? 'Would start a run' : `Would not start: ${m.reason ? PREVIEW_REASON[m.reason] : 'it does not match'}`);

@@ -127,7 +127,7 @@ const connectionNeedsReconnect: BrowserNotificationTemplate = (d) => ({
 const MAIL_TRIGGER_TEXT: Record<string, { title: string; body: (task: string) => string }> = {
   needs_reconnect: { title: 'An email trigger stopped', body: (t) => `The account behind the email trigger on "${t}" must be connected again. Nothing starts until you do.` },
   failing: { title: 'An email trigger keeps failing', body: (t) => `The email trigger on "${t}" could not read the mailbox several times in a row. It keeps trying.` },
-  unverified: { title: 'An email failed the sender check', body: (t) => `A message that looked like it matched the email trigger on "${t}" did not pass the provider's sender check, so nothing started.` },
+  unverified: { title: 'An email failed the sender check', body: (t) => `A message that looked like it matched the email trigger on "${t}" did not pass the provider's sender check (or could not be checked), so nothing started. Open the trigger's history for which.` },
   limit: { title: 'An email trigger hit its daily limit', body: (t) => `The email trigger on "${t}" reached its limit for today. More matching mail will not start runs until tomorrow.` },
   connection_paused: { title: 'An email trigger is waiting', body: (t) => `The account behind the email trigger on "${t}" is paused, so the trigger waits. Resume the account in Settings → Connections.` },
   connection_removed: { title: 'An email trigger was switched off', body: (t) => `The account behind the email trigger on "${t}" was disconnected, so the trigger is off.` },

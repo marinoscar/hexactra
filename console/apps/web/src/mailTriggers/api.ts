@@ -30,6 +30,7 @@ export interface MailTrigger {
   afterStart: string;
   pollSeconds: number;
   maxRunsPerDay: number;
+  acceptUnverified: boolean;
   status: MailTriggerStatus;
   statusReason: string | null;
   lastCheckedAt: string | null;
@@ -47,6 +48,7 @@ export interface TriggerBody {
   afterStart?: string;
   pollSeconds?: number;
   maxRunsPerDay?: number;
+  acceptUnverified?: boolean;
   enabled?: boolean;
 }
 
@@ -64,7 +66,7 @@ export interface PreviewMessage {
   subject: string;
   from: string | null;
   wouldStart: boolean;
-  reason: 'before_enabled' | 'own_message' | 'sender_not_verified' | null;
+  reason: 'before_enabled' | 'own_message' | 'sender_not_verified' | 'sender_not_checked' | null;
   senderVerified: 'pass' | 'fail' | 'unknown';
 }
 export interface TriggerPreview {

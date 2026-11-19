@@ -34,6 +34,7 @@ const trigger = (over: Partial<MailTrigger> = {}): MailTrigger => ({
   afterStart: 'none',
   pollSeconds: 300,
   maxRunsPerDay: 10,
+  acceptUnverified: false,
   status: 'ok',
   statusReason: null,
   lastCheckedAt: '2026-11-18T10:00:00.000Z',
@@ -127,6 +128,7 @@ describe('the model', () => {
       afterStart: 'add_label:Processed',
       pollSeconds: 900,
       maxRunsPerDay: 10,
+      acceptUnverified: false,
       enabled: true,
     });
   });
@@ -138,6 +140,8 @@ describe('the model', () => {
     expect(eventText({ outcome: 'failed', reason: 'START_FAILED' })).toBe('Could not start: the run could not be started');
     expect(matchText({ from: ['a@example.test'], hasAttachment: false, subjectContains: 'x' })).toBe('from a@example.test, subject has “x”, without an attachment');
     expect(previewReason({ wouldStart: false, reason: 'own_message' })).toBe('Would not start: sent from the account itself');
+    expect(previewReason({ wouldStart: false, reason: 'sender_not_checked' })).toMatch(/could not check the sender/);
+    expect(eventText({ outcome: 'skipped_unverified', reason: 'SENDER_NOT_CHECKED' })).toBe('Skipped: the provider could not check the sender');
   });
 });
 
@@ -211,6 +215,20 @@ describe('the email triggers on the task page', () => {
     fireEvent.change(within(dialog).getByLabelText('Invoice number value'), { target: { value: '(a+)+' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
     expect(await within(dialog).findAllByText(/nested quantifiers/)).not.toHaveLength(0);
+  });
+
+  it('accepting unverified senders is off by default and is sent only when switched on', async () => {
+    restore = mockViewport(1024);
+    const { posted } = mount({ triggers: [], responses: { [`POST /tasks/${TASK}/mail-triggers`]: trigger() } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Add a trigger' }));
+    const dialog = await screen.findByRole('dialog');
+    const sw = within(dialog).getByRole('switch', { name: /accept mail the provider could not verify/i });
+    expect(sw).not.toBeChecked();
+    fireEvent.change(within(dialog).getByLabelText('From'), { target: { value: 'billing@example.test' } });
+    fireEvent.click(sw);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
+    await waitFor(() => expect(posted('POST', `/tasks/${TASK}/mail-triggers`)).toHaveLength(1));
+    expect(posted('POST', `/tasks/${TASK}/mail-triggers`)[0]!.body).toMatchObject({ acceptUnverified: true });
   });
 
   it('Test shows what would match and starts nothing', async () => {
