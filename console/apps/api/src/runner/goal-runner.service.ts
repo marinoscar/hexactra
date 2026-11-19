@@ -8,6 +8,9 @@ import { z } from 'zod';
 import { FabricClient, FabricError } from '../fabric/fabric.client';
 import { chooseHost } from './host-choice';
 import { balancedSpec, builtinPolicy, SYSTEM_DEFAULT_POLICY_REF } from '../policies/builtin-policies';
+import { readOutputs } from '../tasks/task-outputs.schemas';
+import { MAX_OUTPUT_ATTEMPTS, parseOutputs, type StoredOutput } from '@app/shared/task-fields';
+import { decideOutputs, finishParameters, instructionsWithOutputs, scrubSensitive, type GivenOutputs } from './outputs';
 import { PolicyModelCheck } from '../policies/policy-model-check';
 import { ModelTiersService } from '../policies/model-tiers.service';
 import { fallbackRequest, sameTierRequest, tierHasVision, tierProblem, tierRequest, type TierRequest } from './tier-request';
@@ -225,6 +228,8 @@ export interface RunMemory {
   saveLogin?: SaveLoginMemory;
   /** `visionOff` was set because the tier's model has no vision (not because a call refused images). */
   visionOffByTier?: boolean;
+  /** How many times `finish` was refused (or the model stopped without it) for a missing or invalid task output (E39.5): two at most, then the run ends with what it has. */
+  outputAttempts?: number;
   /** The highest step `seq` this memory already tells the model about (E38.3): a job that finds later rows reconciles them. */
   lastSeq?: number;
   /** Actions that may or may not have happened (E38.3): their target is asked again, and no saved approval covers it. Never a value. */
@@ -939,6 +944,10 @@ export class GoalRunnerService {
     const sitesText = [policy.allowedDomains.join(', ') || null, policy.appDomains.length ? `the app's: ${policy.appDomains.join(', ')}` : null].filter(Boolean).join('; ');
     // Routing steps (#405) take a `seq` but are not actions: the sequence runs ahead of `stepCount` by their number.
     const lastSeq = await this.prisma.runStep.aggregate({ where: { runId: run.id }, _max: { seq: true } });
+    /** What this run must return (E39.5): the task's outputs as they were when it started. */
+    const outputsSpec = readOutputs(run.outputsSpec);
+    /** The instructions of every call of this run: the shared ones plus the list of outputs. The same text every round (stable prefix, #406). */
+    const instructions = instructionsWithOutputs(INSTRUCTIONS, outputsSpec);
     const state = {
       stepCount: run.stepCount,
       seq: Math.max(run.stepCount, lastSeq._max.seq ?? 0),
@@ -947,7 +956,9 @@ export class GoalRunnerService {
       stop: null as StopLoop['reason'] | null,
       /** Which budget ended the run (set with `stop = 'budget'`). */
       budgetKey: null as BudgetKey | null,
-      finished: null as { success: boolean; result: string } | null,
+      finished: null as { success: boolean; result: string; outputs?: Record<string, StoredOutput>; outputsComplete?: boolean } | null,
+      /** The wrap-up call is under way: `finish` accepts whatever outputs it is given (E39.5). */
+      wrappingUp: false,
       handoffId: null as string | null,
       handoffExpiresAt: null as Date | null,
       handoffAsk: null as { prompt: string; kind: string; input: string } | null,
@@ -2364,12 +2375,29 @@ export class GoalRunnerService {
       ...savedCardTools,
       defineTool({
         name: 'finish',
-        description: 'End the run with a short factual result.',
-        parameters: z.object({ success: z.boolean(), result: z.string().min(1).max(4000) }),
-        execute: async ({ success, result }) => {
-          state.finished = { success, result };
+        description: outputsSpec.length ? 'End the run with a short factual result and the values this task needs (outputs).' : 'End the run with a short factual result.',
+        parameters: finishParameters(outputsSpec) as z.ZodType<{ success: boolean; result: string; outputs?: GivenOutputs }>,
+        execute: async (args: { success: boolean; result: string; outputs?: GivenOutputs }) => {
+          const { success, result } = args;
+          if (outputsSpec.length === 0) {
+            state.finished = { success, result };
+            state.stop = 'finish';
+            await record('finish', null, null, success, trim(result, 1_900), Date.now());
+            return 'Finished.';
+          }
+          // The task's outputs (E39.5): read and checked here, on the server. A finish that is a success is refused (twice at most)
+          // while a required value is missing or one does not parse; a failure, the wrap-up and the third try end the run with what it has.
+          const attempts = memory.outputAttempts ?? 0;
+          const decision = decideOutputs(outputsSpec, args.outputs, { attempts, final: state.wrappingUp || !success });
+          if (decision.refusal) {
+            memory.outputAttempts = attempts + 1;
+            await recordNote('note', null, `finish was refused: ${decision.problemKeys.join(', ')} (${attempts + 1} of ${MAX_OUTPUT_ATTEMPTS})`, { ok: false });
+            return decision.refusal;
+          }
+          const text = scrubSensitive(result, outputsSpec, args.outputs);
+          state.finished = { success, result: text, outputs: decision.fields, outputsComplete: decision.complete };
           state.stop = 'finish';
-          await record('finish', null, null, success, trim(result, 1_900), Date.now());
+          await record('finish', null, null, success, trim(text, 1_900), Date.now());
           return 'Finished.';
         },
       }),
@@ -2475,7 +2503,7 @@ export class GoalRunnerService {
     };
 
     /** End the run with a closing `end` step holding the final screen (#541), taken before the session is released. */
-    const closeRun = async (to: 'succeeded' | 'failed' | 'cancelled', patch: { result?: string; error?: string; stopReason?: RunStopReason }) => {
+    const closeRun = async (to: 'succeeded' | 'failed' | 'cancelled', patch: { result?: string; error?: string; stopReason?: RunStopReason; outputs?: Record<string, StoredOutput>; outputsComplete?: boolean }) => {
       try {
         const seq = await recordNote('end', null, `The run ended: ${to}`, { ok: to === 'succeeded' });
         // A Stop never waits long for the closing picture (E38.1).
@@ -2574,6 +2602,10 @@ export class GoalRunnerService {
       await switchTier(startTier, 'deescalate', `${memory.progressStreak} progressing actions in a row`);
     };
 
+    /** What a run that ends with `done` stores of its outputs (E39.5): every defined key (a run that never gave them has "not found"), and whether all are in. */
+    const outputsPatch = (done: { outputs?: Record<string, StoredOutput>; outputsComplete?: boolean } | null): { outputs?: Record<string, StoredOutput>; outputsComplete?: boolean } =>
+      outputsSpec.length ? { outputs: done?.outputs ?? parseOutputs(outputsSpec, null).fields, outputsComplete: done?.outputsComplete ?? false } : {};
+
     /**
      * A budget is used up: one last call with only `finish` (exempt from the budget, counted in the
      * totals) so the run still returns a partial result. Without a `finish` the run ends on the budget's message.
@@ -2587,15 +2619,16 @@ export class GoalRunnerService {
       memory.log.push(`${error}: asking the model to wrap up.`);
       state.stop = null;
       state.finished = null;
+      state.wrappingUp = true;
       const finishTool = tools.filter((t) => t.tool.name === 'finish');
-      const input = [`Goal: ${goal}`, memory.log.length ? `Progress so far (latest last):\n${memory.log.slice(-LOG_LINES).join('\n')}` : '', instruction].filter(Boolean).join('\n\n');
+      const input = [`Goal: ${goal}`, memory.log.length ? `Progress so far (latest last):\n${memory.log.slice(-LOG_LINES).join('\n')}` : '', instruction, outputsSpec.length ? 'Give the outputs in finish too: the values you found so far, and null for the rest.' : ''].filter(Boolean).join('\n\n');
       await setActivity('thinking');
       try {
         await tr.within(() =>
           provider().runTools({
             // The current tier's model and effort (#403); the wrap-up keeps its own small output cap.
             ...(({ modelLabel: _label, ...req }) => req)(tierRequest(snapshot, tier)),
-            instructions: INSTRUCTIONS,
+            instructions,
             input,
             tools: finishTool,
             maxSteps: 1,
@@ -2609,13 +2642,14 @@ export class GoalRunnerService {
       await this.saveMemory(userId, run.id, memory, used.drain(), lease);
       // Stop during the wrap-up call (E38.1): the run ends cancelled, whatever the model said.
       if (stop.requested) return cancelRun();
-      const done = state.finished as { success: boolean; result: string } | null;
+      state.wrappingUp = false;
+      const done = state.finished as { success: boolean; result: string; outputs?: Record<string, StoredOutput>; outputsComplete?: boolean } | null;
       if (done?.success) {
-        await closeRun('succeeded', { result: done.result, stopReason });
+        await closeRun('succeeded', { result: done.result, stopReason, ...outputsPatch(done) });
         return 'succeeded';
       }
       // No words from the model: the result is the run's own last steps, masked (#540), never only the budget message.
-      await closeRun('failed', { result: done ? done.result : noReportResult(memory.log), error, stopReason });
+      await closeRun('failed', { result: done ? done.result : noReportResult(memory.log), error, stopReason, ...outputsPatch(done) });
       return 'failed';
     };
 
@@ -2769,7 +2803,7 @@ export class GoalRunnerService {
         tr.within(() => provider().runTools({
           // The model, effort and output cap of the run's current tier, from the snapshot (#403).
           ...(({ modelLabel: _label, ...r }) => r)(req),
-          instructions: INSTRUCTIONS,
+          instructions,
           input: roundInput(buildInput(), withImage && shown.length ? shown : null, status),
           tools,
           maxSteps: Math.min(ctx.callsPerChunk, PLATFORM_MAX_CALLS_PER_CHUNK),
@@ -2839,14 +2873,23 @@ export class GoalRunnerService {
       if ((stop.pauseRequested || flags?.pauseRequested) && !(state.stop === 'finish' && state.finished)) return pauseNow();
       if (state.stop === 'finish' && state.finished) {
         const to = state.finished.success ? 'succeeded' : 'failed';
-        await closeRun(to, state.finished.success ? { result: state.finished.result, stopReason: 'finished' } : { result: state.finished.result, error: 'The agent could not reach the goal', stopReason: 'finished' });
+        const done = state.finished;
+        await closeRun(to, done.success ? { result: done.result, stopReason: 'finished', ...outputsPatch(done) } : { result: done.result, error: 'The agent could not reach the goal', stopReason: 'finished', ...outputsPatch(done) });
         return to;
       }
       if (state.stop === 'budget' && state.budgetKey) return wrapUp(state.budgetKey);
       if (state.stop === 'hop') return 'continue';
       if (result && result.stopReason === 'completed') {
+        // The task needs outputs and the model stopped without `finish` (E39.5): ask for them, twice at most, like a refused `finish`.
+        if (outputsSpec.length && (memory.outputAttempts ?? 0) < MAX_OUTPUT_ATTEMPTS) {
+          memory.outputAttempts = (memory.outputAttempts ?? 0) + 1;
+          memory.pendingNudge = 'You stopped without calling finish. This task needs its outputs: call finish with the result and the outputs.';
+          await recordNote('note', null, `the model stopped without finish; asked for the outputs (${memory.outputAttempts} of ${MAX_OUTPUT_ATTEMPTS})`, { ok: false });
+          await this.saveMemory(userId, run.id, memory, used.drain(), lease);
+          continue;
+        }
         // The model answered without calling finish: take its answer as the result.
-        await closeRun('succeeded', { result: trim(result.final.outputText || 'Done.', 7_900), stopReason: 'finished' });
+        await closeRun('succeeded', { result: trim(result.final.outputText || 'Done.', 7_900), stopReason: 'finished', ...outputsPatch(null) });
         return 'succeeded';
       }
       // A stall the detector found during the chunk, or rounds that record nothing at all (a model that only talks):
@@ -2940,10 +2983,10 @@ export class GoalRunnerService {
     sessionId: string | null,
     session: FabricSession,
     to: 'succeeded' | 'failed' | 'cancelled',
-    patch: { result?: string; error?: string; stopReason?: RunStopReason },
+    patch: { result?: string; error?: string; stopReason?: RunStopReason; outputs?: Record<string, StoredOutput>; outputsComplete?: boolean },
   ) {
     if (sessionId) await session.end(sessionId);
-    const done = await this.tasks.transition(userId, runId, to, patch);
+    const done = await this.tasks.transition(userId, runId, to, patch as RunPatch);
     this.log.log(`run ${runId}: ${to}`);
     // The saved result: it leads with a confirmed step the run carried out (#540).
     await this.notifier?.finished(userId, done, to, done.result ?? patch.error);
