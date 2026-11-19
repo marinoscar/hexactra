@@ -111,6 +111,15 @@ A looser rule is made by answering a new request with "Don't ask again" ticked.
 
 "Anything I tick" removes the last brake on a remembered payment: a page on the same site that manages to steer the agent could reach the remembered button. The server matching the page's real site and the element's exact label, the owner's optional limits, the recorded and audited uses, the alert and Pause all lower that risk; they do not remove it.
 
+### With saved logins and a schedule (epic E37)
+
+A saved login changes what a remembered approval can do, so the risk is stated again here: **a saved login plus a remembered approval plus a schedule can move money with nobody watching.** The origin binding of a saved login stops a look-alike site; it does not stop a real page on the saved site steering the agent to the remembered button. Two brakes are built for exactly this (the first is a default the owner can lift, and a remembered rule can still let a click through):
+
+- A run that signed in from a saved login and was **not started from a chat** (a schedule, the API, MCP) keeps the confirmation before payments on unless the task says `unattendedPayments: allow` ([secrets.md](secrets.md#how-the-agent-signs-in)). **A saved approval the owner made still applies as they defined it**, so a payment a remembered rule covers goes ahead: that is the combination to be careful with, and the reason a rule can carry an amount, an expiry and a scope. A scheduled run that used a saved login sends one notification at its end.
+- A **card** is never covered by a site-wide rule: it needs an approval bound to the merchant **and** the card with a required amount limit, and **no rule covers every merchant** ([Cards](#cards-e377)).
+
+Saved logins never create an approval and an approval never releases a secret: the rule decides only whether the owner is asked before a click, and the value is released by the provider under its own rules. The threats this does not stop are in [security-secrets.md](security-secrets.md).
+
 ## Cards (E37.7)
 
 A rule can also be bound to **a saved card**: "Pay with Visa ending 4242 on shop.example.com, up to 100.00 USD". It is a `gate` rule of category `payment` whose `matchKey` is not a button label but `saved card <currency>` (`saved card usd`), with a `cardRef` (`<provider>:<item id>`) and a **required** `maxAmount` in that currency. It is made the same way as every other rule, **only by the owner's tick on a server-issued request**: the runner asks "pay with this card at this shop, this amount" (the question's `rememberable` carries the `cardRef`, `requiresLimit`, the currency and the amount, all computed by the server from its own record of the card), the web card shows **Pay without asking up to (USD)** as a required field under the box, and the answer is refused with `CARD_RULE_NEEDS_AMOUNT_LIMIT` (`422`) without one, or `CARD_RULE_LIMIT_TOO_LOW` when the limit is below this purchase. Nothing else creates one (the test that enumerates every REST operation, MCP tool and CLI source still holds).

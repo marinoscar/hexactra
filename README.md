@@ -211,6 +211,7 @@ The agent works with its owner's full powers on the owner's own machines ([VISIO
 | Console operations, capacity, VPS stack, Android app | [console/docs/runbooks/](console/docs/runbooks/) |
 | MCP and agent-framework recipes | [console/docs/mcp.md](console/docs/mcp.md), [console/docs/agent-frameworks.md](console/docs/agent-frameworks.md) |
 | Hosted AI apps on the public internet: exposure runbook, threat model | [console/docs/runbooks/public-exposure.md](console/docs/runbooks/public-exposure.md), [console/docs/security-hosted-clients.md](console/docs/security-hosted-clients.md) |
+| Saved logins, identity details and cards the agent uses but never sees (epic E37): the chapter, the threat model, what a node holds | [console/docs/secrets.md](console/docs/secrets.md), [console/docs/security-secrets.md](console/docs/security-secrets.md), [docs/nodes.md](docs/nodes.md#what-a-node-holds-of-a-secret) |
 | Fabric: install, operations, API, security, recovery | [docs/installation.md](docs/installation.md), [docs/operations.md](docs/operations.md), [docs/api.md](docs/api.md), [docs/security.md](docs/security.md), [docs/recovery.md](docs/recovery.md) |
 | Fleet orchestration | [docs/fleet-orchestration.md](docs/fleet-orchestration.md) |
 | Deploying hosts (systemd, containers) | [deploy/README.md](deploy/README.md), [docs/container-host.md](docs/container-host.md) |

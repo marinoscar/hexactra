@@ -135,6 +135,24 @@ Send ${{Amount}} today to {{Phone Number}} using Zelle on my Bank of America acc
 - `useSavedCards` (boolean, default off, E37.7): let the task's runs **pay with a saved card**, under the owner's per-merchant approval and an amount limit. It needs `useSavedLogins`, a provider whose grant has `vault:cards_read` and `vault:cards_fill` with Vault's card release on, and for an AI app's run the app's `allowSavedCards` (default off). The model names a card and the fields; the fabric types them; no number, expiry or code is ever returned. An unattended run (not started from a chat) types a card only with `unattendedPayments: allow` **and** a matching remembered approval with an amount limit ([secrets.md](secrets.md#cards-e377), [approvals.md](approvals.md#cards-e377)).
 - A chat has the same `useSavedLogins`, `useSavedIdentity` and `useSavedCards` (`POST`/`PATCH /api/chats`), and a task drafted from a chat carries them over.
 
+### Secrets fields at a glance (epic E37)
+
+Every switch is **off by default**, and none of these fields, in any request or response, ever carries a value. The model of the whole feature is in [secrets.md](secrets.md) and its threats in [security-secrets.md](security-secrets.md).
+
+| Where | Field | Meaning |
+|---|---|---|
+| Task, chat (`POST`/`PATCH /api/tasks`, `/api/chats`) | `useSavedLogins` | Sign in from saved logins and authenticator codes. A new one starts from the owner's `secrets.defaultUseSavedLogins`. |
+| Task, chat | `useSavedIdentity` | Also fill identity details (needs `useSavedLogins`). |
+| Task, chat | `useSavedCards` | Also pay with a saved card, at a merchant and up to a limit the owner approved (needs `useSavedLogins`). |
+| Task only | `unattendedPayments` (`ask` \| `allow`) | What a run **not started from a chat** does at a payment after it signed in with a saved login. `ask` keeps the confirmation on. |
+| Task parameter | `default: { identity: { field } }` | A parameter filled from a saved identity field (the goal reads `[provided: <label>]`). |
+| Run (read-only) | `usedSavedLogins`, `usedSavedIdentity`, `usedSavedCards` | What the run used: names, labels, sites and (for a card) brand, last four and amounts. Never a username, a password, a code, a detail or a card number. |
+| Connected AI app (`PATCH /api/connected-apps/{clientId}/settings`) | `allowSavedLogins`, `allowSavedIdentity`, `allowSavedCards` | The app's own limits; each is a further condition on a run the app starts, and none widens another. |
+| User settings (`PATCH /api/user-settings`) | `secrets.agentUse.enabled`, `secrets.defaultUseSavedLogins`, `secrets.provider` | The owner's switch, where new tasks and chats start, and which provider (`vault` or `builtin`) is active. |
+| System settings (`PATCH /api/system-settings`) | `secrets.agentUse.enabled`, `secrets.vault.allowedHosts` | The deployment's switch, and the Vault host names exempt from the private-address check. |
+
+A run uses a saved secret only when **all** of its switches hold; otherwise the secret tools are not offered and the run asks the owner, as before. A provider that is down, revoked or without a match also ends in a question to the owner, never in a failed run. There is no MCP tool and no CLI command for any of this ([parity.md](parity.md#what-secrets-added-e37)).
+
 ## Runs
 
 The list, its filters and cursor, the counts, deleting and retention are in [runs.md](runs.md). In short:

@@ -127,6 +127,21 @@ Also:
 - The unattended desktop runs as a separate `hexactra` user, so a page in its browser cannot reach your home directory.
 - With nobody logged in there is no keyring. Chrome then stores saved passwords and cookies with a fixed key (`--password-store=basic`), so use full-disk encryption on the node.
 
+## What a node holds of a secret
+
+**Nothing secret is stored on a node by Hexactra.** The node never holds a secrets-provider token, a vault key or a saved login, and it cannot ask a provider for anything: the control plane (the fabric) fetches a saved login, identity detail or card from the owner's provider ([console/docs/secrets.md](../console/docs/secrets.md)), and the node's own credential can act only for itself.
+
+What the node does see is the value **inside the one action that types it**, because the page must receive it:
+
+- **Path.** (A saved card's number, expiry and code travel the same way, as `type_keys` at screen coordinates when the field is inside a payment frame.) The control plane sends the host an ordinary `type` (or `type_keys`) action in the answer to its outbound long-poll, over TLS. The host agent hands it to the native host on its local Unix socket, which hands it to the extension, which types it with trusted input.
+- **How long.** For the length of that one action: the time to deliver and type it, normally well under a second, or until the action's deadline. The control plane keeps the text in a zeroizing buffer apart from the operation's view (which shows `[secret]`) until the host takes the action, and wipes that buffer then; the copy placed in the answer to the host's poll is an ordinary string for as long as it takes to serialize and send.
+- **In memory only.** The agent, the native host and the extension hold it as ordinary process memory. The host agent and the native host log an action's **kind**, its operation id and its outcome, never its text (`crates/hexactra-agent/src/remote_daemon.rs`, `crates/hexactra-native-host/src/relay.rs`); nothing is written to disk by Hexactra.
+- **Not wiped on the node.** The Rust agent and native host do not zeroize the text, and the extension is JavaScript: whoever can read a node's process memory during that window can read the value. Only the control plane's holding buffer is zeroed (best effort: the managed runtimes cannot promise perfect erasure, VISION §11.6).
+- **The origin comes from the node.** The control plane reads the tab's URL by asking the host for its tabs, so a compromised node can report an origin of its choosing. That is why the node is the owner's own machine, with full-disk encryption, and why [the threat model](../console/docs/security-secrets.md) lists a compromised node.
+- **No picture while a value is in flight.** The control plane refuses a screenshot of the session while a typing action holds a value (`409`), and a box covers what the fabric filled in every picture the model is shown.
+
+What the node has always held is unchanged: the browser profiles, with their cookies and saved site sessions, and the Chrome policy file. A secrets provider adds nothing to that on the node except the typing windows above.
+
 ## Acceptance and security review
 
 - [nodes-acceptance.md](nodes-acceptance.md): the manual check on a real mini PC.

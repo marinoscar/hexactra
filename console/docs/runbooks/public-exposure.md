@@ -138,6 +138,8 @@ The API limits are in Administration → **External AI apps** (`mcp` system sett
 
 ## 7. The built-in secrets store on a public console (E37.5)
 
+The threat model for everything the agent can use but never see, on the Vault path as well as the built-in store, is [../security-secrets.md](../security-secrets.md): for each threat (a look-alike site, a page that steers the agent, a hosted AI app, a compromised console or node, a stolen backup or token, a crash around a payment, logs) what stops it and what does not. Read it before turning a switch on for a console the internet can reach.
+
 If `SECRETS_STORE_ENABLED=true` (docs/secrets.md, "The built-in store"), the console keeps owners' saved logins, encrypted, in its own database. What that changes for a public deployment:
 
 - **Nothing of the store is reachable by an AI app.** An OAuth app's `oat_` token is confined to `/api/mcp`; `/api/secrets/*` is not part of any protected resource, and no MCP tool reads or writes a saved login. The internal release route (`/api/internal/secrets-store/v1/*`) answers `401` to a session, a personal access token and an OAuth token alike, and the app's nginx answers `404` for `/api/internal/` on the public side (`infra/nginx/app.d/locations/secrets-store-internal.conf`). **Keep that file** if you replace the nginx overlays, and in shape (c) do not forward `/api/internal/` from the public proxy.

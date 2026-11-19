@@ -38,6 +38,10 @@ const epicChildren = new Map([
   [458, [459, 460, 461, 462, 463, 464, 465, 466, 467, 468, 469]],
   [536, [537, 540, 538, 539, 541, 542, 543, 544, 545]],
   [549, [550, 551, 553, 554, 555, 552, 556, 557]],
+  // E37 secrets the agent can use but never see. Sequence order, then #621 (the "Save this login?" card split out of #593)
+  // and the follow-ups filed by the close-out: #624 acceptance run, #625 hardening, #626 migration, #627 built-in identity,
+  // #628 other password managers, #629 rotation, #630 contract package and conformance kit.
+  [579, [590, 591, 592, 593, 594, 595, 596, 597, 621, 624, 625, 626, 627, 628, 629, 630]],
 ]);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
