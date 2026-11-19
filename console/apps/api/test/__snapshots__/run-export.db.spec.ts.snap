@@ -150,6 +150,7 @@ exports[`GET /runs/{id}/export sends a JSON attachment (no data envelope) that v
     "stopReason": "budget_actions",
     "taskId": null,
     "taskName": null,
+    "traceIds": [],
     "trigger": "chat",
     "usage": {
       "activeMs": 0,
