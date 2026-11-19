@@ -14,6 +14,11 @@
 //!   merchant's top-level origin and, for a field inside an embedded payment
 //!   frame, that frame's origin, and refuses when it cannot tell.
 //!
+//! * save a login (E37.4b): the sign-in the owner typed by hand into a
+//!   `credentials` handoff is forwarded to the provider's create route, from
+//!   the copy of the password this process still holds ([`save_login`]); the
+//!   console never has it.
+//!
 //! The control plane answers these itself. It reads the tab's top-level
 //! origin from the extension (a `tabs` operation) at that moment, so the model
 //! never names an origin, pins every later step to that tab, asks the provider
@@ -35,12 +40,12 @@ use chrono::{DateTime, Utc};
 use hexactra_core::remote::{
     provider_error_codes as code, CardField, CardTypedResult, ItemKind, OperationState,
     OperationView, ProviderSelectedResult, ProviderTypedResult, RegisterSecretsProviderRequest,
-    RemoteAction, SecretField, SecretPurpose, SecretsLookupResult, SecretsProviderKind,
-    SecretsProviderView, SelectPart, ViewportPoint,
+    RemoteAction, SaveLoginRequest, SaveLoginResult, SecretField, SecretPurpose,
+    SecretsLookupResult, SecretsProviderKind, SecretsProviderView, SelectPart, ViewportPoint,
 };
 use hexactra_credential_resolver::{
-    CodeRequest, Origin, OwnerId, ProviderError, PurchaseContext, ReleaseRequest, SecretValue,
-    SecretsProvider,
+    CodeRequest, NewLogin, Origin, OwnerId, ProviderError, PurchaseContext, ReleaseRequest,
+    SecretValue, SecretsProvider,
 };
 use serde_json::{json, Value};
 use tokio::time::Instant;
@@ -232,7 +237,7 @@ impl SecretsProviders {
         v
     }
 
-    fn resolve(
+    pub(super) fn resolve(
         &self,
         owner: Option<&str>,
         wanted: Option<&str>,
@@ -1423,6 +1428,132 @@ impl Run {
             .await?;
         }
         Ok(())
+    }
+}
+
+/// How long a save may take (the provider's own deadline is shorter).
+const SAVE_TIMEOUT: Duration = Duration::from_secs(20);
+
+/// What a failed save reports: the failure's code and message, and whether
+/// the offer was given back (the owner may try again).
+pub(super) struct SaveFailure {
+    pub(super) code: &'static str,
+    pub(super) message: String,
+}
+
+/// Save the sign-in of an answered `credentials` handoff (created with
+/// `offer_save`) in the owner's provider: the password goes from this
+/// process's memory to the provider's create route with purpose
+/// `save_login`, and is zeroed. The offer is consumed only on success: a
+/// taken name, an unreachable provider or a refused token puts it back, so
+/// the owner can pick another name or try again until it expires. The audit
+/// event carries the provider, the origin's host, the purpose and the outcome,
+/// never the password or the username.
+pub(super) async fn save_login(
+    state: &ApiState,
+    owner_id: &str,
+    provider: &str,
+    req: SaveLoginRequest,
+) -> Result<SaveLoginResult, SaveFailure> {
+    let failure = |f: Fail| SaveFailure {
+        code: f.code,
+        message: f.message,
+    };
+    req.validate().map_err(|e| SaveFailure {
+        code: "invalid_request",
+        message: e.0,
+    })?;
+    let origin = Origin::from_stored(&req.origin).map_err(|_| SaveFailure {
+        code: "invalid_request",
+        message: "origin is not a usable page origin (https, or http on loopback)".into(),
+    })?;
+    let (pid, prov) = state
+        .secrets
+        .resolve(Some(owner_id), Some(provider))
+        .map_err(failure)?;
+    let mut audit = Audit {
+        event: "secrets.release",
+        owner_id: Some(owner_id.to_string()),
+        session_id: Uuid::nil(),
+        op_id: Uuid::new_v4(),
+        run_id: req.run_id.clone(),
+        client_label: req.client_label.clone(),
+        provider: Some(pid),
+        item_id: None,
+        field: Some(SecretField::Password.as_str()),
+        origin: Some(origin.to_string()),
+        purpose: Some(SecretPurpose::SaveLogin.as_str()),
+        kind: None,
+        count: None,
+        amount: None,
+        currency: None,
+        frame_origin: None,
+        released: false,
+    };
+    let (offer, username, session_id) =
+        match state
+            .store
+            .take_save_offer(req.handoff_id, owner_id, Utc::now())
+        {
+            Ok(v) => v,
+            Err(e) => {
+                // A handoff that is not this owner's or has no offer is "not found";
+                // a password that is gone is `secret_unavailable`: too late to save.
+                let code = match &e {
+                    StoreError::SecretUnavailable(_) => "secret_unavailable",
+                    StoreError::NotFound(_) => code::NOT_FOUND,
+                    _ => "conflict",
+                };
+                audit.emit(&state.store.log, code);
+                return Err(SaveFailure {
+                    code,
+                    message: e.to_string(),
+                });
+            }
+        };
+    audit.session_id = session_id;
+    let owner = match OwnerId::new(owner_id) {
+        Ok(o) => o,
+        Err(m) => {
+            state.store.return_save_offer(req.handoff_id, offer);
+            return Err(SaveFailure {
+                code: code::NO_PROVIDER,
+                message: m,
+            });
+        }
+    };
+    let new_login = NewLogin {
+        owner,
+        name: req.name.trim().to_string(),
+        username,
+        origin,
+        // Moved in: wiped when the call is over.
+        password: SecretValue::from_string(offer.password.as_str().to_string()),
+        run_id: req.run_id.clone(),
+        client_label: req.client_label.clone(),
+    };
+    let result = tokio::time::timeout(SAVE_TIMEOUT, prov.save_login(new_login)).await;
+    match result {
+        Ok(Ok(saved)) => {
+            // Used: the offer is not given back, so its copy is wiped here.
+            drop(offer);
+            audit.released = true;
+            audit.item_id = Some(saved.id.clone());
+            audit.emit(&state.store.log, "saved");
+            Ok(SaveLoginResult {
+                saved: true,
+                item_id: Some(saved.id),
+            })
+        }
+        other => {
+            let f = match other {
+                Ok(Err(e)) => provider_fail(e),
+                _ => Fail::new(TIMED_OUT, "the provider did not answer in time"),
+            };
+            state.store.return_save_offer(req.handoff_id, offer);
+            audit.emit(&state.store.log, f.code);
+            Err(failure(f))
+        }
     }
 }
 

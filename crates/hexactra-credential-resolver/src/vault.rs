@@ -3,8 +3,9 @@
 //! or a one-time code through Vault's agent credential API.
 //!
 //! The wire shapes below mirror marinoscar/vault `docs/agent-credential-api.md`
-//! (blob `ca2fec94`, **contract 1.2, beta**): `GET /whoami`, `GET
-//! /credentials?origin=`, `POST /credentials/{id}/fill` and `POST
+//! (blob `ca2fec94`, **contract 1.2, beta**, plus the `save_login` purpose of
+//! **contract 1.3**): `GET /whoami`, `GET /credentials?origin=`, `POST
+//! /credentials` (saving a login), `POST /credentials/{id}/fill` and `POST
 //! /credentials/{id}/totp` under `/api/agent/v1`. The contract package
 //! `@marinoscar/vault-contract/agent` is deliberately not a dependency; a
 //! response's unknown fields are ignored and nothing branches on `message`.
@@ -46,7 +47,8 @@ use serde_json::{json, Value};
 use zeroize::{Zeroize, Zeroizing};
 
 use crate::{
-    CodeRequest, Origin, OwnerId, ProviderError, ReleaseRequest, SecretValue, SecretsProvider,
+    CodeRequest, NewLogin, Origin, OwnerId, ProviderError, ReleaseRequest, SavedLogin, SecretValue,
+    SecretsProvider,
 };
 
 /// Where the agent API lives under Vault's `APP_URL`.
@@ -159,6 +161,23 @@ struct WireTotp {
     expires_at: String,
 }
 
+/// The body of `POST /credentials` for a saved login (contract 1.3). Borrows
+/// everything; the password's bytes are the caller's.
+#[derive(serde::Serialize)]
+struct WireNewLogin<'a> {
+    name: &'a str,
+    username: &'a str,
+    origin: &'a str,
+    purpose: &'a str,
+    password: &'a str,
+}
+
+/// `201 { data: { id, ... } }` of `POST /credentials`: only the id is read.
+#[derive(Deserialize)]
+struct WireCreated {
+    id: String,
+}
+
 /// An error body: only Vault's machine `code` is read, never `message`.
 #[derive(Deserialize)]
 struct WireError {
@@ -239,12 +258,26 @@ impl VaultProvider {
         url: url::Url,
         body: Option<Value>,
     ) -> Result<Zeroizing<Vec<u8>>, ProviderError> {
+        let bytes = body.map(|b| Zeroizing::new(b.to_string().into_bytes()));
+        self.request_bytes(post, url, bytes).await
+    }
+
+    /// [`Self::request`] with a body that is already bytes, wiped when the
+    /// call is over (a body that carries a password is built this way).
+    async fn request_bytes(
+        &self,
+        post: bool,
+        url: url::Url,
+        body: Option<Zeroizing<Vec<u8>>>,
+    ) -> Result<Zeroizing<Vec<u8>>, ProviderError> {
         if self.expires_at.is_some_and(|t| t <= Utc::now()) {
             return Err(ProviderError::Unauthorized);
         }
         let mut waited = false;
         loop {
-            let reply = self.send_once(post, url.clone(), body.as_ref()).await?;
+            let reply = self
+                .send_once(post, url.clone(), body.as_ref().map(|b| b.as_slice()))
+                .await?;
             if reply.status == 429 && !waited {
                 if let Some(d) = retry_after(&reply.headers).filter(|d| *d <= MAX_RETRY_WAIT) {
                     waited = true;
@@ -260,7 +293,7 @@ impl VaultProvider {
         &self,
         post: bool,
         url: url::Url,
-        body: Option<&Value>,
+        body: Option<&[u8]>,
     ) -> Result<Reply, ProviderError> {
         let mut auth = HeaderValue::from_str(&format!("Bearer {}", self.token.as_str()))
             .map_err(|_| ProviderError::Unavailable)?;
@@ -275,7 +308,7 @@ impl VaultProvider {
         if let Some(b) = body {
             req = req
                 .header(reqwest::header::CONTENT_TYPE, "application/json")
-                .body(b.to_string());
+                .body(b.to_vec());
         }
         // A reqwest error can name the URL (an origin in a query): never
         // surface or log it, only that the call did not work.
@@ -566,6 +599,48 @@ impl SecretsProvider for VaultProvider {
         drop(code);
         tokio::time::sleep((left + NEXT_PERIOD_MARGIN).min(MAX_NEXT_PERIOD_WAIT)).await;
         self.fetch_code(&req).await
+    }
+
+    /// `POST /credentials` with `purpose: "save_login"` (contract 1.3, scope
+    /// `vault:items_write`): the owner typed this login in by hand and it
+    /// worked. The body is built straight into a buffer that is wiped when
+    /// the call ends; a `409` (the name is taken) is [`ProviderError::NameTaken`],
+    /// a Vault older than 1.3 answers `400` for the unknown purpose and that
+    /// is a plain refusal (`invalid_request`).
+    async fn save_login(&self, req: NewLogin) -> Result<SavedLogin, ProviderError> {
+        let origin = req.origin.to_string();
+        let body = req
+            .password
+            .expose(|pw| {
+                let pw = std::str::from_utf8(pw).ok()?;
+                let wire = WireNewLogin {
+                    name: &req.name,
+                    username: &req.username,
+                    origin: &origin,
+                    purpose: "save_login",
+                    password: pw,
+                };
+                // Sized up front so the buffer never reallocates (a grown
+                // buffer would leave an unwiped copy behind).
+                let mut buf = Zeroizing::new(Vec::with_capacity(
+                    pw.len() + req.name.len() + req.username.len() + origin.len() + 256,
+                ));
+                serde_json::to_writer(&mut *buf, &wire).ok()?;
+                Some(buf)
+            })
+            .ok_or_else(|| ProviderError::Refused("invalid_request".into()))?;
+        let url = self.url(&["credentials"]);
+        let bytes = match self.request_bytes(true, url, Some(body)).await {
+            Ok(b) => b,
+            // 409 on a create is the name being taken.
+            Err(ProviderError::Refused(c)) if c == "conflict" => {
+                return Err(ProviderError::NameTaken)
+            }
+            Err(e) => return Err(e),
+        };
+        let wire: Envelope<WireCreated> =
+            serde_json::from_slice(&bytes).map_err(|_| ProviderError::Unavailable)?;
+        Ok(SavedLogin { id: wire.data.id })
     }
 }
 
@@ -1926,5 +2001,181 @@ mod tests {
                 assert!(!s.contains(&c));
             }
         }
+    }
+
+    fn new_login(name: &str, password: &str) -> NewLogin {
+        NewLogin {
+            owner: owner(),
+            name: name.into(),
+            username: "person-a@example.test".into(),
+            origin: origin("https://signin.example.test"),
+            password: SecretValue::from_string(password.into()),
+            run_id: Some("run-1".into()),
+            client_label: Some("Hexactra".into()),
+        }
+    }
+
+    // Contract 1.3: the owner's own login, saved with purpose `save_login` and the typed password.
+    #[tokio::test]
+    async fn save_login_creates_the_login_with_the_purpose_and_the_typed_password() {
+        let fake = FakeVault::start().await;
+        let p = VaultProvider::new(&fake.base_url, fake.write_token(), None).unwrap();
+        let saved = p
+            .save_login(new_login("Example sign-in", "CANARY-save-pw-0001"))
+            .await
+            .unwrap();
+        let in_vault = fake.login_named("Example sign-in").expect("created");
+        assert_eq!(in_vault.id, saved.id);
+        assert_eq!(in_vault.password, "CANARY-save-pw-0001");
+        assert_eq!(in_vault.username, "person-a@example.test");
+        assert_eq!(
+            in_vault.origins,
+            vec!["https://signin.example.test".to_string()]
+        );
+        // Opened to agents (as every create is): the next lookup for that page finds it, exactly.
+        let items = p
+            .lookup(
+                &owner(),
+                &origin("https://signin.example.test"),
+                ItemKind::Login,
+            )
+            .await
+            .unwrap();
+        assert!(items
+            .iter()
+            .any(|i| i.id == saved.id && i.match_kind == MatchKind::Exact));
+        let creates = fake.requests_to("/credentials");
+        let post = creates.iter().find(|r| r.method == "POST").unwrap();
+        assert_eq!(post.status, 201);
+        assert_eq!(post.params["purpose"], "save_login");
+        assert_eq!(post.params["origin"], "https://signin.example.test");
+        assert_eq!(post.params["cache_control"], "no-store");
+    }
+
+    #[tokio::test]
+    async fn a_taken_name_is_name_taken_and_a_missing_scope_is_a_refusal() {
+        let fake = FakeVault::start().await;
+        let p = VaultProvider::new(&fake.base_url, fake.write_token(), None).unwrap();
+        // The seeded "Shop login" exists: a 409 with no code.
+        assert_eq!(
+            p.save_login(new_login("Shop login", "pw-1"))
+                .await
+                .unwrap_err(),
+            ProviderError::NameTaken
+        );
+        assert_eq!(ProviderError::NameTaken.code(), "name_taken");
+        // Another name works afterwards.
+        assert!(p
+            .save_login(new_login("Shop login 2", "pw-2"))
+            .await
+            .is_ok());
+
+        // A grant without `vault:items_write`.
+        let read_only = VaultProvider::new(&fake.base_url, fake.default_token(), None).unwrap();
+        assert_eq!(
+            read_only
+                .save_login(new_login("Nope", "pw-3"))
+                .await
+                .unwrap_err(),
+            ProviderError::Refused("insufficient_scope".into())
+        );
+        assert!(fake.login_named("Nope").is_none());
+        // Kill switch, revoked token, expired registration.
+        fake.set_agent_access(false);
+        assert_eq!(
+            p.save_login(new_login("Off", "pw-4")).await.unwrap_err(),
+            ProviderError::Disabled
+        );
+        fake.set_agent_access(true);
+        let t = fake.write_token();
+        let revoked = VaultProvider::new(&fake.base_url, t.clone(), None).unwrap();
+        fake.revoke_token(&t);
+        assert_eq!(
+            revoked
+                .save_login(new_login("Gone", "pw-5"))
+                .await
+                .unwrap_err(),
+            ProviderError::Unauthorized
+        );
+        let expired = VaultProvider::new(
+            &fake.base_url,
+            fake.write_token(),
+            Some(Utc::now() - chrono::Duration::seconds(1)),
+        )
+        .unwrap();
+        let before = fake.requests().len();
+        assert_eq!(
+            expired
+                .save_login(new_login("Late", "pw-6"))
+                .await
+                .unwrap_err(),
+            ProviderError::Unauthorized
+        );
+        assert_eq!(
+            fake.requests().len(),
+            before,
+            "no call with an expired token"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_vault_older_than_contract_1_3_refuses_the_purpose_and_the_default_provider_cannot_save(
+    ) {
+        // Vault 1.2 answers 400 for the unknown purpose: a plain refusal the console words.
+        let fake = FakeVault::start().await;
+        fake.fail_next(400);
+        let p = VaultProvider::new(&fake.base_url, fake.write_token(), None).unwrap();
+        assert_eq!(
+            p.save_login(new_login("Old", "pw")).await.unwrap_err(),
+            ProviderError::Refused("invalid_request".into())
+        );
+        // The trait's default: no provider saves unless it says so.
+        struct Plain;
+        #[async_trait]
+        impl SecretsProvider for Plain {
+            fn id(&self) -> &str {
+                "plain"
+            }
+            async fn lookup(
+                &self,
+                _: &OwnerId,
+                _: &Origin,
+                _: ItemKind,
+            ) -> Result<Vec<ItemSummary>, ProviderError> {
+                Ok(vec![])
+            }
+            async fn release(&self, _: ReleaseRequest) -> Result<SecretValue, ProviderError> {
+                Err(ProviderError::NotFound)
+            }
+            async fn one_time_code(
+                &self,
+                _: CodeRequest,
+            ) -> Result<(SecretValue, DateTime<Utc>), ProviderError> {
+                Err(ProviderError::NotFound)
+            }
+        }
+        assert_eq!(
+            Plain.save_login(new_login("x", "pw")).await.unwrap_err(),
+            ProviderError::Unsupported
+        );
+        assert_eq!(ProviderError::Unsupported.code(), "unsupported");
+    }
+
+    #[tokio::test]
+    async fn whoami_of_the_fake_speaks_contract_1_3() {
+        // The fake is the conformance double of the guide: contract 1.3 lists `save_login` after `totp` and before `cards` and `identity`.
+        let fake = FakeVault::start().await;
+        let r = reqwest::Client::new()
+            .get(format!("{}/api/agent/v1/whoami", fake.base_url))
+            .bearer_auth(fake.default_token())
+            .send()
+            .await
+            .unwrap();
+        let v: Value = serde_json::from_slice(&r.bytes().await.unwrap()).unwrap();
+        assert_eq!(v["data"]["contract"]["version"], "1.3");
+        assert_eq!(
+            v["data"]["contract"]["features"],
+            json!(["logins", "totp", "save_login", "cards", "identity"])
+        );
     }
 }

@@ -357,6 +357,7 @@ pub async fn handoff(
                         timeout_ms: Some(timeout_s * 1000),
                         page: None,
                         remember: None,
+                        offer_save: false,
                     },
                 )
                 .await?;

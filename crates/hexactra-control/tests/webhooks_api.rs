@@ -149,6 +149,7 @@ async fn webhook_channel_receives_signed_event_and_answers_handoff() {
                 timeout_ms: None,
                 page: None,
                 remember: None,
+                offer_save: false,
             },
         )
         .await

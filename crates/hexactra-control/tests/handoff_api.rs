@@ -61,6 +61,7 @@ fn code_request() -> CreateHandoffRequest {
         timeout_ms: None,
         page: None,
         remember: None,
+        offer_save: false,
     }
 }
 
@@ -185,6 +186,7 @@ async fn html_form_flow_for_link_channels() {
                 timeout_ms: None,
                 page: None,
                 remember: None,
+                offer_save: false,
             },
         )
         .await

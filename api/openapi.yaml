@@ -1032,6 +1032,54 @@ paths:
           description: Missing or invalid token
         '403':
           description: Token not allowed here
+  /v1/secrets-providers/{owner_id}/{provider}/save-login:
+    post:
+      tags:
+      - secrets
+      description: 'Save the sign-in the owner typed into a `credentials` handoff (E37.4b), so the next run does not ask. The handoff must have been created with `offer_save: true` and answered, and the password typed with a `type_secret` action: the control plane keeps a copy in memory for ten minutes after the answer (surviving the end of the session) and sends it to the provider''s create route (Vault: `POST /credentials`, `purpose: "save_login"`, scope `vault:items_write`, agent contract 1.3), bound to `origin`. The caller never holds the password and the answer never carries it: `{ saved: true, item_id }`. The copy is consumed only on success: a taken name (`409 name_taken`), an unreachable provider or a refused token leaves it, so the owner can try again until it expires. A password that is gone (saved, erased, expired, a restart, or being saved by another call) is `409 secret_unavailable`; a handoff that is not the owner''s, or was not created with `offer_save`, is `404 not_found`. Provider failures keep their codes (`name_taken`, `unauthorized`, `disabled`, `rate_limited`, `unavailable`, `refused`, `unsupported`, `timed_out`). The audit event is `secrets.release` with purpose `save_login`, field `password` and outcome `saved` or the failure code: never the password or the username.'
+      operationId: save_login
+      parameters:
+      - name: owner_id
+        in: path
+        description: The owner's user id, as a session's `owner_id`
+        required: true
+        schema:
+          type: string
+      - name: provider
+        in: path
+        description: 'The provider to save in: `vault`'
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveLoginRequest'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SaveLoginResult'
+        '400':
+          description: Invalid name or origin
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '404':
+          description: No such provider, handoff or offer
+        '409':
+          description: '`name_taken` or `secret_unavailable`'
+        '422':
+          description: The provider cannot save or refused
+        '429':
+          description: Rate limited by the provider
+        '502':
+          description: The provider was unreachable or refused the token
   /v1/sessions:
     get:
       tags:
@@ -1433,6 +1481,17 @@ components:
           $ref: '#/components/schemas/HandoffInput'
         kind:
           $ref: '#/components/schemas/HandoffKind'
+        offer_save:
+          type: boolean
+          description: |-
+            `credentials` only (E37.4b): keep a copy of the password in the
+            control plane's memory after a `type_secret` action types it, so the
+            owner can still ask the secrets provider to save the sign-in for
+            [`SAVE_OFFER_TTL_SECS`] seconds after they gave it (`POST
+            /v1/secrets-providers/{owner_id}/{provider}/save-login`). The copy is
+            zeroed when used, when the time is up and on a restart; it is never
+            returned or persisted. Off by default: without it the password is gone
+            once typed.
         page:
           oneOf:
           - type: 'null'
@@ -3497,6 +3556,55 @@ components:
           items:
             type: string
           description: The selected option ids for `multi_choice`.
+    SaveLoginRequest:
+      type: object
+      description: |-
+        `POST /v1/secrets-providers/{owner_id}/{provider}/save-login` (E37.4b):
+        save the sign-in the owner typed into a `credentials` handoff, so the next
+        run does not ask. The control plane takes the password from its own memory
+        (a handoff created with `offer_save`); the caller never holds it.
+      required:
+      - handoff_id
+      - name
+      - origin
+      properties:
+        client_label:
+          type:
+          - string
+          - 'null'
+          description: What the owner sees as the app.
+        handoff_id:
+          type: string
+          format: uuid
+          description: The answered `credentials` handoff that holds the password.
+        name:
+          type: string
+          description: What the owner calls the login (1-200 characters, one line).
+        origin:
+          type: string
+          description: |-
+            The origin of the sign-in page, as the caller read it from the
+            browser (`https`, or `http` on loopback). The provider binds the login
+            to exactly this origin.
+        run_id:
+          type:
+          - string
+          - 'null'
+          description: The run the save belongs to, for the audit trail.
+    SaveLoginResult:
+      type: object
+      description: |-
+        What a save answers: that it was saved and the provider's id of the new
+        login. Never the password.
+      required:
+      - saved
+      properties:
+        item_id:
+          type:
+          - string
+          - 'null'
+        saved:
+          type: boolean
     ScreenshotResult:
       type: object
       description: |-
@@ -3609,6 +3717,7 @@ components:
       - mfa
       - form
       - purchase
+      - save_login
     SecretsProviderKind:
       type: string
       description: The provider implementations a registration can name.
