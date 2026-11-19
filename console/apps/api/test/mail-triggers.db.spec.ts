@@ -84,6 +84,7 @@ afterAll(async () => {
   if (app && users.size) {
     await prisma.run.updateMany({ where: { userId: { in: [...users] }, status: { in: ['queued', 'running', 'waiting_human'] } }, data: { status: 'cancelled', remindAt: null, finishedAt: new Date() } });
   }
+  if (app && users.size) await prisma.mailTrigger.updateMany({ where: { userId: { in: [...users] } }, data: { enabled: false } });
   limits.override = null;
   if (savedProvider) app.get(CapabilityProviderRegistry, { strict: false }).register(savedProvider as never);
   if (savedAdapter) app.get(ConnectionProviderRegistry, { strict: false }).register(savedAdapter as never);
@@ -535,6 +536,8 @@ describe('the poller', () => {
     const c = await connection(s);
     const t = await task(s);
     const trig = await createTrigger(s, t.id, base(c.id));
+    // Triggers left by earlier runs of this file must not crowd the batch: only this one is on.
+    await prisma.mailTrigger.updateMany({ where: { id: { not: trig.id } }, data: { enabled: false } });
     mailbox(c.id).addMessage({ from: BILLING, date: isoNow() });
     expect(await poller.due()).toBeGreaterThan(0);
     await app.get(MailTriggersPollTask, { strict: false }).handleCron();
