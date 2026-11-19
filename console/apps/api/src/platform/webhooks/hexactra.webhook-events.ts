@@ -1,6 +1,8 @@
 import { WEBHOOKS_PERMISSIONS, registerWebhookEvent } from '@marinoscar/platform-api/webhooks';
 import { z } from 'zod';
 
+import { runOutputResponseSchema } from '../../openapi/console.responses';
+
 /** Event keys. PERMANENT. */
 export const RUN_STARTED_WEBHOOK = 'runs.run.started';
 export const RUN_WAITING_WEBHOOK = 'runs.run.waiting';
@@ -24,6 +26,11 @@ export const runWebhookSchema = run.extend({
   /** What the agent asked the person (runs.run.waiting). Never an answer. */
   prompt: z.string().optional(),
   kind: z.string().optional(),
+  /**
+   * `runs.run.finished`: what the run returned (E39.5, #600), each with the label and type it started with. Additive: absent for a
+   * run whose task has no outputs. A sensitive output is `[hidden]`: a webhook never carries it.
+   */
+  outputs: z.array(runOutputResponseSchema).optional(),
 });
 export const scheduleFailingWebhookSchema = z.object({ scheduleId: z.uuid(), taskName: z.string(), failures: z.number().int() });
 

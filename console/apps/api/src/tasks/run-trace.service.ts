@@ -25,6 +25,7 @@ import { readSnapshot, snapshotBudgetView } from '../policies/policy-snapshot';
 import { readConfirmedActions } from '../runner/confirmed-actions';
 import { PrismaService } from '../prisma/prisma.service';
 import { maskValue, SENSITIVE_PATTERNS_VERSION } from './mask';
+import { outputsView } from './task-outputs';
 import { buildReportDefinition, renderPdf, type ReportPaper } from './run-report.pdf';
 import { RUN_ARTIFACT_STORE, type RunArtifactStore } from './run-delete.service';
 import { RunMetrics } from './run-metrics';
@@ -138,6 +139,9 @@ export class RunTraceService {
         startedAt: true,
         finishedAt: true,
         confirmedActions: true,
+        outputs: true,
+        outputsSpec: true,
+        outputsComplete: true,
         stepCount: true,
         modelCalls: true,
         inputTokens: true,
@@ -247,6 +251,8 @@ export class RunTraceService {
           activeMs: run.activeMs,
         },
       },
+      outputs: outputsView(run.outputsSpec, run.outputs),
+      outputsComplete: run.outputsComplete,
       // The spec and where it came from; never the snapshot's app limits or resolved provider details.
       policy: snapshot ? { id: snapshot.ref, name: snapshot.name, version: snapshot.version, builtin: snapshot.builtin, source: run.policySource ?? snapshot.source ?? null, spec: snapshot.spec } : null,
       budget: snapshotBudgetView(snapshot, run, now.getTime()),
