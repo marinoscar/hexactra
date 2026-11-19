@@ -135,6 +135,9 @@ Design invariants to preserve when writing docs or code:
 - A saved approval is created only by the owner's tick on a server-issued request, and is matched by the server (registrable domain, category, exact label). Never add a route, tool or model path that creates or widens one (console `docs/approvals.md`).
 - A task parameter value is data inserted into a goal: it cannot change a run's allowed sites, policy or confirmation setting. A sensitive value never reaches the model or storage.
 - A stored run-trace image is masked at capture, in the page (`screenshot` with `mask: true`); there is no unmasked trace image and no unmasked export, for any role (§26.8, epic #536). The trace is not the audit trail.
+- Stop takes effect before the next action. Every tool the agent runs goes through one wrapper (`executeTool` in `console/packages/hexactra-agent`) that checks the owner's Stop and Pause first; never add a path that calls a tool, or the fabric, around it (`console/docs/runner.md`).
+- A commit-class action (a payment click, a typed secret, a send) is recorded as an intent before it is sent and is never repeated when its outcome is unknown: a step left in `intent` becomes `unknown`, the gate asks the owner again and no saved approval covers it for that run (`console/docs/runs.md`, "Crash safety").
+- The agent's tools, gates and loop behaviour live in the packages `@marinoscar/hexactra-agent` (generic) and `@marinoscar/hexactra-browser-agent`, with their tests in the package; the console API only binds ports and holds the tools that reach console services (`console/AGENTS.md`).
 - Desktop and input drivers never go through a shell: `xdotool` gets an argument vector. There is no "run a command on the node" action.
 - The public API must not be tied to Chrome or Linux; drivers are pluggable.
 - The Agent Experience Framework (AEF) is an independent, optional product boundary that only consumes redacted outcomes (§17).
