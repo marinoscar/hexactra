@@ -75,12 +75,11 @@ export function TaskOutputsTable({ taskId, refreshKey }: { taskId: string; refre
     );
   }
 
-  const when = (i: Item) => formatDateTime(i.finishedAt ?? i.createdAt);
+  const when = (i: Item) => formatDateTime(i.finishedAt ?? i.createdAt, { month: 'short', day: 'numeric', year: 'numeric' });
   const columns: Column<Item>[] = [
     {
       key: 'run',
       header: 'Run',
-      width: 190,
       render: (i) => (
         <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
           <Link component={RouterLink} to={`/runs/${i.runId}`} underline="hover">
@@ -90,7 +89,8 @@ export function TaskOutputsTable({ taskId, refreshKey }: { taskId: string; refre
         </Stack>
       ),
     },
-    ...page.columns.map((c) => ({ key: c.key, header: c.label, render: (i: Item) => <Cell output={i.values[c.key]} /> })),
+    // The first value column takes the spare width; the others keep their text on one line (the table scrolls inside its box when there are many).
+    ...page.columns.map((c, n) => ({ key: c.key, header: c.label, grow: n === 0, render: (i: Item) => <Cell output={i.values[c.key]} /> })),
   ];
 
   return (
