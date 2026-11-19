@@ -96,7 +96,9 @@ describe('a task lists its connections', () => {
     expect(chat.data.connections).toEqual([expect.objectContaining({ connectionId: work.id, access: 'read', label: 'Work' })]);
     const detail = await call(s, 'GET', `/connections/${work.id}`);
     expect(detail.data.usedBy).toEqual(expect.arrayContaining([{ kind: 'task', id: task.data.id, name: 'Uses Work' }, { kind: 'chat', id: chat.data.id, name: 'Mail chat' }]));
+    await prisma.approvalRule.create({ data: { userId: s.userId, kind: 'connection', host: work.id, matchKey: 'mail_send', summary: 'Send mail with Work', recipients: ['person-b@example.test'] } });
     const removed = await call(s, 'DELETE', `/connections/${work.id}`);
+    expect(await prisma.approvalRule.count({ where: { userId: s.userId, kind: 'connection' } })).toBe(0);
     expect(removed.status).toBe(200);
     expect((await call(s, 'GET', `/tasks/${task.data.id}`)).data.connections).toEqual([]);
     expect((await call(s, 'GET', `/chats/${chat.data.id}`)).data.connections).toEqual([]);

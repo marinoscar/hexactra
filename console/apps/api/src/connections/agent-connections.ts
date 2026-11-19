@@ -97,6 +97,16 @@ export async function replaceConversationConnections(tx: Prisma.TransactionClien
 export function agentConnectionUsage(prisma: PrismaService): ConnectionUsageSource[] {
   return [
     {
+      // The owner's saved approvals for this connection (E39.7) are not listed (they are not a use); they are removed with it, so none outlives the account.
+      kind: 'approval_rule',
+      async list() {
+        return [];
+      },
+      async clear(userId, connectionId) {
+        await prisma.approvalRule.deleteMany({ where: { userId, kind: 'connection', host: connectionId } });
+      },
+    },
+    {
       kind: 'task',
       async list(userId, connectionId) {
         const rows = await prisma.taskConnection.findMany({ where: { connectionId, task: { userId } }, select: { task: { select: { id: true, name: true } } } });

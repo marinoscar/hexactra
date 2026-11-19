@@ -6,6 +6,8 @@ import type { AiService } from '@marinoscar/platform-api/ai';
 
 import { ApprovalRulesService } from '../../src/approvals/approval-rules.service';
 import { CapabilityProviderRegistry } from '../../src/connections/capability-provider.registry';
+import { ConnectionProviderRegistry } from '../../src/connections/connection-provider.registry';
+import type { Capability } from '../../src/connections/connections.constants';
 import { ConnectionCapabilities } from '../../src/connections/connection-capabilities.service';
 import { FakeCapabilityProvider } from '../../src/connections/testing';
 import type { FabricClient } from '../../src/fabric/fabric.client';
@@ -97,6 +99,7 @@ export function connectionKit(app: NestFastifyApplication): Kit {
   const approvals = app.get(ApprovalRulesService);
   const questions = new QuestionsService(prisma, { request: async () => ({}) } as never, { enqueue: async (j: unknown) => void enqueued.push(j) } as never, new QuestionEvents(), undefined, undefined, approvals);
   const hub = app.get(ConnectionCapabilities);
+  const adapters = app.get(ConnectionProviderRegistry);
   return {
     prisma,
     fake,
@@ -112,7 +115,7 @@ export function connectionKit(app: NestFastifyApplication): Kit {
     },
     async connect(userId, label, capabilities, extra = {}) {
       const row = await prisma.connection.create({
-        data: { userId, provider: 'google', accountId: `acct-${randomUUID()}`, accountEmail: extra.email ?? `${label.toLowerCase().replace(/\W+/g, '-')}@example.test`, label, capabilities, grantedScopes: capabilities, defaultFor: extra.defaultFor ?? [], status: extra.status ?? 'active' },
+        data: { userId, provider: 'google', accountId: `acct-${randomUUID()}`, accountEmail: extra.email ?? `${label.toLowerCase().replace(/\W+/g, '-')}@example.test`, label, capabilities, grantedScopes: adapters.get('google')?.scopesFor(capabilities as Capability[]) ?? capabilities, defaultFor: extra.defaultFor ?? [], status: extra.status ?? 'active' },
       });
       return { id: row.id, label: row.label };
     },
