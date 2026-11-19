@@ -41,9 +41,9 @@ export async function commitCall<S extends Service, T>(ctx: HostContext, spec: W
   if (refused) return refused;
   const started = Date.now();
   await ctx.setActivity('acting', { action: { type: spec.tool }, timeoutMs: 60_000 });
+  const seqBefore = ctx.state.seq;
   const intent = await openCallIntent(ctx, spec.tool, conn.id, spec.stepArgs, spec.what);
   if (intent === null) return LEASE_LOST_TEXT;
-  const seqBefore = ctx.state.seq;
   noteCall(ctx, conn.provider, spec.capability, 'write');
   try {
     let called;
