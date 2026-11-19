@@ -224,13 +224,14 @@ export async function runScenario(scenario: Scenario, options: ScenarioOptions =
       sensitiveParams: () => [],
       masking: NO_MASKING,
       hooks: {},
+      outputs: null,
     };
     const newest = await store.newestSeq();
     const ctx = createRunContext<BrowserMemory, BrowserExt>({
       run: { id: 'run-1', userId: 'user-1', orgId: null, goal: scenario.goal, trigger: scenario.trigger, taskId: null, conversationId: scenario.trigger === 'chat' ? 'chat-1' : null },
       ports,
       memory,
-      state: { stepCount: store.stepCount, seq: Math.max(store.stepCount, newest), stall: null, stop: null, budgetKey: null, finished: null, handoffId: null, handoffExpiresAt: null, handoffAsk: null },
+      state: { stepCount: store.stepCount, seq: Math.max(store.stepCount, newest), stall: null, stop: null, budgetKey: null, finished: null, wrappingUp: false, handoffId: null, handoffExpiresAt: null, handoffAsk: null },
       tracker: new BudgetTracker(effectiveBudget, {
         actions: store.stepCount,
         modelCalls: store.totals.modelCalls,
