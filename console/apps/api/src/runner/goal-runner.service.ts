@@ -606,7 +606,7 @@ export class GoalRunnerService {
       this.log.warn(`run ${runId}: stopped, another job took over the run`);
       return 'superseded';
     } finally {
-      stop.dispose();
+      await stop.dispose();
       await lease.release().catch(() => undefined);
     }
   }

@@ -41,7 +41,7 @@ beforeAll(async () => {
   await app.getHttpAdapter().getInstance().ready();
 });
 afterAll(async () => {
-  for (const s of stopSignals) s.dispose();
+  await Promise.all(stopSignals.map((s) => s.dispose()));
   await app?.close();
 });
 

@@ -37,7 +37,7 @@ export class RunStopSignal {
   private readonly controller = new AbortController();
   private unsubscribe: (() => void) | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
-  private polling = false;
+  private polling: Promise<void> | null = null;
   private disposed = false;
 
   private constructor(private readonly source: RunStopSource) {}
@@ -72,25 +72,31 @@ export class RunStopSignal {
   }
 
   /** One read of the database flag now. */
-  async poll(): Promise<void> {
-    if (this.polling || this.requested || this.disposed) return;
-    this.polling = true;
-    try {
-      if (await this.source.isRequested()) this.request();
-    } catch {
-      // Best effort: the next poll tries again.
-    } finally {
-      this.polling = false;
-    }
+  poll(): Promise<void> {
+    if (this.polling || this.requested || this.disposed) return this.polling ?? Promise.resolve();
+    this.polling = (async () => {
+      try {
+        if (await this.source.isRequested()) this.request();
+      } catch {
+        // Best effort: the next poll tries again.
+      } finally {
+        this.polling = null;
+      }
+    })();
+    return this.polling;
   }
 
-  /** Stop listening and polling. A signal already requested stays requested. */
-  dispose(): void {
+  /**
+   * Stop listening and polling. A signal already requested stays requested. Resolves once a read already in
+   * flight has finished, so nothing of the signal touches the database after the job's end.
+   */
+  async dispose(): Promise<void> {
     this.disposed = true;
     this.unsubscribe?.();
     this.unsubscribe = null;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    await this.polling;
   }
 }
 
