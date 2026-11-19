@@ -6,13 +6,28 @@ import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { FastifyReply } from 'fastify';
 
+import { ConnectionActivityService } from './connection-activity.service';
 import { ConnectionFilesService } from './connection-files.service';
-import { ConnectionFileResponseDto, ConnectionFilesPageResponseDto, FileListQueryDto, FileParamDto, NewFolderDto, PickedFileDto, PickerSessionResponseDto } from './connection-files.schemas';
+import { ConnectionActivityResponseDto, ConnectionFileResponseDto, ConnectionFilesPageResponseDto, FileListQueryDto, FileParamDto, NewFolderDto, PickedFileDto, PickerSessionResponseDto } from './connection-files.schemas';
 
 @ApiTags('Connections')
 @Controller('connections/:id')
 export class ConnectionFilesController {
-  constructor(private readonly files: ConnectionFilesService) {}
+  constructor(
+    private readonly files: ConnectionFilesService,
+    private readonly activity: ConnectionActivityService,
+  ) {}
+
+  @Get('activity')
+  @ApiDataResponse(ConnectionActivityResponseDto)
+  @Auth({ permissions: ['connections:read'] })
+  @ApiOperation({
+    summary: 'What an account was used for lately',
+    description: "The agent's tool calls through the account and the deliveries sent through it, newest first (at most 15): the operation, when, whether it worked and the run. Never a subject, an address, a body, a cell or a file name.",
+  })
+  recent(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string) {
+    return this.activity.recent(userId, id);
+  }
 
   @Get('files')
   @ApiDataResponse(ConnectionFilesPageResponseDto)

@@ -1345,8 +1345,9 @@
     },
     {
       "id": "connections.files",
-      "description": "Browse an account's spreadsheets and folders, create a folder, make a picked file usable and open Google's file picker, for the delivery editor's choosers",
+      "description": "Browse an account's spreadsheets and folders, create a folder, make a picked file usable, open Google's file picker and read what the account was used for lately, for the delivery editor's choosers and the Connections page",
       "rest": [
+        "GET /api/connections/{id}/activity",
         "GET /api/connections/{id}/files",
         "GET /api/connections/{id}/files/{fileId}",
         "POST /api/connections/{id}/files/picked",

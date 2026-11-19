@@ -12,6 +12,7 @@ import { ConnectionResolverService } from './connection-resolver.service';
 import { ConnectionTokenStore } from './connection-token.store';
 import { ConnectionTokensService } from './connection-tokens.service';
 import { ConnectionUsageRegistry } from './connection-usage.registry';
+import { ConnectionActivityService } from './connection-activity.service';
 import { ConnectionFilesController } from './connection-files.controller';
 import { ConnectionFilesService } from './connection-files.service';
 import { ConnectionsAdminController } from './connections-admin.controller';
@@ -44,6 +45,7 @@ import { ConnectionsService } from './connections.service';
     ConnectionResolverService,
     ConnectionsService,
     ConnectionFilesService,
+    ConnectionActivityService,
     ConnectionCapabilities,
     ConnectionsHealth,
     ConnectionsHealthHandler,

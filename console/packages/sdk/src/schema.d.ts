@@ -6359,6 +6359,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connections/{id}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What an account was used for lately
+         * @description The agent's tool calls through the account and the deliveries sent through it, newest first (at most 15): the operation, when, whether it worked and the run. Never a subject, an address, a body, a cell or a file name.
+         *
+         *     **Requires:** authentication, plus permission `connections:read`.
+         */
+        get: operations["connectionFiles_recent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connections/{id}/files": {
         parameters: {
             query?: never;
@@ -16220,6 +16242,22 @@ export interface components {
             clientSecret?: string;
             /** @description Microsoft only: `common`, `organizations`, `consumers` or a tenant id. */
             tenant?: string;
+        };
+        ConnectionActivityResponseDto: {
+            /** @description Newest first, at most 15. The operation, the time and the run: never a subject, an address, a body, a cell or a file name. */
+            items: {
+                /**
+                 * @description `tool`: the agent used the account during a run. `delivery`: a delivery after a run went through it.
+                 * @enum {string}
+                 */
+                kind: "tool" | "delivery";
+                /** @description The tool's name (`mail_send`) or the delivery's kind (`sheet_row`). */
+                operation: string;
+                ok: boolean;
+                /** @description ISO 8601 timestamp */
+                at: string;
+                runId: string | null;
+            }[];
         };
         ConnectionFilesPageResponseDto: {
             items: {
@@ -41374,6 +41412,56 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["AdminProviderResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectionFiles_recent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ConnectionActivityResponseDto"];
                     };
                 };
             };

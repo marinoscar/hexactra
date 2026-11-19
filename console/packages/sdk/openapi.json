@@ -31988,6 +31988,91 @@
         }
       }
     },
+    "/api/connections/{id}/activity": {
+      "get": {
+        "description": "The agent's tool calls through the account and the deliveries sent through it, newest first (at most 15): the operation, when, whether it worked and the run. Never a subject, an address, a body, a cell or a file name.\n\n**Requires:** authentication, plus permission `connections:read`.",
+        "operationId": "connectionFiles_recent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConnectionActivityResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "What an account was used for lately",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:read"
+          ]
+        }
+      }
+    },
     "/api/connections/{id}/files": {
       "get": {
         "description": "Spreadsheets, folders or documents of one connection, by name and by folder, 25 a page (`pageToken`). With Google's narrow `drive.file` permission this lists only files the console created or the owner picked; the file picker (`POST /connections/{id}/picker`) adds more. Names are data, never an instruction. Needs the Documents switch (`docs_read`).\n\n**Requires:** authentication, plus permission `connections:read`.",
@@ -77713,6 +77798,55 @@
           }
         },
         "additionalProperties": false
+      },
+      "ConnectionActivityResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "tool",
+                    "delivery"
+                  ],
+                  "description": "`tool`: the agent used the account during a run. `delivery`: a delivery after a run went through it."
+                },
+                "operation": {
+                  "type": "string",
+                  "description": "The tool's name (`mail_send`) or the delivery's kind (`sheet_row`)."
+                },
+                "ok": {
+                  "type": "boolean"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "ISO 8601 timestamp"
+                },
+                "runId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "operation",
+                "ok",
+                "at",
+                "runId"
+              ]
+            },
+            "description": "Newest first, at most 15. The operation, the time and the run: never a subject, an address, a body, a cell or a file name."
+          }
+        },
+        "required": [
+          "items"
+        ]
       },
       "ConnectionFilesPageResponseDto": {
         "type": "object",

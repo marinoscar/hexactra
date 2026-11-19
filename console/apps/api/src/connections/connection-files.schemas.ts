@@ -54,3 +54,18 @@ export const pickerSessionSchema = z.object({
   expiresAt: iso.nullable(),
 });
 export class PickerSessionResponseDto extends createZodDto(pickerSessionSchema) {}
+
+export const connectionActivitySchema = z.object({
+  items: z
+    .array(
+      z.object({
+        kind: z.enum(['tool', 'delivery']).describe('`tool`: the agent used the account during a run. `delivery`: a delivery after a run went through it.'),
+        operation: z.string().describe("The tool's name (`mail_send`) or the delivery's kind (`sheet_row`)."),
+        ok: z.boolean(),
+        at: iso,
+        runId: z.string().nullable(),
+      }),
+    )
+    .describe('Newest first, at most 15. The operation, the time and the run: never a subject, an address, a body, a cell or a file name.'),
+});
+export class ConnectionActivityResponseDto extends createZodDto(connectionActivitySchema) {}

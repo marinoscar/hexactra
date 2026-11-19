@@ -62,7 +62,7 @@ async function connection(user: Session, over: { provider?: 'google' | 'microsof
   const caps = (over.capabilities ?? ['docs_read', 'docs_write']) as never[];
   const scopes = app.get(ConnectionProviderRegistry).get(provider)?.scopesFor(caps) ?? [];
   return prisma.connection.create({
-    data: { userId: user.userId, provider, accountId: `acct-${user.userId}-${provider}`, accountEmail: `acct-${stamp}@example.test`, label: over.label ?? 'Work', capabilities: caps, grantedScopes: scopes },
+    data: { userId: user.userId, provider, accountId: `acct-${user.userId}-${provider}-${over.label ?? 'Work'}`, accountEmail: `acct-${stamp}@example.test`, label: over.label ?? 'Work', capabilities: caps, grantedScopes: scopes },
   });
 }
 
@@ -182,5 +182,35 @@ describe('POST /api/connections/:id/picker', () => {
     expect((await call(user, 'POST', `/api/connections/${noDocs.id}/picker`)).details?.reason).toBe('no_documents');
     const other = await login('picker-c');
     expect((await call(other, 'POST', `/api/connections/${noDocs.id}/picker`)).status).toBe(404);
+  });
+});
+
+describe('GET /api/connections/:id/activity', () => {
+  it('lists the operation, time and run of tool calls and deliveries, and never any content', async () => {
+    const user = await login('activity-a');
+    const c = await connection(user, { label: 'Activity Work' });
+    const other = await connection(user, { label: 'Elsewhere' });
+    const run = await prisma.run.create({ data: { userId: user.userId, goal: 'g', status: 'succeeded' } });
+    await prisma.runStep.createMany({
+      data: [
+        { runId: run.id, seq: 1, kind: 'action', action: 'mail_send', args: { connection: 'Activity Work' }, ok: true, summary: 'sent mail to person-a@example.test SUBJECT-MARK-9921' },
+        { runId: run.id, seq: 2, kind: 'action', action: 'mail_search', args: { connection: 'Elsewhere' }, ok: true, summary: 'found 3 messages' },
+        { runId: run.id, seq: 3, kind: 'action', action: 'click', args: { connection: 'Activity Work' }, ok: true, summary: 'clicked' },
+        { runId: run.id, seq: 4, kind: 'action', action: 'sheet_append_rows', args: { connection: 'Activity Work' }, ok: false, summary: 'failed' },
+      ],
+    });
+    const task = await prisma.task.create({ data: { userId: user.userId, name: 'Pay', goal: 'Pay' } });
+    const delivery = await prisma.taskDelivery.create({ data: { userId: user.userId, taskId: task.id, kind: 'sheet_row', config: {}, connectionId: c.id } });
+    await prisma.runDelivery.create({ data: { userId: user.userId, runId: run.id, deliveryId: delivery.id, kind: 'sheet_row', status: 'sent', sentAt: new Date() } });
+    const r = await call<{ items: { kind: string; operation: string; ok: boolean; runId: string | null }[] }>(user, 'GET', `/api/connections/${c.id}/activity`);
+    expect(r.status).toBe(200);
+    expect(r.data.items.map((i) => `${i.kind}:${i.operation}:${i.ok}`).sort()).toEqual(['delivery:sheet_row:true', 'tool:mail_send:true', 'tool:sheet_append_rows:false']);
+    expect(r.data.items.every((i) => i.runId === run.id)).toBe(true);
+    expect(JSON.stringify(r.data)).not.toContain('SUBJECT-MARK-9921');
+    expect(JSON.stringify(r.data)).not.toContain('person-a@example.test');
+    const none = await call<{ items: unknown[] }>(user, 'GET', `/api/connections/${other.id}/activity`);
+    expect(none.data.items.map((i) => (i as { operation: string }).operation)).toEqual(['mail_search']);
+    const stranger = await login('activity-b');
+    expect((await call(stranger, 'GET', `/api/connections/${c.id}/activity`)).status).toBe(404);
   });
 });
