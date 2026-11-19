@@ -8,3 +8,4 @@ export { VaultConnectionService, type ProviderOutcome, type SecretsStatusView, t
 export { VaultAccessError, VaultTokenService, type VaultAccess } from './vault-token.service';
 export { SecretsActivityService, ACTIVITY_PAGE_SIZE, type ActivityItem, type ReachItem, type SecretsAdminSummary } from './secrets-activity.service';
 export { SECRETS_ACTIVITY_INGEST_JOB } from './secrets-activity.jobs';
+export { RunSecretsService } from './run-secrets.service';

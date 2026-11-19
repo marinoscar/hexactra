@@ -325,8 +325,22 @@ describe('the chat menu', () => {
     expect(confirmSwitch).toBeChecked();
     fireEvent.click(confirmSwitch);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(sent(host, 'PATCH', `/chats/${CHAT_ID}`)[0]?.body).toEqual({ profile: 'default', hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false }));
+    await waitFor(() => expect(sent(host, 'PATCH', `/chats/${CHAT_ID}`)[0]?.body).toEqual({ profile: 'default', hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, useSavedLogins: false }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Chat settings' })).not.toBeInTheDocument());
+  });
+});
+
+describe('saved logins in the chat settings (E37.3)', () => {
+  it('has a switch, off by default, saved with the rest of the settings', async () => {
+    const host = mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Chat actions' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Chat settings' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Chat settings' });
+    const sw = within(dialog).getByRole('switch', { name: 'Sign in with my saved logins' });
+    expect(sw).not.toBeChecked();
+    fireEvent.click(sw);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(sent(host, 'PATCH', `/chats/${CHAT_ID}`)[0]?.body).toMatchObject({ useSavedLogins: true }));
   });
 });
 

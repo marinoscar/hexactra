@@ -21,6 +21,7 @@ const runSettings = {
   policyId: policyRefSchema.nullable().describe("The agent policy of the chat's runs: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."),
   allowedDomains: z.array(domainSchema).max(50).describe("Sites the chat's runs may visit, as on a task; empty (the default) is any site."),
   confirmRiskyActions: z.boolean().describe('Ask the owner before a purchase or another step that is hard to undo. On by default in a chat.'),
+  useSavedLogins: z.boolean().describe("Let the chat's runs sign in from the owner's saved logins (E37.3). Off by default (a new chat starts from the owner's `secrets.defaultUseSavedLogins` setting); it works only while the secrets switches are on and a Vault is connected."),
 };
 
 /** `GET /chats`. */
@@ -39,6 +40,7 @@ export const createChatSchema = z.object({
   policyId: runSettings.policyId.optional(),
   allowedDomains: runSettings.allowedDomains.optional(),
   confirmRiskyActions: runSettings.confirmRiskyActions.optional(),
+  useSavedLogins: runSettings.useSavedLogins.optional(),
 });
 
 /** `PATCH /chats/:id`: at least one field. `status` archives and unarchives. */
@@ -52,6 +54,7 @@ export const updateChatSchema = z
     policyId: runSettings.policyId.optional(),
   allowedDomains: runSettings.allowedDomains.optional(),
   confirmRiskyActions: runSettings.confirmRiskyActions.optional(),
+  useSavedLogins: runSettings.useSavedLogins.optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: 'Nothing to update' });
 

@@ -256,6 +256,15 @@ export function AiAppDetailPage() {
               When it drives a browser itself: typing a code or password you gave, acting on a page with a password or payment field, opening a sensitive site, using the desktop, or running JavaScript that can send data away. You approve in your Hexactra inbox; the app cannot approve for you.
             </Typography>
           </Box>
+          <Box>
+            <FormControlLabel
+              control={<Switch checked={draft.allowSavedLogins} disabled={disabled} onChange={(e) => set({ allowSavedLogins: e.target.checked })} />}
+              label="Let it sign in with my saved logins"
+            />
+            <Typography variant="caption" color="text.secondary" component="p" sx={{ ml: { xs: 0, sm: 6 } }}>
+              Off by default. When on, its runs may sign in to a site you saved a login for, without asking you, if the task or chat also allows it and your Secrets switches are on. The app never sees the login, the password or the code: it only gets the run's answer.
+            </Typography>
+          </Box>
         </Stack>
         {canWrite && (
           <Box sx={{ position: { xs: 'sticky', sm: 'static' }, bottom: aboveBottomBar(0), bgcolor: 'background.paper', pt: 2, display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>

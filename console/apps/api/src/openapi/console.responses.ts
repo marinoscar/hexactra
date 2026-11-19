@@ -63,6 +63,8 @@ export const taskResponseSchema = z.object({
   maxSteps: z.number().int().meta({ deprecated: true }).describe('Deprecated: see `policyId`'),
   maxMinutes: z.number().int().meta({ deprecated: true }).describe('Deprecated: see `policyId`'),
   confirmRiskyActions: z.boolean(),
+  useSavedLogins: z.boolean().describe("Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3)"),
+  unattendedPayments: z.enum(['ask', 'allow']).describe('`ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`'),
   model: z.string().nullable().meta({ deprecated: true }).describe('Deprecated: see `policyId`'),
   policyId: z.string().nullable().describe("The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default"),
   parameters: z.array(taskParameterResponseSchema).nullable().describe("The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none"),
@@ -185,6 +187,16 @@ export const runResponseSchema = z.object({
       }),
     )
     .describe('Steps the owner confirmed that the run then carried out (#540), oldest first; empty when none. "Run again" asks before repeating such a run.'),
+  usedSavedLogins: z
+    .array(
+      z.object({
+        provider: z.string().describe('The secrets provider that held the login (`vault`)'),
+        itemName: z.string().describe("The saved login's name as the owner gave it (\"Shop login\"), never its username, password or code"),
+        origin: z.string().describe('The site the login was used on (`https://shop.example.test`)'),
+        at: iso.describe('When it was first used in this run'),
+      }),
+    )
+    .describe('The saved logins the run signed in with (E37.3), oldest first; empty when it used none. "Signed in with: Shop login" on the run page.'),
   inputs: z.array(runInputResponseSchema).nullable().optional().describe("The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters"),
   memoryIds: z.array(z.uuid()).describe('The owner\'s memories this run used (#553): the ones its goal names. A deleted memory leaves its id.'),
   createdAt: iso,

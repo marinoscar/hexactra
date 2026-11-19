@@ -1,4 +1,4 @@
-# Secrets: connecting a Vault
+# Secrets: connecting a Vault, and signing in from a saved login
 
 Epic E37 (#579) lets an agent use the owner's saved logins and one-time codes **without ever seeing them**. This page is the console's half of the Vault provider (E37.2, #591): how an owner connects their Vault, what Hexactra stores, the kill switches, and what happens when the connection breaks. Looking up a login and typing a field is the fabric's job (E37.1, E37.3); **the console never receives a login, a password or a code**, and there is no console route that returns one.
 
@@ -67,7 +67,46 @@ There are three, and each alone stops the agent:
 | **The deployment's** | system setting `secrets.agentUse.enabled` (`PATCH /api/system-settings`, `system_settings:write`) | **off** |
 | **The owner's** | user setting `secrets.agentUse.enabled` (`PATCH /api/user-settings`) | **off** |
 
+A third setting, `secrets.defaultUseSavedLogins` (owner, default off), is not a switch: it only sets where new tasks and chats start. Each task, chat and AI app still has its own opt-in ([How the agent signs in](#how-the-agent-signs-in)).
+
 With either of Hexactra's two off, `secrets_lookup` answers "not enabled", the fabric is told to hold nothing for the owner, and nothing is released, whatever Vault allows. Both are read on every registration (the deployment's with a five-second cache).
+
+## How the agent signs in
+
+E37.3 (#592). When a run reaches a sign-in page and the owner has a saved login for **exactly** that site, the agent signs in without asking: the username, the password, and an authenticator code when the site wants one. With no match, several matches or a provider that says no, it falls back to the sign-in card ("Sign-in needed"), as before. This is what lets a scheduled task run with nobody there.
+
+**Who may use it.** A run uses saved logins only when all of these hold: the deployment switch and the owner's switch above are on, a provider is connected, and the run's **task or chat has `useSavedLogins`**. A run started by a hosted AI app over OAuth also needs the app's `allowSavedLogins` limit (default **off**, `PATCH /api/connected-apps/{clientId}/settings`; [security-hosted-clients.md](security-hosted-clients.md)). Anything else: the three tools below are not offered and the run asks as before.
+
+| Where | Field | Default |
+|---|---|---|
+| Task | `useSavedLogins` (`POST`/`PATCH /api/tasks`) | the owner's `secrets.defaultUseSavedLogins`, else off |
+| Chat | `useSavedLogins` (`POST`/`PATCH /api/chats`, Chat settings) | the owner's `secrets.defaultUseSavedLogins`, else off |
+| Owner | user setting `secrets.defaultUseSavedLogins` (`PATCH /api/user-settings`) | off; new tasks and chats start from it |
+| Connected AI app | limit `allowSavedLogins` | off |
+| Task | `unattendedPayments` `ask` \| `allow` | `ask` |
+
+**The three tools** (group `secrets`, offered only when the run may use saved logins):
+
+| Tool | Parameters | What the model reads |
+|---|---|---|
+| `saved_logins` | none | For the page on screen: `none`, or `{ ref, name, username, exact, hasCode }` for each login. `ref` is a per-run reference (`login-1`), never the provider's id. A username is not secret; a password and a code never appear. |
+| `sign_in_with_saved_login` | `ref`, `username_selector`, `password_selector`, `submit` | "Typed username and password…" or a failure in plain words. A site that splits the sign-in over two pages takes one selector per call. |
+| `type_saved_code` | `ref`, `selector`, `submit` | "Typed the code" or a failure. Only for a login with `hasCode`, and only for an authenticator-app code: a code sent by text message or email is not in a vault and still asks the owner. |
+
+**The rules** (enforced by the runner, not by the model's good will):
+
+- **Only an exact match is usable.** A `ref` that is not exact ("saved for a different address of this site") is refused. No match, or a site-only match: the model asks the owner (`request_human`, kind `login`, input `credentials`). **Several exact matches:** the tool tells the model to ask with a choice card whose options are the logins' names and usernames; nothing is typed until the owner picks one, and then only that login.
+- **The model never names a secret.** It passes a `ref` from the lookup of the page it is on. The fabric reads the page's origin itself when it types, asks the provider with it, types with trusted input and wipes the value. If the page changed since the lookup, nothing is typed and the model looks up again.
+- **A mismatch stops everything.** `origin_mismatch` (a look-alike address) or a field in another site's frame: nothing was typed, the model is told "Stop. This page is not the site this login is saved for. Do not try another login. Tell the owner.", **the run asks the owner with a warning card** (kind `login`, input `takeover`, "Warning: …"), and saved logins are off for the rest of the run.
+- **Errors become instructions.** `disabled`, `unauthorized`, `unavailable`, `rate_limited`, `not_found`: "Saved logins are not available right now. Ask the owner to sign in" (the sign-in card; the run continues after the answer). The outcome is reported to the connection's status: `unauthorized` makes it `needs_reconnect` (one notification), `disabled` turns `agentAccess` off.
+- **A rejected password is not retried.** A login's password is typed at most once per run and site. A second request is refused and the model is sent to the owner: repeated failures lock accounts. A code is typed at most three times per login and site.
+- **"Remember this device"** and similar options: unchanged from #527 (the owner's choice when asked; with a saved login the page's box is left as the page had it).
+
+**What the run records.** Steps read "looked up saved logins: 1 match", "signed in with the saved login 'Shop login' (username p•••@example.test)" and "typed the authenticator code of the saved login …": the item's name and the **masked** username, never a value. `Run.usedSavedLogins` (`[{ provider, itemName, origin, at }]`, at most 20, one per login and site) is returned by `GET /api/runs/{id}` and shown on the run page ("Signed in with: Shop login"). A run holds no password, no code and no provider id in a step, its memory, the model's input or a tool result (`test/saved-logins.db.spec.ts`, marker test).
+
+**When nobody is watching.** A run that used a saved login and was **not started from a chat** (a schedule, the API, MCP, a manual task run) keeps the confirmation before payments and other commitments **on** for that run, even when the task has it off, unless the task sets `unattendedPayments: allow`. The owner's saved approvals (see [approvals.md](approvals.md)) still apply as the owner defined them. A scheduled run that used a saved login sends **one** notification at its end, grouped by site ("Signed in to shop.example.test with a saved login", event `runs.saved_login_used`, browser and push).
+
+**Crash safety.** Before each field the runner writes the phase (`typing`) to the run's memory and a `saved_login_phase` note to the trace, and `typed` after the fabric confirms it. A job that dies between the two fields and is retried does not type the username again; a password that may already have been typed is never typed a second time (the model is told to look at the page and, if it is not signed in, to ask the owner).
 
 ## Status, errors and reconnecting
 

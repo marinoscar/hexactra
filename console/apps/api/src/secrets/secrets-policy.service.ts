@@ -5,7 +5,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { resolveSecretsSystemSettings, secretsAgentUseOf, type ResolvedSecretsSystemSettings } from './secrets.settings';
+import { resolveSecretsSystemSettings, secretsAgentUseOf, secretsDefaultUseSavedLoginsOf, type ResolvedSecretsSystemSettings } from './secrets.settings';
 
 /** How stale the cached system settings may be: a switch takes effect within a few seconds. */
 export const SECRETS_SETTINGS_CACHE_MS = 5_000;
@@ -56,6 +56,12 @@ export class SecretsPolicyService {
   async userSwitch(userId: string): Promise<boolean> {
     const row = await this.prisma.userSettings.findUnique({ where: { userId }, select: { value: true } });
     return secretsAgentUseOf(row?.value);
+  }
+
+  /** Whether new tasks and chats of the owner start with "sign in with my saved logins" on (user setting `secrets.defaultUseSavedLogins`, off by default). */
+  async defaultUseSavedLogins(userId: string): Promise<boolean> {
+    const row = await this.prisma.userSettings.findUnique({ where: { userId }, select: { value: true } });
+    return secretsDefaultUseSavedLoginsOf(row?.value);
   }
 
   /** The state of both switches for an owner. `effective` is what `secrets_lookup` and the fabric registration obey. */

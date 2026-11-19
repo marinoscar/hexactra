@@ -17,6 +17,8 @@ export const RUN_RETENTION_NOTICE_EVENT = 'runs.retention_notice';
 export const RUN_OVER_BUDGET_EVENT = 'runs.over_budget';
 /** Steps of a run went ahead on saved approvals (#555): once, at the end of the run. */
 export const RUN_SAVED_APPROVALS_EVENT = 'runs.saved_approvals_used';
+/** A scheduled run signed in with a saved login (E37.3): once per run, grouped, at the end of the run. */
+export const RUN_SAVED_LOGIN_EVENT = 'runs.saved_login_used';
 /** The owner's Vault refused the saved grant (revoked, replayed or expired) and must be connected again (E37.2): once per episode. */
 export const SECRETS_NEEDS_RECONNECT_EVENT = 'secrets.needs_reconnect';
 
@@ -80,6 +82,11 @@ const overBudget: BrowserNotificationTemplate = (d) => ({
 const savedApprovals: BrowserNotificationTemplate = (d) => ({
   title: 'Went ahead on a saved approval',
   body: trim(str(d, 'line') || 'Steps of a run went ahead on your saved approvals.', 180),
+  link: `/runs/${str(d, 'runId')}`,
+});
+const savedLoginUsed: BrowserNotificationTemplate = (d) => ({
+  title: 'Signed in with a saved login',
+  body: trim(str(d, 'line') || 'A scheduled run signed in with a saved login.', 180),
   link: `/runs/${str(d, 'runId')}`,
 });
 const secretsNeedsReconnect: BrowserNotificationTemplate = () => ({
@@ -192,6 +199,16 @@ export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
   },
   {
     event: {
+      key: RUN_SAVED_LOGIN_EVENT,
+      label: 'Signed in with a saved login',
+      description: 'A scheduled run signed in to a site with one of your saved logins, so nobody had to be there. One notification per run.',
+      channels: ['browser', ...PUSH],
+      defaultEnabled: true,
+    },
+    browserTemplate: savedLoginUsed,
+  },
+  {
+    event: {
       key: SECRETS_NEEDS_RECONNECT_EVENT,
       label: 'Vault needs to be reconnected',
       description: 'Once, when Vault stops accepting the connection (you removed the app in Vault, or its sign-in expired), so agents can no longer use your saved logins.',
@@ -252,6 +269,7 @@ export const hexactraPushPayload: PushPayloadHook = (event, data) => {
   if (event.key === RUN_FINISHED_EVENT) return { tag: runId ? `run-${runId}` : 'run', urgency: str(data, 'status') === 'failed' ? 'high' : 'normal' };
   if (event.key === RUN_OVER_BUDGET_EVENT) return { tag: runId ? `run-${runId}` : 'run', urgency: 'normal' };
   if (event.key === RUN_SAVED_APPROVALS_EVENT) return { tag: runId ? `approvals-${runId}`.slice(0, 64) : 'approvals', urgency: 'normal' };
+  if (event.key === RUN_SAVED_LOGIN_EVENT) return { tag: runId ? `saved-login-${runId}`.slice(0, 64) : 'saved-login', urgency: 'normal' };
   if (event.key === SECRETS_NEEDS_RECONNECT_EVENT) return { tag: 'secrets-reconnect', urgency: 'normal' };
   if (event.key === SCHEDULE_FAILING_EVENT) return { tag: `schedule-${str(data, 'scheduleId') || 'failing'}`, urgency: 'normal' };
   return null;
