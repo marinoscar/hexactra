@@ -87,7 +87,14 @@ export const ATTR = {
   questionWaitedMs: 'hexactra.question.waited_ms',
   conversationId: 'hexactra.conversation.id',
   linkType: 'hexactra.link.type',
+  // A call through one of the owner's connections (E39.7): which provider, which capability and whether it reads or changes. Never an address, a subject or text.
+  connectionProvider: 'hexactra.connection.provider',
+  connectionCapability: 'hexactra.connection.capability',
+  connectionEffect: 'hexactra.connection.effect',
 } as const;
+
+/** The only attributes a tool may add to its own span with `toolAttributes`: closed, content-free names. */
+export const TOOL_ATTRIBUTES: readonly string[] = [ATTR.connectionProvider, ATTR.connectionCapability, ATTR.connectionEffect];
 
 /** Why a span link exists (`hexactra.link.type`). */
 export const LINK = { previousJob: 'previous_job', startedBy: 'started_by' } as const;

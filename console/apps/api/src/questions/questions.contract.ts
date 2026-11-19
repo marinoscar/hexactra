@@ -144,10 +144,32 @@ export interface QuestionSpec {
    * a `rememberable` sent by a model or an API caller is dropped.
    */
   rememberable?: QuestionRememberable | null;
+  /**
+   * A call through one of the owner's connections the owner is asked to approve (E39.7). Set by the runner only, from the tool's validated
+   * arguments: not in `questionSpecSchema`, so one sent by a model or an API caller is dropped. Such a question needs no browser.
+   */
+  action?: QuestionAction | null;
+}
+
+/**
+ * What the card of a connection call shows (E39.7), built by the SERVER from the validated arguments, never from model text. `lines` are the
+ * labelled facts (from, to, cc, subject, a body preview, attachments by name and size; an event's title, time and attendees; a file's name and
+ * the cells); `body` is the whole text for "show all" (at most 20,000 characters). No token, no mailbox content.
+ */
+export interface QuestionAction {
+  connectionId: string;
+  connectionLabel: string;
+  tool: string;
+  lines: { label: string; value: string }[];
+  body?: string;
+  /** What it does, in one line with no content (no body, no cells): what the run's step, its memory and the notifications and webhooks say instead of the card. */
+  summary: string;
+  /** A hash of the validated arguments the card shows: only that exact call goes through once approved. */
+  hash?: string;
 }
 
 /** The kinds of question a saved approval can be made from (#555). */
-export const REMEMBERABLE_KINDS = ['gate', 'ask'] as const;
+export const REMEMBERABLE_KINDS = ['gate', 'ask', 'connection'] as const;
 
 /**
  * What the owner can tick "Don't ask again" for (#555): a `gate` (the server stopped a commitment; keyed on the
@@ -168,6 +190,12 @@ export interface QuestionRememberable {
    * limit's currency and `amount` the purchase this approval is for.
    */
   cardRef?: string;
+  /**
+   * A call through one of the owner's connections (E39.7, `kind: 'connection'`): `host` is the connection's id and `matchKey` the tool. `recipients`
+   * are the addresses the approved call reaches (set by the server from its validated arguments); the owner chooses to remember those people or
+   * anyone at their domains (`rememberRule.recipientsFrom`). Absent for a tool that reaches no one.
+   */
+  recipients?: string[];
   requiresLimit?: boolean;
   currency?: string;
   amount?: string;
@@ -187,6 +215,8 @@ export const rememberRuleSchema = z
     scope: z.enum(REMEMBER_RULE_SCOPES).optional(),
     maxAmount: z.number().finite().positive().max(1_000_000_000).optional(),
     expiresInDays: z.number().int().min(1).max(3650).optional(),
+    /** A connection call that reaches people (E39.7): remember `these` people or `domain` (anyone at their domains). There is no "anyone". Default `these`. */
+    recipientsFrom: z.enum(['these', 'domain']).optional(),
   })
   .strict();
 export type RememberRuleInput = z.infer<typeof rememberRuleSchema>;

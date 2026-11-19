@@ -5,6 +5,8 @@
 // What is allowed in the app, each with its reason:
 //   - `defineRunnerTool(` in `src/runner/host/tools/`: the app's own tool families reach console services (providers, memories), which a package
 //     may not import. Moving them needs a port (follow-up); until then they are the only tools in the app.
+//   - a `Gate` in `src/runner/host/gates/` (E39.7): the connection gate decides from the owner's saved approvals and recipients and builds its card from the
+//     console's question contract, which a package may not import. It is the only gate in the app.
 //   - `GatePipeline` and `createRunLoop` in `src/runner/host/build-context.ts`: the one place that plugs the toolset's gates into the harness.
 //   - the engine entry (`@marinoscar/hexactra-agent/engine`) in three host files that start, end and pause a run.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -14,6 +16,8 @@ const SRC = join(__dirname, '../../src');
 
 const posix = (p: string) => p.split(sep).join('/');
 const TOOL_HOME = /^runner\/host\/tools\//;
+/** The gate of the connection tools (E39.7): it reads the owner's saved approvals and recipients and builds the card from the console's question contract, which a package may not import. */
+const GATE_HOME = /^runner\/host\/gates\//;
 const WIRING_FILES = new Set(['runner/host/build-context.ts']);
 const ENGINE_IMPORTERS = new Set(['runner/host/build-context.ts', 'runner/host/before-loop.ts', 'runner/goal-runner.service.ts']);
 
@@ -23,7 +27,7 @@ export function violations(rel: string, source: string): string[] {
   const fail = (why: string) => out.push(`${rel}: ${why}`);
   if (/^runner\/(harness|browser)\//.test(rel)) fail('the loop and the browser toolset are packages now (`@marinoscar/hexactra-agent`, `@marinoscar/hexactra-browser-agent`); this folder does not come back');
   if (/\bdefineRunnerTool\s*\(/.test(source) && !TOOL_HOME.test(rel)) fail('a tool is defined in a package (or, for a console service, in runner/host/tools/), not here');
-  if (/\bimplements\s+Gate\b|:\s*Gate<|\bGate<[A-Za-z]+>\s*=/.test(source)) fail('a gate is defined in a package, not in the app');
+  if (/\bimplements\s+Gate\b|:\s*Gate<|\bGate<[A-Za-z]+>\s*=/.test(source) && !GATE_HOME.test(rel)) fail('a gate is defined in a package, not in the app');
   if (/\bnew\s+GatePipeline\b/.test(source) && !WIRING_FILES.has(rel)) fail('the gate pipeline is built in runner/host/build-context.ts only');
   if (/\b(runLoop|executeTool|createRunContext|createRunLoop)\s*\(/.test(source) && !WIRING_FILES.has(rel) && !ENGINE_IMPORTERS.has(rel)) fail('loop code is in the harness package; the app binds ports and calls the loop from the goal runner only');
   if (/from '@marinoscar\/hexactra-agent\/engine'/.test(source) && !ENGINE_IMPORTERS.has(rel)) fail('only the files that start, pause and end a run import the engine');

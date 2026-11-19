@@ -19,6 +19,8 @@ export interface TelemetryPort {
   useFallback(): void;
   stepRecorded(info: { seq: number; ok: boolean; action: string | null; url?: unknown }): void;
   gated(category: string): void;
+  /** Closed, content-free attributes of the tool call now running (E39.7: which provider and capability a connection tool used). The host keeps only the names it allows. */
+  toolAttributes(attrs: Record<string, string | number | boolean>): void;
   asked(facts: { kind: string; input: string }): void;
   answered(facts: { kind: string; input: string | null; channel: string | null; outcome: string; waitedMs: number | null }): void;
 }

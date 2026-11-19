@@ -46,8 +46,8 @@ export class SetApprovalsPausedDto extends createZodDto(setApprovalsPausedSchema
 
 export const approvalRuleSchema = z.object({
   id: z.uuid(),
-  kind: z.enum(APPROVAL_RULE_KINDS).describe('`gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own.'),
-  host: z.string().describe('The registrable domain it applies on.'),
+  kind: z.enum(APPROVAL_RULE_KINDS).describe('`gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own. `connection`: a call that changes something through one of the owner\'s connections (E39.7).'),
+  host: z.string().describe("The registrable domain it applies on; for a `connection` rule, the connection\'s id."),
   category: z.string().nullable().describe('For `gate`: payment, purchase, send, delete or submit.'),
   matchKey: z.string().describe("For `gate`: the element's label, normalised (digits as `#`). For `ask`: the topic."),
   summary: z.string().describe("What the rule allows, in plain words: \"Press 'Pay' on bankofamerica.com\"."),
@@ -56,6 +56,7 @@ export const approvalRuleSchema = z.object({
   conversationId: z.uuid().nullable().describe('When set, only runs of this chat.'),
   maxAmount: z.number().nullable().describe('When set, only steps whose amount is known and not larger. Always set for a card rule (E37.7).'),
   cardRef: z.string().nullable().describe('A saved card (E37.7): `<provider>:<item id>`. Such a rule is for paying with that one card on this site, up to `maxAmount` in the currency of its match key (`saved card usd`); null for every other rule.'),
+  recipients: z.array(z.string()).describe('`connection` rules that send mail or invite people (E39.7): the addresses (or `@domain`) the owner approved. A call to anyone else asks again. Empty for every other rule.'),
   expiresAt: z.string().nullable(),
   enabled: z.boolean(),
   createdFromQuestionId: z.uuid().nullable().describe('The question whose answer made the rule.'),

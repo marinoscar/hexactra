@@ -20,6 +20,7 @@ export const APP_LIMIT_DEFAULTS = {
   allowSavedLogins: false,
   allowSavedIdentity: false,
   allowSavedCards: false,
+  allowConnections: false,
   paused: false,
 } as const;
 
@@ -49,6 +50,9 @@ export const appLimitsSchema = z.object({
   allowSavedCards: z
     .boolean()
     .describe("Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's \"confirm purchases\" limit still makes every card use ask."),
+  allowConnections: z
+    .boolean()
+    .describe("Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner."),
   paused: z.boolean().describe('Refuse new runs and sessions from this app without disconnecting it.'),
 });
 export type AppLimits = z.infer<typeof appLimitsSchema>;
@@ -69,6 +73,7 @@ export const patchAppSettingsSchema = z
     allowSavedLogins: z.boolean(),
     allowSavedIdentity: z.boolean(),
     allowSavedCards: z.boolean(),
+    allowConnections: z.boolean(),
     paused: z.boolean(),
   })
   .partial()

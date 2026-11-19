@@ -14,6 +14,7 @@ import { z } from 'zod';
 
 import { MCP_EFFECTS, MCP_SCOPES, MCP_SCOPE_IDS } from '../src/mcp/mcp.scopes';
 import { MCP_TOOLS, READ_ONLY_TOOLS, toolAnnotations, type McpTool } from '../src/mcp/mcp.tools';
+import { connectionTools } from '../src/runner/host/tools/connections';
 
 const SNAPSHOT = join(__dirname, '__snapshots__', 'mcp-tools.json');
 const DOC = join(__dirname, '..', '..', '..', 'docs', 'mcp.md');
@@ -91,6 +92,14 @@ const STRUCTURED = [
 
 describe('MCP tool manifest (#462)', () => {
   const current = MCP_TOOLS.map(entry);
+
+  it("offers no connection tool: a hosted AI app does not get the owner's mailbox, calendar or documents through Hexactra (E39.7)", () => {
+    const names = new Set(MCP_TOOLS.map((t) => t.name));
+    // Neither the agent's own tools (the runner's connection family)...
+    expect(connectionTools.map((t) => t.name).filter((n) => names.has(n))).toEqual([]);
+    // ...nor any tool that reads or changes mail, a calendar, a drive or a connection.
+    expect([...names].filter((n) => /^(mail|calendar|docs|sheet|file_upload|connection)/.test(n))).toEqual([]);
+  });
 
   it('matches the snapshot (UPDATE_MCP_MANIFEST=1 rewrites it), and never loses a tool', () => {
     const pinned = readJson<Entry[]>(SNAPSHOT, []);

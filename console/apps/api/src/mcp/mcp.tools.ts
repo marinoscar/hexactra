@@ -416,8 +416,13 @@ function mcpParameters(raw: unknown): z.infer<typeof mcpTaskParameterSchema>[] {
 
 /** A task as a tool returns it: its parameters without their defaults' values (#552). */
 function mcpTask<T extends Record<string, unknown>>(t: T): T {
-  return t && 'parameters' in t ? { ...t, parameters: mcpParameters(t.parameters) } : t;
+  // A hosted AI app is never told which accounts the owner connected or which a task may use (E39.7): `connections` and `needsBrowser` stay on REST.
+  const { connections: _connections, needsBrowser: _needsBrowser, ...rest } = t;
+  return rest && 'parameters' in rest ? ({ ...rest, parameters: mcpParameters(rest.parameters) } as unknown as T) : (rest as unknown as T);
 }
+
+/** The task shapes MCP returns: what the REST task carries, without the connection fields (E39.7). */
+const mcpTaskOutput = taskWithSummarySchema.omit({ connections: true, needsBrowser: true });
 
 /** One task as tasks_list answers it: its fields, the goal cut short, and the summary facts the tasks card shows. */
 const taskListItemSchema = z.object({
@@ -904,7 +909,7 @@ export const MCP_TOOLS: McpTool[] = [
       policy_id: policyIdParam.optional(),
       schedules: z.array(scheduleItem).max(10).optional().describe('Schedules created with the task, each { cron, timezone?, enabled?, policy_id? }.'),
     }),
-    output: taskWithSummarySchema.extend({ parameters: z.array(mcpTaskParameterSchema).nullable().optional() }),
+    output: mcpTaskOutput.extend({ parameters: z.array(mcpTaskParameterSchema).nullable().optional() }),
     scope: 'tasks:write',
     effect: 'write',
     openWorld: false,
@@ -942,7 +947,7 @@ export const MCP_TOOLS: McpTool[] = [
       allowed_domains: allowedDomains.optional(),
       policy_id: policyIdParam.nullable().optional().describe("The task's agent policy; null makes it follow the user's default policy."),
     }),
-    output: taskResponseSchema.extend({ parameters: z.array(mcpTaskParameterSchema).nullable().optional() }),
+    output: taskResponseSchema.omit({ connections: true, needsBrowser: true }).extend({ parameters: z.array(mcpTaskParameterSchema).nullable().optional() }),
     scope: 'tasks:write',
     effect: 'destructive',
     openWorld: false,
@@ -1031,7 +1036,7 @@ export const MCP_TOOLS: McpTool[] = [
       'Disable every schedule of a task, so it no longer starts by itself. Use it when the user wants scheduled runs to stop for now (task_resume undoes it). ' +
       'The task can still be started with task_run, and a run that is going finishes. A task without a schedule answers NO_SCHEDULES. Returns the task with its summary.',
     input: z.object({ task_id: taskId }),
-    output: taskWithSummarySchema.extend({ skipped: z.array(z.uuid()), parameters: z.array(mcpTaskParameterSchema).nullable().optional() }),
+    output: mcpTaskOutput.extend({ skipped: z.array(z.uuid()), parameters: z.array(mcpTaskParameterSchema).nullable().optional() }),
     scope: 'tasks:write',
     effect: 'destructive',
     openWorld: false,
@@ -1046,7 +1051,7 @@ export const MCP_TOOLS: McpTool[] = [
     title: 'Resume a task',
     description: 'Enable every schedule of a paused task and compute their next firing. Use it to undo task_pause. Returns the task with its summary.',
     input: z.object({ task_id: taskId }),
-    output: taskWithSummarySchema.extend({ skipped: z.array(z.uuid()), parameters: z.array(mcpTaskParameterSchema).nullable().optional() }),
+    output: mcpTaskOutput.extend({ skipped: z.array(z.uuid()), parameters: z.array(mcpTaskParameterSchema).nullable().optional() }),
     scope: 'tasks:write',
     effect: 'write',
     openWorld: false,

@@ -62,6 +62,8 @@ model Connection {
 
   user  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   flows ConnectionFlow[]
+  taskConnections         TaskConnection[]
+  conversationConnections ConversationConnection[]
 
   @@unique([userId, provider, accountId])
   @@unique([userId, label])
@@ -96,4 +98,37 @@ model ConnectionFlow {
   @@index([userId])
   @@index([expiresAt])
   @@map("connection_flows")
+}
+
+/// The connections a task may use (E39.7), and how: `read` or `read_write`. Nothing is available to a task by default.
+model TaskConnection {
+  id           String   @id @default(uuid()) @db.Uuid
+  taskId       String   @map("task_id") @db.Uuid
+  connectionId String   @map("connection_id") @db.Uuid
+  /// `read` or `read_write`.
+  access       String   @db.VarChar(10)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  task       Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  connection Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, connectionId])
+  @@index([connectionId])
+  @@map("task_connections")
+}
+
+/// The same for a chat (E39.7).
+model ConversationConnection {
+  id             String   @id @default(uuid()) @db.Uuid
+  conversationId String   @map("conversation_id") @db.Uuid
+  connectionId   String   @map("connection_id") @db.Uuid
+  access         String   @db.VarChar(10)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  connection   Connection   @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, connectionId])
+  @@index([connectionId])
+  @@map("conversation_connections")
 }

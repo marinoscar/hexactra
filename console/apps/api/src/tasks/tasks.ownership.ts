@@ -25,7 +25,8 @@ export const TASKS_USER_OWNED_MODELS: readonly UserOwnedModelDef<'Task' | 'Run' 
   },
 ];
 
-export const TASKS_MODEL_OWNERSHIP: readonly ModelOwnershipDef<'Task' | 'Run' | 'RunStep' | 'TaskSchedule' | 'ActionToken'>[] = [
+export const TASKS_MODEL_OWNERSHIP: readonly ModelOwnershipDef<'Task' | 'Run' | 'RunStep' | 'TaskSchedule' | 'ActionToken' | 'TaskConnection'>[] = [
+  { model: 'TaskConnection', kind: 'user', rationale: 'Which connections a task may use (E39.7): reached only through its task, deleted with it and with the connection.' },
   { model: 'TaskSchedule', kind: 'user', rationale: 'A schedule belongs to the user who set it.' },
   { model: 'Task', kind: 'user', rationale: 'A task is the goal one user set; single organization deployment.' },
   { model: 'Run', kind: 'user', rationale: 'A run belongs to the user who started it.' },

@@ -13,7 +13,7 @@ import { UserSettingsService } from '@marinoscar/platform-api/settings';
 import { Prisma, type ApprovalRule } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { findRule, normaliseLabel, registrableDomain, ruleSummary, ASK_TOPICS, CARD_MATCH_KEY_PREFIX, GATE_CATEGORIES, MATCH_KEY_MAX, type ApprovalRuleKind, type MatchQuery } from './approval-match';
+import { findRule, normaliseLabel, normaliseRecipient, recipientDomain, registrableDomain, ruleSummary, ASK_TOPICS, CARD_MATCH_KEY_PREFIX, GATE_CATEGORIES, MATCH_KEY_MAX, type ApprovalRuleKind, type MatchQuery } from './approval-match';
 import { ApprovalMetrics } from './approval-metrics';
 import { APPROVAL_RULE_USES_KEPT, APPROVAL_RULE_USES_SHOWN, type ApprovalRuleDetailView, type ApprovalRuleView, type ApprovalRulesList, type PatchApprovalRule } from './approval-rules.schemas';
 import './approvals.errors';
@@ -35,6 +35,12 @@ export interface Rememberable {
    * REQUIRED for it.
    */
   cardRef?: string | null;
+  /**
+   * `connection` (E39.7): the tool (`mail_send`, `sheet_append_rows`, ...) is `matchKey` and the connection's id is `host`. The server sets
+   * `recipients` from the call it validated (never from the model's words): the addresses the approved call reaches. Required for a tool
+   * that reaches people (the rule then carries those people, or their domains), empty for the others.
+   */
+  recipients?: string[] | null;
 }
 
 /** The owner's choices when they tick "Don't ask again" (#555). All optional. */
@@ -42,6 +48,8 @@ export interface RememberRuleChoice {
   scope?: 'everywhere' | 'this_task' | 'this_chat';
   maxAmount?: number | null;
   expiresInDays?: number | null;
+  /** `connection` rules that reach people: remember `these` people (the call's addresses) or `domain` (anyone at their domains). */
+  recipientsFrom?: 'these' | 'domain';
 }
 
 /** The question a rule is made from: created by the server, answered by its owner. */
@@ -113,6 +121,7 @@ export function ruleView(r: ApprovalRule, taskName: string | null = null): Appro
     conversationId: r.conversationId || null,
     maxAmount: amount(r.maxAmount),
     cardRef: r.cardRef || null,
+    recipients: [...(r.recipients ?? [])],
     expiresAt: iso(r.expiresAt),
     enabled: r.enabled,
     createdFromQuestionId: r.createdFromQuestionId,
@@ -126,7 +135,7 @@ export function ruleView(r: ApprovalRule, taskName: string | null = null): Appro
 
 /** A rule's facts as the matcher reads them. */
 function matchable(r: ApprovalRule) {
-  return { ...r, category: r.category || null, taskId: r.taskId || null, conversationId: r.conversationId || null, cardRef: r.cardRef || null, maxAmount: amount(r.maxAmount) };
+  return { ...r, category: r.category || null, taskId: r.taskId || null, conversationId: r.conversationId || null, cardRef: r.cardRef || null, recipients: r.recipients ?? [], maxAmount: amount(r.maxAmount) };
 }
 
 @Injectable()
@@ -182,6 +191,18 @@ export class ApprovalRulesService {
   }
 
   /**
+   * The saved approval that lets a call through one of the owner's connections (E39.7), or null: the owner's enabled `connection` rules for
+   * this connection and tool, in this run's scope, with "Pause all" honoured. `recipients` are the addresses the validated call reaches; a rule
+   * covers the call only when its approved set covers every one of them. The connection id and the tool come from the server, never the model.
+   */
+  async matchConnection(userId: string, q: { connectionId: string; tool: string; recipients: readonly string[]; taskId: string | null; conversationId: string | null; now?: Date }): Promise<ApprovalRule | null> {
+    if (await this.isPaused(userId)) return null;
+    const rows = await this.prisma.approvalRule.findMany({ where: { userId, host: q.connectionId, matchKey: q.tool, enabled: true, kind: 'connection' } });
+    const hit = findRule(rows.map(matchable), { kind: 'connection', host: q.connectionId, category: null, matchKey: q.tool, taskId: q.taskId, conversationId: q.conversationId, amount: null, recipients: q.recipients, now: q.now ?? new Date(), paused: false });
+    return hit ? (rows.find((r) => r.id === hit.id) ?? null) : null;
+  }
+
+  /**
    * The ask topics the owner has enabled rules for on a site, in this run's scope (#555): the line the model reads
    * so it stops asking. Never gate rules. Empty while paused, for an unknown site, or with no rules.
    */
@@ -193,9 +214,9 @@ export class ApprovalRulesService {
     return [...new Set(rows.filter((r) => findRule([matchable(r)], { kind: 'ask', host, category: null, matchKey: r.matchKey, taskId: q.taskId, conversationId: q.conversationId, amount: null, now })).map((r) => r.matchKey))];
   }
 
-  /** The gate rules a run used, one entry per use, oldest first (#555): the end-of-run notification and the chat's result card. */
+  /** The gate and connection rules a run used, one entry per use, oldest first (#555): the end-of-run notification and the chat's result card. */
   async gateUsesOfRun(userId: string, runId: string): Promise<{ ruleId: string; summary: string }[]> {
-    const uses = await this.prisma.approvalRuleUse.findMany({ where: { runId, rule: { userId, kind: 'gate' } }, orderBy: { usedAt: 'asc' }, select: { ruleId: true, rule: { select: { summary: true } } } });
+    const uses = await this.prisma.approvalRuleUse.findMany({ where: { runId, rule: { userId, kind: { in: ['gate', 'connection'] } } }, orderBy: { usedAt: 'asc' }, select: { ruleId: true, rule: { select: { summary: true } } } });
     return uses.map((u) => ({ ruleId: u.ruleId, summary: u.rule.summary }));
   }
 
@@ -211,10 +232,13 @@ export class ApprovalRulesService {
     const now = opts.now ?? new Date();
     const r = question.rememberable;
     const kind = r.kind;
-    if (kind !== 'gate' && kind !== 'ask') throw invalid('The question cannot be remembered.');
+    if (kind !== 'gate' && kind !== 'ask' && kind !== 'connection') throw invalid('The question cannot be remembered.');
     const cardRef = (r.cardRef ?? '').trim();
     const host = (r.host ?? '').trim().toLowerCase();
-    if (!host || host.includes('*') || host.length > 253 || registrableDomain(`https://${host}/`) !== host) throw invalid('The question has no site a rule could be kept for.');
+    // A connection rule has no site: its `host` is the connection's id (a UUID the server read from its own record).
+    if (kind === 'connection') {
+      if (!/^[0-9a-f-]{36}$/.test(host)) throw invalid('The question has no connection a rule could be kept for.');
+    } else if (!host || host.includes('*') || host.length > 253 || registrableDomain(`https://${host}/`) !== host) throw invalid('The question has no site a rule could be kept for.');
     let category = '';
     let matchKey: string;
     let label: string | null = null;
@@ -224,6 +248,9 @@ export class ApprovalRulesService {
       category = 'payment';
       matchKey = (r.matchKey ?? '').trim().toLowerCase();
       if (!new RegExp(`^${CARD_MATCH_KEY_PREFIX} [a-z]{3}$`).test(matchKey)) throw invalid('The question has no currency a card rule could be kept for.');
+    } else if (kind === 'connection') {
+      matchKey = (r.matchKey ?? '').trim();
+      if (!/^[a-z][a-z_]{2,40}$/.test(matchKey)) throw invalid('The question has no tool a rule could be kept for.');
     } else if (kind === 'gate') {
       category = (r.category ?? '').trim().toLowerCase();
       if (!(GATE_CATEGORIES as readonly string[]).includes(category)) throw invalid('The question has no commitment a rule could be kept for.');
@@ -246,15 +273,33 @@ export class ApprovalRulesService {
     if (days !== null && !(Number.isInteger(days) && days > 0 && days <= 3650)) throw invalid('An expiry must be a whole number of days.');
     const summary = (r.summary?.trim() || ruleSummary({ kind, host, label, topic: matchKey, card: cardRef ? 'a saved card' : null })).slice(0, 300);
 
+    // The recipients a connection rule covers (E39.7): the approved call's own addresses, or their domains; never "anyone", never the model's.
+    let recipients: string[] = [];
+    if (kind === 'connection' && (r.recipients ?? []).length > 0) {
+      const own = (r.recipients ?? []).map((a) => normaliseRecipient(a)).filter((a): a is string => Boolean(a) && !a!.startsWith('@'));
+      if (own.length === 0 || own.length !== (r.recipients ?? []).length) throw invalid('The question has no recipients a rule could be kept for.');
+      recipients = [...new Set(choice.recipientsFrom === 'domain' ? own.map((a) => recipientDomain(a)!) : own)].slice(0, 50);
+    }
+
     const key = { userId: question.userId, kind, host, category, matchKey: matchKey.slice(0, MATCH_KEY_MAX), taskId, conversationId, cardRef };
     const existing = await db.approvalRule.findUnique({ where: { approval_rule_key: key } });
-    if (existing) return { rule: ruleView(existing), created: false };
+    if (existing) {
+      // Another approved call to new people (E39.7): the owner's tick on this request adds them to the rule; nothing else adds a recipient.
+      const merged = [...new Set([...existing.recipients, ...recipients])].slice(0, 200);
+      if (kind === 'connection' && merged.length !== existing.recipients.length) {
+        const updated = await db.approvalRule.update({ where: { id: existing.id }, data: { recipients: merged } });
+        await this.audit(db, question.userId, opts.orgId ?? null, APPROVAL_AUDIT.narrowed, updated, { questionId: question.id, recipientsAdded: merged.length - existing.recipients.length });
+        return { rule: ruleView(updated), created: false };
+      }
+      return { rule: ruleView(existing), created: false };
+    }
     let row: ApprovalRule;
     try {
       row = await db.approvalRule.create({
         data: {
           ...key,
           summary,
+          recipients,
           maxAmount: maxAmount === null ? null : new Prisma.Decimal(maxAmount.toFixed(2)),
           expiresAt: days === null ? null : new Date(now.getTime() + days * DAY_MS),
           createdFromQuestionId: question.id,
