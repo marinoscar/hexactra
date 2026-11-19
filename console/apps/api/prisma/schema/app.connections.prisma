@@ -9,7 +9,8 @@
 // granted, the defaults, the status and the times.
 // Registered in the user-owned data registry (src/connections/connections.ownership.ts).
 
-/// `mcp` is reserved for E39.9 (generic connections through MCP servers); nothing implements it yet.
+/// `mcp` (E39.9): an MCP server the owner added (Streamable HTTP only). Its URL and how it signs in are in `config`; its tools are
+/// `connection_mcp_tools`; its secrets (a bearer token, an OAuth client and tokens) are in the credential store.
 enum ConnectionProvider {
   google
   microsoft
@@ -57,6 +58,9 @@ model Connection {
   refreshLeaseUntil   DateTime?        @map("refresh_lease_until") @db.Timestamptz
   /// When the owner was told this connection needs reconnecting (once per episode; cleared on reconnect).
   reconnectNotifiedAt DateTime?        @map("reconnect_notified_at") @db.Timestamptz
+  /// Provider `mcp` only (E39.9): the server's URL, how it signs in (`none`, `bearer`, `header`, `oauth`: never the secret), what it
+  /// said about itself and when its tools were last listed. Validated by `mcpConfigSchema` (src/connections/mcp/mcp-config.ts).
+  config              Json?
   createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime         @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -64,6 +68,7 @@ model Connection {
   flows ConnectionFlow[]
   taskConnections         TaskConnection[]
   conversationConnections ConversationConnection[]
+  mcpTools                ConnectionMcpTool[]
 
   @@unique([userId, provider, accountId])
   @@unique([userId, label])
@@ -131,4 +136,37 @@ model ConversationConnection {
   @@unique([conversationId, connectionId])
   @@index([connectionId])
   @@map("conversation_connections")
+}
+
+/// The tools an MCP server offered (E39.9): a snapshot per connection, taken on connect and on "Refresh tools". `mode` is the OWNER's
+/// choice (`off` by default, `read` or `write`); `suggested` is only what the server's hints suggest. `hash` covers the name, title,
+/// description, input schema and hints: a refresh that finds a different hash for a tool the owner enabled switches it off and sets
+/// `review` (`changed`; `new` for a tool that appeared after the first listing) until the owner decides again, which records
+/// `approved_hash`. A tool the server stops offering is deleted.
+model ConnectionMcpTool {
+  id           String   @id @default(uuid()) @db.Uuid
+  connectionId String   @map("connection_id") @db.Uuid
+  name         String   @db.VarChar(128)
+  title        String?  @db.VarChar(200)
+  /// The server's text, kept as sent up to 4,000 characters: it is shown to the owner as plain text and sanitised before a model reads it.
+  description  String   @default("") @db.Text
+  inputSchema  Json     @map("input_schema")
+  annotations  Json     @default("{}")
+  hash         String   @db.VarChar(64)
+  /// `off`, `read` or `write`: set only by the owner's own act.
+  mode         String   @default("off") @db.VarChar(8)
+  /// `read` or `write`: what the hints suggest (no hint: `write`).
+  suggested    String   @db.VarChar(8)
+  /// `new` or `changed` while the owner has not reviewed it; null once reviewed.
+  review       String?  @db.VarChar(8)
+  /// The hash the owner last decided on.
+  approvedHash String?  @map("approved_hash") @db.VarChar(64)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  connection Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, name])
+  @@index([connectionId, mode])
+  @@map("connection_mcp_tools")
 }

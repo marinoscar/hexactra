@@ -19,7 +19,7 @@ import {
   type RunContext,
   type HarnessMemory,
 } from '../src';
-import { executeTool, runLoop } from '../src/engine';
+import { executeTool, offerTools, runLoop } from '../src/engine';
 import { fakeRun, ScriptedModel, textProfile } from '../src/testing';
 
 type Ctx = RunContext<HarnessMemory, Record<string, never>>;
@@ -219,6 +219,14 @@ describe('the input builder and the instructions: the stable prefix', () => {
     expect(registry.list(ctx).map((x) => x.name)).toEqual(['b', 'c']);
     expect(registry.usageNotes(ctx)).toEqual(['b is for x']);
     expect(() => registry.register(t('b') as never)).toThrow(/twice/);
+  });
+
+  it('offers a tool to the model strict unless it says it is not (a third party\'s schema has optional fields strict mode refuses)', () => {
+    const { ctx } = fakeRun();
+    const t = (name: string, extra: object = {}) => defineRunnerTool({ name, group: 'test', description: '', parameters: z.object({}), execute: () => name, ...extra });
+    const registry = new ToolRegistry<Ctx>().registerAll([t('own') as never, t('theirs', { strict: false }) as never]);
+    const offered = offerTools(ctx, registry, new GatePipeline<Ctx>());
+    expect(offered.map((o) => [o.name, 'strict' in o ? o.strict : 'absent'])).toEqual([['own', 'absent'], ['theirs', false]]);
   });
 });
 

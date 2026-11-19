@@ -12,6 +12,7 @@ import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { BrowserPane, confirmedPromptOf } from '../components/ChatBrowser';
 import { runAgainQuestion } from '../components/runRow';
 import { ChatComposer } from '../components/ChatComposer';
+import { ChatAccountChips } from '../taskConnections/ChatAccountChips';
 import { ChatRequestCard, RequestSettled, settledText, type RequestResult } from '../components/ChatRequest';
 import { ChatList, type ChatRowAction } from '../components/ChatList';
 import { ThreadRows, TypingIndicator, type ThreadCards } from '../components/ChatMessages';
@@ -542,7 +543,12 @@ export function ChatPage() {
                 This chat is archived. It is read-only.
               </Alert>
             ) : (
-              canWrite && <ChatComposer value={draft} onChange={setDraft} onSend={() => void send(draft)} busy={sending} enterSends={!isPhone} autoFocus={!isPhone} placeholder={isNew ? 'What should I do?' : liveRun ? 'Add something for the agent' : 'Message'} />
+              canWrite && (
+                <>
+                  <ChatAccountChips accounts={chat?.connections} />
+                  <ChatComposer value={draft} onChange={setDraft} onSend={() => void send(draft)} busy={sending} enterSends={!isPhone} autoFocus={!isPhone} placeholder={isNew ? 'What should I do?' : liveRun ? 'Add something for the agent' : 'Message'} />
+                </>
+              )
             )}
           </Box>
         </Box>

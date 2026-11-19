@@ -1,6 +1,7 @@
 import { Module, type OnModuleInit } from '@nestjs/common';
 import { CredentialsModule, UserCredentialsModule } from '@marinoscar/platform-api/credentials';
 
+import { OAuthClientModule } from '../oauth-client';
 import { PrismaService } from '../prisma/prisma.service';
 import { agentConnectionUsage } from './agent-connections';
 import { CapabilityProviderRegistry } from './capability-provider.registry';
@@ -12,11 +13,20 @@ import { ConnectionResolverService } from './connection-resolver.service';
 import { ConnectionTokenStore } from './connection-token.store';
 import { ConnectionTokensService } from './connection-tokens.service';
 import { ConnectionUsageRegistry } from './connection-usage.registry';
+import { ConnectionActivityService } from './connection-activity.service';
+import { ConnectionFilesController } from './connection-files.controller';
+import { ConnectionFilesService } from './connection-files.service';
 import { ConnectionsAdminController } from './connections-admin.controller';
 import { ConnectionsController } from './connections.controller';
 import { ConnectionEvents } from './connections.events';
 import { ConnectionsHealth, ConnectionsHealthHandler, ConnectionsHealthTask } from './connections.jobs';
 import { ConnectionsService } from './connections.service';
+import { McpCatalogService } from './mcp/mcp-catalog.service';
+import { McpConnectionsService } from './mcp/mcp-connections.service';
+import { McpConnector } from './mcp/mcp-connector.service';
+import { McpOAuthService } from './mcp/mcp-oauth.service';
+import { McpRunService } from './mcp/mcp-run.service';
+import { McpSecretStore } from './mcp/mcp-secrets';
 
 /**
  * Connections (E39.2, #599): the owner's accounts at Google and Microsoft, several per service, each with a label and its own
@@ -25,11 +35,12 @@ import { ConnectionsService } from './connections.service';
  *
  * What the next issues use: `ConnectionProviderRegistry` (E39.3 and E39.4 register their adapters), `ConnectionResolverService`
  * (`resolveConnection`), `ConnectionTokensService` (`getAccessToken`), `ConnectionUsageRegistry` (deliveries, tools and triggers
- * register what references a connection), `ConnectionCapabilities` (`mail`, `calendar`, `documents` of one connection: E39.3).
+ * register what references a connection), `ConnectionCapabilities` (`mail`, `calendar`, `documents` of one connection: E39.3),
+ * `McpRunService` (E39.9: the tools of the owner's MCP servers a run may be offered, and calling one).
  */
 @Module({
-  imports: [CredentialsModule, UserCredentialsModule],
-  controllers: [ConnectionsController, ConnectionsAdminController],
+  imports: [CredentialsModule, UserCredentialsModule, OAuthClientModule],
+  controllers: [ConnectionsController, ConnectionsAdminController, ConnectionFilesController],
   providers: [
     ConnectionProviderRegistry,
     CapabilityProviderRegistry,
@@ -41,12 +52,20 @@ import { ConnectionsService } from './connections.service';
     ConnectionFlowService,
     ConnectionResolverService,
     ConnectionsService,
+    ConnectionFilesService,
+    ConnectionActivityService,
     ConnectionCapabilities,
     ConnectionsHealth,
     ConnectionsHealthHandler,
     ConnectionsHealthTask,
+    McpSecretStore,
+    McpConnector,
+    McpCatalogService,
+    McpOAuthService,
+    McpConnectionsService,
+    McpRunService,
   ],
-  exports: [ConnectionProviderRegistry, CapabilityProviderRegistry, ConnectionCapabilities, ConnectionUsageRegistry, ConnectionResolverService, ConnectionTokensService, ConnectionsService, ConnectionApps],
+  exports: [ConnectionProviderRegistry, CapabilityProviderRegistry, ConnectionCapabilities, ConnectionUsageRegistry, ConnectionResolverService, ConnectionTokensService, ConnectionsService, ConnectionApps, McpRunService, McpConnectionsService, McpCatalogService],
 })
 export class ConnectionsModule implements OnModuleInit {
   constructor(

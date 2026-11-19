@@ -9,6 +9,7 @@ import { CapabilityProviderRegistry } from '../../src/connections/capability-pro
 import { ConnectionProviderRegistry } from '../../src/connections/connection-provider.registry';
 import type { Capability } from '../../src/connections/connections.constants';
 import { ConnectionCapabilities } from '../../src/connections/connection-capabilities.service';
+import { McpRunService } from '../../src/connections/mcp/mcp-run.service';
 import { FakeCapabilityProvider } from '../../src/connections/testing';
 import type { FabricClient } from '../../src/fabric/fabric.client';
 import { PrismaService } from '../../src/prisma/prisma.service';
@@ -58,7 +59,10 @@ export function scriptedModel(scripts: Call[][]) {
   const outputs: string[] = [];
   const offered: string[][] = [];
   const inputs: string[] = [];
-  const runTools = jest.fn(async (req: { tools: { tool: { name: string }; execute: (a: unknown, c: unknown) => Promise<unknown> }[]; onStep?: (s: unknown) => void; input: unknown; instructions?: string }) => {
+  /** Every request the model was given (instructions, input, tools with their descriptions and strictness): asserted on by the specs of what the model reads. */
+  const requests: { instructions?: string; tools: { tool: { name: string; description?: string; strict?: boolean } }[] }[] = [];
+  const runTools = jest.fn(async (req: { tools: { tool: { name: string; description?: string; strict?: boolean }; execute: (a: unknown, c: unknown) => Promise<unknown> }[]; onStep?: (s: unknown) => void; input: unknown; instructions?: string }) => {
+    requests.push(req);
     offered.push(req.tools.map((t) => t.tool.name));
     inputs.push(JSON.stringify(req.input));
     const script = scripts.shift() ?? [];
@@ -74,7 +78,7 @@ export function scriptedModel(scripts: Call[][]) {
     }
     return { final: { outputText: '' }, steps: [], stopReason: 'steps_exhausted' };
   });
-  return { ai: { forUser: () => ({ runTools }) } as unknown as AiService, runTools, outputs, offered, inputs };
+  return { ai: { forUser: () => ({ runTools }) } as unknown as AiService, runTools, outputs, offered, inputs, requests };
 }
 
 export interface Kit {
@@ -114,6 +118,8 @@ export function connectionKit(app: NestFastifyApplication): Kit {
       const runner = new GoalRunnerService(prisma, app.get(TasksService), fabric.client, model.ai, notifier as never, questions);
       runner.approvals = approvals;
       runner.connections = hub;
+      // MCP servers (E39.9): the real run service over the real database, as in the application.
+      runner.mcp = app.get(McpRunService, { strict: false });
       return runner;
     },
     async connect(userId, label, capabilities, extra = {}) {

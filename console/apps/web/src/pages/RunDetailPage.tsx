@@ -1,6 +1,7 @@
 import { RunInputs } from '../taskParams/RunInputs';
 import { RunOutputs } from '../taskOutputs/RunOutputs';
 import { RunDeliveries } from '../deliveries/RunDeliveries';
+import { StartedByEmail } from '../mailTriggers/StartedByEmail';
 import { useCallback, useEffect, useId, useRef, useState, type ElementType, type MouseEvent } from 'react';
 import { Alert, Box, Button, Collapse, IconButton, Link, Paper, Stack, Typography, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -367,6 +368,7 @@ export function RunDetailPage() {
           </Link>
         </Typography>
       )}
+      <StartedByEmail taskId={run.taskId ?? null} triggerId={run.mailTriggerId} canRead={viewer.hasPermission('runs:read')} />
       <RunHeaderChips policy={run.policy} tier={run.tier} />
       <RunInputs inputs={run.inputs} />
       <UsedMemories memories={run.memories} />
@@ -389,7 +391,7 @@ export function RunDetailPage() {
   // What the run returned (E39.5): once it has ended; a live run has nothing to show yet.
   const outputs = !isLive && <RunOutputs outputs={run.outputs} complete={run.outputsComplete} />;
   // What was sent when the run ended (E39.6): an email, a row, files, a webhook. Only a run of a task has any.
-  const deliveries = !isLive && run.taskId && viewer.hasPermission('runs:read') ? <RunDeliveries runId={run.id} canRetryDelivery={viewer.hasPermission('runs:write')} /> : null;
+  const deliveries = !isLive && run.taskId && viewer.hasPermission('runs:read') ? <RunDeliveries runId={run.id} canRetryDelivery={viewer.hasPermission('runs:write')} taskId={run.taskId} canOpenLinks={viewer.hasPermission('connections:read')} /> : null;
   // Paused: nothing happens until the owner resumes or stops. The browser stays in view, and takeover stays available.
   const pausedBanner = paused && <PausedBanner onResume={canCancel ? resume : undefined} onStop={canCancel ? cancel : undefined} resuming={resuming} stopping={stopping} />;
   const waiting = run.status === 'waiting_human' && <Alert severity="warning" sx={{ my: 2 }}>The agent is waiting for you. Answer its request in the Inbox.</Alert>;

@@ -20,9 +20,11 @@ Epic E39 (#581), issue E39.6 (#603). When a run of a task ends, its result goes 
 | The CLI | `hexactra tasks deliveries list <task>`, `hexactra tasks deliveries test <task> <delivery>`, `hexactra runs deliveries <run> [--retry <logId>]` |
 | The SDK | `hx.tasks.deliveries(id)`, `hx.tasks.testDelivery(id, deliveryId)`, `hx.runs.deliveries(id)`, `hx.runs.retryDelivery(id, logId)` |
 | MCP | **No tool creates or changes a delivery**: a hosted app must not add a recipient. `run_status` reports a `deliveries` summary (counts by status), never a recipient, a subject or a destination ([parity.md](parity.md#what-connections-added-e39)) |
-| The web app | The run page's **Deliveries** block (status, the reason, **Retry**). The editor on the task page is E39.10 (#607); until it is merged, deliveries are created through the API (`POST /api/tasks/{id}/deliveries`, typed through `hx.api`); the CLI lists and tests them |
+| The web app | The task form's **Where the result goes** section (E39.10, #607: the four editors, the confirm-the-address dialog, the column mapping with **Fill from outputs**, **Send a test**, reordering, the guided setup; [README](../README.md#accounts-and-deliveries-in-the-form)) and the run page's **Deliveries** block (where each went, when, the reason, **Retry**, a link to the spreadsheet or folder). Deliveries can also be created through the API (`POST /api/tasks/{id}/deliveries`, typed through `hx.api`); the CLI lists and tests them |
 | The code | `apps/api/src/deliveries/`, `apps/api/prisma/fragments/deliveries.prisma`, `apps/api/src/tasks/run-files.service.ts`, `run-report-link.ts` |
 | Settings | System namespace `deliveries`: `maxRecipientsPerTask` (10), `maxEmailsPerDay` (100), `maxAttachmentMb` (7). `PATCH /api/system-settings` |
+
+![The spreadsheet row editor with its column mapping, on a phone](images/delivery-editor-sheet-phone.png)
 
 ## The four kinds
 
@@ -124,4 +126,4 @@ A delivery that uses a connection registers with the connection usage registry: 
 
 ## Not in this issue
 
-The editor UI (E39.10, #607); deliveries for chat jobs without a task; messaging apps, SMS and other storage providers; unmasked reports; `endpointId` webhooks (above). **Verified with a real account** only when the owner runs the acceptance run on the deployed stack: one task with an email, a sheet row and a folder delivery, run twice.
+The web editor is done (E39.10, #607). Not done: deliveries for chat jobs without a task; messaging apps, SMS and other storage providers; unmasked reports; `endpointId` webhooks (above). The editor saves deliveries after the task (create, change, delete and reorder in one go, deletes first), shows a webhook's signing secret once, and never changes a delivery on its own; a webhook can be pointed at a URL only (`endpointId` is not offered, above). **Verified with a real account** only when the owner runs the acceptance run on the deployed stack: one task with an email, a sheet row and a folder delivery, run twice.

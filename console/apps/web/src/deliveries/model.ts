@@ -49,3 +49,44 @@ function capitalise(s: string): string {
 
 /** A failed delivery can be retried by its owner. */
 export const canRetry = (r: RunDelivery): boolean => r.status === 'failed';
+
+/** The configuration of a delivery the run page joins to a log row (`GET /tasks/{id}/deliveries`): enough to name where it went. */
+export interface DeliveryDestination {
+  id: string;
+  kind: DeliveryKind;
+  config: Record<string, unknown>;
+  connection: { id: string; label: string | null } | null;
+}
+
+/**
+ * Where a log row went, in words: "Email to 2 people", "Spreadsheet row in Work", "Folder in Work", "Hexactra storage", "hooks.example.test".
+ * Built from the delivery's setup, never from the log (which holds no address, file name or path). A deleted delivery is its kind.
+ */
+export function destinationLabel(row: Pick<RunDelivery, 'kind' | 'detail'>, d: DeliveryDestination | undefined): string {
+  if (!d) return kindLabel(row.kind);
+  const c = d.config;
+  const account = d.connection?.label ?? 'a removed account';
+  if (d.kind === 'email') {
+    const n = new Set([...(Array.isArray(c.to) ? c.to : []), ...(Array.isArray(c.cc) ? c.cc : [])].map((a) => String(a).toLowerCase())).size;
+    return `Email to ${n === 1 ? '1 person' : `${n} people`}`;
+  }
+  if (d.kind === 'sheet_row') return `Spreadsheet row in ${account}`;
+  if (d.kind === 'folder') return c.target === 'storage' ? 'Files in Hexactra storage' : `Files in a folder in ${account}`;
+  try {
+    return `Webhook to ${new URL(String(c.url)).host}`;
+  } catch {
+    return kindLabel(d.kind);
+  }
+}
+
+/** The file or folder a log row can open at the provider, when the delivery names one in an account: `{ connectionId, fileId }`. */
+export function linkTarget(row: Pick<RunDelivery, 'status'>, d: DeliveryDestination | undefined): { connectionId: string; fileId: string; what: 'spreadsheet' | 'folder' } | null {
+  if (!d || row.status !== 'sent') return null;
+  const c = d.config;
+  if (d.kind === 'sheet_row' && typeof c.fileId === 'string' && typeof c.connectionId === 'string') return { connectionId: c.connectionId, fileId: c.fileId, what: 'spreadsheet' };
+  if (d.kind === 'folder' && c.target && typeof c.target === 'object') {
+    const t = c.target as { connectionId?: unknown; folderId?: unknown };
+    if (typeof t.connectionId === 'string' && typeof t.folderId === 'string') return { connectionId: t.connectionId, fileId: t.folderId, what: 'folder' };
+  }
+  return null;
+}

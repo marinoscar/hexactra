@@ -250,7 +250,8 @@ export class ApprovalRulesService {
       if (!new RegExp(`^${CARD_MATCH_KEY_PREFIX} [a-z]{3}$`).test(matchKey)) throw invalid('The question has no currency a card rule could be kept for.');
     } else if (kind === 'connection') {
       matchKey = (r.matchKey ?? '').trim();
-      if (!/^[a-z][a-z_]{2,40}$/.test(matchKey)) throw invalid('The question has no tool a rule could be kept for.');
+      // A built-in tool (`mail_send`) or a tool of an MCP server (`work_notes__create-note`, E39.9): a name a model can call, at most 64 characters.
+      if (!/^[a-z][A-Za-z0-9_-]{2,63}$/.test(matchKey)) throw invalid('The question has no tool a rule could be kept for.');
     } else if (kind === 'gate') {
       category = (r.category ?? '').trim().toLowerCase();
       if (!(GATE_CATEGORIES as readonly string[]).includes(category)) throw invalid('The question has no commitment a rule could be kept for.');

@@ -84,6 +84,8 @@ export interface Run {
   taskId: string | null;
   status: RunStatus;
   trigger: string;
+  /** The email trigger that started the run (E39.8, E39.10); null or absent otherwise. */
+  mailTriggerId?: string | null;
   /** Where the run was started from (#464): web (the console), android, cli, api, mcp (an AI app), schedule, system. */
   origin?: RunOrigin;
   /** The AI app that started it (#464); null when no app did. */

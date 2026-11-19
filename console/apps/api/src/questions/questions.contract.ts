@@ -160,6 +160,8 @@ export interface QuestionAction {
   connectionId: string;
   connectionLabel: string;
   tool: string;
+  /** What the card says after "The agent asks to": a tool of an MCP server (E39.9) has a model-facing name that reads badly there. Absent: the tool's name and the connection's label. */
+  display?: string;
   lines: { label: string; value: string }[];
   body?: string;
   /** What it does, in one line with no content (no body, no cells): what the run's step, its memory and the notifications and webhooks say instead of the card. */

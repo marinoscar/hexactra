@@ -9,6 +9,7 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 import { useOptionalAuth } from '@marinoscar/platform-web/identity/headless';
 
+import { NeedsReconnectBlock } from '../connections/NeedsReconnectBlock';
 import { useInboxCount } from '../components/InboxCountProvider';
 import { useNow } from '../components/RunActivity';
 import { BlockSkeleton, GetStartedBlock, MachinesBlock, NeedsYouBlock, RecentRunsBlock, RunningNowBlock, ThisWeekBlock, UpNextBlock } from '../components/home/blocks';
@@ -272,6 +273,8 @@ export function HomePage() {
 
       {summary !== null && (
         <Stack spacing={3}>
+          <NeedsReconnectBlock />
+
           {/* 2. Needs you: always first. */}
           {summary.needsYou && summary.needsYou.count > 0 && (
             <Box sx={dim}>

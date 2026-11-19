@@ -14,7 +14,7 @@ import { CONNECTION_GATE, intentTarget, type ConnectionDecision, type Connection
 
 /** The card's prompt, from the server's facts: "Send an email with Work", then each labelled fact. */
 export function cardPrompt(action: NonNullable<ConnectionGateRequest['action']>): string {
-  return clip([`The agent asks to ${action.tool.replace(/_/g, ' ')} with "${action.connectionLabel}".`, ...action.lines.map((l) => `${l.label}: ${l.value}`)].join('\n'), 2_000);
+  return clip([`The agent asks to ${action.display ?? `${action.tool.replace(/_/g, ' ')} with "${action.connectionLabel}"`}.`, ...action.lines.map((l) => `${l.label}: ${l.value}`)].join('\n'), 2_000);
 }
 
 export const connectionGate: Gate<HostContext> = {

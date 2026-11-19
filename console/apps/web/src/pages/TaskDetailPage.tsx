@@ -15,6 +15,8 @@ import { TaskSchedulesSection } from '../components/TaskSchedulesSection';
 import { MailTriggersSection } from '../mailTriggers/MailTriggersSection';
 import { TaskStats } from '../components/TaskStats';
 import { useTaskActions } from '../components/useTaskActions';
+import { TaskDeliveriesSummary } from '../deliveries/TaskDeliveriesSummary';
+import { TaskChips } from '../taskConnections/TaskChips';
 import { TaskOutputsTable } from '../taskOutputs/TaskOutputsTable';
 import { OUTPUT_TYPE_LABEL } from '../taskOutputs/model';
 import { useRunInputs } from '../taskParams/RunInputsDialog';
@@ -395,6 +397,7 @@ export function TaskDetailPage() {
         </Stack>
       </PageHeader>
 
+      <TaskChips task={task} mt={0} />
       <ErrorBanner error={error} onClose={() => setError(null)} />
       {summary.liveRunId && (
         <LiveBanner runId={summary.liveRunId} run={liveRun} fallbackStatus={summary.lastRun?.id === summary.liveRunId ? summary.lastRun.status : 'running'} canOpen={canReadRuns} />
@@ -445,6 +448,12 @@ export function TaskDetailPage() {
           </Section>
 
           <TaskSchedulesSection task={task} canWrite={canWrite} canReadRuns={canReadRuns} catalog={policyCatalog} onChanged={() => void refresh()} />
+
+          {((task.connections?.length ?? 0) > 0 || (summary.deliveries ?? 0) > 0) && (
+            <Section title="Accounts and deliveries" action={editLink}>
+              <TaskDeliveriesSummary taskId={task.id} accounts={task.connections ?? []} canReadRuns={canReadRuns} canReadConnections={viewer.hasPermission('connections:read')} refreshKey={task.updatedAt} />
+            </Section>
+          )}
 
           <MailTriggersSection taskId={task.id} parameters={task.parameters ?? []} canWrite={canRun} canRead={canReadRuns} canReadConnections={viewer.hasPermission('connections:read')} />
 

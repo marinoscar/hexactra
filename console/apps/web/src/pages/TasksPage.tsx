@@ -30,6 +30,7 @@ import { useTaskList } from '../components/useTaskList';
 import { usePolicyCatalog } from '../policies/usePolicyCatalog';
 import type { FleetHost } from '../types/fleet';
 import type { TaskListSort, TaskScheduleState, TaskWithSummary } from '../types/tasks';
+import { TaskChips } from '../taskConnections/TaskChips';
 import { EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, ResponsiveList, aboveBottomBar, useBreakpoint, type Column } from '../ui';
 
 /** How long typing rests before the search is sent. */
@@ -172,6 +173,7 @@ export function TasksPage() {
         <Box sx={{ minWidth: 120 }}>
           <TaskName task={t} canOpen={canOpen} />
           <TaskGoalExcerpt goal={t.goal} />
+          <TaskChips task={t} />
           {/* Below `xl` the Policy column is hidden: the policy and model stay on the row, here. */}
           {policiesShown && (
             <Box sx={{ display: { xl: 'none' } }} data-testid="task-policy-line">

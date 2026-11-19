@@ -3,6 +3,9 @@ import { useTheme } from '@mui/material/styles';
 import { useEffect, useState } from 'react';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
+import { AccountsSection } from '../taskConnections/AccountsSection';
+import { selectionsOf, summaryLine, type ConnectionSelection } from '../taskConnections/model';
+import { useConnections } from '../connections/useConnections';
 import { PolicySelect } from '../policies/PolicySelect';
 import { usePolicyCatalog } from '../policies/usePolicyCatalog';
 import type { Chat, ChatSettings } from '../types/chat';
@@ -34,7 +37,10 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
   const hosts = useFleetHosts();
   const catalog = usePolicyCatalog({ withTiers: false });
   const canPickPolicy = viewer.hasPermission('agent_policies:read');
+  const accounts = useConnections(open);
+  const canReadConnections = viewer.hasPermission('connections:read');
   const [values, setValues] = useState<ChatSettings>(() => settingsOf(chat));
+  const [selections, setSelections] = useState<ConnectionSelection[]>(() => selectionsOf(chat.connections));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +48,7 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
   useEffect(() => {
     if (!open) return;
     setValues(settingsOf(chat));
+    setSelections(selectionsOf(chat.connections));
     setError(null);
   }, [open, chat]);
 
@@ -49,7 +56,10 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
     setBusy(true);
     setError(null);
     try {
-      await onSave({ ...values, profile: values.profile.trim() || 'default' });
+      // The accounts go only when the owner changed them: an older answer must never switch them off by accident.
+      const before = selectionsOf(chat.connections);
+      const changed = canReadConnections && JSON.stringify(before) !== JSON.stringify(selections);
+      await onSave({ ...values, profile: values.profile.trim() || 'default', ...(changed ? { connections: selections } : {}) });
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save the settings');
@@ -83,6 +93,17 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
             identity={{ checked: values.useSavedIdentity, onChange: (useSavedIdentity) => setValues((v) => ({ ...v, useSavedIdentity })) }}
             cards={{ checked: values.useSavedCards, onChange: (useSavedCards) => setValues((v) => ({ ...v, useSavedCards })) }}
           />
+          {canReadConnections && (
+            <Stack spacing={1} component="section" aria-label="Accounts this chat may use">
+              <Typography variant="subtitle2" component="h3">
+                Accounts this chat may use
+              </Typography>
+              <Typography variant="body2" color="text.secondary" data-testid="chat-accounts-summary">
+                {summaryLine(selections, accounts.connections)}
+              </Typography>
+              <AccountsSection connections={accounts.connections} failed={accounts.failed} selections={selections} onChange={setSelections} disabled={busy} />
+            </Stack>
+          )}
           {/* A setting of the owner, not of this chat (#553): saved as soon as it is switched. */}
           <div>
             <SuggestMemoriesSwitch disabled={busy} />

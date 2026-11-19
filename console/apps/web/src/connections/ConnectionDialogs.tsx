@@ -161,7 +161,11 @@ export function DefaultsDialog({ connection, onClose, onSave }: { connection: Co
 export function TestDialog({ connection, result, onClose }: { connection: Connection | null; result: TestResult | null; onClose: () => void }) {
   return (
     <Shell open={connection !== null && result !== null} title={connection ? `Test of ${connection.label}` : ''} onClose={onClose} actions={<Button onClick={onClose} sx={TOUCH}>Close</Button>}>
-      {result && result.results.length === 0 && <Typography color="text.secondary">Nothing is switched on for this account, so there is nothing to test.</Typography>}
+      {result && result.results.length === 0 && (
+        <Typography color={connection?.provider === 'mcp' ? 'success.main' : 'text.secondary'}>
+          {connection?.provider === 'mcp' ? 'The server answered and listed its tools.' : 'Nothing is switched on for this account, so there is nothing to test.'}
+        </Typography>
+      )}
       <List aria-label="Test results">
         {result?.results.map((r) => (
           <ListItem key={r.capability} disableGutters>

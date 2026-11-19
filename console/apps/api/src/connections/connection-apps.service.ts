@@ -9,7 +9,7 @@ import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 import { CONNECTION_APP_SECRET_NAME, connectionAppPurpose } from './connections.credentials';
 import { CONNECTION_PROVIDER_IDS, type ConnectionProviderId } from './connections.constants';
 import { CONNECTION_AUDIT, ConnectionEvents } from './connections.events';
-import { resolveConnectionsSystemSettings, type ResolvedConnectionsSystemSettings } from './connections.settings';
+import { resolveConnectionsSystemSettings, type ResolvedConnectionsSystemSettings, type ResolvedMcpSettings } from './connections.settings';
 import { ConnectionProviderRegistry } from './connection-provider.registry';
 import { COLUMNS_OF_PROVIDER, matrixRows, type MatrixColumn, type MatrixRow } from './capability-matrix';
 import { PROVIDER_INFO, type ProviderInfo } from './provider-info';
@@ -136,6 +136,30 @@ export class ConnectionApps {
       });
     }
     return out;
+  }
+
+  // ---- MCP servers (E39.9) ----
+
+  /** The deployment switch and host lists for MCP servers, as the settings are now (a few seconds stale at most). */
+  async mcp(): Promise<ResolvedMcpSettings> {
+    return (await this.system()).mcp;
+  }
+
+  async mcpAdminView(): Promise<ResolvedMcpSettings> {
+    this.invalidate();
+    return this.mcp();
+  }
+
+  /** Sets the switch and the host lists. Lists replace the stored ones; a field left out is kept. */
+  async saveMcp(adminId: string, input: { enabled?: boolean; allowedHosts?: string[]; blockedHosts?: string[] }): Promise<ResolvedMcpSettings> {
+    const patch: Record<string, unknown> = {};
+    if (input.enabled !== undefined) patch.enabled = input.enabled;
+    if (input.allowedHosts !== undefined) patch.allowedHosts = input.allowedHosts;
+    if (input.blockedHosts !== undefined) patch.blockedHosts = input.blockedHosts;
+    if (Object.keys(patch).length > 0) await this.settings?.patchSettings({ connections: { mcp: patch } } as never, adminId);
+    this.invalidate();
+    await this.events.audit(adminId, CONNECTION_AUDIT.appSaved, adminId, { provider: 'mcp', enabled: input.enabled ?? null, allowedHosts: input.allowedHosts?.length ?? null, blockedHosts: input.blockedHosts?.length ?? null }, 'connection_app');
+    return this.mcpAdminView();
   }
 
   /** The client id is not a secret, so the link is built from the settings without reading the secret. */

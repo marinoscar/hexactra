@@ -28,6 +28,7 @@ import { openFabricSession } from './browser-session';
 import { BrowserError } from '@marinoscar/hexactra-browser-agent/browser-port';
 import { connectionGate } from './gates/connection-gate';
 import { connectionTools } from './tools/connections';
+import { mcpTools } from './tools/connections/mcp';
 import { DEFAULT_CONNECTION_READ_LIMITS } from './connections/memory';
 import { GOAL_RUN_HOP_MARGIN_MS, GOAL_RUN_MAX_RUNTIME_MS } from '../goal-run.enqueue';
 import type { HostContext, HostExt } from './context';
@@ -209,6 +210,8 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
   if (flags.savedCards && !noBrowser) registry.registerAll(buildSavedCardTools(cardCtx));
   // The owner's connections (E39.7): offered only when the run has one with the capability switched on (`available`).
   if (s.connections.list.length > 0 && d.connections) registry.registerAll(connectionTools);
+  // The tools of the owner's MCP servers (E39.9): the ones the owner enabled on the connections the run lists, namespaced by the connection.
+  if (s.connections.list.length > 0) registry.registerAll(await mcpTools(d, userId, s.connections.list));
   registry.register(browserTools.finish as unknown as RunnerTool<HostContext>);
 
   // A run an email started (E39.8): a reference to the message, never its content.

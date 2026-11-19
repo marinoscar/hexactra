@@ -1,6 +1,7 @@
 // The pieces of a task row (#426): the Scheduled switch, the run control, the
 // overflow menu, the cells and the phone card. The Tasks list composes them;
 // the task page (#428) reuses the switch, the run control and the menu.
+import { TaskChips } from '../taskConnections/TaskChips';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { Box, Card, CardContent, Chip, Divider, IconButton, Link, ListItemText, Menu, MenuItem, Stack, Switch, Tooltip, Typography } from '@mui/material';
 import { useId, useState, type MouseEvent, type ReactNode } from 'react';
@@ -303,6 +304,7 @@ export function TaskCard({ task, catalog, canOpen, canReadRuns, scheduled, actio
         <Typography variant="body2" title={task.goal} sx={{ ...muted, mt: 0.5, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>
           {task.goal}
         </Typography>
+        <TaskChips task={task} mt={1} />
         <Box sx={{ mt: 1 }}>
           <TaskScheduleCell task={task} catalog={catalog} after={<TaskNextRun task={task} prefix="next " />} />
         </Box>
