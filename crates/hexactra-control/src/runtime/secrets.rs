@@ -119,7 +119,7 @@ impl SecretsProviders {
         &self,
         owner_id: &str,
         provider_id: &str,
-        req: RegisterSecretsProviderRequest,
+        mut req: RegisterSecretsProviderRequest,
     ) -> Result<SecretsProviderView, RegisterError> {
         OwnerId::new(owner_id).map_err(RegisterError::Invalid)?;
         if !hexactra_core::remote::valid_provider_id(provider_id) {
@@ -139,8 +139,13 @@ impl SecretsProviders {
             hexactra_credential_resolver::http::check_base_url(u)
                 .map_err(RegisterError::Invalid)?;
         }
-        let provider = build_provider(&req)?;
-        Ok(self.insert(owner_id, provider_id, provider, &req))
+        let provider = build_provider(&req);
+        // The provider now holds the token (zeroized on drop); wipe the
+        // request's copy whatever the outcome.
+        if let Some(t) = req.access_token.as_mut() {
+            t.zeroize();
+        }
+        Ok(self.insert(owner_id, provider_id, provider?, &req))
     }
 
     /// Register a ready provider object (tests and embedders).
@@ -260,8 +265,11 @@ fn view_of(owner_id: &str, provider_id: &str, r: &Registered) -> SecretsProvider
     }
 }
 
-/// Build the provider a registration names. `vault` and `console` arrive with
-/// E37.2 and E37.5; only the fixture provider exists here.
+/// Build the provider a registration names. `vault` is the remote Vault
+/// (E37.2, #591): it needs the Vault's `APP_URL`, the short-lived `oat_`
+/// access token the console minted and when that token stops working (the
+/// registration is dropped then, and the token with it). `console` arrives
+/// with E37.5.
 fn build_provider(
     req: &RegisterSecretsProviderRequest,
 ) -> Result<Arc<dyn SecretsProvider>, RegisterError> {
@@ -282,9 +290,20 @@ fn build_provider(
                 ))
             }
         }
-        SecretsProviderKind::Vault => Err(RegisterError::Unsupported(
-            "the vault provider is not implemented in this build (E37.2)".into(),
-        )),
+        SecretsProviderKind::Vault => {
+            let missing =
+                |what: &str| RegisterError::Invalid(format!("a vault provider needs {what}"));
+            let base_url = req.base_url.as_deref().ok_or_else(|| missing("base_url"))?;
+            let token = req
+                .access_token
+                .clone()
+                .ok_or_else(|| missing("access_token"))?;
+            let expires_at = req.expires_at.ok_or_else(|| missing("expires_at"))?;
+            let p =
+                hexactra_credential_resolver::VaultProvider::new(base_url, token, Some(expires_at))
+                    .map_err(RegisterError::Invalid)?;
+            Ok(Arc::new(p))
+        }
         SecretsProviderKind::Console => Err(RegisterError::Unsupported(
             "console-hosted providers are not implemented in this build (E37.5)".into(),
         )),
@@ -958,12 +977,53 @@ mod tests {
             r.register("user-a", "test", bad_url),
             Err(RegisterError::Invalid(_))
         ));
-        let mut vault = test_req();
-        vault.kind = SecretsProviderKind::Vault;
+        // The console provider is not built yet (E37.5).
+        let mut console = test_req();
+        console.kind = SecretsProviderKind::Console;
         assert!(matches!(
-            r.register("user-a", "vault", vault),
+            r.register("user-a", "builtin", console),
             Err(RegisterError::Unsupported(_))
         ));
+    }
+
+    #[test]
+    fn a_vault_registration_needs_url_token_and_expiry_and_keeps_no_copy() {
+        let r = SecretsProviders::default();
+        let good = || RegisterSecretsProviderRequest {
+            kind: SecretsProviderKind::Vault,
+            base_url: Some("https://vault.example.test".into()),
+            access_token: Some("oat_canary-token-not-logged".into()),
+            expires_at: Some(Utc::now() + chrono::Duration::minutes(5)),
+            settings: None,
+        };
+        let v = r.register("user-a", "vault", good()).unwrap();
+        assert_eq!(v.kind, SecretsProviderKind::Vault);
+        assert_eq!(v.base_url.as_deref(), Some("https://vault.example.test"));
+        assert!(!serde_json::to_string(&v).unwrap().contains("canary-token"));
+        assert_eq!(r.resolve(Some("user-a"), None).unwrap().0, "vault");
+        // Registering again replaces the provider (and so its token).
+        r.register("user-a", "vault", good()).unwrap();
+        assert_eq!(r.list("user-a").len(), 1);
+        for broken in [
+            |q: &mut RegisterSecretsProviderRequest| q.base_url = None,
+            |q: &mut RegisterSecretsProviderRequest| q.access_token = None,
+            |q: &mut RegisterSecretsProviderRequest| q.expires_at = None,
+            |q: &mut RegisterSecretsProviderRequest| {
+                q.base_url = Some("http://vault.example.test".into())
+            },
+            |q: &mut RegisterSecretsProviderRequest| {
+                q.base_url = Some("https://10.0.0.1@evil.test".into())
+            },
+            |q: &mut RegisterSecretsProviderRequest| q.access_token = Some("has space".into()),
+        ] {
+            let mut q = good();
+            broken(&mut q);
+            assert!(matches!(
+                r.register("user-b", "vault", q),
+                Err(RegisterError::Invalid(_))
+            ));
+        }
+        assert!(r.list("user-b").is_empty());
     }
 
     #[test]
