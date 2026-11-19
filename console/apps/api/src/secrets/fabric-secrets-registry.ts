@@ -33,6 +33,9 @@ export interface FabricSecretsRegistry {
 /** Injection token of the fabric-side registry. */
 export const FABRIC_SECRETS_REGISTRY = Symbol('FABRIC_SECRETS_REGISTRY');
 
+/** The id actions name for a registration kind. */
+export const providerIdOf = (kind: SecretsProviderRegistration['kind']): string => (kind === 'console' ? 'builtin' : kind);
+
 /** The fabric could not be given the provider: no fabric connection is configured, it is not answering, or it refused. Never carries a token. */
 export class FabricSecretsUnavailable extends Error {
   constructor(readonly reason: 'not_wired' | 'unreachable' | 'refused') {
@@ -58,9 +61,9 @@ export class FabricSessionSecretsRegistry implements FabricSecretsRegistry {
     const expiresAt = new Date(registration.expiresAt);
     if (Number.isNaN(expiresAt.getTime())) throw new FabricSecretsUnavailable('refused');
     try {
-      // The provider id actions name is the kind: `vault`.
+      // The provider id actions name: `vault`, or `builtin` for the built-in store (kind `console`).
       await this.session.registerSecretsProvider(ownerId, {
-        provider: registration.kind,
+        provider: providerIdOf(registration.kind),
         kind: registration.kind,
         baseUrl: registration.baseUrl,
         accessToken: registration.accessToken,
@@ -73,7 +76,7 @@ export class FabricSessionSecretsRegistry implements FabricSecretsRegistry {
 
   async unregisterSecretsProvider(ownerId: string, kind: SecretsProviderRegistration['kind']): Promise<void> {
     try {
-      await this.session.unregisterSecretsProvider(ownerId, kind);
+      await this.session.unregisterSecretsProvider(ownerId, providerIdOf(kind));
     } catch (e) {
       throw unavailableOf(e);
     }
