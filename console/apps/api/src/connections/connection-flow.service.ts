@@ -27,7 +27,7 @@ import { capabilitiesOf } from './connection-view';
 import type { ConnectionProviderAdapter, ProviderApp, TokenSet } from './provider';
 
 /** What the callback tells the browser (query values on the return page): a closed set. */
-export type CallbackOutcome = 'connected' | 'state_invalid' | 'expired' | 'binding_invalid' | 'denied' | 'refused' | 'exchange_failed' | 'no_refresh_token' | 'account_mismatch' | 'nothing_granted' | 'provider_unavailable' | 'limit';
+export type CallbackOutcome = 'connected' | 'state_invalid' | 'expired' | 'binding_invalid' | 'denied' | 'refused' | 'exchange_failed' | 'no_refresh_token' | 'account_mismatch' | 'nothing_granted' | 'provider_unavailable' | 'limit' | 'admin_consent_required';
 
 export interface CallbackResult {
   outcome: CallbackOutcome;
@@ -140,7 +140,7 @@ export class ConnectionFlowService {
    * The callback of the authorization (public route). Never throws for a bad request: it answers with a closed outcome the
    * controller puts on the redirect to the return page. Never echoes the provider's parameters.
    */
-  async handleCallback(provider: string, params: { code?: string; state?: string; error?: string }, bindingFor: (cookieName: string) => string | undefined): Promise<CallbackResult> {
+  async handleCallback(provider: string, params: { code?: string; state?: string; error?: string; errorDescription?: string }, bindingFor: (cookieName: string) => string | undefined): Promise<CallbackResult> {
     const fail = (outcome: CallbackOutcome, returnTo = DEFAULT_RETURN_TO): CallbackResult => ({ outcome, returnTo });
     if (!isProviderId(provider)) return fail('state_invalid');
     if (!params.state || params.state.length > 200) return fail('state_invalid');
@@ -164,8 +164,11 @@ export class ConnectionFlowService {
     if (params.error) {
       const code = /^[a-z_]{1,40}$/.test(params.error) ? params.error : 'refused';
       await this.events.audit(flow.userId, CONNECTION_AUDIT.connectFailed, flow.connectionId ?? flow.id, { provider, reason: code });
-      this.events.count(provider, code === 'access_denied' ? 'denied' : 'failed');
-      return fail(code === 'access_denied' ? 'denied' : 'refused', back);
+      // Told apart by the provider's adapter (Microsoft: the owner declined, or an administrator has to approve the app).
+      const kind = this.registry.get(provider)?.classifyAuthorizationError?.(code, params.errorDescription?.slice(0, 1000) ?? null) ?? null;
+      const outcome: CallbackOutcome = kind === 'admin_consent_required' ? 'admin_consent_required' : kind === 'denied' || code === 'access_denied' ? 'denied' : 'refused';
+      this.events.count(provider, outcome === 'denied' ? 'denied' : 'failed');
+      return fail(outcome, back);
     }
     if (!params.code || params.code.length > 4096) return this.failed(flow.userId, flow.id, provider, 'exchange_failed', back);
 
@@ -178,7 +181,8 @@ export class ConnectionFlowService {
       tokens = await adapter.exchangeCode({ app, code: params.code, verifier });
     } catch (e) {
       if (!(e instanceof OAuthClientError)) this.log.warn(`connection code exchange failed (${e instanceof Error ? e.name : 'error'})`);
-      return this.failed(flow.userId, flow.id, provider, 'exchange_failed', back);
+      // The consent screen was passed but the organization requires an administrator's approval: not a failure of the owner's.
+      return this.failed(flow.userId, flow.id, provider, e instanceof OAuthClientError && e.oauthError === 'admin_consent_required' ? 'admin_consent_required' : 'exchange_failed', back);
     }
 
     try {
