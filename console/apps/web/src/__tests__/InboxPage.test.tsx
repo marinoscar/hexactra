@@ -112,6 +112,31 @@ describe('InboxPage', () => {
     );
   });
 
+  it('a task run waiting for its values: the form card, answered with fields (#556)', async () => {
+    const form: InboxItem = {
+      ...base,
+      questionId: 'q9',
+      runId: 'r9',
+      handoffId: null,
+      goal: 'Send {{Amount}} today using Zelle',
+      askedBy: 'run:r9',
+      pageTitle: null,
+      kind: 'other',
+      prompt: 'A few details to start "Zelle": Amount',
+      input: 'form',
+      fields: [{ key: 'amount', label: 'Amount', type: 'money', required: true }],
+    };
+    const host = createTestPlatformHost({ permissions: ['runs:read', 'runs:write'], responses: { 'GET /inbox': [form], 'POST /questions/q9/answer': {} } });
+    renderInbox(host);
+    const amount = await screen.findByRole('textbox', { name: /^Amount/ });
+    // The goal with its blank, linked to the waiting run.
+    expect(screen.getByRole('link', { name: 'Send {{Amount}} today using Zelle' })).toHaveAttribute('href', '/runs/r9');
+    fireEvent.change(amount, { target: { value: '25' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(host.requests.filter((r) => r.method === 'POST')).toHaveLength(1));
+    expect(host.requests.find((r) => r.method === 'POST')!.body).toEqual({ outcome: 'completed', fields: { amount: '25' }, channel: 'web' });
+  });
+
   it("links a chat's request to its chat, where it is answered in the thread; other requests have no such link (#488)", async () => {
     const CHAT = '88888888-8888-4888-8888-888888888888';
     const host = createTestPlatformHost({ permissions: ['runs:read', 'runs:write'], responses: { 'GET /inbox': [{ ...confirm, conversationId: CHAT }, { ...freeStanding, conversationId: null }] } });

@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger, Optional } from '@nestjs/common';
 import { AiError, AiService, defineTool, type AiDefinedTool } from '@marinoscar/platform-api/ai';
 import { JobsService } from '@marinoscar/platform-api/jobs';
-import type { Conversation } from '@prisma/client';
+import type { Conversation, Prisma } from '@prisma/client';
 import { z } from 'zod';
 
 import { MemoryContext } from '../memories/memory-context';
@@ -317,7 +317,7 @@ export class ChatTurnService {
                 if (state.done) return 'Already handled this turn.';
                 const draft = await this.drafts!.draft(userId, c.id, orgId);
                 if (!draft.goal) return 'There is nothing to save yet: no job was described in this chat.';
-                await this.chats.append(c.id, { role: 'assistant', kind: 'task_draft', text: draft.goal, meta: { ...draft } });
+                await this.chats.append(c.id, { role: 'assistant', kind: 'task_draft', text: draft.goal, meta: { ...draft, parameters: draft.parameters as unknown as Prisma.InputJsonValue[] } });
                 state.done = state.wrote = true;
                 return 'Drafted. The owner reviews and saves it from the chat.';
               },

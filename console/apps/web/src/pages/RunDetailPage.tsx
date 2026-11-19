@@ -1,3 +1,4 @@
+import { RunInputs } from '../taskParams/RunInputs';
 import { useCallback, useEffect, useId, useState, type ElementType, type MouseEvent } from 'react';
 import { Alert, Box, Button, Collapse, IconButton, Link, Paper, Stack, Typography, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -306,6 +307,7 @@ export function RunDetailPage() {
         </Typography>
       )}
       <RunHeaderChips policy={run.policy} tier={run.tier} />
+      <RunInputs inputs={run.inputs} />
       <UsedMemories memories={run.memories} />
     </>
   );

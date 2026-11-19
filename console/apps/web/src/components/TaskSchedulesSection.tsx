@@ -230,7 +230,7 @@ export function TaskSchedulesSection({ task, canWrite, canReadRuns, catalog, onC
           {draft && (
             <Box sx={{ pt: 1 }}>
               {/* One editor per draft: a stable key, so its builder state is this schedule's. */}
-              <ScheduleEditor key={draft.id ?? 'new'} value={draft} onChange={setDraft} onValidity={setValid} disabled={saving} profileTimezone={profileTimezone} catalog={catalog} taskPolicyId={task.policyId} />
+              <ScheduleEditor key={draft.id ?? 'new'} value={draft} onChange={setDraft} onValidity={setValid} disabled={saving} profileTimezone={profileTimezone} catalog={catalog} taskPolicyId={task.policyId} parameters={task.parameters ?? undefined} />
             </Box>
           )}
         </DialogContent>

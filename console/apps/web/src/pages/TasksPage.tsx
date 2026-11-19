@@ -25,6 +25,7 @@ import {
 } from '../components/TaskListItems';
 import { EXAMPLE_GOALS, TASK_FILTERS, TASK_SORTS, isFiltered, parseTaskListQuery, taskListSearchParams, taskPaths, type TaskListQuery } from '../components/taskList';
 import { TaskActionError, useTaskActions } from '../components/useTaskActions';
+import { useRunInputs } from '../taskParams/RunInputsDialog';
 import { useTaskList } from '../components/useTaskList';
 import { usePolicyCatalog } from '../policies/usePolicyCatalog';
 import type { FleetHost } from '../types/fleet';
@@ -55,6 +56,7 @@ export function TasksPage() {
 
   const list = useTaskList(query);
   const actions = useTaskActions();
+  const runInputs = useRunInputs();
   // One catalog for the page (it loads nothing without `agent_policies:read`); a failed load hides the policy parts.
   const catalog = usePolicyCatalog();
   const policiesShown = canReadPolicies && !catalog.error;
@@ -125,7 +127,9 @@ export function TasksPage() {
     setError(null);
     setBusy((b) => ({ ...b, [task.id]: true }));
     try {
-      const started = await actions.run(task, policyId);
+      // Values still missing are asked for first (#556); Cancel starts nothing.
+      const started = await runInputs.ask(task, (inputs) => actions.run(task, policyId, inputs));
+      if (!started) return;
       // The row shows the run at once; its 5 s refresh takes over from here. The page stays, so several tasks can be started.
       list.patch(task.id, (t) => ({
         ...t,
@@ -406,6 +410,7 @@ export function TasksPage() {
           {notice?.text}
         </Alert>
       </Snackbar>
+      {runInputs.dialog}
     </PageContainer>
   );
 }
