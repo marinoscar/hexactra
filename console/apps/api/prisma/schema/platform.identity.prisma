@@ -133,6 +133,11 @@ model User {
   connections     Connection[]
   connectionFlows ConnectionFlow[]
 
+  // composed from app:deliveries.prisma
+  taskDeliveries    TaskDelivery[]
+  runDeliveries     RunDelivery[]
+  deliveryRecipients DeliveryRecipient[]
+
   // composed from app:documents.prisma
   documents Document[]
 

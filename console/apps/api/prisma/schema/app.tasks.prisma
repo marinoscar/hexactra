@@ -115,6 +115,9 @@ model Task {
   user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   runs Run[]
 
+  // composed from app:deliveries.prisma
+  deliveries TaskDelivery[]
+
   // composed from app:schedules.prisma
   schedules TaskSchedule[]
 
@@ -265,6 +268,9 @@ model Run {
   steps        RunStep[]
   chatMessages ChatMessage[]
   guidance     RunGuidance[]
+
+  // composed from app:deliveries.prisma
+  deliveries RunDelivery[]
 
   // composed from app:questions.prisma
   questions Question[]
