@@ -5873,6 +5873,148 @@ export interface paths {
         patch: operations["approvalRules_patch"];
         trace?: never;
     };
+    "/api/secrets/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Status of your secrets providers
+         * @description Whether your Vault is connected (`status`), the scopes you consented to, the last successful call, the last error `code` (a stable code, never a message), whether Vault's own agent access switch is on (`agentAccess`), and the two Hexactra switches (`agentUse`: the deployment's and yours, both off by default; both must be on for the agent to look up or use anything). Never a token, a client secret or a login.
+         *
+         *     **Requires:** authentication, plus permission `secrets:read`.
+         */
+        get: operations["secrets_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/secrets/vault/client": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set your Vault address, client id and client secret
+         * @description Your own entries; an administrator may set a deployment default so you only press Connect. The client secret is write-only (omit it to keep the stored one). The address is checked against private-address rules (https only; loopback http in development) and again on every call.
+         *
+         *     **Requires:** authentication, plus permission `secrets:write`.
+         */
+        put: operations["secrets_saveClient"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/secrets/vault/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start connecting your Vault (OAuth 2.1 authorization code with PKCE)
+         * @description Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` (a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.
+         *
+         *     **Requires:** authentication, plus permission `secrets:write`.
+         */
+        post: operations["secrets_connect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/secrets/vault/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vault redirects the browser here after the consent
+         * @description The redirect URI to register at the Vault (`/api/secrets/vault/callback` under this console's address). Not called by API clients.
+         */
+        get: operations["secrets_callback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/secrets/vault/disconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disconnect your Vault
+         * @description Revokes the grant at Vault (`revoked: false` when Vault could not be asked: remove the app in its Connected apps), deletes the stored tokens, tells the fabric to forget the provider and marks the connection disconnected. A run that is using it falls back to asking you. `forgetClient` also forgets your own address, client id and client secret.
+         *
+         *     **Requires:** authentication, plus permission `secrets:write`.
+         */
+        post: operations["secrets_disconnect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/secrets/vault/default-client": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The deployment default Vault client
+         * @description Address, client id and whether a client secret is stored (never the secret), plus the redirect URI to register at the Vault.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:read`.
+         */
+        get: operations["secrets_getDefault"];
+        /**
+         * Set the deployment default Vault client
+         * @description So owners only press Connect. The client secret is write-only. An owner's own entries take precedence.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:write`.
+         */
+        put: operations["secrets_setDefault"];
+        post?: never;
+        /**
+         * Remove the deployment default Vault client
+         * @description Removes the default address, client id and client secret. Existing connections and owners' own entries are untouched.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:write`.
+         */
+        delete: operations["secrets_removeDefault"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connected-apps": {
         parameters: {
             query?: never;
@@ -7849,6 +7991,13 @@ export interface components {
              * @example CHAT_NOT_FOUND
              * @example CHAT_ARCHIVED
              * @example CHAT_RUN_LIVE
+             * @example SECRETS_VAULT_NOT_CONFIGURED
+             * @example SECRETS_VAULT_URL_REFUSED
+             * @example SECRETS_VAULT_DISCONNECT_FIRST
+             * @example SECRETS_VAULT_NOT_CONNECTED
+             * @example SECRETS_VAULT_NEEDS_RECONNECT
+             * @example SECRETS_VAULT_UNAVAILABLE
+             * @example SECRETS_VAULT_CONNECT_FAILED
              * @example ERROR
              */
             code: string;
@@ -8816,6 +8965,12 @@ export interface components {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
             };
+            secrets?: {
+                agentUse: {
+                    /** @description Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default. */
+                    enabled: boolean;
+                };
+            };
             notifications?: {
                 [key: string]: {
                     [key: string]: boolean;
@@ -8898,6 +9053,12 @@ export interface components {
             approvals?: {
                 /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                 paused: boolean;
+            };
+            secrets?: {
+                agentUse: {
+                    /** @description Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default. */
+                    enabled: boolean;
+                };
             };
             notifications?: {
                 [key: string]: {
@@ -8982,6 +9143,11 @@ export interface components {
             } | null;
             approvals?: {
                 paused?: boolean;
+            } | null;
+            secrets?: {
+                agentUse?: {
+                    enabled?: boolean;
+                };
             } | null;
             notifications?: {
                 [key: string]: {
@@ -9085,6 +9251,20 @@ export interface components {
                 maxOutputTokens: number | null;
                 /** @description Most a run may cost in US dollars. `null` sets no ceiling. */
                 maxCostUsd: number | null;
+            };
+            secrets: {
+                agentUse: {
+                    /** @description Deployment kill switch for the agent using stored secrets. Off by default. */
+                    enabled: boolean;
+                };
+                vault?: {
+                    /** @description The default Vault address owners connect to (`https://vault.example.test`). */
+                    baseUrl?: string | null;
+                    /** @description The OAuth client id Hexactra is registered as at that Vault. */
+                    clientId?: string | null;
+                    /** @description Vault host names exempt from the private-address check (https is still required). */
+                    allowedHosts?: string[];
+                };
             };
             storage: {
                 provider: string;
@@ -9315,6 +9495,20 @@ export interface components {
                 maxOutputTokens: number | null;
                 /** @description Most a run may cost in US dollars. `null` sets no ceiling. */
                 maxCostUsd: number | null;
+            };
+            secrets?: {
+                agentUse: {
+                    /** @description Deployment kill switch for the agent using stored secrets. Off by default. */
+                    enabled: boolean;
+                };
+                vault?: {
+                    /** @description The default Vault address owners connect to (`https://vault.example.test`). */
+                    baseUrl?: string | null;
+                    /** @description The OAuth client id Hexactra is registered as at that Vault. */
+                    clientId?: string | null;
+                    /** @description Vault host names exempt from the private-address check (https is still required). */
+                    allowedHosts?: string[];
+                };
             };
             storage?: {
                 provider: string;
@@ -9551,6 +9745,19 @@ export interface components {
                 maxOutputTokens?: number | null;
                 /** @description Most a run may cost in US dollars. `null` sets no ceiling. */
                 maxCostUsd?: number | null;
+            };
+            secrets?: {
+                agentUse?: {
+                    enabled?: boolean;
+                };
+                vault?: {
+                    /** @description The default Vault address owners connect to (`https://vault.example.test`). */
+                    baseUrl?: string | null;
+                    /** @description The OAuth client id Hexactra is registered as at that Vault. */
+                    clientId?: string | null;
+                    /** @description Vault host names exempt from the private-address check (https is still required). */
+                    allowedHosts?: string[];
+                };
             };
             storage?: {
                 provider?: string;
@@ -10059,6 +10266,12 @@ export interface components {
                 approvals?: {
                     /** @description When true, no saved approval matches: every question is asked again until it is turned off. */
                     paused: boolean;
+                };
+                secrets?: {
+                    agentUse: {
+                        /** @description Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default. */
+                        enabled: boolean;
+                    };
                 };
                 notifications?: {
                     [key: string]: {
@@ -14557,6 +14770,150 @@ export interface components {
             taskId?: string | null;
             /** @description Limit the rule to one chat. May be added; removing or changing a scope is refused. */
             conversationId?: string | null;
+        };
+        SecretsStatusResponseDto: {
+            agentUse: {
+                /** @description `secrets.agentUse.enabled` in the system settings (the administrator's kill switch, off by default). */
+                deployment: boolean;
+                /** @description Your own switch (off by default). */
+                user: boolean;
+                /** @description Both are on: the agent may look up and use your saved secrets. With either off, nothing is released, whatever Vault allows. */
+                effective: boolean;
+            };
+            providers: {
+                vault: {
+                    /** @constant */
+                    provider: "vault";
+                    /**
+                     * @description `not_configured`: no address, client id and secret yet. `needs_reconnect`: Vault refused the saved grant; connect again.
+                     * @enum {string}
+                     */
+                    status: "not_configured" | "disconnected" | "connected" | "needs_reconnect";
+                    /** @description The address, client id and client secret are all set (the owner's own or the deployment default). */
+                    configured: boolean;
+                    /**
+                     * @description Whose address and client id are used.
+                     * @enum {string}
+                     */
+                    source: "user" | "deployment" | "none";
+                    baseUrl: string | null;
+                    clientId: string | null;
+                    /** @description A client secret is stored (never returned). */
+                    hasClientSecret: boolean;
+                    /** @description The redirect URI the Vault must have registered for this client. */
+                    redirectUri: string;
+                    /** @description The scopes you consented to. */
+                    scopes: string[];
+                    vaultUserId: string | null;
+                    /**
+                     * @description Whether Vault's own agent access switch is on: from `whoami` or the last 403 `AGENT_ACCESS_DISABLED`.
+                     * @enum {string}
+                     */
+                    agentAccess: "on" | "off" | "unknown";
+                    connectedAt: string | null;
+                    lastUsedAt: string | null;
+                    /** @description The last successful call (the connection itself, or a lookup or release by the agent). */
+                    lastSuccessAt: string | null;
+                    /** @description A stable code, never a message. */
+                    lastErrorCode: string | null;
+                    /** @description A connection was started and its callback has not arrived. */
+                    connecting: boolean;
+                };
+            };
+        };
+        SaveVaultClientDto: {
+            /** @description The Vault address, `https://vault.example.test` (the Vault's own `APP_URL`). */
+            baseUrl: string;
+            /** @description The OAuth client id the Vault gave Hexactra. */
+            clientId: string;
+            /** @description The client secret. Write-only; omit it to keep the stored one. */
+            clientSecret?: string;
+        };
+        ConnectVaultResponseDto: {
+            /** @description Send the browser here: Vault's consent screen. The flow is bound to this browser by an HttpOnly cookie set on this response. */
+            authorizeUrl: string;
+            /** @description The flow must finish by then (10 minutes). */
+            expiresAt: string;
+        };
+        ConnectVaultDto: {
+            /** @description Also ask for `vault:items_write` (the agent may save and change logins). A new consent. Off by default. */
+            allowWrite?: boolean;
+            /** @description A path on this console to return to after the consent (default `/settings/secrets`). */
+            returnTo?: string;
+        };
+        DisconnectVaultResponseDto: {
+            /** @description Vault confirmed the revocation. `false`: it could not be asked; remove the app in Vault's Connected apps. The tokens here are deleted either way. */
+            revoked: boolean;
+            status: {
+                agentUse: {
+                    /** @description `secrets.agentUse.enabled` in the system settings (the administrator's kill switch, off by default). */
+                    deployment: boolean;
+                    /** @description Your own switch (off by default). */
+                    user: boolean;
+                    /** @description Both are on: the agent may look up and use your saved secrets. With either off, nothing is released, whatever Vault allows. */
+                    effective: boolean;
+                };
+                providers: {
+                    vault: {
+                        /** @constant */
+                        provider: "vault";
+                        /**
+                         * @description `not_configured`: no address, client id and secret yet. `needs_reconnect`: Vault refused the saved grant; connect again.
+                         * @enum {string}
+                         */
+                        status: "not_configured" | "disconnected" | "connected" | "needs_reconnect";
+                        /** @description The address, client id and client secret are all set (the owner's own or the deployment default). */
+                        configured: boolean;
+                        /**
+                         * @description Whose address and client id are used.
+                         * @enum {string}
+                         */
+                        source: "user" | "deployment" | "none";
+                        baseUrl: string | null;
+                        clientId: string | null;
+                        /** @description A client secret is stored (never returned). */
+                        hasClientSecret: boolean;
+                        /** @description The redirect URI the Vault must have registered for this client. */
+                        redirectUri: string;
+                        /** @description The scopes you consented to. */
+                        scopes: string[];
+                        vaultUserId: string | null;
+                        /**
+                         * @description Whether Vault's own agent access switch is on: from `whoami` or the last 403 `AGENT_ACCESS_DISABLED`.
+                         * @enum {string}
+                         */
+                        agentAccess: "on" | "off" | "unknown";
+                        connectedAt: string | null;
+                        lastUsedAt: string | null;
+                        /** @description The last successful call (the connection itself, or a lookup or release by the agent). */
+                        lastSuccessAt: string | null;
+                        /** @description A stable code, never a message. */
+                        lastErrorCode: string | null;
+                        /** @description A connection was started and its callback has not arrived. */
+                        connecting: boolean;
+                    };
+                };
+            };
+        };
+        DisconnectVaultDto: {
+            /** @description Also forget your own Vault address, client id and client secret. */
+            forgetClient?: boolean;
+        };
+        DefaultVaultClientViewResponseDto: {
+            baseUrl: string | null;
+            clientId: string | null;
+            hasClientSecret: boolean;
+            allowedHosts: string[];
+            /** @description The redirect URI to register at the Vault for this client. */
+            redirectUri: string;
+        };
+        DefaultVaultClientDto: {
+            /** @description The deployment default Vault address. `null` clears it. */
+            baseUrl?: string | null;
+            /** @description The default OAuth client id. `null` clears it. */
+            clientId?: string | null;
+            /** @description The default client secret. Write-only; omit it to keep the stored one. */
+            clientSecret?: string;
         };
         ConnectedAppListResponseDto: {
             /** @description `oauth_clients.id` */
@@ -37027,6 +37384,433 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    secrets_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SecretsStatusResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    secrets_saveClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveVaultClientDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["SecretsStatusResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `SECRETS_VAULT_DISCONNECT_FIRST`: the address or client id cannot change while connected. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `SECRETS_VAULT_URL_REFUSED`: not https, a private address, or user info in the URL (`details.reason`). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    secrets_connect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectVaultDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ConnectVaultResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `SECRETS_VAULT_NOT_CONFIGURED`: set the address, client id and client secret first. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `SECRETS_VAULT_URL_REFUSED`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `SECRETS_VAULT_CONNECT_FAILED`: the Vault did not answer as an OAuth server. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    secrets_callback: {
+        parameters: {
+            query?: {
+                code?: string;
+                state?: string;
+                error?: string;
+                error_description?: string;
+                iss?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Back to the page that started the connection (`/settings/secrets` by default) with `vault=connected`, or `vault=<reason>` (`denied`, `expired`, `state_invalid`, `binding_invalid`, `exchange_failed`, ...). */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    secrets_disconnect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisconnectVaultDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DisconnectVaultResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    secrets_getDefault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DefaultVaultClientViewResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    secrets_setDefault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DefaultVaultClientDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DefaultVaultClientViewResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `SECRETS_VAULT_URL_REFUSED`. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    secrets_removeDefault: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DefaultVaultClientViewResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {

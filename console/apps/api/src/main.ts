@@ -10,6 +10,7 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { APP_NAME, REPO_URL } from '@app/shared';
 import { verifyEncryptionKeyAtStartup } from '@marinoscar/platform-api/core';
+import { registerVaultCallbackLogRedaction } from './secrets/secrets.log-redaction';
 import { registerRequestSpanAttributes } from '@marinoscar/platform-api/otel-core';
 import { buildCorsOptions, isSameOriginOnly, registerPlatformDocs, resolveApiVersion, type PlatformOpenApiOptions } from '@marinoscar/platform-api/host';
 import { OAUTH_PUBLIC_CORS_PATHS, verifyTenancyModeAtStartup } from '@marinoscar/platform-api/identity';
@@ -67,6 +68,8 @@ export async function createApp(): Promise<NestFastifyApplication> {
     (client) => mcpMetrics.rateLimited({ keyKind: 'unauthenticated', client }),
   );
   registerMcpTransport(app.getHttpAdapter().getInstance(), app.get(ConfigService).get<string>('appUrl'), { unauthenticated });
+  // The OAuth callback's `code` and `state` stay out of the request log (E37.2).
+  registerVaultCallbackLogRedaction(app.getHttpAdapter().getInstance());
   await app.register(fastifyCookie, { secret: process.env.COOKIE_SECRET || process.env.JWT_SECRET });
   if (isSliceEnabled('storage')) {
     // The simple (single request) upload route reads multipart bodies; its size

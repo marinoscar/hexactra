@@ -6,6 +6,7 @@
 import type { CredentialPurposeDef } from '@marinoscar/platform-api/credentials';
 
 import { FABRIC_CREDENTIAL_PURPOSE } from '../../fabric/fabric.credentials';
+import { SECRETS_VAULT_CLIENT_SYSTEM_PURPOSE } from '../../secrets/secrets.credentials';
 
 /**
  * The minimal example: a secret the sample feature could keep for a webhook it
@@ -20,4 +21,4 @@ export const NOTES_WEBHOOK_CREDENTIAL_PURPOSE: CredentialPurposeDef = {
 };
 
 /** Every purpose this app adds. Append here. */
-export const APP_CREDENTIAL_PURPOSES: readonly CredentialPurposeDef[] = [NOTES_WEBHOOK_CREDENTIAL_PURPOSE, FABRIC_CREDENTIAL_PURPOSE];
+export const APP_CREDENTIAL_PURPOSES: readonly CredentialPurposeDef[] = [NOTES_WEBHOOK_CREDENTIAL_PURPOSE, FABRIC_CREDENTIAL_PURPOSE, SECRETS_VAULT_CLIENT_SYSTEM_PURPOSE];

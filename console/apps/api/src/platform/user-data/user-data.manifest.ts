@@ -49,6 +49,7 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
   { model: 'McpActivity', category: 'browser-tasks' },
   { model: 'Memory', category: 'memories' },
   { model: 'ApprovalRule', category: 'browser-tasks' },
+  { model: 'SecretsConnection', category: 'credentials' },
 ];
 
 /** Narrow scopes, such as "delete my notes" (none by default: the built-in scopes cover every category). */

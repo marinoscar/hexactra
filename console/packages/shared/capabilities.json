@@ -1048,6 +1048,68 @@
         "none": "The TUI is for watching and answering; use the web app"
       },
       "web": "/settings/approvals"
+    },
+    {
+      "id": "secrets.status",
+      "description": "Status of the owner's secrets providers: Vault connected or not, scopes, last successful call, last error code, Vault's agent access switch, and the two Hexactra kill switches (never a token or a secret)",
+      "rest": [
+        "GET /api/secrets/status"
+      ],
+      "cli": {
+        "none": "Deliberate for now: connecting a Vault is an owner act in the signed-in web app; the CLI gets a status command with the Secrets page (E37.4)"
+      },
+      "mcp": {
+        "none": "Deliberate: a hosted AI app must not read or change how the owner's secrets are connected (E37.2)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; use the web app"
+      },
+      "web": {
+        "none": "The Secrets page is E37.4; until it ships, connect from the API (the status route carries the redirect URI)"
+      }
+    },
+    {
+      "id": "secrets.vault.connect",
+      "description": "Connect or disconnect the owner's Vault with OAuth (the consent happens at Vault), and set the owner's own Vault address, client id and client secret",
+      "rest": [
+        "PUT /api/secrets/vault/client",
+        "POST /api/secrets/vault/connect",
+        "GET /api/secrets/vault/callback",
+        "POST /api/secrets/vault/disconnect"
+      ],
+      "cli": {
+        "none": "Deliberate: the consent screen is a browser flow and the client secret is write-only; a personal access token must not rewire the owner's secrets provider"
+      },
+      "mcp": {
+        "none": "Deliberate: a hosted AI app must never connect, change or disconnect the owner's secrets provider (E37.2)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; use the web app"
+      },
+      "web": {
+        "none": "The Secrets page is E37.4; until it ships, connect from the API (the status route carries the redirect URI)"
+      }
+    },
+    {
+      "id": "secrets.vault.default",
+      "description": "Administrator: the deployment default Vault address, OAuth client id and client secret, so owners only press Connect",
+      "rest": [
+        "GET /api/secrets/vault/default-client",
+        "PUT /api/secrets/vault/default-client",
+        "DELETE /api/secrets/vault/default-client"
+      ],
+      "cli": {
+        "none": "Deliberate: an administrator sets it in Administration; the client secret is write-only"
+      },
+      "mcp": {
+        "none": "Deliberate: no MCP tool changes deployment secrets configuration"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; use the web app"
+      },
+      "web": {
+        "none": "The Secrets administration card is E37.4; until it ships, use the API"
+      }
     }
   ]
 }

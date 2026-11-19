@@ -17,6 +17,8 @@ export const RUN_RETENTION_NOTICE_EVENT = 'runs.retention_notice';
 export const RUN_OVER_BUDGET_EVENT = 'runs.over_budget';
 /** Steps of a run went ahead on saved approvals (#555): once, at the end of the run. */
 export const RUN_SAVED_APPROVALS_EVENT = 'runs.saved_approvals_used';
+/** The owner's Vault refused the saved grant (revoked, replayed or expired) and must be connected again (E37.2): once per episode. */
+export const SECRETS_NEEDS_RECONNECT_EVENT = 'secrets.needs_reconnect';
 
 const str = (d: unknown, k: string) => (typeof (d as Record<string, unknown>)[k] === 'string' ? String((d as Record<string, unknown>)[k]) : '');
 const trim = (s: string, n: number) => (s.length > n ? `${s.slice(0, n)}…` : s);
@@ -79,6 +81,11 @@ const savedApprovals: BrowserNotificationTemplate = (d) => ({
   title: 'Went ahead on a saved approval',
   body: trim(str(d, 'line') || 'Steps of a run went ahead on your saved approvals.', 180),
   link: `/runs/${str(d, 'runId')}`,
+});
+const secretsNeedsReconnect: BrowserNotificationTemplate = () => ({
+  title: 'Reconnect your Vault',
+  body: 'Vault no longer accepts the connection, so agents cannot use your saved logins. Connect it again in Settings → Secrets.',
+  link: '/settings/secrets',
 });
 /** Where a failing-schedule notice leads: the task's schedules (`/tasks/:id#schedule`); the Tasks list for a notice without a task id. */
 export function failingScheduleLink(taskId: string | null | undefined): string {
@@ -183,6 +190,16 @@ export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
     },
     browserTemplate: savedApprovals,
   },
+  {
+    event: {
+      key: SECRETS_NEEDS_RECONNECT_EVENT,
+      label: 'Vault needs to be reconnected',
+      description: 'Once, when Vault stops accepting the connection (you removed the app in Vault, or its sign-in expired), so agents can no longer use your saved logins.',
+      channels: ['browser', ...PUSH],
+      defaultEnabled: true,
+    },
+    browserTemplate: secretsNeedsReconnect,
+  },
 ];
 
 /**
@@ -235,6 +252,7 @@ export const hexactraPushPayload: PushPayloadHook = (event, data) => {
   if (event.key === RUN_FINISHED_EVENT) return { tag: runId ? `run-${runId}` : 'run', urgency: str(data, 'status') === 'failed' ? 'high' : 'normal' };
   if (event.key === RUN_OVER_BUDGET_EVENT) return { tag: runId ? `run-${runId}` : 'run', urgency: 'normal' };
   if (event.key === RUN_SAVED_APPROVALS_EVENT) return { tag: runId ? `approvals-${runId}`.slice(0, 64) : 'approvals', urgency: 'normal' };
+  if (event.key === SECRETS_NEEDS_RECONNECT_EVENT) return { tag: 'secrets-reconnect', urgency: 'normal' };
   if (event.key === SCHEDULE_FAILING_EVENT) return { tag: `schedule-${str(data, 'scheduleId') || 'failing'}`, urgency: 'normal' };
   return null;
 };

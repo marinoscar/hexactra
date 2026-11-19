@@ -29757,6 +29757,664 @@
         }
       }
     },
+    "/api/secrets/status": {
+      "get": {
+        "description": "Whether your Vault is connected (`status`), the scopes you consented to, the last successful call, the last error `code` (a stable code, never a message), whether Vault's own agent access switch is on (`agentAccess`), and the two Hexactra switches (`agentUse`: the deployment's and yours, both off by default; both must be on for the agent to look up or use anything). Never a token, a client secret or a login.\n\n**Requires:** authentication, plus permission `secrets:read`.",
+        "operationId": "secrets_status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SecretsStatusResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Status of your secrets providers",
+        "tags": [
+          "Secrets"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "secrets:read"
+          ]
+        }
+      }
+    },
+    "/api/secrets/vault/client": {
+      "put": {
+        "description": "Your own entries; an administrator may set a deployment default so you only press Connect. The client secret is write-only (omit it to keep the stored one). The address is checked against private-address rules (https only; loopback http in development) and again on every call.\n\n**Requires:** authentication, plus permission `secrets:write`.",
+        "operationId": "secrets_saveClient",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveVaultClientDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SecretsStatusResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`SECRETS_VAULT_DISCONNECT_FIRST`: the address or client id cannot change while connected."
+          },
+          "422": {
+            "description": "`SECRETS_VAULT_URL_REFUSED`: not https, a private address, or user info in the URL (`details.reason`)."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Set your Vault address, client id and client secret",
+        "tags": [
+          "Secrets"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "secrets:write"
+          ]
+        }
+      }
+    },
+    "/api/secrets/vault/connect": {
+      "post": {
+        "description": "Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` (a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.\n\n**Requires:** authentication, plus permission `secrets:write`.",
+        "operationId": "secrets_connect",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectVaultDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConnectVaultResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`SECRETS_VAULT_NOT_CONFIGURED`: set the address, client id and client secret first."
+          },
+          "422": {
+            "description": "`SECRETS_VAULT_URL_REFUSED`."
+          },
+          "502": {
+            "description": "`SECRETS_VAULT_CONNECT_FAILED`: the Vault did not answer as an OAuth server."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Start connecting your Vault (OAuth 2.1 authorization code with PKCE)",
+        "tags": [
+          "Secrets"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "secrets:write"
+          ]
+        }
+      }
+    },
+    "/api/secrets/vault/callback": {
+      "get": {
+        "description": "The redirect URI to register at the Vault (`/api/secrets/vault/callback` under this console's address). Not called by API clients.",
+        "operationId": "secrets_callback",
+        "parameters": [
+          {
+            "name": "code",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 4096,
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "name": "error",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "name": "error_description",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 1000,
+              "type": "string"
+            }
+          },
+          {
+            "name": "iss",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 2048,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Back to the page that started the connection (`/settings/secrets` by default) with `vault=connected`, or `vault=<reason>` (`denied`, `expired`, `state_invalid`, `binding_invalid`, `exchange_failed`, ...)."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Vault redirects the browser here after the consent",
+        "tags": [
+          "Secrets"
+        ]
+      }
+    },
+    "/api/secrets/vault/disconnect": {
+      "post": {
+        "description": "Revokes the grant at Vault (`revoked: false` when Vault could not be asked: remove the app in its Connected apps), deletes the stored tokens, tells the fabric to forget the provider and marks the connection disconnected. A run that is using it falls back to asking you. `forgetClient` also forgets your own address, client id and client secret.\n\n**Requires:** authentication, plus permission `secrets:write`.",
+        "operationId": "secrets_disconnect",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisconnectVaultDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DisconnectVaultResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Disconnect your Vault",
+        "tags": [
+          "Secrets"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "secrets:write"
+          ]
+        }
+      }
+    },
+    "/api/secrets/vault/default-client": {
+      "get": {
+        "description": "Address, client id and whether a client secret is stored (never the secret), plus the redirect URI to register at the Vault.\n\n**Requires:** authentication, plus permission `system_settings:read`.",
+        "operationId": "secrets_getDefault",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DefaultVaultClientViewResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The deployment default Vault client",
+        "tags": [
+          "Secrets"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:read"
+          ]
+        }
+      },
+      "put": {
+        "description": "So owners only press Connect. The client secret is write-only. An owner's own entries take precedence.\n\n**Requires:** authentication, plus permission `system_settings:write`.",
+        "operationId": "secrets_setDefault",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DefaultVaultClientDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DefaultVaultClientViewResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`SECRETS_VAULT_URL_REFUSED`."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Set the deployment default Vault client",
+        "tags": [
+          "Secrets"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:write"
+          ]
+        }
+      },
+      "delete": {
+        "description": "Removes the default address, client id and client secret. Existing connections and owners' own entries are untouched.\n\n**Requires:** authentication, plus permission `system_settings:write`.",
+        "operationId": "secrets_removeDefault",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/DefaultVaultClientViewResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Remove the deployment default Vault client",
+        "tags": [
+          "Secrets"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "system_settings:write"
+          ]
+        }
+      }
+    },
     "/api/connected-apps": {
       "get": {
         "description": "Your active OAuth grants to the MCP endpoint, one per app, with the scopes in words, your limits for the app and its usage over 30 days (counted from runs).\n\n**Requires:** authentication, plus permission `connected_apps:read`.",
@@ -40410,6 +41068,13 @@
               "CHAT_NOT_FOUND",
               "CHAT_ARCHIVED",
               "CHAT_RUN_LIVE",
+              "SECRETS_VAULT_NOT_CONFIGURED",
+              "SECRETS_VAULT_URL_REFUSED",
+              "SECRETS_VAULT_DISCONNECT_FIRST",
+              "SECRETS_VAULT_NOT_CONNECTED",
+              "SECRETS_VAULT_NEEDS_RECONNECT",
+              "SECRETS_VAULT_UNAVAILABLE",
+              "SECRETS_VAULT_CONNECT_FAILED",
               "ERROR"
             ]
           },
@@ -43376,6 +44041,26 @@
               "paused"
             ]
           },
+          "secrets": {
+            "type": "object",
+            "properties": {
+              "agentUse": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default."
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              }
+            },
+            "required": [
+              "agentUse"
+            ]
+          },
           "notifications": {
             "type": "object",
             "propertyNames": {
@@ -43783,6 +44468,26 @@
             },
             "required": [
               "paused"
+            ]
+          },
+          "secrets": {
+            "type": "object",
+            "properties": {
+              "agentUse": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default."
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              }
+            },
+            "required": [
+              "agentUse"
             ]
           },
           "notifications": {
@@ -44229,6 +44934,26 @@
                 "properties": {
                   "paused": {
                     "type": "boolean"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "secrets": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "agentUse": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean"
+                      }
+                    }
                   }
                 }
               },
@@ -44848,6 +45573,67 @@
               "maxCostUsd"
             ]
           },
+          "secrets": {
+            "type": "object",
+            "properties": {
+              "agentUse": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Deployment kill switch for the agent using stored secrets. Off by default."
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              },
+              "vault": {
+                "type": "object",
+                "properties": {
+                  "baseUrl": {
+                    "description": "The default Vault address owners connect to (`https://vault.example.test`).",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 2048
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "clientId": {
+                    "description": "The OAuth client id Hexactra is registered as at that Vault.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "allowedHosts": {
+                    "description": "Vault host names exempt from the private-address check (https is still required).",
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 253,
+                      "pattern": "^[a-z0-9.-]+$"
+                    }
+                  }
+                }
+              }
+            },
+            "required": [
+              "agentUse"
+            ]
+          },
           "storage": {
             "type": "object",
             "properties": {
@@ -45454,6 +46240,7 @@
           "browserAgentTiers",
           "agentPricing",
           "browserAgentCeilings",
+          "secrets",
           "storage",
           "notifications",
           "ai",
@@ -45919,6 +46706,67 @@
               "maxInputTokens",
               "maxOutputTokens",
               "maxCostUsd"
+            ]
+          },
+          "secrets": {
+            "type": "object",
+            "properties": {
+              "agentUse": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "Deployment kill switch for the agent using stored secrets. Off by default."
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              },
+              "vault": {
+                "type": "object",
+                "properties": {
+                  "baseUrl": {
+                    "description": "The default Vault address owners connect to (`https://vault.example.test`).",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 2048
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "clientId": {
+                    "description": "The OAuth client id Hexactra is registered as at that Vault.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "allowedHosts": {
+                    "description": "Vault host names exempt from the private-address check (https is still required).",
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 253,
+                      "pattern": "^[a-z0-9.-]+$"
+                    }
+                  }
+                }
+              }
+            },
+            "required": [
+              "agentUse"
             ]
           },
           "storage": {
@@ -47027,6 +47875,60 @@
                   }
                 ],
                 "description": "Most a run may cost in US dollars. `null` sets no ceiling."
+              }
+            }
+          },
+          "secrets": {
+            "type": "object",
+            "properties": {
+              "agentUse": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                }
+              },
+              "vault": {
+                "type": "object",
+                "properties": {
+                  "baseUrl": {
+                    "description": "The default Vault address owners connect to (`https://vault.example.test`).",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 2048
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "clientId": {
+                    "description": "The OAuth client id Hexactra is registered as at that Vault.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "allowedHosts": {
+                    "description": "Vault host names exempt from the private-address check (https is still required).",
+                    "maxItems": 20,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 253,
+                      "pattern": "^[a-z0-9.-]+$"
+                    }
+                  }
+                }
               }
             }
           },
@@ -49319,6 +50221,26 @@
                 },
                 "required": [
                   "paused"
+                ]
+              },
+              "secrets": {
+                "type": "object",
+                "properties": {
+                  "agentUse": {
+                    "type": "object",
+                    "properties": {
+                      "enabled": {
+                        "type": "boolean",
+                        "description": "Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default."
+                      }
+                    },
+                    "required": [
+                      "enabled"
+                    ]
+                  }
+                },
+                "required": [
+                  "agentUse"
                 ]
               },
               "notifications": {
@@ -70456,6 +71378,517 @@
                 "type": "null"
               }
             ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "SecretsStatusResponseDto": {
+        "type": "object",
+        "properties": {
+          "agentUse": {
+            "type": "object",
+            "properties": {
+              "deployment": {
+                "type": "boolean",
+                "description": "`secrets.agentUse.enabled` in the system settings (the administrator's kill switch, off by default)."
+              },
+              "user": {
+                "type": "boolean",
+                "description": "Your own switch (off by default)."
+              },
+              "effective": {
+                "type": "boolean",
+                "description": "Both are on: the agent may look up and use your saved secrets. With either off, nothing is released, whatever Vault allows."
+              }
+            },
+            "required": [
+              "deployment",
+              "user",
+              "effective"
+            ]
+          },
+          "providers": {
+            "type": "object",
+            "properties": {
+              "vault": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "const": "vault"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_configured",
+                      "disconnected",
+                      "connected",
+                      "needs_reconnect"
+                    ],
+                    "description": "`not_configured`: no address, client id and secret yet. `needs_reconnect`: Vault refused the saved grant; connect again."
+                  },
+                  "configured": {
+                    "type": "boolean",
+                    "description": "The address, client id and client secret are all set (the owner's own or the deployment default)."
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "deployment",
+                      "none"
+                    ],
+                    "description": "Whose address and client id are used."
+                  },
+                  "baseUrl": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "clientId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "hasClientSecret": {
+                    "type": "boolean",
+                    "description": "A client secret is stored (never returned)."
+                  },
+                  "redirectUri": {
+                    "type": "string",
+                    "description": "The redirect URI the Vault must have registered for this client."
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "The scopes you consented to."
+                  },
+                  "vaultUserId": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "agentAccess": {
+                    "type": "string",
+                    "enum": [
+                      "on",
+                      "off",
+                      "unknown"
+                    ],
+                    "description": "Whether Vault's own agent access switch is on: from `whoami` or the last 403 `AGENT_ACCESS_DISABLED`."
+                  },
+                  "connectedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "description": "ISO 8601 timestamp"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lastUsedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "description": "ISO 8601 timestamp"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "lastSuccessAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "description": "ISO 8601 timestamp"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "description": "The last successful call (the connection itself, or a lookup or release by the agent)."
+                  },
+                  "lastErrorCode": {
+                    "description": "A stable code, never a message.",
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "connecting": {
+                    "type": "boolean",
+                    "description": "A connection was started and its callback has not arrived."
+                  }
+                },
+                "required": [
+                  "provider",
+                  "status",
+                  "configured",
+                  "source",
+                  "baseUrl",
+                  "clientId",
+                  "hasClientSecret",
+                  "redirectUri",
+                  "scopes",
+                  "vaultUserId",
+                  "agentAccess",
+                  "connectedAt",
+                  "lastUsedAt",
+                  "lastSuccessAt",
+                  "lastErrorCode",
+                  "connecting"
+                ]
+              }
+            },
+            "required": [
+              "vault"
+            ]
+          }
+        },
+        "required": [
+          "agentUse",
+          "providers"
+        ]
+      },
+      "SaveVaultClientDto": {
+        "type": "object",
+        "properties": {
+          "baseUrl": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "description": "The Vault address, `https://vault.example.test` (the Vault's own `APP_URL`)."
+          },
+          "clientId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "The OAuth client id the Vault gave Hexactra."
+          },
+          "clientSecret": {
+            "description": "The client secret. Write-only; omit it to keep the stored one.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "baseUrl",
+          "clientId"
+        ],
+        "additionalProperties": false
+      },
+      "ConnectVaultResponseDto": {
+        "type": "object",
+        "properties": {
+          "authorizeUrl": {
+            "type": "string",
+            "description": "Send the browser here: Vault's consent screen. The flow is bound to this browser by an HttpOnly cookie set on this response."
+          },
+          "expiresAt": {
+            "type": "string",
+            "description": "The flow must finish by then (10 minutes)."
+          }
+        },
+        "required": [
+          "authorizeUrl",
+          "expiresAt"
+        ]
+      },
+      "ConnectVaultDto": {
+        "type": "object",
+        "properties": {
+          "allowWrite": {
+            "description": "Also ask for `vault:items_write` (the agent may save and change logins). A new consent. Off by default.",
+            "type": "boolean"
+          },
+          "returnTo": {
+            "description": "A path on this console to return to after the consent (default `/settings/secrets`).",
+            "type": "string",
+            "maxLength": 200
+          }
+        },
+        "additionalProperties": false
+      },
+      "DisconnectVaultResponseDto": {
+        "type": "object",
+        "properties": {
+          "revoked": {
+            "type": "boolean",
+            "description": "Vault confirmed the revocation. `false`: it could not be asked; remove the app in Vault's Connected apps. The tokens here are deleted either way."
+          },
+          "status": {
+            "type": "object",
+            "properties": {
+              "agentUse": {
+                "type": "object",
+                "properties": {
+                  "deployment": {
+                    "type": "boolean",
+                    "description": "`secrets.agentUse.enabled` in the system settings (the administrator's kill switch, off by default)."
+                  },
+                  "user": {
+                    "type": "boolean",
+                    "description": "Your own switch (off by default)."
+                  },
+                  "effective": {
+                    "type": "boolean",
+                    "description": "Both are on: the agent may look up and use your saved secrets. With either off, nothing is released, whatever Vault allows."
+                  }
+                },
+                "required": [
+                  "deployment",
+                  "user",
+                  "effective"
+                ]
+              },
+              "providers": {
+                "type": "object",
+                "properties": {
+                  "vault": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string",
+                        "const": "vault"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "not_configured",
+                          "disconnected",
+                          "connected",
+                          "needs_reconnect"
+                        ],
+                        "description": "`not_configured`: no address, client id and secret yet. `needs_reconnect`: Vault refused the saved grant; connect again."
+                      },
+                      "configured": {
+                        "type": "boolean",
+                        "description": "The address, client id and client secret are all set (the owner's own or the deployment default)."
+                      },
+                      "source": {
+                        "type": "string",
+                        "enum": [
+                          "user",
+                          "deployment",
+                          "none"
+                        ],
+                        "description": "Whose address and client id are used."
+                      },
+                      "baseUrl": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "clientId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "hasClientSecret": {
+                        "type": "boolean",
+                        "description": "A client secret is stored (never returned)."
+                      },
+                      "redirectUri": {
+                        "type": "string",
+                        "description": "The redirect URI the Vault must have registered for this client."
+                      },
+                      "scopes": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "The scopes you consented to."
+                      },
+                      "vaultUserId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "agentAccess": {
+                        "type": "string",
+                        "enum": [
+                          "on",
+                          "off",
+                          "unknown"
+                        ],
+                        "description": "Whether Vault's own agent access switch is on: from `whoami` or the last 403 `AGENT_ACCESS_DISABLED`."
+                      },
+                      "connectedAt": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "description": "ISO 8601 timestamp"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "lastUsedAt": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "description": "ISO 8601 timestamp"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "lastSuccessAt": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "description": "ISO 8601 timestamp"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "The last successful call (the connection itself, or a lookup or release by the agent)."
+                      },
+                      "lastErrorCode": {
+                        "description": "A stable code, never a message.",
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "connecting": {
+                        "type": "boolean",
+                        "description": "A connection was started and its callback has not arrived."
+                      }
+                    },
+                    "required": [
+                      "provider",
+                      "status",
+                      "configured",
+                      "source",
+                      "baseUrl",
+                      "clientId",
+                      "hasClientSecret",
+                      "redirectUri",
+                      "scopes",
+                      "vaultUserId",
+                      "agentAccess",
+                      "connectedAt",
+                      "lastUsedAt",
+                      "lastSuccessAt",
+                      "lastErrorCode",
+                      "connecting"
+                    ]
+                  }
+                },
+                "required": [
+                  "vault"
+                ]
+              }
+            },
+            "required": [
+              "agentUse",
+              "providers"
+            ]
+          }
+        },
+        "required": [
+          "revoked",
+          "status"
+        ]
+      },
+      "DisconnectVaultDto": {
+        "type": "object",
+        "properties": {
+          "forgetClient": {
+            "description": "Also forget your own Vault address, client id and client secret.",
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DefaultVaultClientViewResponseDto": {
+        "type": "object",
+        "properties": {
+          "baseUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "clientId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hasClientSecret": {
+            "type": "boolean"
+          },
+          "allowedHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "redirectUri": {
+            "type": "string",
+            "description": "The redirect URI to register at the Vault for this client."
+          }
+        },
+        "required": [
+          "baseUrl",
+          "clientId",
+          "hasClientSecret",
+          "allowedHosts",
+          "redirectUri"
+        ]
+      },
+      "DefaultVaultClientDto": {
+        "type": "object",
+        "properties": {
+          "baseUrl": {
+            "description": "The deployment default Vault address. `null` clears it.",
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048,
+                "description": "The Vault address, `https://vault.example.test` (the Vault's own `APP_URL`)."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clientId": {
+            "description": "The default OAuth client id. `null` clears it.",
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clientSecret": {
+            "description": "The default client secret. Write-only; omit it to keep the stored one.",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
           }
         },
         "additionalProperties": false
