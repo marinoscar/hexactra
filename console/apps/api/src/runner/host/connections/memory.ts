@@ -40,4 +40,6 @@ export interface RunConnectionsInfo {
   needsBrowser: NeedsBrowser;
   /** The browser opens at its first use. */
   lazyBrowser: boolean;
+  /** How the model is told to ask the owner which account (a chat has `ask_user`, a run `request_human`). */
+  askWith?: 'request_human' | 'ask_user';
 }

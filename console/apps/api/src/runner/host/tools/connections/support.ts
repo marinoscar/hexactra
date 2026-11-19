@@ -82,8 +82,9 @@ export type Pick = ({ ok: true } & Picked) | { ok: false; text: string };
 const NOT_ALLOWED = 'This task is not allowed to do that with this account.';
 
 /** The words that tell the model to ask the owner which account, with the labels as a choice. */
-function askWhich(labels: string[]): string {
-  return `More than one account could do this: ${labels.map((l) => `"${l}"`).join(', ')}. Ask the owner which one: call request_human with kind "other", input "choice" and choices ${JSON.stringify(labels)}, then call this tool again with connection set to the one they choose. Do not pick one yourself.`;
+function askWhich(labels: string[], askWith: 'request_human' | 'ask_user'): string {
+  const how = askWith === 'ask_user' ? `call ask_user with the account labels as options ${JSON.stringify(labels)}` : `call request_human with kind "other", input "choice" and choices ${JSON.stringify(labels)}`;
+  return `More than one account could do this: ${labels.map((l) => `"${l}"`).join(', ')}. Ask the owner which one: ${how}, then call this tool again with connection set to the one they choose. Do not pick one yourself.`;
 }
 
 /**
@@ -118,7 +119,7 @@ export async function pickConnection(ctx: HostContext, ref: string | null | unde
   }
   const defaults = candidates.filter((p) => p.live.defaultFor.includes(groupOf(capability)));
   if (defaults.length === 1) return defaults[0]!;
-  return { ok: false, text: askWhich(candidates.map((p) => p.live.label)) };
+  return { ok: false, text: askWhich(candidates.map((p) => p.live.label), ctx.ext.connections.askWith ?? 'request_human') };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
