@@ -99,6 +99,7 @@ export class InboxController {
         denyLabel: q.denyLabel,
         rememberLabel: q.rememberLabel,
         rememberable: (q.rememberable as unknown as QuestionRememberable | null) ?? null,
+        fields: q.fields ?? null,
         risk: (q.risk as 'low' | 'high' | null) ?? null,
         pageTitle: q.pageTitle,
         viewerUrl: q.viewerUrl,

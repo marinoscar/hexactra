@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { QuestionsModule } from '../questions/questions.module';
 import { PoliciesModule } from '../policies/policies.module';
 import { TasksModule } from '../tasks/tasks.module';
 import { SchedulesController } from './schedules.controller';
@@ -8,7 +9,7 @@ import { SchedulesService } from './schedules.service';
 
 /** Task schedules: a per-minute tick starts due runs of the goal runner. */
 @Module({
-  imports: [TasksModule, PoliciesModule],
+  imports: [TasksModule, PoliciesModule, QuestionsModule],
   controllers: [SchedulesController],
   providers: [SchedulesService, SchedulesTickHandler, SchedulesTickTask],
   exports: [SchedulesService],

@@ -115,7 +115,7 @@ describe('"Don\'t ask again" (#555)', () => {
   const brokers = new WeakMap<object, QuestionsService>();
   const brokerOf = (fabric: ReturnType<typeof fakeFabric>) => {
     let b = brokers.get(fabric);
-    if (!b) brokers.set(fabric, (b = new QuestionsService(prisma, fabric.client, { enqueue: async () => undefined } as never, new QuestionEvents(), undefined, approvals)));
+    if (!b) brokers.set(fabric, (b = new QuestionsService(prisma, fabric.client, { enqueue: async () => undefined } as never, new QuestionEvents(), undefined, undefined, approvals)));
     return b;
   };
   /** Questions answered with a fabric that answers every handoff (for questions whose run is not driven here). */
@@ -203,15 +203,33 @@ describe('"Don\'t ask again" (#555)', () => {
     }
   });
 
-  it('with an amount limit, an amount the server does not know asks', async () => {
+  it('with maxAmount 50: the money input 25 passes, 75 asks, an unknown amount asks (#552 inputs)', async () => {
     const o = await owner('amount');
     const { ruleId } = await rememberPay(o, { enabled: true, maxAmount: 50 });
     expect(Number((await prisma.approvalRule.findUniqueOrThrow({ where: { id: ruleId } })).maxAmount)).toBe(50);
-    const fabric = fakeFabric(SITE);
-    const run = await o.newRun();
-    const { ai, outputs } = scriptedAi([[['click', { selector: '#pay', reason: 'pay $25 as the owner said' }]]]);
-    await runnerOf(fabric, ai).advance(run.id, o.userId, null);
-    expect(outputs[0]).toMatch(/^Refused:/);
+    // The task's one money parameter (#552); the run's inputs hold the owner's value.
+    await o.db.task.update({ where: { id: o.task.id }, data: { goal: 'Pay {{Amount}} on the bill', parameters: [{ key: 'amount', label: 'Amount', type: 'money', required: true }] as never } });
+    const runWith = (amount: string | null) =>
+      o.db.run.create({
+        data: { userId: o.userId, taskId: o.task.id, goal: 'Pay the bill', ...(amount === null ? {} : { inputs: { values: { amount: { value: amount, source: 'provided', label: 'Amount' } }, sensitive: [] } as never }) },
+      });
+    const tryPay = async (run: { id: string }) => {
+      const fabric = fakeFabric(SITE);
+      // The model's words name an amount: they are never read.
+      const { ai, outputs } = scriptedAi([[['click', { selector: '#pay', reason: 'pay $25 as the owner said' }]]]);
+      await runnerOf(fabric, ai).advance(run.id, o.userId, null);
+      return { out: outputs[0]!, clicks: fabric.actions.filter((a) => a.type === 'click').length };
+    };
+    const at25 = await tryPay(await runWith('25'));
+    expect(at25.out).not.toMatch(/Refused/);
+    expect(at25.clicks).toBe(1);
+    const at75 = await tryPay(await runWith('75'));
+    expect(at75.out).toMatch(/^Refused:/);
+    expect(at75.clicks).toBe(0);
+    const unknown = await tryPay(await runWith(null));
+    expect(unknown.out).toMatch(/^Refused:/);
+    expect(unknown.clicks).toBe(0);
+    expect((await prisma.approvalRule.findUniqueOrThrow({ where: { id: ruleId } })).useCount).toBe(1);
   });
 
   it('a rule scoped to this task does not apply to another task or a chat; expired, disabled and paused rules ask again', async () => {

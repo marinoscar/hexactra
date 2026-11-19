@@ -18,6 +18,8 @@ import { TasksService } from '../tasks/tasks.service';
 import { withCost } from '../tasks/run-cost';
 import { enqueueGoalRun } from './goal-runner.jobs';
 import { RunResponseDto } from '../openapi/console.responses';
+import { TaskRunStarter } from '../questions/task-run-starter';
+import { taskInputsField } from '../tasks/task-params.schemas';
 
 const startRunSchema = z.object({
   goal: z.string().trim().min(1).max(4000),
@@ -31,6 +33,12 @@ class StartRunDto extends createZodDto(startRunSchema) {}
 
 const runTaskSchema = z.object({
   policyId: policyRefSchema.optional().describe("Run under this agent policy for this run only (\"Run with...\"), instead of the schedule's, the task's or the user's default."),
+  inputs: taskInputsField
+    .optional()
+    .describe(
+      "Values for the task's `{{Name}}` parameters, by key or display name (#552). Unknown names are a 400 `UNKNOWN_INPUT`, invalid values a 400 `INVALID_INPUT` with `details.issues`, a sensitive parameter a 400 `SENSITIVE_INPUT`. " +
+        'A required value still missing after the defaults: the run is created `waiting_human` with one `form` question for every missing value, and starts once it is answered.',
+    ),
 });
 class RunTaskDto extends createZodDto(runTaskSchema) {}
 
@@ -50,6 +58,7 @@ export class RunsStartController {
     private readonly policies: PoliciesService,
     private readonly clients: RequestClientService,
     private readonly apps: ConnectedAppsService,
+    private readonly starter: TaskRunStarter,
   ) {}
 
   /** Run a saved task now. */
@@ -63,26 +72,23 @@ export class RunsStartController {
     if (!parsed.success) throw new BadRequestException({ code: 'VALIDATION_ERROR', message: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ') });
     const task = await this.tasks.getTask(user.id, id);
     await this.policies.assertAssignable(user.id, parsed.data.policyId);
+    // The inputs are checked before anything else is decided: a bad value writes nothing (#552).
+    await this.starter.checkInputs(user.id, task, parsed.data.inputs);
     // Who is starting it (#464), and the limits of the AI app behind the request: a refusal writes nothing.
     const client = await this.clients.resolve(req);
     const decision = await this.apps.checkStart(user.id, client, { kind: 'run', policyId: parsed.data.policyId, taskPolicyRef: task.policyRef, allowedDomains: task.allowedDomains });
     const policyId = parsed.data.policyId ?? decision.policyOverride;
-    const run = await this.prisma.forUser({ userId: user.id }).run.create({
+    // The task's parameters are filled in by the server; missing values make the run wait on one form (#552).
+    const { run } = await this.starter.start(user, task, {
+      inputs: parsed.data.inputs,
+      reason: 'run_started',
       data: {
-        userId: user.id,
-        taskId: task.id,
-        goal: task.goal,
-        profile: task.profile,
-        hostId: task.hostId,
-        hostFallback: task.hostFallback,
         trigger: 'manual',
         ...clientColumns(client),
         ...(decision.appLimits ? { appLimits: decision.appLimits as never } : {}),
         ...(policyId ? { policyRef: policyId, policySource: 'run' as const } : {}),
       },
-      omit: { transcript: true },
     });
-    await enqueueGoalRun(this.jobs, { runId: run.id, userId: user.id, orgId: user.activeOrgId ?? null }, 'run_started');
     await this.apps.afterStart(user.id, client, run);
     return runView(withCost(run));
   }

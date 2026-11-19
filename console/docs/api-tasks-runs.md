@@ -82,6 +82,51 @@ A schedule that is created without `timezone` gets the owner's profile time zone
 
 `GET /api/tasks/:id/stats?days=30` (`runs:read`; 7 to 90 days, today included) returns `totals` (runs, outcomes, `successRate`, `costUsd`, `costKnown`), `avgDurationSeconds`, `p95DurationSeconds`, `avgSteps`, `avgCostPerSuccessUsd`, a `series` with one entry per day (zeros included) and `stopReasons`. Days are bucketed in the viewer's time zone (the same rule as above). `costUsd` is `null` when no run of the period has a cost, and `costKnown` is `false` when a run could not be priced.
 
+### Tasks with parameters
+
+A goal can hold named blanks (E36.6, #552). Running the task collects every missing value at once, checks it, fills the goal in and only then starts the agent: the model never asks for them one by one.
+
+```
+Send ${{Amount}} today to {{Phone Number}} using Zelle on my Bank of America account using the checking account ending in {{Account Last 4 Digits}}
+```
+
+**Syntax** (one parser for the API, the web form and the CLI: `packages/shared/task-params.js`):
+
+- A placeholder is `{{Name}}`: letters, digits, spaces, `_` and `-`, 1 to 40 characters. Its **key** is the name lower-cased with spaces, `_` and `-` as one `_` (`Phone Number` → `phone_number`). The same key may appear more than once.
+- Anything else between braces is text. `\{{` is a literal `{{`. `${{Amount}}` with `25` reads `$25`.
+- A `{{` that is never closed, an empty `{{ }}` or a name over 40 characters is a `400 INVALID_GOAL` naming the position. At most 20 parameters.
+
+**Definitions** (`parameters` on `POST /api/tasks` and `PATCH /api/tasks/:id`, returned on every task): `{ key, label, type, required, options?, help?, default?, constraints?, sensitive? }`.
+
+- The server reconciles them with the goal on every save: a placeholder without a definition gets one (`text`, required, labelled with its name); a definition without a placeholder is dropped. Changing the goal re-runs this.
+- `type`: `text`, `number`, `money` (a leading currency sign is dropped, so the goal's own `$` is not doubled), `date` (ISO, or `today` / `tomorrow` in the owner's time zone; the goal reads "Wednesday, November 18, 2026"), `choice` (2 to 50 `options`), `phone`, `email`.
+- `constraints`: `min`, `max`, `maxLength`, `pattern` (at most 200 characters; back-references and nested quantifiers such as `(a+)+` are refused so a pattern cannot hang the server).
+- `default`: `{ value }`, or `{ memory: { id, attribute } }`, resolved from the owner's memory when the run starts. It is read from the owner's **active** memory with that id ([memories.md](memories.md)), and the memory is marked used (`lastUsedAt`); the run records the source `memory`. A memory that is missing, archived or superseded, or one without that attribute, makes the value missing (it is then asked for).
+- `sensitive: true`: a value that must not be stored or shown to the model (a gift card code). It has no default, cannot be preset on a schedule and is never accepted from the API, the CLI or MCP (`400 SENSITIVE_INPUT`). The goal the model reads says `[provided: <label>]`; once the browser is open the runner asks for it as a `secret` request (answered in the signed-in console), the fabric keeps it and the agent types it with `type_handoff_secret(parameter)`. It is in no table row, step, run view or export.
+- Definition problems are `400 INVALID_PARAMETERS` with `details.issues` per key.
+
+**Starting a run with inputs.** `POST /api/tasks/:id/runs` takes `inputs: { <key or name>: value }`.
+
+- Unknown names are `400 UNKNOWN_INPUT` (so is any input on a task without parameters); an invalid value is `400 INVALID_INPUT` with `details.issues` per key. Nothing is written for a refused start.
+- Values come from `inputs`, then a schedule's presets, then the defaults. `runs.inputs` keeps each value with its source (`provided`, `default`, `memory`, `asked`, `schedule`); run views return them **masked** (#538), as `inputs: [{ key, label, value, source }]`.
+- `runs.goal` is the **rendered** goal: each value between the data markers `⟦ ⟧`, which the runner's instructions describe as data. The console shows the marked values masked; the model reads the real ones. A value is text only: it cannot add a placeholder, and nothing in it changes the task's allowed sites, policy or confirmation setting.
+- A task without parameters behaves exactly as before.
+
+**Missing values: one form, before the browser opens.** When a required value is still missing, the run is created `waiting_human` with one question of input `form`: `fields: [{ key, label, type, required, options?, help?, constraints? }]`. No browser session and no model call happen until it is answered, and the waiting time is not active time.
+
+- Answer it like any question: `POST /api/questions/:id/answer` with `{ outcome: "completed", fields: { amount: "25" } }`, or `POST /api/inbox/:runId/respond` with the same body. Every field is checked with the parameter rules; a bad answer is `400 INVALID_INPUT` with `details.issues` and the run keeps waiting. A good one fills the goal, moves the run to `queued` and starts it. The stored answer keeps the values masked.
+- Declined or expired (24 hours), the run ends `cancelled` with "The values were not provided."
+- Channels: answered in the signed-in web and Android app, the CLI, and by an AI app through `inbox_answer` with `fields` (a form never holds a sensitive field). Notifications and webhooks carry a link.
+
+**Schedules.** A schedule stores `inputs` (presets, checked like a run's). Saving, enabling or resuming a schedule whose task has a required parameter with no preset, no default and no memory is `400 SCHEDULE_INPUTS_MISSING`. If a value is missing at fire time anyway (a memory was deleted), the run waits on the form and the owner is notified.
+
+**Chat, CLI, SDK and MCP.**
+
+- Chat: the orchestrator's `run_task(task, inputs)` starts a saved task by name ("send Paula 25 with my Zelle task"); a missing value produces the same form in the thread.
+- CLI: `hexactra tasks run <task> --input amount=25 --input "Phone Number=555 010 6020"`; at a terminal, each missing value is prompted for. A sensitive parameter is never prompted: the CLI prints the console link.
+- SDK: `packages/sdk/src/examples/task-parameters.ts`.
+- MCP: `task_run` takes `inputs`; `tasks_list`, `task_create` and `task_update` return `parameters` with `has_default` and never a default's value; `schedule_create` takes `inputs`; `inbox_answer` takes `fields`. Scopes, effects and titles are unchanged.
+
 ## Runs
 
 The list, its filters and cursor, the counts, deleting and retention are in [runs.md](runs.md). In short:

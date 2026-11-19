@@ -4,6 +4,7 @@ import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
 import { policyRefSchema } from '../policies/policies.schemas';
+import { taskInputsField } from './task-params.schemas';
 
 /** Failed scheduled runs in a row after which a schedule is "failing": the owner is told, and the task list's `failing` filter matches. */
 export const FAILING_AFTER = 3;
@@ -22,6 +23,10 @@ export const taskScheduleItemSchema = z.object({
   enabled: z.boolean().optional().describe('Omitted: `true` for a new schedule, unchanged for an existing one.'),
   concurrency: z.enum(['skip', 'queue']).optional().describe('`skip` (default) skips a firing while an earlier run of the task is live; `queue` starts it anyway.'),
   policyId: policyRefSchema.nullable().optional().describe("Overrides the task's agent policy for this schedule's runs; `null` follows the task. Omitted on an existing schedule: unchanged."),
+  inputs: taskInputsField
+    .nullable()
+    .optional()
+    .describe("Preset values for the task's parameters (#552), by key or name. An enabled schedule needs a value (here, a default or a memory) for every required parameter: 400 `SCHEDULE_INPUTS_MISSING`. Omitted on an existing schedule: unchanged."),
 });
 export type TaskScheduleItem = z.infer<typeof taskScheduleItemSchema>;
 

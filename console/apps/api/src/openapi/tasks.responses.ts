@@ -21,6 +21,7 @@ export const taskSummaryScheduleSchema = z.object({
   consecutiveFailures: z.number().int().describe('Failed scheduled runs in a row; 3 or more is "failing"'),
   description: z.string().describe('The expression in words (English, 24-hour), e.g. "Monday to Friday at 09:00"; "Custom schedule (<expr>)" for one the builder does not write'),
   policyId: z.string().nullable().describe("Overrides the task's agent policy for this schedule's runs; null follows the task"),
+  inputs: z.record(z.string(), z.string()).nullable().optional().describe("Preset values for the task's parameters (#552), by key; null for none"),
 });
 
 export const taskSummarySchema = z

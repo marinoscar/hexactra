@@ -1,4 +1,5 @@
 import type { AgentPolicySpec, Tier } from './agent-policy.schema';
+import { maskRunGoal, runInputsView } from '../tasks/task-params';
 import { agentPolicySpecSchema } from './agent-policy.schema';
 import { builtinPolicy } from './builtin-policies';
 import { readConfirmedActions } from '../runner/confirmed-actions';
@@ -127,7 +128,12 @@ export function runView<R extends RunPolicyColumns>(run: R): Omit<R, 'policyRef'
   const snapshot = readSnapshot(policySnapshot);
   // A full run carries its confirmed steps as a list (#540), never null; a list row's count passes through.
   const confirmed = 'confirmedActions' in rest && typeof (rest as { confirmedActions?: unknown }).confirmedActions !== 'number' ? { confirmedActions: readConfirmedActions((rest as { confirmedActions?: unknown }).confirmedActions) } : {};
-  return { ...rest, ...confirmed, policy: summarize(snapshot), budget: snapshotBudgetView(snapshot, run), tier: runTierView(snapshot, run) };
+  // The goal and the task parameter values as a person reads them: each inserted value masked (#552, #538).
+  const shown = {
+    ...('goal' in rest && typeof (rest as { goal?: unknown }).goal === 'string' ? { goal: maskRunGoal((rest as { goal: string }).goal) } : {}),
+    ...('inputs' in rest ? { inputs: runInputsView((rest as { inputs?: unknown }).inputs) } : {}),
+  };
+  return { ...rest, ...confirmed, ...shown, policy: summarize(snapshot), budget: snapshotBudgetView(snapshot, run), tier: runTierView(snapshot, run) };
 }
 
 /** The budget view of a run under its snapshot; null without an effective budget or the run's totals. */

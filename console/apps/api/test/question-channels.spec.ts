@@ -46,6 +46,7 @@ function view(over: Partial<QuestionView>): QuestionView {
     denyLabel: null,
     risk: null,
     rememberLabel: null,
+    fields: null,
     gate: null,
     rememberable: null,
     status: 'pending',

@@ -1,13 +1,15 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import type { RequestWithHeaders } from '@marinoscar/platform-api/core';
 import { SettingsResolver } from '@marinoscar/platform-api/settings';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import '../schedules/schedules.errors';
 import { PoliciesService } from '../policies/policies.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { nextFiring, scheduleProblem, validTimezone } from '../schedules/cron';
 import { SCHEDULE_LIMIT, type ReplaceTaskScheduleItem, type TaskScheduleItem } from './task-list.schemas';
+import { assertScheduleInputs, missingForSchedule, scheduleInputs } from './task-params';
+import { readParameters, type TaskParameter } from './task-params.schemas';
 
 /** The header a client sends with the device's zone, for a user whose profile follows the device. */
 const TIME_ZONE_HEADER = 'x-time-zone';
@@ -27,6 +29,8 @@ export interface PreparedSchedule {
   nextRunAt: Date | null;
   /** The schedule goes from disabled to enabled: its failure count starts again. */
   resetFailures: boolean;
+  /** Preset task parameter values (#552), by key; null for none. */
+  inputs: Record<string, string> | null;
 }
 
 /** What an existing schedule contributes to an update that leaves a field out. */
@@ -36,6 +40,7 @@ interface ExistingSchedule {
   enabled: boolean;
   concurrency: 'skip' | 'queue';
   policyRef: string | null;
+  inputs?: Prisma.JsonValue | null;
 }
 
 /**
@@ -81,6 +86,12 @@ export class TaskSchedulesService {
     if (!task) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
   }
 
+  /** The task's parameter definitions (#552). */
+  async parameters(userId: string, taskId: string): Promise<TaskParameter[]> {
+    const t = await this.db(userId).task.findFirst({ where: { id: taskId }, select: { parameters: true } });
+    return readParameters(t?.parameters);
+  }
+
   /** 409 `SCHEDULE_LIMIT` when the task already has its 10 schedules. */
   async assertRoom(userId: string, taskId: string): Promise<void> {
     const count = await this.db(userId).taskSchedule.count({ where: { taskId } });
@@ -99,7 +110,7 @@ export class TaskSchedulesService {
    * the task's current schedules for a replace (an item with an `id` keeps the
    * fields it leaves out).
    */
-  async prepare(userId: string, items: readonly (TaskScheduleItem & { id?: string })[], opts: { request?: RequestWithHeaders; existing?: Map<string, ExistingSchedule> } = {}): Promise<PreparedSchedule[]> {
+  async prepare(userId: string, items: readonly (TaskScheduleItem & { id?: string })[], opts: { request?: RequestWithHeaders; existing?: Map<string, ExistingSchedule>; parameters?: readonly TaskParameter[] } = {}): Promise<PreparedSchedule[]> {
     if (items.length > SCHEDULE_LIMIT) throw new ConflictException({ code: 'SCHEDULE_LIMIT', message: `A task has at most ${SCHEDULE_LIMIT} schedules` });
     const seen = new Set<string>();
     items.forEach((item, i) => {
@@ -129,6 +140,22 @@ export class TaskSchedulesService {
         this.refuse(i, 'policyId', 'POLICY_REF_INVALID', 'policyId does not name a built-in policy or one of yours');
       }
       const enabled = item.enabled ?? before?.enabled ?? true;
+      // The task's parameters (#552): presets are checked, and an enabled schedule needs a value for every required one.
+      const params = opts.parameters ?? [];
+      let inputs: Record<string, string> | null = item.inputs !== undefined ? null : ((before?.inputs as Record<string, string> | null | undefined) ?? null);
+      if (item.inputs !== undefined) {
+        try {
+          inputs = item.inputs === null ? null : scheduleInputs(params, item.inputs);
+        } catch (e) {
+          const r = e instanceof BadRequestException ? (e.getResponse() as { code?: string; message?: string }) : null;
+          if (r) this.refuse(i, 'inputs', r.code ?? 'INVALID_INPUT', r.message ?? 'Invalid inputs');
+          throw e;
+        }
+      }
+      if (enabled) {
+        const missing = missingForSchedule(params, inputs);
+        if (missing.length) this.refuse(i, 'inputs', 'SCHEDULE_INPUTS_MISSING', `This schedule has no value for: ${missing.map((p) => p.label).join(', ')}`);
+      }
       out.push({
         ...(item.id !== undefined ? { id: item.id } : {}),
         cron: item.cron,
@@ -138,6 +165,7 @@ export class TaskSchedulesService {
         policyRef: item.policyId !== undefined ? item.policyId : (before?.policyRef ?? null),
         nextRunAt: enabled ? nextFiring(item.cron, timezone) : null,
         resetFailures: enabled && before !== undefined && !before.enabled,
+        inputs: inputs && Object.keys(inputs).length ? inputs : null,
       });
     }
     return out;
@@ -156,6 +184,7 @@ export class TaskSchedulesService {
       concurrency: s.concurrency,
       policyRef: s.policyRef,
       nextRunAt: s.nextRunAt,
+      inputs: s.inputs ?? Prisma.DbNull,
       createdAt: new Date(base + i),
     }));
   }
@@ -168,8 +197,9 @@ export class TaskSchedulesService {
    */
   async replace(userId: string, taskId: string, items: readonly ReplaceTaskScheduleItem[], request?: RequestWithHeaders): Promise<void> {
     await this.requireTask(userId, taskId);
-    const current = await this.db(userId).taskSchedule.findMany({ where: { taskId }, select: { id: true, timezone: true, enabled: true, concurrency: true, policyRef: true } });
-    const prepared = await this.prepare(userId, items, { request, existing: new Map(current.map((s) => [s.id, s])) });
+    const current = await this.db(userId).taskSchedule.findMany({ where: { taskId }, select: { id: true, timezone: true, enabled: true, concurrency: true, policyRef: true, inputs: true } });
+    const parameters = await this.parameters(userId, taskId);
+    const prepared = await this.prepare(userId, items, { request, existing: new Map(current.map((s) => [s.id, s])), parameters });
     const keep = prepared.flatMap((s) => (s.id !== undefined ? [s.id] : []));
     const created = prepared.filter((s) => s.id === undefined);
     await this.prisma.$transaction(async (tx) => {
@@ -178,7 +208,7 @@ export class TaskSchedulesService {
         if (s.id === undefined) continue;
         await tx.taskSchedule.updateMany({
           where: { id: s.id, userId, taskId },
-          data: { cron: s.cron, timezone: s.timezone, enabled: s.enabled, concurrency: s.concurrency, policyRef: s.policyRef, nextRunAt: s.nextRunAt, ...(s.resetFailures ? { consecutiveFailures: 0 } : {}) },
+          data: { cron: s.cron, timezone: s.timezone, enabled: s.enabled, concurrency: s.concurrency, policyRef: s.policyRef, nextRunAt: s.nextRunAt, inputs: s.inputs ?? Prisma.DbNull, ...(s.resetFailures ? { consecutiveFailures: 0 } : {}) },
         });
       }
       if (created.length > 0) await tx.taskSchedule.createMany({ data: this.rows(userId, taskId, created) });
@@ -202,8 +232,11 @@ export class TaskSchedulesService {
    */
   async resume(userId: string, taskId: string): Promise<{ changed: number; skipped: string[] }> {
     await this.requireTask(userId, taskId);
-    const schedules = await this.db(userId).taskSchedule.findMany({ where: { taskId }, select: { id: true, cron: true, timezone: true } });
+    const schedules = await this.db(userId).taskSchedule.findMany({ where: { taskId }, select: { id: true, cron: true, timezone: true, inputs: true } });
     if (schedules.length === 0) throw new ConflictException({ code: 'NO_SCHEDULES', message: 'This task has no schedule' });
+    // Enabling needs a value for every required parameter (#552).
+    const parameters = await this.parameters(userId, taskId);
+    for (const s of schedules) assertScheduleInputs(parameters, s.inputs as Record<string, string> | null);
     const skipped: string[] = [];
     const updates: Prisma.PrismaPromise<unknown>[] = [];
     for (const s of schedules) {

@@ -11,12 +11,15 @@ export type RunStatus = 'queued' | 'running' | 'waiting_human' | 'succeeded' | '
  *     │     waiting_human ─▶ failed | cancelled
  *     └──────────────────────▶ cancelled | failed
  *
+ * A task run created waiting for its parameter values (#552) goes
+ * waiting_human ─▶ queued once its form is answered.
+ *
  * Terminal states never change again.
  */
 export const RUN_TRANSITIONS: Readonly<Record<RunStatus, readonly RunStatus[]>> = {
   queued: ['running', 'cancelled', 'failed'],
   running: ['waiting_human', 'succeeded', 'failed', 'cancelled'],
-  waiting_human: ['running', 'failed', 'cancelled'],
+  waiting_human: ['running', 'queued', 'failed', 'cancelled'],
   succeeded: [],
   failed: [],
   cancelled: [],

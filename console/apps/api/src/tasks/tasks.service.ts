@@ -18,6 +18,8 @@ import { STOP_WAITING, startWaiting } from './reminder-schedule';
 import { averageUsd, NO_SPEND, SPEND_WINDOW_DAYS, withCost, type TaskSpend } from './run-cost';
 import type { RequestWithHeaders } from '@marinoscar/platform-api/core';
 import { TaskSchedulesService } from './task-schedules.service';
+import { prepareParameters } from './task-params';
+import { readParameters } from './task-params.schemas';
 
 /** Fields a status change may set. */
 export interface RunPatch {
@@ -115,12 +117,14 @@ export class TasksService {
    * `request` supplies the device time zone for a schedule that names none.
    */
   async createTask(userId: string, input: CreateTaskDto, request?: RequestWithHeaders) {
-    const { policyId, schedules, ...fields } = input;
+    const { policyId, schedules, parameters: defs, ...fields } = input;
+    // The goal's `{{Name}}` parameters (#552): inferred where not defined, checked (400 names the problem).
+    const parameters = prepareParameters(fields.goal, defs);
     await this.policies?.assertAssignable(userId, policyId);
-    const prepared = schedules?.length && this.taskSchedules ? await this.taskSchedules.prepare(userId, schedules, { request }) : [];
+    const prepared = schedules?.length && this.taskSchedules ? await this.taskSchedules.prepare(userId, schedules, { request, parameters }) : [];
     const limits = { maxSteps: fields.maxSteps, maxMinutes: fields.maxMinutes, model: fields.model ?? null };
     const policyRef = policyId !== undefined ? policyId : this.policies && !isDefaultLimits(limits) ? await this.policies.ensureLegacyPolicy(userId, fields.name, limits) : null;
-    const data = { ...fields, userId, hostId: fields.hostId ?? null, model: fields.model ?? null, policyRef };
+    const data = { ...fields, userId, hostId: fields.hostId ?? null, model: fields.model ?? null, policyRef, parameters: parameters as unknown as Prisma.InputJsonValue };
     if (prepared.length === 0) return { ...(await this.db(userId).task.create({ data })), spend30d: NO_SPEND };
     const t = await this.prisma.$transaction(async (tx) => {
       const task = await tx.task.create({ data });
@@ -132,9 +136,14 @@ export class TasksService {
 
   /** Update a task. A legacy limit in the patch re-derives the task's policy unless `policyId` is also given. */
   async updateTask(userId: string, id: string, patch: UpdateTaskDto) {
-    const { policyId, ...fields } = patch;
+    const { policyId, parameters: defs, ...fields } = patch;
     await this.policies?.assertAssignable(userId, policyId);
     const data: Prisma.TaskUpdateManyMutationInput = { ...fields };
+    // A new goal or new definitions: the parameters are reconciled with the goal again (#552).
+    if (fields.goal !== undefined || defs !== undefined) {
+      const task = await this.getTask(userId, id);
+      data.parameters = prepareParameters(fields.goal ?? task.goal, defs ?? readParameters(task.parameters)) as unknown as Prisma.InputJsonValue;
+    }
     if (policyId !== undefined) {
       data.policyRef = policyId;
     } else if (this.policies && (fields.maxSteps !== undefined || fields.maxMinutes !== undefined || fields.model !== undefined)) {

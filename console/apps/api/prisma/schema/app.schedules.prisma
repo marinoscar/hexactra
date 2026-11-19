@@ -29,6 +29,8 @@ model TaskSchedule {
   consecutiveFailures Int                 @default(0) @map("consecutive_failures")
   /// Overrides the task's agent policy for scheduled runs (#401); null follows the task.
   policyRef           String?             @map("policy_ref") @db.VarChar(64)
+  /// Preset task parameter values for this schedule's runs (#552): `{ key: value }`. Never a sensitive parameter.
+  inputs              Json?
   createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime            @updatedAt @map("updated_at") @db.Timestamptz
 
