@@ -2,7 +2,7 @@
 // the run (E38.3).
 import type { FabricSession } from '../fabric-session';
 import { appendConfirmedAction } from '../confirmed-actions';
-import { runActivity, type ActivityOptions, type CheckpointInput, type CommitStepInput, type NewStep, type RunActivityPhase, type RunStopReason, type RunStorePort, type StepPatch, type StoredStep, type Transition } from '../harness';
+import { runActivity, type ActivityOptions, type CheckpointInput, type CommitStepInput, type NewStep, type RunActivityPhase, type RunStopReason, type RunStorePort, type StepPatch, type StoredStep, type Transition } from '@marinoscar/hexactra-agent';
 import type { RunLease } from '../lease';
 import { finishRun, pauseRunRaw, saveMemoryRaw } from './finish-run';
 import type { HostDeps } from './deps';

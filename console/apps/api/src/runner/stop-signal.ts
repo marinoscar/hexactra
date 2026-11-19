@@ -1,9 +1,9 @@
 import type { AiDefinedTool } from '@marinoscar/platform-api/ai';
 
 import { maskSensitive } from '../tasks/mask';
-import { stoppedResult as stoppedText } from './harness/outcome-text';
-import { PAUSED_TEXT, STOPPED_TEXT } from './harness/types';
-import { withinMs } from './harness/time';
+import { stoppedResult as stoppedText } from '@marinoscar/hexactra-agent';
+import { PAUSED_TEXT, STOPPED_TEXT } from '@marinoscar/hexactra-agent';
+import { withinMs } from '@marinoscar/hexactra-agent';
 import type { RunEvent } from '../tasks/run-events';
 
 /** Thrown by `throwIfRequested`: the owner pressed Stop. */

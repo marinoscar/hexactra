@@ -2,7 +2,7 @@
 // `ModelUnavailable` so the loop may fall back to the tier's other model.
 import { AiError, defineTool, type AiService } from '@marinoscar/platform-api/ai';
 
-import { ModelUnavailable, type ModelPort, type ModelRequest, type ModelResult } from '../harness';
+import { ModelUnavailable, type ModelPort, type ModelRequest, type ModelResult } from '@marinoscar/hexactra-agent';
 import { BROWSER_AGENT_FEATURE_ID } from '../browser-agent.feature';
 
 /** AI error codes that send a chunk to the tier's fallback model (#405). */

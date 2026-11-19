@@ -10,6 +10,7 @@ Hexactra is a Cargo + pnpm monorepo with a large amount of scaffolding. **Most v
 - `crates/` — Rust workspace (control plane, host agent, worker, native host, CLI, MCP, core types, telemetry, providers, AEF connector, fleet scheduling).
 - `apps/chrome-extension` (MV3 extension, standalone side-panel AI works), `apps/dashboard`, `packages/sdk`, `packages/contracts`.
 - `console/` — the Hexactra Console (epic #217): an EnterpriseAppBase starter app (NestJS + React + Prisma, Node 24, npm, separate from the pnpm workspace). Inside `console/`, its own `AGENTS.md` applies: never edit `@marinoscar/platform-*`; platform gaps go upstream as EnterpriseAppBase seam requests. CI: `.github/workflows/console.yml`.
+- `console/packages/hexactra-agent`, `console/packages/hexactra-browser-agent` — the agent harness and the Hexactra browser toolset (E38.9, #614), workspace packages the console API hosts (`@marinoscar/hexactra-agent`, `@marinoscar/hexactra-browser-agent`; decision record `console/docs/decisions/agent-packages.md`). **A new tool, gate or loop behaviour goes in a package, with its test in the package; the app only binds ports** (`console/apps/api/src/runner/host/`). The harness package never imports a framework, a database client, the fabric or a provider SDK (a test scans its built output). `cd console && npm run build:packages` builds them (the apps import the built output); `npm run test:packages` tests them.
 - `console/apps/web/src/ui/` — the console's page kit (`PageContainer`, `PageHeader`, `ResponsiveList`, `StatusChip`, `useConfirm`, `aboveBottomBar`, the time and cost formatters; console README, "UI kit"). New console pages compose the kit and are verified at 360/390/768/1024/1440 px (`npm run ui:screens`, console README, "Responsive rules").
 - `api/openapi.yaml`, `api/*.json` — contracts (CI checks they parse).
 - `scripts/link-github-subissues.mjs` — idempotent script linking epics to sub-issues (`epicChildren` map); refuses any repo but `marinoscar/hexactra`.
@@ -23,7 +24,7 @@ cargo test --workspace --all-targets
 pnpm install --frozen-lockfile && pnpm build
 pnpm --filter @hexactra/sdk --filter @hexactra/chrome-extension test
 python3 scripts/ci/validate-contracts.py
-cd console && npm ci && npm run platform:check && npm run typecheck && npm test && npm run build   # Node 24
+cd console && npm ci && npm run platform:check && npm run build:packages && npm run typecheck && npm test && npm run build   # Node 24 (typecheck, test and build run build:packages first; test:packages and check:package-pack are the packages' own checks)
 cd console/apps/api && UPDATE_MCP_MANIFEST=1 npx jest --config ./test/jest.config.js mcp-manifest   # regenerate the MCP tool and scope tables in console/docs/mcp.md (a deliberate change)
 cd console && npm run docs:hosted-clients   # regenerate the client steps in console/docs/hosted-clients.md
 GITHUB_TOKEN=... node scripts/link-github-subissues.mjs --check   # dry run of sub-issue linking

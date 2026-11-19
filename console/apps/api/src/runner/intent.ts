@@ -1,9 +1,9 @@
 import { defineTool, type AiDefinedTool } from '@marinoscar/platform-api/ai';
 import type { z } from 'zod';
 
-import { runAsCommit } from './harness/intent';
+import { runAsCommit } from '@marinoscar/hexactra-agent/intent';
 
-export * from './harness/intent';
+export * from '@marinoscar/hexactra-agent/intent';
 
 /**
  * `defineTool` with one more field. `commits: true` marks the tool commit-class: its fabric actions get an intent record.

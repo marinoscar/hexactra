@@ -1,9 +1,9 @@
 // What a run asks for before the model works: a detail the owner chose to type themselves (E37.6) and the sensitive values the task needs (#552).
 // The fabric keeps the value and types it (`type_handoff_secret`); the model never sees it.
 import { readRunInputs } from '../../tasks/task-params.schemas';
-import { hostOf } from '../browser/policy';
-import type { RunOutcome } from '../harness';
-import { closeRun, pauseForPerson } from '../harness/engine';
+import { hostOf } from '@marinoscar/hexactra-browser-agent/policy';
+import type { RunOutcome } from '@marinoscar/hexactra-agent';
+import { closeRun, pauseForPerson } from '@marinoscar/hexactra-agent/engine';
 import type { HostContext } from './context';
 
 export async function beforeLoop(ctx: HostContext): Promise<RunOutcome | null> {

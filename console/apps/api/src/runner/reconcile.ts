@@ -1,2 +1,2 @@
 // Moved into the harness layer (E38.5); kept so existing imports keep working.
-export * from './harness/reconcile';
+export * from '@marinoscar/hexactra-agent/reconcile';
