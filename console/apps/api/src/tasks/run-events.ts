@@ -4,8 +4,11 @@ import { EVENT_BUS, type EventBus } from '@marinoscar/platform-api/host';
 /** The bus channel every run event goes on (cross-replica with the postgres bus). */
 export const RUN_EVENTS_CHANNEL = 'runs.events';
 
-/** What happened to a run: its status changed, or it recorded a step. */
-export const RUN_EVENT_TYPES = ['run.status', 'run.step'] as const;
+/**
+ * What happened to a run: its status changed, it recorded a step, or its owner pressed Stop (`run.cancel`, E38.1:
+ * the worker that holds the run aborts its work at once; every other subscriber ignores it).
+ */
+export const RUN_EVENT_TYPES = ['run.status', 'run.step', 'run.cancel'] as const;
 export type RunEventType = (typeof RUN_EVENT_TYPES)[number];
 
 /**

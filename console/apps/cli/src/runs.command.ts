@@ -307,7 +307,7 @@ export const runsCommand: CliCommandRegistration = (program: Command) => {
     .command('cancel <id>')
     .action(async (id: string) => {
       const r = await consoleApi().post<Run>(`/runs/${id}/cancel`, {});
-      out(`${label(r.status)}${r.status === 'running' ? ' (stopping after the current step)' : ''}`);
+      out(`${label(r.status)}${r.status === 'running' ? ' (stopping)' : ''}`);
     });
 
   const schedules = program.command('schedules').description('Run tasks on a schedule (cron + time zone)');

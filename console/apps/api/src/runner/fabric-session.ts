@@ -182,9 +182,11 @@ export class FabricSession {
    * fabric refuses new actions with `409 takeover_active`: by default this
    * waits (up to 30 minutes) and runs the step once they release it;
    * `waitForTakeover: false` throws at once instead (an external agent
-   * decides itself when to retry).
+   * decides itself when to retry). `signal` (Stop, E38.1) ends the wait at once: the request is dropped
+   * (a `FabricError` of kind `aborted`); the fabric has no operation cancel, so the host finishes the action
+   * on its own, within `timeoutMs`.
    */
-  async act(sessionId: string, action: Record<string, unknown>, timeoutMs = ACTION_TIMEOUT_MS, opts: { waitForTakeover?: boolean } = {}): Promise<FabricOperation> {
+  async act(sessionId: string, action: Record<string, unknown>, timeoutMs = ACTION_TIMEOUT_MS, opts: { waitForTakeover?: boolean; signal?: AbortSignal } = {}): Promise<FabricOperation> {
     // Inside a run's trace this is a `hexactra.fabric <action>` span (E38.4); anywhere else, no span. Only the action's type is named.
     return traceFabric(String(action.type ?? 'action'), async () => {
       const until = Date.now() + TAKEOVER_WAIT_MS;
@@ -193,9 +195,10 @@ export class FabricSession {
           return await this.fabric.request<FabricOperation>('POST', `/v1/sessions/${sessionId}/actions`, {
             body: { action, timeout_ms: timeoutMs },
             timeoutMs: timeoutMs + 15_000,
+            ...(opts.signal ? { signal: opts.signal } : {}),
           });
         } catch (e) {
-          if (opts.waitForTakeover === false || !isTakeoverActive(e) || Date.now() >= until) throw e;
+          if (opts.waitForTakeover === false || !isTakeoverActive(e) || Date.now() >= until || opts.signal?.aborted) throw e;
           await this.sleep(TAKEOVER_POLL_MS);
         }
       }

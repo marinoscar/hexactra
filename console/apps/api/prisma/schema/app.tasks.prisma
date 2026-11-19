@@ -139,6 +139,8 @@ model Run {
   result          String?    @db.VarChar(8000)
   error           String?    @db.VarChar(2000)
   cancelRequested Boolean    @default(false) @map("cancel_requested")
+  /// When Stop was pressed (E38.1, #582): the start of the stop-latency measure; set with `cancel_requested`.
+  cancelRequestedAt DateTime? @map("cancel_requested_at")
   stepCount       Int        @default(0) @map("step_count")
   /// What the goal runner is doing right now (#379): `{ phase, action?, args?, reason?, startedAt, timeoutMs? }`.
   /// Redacted like step args; cleared whenever the run leaves `running`.

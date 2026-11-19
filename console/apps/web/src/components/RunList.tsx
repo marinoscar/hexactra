@@ -382,7 +382,7 @@ export function RunList({ scope, showTaskColumn = false, compact = false, onNewR
   const activityLine = (run: RunListItem) =>
     run.status === 'running' && run.activity ? (
       <Typography variant="caption" color="info.main" sx={{ ...clamp(1), mt: 0.25 }} data-testid="run-activity">
-        {describeActivity(run.activity)}
+        {run.cancelRequested ? 'Stopping…' : describeActivity(run.activity)}
       </Typography>
     ) : null;
 
