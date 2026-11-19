@@ -1,6 +1,6 @@
 # Saved approvals
 
-A saved approval is the owner's standing answer to one kind of question: "on this site, do not ask me before this step". It is kept as a **structured rule the server matches**, never as a sentence the model is trusted to obey. This page covers the rules, how they match, the limits and **Pause all**, the page and the API (#554). Creating a rule from a request card ("Don't ask again") and using it in a run is #555.
+A saved approval is the owner's standing answer to one kind of question: "on this site, do not ask me before this step". It is kept as a **structured rule the server matches**, never as a sentence the model is trusted to obey. This page covers the rules, how they match, the limits and **Pause all**, the page and the API (#554), and how a rule is made from a request card ("Don't ask again") and used in a run (#555).
 
 ## What a rule is
 
@@ -25,6 +25,34 @@ Rules live in `approval_rules`; each use is a row of `approval_rule_uses` (rule,
 
 There is **no route, CLI command or MCP tool that creates a rule**, and there must never be one: `apps/api/test/approval-rules.spec.ts` enumerates every REST operation, every MCP tool and the CLI's sources and fails if one appears. A personal access token with `approvals:write` may list, narrow, disable, re-enable and delete rules; it cannot create or loosen one. Web pages, model output and memories never create, widen or match a rule.
 
+## "Don't ask again" on a request (#555)
+
+**Which requests offer it.** A confirmation the server marked **rememberable**: the question's `rememberable` (`{ kind, host, category, matchKey, summary, scopes }`) is computed by the runner, never taken from the model or a request body:
+
+- **A gate question.** The confirmation gate stopped a click (#550): `kind: gate`, the registrable domain of the active tab's URL as the fabric reports it, the verdict's category and the element's label read from the page.
+- **An ask.** The agent asked on its own (`request_human` with `kind: confirmation`, input `confirm` or `none`) and named a `topic` from the fixed list. The runner reads the page's URL itself. A topic outside the list is `other`, and `other` is never rememberable.
+
+A secret, a sign-in, a code, a choice and a question without a known site are never rememberable.
+
+**The card.** Under Allow and Deny: a checkbox, **off by default**, "Don't ask again: Press 'Pay' on bankofamerica.com". Ticked, it opens **Limit it**: where (everywhere on this site, only this task, only this chat; the scopes the run has), up to an amount (for `payment`, `purchase` and `send`) and for how long (always, 30 days, 7 days), all optional. For `payment`, `purchase`, `send` and `delete` a warning line says the agent will do this without asking. The settled card reads "Allowed · won't ask again" with a link to the rule.
+
+**The answer.** `POST /api/questions/{id}/answer` with `rememberRule: { enabled: true, scope?, maxAmount?, expiresInDays? }` (distinct from `remember`, a site's own "remember me", #527). It is accepted only:
+
+- with an approval (`value: approve` on a `confirm`, or Done on a `none` confirmation);
+- on a question the server marked rememberable;
+- from the signed-in **web** or **Android** app: the declared channel must be `web` or `android_app` **and** the request's credential must be the console's own session (its origin, from the credential, is `web` or `android`). A notification button, the answer link, a webhook, the MCP relay, an elicitation form, an MCP Apps card, a hosted AI app, the CLI and a personal access token approve **once** and get `422` (`REMEMBER_NOT_ALLOWED_HERE`, `NOT_REMEMBERABLE`, `REMEMBER_NEEDS_APPROVAL`); the question stays answerable once from there.
+
+The rule is created by `createFromAnswer` **in the same transaction as the answer**: both happen or neither. A second identical tick returns the same rule. The response's `ruleId` names it.
+
+**In the run** (`apps/api/src/runner/goal-runner.service.ts`):
+
+- **Gate.** Where a click would be refused, the runner first asks `ApprovalRulesService.match` with the page's registrable domain, the verdict's category and the normalised label, the run's task and chat, and the amount when the owner's inputs make one known (the one `money` parameter of the task, #552; otherwise unknown). On a match the click is carried out, the step's `args.approval = { ruleId }` and its summary says "allowed by a saved approval: …", the use is recorded, and the step is a confirmed action "by saved approval" (#540). A rule applies only when the page itself described the target: never when that read failed or the target is in a cross-origin frame.
+- **Ask.** `request_human` with `kind: confirmation` and a `topic`: on a matching `ask` rule the tool answers "The owner has a standing approval for this on this site. Go ahead." No question is created; a `handoff` step with `action: pre_approved` is recorded and it is not an action (no budget, no stall count).
+- **Telling the model.** The volatile tail of the model input carries one line for the current site when it has `ask` rules: "On bankofamerica.com the owner does not want to be asked before: choosing dates, opening menus." Gate rules are never announced; the gate simply does not fire. The line is advice that lowers questions; it never authorises a step.
+- **AI apps.** In a run an AI app started with its "confirm purchases" limit on (#464), a gate question is always asked, whatever rules exist. That limit is the app's own setting, separate from a personal rule.
+
+**Notifications.** At the end of a run in which a `gate` rule was used: one notification, "2 steps went ahead on saved approvals: Press 'Pay' on bankofamerica.com.", linking to the run (event `runs.saved_approvals_used`, browser and push). A chat's result card shows the same line. `ask` rules do not notify.
+
 ## How a rule matches
 
 `apps/api/src/approvals/approval-match.ts`, pure and table-tested (`test/approval-match.spec.ts`):
@@ -38,7 +66,9 @@ There is **no route, CLI command or MCP tool that creates a rule**, and there mu
 
 - Apply on another registrable domain, or when the page's address is unknown.
 - Apply to a label that differs after normalisation.
-- Answer a password, a code, a sign-in or a choice (#555).
+- Answer a password, a code, a sign-in or a choice (#555): those questions are never rememberable, and the answer handler refuses a tick on anything but a confirmation.
+- Apply when the page could not describe the clicked element (a cross-origin frame, a failed read).
+- Get created, claimed or widened by the model: a `rememberable`, `gate` or host in `request_human`'s arguments is dropped.
 - Override the task's allowed sites, or an AI app's own "confirm purchases" limit (#464): a gate question in that app's runs is always asked.
 - Apply while Pause all is on.
 

@@ -158,6 +158,8 @@ const confirmation = {
   ...question, questionId: '55555555-5555-4555-8555-555555555556', id: '55555555-5555-4555-8555-555555555556', runId: null, goal: '', handoffId: null,
   askedBy: 'agent:packer', browserBound: false, prompt: 'Book the 9:00 departure for 120?', pageTitle: null, kind: 'confirmation', input: 'confirm',
   constraints: null, confirmLabel: 'Book it', denyLabel: 'Do not book', risk: 'high',
+  // "Don't ask again" (#555): what the server says the approval would remember.
+  rememberable: { kind: 'gate', host: 'example.com', category: 'purchase', matchKey: 'Book it', summary: "Press 'Book it' on example.com", scopes: ['everywhere', 'this_task'] },
 };
 
 /** A memory the agent proposes (#553): a quiet, non-blocking request, in the chat and the Inbox. */

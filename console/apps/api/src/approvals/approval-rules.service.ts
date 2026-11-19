@@ -169,6 +169,24 @@ export class ApprovalRulesService {
     return hit ? (rows.find((r) => r.id === hit.id) ?? null) : null;
   }
 
+  /**
+   * The ask topics the owner has enabled rules for on a site, in this run's scope (#555): the line the model reads
+   * so it stops asking. Never gate rules. Empty while paused, for an unknown site, or with no rules.
+   */
+  async askTopics(userId: string, q: { pageUrl: string | null; taskId: string | null; conversationId: string | null; now?: Date }): Promise<string[]> {
+    const host = registrableDomain(q.pageUrl);
+    if (!host || (await this.isPaused(userId))) return [];
+    const rows = await this.prisma.approvalRule.findMany({ where: { userId, host, enabled: true, kind: 'ask' } });
+    const now = q.now ?? new Date();
+    return [...new Set(rows.filter((r) => findRule([matchable(r)], { kind: 'ask', host, category: null, matchKey: r.matchKey, taskId: q.taskId, conversationId: q.conversationId, amount: null, now })).map((r) => r.matchKey))];
+  }
+
+  /** The gate rules a run used, one entry per use, oldest first (#555): the end-of-run notification and the chat's result card. */
+  async gateUsesOfRun(userId: string, runId: string): Promise<{ ruleId: string; summary: string }[]> {
+    const uses = await this.prisma.approvalRuleUse.findMany({ where: { runId, rule: { userId, kind: 'gate' } }, orderBy: { usedAt: 'asc' }, select: { ruleId: true, rule: { select: { summary: true } } } });
+    return uses.map((u) => ({ ruleId: u.ruleId, summary: u.rule.summary }));
+  }
+
   // ---- The one creator ----
 
   /**

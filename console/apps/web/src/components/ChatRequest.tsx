@@ -3,9 +3,11 @@ import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
 import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import PanToolOutlinedIcon from '@mui/icons-material/PanToolOutlined';
 import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
-import { Alert, Box, Button, Chip, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, Chip, Link, Paper, Stack, Typography } from '@mui/material';
 import { useEffect, useRef, useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 
+import { savedApprovalHref } from '../approvals/types';
 import { useConfirm } from '../ui';
 import { BrowserFrame } from './ChatBrowser';
 import { QuestionAnswerForm } from './QuestionAnswerForm';
@@ -41,6 +43,8 @@ export function settledText(q: Pick<Question, 'input'>, answer: AnswerBody): str
   if (answer.outcome === 'cancelled') return 'Declined';
   // Never the value; whether the site was asked to remember it, when that was offered.
   if (q.input === 'secret' || q.input === 'credentials') return answer.remember ? 'Provided · Remembered on this device' : 'Provided';
+  // "Don't ask again" was ticked (#555): the approval is remembered.
+  if (answer.rememberRule && (q.input === 'none' || answer.value === 'approve')) return "Allowed · won't ask again";
   if (q.input === 'confirm') return answer.value === 'approve' ? 'Allowed' : 'Denied';
   if (q.input === 'takeover' || q.input === 'none') return 'Done';
   if (q.input === 'form') return 'Provided';
@@ -162,10 +166,19 @@ export function ChatRequestCard({ question: q, now, canAnswer, onAnswer, frame, 
 }
 
 /** A request that is over, in one line where its card was: "Provided", "Allowed", or that it was closed elsewhere. */
-export function RequestSettled({ text, tone = 'success' }: { text: string; tone?: 'success' | 'info' }) {
+export function RequestSettled({ text, tone = 'success', ruleId }: { text: string; tone?: 'success' | 'info'; ruleId?: string | null }) {
   return (
     <Alert severity={tone} role="status" variant="outlined" sx={{ width: '100%', maxWidth: CARD_MAX, borderRadius: 3, my: 0.75, py: 0 }}>
       {text}
+      {/* The saved approval the answer made (#555): where it can be seen, limited or stopped. */}
+      {ruleId && (
+        <>
+          {' · '}
+          <Link component={RouterLink} to={savedApprovalHref(ruleId)}>
+            See the saved approval
+          </Link>
+        </>
+      )}
     </Alert>
   );
 }
