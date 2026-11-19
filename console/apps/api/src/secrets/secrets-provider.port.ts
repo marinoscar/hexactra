@@ -66,6 +66,26 @@ export interface FieldSummary {
   usableHere: boolean;
 }
 
+/** The grant a card is listed under for the merchant on screen (E37.7): what the owner allowed in the provider. */
+export interface CardGrantSummary {
+  /** The most a purchase may be, a decimal with two places (`"500.00"`). */
+  maxAmount: string;
+  /** ISO 4217. */
+  currency: string;
+  /** The security code may be released under this grant. */
+  includesSecurityCode: boolean;
+  expiresAt?: Date | null;
+}
+
+/** What a lookup says about a saved card (E37.7). Never the number, never the security code: the last four digits at most. */
+export interface CardSummary {
+  brand?: string | null;
+  last4?: string | null;
+  expMonth?: string | null;
+  expYear?: string | null;
+  grant?: CardGrantSummary | null;
+}
+
 /** What a provider says about an item the owner opened to the agent. Never a value (a login's username is not secret). */
 export interface ItemSummary {
   id: string;
@@ -79,6 +99,8 @@ export interface ItemSummary {
   updatedAt?: Date | null;
   /** An identity item's fields (E37.6); absent for a login. For an identity item `matchKind` is `exact` when the page's origin is on the item's allowed list. */
   fields?: FieldSummary[];
+  /** A saved card (E37.7): brand, last four, expiry and the merchant grant it is listed under; absent for a login and an identity item. */
+  card?: CardSummary;
 }
 
 /** One field of one item, for one purpose, bound to the page's origin (read by the fabric from the browser). */
@@ -172,6 +194,13 @@ export type SecretsErrorCode =
   | 'typing_failed'
   | 'insecure_origin'
   | 'no_option'
+  | 'amount_exceeded'
+  | 'currency_mismatch'
+  | 'security_code_not_granted'
+  | 'grant_expired'
+  | 'limit_reached'
+  | 'cards_disabled'
+  | 'frame_unknown'
   | 'unsupported'
   | 'timed_out'
   | 'cancelled'
@@ -192,6 +221,13 @@ export const SECRETS_ERROR_CODES: readonly SecretsErrorCode[] = [
   'typing_failed',
   'insecure_origin',
   'no_option',
+  'amount_exceeded',
+  'currency_mismatch',
+  'security_code_not_granted',
+  'grant_expired',
+  'limit_reached',
+  'cards_disabled',
+  'frame_unknown',
   'unsupported',
   'timed_out',
   'cancelled',
@@ -214,7 +250,9 @@ export function secretsErrorAction(code: SecretsErrorCode): SecretsErrorAction {
   switch (code) {
     case 'origin_mismatch':
     case 'cross_origin_frame':
+    case 'frame_unknown':
     case 'disabled':
+    case 'cards_disabled':
       return 'stop';
     case 'not_found':
     case 'no_provider':

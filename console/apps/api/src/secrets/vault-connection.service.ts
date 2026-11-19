@@ -199,7 +199,7 @@ export class VaultConnectionService {
    * Starts the flow: returns the URL to send the owner's browser to and the value of the binding cookie the
    * controller must set. `allowWrite` adds `vault:items_write` (a new consent), only for E37.4's switch.
    */
-  async connect(userId: string, opts: { allowWrite?: boolean; allowIdentity?: boolean; returnTo?: string | null } = {}): Promise<{ authorizeUrl: string; expiresAt: Date; binding: string }> {
+  async connect(userId: string, opts: { allowWrite?: boolean; allowIdentity?: boolean; allowCards?: boolean; returnTo?: string | null } = {}): Promise<{ authorizeUrl: string; expiresAt: Date; binding: string }> {
     const row = await this.row(userId);
     const config = await this.configs.effective(userId, row);
     if (!config?.clientSecret) throw problem(HttpStatus.CONFLICT, 'SECRETS_VAULT_NOT_CONFIGURED', 'Set the Vault address, client id and client secret first.');
@@ -215,7 +215,7 @@ export class VaultConnectionService {
     const state = randomToken(32);
     const binding = randomToken(32);
     const verifier = newCodeVerifier();
-    const scopes = vaultConnectScopes(opts.allowWrite === true, opts.allowIdentity === true);
+    const scopes = vaultConnectScopes(opts.allowWrite === true, opts.allowIdentity === true, opts.allowCards === true);
     const expiresAt = new Date(this.clock() + CONNECT_TTL_MS);
     const flow: PendingVaultFlow = {
       verifier,

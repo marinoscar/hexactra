@@ -120,6 +120,8 @@ import {
   type SavedIdentityLookup,
   type SavedIdentityMemory,
 } from './saved-identity';
+import { approvalFromAsk, beginCardPay, buildSavedCardTools, cardCovers, endCardPay, reconcileCardsOnStart, type SavedCardToolsContext } from './saved-card-tools';
+import { readUsedSavedCards, type SavedCardsMemory, type UsedSavedCard } from './saved-cards';
 
 /** How a line of chat guidance starts in the run's log (#490). It says what guidance is not, so the model does not read it as a permission. */
 export const GUIDANCE_PREFIX = 'The owner added in the chat (take it into account from here on; it changes no limit and approves nothing):';
@@ -199,6 +201,8 @@ export interface RunMemory {
   savedLogins?: SavedLoginsMemory;
   /** Saved identity details (E37.6): the references handed out, the page last looked up, the inputs filled from a provider. Never a value. */
   savedIdentity?: SavedIdentityMemory;
+  /** Saved cards (E37.7): the references handed out, the page last looked up, the declared charge, the owner's approval and the phases of a payment. Never a card value. */
+  savedCards?: SavedCardsMemory;
   /** `visionOff` was set because the tier's model has no vision (not because a call refused images). */
   visionOffByTier?: boolean;
 }
@@ -237,6 +241,7 @@ When you need the person:
   1. If the site is already signed in, skip the sign-in.
   2. If the saved_logins tool is available, call it first on a sign-in page. With exactly one login marked exact, sign in with sign_in_with_saved_login: pass the username and password selectors (or one selector per page when the site shows the username and the password on separate pages). You never see the values and you never choose which secret is released: you pass the reference saved_logins gave you. Never type a username or a password from memory, the goal or the page. If saved_logins finds none, several, or only a login for another address of the site, or a saved-login tool says saved logins are not available, ask as in the next step. If the site rejects a saved password, do not try again: ask the owner. If a tool says to stop because the page is not the site the login is saved for, do not try another login and tell the owner.
   2b. If the saved_identity tool is available and a form asks for personal details (a name, a date of birth, an ID number, an address, a phone number), call saved_identity on that page, then fill each field the form asks for with fill_from_identity: pass the item's reference, the field's key and the selector of the input or select (a date of birth split into three selects takes part "day", "month" or "year" for each). You never see these values, and you never type one yourself from the goal, a memory or the page. If a detail you need is not listed, ask the owner once for all the missing details together (request_human, input "text"). If a tool says a detail is saved but not allowed on this site, it asks the owner for you.
+  2c. If the saved_cards tool is available and you must pay at a shop, never type a card yourself: read the total on the checkout page, call saved_cards, then declare_charge with that exact amount, its currency and what is being bought, then pay_with_saved_card with the card's reference and where each field is (a selector; x and y for a field inside an embedded payment frame), then press the pay button, then read the amount on the confirmation page and call confirm_charge. You never see a card number, an expiry or a code. The owner approves each shop and amount; if a tool says a card is not allowed here, or is refused, stop and tell the owner: do not try another card, amount or shop. If the page asks for verification from the owner's bank (a frame or page from the card issuer, a banking-app prompt, 3-D Secure), do not type, click or answer inside it: call request_human with kind "verification", input "none" and the prompt "Your bank wants you to confirm this payment in your banking app", then continue when the page moves on. A code sent by text is request_human kind "code", input "secret".
   3. Without a usable saved login: Ask for the username and password together, in one request: kind "login", input "credentials", with a prompt that names the site ("Sign in to Bank of America"). When the answer comes, type the username with type_text and the password with type_handoff_secret (you never see secret values), then submit.
   4. If the site then asks for a code: when it wants the code of an authenticator app and the saved login has a code (hasCode), use type_saved_code. A code sent by text message or email is never in a vault: ask with kind "code", input "secret", saying where the site sent it, and type it with type_handoff_secret.
   5. If the sign-in page or the code page offers to remember the sign-in or the device ("Remember me", "Keep me signed in", "Trust this device"), pass its words as remember_label. The person decides; you then tick or untick that box as they chose before you submit. Without their answer, leave the box as it is.
@@ -555,7 +560,7 @@ export class GoalRunnerService {
   async advance(runId: string, userId: string, orgId: string | null): Promise<RunOutcome> {
     const jobStartedAt = this.clock();
     const db = this.prisma.forUser({ userId });
-    const run = await db.run.findFirst({ where: { id: runId }, include: { task: true, conversation: { select: { allowedDomains: true, confirmRiskyActions: true, useSavedLogins: true, useSavedIdentity: true } } } });
+    const run = await db.run.findFirst({ where: { id: runId }, include: { task: true, conversation: { select: { allowedDomains: true, confirmRiskyActions: true, useSavedLogins: true, useSavedIdentity: true, useSavedCards: true } } } });
     if (!run) return 'failed';
     if (run.status === 'succeeded' || run.status === 'failed' || run.status === 'cancelled') return run.status;
     const session = new FabricSession(this.fabric);
@@ -574,6 +579,10 @@ export class GoalRunnerService {
       if (interrupted.username === 'typing') interrupted.username = undefined;
       memory.log.push('(A sign-in from a saved login was cut off while it was typing. Look at the page and read each field before typing again. A password that may already have been typed is not typed a second time: if you are not signed in, ask the owner.)');
     }
+
+    // A saved card cut off between two fields, or around the pay click (E37.7): what was typed is known from the phases, a payment that
+    // may have happened is never repeated.
+    for (const line of reconcileCardsOnStart(memory.savedCards)) memory.log.push(line);
 
     if (run.cancelRequested) {
       await this.finish(userId, run.id, run.sessionId, session, 'cancelled', { error: 'Cancelled by the user', stopReason: 'cancelled' });
@@ -652,12 +661,28 @@ export class GoalRunnerService {
         if (h.input === 'secret' && memory.askingParam) memory.paramSecrets = { ...(memory.paramSecrets ?? {}), [memory.askingParam]: h.id };
         else if (h.input === 'secret' || h.input === 'credentials') memory.secretHandoffId = h.id;
         const approved = h.kind === 'confirmation' && (h.input !== 'confirm' || (resp?.value ?? h.response?.value) === 'approve');
+        // The owner answered the card question (E37.7): an approval lets exactly this card, shop and amount through, once.
+        const askedCard = memory.savedCards?.asking ?? null;
+        const cardAnswered = Boolean(askedCard && q?.input === 'confirm' && h.kind === 'confirmation');
+        if (cardAnswered && askedCard) {
+          memory.savedCards!.asking = null;
+          if (approved) {
+            memory.savedCards!.approval = approvalFromAsk(askedCard);
+            memory.savedCards!.fields = {};
+            this.tasks.metrics.cardUse('approved');
+            memory.log.push(`The owner allowed paying ${askedCard.amount} ${askedCard.currency} at ${askedCard.site}. Call pay_with_saved_card again for the same card.`);
+          } else {
+            this.tasks.metrics.cardUse('declined');
+            memory.log.push('The owner declined the payment. Do not pay, do not try another card or amount: finish and say that the payment was not made.');
+          }
+        }
         // The approval covers the target the gate stopped (#550), never any later risky click; without a gate, the next one.
         const gate = (q?.gate as unknown as QuestionGate | null) ?? null;
         // A confirmation the model asked on its own names no target: it lets nothing through the gate.
         if (approved && gate) memory.confirmedTarget = { category: gate.category as GateTarget['category'], label: gate.label, host: gate.host };
         // The step the person allowed (#540): the next successful action is recorded as carried out.
-        if (approved) memory.pendingConfirmation = { prompt: q?.prompt ?? memory.askedPrompt ?? '', tries: 0 };
+        // The card question's approval is recorded when the card is typed (`confirmedAction`), not on the next action.
+        if (approved && !cardAnswered) memory.pendingConfirmation = { prompt: q?.prompt ?? memory.askedPrompt ?? '', tries: 0 };
         memory.log.push(line);
       } else if (memory.askingParam) {
         // A sensitive task parameter was not provided (#552): the run cannot do its job.
@@ -710,6 +735,15 @@ export class GoalRunnerService {
     if (savedLoginsOn && identityOptedIn && this.secrets) {
       savedIdentityOn = await this.secrets.identitySupported(userId);
       if (!savedIdentityOn && (memory.chunks ?? 0) === 0) memory.log.push('(Saved identity details are not available for this run: ask the owner for the details a form needs.)');
+    }
+
+    // Saved cards (E37.7): a sub-switch of saved logins like identity. On only when the task or chat opted in, the app (if an AI app
+    // started the run) allows it (`allowSavedCards`, default off), saved logins are on and the provider's grant holds the card scopes.
+    const cardsOptedIn = (run.task ? run.task.useSavedCards : (run.conversation?.useSavedCards ?? false)) && (appAtStart ? appAtStart.allowSavedCards : true);
+    let savedCardsOn = false;
+    if (savedLoginsOn && cardsOptedIn && this.secrets) {
+      savedCardsOn = await this.secrets.cardsSupported(userId);
+      if (!savedCardsOn && (memory.chunks ?? 0) === 0) memory.log.push('(Saved cards are not available for this run: the owner pays or enters a card themselves, so ask them.)');
     }
 
     let sessionId = run.sessionId;
@@ -765,7 +799,9 @@ export class GoalRunnerService {
       get confirmRisky(): boolean {
         const own = (run.task?.confirmRiskyActions ?? run.conversation?.confirmRiskyActions ?? false) || app?.confirmPurchases === true;
         const unattended = !run.conversationId && run.trigger !== 'chat';
-        return own || (state.usedLogins.length > 0 && unattended && (run.task?.unattendedPayments ?? 'ask') !== 'allow');
+        // A card was typed and the pay button is not pressed yet (E37.7): the click is gated, so the approval for the card is what lets it through.
+        const cardTyped = memory.savedCards?.approval?.typed === true && memory.savedCards.approval.pay !== 'done';
+        return own || cardTyped || (state.usedLogins.length > 0 && unattended && (run.task?.unattendedPayments ?? 'ask') !== 'allow');
       },
     };
     /** Whether a URL is allowed by the task and by the app. */
@@ -795,6 +831,8 @@ export class GoalRunnerService {
       usedLogins: readUsedSavedLogins(run.usedSavedLogins),
       /** The identity details the run filled (E37.6), as `runs.used_saved_identity` holds them: labels, never values. */
       usedIdentity: readUsedSavedIdentity(run.usedSavedIdentity),
+      /** The saved cards the run paid with (E37.7), as `runs.used_saved_cards` holds them: brand, last four and amounts. */
+      usedCards: readUsedSavedCards(run.usedSavedCards) as UsedSavedCard[],
     };
 
     /** What the run page shows as happening now (#379). Best effort: never fails the run. */
@@ -1118,7 +1156,7 @@ export class GoalRunnerService {
     };
 
     /** Whether the person's approval covers this target. */
-    const approved = (target: GateTarget) => Boolean(memory.confirmedTarget && approvalCovers(memory.confirmedTarget, target));
+    const approved = (target: GateTarget) => Boolean(memory.confirmedTarget && approvalCovers(memory.confirmedTarget, target)) || cardCovers(memory.savedCards, target);
     /** A rememberable question with the scopes this run offers: always everywhere; this task or this chat when it has one. */
     const withScopes = <T extends object>(r: T | null): (T & { scopes: ('everywhere' | 'this_task' | 'this_chat')[] }) | null =>
       r ? { ...r, scopes: ['everywhere', ...(run.taskId ? (['this_task'] as const) : []), ...(run.conversationId ? (['this_chat'] as const) : [])] } : null;
@@ -1130,7 +1168,8 @@ export class GoalRunnerService {
      * purchases (#464), never while "Pause all" is on. The model is not asked and cannot claim one.
      */
     const savedGate = async (target: GateTarget, described: boolean) => {
-      if (!this.approvals || !described || !target.host || app?.confirmPurchases === true) return null;
+      // After a payment that may or may not have happened, no remembered approval applies to the pay button (E37.7).
+      if (!this.approvals || !described || !target.host || app?.confirmPurchases === true || memory.savedCards?.paymentUnknown) return null;
       try {
         return await this.approvals.match(userId, {
           kind: 'gate',
@@ -1287,15 +1326,24 @@ export class GoalRunnerService {
      * Run `fn` (a screenshot) with an opaque box over every filled input of the page, so no picture shows a value. The boxes
      * are in the page when the pixels are read and are removed afterwards. If they cannot be drawn, nothing is captured.
      */
+    /** The points a card field was typed at inside an embedded frame, on the page now on screen (E37.7). */
+    const cardPointsNow = async (): Promise<{ x: number; y: number }[]> => {
+      const pts = memory.savedCards?.points;
+      if (!pts?.length) return [];
+      const page = pageOf(await currentUrl());
+      return page ? pts.filter((p) => p.page === page).map((p) => ({ x: p.x, y: p.y })) : [];
+    };
     const withFilledCovered = async <T,>(fn: (covered: string[]) => Promise<T>): Promise<T> => {
       const filled = await filledNow();
-      if (filled.length === 0) return fn([]);
+      const points = await cardPointsNow();
+      if (filled.length === 0 && points.length === 0) return fn([]);
       const cover = `/* hexactra:cover-filled */(() => { const id = '__hexactra_filled_cover__'; const old = document.getElementById(id); if (old) old.remove();
         const root = document.createElement('div'); root.id = id; root.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483646;';
-        for (const s of ${JSON.stringify(filled)}) { let e = null; try { e = document.querySelector(s); } catch (x) { e = null; } if (!e) continue;
-          const r = e.getBoundingClientRect(); if (r.width < 1 || r.height < 1) continue;
+        const cover = (e) => { if (!e) return; const r = e.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return;
           const b = document.createElement('div'); b.textContent = 'filled'; b.style.cssText = 'position:fixed;left:' + r.left + 'px;top:' + r.top + 'px;width:' + r.width + 'px;height:' + r.height + 'px;background:#6b7280;color:#fff;font:11px/1.2 sans-serif;display:flex;align-items:center;padding:0 4px;box-sizing:border-box;overflow:hidden;';
-          root.appendChild(b); }
+          root.appendChild(b); };
+        for (const s of ${JSON.stringify(filled)}) { let e = null; try { e = document.querySelector(s); } catch (x) { e = null; } cover(e); }
+        for (const pt of ${JSON.stringify(points)}) { let e = null; try { e = document.elementFromPoint(pt.x, pt.y); } catch (x) { e = null; } cover(e); }
         document.documentElement.appendChild(root); return true; })()`;
       const uncover = `/* hexactra:uncover-filled */(() => { const e = document.getElementById('__hexactra_filled_cover__'); if (e) e.remove(); return true; })()`;
       const drawn = await session.act(sessionId!, { type: 'evaluate', script: cover, await_promise: false }, ACTION_TIMEOUT_MS);
@@ -1601,6 +1649,73 @@ export class GoalRunnerService {
       }),
     ];
 
+    // ------------------------------------------------------------------ saved cards (E37.7, #596)
+    // The rules are in `saved-card-tools.ts`; this hands them the runner's own helpers. A card value never reaches this process.
+    const lastStepOk = async (seqBefore: number): Promise<boolean> => {
+      if (state.seq === seqBefore) return false;
+      const step = await this.prisma.runStep.findFirst({ where: { runId: run.id, seq: state.seq }, select: { ok: true, kind: true } });
+      return Boolean(step?.ok && step.kind === 'action');
+    };
+    const cardCtx: SavedCardToolsContext = {
+      userId,
+      orgId,
+      runId: run.id,
+      taskId: run.taskId ?? null,
+      conversationId: run.conversationId ?? null,
+      runInputs: run.inputs,
+      task: run.task ? { parameters: run.task.parameters } : null,
+      unattended,
+      unattendedPayments: run.task?.unattendedPayments === 'allow' ? 'allow' : 'ask',
+      appConfirmsPurchases: app?.confirmPurchases === true,
+      sessionId: () => sessionId!,
+      session,
+      memory: () => (memory.savedCards ??= { refs: {} }),
+      persist: persistSavedLogins,
+      loginOpts,
+      approvals: this.approvals,
+      notifier: this.notifier,
+      run: { id: run.id, goal: run.goal, taskId: run.taskId ?? null, trigger: run.trigger, conversationId: run.conversationId ?? null },
+      log: this.log,
+      currentUrl,
+      siteAllowed,
+      budgetStop: () => {
+        const spent = budgetCheck();
+        if (!spent) return null;
+        stopForBudget(spent);
+        return `${BUDGET_ERROR[spent]}.`;
+      },
+      record,
+      setActivity,
+      askPerson,
+      withScopes,
+      noteFilled: async (target, label) => {
+        if (target.selector) return noteFilledInput(target.selector, label);
+        const page = pageOf(await currentUrl());
+        const sc = (memory.savedCards ??= { refs: {} });
+        if (page && target.x !== null && target.y !== null && !(sc.points ?? []).some((p) => p.page === page && p.x === target.x && p.y === target.y)) sc.points = [...(sc.points ?? []), { page, x: target.x, y: target.y }].slice(-20);
+      },
+      usedCards: () => state.usedCards,
+      setUsedCards: async (next) => {
+        state.usedCards = next;
+        await db.run.updateMany({ where: { id: run.id }, data: { usedSavedCards: next as never } });
+      },
+      stepSeq: () => state.seq,
+      confirmedAction: async (prompt, action) => {
+        const row = await db.run.findFirst({ where: { id: run.id }, select: { confirmedActions: true } });
+        const next = appendConfirmedAction(row?.confirmedActions ?? null, { seq: state.seq, prompt, action, at: new Date() });
+        await db.run.updateMany({ where: { id: run.id }, data: { confirmedActions: next as never } });
+      },
+      providerOutcome: async (o) => {
+        await this.secrets?.outcome(userId, o === 'ok' ? { ok: true } : { ok: false, code: o });
+      },
+      metric: (o) => this.tasks.metrics.cardUse(o),
+      providerAddress: async () => (await this.secrets?.providerAddress(userId)) ?? null,
+      warnPrompt: (merchant) =>
+        `Warning: the agent tried to pay with a saved card at ${merchant}, but that shop (or the payment frame on it) is not what you allowed this card for. Nothing was typed. Please look at the browser; the agent will not use a card again in this run.`,
+    };
+    const cardPayCtx = cardCtx;
+    const savedCardTools: AiDefinedTool[] = savedCardsOn ? buildSavedCardTools(cardCtx) : [];
+
     const tools: AiDefinedTool[] = [
       defineTool({
         name: 'observe_elements',
@@ -1637,9 +1752,11 @@ export class GoalRunnerService {
           const rule = target && !approved(target) ? await savedGate(target, described !== null) : null;
           if (target && !approved(target) && !rule) return refuseGated('click', { selector }, target, reason);
           const seqBefore = state.seq;
+          const cardPay = rule ? false : await beginCardPay(cardPayCtx, target);
           const out = await act({ type: 'click', selector }, reason);
           if (rule) await allowedByRule(rule, seqBefore, 'click');
           else spend(target);
+          if (cardPay) await endCardPay(cardPayCtx, await lastStepOk(seqBefore));
           return out;
         },
       }),
@@ -1706,9 +1823,11 @@ export class GoalRunnerService {
           const rule = target && !approved(target) ? await savedGate(target, described !== null) : null;
           if (target && !approved(target) && !rule) return refuseGated('click_at', { mark: n }, target, reason);
           const seqBefore = state.seq;
+          const cardPay = rule ? false : await beginCardPay(cardPayCtx, target);
           const out = await act({ type: 'click_at', x, y, ...(double ? { click_count: 2 } : {}) }, reason, { x: mark.x, y: mark.y, w: mark.w, h: mark.h });
           if (rule) await allowedByRule(rule, seqBefore, 'click_at');
           else spend(target);
+          if (cardPay) await endCardPay(cardPayCtx, await lastStepOk(seqBefore));
           return out;
         },
       }),
@@ -1730,9 +1849,11 @@ export class GoalRunnerService {
           const rule = target && !approved(target) ? await savedGate(target, described !== null) : null;
           if (target && !approved(target) && !rule) return refuseGated('click_at', { x, y }, target, reason);
           const seqBefore = state.seq;
+          const cardPay = rule ? false : await beginCardPay(cardPayCtx, target);
           const out = await act({ type: 'click_at', x, y, ...(button !== 'left' ? { button } : {}), ...(double ? { click_count: 2 } : {}), ...(modifiers.length ? { modifiers } : {}) }, reason);
           if (rule) await allowedByRule(rule, seqBefore, 'click_at');
           else spend(target);
+          if (cardPay) await endCardPay(cardPayCtx, await lastStepOk(seqBefore));
           return out;
         },
       }),
@@ -1830,14 +1951,14 @@ export class GoalRunnerService {
       defineTool({
         name: 'request_human',
         description:
-          'Ask the person for what only they have: a username, a password, a one-time code, a passkey touch, a CAPTCHA, a choice, a number, or a confirmation before an irreversible step. ' +
+          'Ask the person for what only they have: a username, a password, a one-time code, a passkey touch, a CAPTCHA, a choice, a number, or a confirmation before an irreversible step (kind "verification": their bank wants them to confirm a payment in a banking app). ' +
           'For a sign-in, ask once for the username and password (kind login, input credentials), then any code (kind code, input secret), and type each yourself; do not ask the person to sign in in the browser. ' +
           'input: none (they do something, then press Done), text, secret (a code or password; type it with type_handoff_secret), credentials (a username, typed with type_text, and a password, typed with type_handoff_secret), choice (one of options), ' +
           'multi_choice (several of options), number (with constraints min/max/step/unit), confirm (approve or deny; risk "high" by default), ' +
           'takeover (they take over the browser, then press Done: only for a passkey, a CAPTCHA you cannot pass, or when they declined to give a credential). ' +
           'Set the fields that do not apply to null. The run pauses until they answer.',
         parameters: z.object({
-          kind: z.enum(['captcha', 'code', 'passkey', 'login', 'confirmation', 'other']),
+          kind: z.enum(['captcha', 'code', 'passkey', 'login', 'confirmation', 'verification', 'other']),
           prompt: z.string().min(1).max(1500),
           input: z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials']),
           /** Bare option labels (each its own id); or use `options`. */
@@ -1971,6 +2092,7 @@ export class GoalRunnerService {
       }),
       ...(savedLoginsOn ? savedLoginTools : []),
       ...(savedIdentityOn ? savedIdentityTools : []),
+      ...savedCardTools,
       defineTool({
         name: 'finish',
         description: 'End the run with a short factual result.',
@@ -2271,7 +2393,7 @@ export class GoalRunnerService {
         memory.look = null;
         try {
           // A saved detail on screen is covered in the picture and its mark's label is masked (E37.6); a desktop picture cannot be covered.
-          if (screen === 'desktop' && (await filledNow()).length) throw new Error('a saved detail is on the page, and the desktop picture would show it: use the page screenshot');
+          if (screen === 'desktop' && ((await filledNow()).length || (await cardPointsNow()).length)) throw new Error('a saved detail is on the page, and the desktop picture would show it: use the page screenshot');
           view = await withFilledCovered(async (covered) => {
             const v = await captureScreen(session, this.fabric, sessionId!, screen);
             if (screen !== 'page' || covered.length === 0) return v;

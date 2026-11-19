@@ -9,7 +9,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { SecretsPolicyService } from './secrets-policy.service';
 import { SecretsProviderRegistrar, type RegistrationResult } from './secrets-provider.registrar';
 import { VaultConnectionService, type ProviderOutcome } from './vault-connection.service';
-import { hasIdentityScopes } from './vault-contract';
+import { hasCardScopes, hasIdentityScopes } from './vault-contract';
 
 @Injectable()
 export class RunSecretsService {
@@ -44,6 +44,21 @@ export class RunSecretsService {
     try {
       if ((await this.policy.activeProvider(userId)) !== 'vault') return false;
       return hasIdentityScopes(await this.connection.grantedScopes(userId));
+    } catch (e) {
+      this.log.warn(`could not read the granted scopes (${e instanceof Error ? e.name : 'error'})`);
+      return false;
+    }
+  }
+
+  /**
+   * Whether the owner's active provider can look up and fill payment cards (E37.7): the remote Vault, with a grant that holds both
+   * card scopes. The built-in store holds logins only. The runner asks this only for a run whose task or chat opted in to cards.
+   * Never throws.
+   */
+  async cardsSupported(userId: string): Promise<boolean> {
+    try {
+      if ((await this.policy.activeProvider(userId)) !== 'vault') return false;
+      return hasCardScopes(await this.connection.grantedScopes(userId));
     } catch (e) {
       this.log.warn(`could not read the granted scopes (${e instanceof Error ? e.name : 'error'})`);
       return false;

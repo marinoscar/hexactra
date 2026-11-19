@@ -31,6 +31,8 @@ model ConnectedAppSettings {
   allowSavedLogins  Boolean  @default(false) @map("allow_saved_logins")
   /// Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default; needs `allowSavedLogins`.
   allowSavedIdentity Boolean @default(false) @map("allow_saved_identity")
+  /// Let this app's runs pay with the owner's saved cards (E37.7). Off by default; needs `allowSavedLogins`, and its "confirm purchases" limit still applies.
+  allowSavedCards Boolean @default(false) @map("allow_saved_cards")
   /// Refuse new runs and sessions from this app without disconnecting it.
   paused            Boolean  @default(false)
   /// The scopes the owner was already told about (`app.connected`, `app.scope_added`), so a step-up announces only what it adds.

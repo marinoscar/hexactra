@@ -16,6 +16,9 @@ export const activityItemSchema = z.object({
   outcome: z.string().describe('A closed code: `typed`, `selected`, `ok`, or why nothing was typed (`origin_mismatch`, `not_found`, `disabled`, `rate_limited`, ...).'),
   refused: z.boolean().describe('Nothing was typed: the fabric or the provider refused or failed.'),
   matches: z.number().int().nullable().describe('For a lookup: how many logins matched the page.'),
+  amount: z.string().nullable().describe('A card field (E37.7): the amount the agent declared for the purchase, a decimal with two places. Null for anything else.'),
+  currency: z.string().nullable().describe('A card field: the currency of the declared amount (ISO 4217).'),
+  frameSite: z.string().nullable().describe("A card field typed into an embedded payment frame: the frame's host."),
 });
 export const activityListSchema = z.object({
   items: z.array(activityItemSchema),
@@ -56,3 +59,30 @@ export const identityListingSchema = z.object({
   manageUrl: z.string().nullable().describe("The provider's address, where each item's allowed sites are managed."),
 });
 export class IdentityListingResponseDto extends createZodDto(identityListingSchema) {}
+
+export const cardListingSchema = z.object({
+  available: z.boolean().describe('Cards can be read and used: connected, the switches on and the card permissions granted.'),
+  reason: z.enum(['ok', 'not_connected', 'needs_reconnect', 'needs_scope', 'switched_off', 'provider_off', 'unavailable', 'bad_merchant']).describe('Why not, when `available` is false. `needs_scope`: connect again and allow cards. `provider_off`: the provider has card release switched off. `bad_merchant`: not an https address of a site.'),
+  merchant: z.string().nullable().describe('The merchant asked about, as `https://<host>`; null when it was not a usable address.'),
+  cards: z
+    .array(
+      z.object({
+        name: z.string().describe("The saved card's name"),
+        brand: z.string().nullable().describe('The card network (`visa`)'),
+        last4: z.string().nullable().describe('The last four digits: never more'),
+        expires: z.string().nullable().describe('The card\'s expiry as MM/YYYY'),
+        limit: z.object({
+          maxAmount: z.string().describe('The most one purchase may be at this merchant, a decimal with two places'),
+          currency: z.string(),
+          includesSecurityCode: z.boolean().describe('The owner allowed the security code for this card at this merchant'),
+          expiresAt: z.string().nullable().describe('When the permission ends, or null'),
+        }),
+      }),
+    )
+    .describe('The cards you opened to the agent that hold a live permission for this merchant. Never a number or a code.'),
+  manageUrl: z.string().nullable().describe("The provider's address, where each card's merchant permissions are made."),
+});
+export class CardListingResponseDto extends createZodDto(cardListingSchema) {}
+
+export const cardQuerySchema = z.object({ merchant: z.string().min(1).max(300).describe('A merchant: a host (`shop.example.test`) or an https address.') }).strict();
+export class CardQueryDto extends createZodDto(cardQuerySchema) {}

@@ -254,7 +254,7 @@ pub fn tools() -> Vec<Value> {
             "browser_request_human",
             "Pause and ask the user to do something only a person should do, or a question only they can answer: solve a CAPTCHA, enter a one-time code, approve a passkey, sign in, confirm a purchase, pick from options. The user is reached on their configured channels (chat, email link, ...). With wait=true (default) this returns the outcome and the person's answer: `value` for text, choice (the option id), number (a decimal string) and confirm (`approve` or `deny`), `values` (option ids) for multi_choice. Use input=secret for one-time codes and passwords: the answer is never returned (`value_withheld`); type it into the page with browser_type_secret and the handoff_id. Use input=takeover when the person must operate the browser themselves.",
             json!({
-                "kind": {"type": "string", "enum": ["captcha", "code", "passkey", "login", "confirmation", "other"]},
+                "kind": {"type": "string", "enum": ["captcha", "code", "passkey", "login", "confirmation", "verification", "other"]},
                 "prompt": {"type": "string", "description": "What the person should do, in plain words."},
                 "input": {"type": "string", "enum": ["none", "text", "secret", "choice", "multi_choice", "number", "confirm", "takeover"], "description": "none: the person acts in the browser and marks it done. takeover: the person operates the browser, then marks it done. confirm: approve or deny."},
                 "choices": {

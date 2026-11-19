@@ -10,6 +10,7 @@ import { SecretsProviderRegistrar } from './secrets-provider.registrar';
 import { SecretsActivityController } from './secrets-activity.controller';
 import { SecretsActivityIngestHandler, SecretsActivityIngestTask } from './secrets-activity.jobs';
 import { SecretsActivityService } from './secrets-activity.service';
+import { SecretsCardsService } from './secrets-cards.service';
 import { SecretsIdentityService } from './secrets-identity.service';
 import { SecretsController } from './secrets.controller';
 import { VaultConnectionsCheck, VaultEgressContributor } from './secrets.doctor';
@@ -42,6 +43,7 @@ import { VaultTokenService } from './vault-token.service';
     SecretsActivityIngestHandler,
     SecretsActivityIngestTask,
     SecretsIdentityService,
+    SecretsCardsService,
     VaultApiClient,
     VaultGrantStore,
     VaultClientConfigs,

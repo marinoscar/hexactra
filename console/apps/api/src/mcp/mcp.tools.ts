@@ -202,7 +202,7 @@ const constraints = z
   .optional()
   .describe('Rules the answer must meet (text, number and multi_choice).');
 const CONSTRAINT_KEYS = { max_length: 'maxLength', pattern: 'pattern', multiline: 'multiline', min: 'min', max: 'max', step: 'step', unit: 'unit', min_selections: 'minSelections', max_selections: 'maxSelections' } as const;
-const KINDS = ['captcha', 'code', 'passkey', 'login', 'confirmation', 'other'] as const;
+const KINDS = ['captcha', 'code', 'passkey', 'login', 'confirmation', 'verification', 'other'] as const;
 const confirmLabel = z.string().min(1).max(40).optional().describe('confirm: the approve button label.');
 const denyLabel = z.string().min(1).max(40).optional().describe('confirm: the deny button label.');
 const risk = z.enum(['low', 'high']).optional().describe('confirm only: "high" (default) lets only signed-in channels answer; "low" also allows notification buttons.');

@@ -19,6 +19,7 @@ pub enum KindArg {
     Passkey,
     Login,
     Confirmation,
+    Verification,
     Other,
 }
 
@@ -30,6 +31,7 @@ impl From<KindArg> for HandoffKind {
             KindArg::Passkey => HandoffKind::Passkey,
             KindArg::Login => HandoffKind::Login,
             KindArg::Confirmation => HandoffKind::Confirmation,
+            KindArg::Verification => HandoffKind::Verification,
             KindArg::Other => HandoffKind::Other,
         }
     }

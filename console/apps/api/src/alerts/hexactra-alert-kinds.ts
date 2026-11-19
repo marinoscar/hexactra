@@ -26,6 +26,16 @@ export interface AlertSources {
   expensiveRuns(overUsd: number, since: Date): Promise<ExpensiveRun[]>;
   /** Saved approvals (#554) used at least `minUses` times since `since`, busiest first. Optional: a source that predates #554 has none. */
   busyApprovals?(minUses: number, since: Date): Promise<BusyApproval[]>;
+  /** Saved card payments (E37.7) per user since `since`: how many cards were typed (`number` released) and the largest declared amount. Optional. */
+  cardUsage?(since: Date): Promise<CardUsage[]>;
+}
+
+/** One user's saved-card payments in a window: counts and the largest declared amount; never a card, a merchant or a value. */
+export interface CardUsage {
+  userId: string;
+  uses: number;
+  /** The largest declared amount, a decimal with two places, with its currency; null when none was recorded. */
+  largest: { amount: string; currency: string } | null;
 }
 
 /** A saved approval that was used a lot: ids, kind and category only (never a page label). */
@@ -122,6 +132,8 @@ export const HEXACTRA_ALERT_KINDS = {
   RUN_COST_SPIKE: 'hexactra_run_cost',
   /** #554. The starter rule's key is `hexactra.approval_busy`. */
   APPROVAL_BUSY: 'hexactra_approval_busy',
+  /** E37.7. The starter rule's key is `hexactra.card_use`. */
+  CARD_USE: 'hexactra_card_use',
 } as const;
 
 const hostOfflineConfig = z.object({ includeDraining: z.boolean().default(false) });
@@ -284,6 +296,33 @@ export const approvalBusyKind: AlertRuleKind<z.infer<typeof approvalBusyConfig>>
   describe: (rule) => `One saved approval used more than ${rule.config.maxUses} times within ${rule.config.windowHours} h`,
 };
 
+const cardUseConfig = z.object({
+  /** Card payments of one user in the window that fire the alert. */
+  maxUses: z.number().int().min(1).max(1_000).default(5),
+  /** A single declared amount above this (any currency) fires it; null checks no amount. */
+  maxAmount: z.number().positive().nullable().default(null),
+  windowHours: z.number().int().min(1).max(168).default(24),
+});
+export const cardUseKind: AlertRuleKind<z.infer<typeof cardUseConfig>> = {
+  id: HEXACTRA_ALERT_KINDS.CARD_USE,
+  label: 'Saved card used a lot',
+  description: "A user's agents paid with saved cards more often than expected in a day, or one payment was above the deployment's threshold.",
+  configSchema: cardUseConfig,
+  async evaluate(ctx, rule) {
+    const { maxUses, maxAmount, windowHours } = rule.config;
+    const since = new Date(ctx.now.getTime() - windowHours * 3_600_000);
+    const rows = (await need().cardUsage?.(since)) ?? [];
+    return rows.map((u) => {
+      const overUses = u.uses > maxUses;
+      const overAmount = maxAmount !== null && u.largest !== null && Number(u.largest.amount) > maxAmount;
+      const breached = overUses || overAmount;
+      const why = [overUses ? `${u.uses} card payments (limit ${maxUses})` : '', overAmount ? `a payment of ${u.largest!.amount} ${u.largest!.currency} (limit ${maxAmount})` : ''].filter(Boolean).join(', ');
+      return { labels: { 'user.id': u.userId }, value: u.uses, breached, summary: breached ? `${rule.name}: in ${windowHours} h, ${why}` : `${rule.name}: ${u.uses} card payment${u.uses === 1 ? '' : 's'} in ${windowHours} h` };
+    });
+  },
+  describe: (rule) => `More than ${rule.config.maxUses} saved-card payments of one user within ${rule.config.windowHours} h${rule.config.maxAmount !== null ? `, or one above ${rule.config.maxAmount}` : ''}`,
+};
+
 // Run retention keeps runs for these kinds' windows: a new kind that reads `runs` joins the list.
 const RUN_READERS: readonly string[] = [HEXACTRA_ALERT_KINDS.RUN_BUDGET, HEXACTRA_ALERT_KINDS.RUN_STALLED, HEXACTRA_ALERT_KINDS.RUN_COST_SPIKE];
 if (RUN_READING_ALERT_KINDS.length !== RUN_READERS.length || RUN_READING_ALERT_KINDS.some((k) => !RUN_READERS.includes(k))) {
@@ -296,6 +335,7 @@ registerAlertRuleKind(runBudgetKind);
 registerAlertRuleKind(runStalledKind);
 registerAlertRuleKind(runCostSpikeKind);
 registerAlertRuleKind(approvalBusyKind);
+registerAlertRuleKind(cardUseKind);
 
 /**
  * The rules the console creates once (by key); admins tune them at
@@ -311,4 +351,6 @@ export const HEXACTRA_ALERT_RULES = [
   { key: 'hexactra.run_cost', name: 'Expensive run', kind: HEXACTRA_ALERT_KINDS.RUN_COST_SPIKE, severity: 'warning', config: { maxRunCostUsd: 10, windowHours: 24 }, forSeconds: 0, enabled: false },
   // #554: a saved approval that keeps being used (a loop pressing a remembered button).
   { key: 'hexactra.approval_busy', name: 'Saved approval used a lot', kind: HEXACTRA_ALERT_KINDS.APPROVAL_BUSY, severity: 'warning', config: { maxUses: 20, windowHours: 24 }, forSeconds: 0, enabled: true },
+  // E37.7: saved cards are the highest-risk secret: more than five payments a day in one account, or a payment above the threshold the administrator sets.
+  { key: 'hexactra.card_use', name: 'Saved card used a lot', kind: HEXACTRA_ALERT_KINDS.CARD_USE, severity: 'warning', config: { maxUses: 5, maxAmount: null, windowHours: 24 }, forSeconds: 0, enabled: true },
 ] as const;

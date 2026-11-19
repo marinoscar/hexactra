@@ -31,9 +31,16 @@ export const ACTIVITY_FIELDS = [
   'country',
   'phone',
   'email',
+  // Card fields (E37.7): the field kind, never a value.
+  'number',
+  'expiry',
+  'exp_month',
+  'exp_year',
+  'holder_name',
+  'security_code',
 ] as const;
 /** The purposes the fabric sends (Vault's `purpose` for fill and totp). */
-export const ACTIVITY_PURPOSES = ['login', 'signup', 'password_change', 'mfa', 'form'] as const;
+export const ACTIVITY_PURPOSES = ['login', 'signup', 'password_change', 'mfa', 'form', 'purchase'] as const;
 /**
  * The closed outcome codes of the fabric (`typed` and `ok` for success, the rest are `Fail` codes of
  * runtime/secrets.rs). Anything else is stored as `other`.
@@ -55,6 +62,14 @@ export const ACTIVITY_OUTCOMES = [
   'typing_failed',
   'insecure_origin',
   'no_option',
+  // Card refusals (E37.7).
+  'amount_exceeded',
+  'currency_mismatch',
+  'security_code_not_granted',
+  'grant_expired',
+  'limit_reached',
+  'cards_disabled',
+  'frame_unknown',
   'timed_out',
   'internal',
   'other',
@@ -86,6 +101,10 @@ export interface SanitizedActivity {
   outcome: ActivityOutcome;
   matches: number | null;
   released: boolean;
+  /** A card field (E37.7): the purchase's amount (a decimal with at most two places), its currency and the payment frame's host. Null otherwise. */
+  amount: string | null;
+  currency: string | null;
+  frameSite: string | null;
 }
 
 const asString = (v: unknown): string | null => (typeof v === 'string' ? v : null);
@@ -98,6 +117,9 @@ export function siteOf(origin: unknown): string | null {
   const host = hostOf(raw)?.toLowerCase() ?? null;
   return host && host.length <= 255 && HOST.test(host) ? host : null;
 }
+
+const AMOUNT = /^\d{1,8}(\.\d{1,2})?$/;
+const CURRENCY = /^[A-Z]{3}$/;
 
 /** One fabric event (`{ seq, type, at, data }`) as a row, or `null` when it is not a usable activity event. */
 export function sanitizeSecretsEvent(raw: unknown): SanitizedActivity | null {
@@ -131,6 +153,9 @@ export function sanitizeSecretsEvent(raw: unknown): SanitizedActivity | null {
     outcome: oneOf(ACTIVITY_OUTCOMES, d.outcome) ?? 'other',
     matches: event === 'lookup' ? matches : null,
     released: d.released === true,
+    amount: event === 'release' && typeof d.amount === 'string' && AMOUNT.test(d.amount) ? d.amount : null,
+    currency: event === 'release' && typeof d.currency === 'string' && CURRENCY.test(d.currency) ? d.currency : null,
+    frameSite: event === 'release' ? siteOf(d.frame_origin) : null,
   };
 }
 

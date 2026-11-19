@@ -1919,6 +1919,10 @@ pub enum HandoffKind {
     Login,
     /// A purchase, payment or other irreversible step to approve.
     Confirmation,
+    /// The person's own bank or card issuer wants them to verify a payment
+    /// (a banking-app prompt, a 3-D Secure step): the agent does not try to
+    /// pass it (E37.7).
+    Verification,
     /// Anything else needing human judgement.
     Other,
 }

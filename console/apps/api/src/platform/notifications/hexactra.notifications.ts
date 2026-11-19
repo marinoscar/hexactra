@@ -19,6 +19,10 @@ export const RUN_OVER_BUDGET_EVENT = 'runs.over_budget';
 export const RUN_SAVED_APPROVALS_EVENT = 'runs.saved_approvals_used';
 /** A scheduled run signed in with a saved login (E37.3): once per run, grouped, at the end of the run. */
 export const RUN_SAVED_LOGIN_EVENT = 'runs.saved_login_used';
+/** A run typed a saved card at a shop (E37.7): once per use, attended or not, with the shop and the amount. */
+export const RUN_CARD_USED_EVENT = 'runs.card_used';
+/** The amount a run read on the confirmation page differs from the one it declared before paying (E37.7). */
+export const RUN_CARD_AMOUNT_MISMATCH_EVENT = 'runs.card_amount_mismatch';
 /** The owner's Vault refused the saved grant (revoked, replayed or expired) and must be connected again (E37.2): once per episode. */
 export const SECRETS_NEEDS_RECONNECT_EVENT = 'secrets.needs_reconnect';
 
@@ -87,6 +91,16 @@ const savedApprovals: BrowserNotificationTemplate = (d) => ({
 const savedLoginUsed: BrowserNotificationTemplate = (d) => ({
   title: 'Signed in with a saved login',
   body: trim(str(d, 'line') || 'A scheduled run signed in with a saved login.', 180),
+  link: `/runs/${str(d, 'runId')}`,
+});
+const cardUsed: BrowserNotificationTemplate = (d) => ({
+  title: 'A saved card was used',
+  body: trim(str(d, 'line') || 'An agent paid with a saved card.', 180),
+  link: `/runs/${str(d, 'runId')}`,
+});
+const cardAmountMismatch: BrowserNotificationTemplate = (d) => ({
+  title: 'The amount charged differs',
+  body: trim(str(d, 'line') || 'The amount an agent read on the confirmation page differs from the one it declared.', 180),
   link: `/runs/${str(d, 'runId')}`,
 });
 const secretsNeedsReconnect: BrowserNotificationTemplate = () => ({
@@ -206,6 +220,26 @@ export const HEXACTRA_NOTIFICATIONS: readonly NotificationRegistration[] = [
       defaultEnabled: true,
     },
     browserTemplate: savedLoginUsed,
+  },
+  {
+    event: {
+      key: RUN_CARD_USED_EVENT,
+      label: 'Saved card used',
+      description: 'Every time an agent types a saved card at a shop, whether or not you were watching: the shop and the amount it declared.',
+      channels: ['browser', ...PUSH],
+      defaultEnabled: true,
+    },
+    browserTemplate: cardUsed,
+  },
+  {
+    event: {
+      key: RUN_CARD_AMOUNT_MISMATCH_EVENT,
+      label: 'Amount charged differs from the one declared',
+      description: 'After a payment with a saved card, when the amount the agent read on the confirmation page differs from the one it declared before paying.',
+      channels: ['browser', ...PUSH],
+      defaultEnabled: true,
+    },
+    browserTemplate: cardAmountMismatch,
   },
   {
     event: {

@@ -35,6 +35,9 @@ model ApprovalRule {
   taskId                String           @default("") @map("task_id") @db.VarChar(36)
   conversationId        String           @default("") @map("conversation_id") @db.VarChar(36)
   maxAmount             Decimal?         @map("max_amount") @db.Decimal(12, 2)
+  /// A saved card (E37.7): `<provider>:<item id>`; empty for every other rule. A card rule is a `gate` rule of category `payment`
+  /// bound to the merchant's site AND this card, with a REQUIRED `maxAmount` (in the currency named by its match key). Part of the key.
+  cardRef               String           @default("") @map("card_ref") @db.VarChar(200)
   expiresAt             DateTime?        @map("expires_at") @db.Timestamptz
   enabled               Boolean          @default(true)
   createdFromQuestionId String?          @map("created_from_question_id") @db.Uuid
@@ -48,7 +51,7 @@ model ApprovalRule {
   user User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   uses ApprovalRuleUse[]
 
-  @@unique([userId, kind, host, category, matchKey, taskId, conversationId])
+  @@unique([userId, kind, host, category, matchKey, taskId, conversationId, cardRef], name: "approval_rule_key", map: "approval_rules_user_id_kind_host_category_match_key_task_id_key")
   @@index([userId, host, enabled])
   @@map("approval_rules")
 }
