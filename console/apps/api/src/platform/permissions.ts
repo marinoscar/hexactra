@@ -41,3 +41,27 @@ export const PERMISSION_OPTIONS = {
   ],
   app: { permissions: [NOTES_PERMISSIONS, FABRIC_PERMISSIONS, FLEET_PERMISSIONS, TASKS_PERMISSIONS, POLICIES_PERMISSIONS, CHAT_PERMISSIONS, CONNECTED_APPS_PERMISSIONS, MCP_PERMISSIONS, MEMORIES_PERMISSIONS, APPROVALS_PERMISSIONS, SECRETS_PERMISSIONS] },
 } satisfies PlatformPermissionOptions;
+
+// The permission id type. `@marinoscar/vault-api` (the built-in secrets store, E37.5) augments the platform's
+// `IdentityPermissionIds` with ITS permission ids, and an augmentation turns the open `string` into a closed union, so
+// every id the console itself enforces must be added here or `@Auth({ permissions })` stops compiling for it. The
+// ids are derived from the app's own permission sets, so adding one needs no change here.
+type AppPermissionSet =
+  | typeof NOTES_PERMISSIONS
+  | typeof FABRIC_PERMISSIONS
+  | typeof FLEET_PERMISSIONS
+  | typeof TASKS_PERMISSIONS
+  | typeof POLICIES_PERMISSIONS
+  | typeof CHAT_PERMISSIONS
+  | typeof CONNECTED_APPS_PERMISSIONS
+  | typeof MCP_PERMISSIONS
+  | typeof MEMORIES_PERMISSIONS
+  | typeof APPROVALS_PERMISSIONS
+  | typeof SECRETS_PERMISSIONS;
+// Distributive over the union (`keyof (A | B)` would keep only the keys both sets share).
+type IdsOf<T> = T extends Record<string, { readonly id: infer I }> ? I : never;
+type AppPermissionId = IdsOf<AppPermissionSet>;
+
+declare module '@marinoscar/platform-api/identity' {
+  interface IdentityPermissionIds extends Record<AppPermissionId, true> {}
+}

@@ -28,6 +28,16 @@ describe('FabricSessionSecretsRegistry', () => {
     ]);
   });
 
+  it('registers the built-in store as kind "console" under the provider id "builtin" (E37.5)', async () => {
+    const { calls, registry } = fake(() => ({ ...view, provider: 'builtin', kind: 'console' }));
+    await registry.registerSecretsProvider('user-a', { kind: 'console', baseUrl: 'http://api:3000/api/internal/secrets-store/v1', accessToken: 'sct_canary', expiresAt: '2030-01-02T03:04:05.000Z' });
+    await registry.unregisterSecretsProvider('user-a', 'console');
+    expect(calls).toEqual([
+      ['PUT', '/v1/secrets-providers/user-a/builtin', { kind: 'console', base_url: 'http://api:3000/api/internal/secrets-store/v1', access_token: 'sct_canary', expires_at: '2030-01-02T03:04:05.000Z' }],
+      ['DELETE', '/v1/secrets-providers/user-a/builtin', undefined],
+    ]);
+  });
+
   it('percent-encodes the owner id in the path', async () => {
     const { calls, registry } = fake(() => view);
     await registry.registerSecretsProvider('user/a b', REG);

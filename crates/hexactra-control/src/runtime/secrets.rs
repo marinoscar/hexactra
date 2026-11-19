@@ -140,8 +140,15 @@ impl SecretsProviders {
             return Err(RegisterError::Invalid("expires_at is in the past".into()));
         }
         if let Some(u) = &req.base_url {
-            hexactra_credential_resolver::http::check_base_url(u)
-                .map_err(RegisterError::Invalid)?;
+            // A Vault's address must be https (http only on loopback); the
+            // console's callback address is on the deployment's own network
+            // and may be plain http on a private path (`http://api:3000`).
+            let checked = if req.kind == SecretsProviderKind::Console {
+                hexactra_credential_resolver::console::check_console_url(u)
+            } else {
+                hexactra_credential_resolver::http::check_base_url(u)
+            };
+            checked.map(|_| ()).map_err(RegisterError::Invalid)?;
         }
         let provider = build_provider(&req);
         // The provider now holds the token (zeroized on drop); wipe the
@@ -308,9 +315,23 @@ fn build_provider(
                     .map_err(RegisterError::Invalid)?;
             Ok(Arc::new(p))
         }
-        SecretsProviderKind::Console => Err(RegisterError::Unsupported(
-            "console-hosted providers are not implemented in this build (E37.5)".into(),
-        )),
+        SecretsProviderKind::Console => {
+            let missing =
+                |what: &str| RegisterError::Invalid(format!("a console provider needs {what}"));
+            let base_url = req.base_url.as_deref().ok_or_else(|| missing("base_url"))?;
+            let token = req
+                .access_token
+                .clone()
+                .ok_or_else(|| missing("access_token"))?;
+            let expires_at = req.expires_at.ok_or_else(|| missing("expires_at"))?;
+            let p = hexactra_credential_resolver::ConsoleProvider::new(
+                base_url,
+                token,
+                Some(expires_at),
+            )
+            .map_err(RegisterError::Invalid)?;
+            Ok(Arc::new(p))
+        }
     }
 }
 
@@ -1272,12 +1293,28 @@ mod tests {
             r.register("user-a", "test", bad_url),
             Err(RegisterError::Invalid(_))
         ));
-        // The console provider is not built yet (E37.5).
+        // A console provider needs its callback address, credential and expiry (E37.5).
         let mut console = test_req();
         console.kind = SecretsProviderKind::Console;
         assert!(matches!(
             r.register("user-a", "builtin", console),
-            Err(RegisterError::Unsupported(_))
+            Err(RegisterError::Invalid(_))
+        ));
+        let console_ok = || RegisterSecretsProviderRequest {
+            kind: SecretsProviderKind::Console,
+            base_url: Some("http://api:3000/api/internal/secrets-store/v1".into()),
+            access_token: Some("sct_canary-token-not-logged".into()),
+            expires_at: Some(Utc::now() + chrono::Duration::minutes(5)),
+            settings: None,
+        };
+        let v = r.register("user-a", "builtin", console_ok()).unwrap();
+        assert_eq!(v.kind, SecretsProviderKind::Console);
+        assert!(!serde_json::to_string(&v).unwrap().contains("canary-token"));
+        let mut public_http = console_ok();
+        public_http.base_url = Some("http://console.example.test/x".into());
+        assert!(matches!(
+            r.register("user-b", "builtin", public_http),
+            Err(RegisterError::Invalid(_))
         ));
     }
 

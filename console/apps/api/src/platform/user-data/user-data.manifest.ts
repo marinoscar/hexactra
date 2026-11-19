@@ -32,6 +32,7 @@ export const APP_USER_DATA_CATEGORIES: readonly UserDataCategoryDef[] = [
   { id: 'notes', label: 'Notes', description: 'Every note you wrote.', content: true },
   { id: 'documents', label: 'Documents', description: 'Every document you wrote.', content: true },
   { id: 'memories', label: 'Memories', description: 'Every fact you let the agent use (people, accounts, preferences), with their earlier versions.', content: true },
+  { id: 'saved-logins', label: 'Saved logins', description: "The logins you saved in Hexactra's built-in store, their earlier versions and your encryption key. Deleting them is permanent: nothing can decrypt them afterwards.", content: true },
   { id: 'browser-tasks', label: 'Browser tasks and runs', description: 'Your browser tasks, their runs, the steps the agents took, the questions they asked you, your chats, your agent policies, your limits for connected AI apps and what those apps did, and your saved approvals.', content: true },
 ];
 
@@ -50,6 +51,16 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
   { model: 'Memory', category: 'memories' },
   { model: 'ApprovalRule', category: 'browser-tasks' },
   { model: 'SecretsConnection', category: 'credentials' },
+  { model: 'Secret', category: 'saved-logins' },
+  { model: 'SecretVersion', category: 'saved-logins' },
+  { model: 'SecretType', category: 'saved-logins' },
+  { model: 'SecretsStoreDataKey', category: 'saved-logins' },
+  { model: 'SecretsStoreCallbackToken', category: 'saved-logins' },
+  { model: 'MediaFolder', category: 'saved-logins' },
+  { model: 'BackupRun', category: 'saved-logins' },
+  { model: 'BackupSchedule', category: 'saved-logins' },
+  { model: 'AgentCardGrant', category: 'saved-logins' },
+  { model: 'AgentCardGrantRequest', category: 'saved-logins' },
   { model: 'SecretsActivity', category: 'credentials' },
 ];
 

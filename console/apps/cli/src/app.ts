@@ -51,6 +51,11 @@ export const FABRIC_ENV_FRAGMENT = {
     // Whether the bundled browser host runs (#343): see bundledHostProfile.
     COMPOSE_PROFILES: { generate: 'bundled-host-profile', autoGenerate: true },
     HEXACTRA_FABRIC_OTLP_ENDPOINT: { allowBlank: true },
+    // The built-in secrets store (E37.5) is off by default: the switch and the callback address may stay blank. Its
+    // key (SECRETS_STORE_KEY, and SECRETS_STORE_KEY_PREVIOUS during a rotation) is deliberately NOT in the template:
+    // a declared secret is asked for (and `init` cannot leave one blank), and a key only matters once the store is on.
+    SECRETS_STORE_ENABLED: { allowBlank: true },
+    SECRETS_STORE_CALLBACK_URL: { allowBlank: true },
   },
 } as const;
 

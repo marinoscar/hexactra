@@ -11,6 +11,14 @@ import { FABRIC_SECRETS_REGISTRY, FabricSecretsUnavailable, type FabricSecretsRe
 import { SecretsPolicyService } from './secrets-policy.service';
 import { VaultAccessError, VaultTokenService } from './vault-token.service';
 
+/** The built-in store's side of the registrar (E37.5): attached by its module when the slice is on, absent otherwise. */
+export interface BuiltinRegistration {
+  /** Hands the fabric a callback credential for the owner (the owner chose the built-in store and both switches are on). */
+  register(userId: string): Promise<'registered' | 'unavailable'>;
+  /** Revokes the owner's credentials. */
+  revoke(userId: string): Promise<void>;
+}
+
 export type RegistrationResult =
   /** The fabric holds a fresh access token for the owner. */
   | 'registered'
@@ -33,6 +41,13 @@ export class SecretsProviderRegistrar {
   /** The wall clock; tests replace it. */
   clock: () => number = Date.now;
 
+  private builtin: BuiltinRegistration | null = null;
+
+  /** Called once by the built-in store's module. Nothing is attached while the slice is off. */
+  attachBuiltin(builtin: BuiltinRegistration): void {
+    this.builtin = builtin;
+  }
+
   constructor(
     private readonly policy: SecretsPolicyService,
     private readonly tokens: VaultTokenService,
@@ -48,6 +63,12 @@ export class SecretsProviderRegistrar {
       await this.forget(userId);
       return 'not_enabled';
     }
+    // One provider is active per owner (E37.5): the built-in store replaces the Vault for an owner who chose it.
+    if (this.builtin && (await this.policy.activeProvider(userId)) === 'builtin') {
+      await this.fabric.unregisterSecretsProvider(userId, 'vault').catch(() => undefined);
+      return this.builtin.register(userId);
+    }
+    if (this.builtin) await this.builtin.revoke(userId);
     let access;
     try {
       access = await this.tokens.getAccess(userId, { minRemainingMs: REGISTRATION_MIN_REMAINING_MS });
@@ -78,6 +99,7 @@ export class SecretsProviderRegistrar {
   /** Tells the fabric to forget the owner's provider (a run ended with no other live, a switch turned off). */
   async forget(userId: string): Promise<void> {
     this.pushed.delete(userId);
+    if (this.builtin) await this.builtin.revoke(userId).catch(() => undefined);
     await this.fabric.unregisterSecretsProvider(userId, 'vault').catch((e: unknown) => this.log.warn(`the fabric could not be told to forget the provider (${e instanceof Error ? e.name : 'error'})`));
   }
 }

@@ -14,10 +14,11 @@ import { FabricSession } from '../runner/fabric-session';
 
 /** What the fabric is told about a provider. `expiresAt` is ISO 8601. */
 export interface SecretsProviderRegistration {
-  kind: 'vault';
-  /** The Vault's `APP_URL` (the fabric appends `/api/agent/v1`). */
+  /** `vault`: the fabric calls the owner's Vault itself. `console`: the built-in store (E37.5): the fabric calls back into the console. */
+  kind: 'vault' | 'console';
+  /** `vault`: the Vault's `APP_URL` (the fabric appends `/api/agent/v1`). `console`: the console's internal address the fabric calls back (`/api/internal/secrets-store/v1`). */
   baseUrl: string;
-  /** The `oat_` access token. Secret Material: memory only, never logged. */
+  /** `vault`: the `oat_` access token. `console`: the owner's `sct_` callback credential. Secret Material: memory only, never logged. */
   accessToken: string;
   expiresAt: string;
 }
@@ -31,6 +32,9 @@ export interface FabricSecretsRegistry {
 
 /** Injection token of the fabric-side registry. */
 export const FABRIC_SECRETS_REGISTRY = Symbol('FABRIC_SECRETS_REGISTRY');
+
+/** The id actions name for a registration kind. */
+export const providerIdOf = (kind: SecretsProviderRegistration['kind']): string => (kind === 'console' ? 'builtin' : kind);
 
 /** The fabric could not be given the provider: no fabric connection is configured, it is not answering, or it refused. Never carries a token. */
 export class FabricSecretsUnavailable extends Error {
@@ -57,9 +61,9 @@ export class FabricSessionSecretsRegistry implements FabricSecretsRegistry {
     const expiresAt = new Date(registration.expiresAt);
     if (Number.isNaN(expiresAt.getTime())) throw new FabricSecretsUnavailable('refused');
     try {
-      // The provider id actions name is the kind: `vault`.
+      // The provider id actions name: `vault`, or `builtin` for the built-in store (kind `console`).
       await this.session.registerSecretsProvider(ownerId, {
-        provider: registration.kind,
+        provider: providerIdOf(registration.kind),
         kind: registration.kind,
         baseUrl: registration.baseUrl,
         accessToken: registration.accessToken,
@@ -72,7 +76,7 @@ export class FabricSessionSecretsRegistry implements FabricSecretsRegistry {
 
   async unregisterSecretsProvider(ownerId: string, kind: SecretsProviderRegistration['kind']): Promise<void> {
     try {
-      await this.session.unregisterSecretsProvider(ownerId, kind);
+      await this.session.unregisterSecretsProvider(ownerId, providerIdOf(kind));
     } catch (e) {
       throw unavailableOf(e);
     }

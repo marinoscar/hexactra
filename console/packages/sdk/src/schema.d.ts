@@ -9036,6 +9036,11 @@ export interface components {
                 };
             };
             secrets?: {
+                /**
+                 * @description Where the agent finds your saved logins: your Vault (the default) or the built-in store. Switching does not move data.
+                 * @enum {string}
+                 */
+                provider?: "vault" | "builtin";
                 agentUse: {
                     /** @description Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default. */
                     enabled: boolean;
@@ -9127,6 +9132,11 @@ export interface components {
                 };
             };
             secrets?: {
+                /**
+                 * @description Where the agent finds your saved logins: your Vault (the default) or the built-in store. Switching does not move data.
+                 * @enum {string}
+                 */
+                provider?: "vault" | "builtin";
                 agentUse: {
                     /** @description Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default. */
                     enabled: boolean;
@@ -9220,6 +9230,8 @@ export interface components {
                 } | null;
             } | null;
             secrets?: {
+                /** @enum {string} */
+                provider?: "vault" | "builtin";
                 agentUse?: {
                     enabled?: boolean;
                 };
@@ -10343,6 +10355,11 @@ export interface components {
                     };
                 };
                 secrets?: {
+                    /**
+                     * @description Where the agent finds your saved logins: your Vault (the default) or the built-in store. Switching does not move data.
+                     * @enum {string}
+                     */
+                    provider?: "vault" | "builtin";
                     agentUse: {
                         /** @description Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default. */
                         enabled: boolean;
