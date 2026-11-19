@@ -386,7 +386,7 @@ const approvalRules = [
 ];
 
 /** Secrets (#593): the provider card in each state; the page's own address says which (`?state=`). */
-const vaultBase = { provider: 'vault', status: 'connected', configured: true, source: 'user', baseUrl: 'https://vault.example.test', clientId: 'hexactra', hasClientSecret: true, redirectUri: 'https://console.example.test/api/secrets/vault/callback', scopes: ['vault:items_read', 'vault:items_fill', 'offline_access'], vaultUserId: 'abcdef12-0000-4000-8000-000000000000', agentAccess: 'on', connectedAt: iso(-5 * 86_400_000), lastUsedAt: iso(-3_600_000), lastSuccessAt: iso(-3_600_000), lastErrorCode: null, connecting: false };
+const vaultBase = { provider: 'vault', status: 'connected', configured: true, source: 'user', baseUrl: 'https://vault.example.test', clientId: 'hexactra', hasClientSecret: true, redirectUri: 'https://console.example.test/api/secrets/vault/callback', scopes: ['vault:items_read', 'vault:items_fill', 'vault:identity_read', 'vault:identity_fill', 'offline_access'], vaultUserId: 'abcdef12-0000-4000-8000-000000000000', agentAccess: 'on', connectedAt: iso(-5 * 86_400_000), lastUsedAt: iso(-3_600_000), lastSuccessAt: iso(-3_600_000), lastErrorCode: null, connecting: false };
 const stateOf = (referer) => (referer ? (new URL(referer).searchParams.get('state') ?? 'connected') : 'connected');
 const secretsStatus = (_url, _body, referer) => {
   const st = stateOf(referer);
@@ -410,6 +410,24 @@ const secretsReach = (_url, _body, referer) =>
   stateOf(referer) === 'empty'
     ? { listing: 'per_origin', items: [] }
     : { listing: 'per_origin', items: [{ site: 'app.example.test', fields: ['username', 'password', 'one_time_code'], uses: 7, lastUsedAt: iso(-3_600_000), lastRunId: IDS.finishedRun }, { site: 'shop.example.test', fields: ['username', 'password'], uses: 2, lastUsedAt: iso(-5 * 86_400_000), lastRunId: null }] };
+
+/** Identity details (#595): the items the owner saved, with field labels and flags; never a value. */
+const secretsIdentity = (_url, _body, referer) => {
+  const st = stateOf(referer);
+  if (st === 'not_connected') return { available: false, reason: 'not_connected', items: [], manageUrl: null };
+  if (st === 'needs_reconnect') return { available: false, reason: 'needs_reconnect', items: [], manageUrl: 'https://vault.example.test' };
+  if (st === 'deployment_off') return { available: false, reason: 'switched_off', items: [], manageUrl: 'https://vault.example.test' };
+  if (st === 'empty') return { available: true, reason: 'ok', items: [], manageUrl: 'https://vault.example.test' };
+  return {
+    available: true,
+    reason: 'ok',
+    manageUrl: 'https://vault.example.test',
+    items: [
+      { name: 'Passport', fields: [{ label: 'Full name', sensitive: false }, { label: 'Date of birth', sensitive: true }, { label: 'ID number', sensitive: true }, { label: 'Country', sensitive: false }] },
+      { name: 'Home address and a long name that has to wrap on a narrow phone screen', fields: [{ label: 'Address line 1', sensitive: false }, { label: 'City', sensitive: false }, { label: 'Postal code', sensitive: false }, { label: 'Phone', sensitive: false }] },
+    ],
+  };
+};
 
 /** `"<METHOD> <path>"` to the response `data`. A function gets the request URL and its JSON body. */
 const memory = (id, kind, label, attributes, extra = {}) => ({
@@ -477,6 +495,7 @@ export const RESPONSES = {
   'GET /secrets/status': secretsStatus,
   'GET /secrets/activity': secretsActivity,
   'GET /secrets/reach': secretsReach,
+  'GET /secrets/identity': secretsIdentity,
   'GET /secrets/admin/summary': { deploymentEnabled: true, usersConnected: 3, usersNeedingReconnect: 1, usesThisWeek: 41, refusalsThisWeek: 4 },
   'GET /secrets/vault/default-client': { baseUrl: 'https://vault.example.test', clientId: 'hexactra', hasClientSecret: true, allowedHosts: [], redirectUri: 'https://console.example.test/api/secrets/vault/callback' },
   'GET /connected-apps/preflight': preflight,
