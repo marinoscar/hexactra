@@ -29,6 +29,7 @@ beforeAll(async () => {
   registry.register(fake);
   jest.spyOn(app.get(ConnectionTokensService), 'getAccessToken').mockResolvedValue(TOKEN);
   jest.spyOn(app.get(ConnectionApps), 'system').mockResolvedValue({
+    mcp: { enabled: false, allowedHosts: [], blockedHosts: [] },
     google: { enabled: true, clientId: '123456789012-abcdef.apps.googleusercontent.com', pickerApiKey: 'AIzaSyExampleKeyNotReal-0001' },
     microsoft: { enabled: false, clientId: null, tenant: 'common' },
   });
