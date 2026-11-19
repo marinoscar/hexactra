@@ -47,6 +47,7 @@ interface Grant {
 const SCOPE_OF: Record<Capability, string> = {
   mail_read: 'fake:mail.read',
   mail_send: 'fake:mail.send',
+  mail_modify: 'fake:mail.modify',
   calendar_read: 'fake:calendar.read',
   calendar_write: 'fake:calendar.write',
   docs_read: 'fake:docs.read',

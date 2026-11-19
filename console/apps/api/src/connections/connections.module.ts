@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
 import { CredentialsModule, UserCredentialsModule } from '@marinoscar/platform-api/credentials';
 
+import { CapabilityProviderRegistry } from './capability-provider.registry';
 import { ConnectionApps } from './connection-apps.service';
+import { ConnectionCapabilities } from './connection-capabilities.service';
 import { ConnectionFlowService } from './connection-flow.service';
 import { ConnectionProviderRegistry } from './connection-provider.registry';
 import { ConnectionResolverService } from './connection-resolver.service';
@@ -21,13 +23,14 @@ import { ConnectionsService } from './connections.service';
  *
  * What the next issues use: `ConnectionProviderRegistry` (E39.3 and E39.4 register their adapters), `ConnectionResolverService`
  * (`resolveConnection`), `ConnectionTokensService` (`getAccessToken`), `ConnectionUsageRegistry` (deliveries, tools and triggers
- * register what references a connection).
+ * register what references a connection), `ConnectionCapabilities` (`mail`, `calendar`, `documents` of one connection: E39.3).
  */
 @Module({
   imports: [CredentialsModule, UserCredentialsModule],
   controllers: [ConnectionsController, ConnectionsAdminController],
   providers: [
     ConnectionProviderRegistry,
+    CapabilityProviderRegistry,
     ConnectionUsageRegistry,
     ConnectionEvents,
     ConnectionTokenStore,
@@ -36,10 +39,11 @@ import { ConnectionsService } from './connections.service';
     ConnectionFlowService,
     ConnectionResolverService,
     ConnectionsService,
+    ConnectionCapabilities,
     ConnectionsHealth,
     ConnectionsHealthHandler,
     ConnectionsHealthTask,
   ],
-  exports: [ConnectionProviderRegistry, ConnectionUsageRegistry, ConnectionResolverService, ConnectionTokensService, ConnectionsService, ConnectionApps],
+  exports: [ConnectionProviderRegistry, CapabilityProviderRegistry, ConnectionCapabilities, ConnectionUsageRegistry, ConnectionResolverService, ConnectionTokensService, ConnectionsService, ConnectionApps],
 })
 export class ConnectionsModule {}
