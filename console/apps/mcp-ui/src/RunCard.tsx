@@ -75,6 +75,8 @@ export function RunCard({ host, pollerOptions, channelFactory, isVisible }: RunC
   const [ctx, setCtx] = useState<HostContextLike | undefined>(() => host.hostContext());
   const [toolName, setToolName] = useState<string | undefined>(() => host.hostContext()?.toolInfo?.tool?.name);
   const [confirmStop, setConfirmStop] = useState(false);
+  // Stop was pressed (E38.1): the button says so at once and cannot be pressed twice.
+  const [stopping, setStopping] = useState(false);
   const [busy, setBusy] = useState<'stop' | 'again' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [goalOpen, setGoalOpen] = useState(false);
@@ -161,6 +163,7 @@ export function RunCard({ host, pollerOptions, channelFactory, isVisible }: RunC
   const stop = async () => {
     if (!snap || superseded) return;
     setBusy('stop');
+    setStopping(true);
     setNotice(null);
     try {
       const s = snapshotOf(await host.callTool('run_cancel', { run_id: snap.progress.run_id }));
@@ -168,8 +171,9 @@ export function RunCard({ host, pollerOptions, channelFactory, isVisible }: RunC
         apply(s);
         poller.current?.observe(s);
       }
-      setNotice('Stopping after the current step.');
+      setNotice('The run is stopping.');
     } catch {
+      setStopping(false);
       setNotice('Could not stop the run from here. Open it in Hexactra to stop it.');
     } finally {
       setBusy(null);
@@ -386,8 +390,8 @@ export function RunCard({ host, pollerOptions, channelFactory, isVisible }: RunC
               </button>
             </div>
           ) : (
-            <button type="button" className="btn danger" disabled={superseded || busy !== null} onClick={() => setConfirmStop(true)}>
-              Stop
+            <button type="button" className="btn danger" disabled={superseded || busy !== null || stopping} onClick={() => setConfirmStop(true)}>
+              {stopping ? 'Stopping…' : 'Stop'}
             </button>
           )
         ) : (
