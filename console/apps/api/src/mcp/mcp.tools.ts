@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { fleetHostResponseSchema, inboxItemResponseSchema, runListItemResponseSchema, runPageResponseSchema, runResponseSchema, runStepResponseSchema, runTierSchema, scheduleResponseSchema, taskOutputResponseSchema, taskResponseSchema } from '../openapi/console.responses';
 import { schedulePreviewSchema, taskWithSummarySchema } from '../openapi/tasks.responses';
+import { deliverySummarySchema } from '../deliveries/delivery.schemas';
 import { agentPolicySpecSchema } from '../policies/agent-policy.schema';
 import { parsePolicyRef } from '../policies/builtin-policies';
 import { agentPolicyResponseSchema, defaultPolicyResponseSchema } from '../policies/policies.schemas';
@@ -540,10 +541,26 @@ function listOutput(items: unknown[], noun: string, extra: { untrusted?: boolean
   return toolOutput({ text: items, structured: { items }, summary: `${items.length} ${noun}${items.length === 1 ? '' : 's'}.`, untrusted: extra.untrusted });
 }
 
+/** The counts of a run's deliveries by status (E39.6), or undefined when it has none or the route is not there. Never what was sent. */
+async function deliverySummary(ctx: McpContext, runId: string): Promise<z.infer<typeof deliverySummarySchema> | undefined> {
+  try {
+    const rows = await ctx.api<{ status?: string }[]>('GET', `/runs/${runId}/deliveries`);
+    if (!Array.isArray(rows) || rows.length === 0) return undefined;
+    const out = { total: rows.length, pending: 0, sending: 0, sent: 0, failed: 0, skipped: 0 };
+    for (const r of rows) if (typeof r.status === 'string' && r.status in out && r.status !== 'total') out[r.status as 'pending'] += 1;
+    return out;
+  } catch {
+    return undefined;
+  }
+}
+
 const runStatusOutput = runResponseSchema.extend({
   steps: z.array(runStepResponseSchema).describe('The latest steps, oldest first'),
   olderSteps: z.number().int().describe('Steps before the first one returned: page back with steps_before = the first step\'s seq'),
   progress: runProgressSchema.describe('The run in plain words (#463)'),
+  deliveries: deliverySummarySchema
+    .optional()
+    .describe('What the task sends when a run ends (E39.6): the number of deliveries by status (an email, a spreadsheet row, a file, a webhook). Counts only: never a recipient, a subject or a destination. Absent for a run without deliveries.'),
 });
 
 /** A run answer with its progress block (run_goal, task_run, run_cancel). */
@@ -712,7 +729,8 @@ export const MCP_TOOLS: McpTool[] = [
         progress = { ...progress, screenshot: shot.state, ...(shot.note ? { screenshot_note: shot.note } : {}) };
         images = shot.content;
       }
-      const v = { ...run, steps, olderSteps: window.length - steps.length, progress };
+      const deliveries = await deliverySummary(ctx, String(a.run_id));
+      const v = { ...run, steps, olderSteps: window.length - steps.length, progress, ...(deliveries ? { deliveries } : {}) };
       const out = toolOutput({ text: v, structured: v, summary: `${runSummary(v)} ${progressSummary(progress)}`, untrusted: runHasPageText(v) || steps.length > 0 || progressHasPageText(progress) });
       return images.length ? { ...out, content: [...out.content, ...images] } : out;
     },
