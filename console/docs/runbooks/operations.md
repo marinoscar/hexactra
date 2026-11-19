@@ -14,7 +14,8 @@ F="-f base.compose.yml -f prod.compose.yml -f app.fabric.compose.yml"   # + -f d
 | Object storage (the console) | Run screenshots, database backups | Screenshots can show what was on screen |
 | Volume `fabric-control-data` | The control plane's state database `control.db`: hosts, host credentials (digests), sessions, handoffs (token digests; a `secret` answer is held in memory only, never written), host commands; its webhook registry | Digests only: no raw tokens |
 | Volume `fabric-host-data` | The browser profiles of the bundled host (optional; nodes keep their profiles on the node, see [docs/nodes.md](../../../docs/nodes.md)): cookies and live sign-ins | **Secret**: whoever has a profile is signed in as you |
-| `infra/compose/.env` | `JWT_SECRET`, `COOKIE_SECRET`, `SECRETS_ENCRYPTION_KEY`, `HEXACTRA_FABRIC_OPERATOR_TOKEN`, database password | Secret; keep it apart from the backups |
+| `infra/compose/.env` | `JWT_SECRET`, `COOKIE_SECRET`, `SECRETS_ENCRYPTION_KEY`, `HEXACTRA_FABRIC_OPERATOR_TOKEN`, database password, and with the built-in secrets store on `SECRETS_STORE_KEY` (and `SECRETS_STORE_KEY_PREVIOUS` during a rotation) | Secret; keep it apart from the backups. **Losing `SECRETS_STORE_KEY` loses every saved login of the built-in store for good** |
+| Postgres (secrets) | `secrets_connections` (a Vault connection's address, client id, status, error code; no token), `secrets_activity` (what the agent used: value-free, 180 days), the encrypted Vault tokens in the credential store; with the built-in store, the Vault tables (ciphertext) and `secrets_store_data_keys` (wrapped per-owner keys) | No login, password, code or card is readable from a backup without the keys in `.env` ([security-secrets.md](../security-secrets.md)) |
 
 Other browser hosts (your desktop, other machines) keep their profiles on their own disk. Back them up there.
 
@@ -198,3 +199,54 @@ ChatGPT, Claude and agent frameworks call the console's MCP endpoint (`/api/mcp`
 - **The audit trail** is the table `mcp_activity`: one row per tool call from an OAuth app or a personal access token, and per refusal (kill switch, rate limit, step-up) and limit change. No typed text, script or result. Each user reads theirs on the app's page or `hexactra apps activity`; administrators read everyone's on External AI apps (`mcp_activity:read`, `GET /api/admin/mcp/activity`). The nightly job `mcp.activity.purge` (03:40, Administration → Jobs) deletes rows past the user's run retention (365 days at most); deleting a run keeps its activity rows and clears their run id.
 - **Every user's apps.** External AI apps → **Connected apps** lists every active grant with its user, scopes and last use; **Disconnect** revokes it (`oauth_clients:write`, recorded as `oauth:grant.revoke` by `admin` and in the user's activity). Doctor `mcp.high_risk_grants` counts grants holding `browser:evaluate`, `desktop:control` or `policies:write`.
 - **Doctor.** `mcp.endpoint` (an anonymous call gets the `401` challenge and its metadata document answers), `mcp.public_reachability` (OAuth on but `APP_URL` not public HTTPS), `mcp.exposure` (admin routes answer `200` without a credential through the public URL), `mcp.trust_proxy` (`TRUST_PROXY=false` while `APP_URL` is public HTTPS, so every caller shares one per-address bucket).
+
+## 10. Saved logins and the secrets providers
+
+How it works and what it protects: [../secrets.md](../secrets.md); what stops each threat and what does not: [../security-secrets.md](../security-secrets.md). In operation there are three things you will be asked about: a run that could not sign in, a Vault that must be reconnected, and the built-in store's key.
+
+### A run could not sign in
+
+A run that did not sign in from a saved login **has not failed**: by design it fell back to the sign-in card and waits for the owner. For a scheduled run that means it is waiting (Inbox, and the notification) until someone answers. Work down the list.
+
+1. **Read the Activity.** Settings → Secrets → **Activity** lists the newest 100 uses and refusals of the owner (admins see counts only: Administration → Secrets), each with the run, the site and the outcome in words. The run page says "Signed in with: …" when it worked. Find the row for the run and read the outcome:
+
+   | Outcome shown | What it means | What to do |
+   |---|---|---|
+   | Refused: no provider was connected | The run had no provider registered for its owner | Settings → Secrets: connect (or choose the built-in store); check `GET /api/secrets/status` |
+   | Refused: saved logins are turned off | One of the switches is off, or the other provider is the chosen one | Check, in this order: the deployment switch (Administration → Secrets), the owner's switch, the task's or chat's *Use my saved logins*, an AI app's limit `allowSavedLogins`, Vault's own Agent access, and which provider the owner chose |
+   | Refused: no saved login for this page | The provider has no login **opened to agents** for this exact origin | In the provider, open the login to agents and check its site is the page's exact origin: `https://www.example.test` and `https://example.test` are different. A site that signs in on another domain (single sign-on) needs that domain listed too |
+   | Refused: the page was not the saved site | The run was on another origin than the login's (a look-alike, or a redirect) | If it is the real site, add the origin to the login in the provider; if you do not know the address, treat it as a phishing attempt. The run asked the owner with a warning card and switched saved logins off for the rest of the run |
+   | Refused: the field was in a frame of another site | The sign-in form is inside another site's frame | Not supported for logins: the owner signs in by hand |
+   | Refused: too many requests, try again later | Vault's per-minute limit | Wait; reduce parallel runs for that owner |
+   | Failed: the provider asks you to connect again (`unauthorized`) | Vault refused the token | The connection says *Reconnect*: [below](#reconnect-the-vault) |
+   | Failed: the provider could not be reached (`unavailable`), or: it took too long | The address, the network or Vault is down | Administration → **Doctor**, `secrets.vault_connections`; the Vault host is listed in Doctor's egress inventory; from the console host `curl -sS -o /dev/null -w '%{http_code}\n' https://<vault>/api/agent/v1/whoami` should answer an HTTP status (`401`, or `403` when Vault's Agent access is off), not time out |
+   | Refused by the provider | Vault refused for a reason of its own (a missing scope, for instance) | Vault's **Agent activity** page; reconnect with the scopes the feature needs |
+   | Failed: the page address could not be read / the field could not be typed into | The browser did not report the tab's URL, or the selector the model chose did not take the text | Look at the run's screenshots; the run asks the owner |
+
+2. **Several matching logins** is not a fault: the run asks with a choice card of names and usernames. Save only one login per site, or the owner picks.
+3. **A rejected password is not retried.** A password is typed at most once per run and site; if the site refused it, the run asks the owner. Update the login in the provider.
+4. **A code by text message** is never in a vault: the run asks the owner for it.
+5. **Still waiting?** The run is in the Inbox with the sign-in card; the owner can answer there, take over the desktop, or stop the run. Nothing about a saved login makes a run fail on its own.
+6. **Do not** look for the value in the logs: it is not there (that is the design). The run's steps say "signed in with the saved login 'Shop login' (username p•••@example.test)", the Activity says what was typed, Vault's own **Agent activity** page says the same from its side.
+
+### Reconnect the vault
+
+An owner's connection becomes `needs_reconnect` when Vault answers `401`: they removed Hexactra in Vault's **Connected apps**, the refresh token expired or was replayed (Vault then revokes the grant), or the client secret was rotated. The console deletes the stored tokens, the fabric forgets the provider, the owner gets **one** notification ("Reconnect your Vault") and runs ask instead of signing in. Doctor `secrets.vault_connections` warns while any connection needs it.
+
+1. The owner opens Settings → **Secrets** and presses **Reconnect** (the Vault's own consent screen opens; they must come back in the same browser within 10 minutes).
+2. A return to `/settings/secrets?vault=<reason>` says what went wrong: `denied` (they refused), `expired` (more than 10 minutes), `state_invalid` or `binding_invalid` (a different browser or a stale link: start again), `issuer_mismatch` (Vault answered as another issuer), `exchange_failed`, `no_refresh_token` (Vault issued no refresh token: ask its administrator to allow refresh tokens, `offline_access`, for the Hexactra client), `whoami_failed` (the connection was made but Vault did not identify the account; try again).
+3. If **many owners** need it at once, the cause is on the Vault side: the client secret was rotated, the redirect URI changed (`GET /api/secrets/status` shows the exact `redirectUri` to register), or Vault's host allowlist no longer lists the console. Fix it in Vault, then update the deployment default (Administration → Secrets) or each owner's client (**Disconnect** first: `PUT /api/secrets/vault/client` answers `409 SECRETS_VAULT_DISCONNECT_FIRST` while connected), and each owner reconnects.
+4. After it, the next run signs in again with no question. Reconnecting never needs the owner to retype anything.
+
+### Rotate the store key
+
+Only for deployments with the built-in store (`SECRETS_STORE_ENABLED=true`). The key wraps each owner's data key; rotation re-wraps the data keys and **does not re-encrypt the values**. Take a database backup first and keep the old key until you hold one made **after** step 5. The reference is [../secrets.md](../secrets.md#rotating-the-store-key).
+
+1. Generate the new key: `openssl rand -base64 32`. Keep the old one.
+2. In `infra/compose/.env` set `SECRETS_STORE_KEY=<new>` and add `SECRETS_STORE_KEY_PREVIOUS=<old>` (neither is in the env template). Recreate the API: `docker compose $F up -d api`. Everything keeps working: rows still wrapped under the old key are read with it.
+3. Administration → **Doctor**: `secrets.store_key` warns "A rotation is unfinished". If it **fails** ("wrapped under a store key this deployment no longer has"), the previous key is missing: put it back in `SECRETS_STORE_KEY_PREVIOUS` before anything else; without it those logins cannot be recovered.
+4. Re-wrap: `POST /api/admin/secrets-store/rewrap` (a session or a personal access token with `system_settings:write`; it queues the job `secrets.store.maintain`, visible under Administration → Jobs, and is safe to repeat), for example `curl -sS -X POST -H "Authorization: Bearer $HEXACTRA_TOKEN" https://<console>/api/admin/secrets-store/rewrap`.
+5. When `secrets.store_key` passes ("every owner key is wrapped under it"), take a fresh database backup, then remove `SECRETS_STORE_KEY_PREVIOUS` and recreate the API. Keep the old key somewhere safe until that backup exists.
+6. Check: a scheduled run on a test login still signs in; the Activity shows `typed`.
+
+The same job removes expired fabric credentials and the data of owners who no longer exist. **To restore** a database backup, restore `SECRETS_STORE_KEY` with it (the key that was current when the backup was taken, and its predecessor if a rotation was unfinished); without it the app works and the logins are unreadable.
