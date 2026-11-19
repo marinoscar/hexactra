@@ -425,6 +425,48 @@ describe('saved logins: the page is not the site (OriginMismatch)', () => {
   });
 });
 
+describe('saved logins: the password goes only into a password field (E37.10)', () => {
+  it('a plain text box is refused by the fabric: nothing typed, the run asks the owner, and a real password field still works afterwards', async () => {
+    const o = await owner('not-password');
+    const fabric = fakeSecretsFabric(LOGIN_PAGE);
+    // The model names a visible text box (a comment field, say) for the password: the fabric refuses before the provider is asked.
+    fabric.state.notPassword = ['#comment'];
+    const seam = secretsSeam();
+    const a = scriptedAi([[lookup, signIn({ username_selector: null, password_selector: '#comment' })], [signIn({ username_selector: null, password_selector: '#pw' }), finish()]]);
+    const run = await o.newRun();
+    const runner = runnerOf(fabric, a.ai, seam.seam);
+    expect(await runner.advance(run.id, o.userId, null)).toBe('waiting_human');
+
+    // Nothing was fetched or typed, and the model is told not to type the password itself.
+    expect(fabric.typed()).toEqual([]);
+    expect(fabric.page.fields['#comment']).toBeUndefined();
+    expect(fabric.providerCalls.filter((c) => c.op === 'release')).toEqual([]);
+    expect(a.outputs[1]).toContain('not a password field');
+    expect(a.outputs[1]).toContain('Do not type the password yourself');
+    expect(a.outputs[1]).toContain('The owner has been asked to sign in.');
+
+    // The run asks the owner to sign in (a takeover card, not a warning about a wrong site); saved logins stay on.
+    const q = await o.db.question.findFirstOrThrow({ where: { runId: run.id } });
+    expect(q).toMatchObject({ kind: 'login', input: 'takeover' });
+    expect(q.prompt).toContain('not a password field');
+    expect(q.prompt).not.toMatch(/^Warning/);
+    // It says nothing against the provider's connection.
+    expect(seam.outcome).not.toHaveBeenCalledWith(o.userId, expect.objectContaining({ ok: false }));
+    const step = await prisma.runStep.findFirstOrThrow({ where: { runId: run.id, action: 'sign_in_with_saved_login' } });
+    expect(step).toMatchObject({ ok: false, summary: 'the field is not a password field: the saved password was not typed' });
+
+    // The owner signs in or looks; the model then names the password field itself and it is typed (the same password is not blocked).
+    fabric.answer([...fabric.handoffs.values()][0]!, {});
+    expect(await runner.advance(run.id, o.userId, null)).toBe('succeeded');
+    expect(a.outputs[2]).toMatch(/Typed (username and )?password of the saved login login-1/);
+    expect(fabric.typed().map((c) => c.op)).toEqual(['release']);
+    for (const v of PASSWORDS) {
+      expect((await everythingAbout(run.id)).stored).not.toContain(v);
+      expect(a.outputs.join('\n')).not.toContain(v);
+    }
+  });
+});
+
 describe('saved logins: the authenticator code', () => {
   it('type_saved_code types the code of a login that has one, fresh, and records no value', async () => {
     const o = await owner('code');

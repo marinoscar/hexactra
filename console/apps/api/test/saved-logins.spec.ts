@@ -1,7 +1,7 @@
 // The pure parts of signing in from a saved login (E37.3, #592): references, masking, the lookup the model reads, the
 // error-to-instruction table, and the list of logins a run used.
 import { SECRETS_ERROR_CODES, type ItemSummary } from '../src/secrets/secrets-provider.port';
-import { appendUsedSavedLogin, failureOf, loginLabel, lookupOf, lookupText, maskUsername, readUsedSavedLogins, refFor, MAX_USED_SAVED_LOGINS } from '../src/runner/saved-logins';
+import { appendUsedSavedLogin, failureOf, loginLabel, lookupOf, lookupText, maskUsername, notPasswordPrompt, readUsedSavedLogins, refFor, MAX_USED_SAVED_LOGINS } from '../src/runner/saved-logins';
 
 const item = (id: string, name: string, matchKind: 'exact' | 'site', hasCode = false, username = `${id}@example.test`): ItemSummary => ({ id, name, username, origins: ['https://a.example.test'], matchKind, hasCode });
 
@@ -58,6 +58,19 @@ describe('the error to instruction table', () => {
     expect(f.warn).toBe(true);
     expect(f.text).toBe('Stop. This page is not the site this login is saved for. Do not try another login. Tell the owner.');
     expect(failureOf('cross_origin_frame').warn).toBe(true);
+  });
+
+  it('target_not_password: the run asks the owner to sign in, does not stop saved logins and tells the model not to type it itself (E37.10)', () => {
+    const f = failureOf('target_not_password');
+    expect(f.warn).toBe(false);
+    expect(f.askOwner).toBe(true);
+    expect(f.outcome).toBeNull();
+    expect(f.text).toContain('not a password field');
+    expect(f.text).toContain('Do not type the password yourself');
+    expect(failureOf('origin_mismatch').askOwner).toBeUndefined();
+    expect(notPasswordPrompt('login.example.test', "Shop's login")).toBe(
+      "The agent was about to sign in with your saved login 'Shop's login' on login.example.test, but the field it chose for the password is not a password field, so your password was not typed. Please sign in yourself and press Done.",
+    );
   });
 
   it.each(['disabled', 'unauthorized', 'unavailable', 'rate_limited', 'not_found', 'no_provider', 'unknown'] as const)('%s: saved logins are not available, ask the owner', (code) => {

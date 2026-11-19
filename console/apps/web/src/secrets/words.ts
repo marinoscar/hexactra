@@ -87,6 +87,7 @@ const OUTCOME_WORDS: Record<string, string> = {
   limit_reached: 'Refused: the usage limit for this card is reached',
   cards_disabled: 'Refused: card payments are switched off in your provider',
   frame_unknown: 'Refused: the payment frame could not be verified',
+  target_not_password: 'Refused: that field was not a password field',
   ok: 'Done',
   no_provider: 'Refused: no provider was connected',
   not_found: 'Refused: no saved login for this page',

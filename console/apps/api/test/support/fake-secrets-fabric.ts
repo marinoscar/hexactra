@@ -172,6 +172,8 @@ export function fakeSecretsFabric(url: string) {
     failTyping: [] as FailMode[],
     /** Throw a plain error (a crash) the first time this field is typed. */
     crashOn: null as string | null,
+    /** Selectors that name something other than a password field: the fabric refuses a login's password there (E37.10), before the provider is asked. */
+    notPassword: [] as string[],
   };
 
   const failure = (mode: FailMode, op: string) => {
@@ -330,6 +332,9 @@ export function fakeSecretsFabric(url: string) {
       if (action.type === 'type_from_provider' || action.type === 'type_code_from_provider') {
         const isCode = action.type === 'type_code_from_provider';
         const field = isCode ? 'code' : String(action.field);
+        if (!isCode && field === 'password' && state.notPassword.includes(String(action.selector))) {
+          return { id: 'op', state: 'failed', error: 'target_not_password: that field is not a password field; a saved password is only typed into one. Nothing was typed' };
+        }
         providerCalls.push({ op: isCode ? 'one_time_code' : 'release', origin, itemId: String(action.item_id), ...(isCode ? {} : { field }), purpose: action.purpose as string | undefined, ...meta });
         if (state.crashOn === field) {
           state.crashOn = null;

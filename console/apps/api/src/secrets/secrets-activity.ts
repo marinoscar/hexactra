@@ -70,6 +70,8 @@ export const ACTIVITY_OUTCOMES = [
   'limit_reached',
   'cards_disabled',
   'frame_unknown',
+  // A login's password named a field that is not a password field (E37.10).
+  'target_not_password',
   'timed_out',
   'internal',
   'other',

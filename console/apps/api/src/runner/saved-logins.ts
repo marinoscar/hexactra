@@ -143,6 +143,11 @@ export interface SavedLoginFailure {
   text: string;
   /** The run asks the owner now, with a warning card. */
   warn: boolean;
+  /**
+   * The run asks the owner now to sign in themselves (a takeover card, no warning): the fabric refused the field the model
+   * named because it is not a password field (E37.10). Saved logins stay on; the model is told not to type the password itself.
+   */
+  askOwner?: boolean;
   /** The kind of step the failure is recorded as (`ok: false`). */
   summary: string;
   /** Provider outcome for the connection's status (`UNAUTHORIZED`, `DISABLED`, ...): null for a failure that says nothing about the provider. */
@@ -164,6 +169,14 @@ export function failureOf(code: SecretsErrorCode, retryAfterSeconds?: number): S
         warn: true,
         summary: code === 'origin_mismatch' ? 'the page is not the site this login is saved for: nothing was typed' : 'the field is in a frame of another site: nothing was typed',
         outcome: code === 'origin_mismatch' ? 'ORIGIN_MISMATCH' : null,
+      };
+    case 'target_not_password':
+      return {
+        text: 'The password was not typed: that field is not a password field, and a saved password is only typed into one. Do not type the password yourself and do not try other fields of the page. The owner has been asked to sign in.',
+        warn: false,
+        askOwner: true,
+        summary: 'the field is not a password field: the saved password was not typed',
+        outcome: null,
       };
     case 'disabled':
       return { text: UNAVAILABLE, warn: false, summary: 'saved logins are switched off in the vault', outcome: 'DISABLED' };
@@ -194,6 +207,11 @@ export function mismatchPrompt(pageHost: string | null, loginName: string, saved
   // Both addresses, so the owner can tell a look-alike from the real site: the page it is on, and the site the login is saved for.
   const hosts = [pageHost ? `The page is ${pageHost}.` : null, savedHost ? `The login is saved for ${savedHost}.` : null].filter(Boolean).join(' ');
   return `Warning: the agent was about to sign in with your saved login '${loginName.slice(0, 80)}', but this page is not the site that login is saved for.${hosts ? ` ${hosts}` : ''} Nothing was typed and the agent will not try another saved login. If this is the site you meant, sign in yourself and press Done. If it looks like a copy of a site you know, stop the run.`;
+}
+
+/** The card the run asks the owner with when the field the model named for a saved password is not a password field (kind `login`, the owner takes over). */
+export function notPasswordPrompt(pageHost: string | null, loginName: string): string {
+  return `The agent was about to sign in with your saved login '${loginName.slice(0, 80)}'${pageHost ? ` on ${pageHost}` : ''}, but the field it chose for the password is not a password field, so your password was not typed. Please sign in yourself and press Done.`;
 }
 
 /** The line the next round's input carries after a mismatch. */

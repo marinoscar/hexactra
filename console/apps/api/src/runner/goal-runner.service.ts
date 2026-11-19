@@ -92,6 +92,7 @@ import {
   maskUsername,
   MISMATCH_LOG,
   mismatchPrompt,
+  notPasswordPrompt,
   PASSWORD_ALREADY_TYPED,
   readUsedSavedLogins,
   type LookedUpLogin,
@@ -1259,6 +1260,11 @@ export class GoalRunnerService {
       else throw e;
       if (f.outcome) await this.secrets?.outcome(userId, { ok: false, code: f.outcome });
       await record('action', action, args, false, f.summary, started, undefined, { secret: true });
+      if (f.askOwner) {
+        // The password went nowhere: the owner is asked to sign in, and the login stays usable for a field that is one.
+        const spec = questionSpecSchema.parse({ kind: 'login', input: 'takeover', prompt: notPasswordPrompt(hostOf(await currentUrl()), about?.name ?? 'saved login') });
+        return (await askPerson(spec, started)) ? f.text : f.text.replace(' The owner has been asked to sign in.', ' Ask the owner: call request_human with kind "login", input "credentials".');
+      }
       if (!f.warn) return f.text;
       sl().stopped = true;
       sl().attempt = null;
@@ -1547,7 +1553,7 @@ export class GoalRunnerService {
       defineTool({
         name: 'sign_in_with_saved_login',
         description:
-          "Sign in with a login the owner saved, on the page now on screen: types its username and password into the fields you name with real keystrokes. You never see either. `ref` comes from saved_logins and must be marked exact. When the site asks for the username and the password on separate pages, pass one selector per call and null for the other. `submit` presses Enter after the last field typed. A password is typed at most once per run: if the site rejects it, ask the owner.",
+          "Sign in with a login the owner saved, on the page now on screen: types its username and password into the fields you name with real keystrokes. You never see either. `ref` comes from saved_logins and must be marked exact. When the site asks for the username and the password on separate pages, pass one selector per call and null for the other. `submit` presses Enter after the last field typed. `password_selector` must name the password field itself (an input of type password): a saved password is not typed into any other field. A password is typed at most once per run: if the site rejects it, ask the owner.",
         parameters: z.object({ ref: z.string().min(1).max(40), username_selector: z.string().max(2000).nullable(), password_selector: z.string().max(2000).nullable(), submit: z.boolean() }),
         execute: async ({ ref, username_selector, password_selector, submit }) => {
           const started = Date.now();

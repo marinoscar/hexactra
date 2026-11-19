@@ -119,6 +119,15 @@ describe('selectFromProvider and identity lookups (E37.6)', () => {
   });
 });
 
+describe('typeFromProvider: the origin guard and the password check (E37.10)', () => {
+  it('maps the browser-side origin refusal and the not-a-password-field refusal to their codes', async () => {
+    for (const code of ['origin_mismatch', 'target_not_password']) {
+      const { session } = fake(() => failed(`${code}: nothing was typed`));
+      await expect(session.typeFromProvider('s1', { itemId: 'i', field: 'password', selector: '#pw', purpose: 'login', clear: true, submit: false })).rejects.toMatchObject({ code });
+    }
+  });
+});
+
 describe('typeCodeFromProvider', () => {
   it('returns when the code expires', async () => {
     const { calls, session } = fake(() => ok({ typed: true, expires_at: '2030-01-01T00:00:30Z' }));
@@ -156,6 +165,7 @@ describe('error mapping', () => {
     expect(secretsErrorAction('origin_mismatch')).toBe('stop');
     expect(secretsErrorAction('cross_origin_frame')).toBe('stop');
     expect(secretsErrorAction('not_found')).toBe('ask_person');
+    expect(secretsErrorAction('target_not_password')).toBe('ask_person');
     expect(secretsErrorAction('no_provider')).toBe('ask_person');
     expect(secretsErrorAction('unauthorized')).toBe('reconnect');
     expect(secretsErrorAction('rate_limited')).toBe('wait');
