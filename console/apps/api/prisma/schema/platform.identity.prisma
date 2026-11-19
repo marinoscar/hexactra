@@ -153,9 +153,27 @@ model User {
   // composed from app:secrets-connections.prisma
   secretsConnections SecretsConnection[]
 
+  // composed from app:secrets-store.prisma
+  secretsStoreDataKey SecretsStoreDataKey?
+
   // composed from app:tasks.prisma
   tasks Task[]
   runs  Run[]
+
+  // composed from app:vault.backups.prisma
+  backupSchedulesUpdated BackupSchedule[] @relation("BackupScheduleUpdater")
+  backupRunsTriggered    BackupRun[]      @relation("BackupRunTrigger")
+  backupRunsOwned        BackupRun[]      @relation("BackupRunOwner")
+
+  // composed from app:vault.media.prisma
+  mediaFolders MediaFolder[] @relation("UserMediaFolders")
+
+  // composed from app:vault.secrets.prisma
+  secretTypes    SecretType[]    @relation("UserSecretTypes")
+  secrets        Secret[]        @relation("UserSecrets")
+  secretVersions SecretVersion[] @relation("UserSecretVersions")
+  agentCardGrants        AgentCardGrant[]        @relation("UserAgentCardGrants")
+  agentCardGrantRequests AgentCardGrantRequest[] @relation("UserAgentCardGrantRequests")
 
   @@map("users")
 }
