@@ -6,8 +6,8 @@ import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { RequestClientService } from '../connected-apps/request-client';
 import { QuestionResponseDto } from '../openapi/console.responses';
 import { AnswerQuestionDto, CancelQuestionDto, CreateQuestionDto, GetQuestionDto, ListQuestionsDto } from './questions.schemas';
-import { MEMORY_ANSWER_CHANNELS, channelId } from './channels/channel-rules';
-import { QuestionsService, type QuestionActor, type QuestionView } from './questions.service';
+import { MEMORY_ANSWER_CHANNELS, SAVE_LOGIN_ANSWER_CHANNELS, channelId } from './channels/channel-rules';
+import { QuestionsService, isOwnerCardInput, type QuestionActor, type QuestionView } from './questions.service';
 
 /**
  * `/api/questions`: the question broker. An agent (with its user's token)
@@ -29,7 +29,7 @@ export class QuestionsController {
   async list(@CurrentUser('id') userId: string, @Query() q: ListQuestionsDto, @Req() req?: object): Promise<QuestionView[]> {
     const rows = await this.questions.list(userId, q);
     // An MCP client (an AI app, or the console's own MCP tools) never reads a memory proposal (#553).
-    return (await this.fromMcp(req)) ? rows.filter((r) => r.input !== 'memory') : rows;
+    return (await this.fromMcp(req)) ? rows.filter((r) => !isOwnerCardInput(r.input)) : rows;
   }
 
   /** Whether the request came through the MCP endpoint (an AI app or an MCP client): memory proposals are not theirs to read or answer (#553). */
@@ -40,12 +40,12 @@ export class QuestionsController {
   /** The channel an answer is recorded under: through MCP never one of the console's own signed-in channels, whatever the body says (#553). */
   private async channelOf(req: object | undefined, claimed: string | undefined): Promise<string> {
     const channel = claimed ?? 'api';
-    return MEMORY_ANSWER_CHANNELS.includes(channelId(channel)) && (await this.fromMcp(req)) ? 'mcp' : channel;
+    return (MEMORY_ANSWER_CHANNELS.includes(channelId(channel)) || SAVE_LOGIN_ANSWER_CHANNELS.includes(channelId(channel))) && (await this.fromMcp(req)) ? 'mcp' : channel;
   }
 
   /** A memory proposal is a 404 to an MCP client (#553). */
   private async visible(req: object | undefined, view: QuestionView): Promise<QuestionView> {
-    if (view.input === 'memory' && (await this.fromMcp(req))) throw new NotFoundException({ code: 'QUESTION_NOT_FOUND', message: 'Question not found' });
+    if (isOwnerCardInput(view.input) && (await this.fromMcp(req))) throw new NotFoundException({ code: 'QUESTION_NOT_FOUND', message: 'Question not found' });
     return view;
   }
 

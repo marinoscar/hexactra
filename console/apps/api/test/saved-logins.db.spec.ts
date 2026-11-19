@@ -76,7 +76,9 @@ const notifier = { finished: jest.fn(), needsYou: jest.fn(), started: jest.fn(),
 function secretsSeam(state: 'registered' | 'not_enabled' | 'not_connected' | 'needs_reconnect' | 'unavailable' = 'registered') {
   const prepare = jest.fn(async () => state);
   const outcome = jest.fn(async () => undefined);
-  return { seam: { prepare, outcome } as unknown as RunSecretsService, prepare, outcome };
+  // Offering to save a typed sign-in (E37.4b) is off here: its own spec (save-login.db.spec.ts) covers it.
+  const saveLoginSupported = jest.fn(async () => false);
+  return { seam: { prepare, outcome, saveLoginSupported } as unknown as RunSecretsService, prepare, outcome };
 }
 
 function runnerOf(fabric: SecretsFabric, ai: AiService, seam?: RunSecretsService) {

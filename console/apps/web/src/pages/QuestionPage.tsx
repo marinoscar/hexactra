@@ -4,7 +4,7 @@ import { useParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { QuestionCard, type AnswerResult } from '../components/QuestionCard';
-import { isSettledError, type AnswerBody, type Question } from '../components/questions';
+import { answerRequest, isSettledError, type AnswerBody, type Question } from '../components/questions';
 import { useNow } from '../components/RunActivity';
 import { useOpenViewer } from '../components/useOpenViewer';
 import { CardSkeleton, ErrorBanner, PageContainer, PageHeader } from '../ui';
@@ -48,11 +48,8 @@ export function QuestionPage() {
 
   const respond = async (answer: AnswerBody): Promise<AnswerResult> => {
     try {
-      setQuestion(
-        answer.outcome === 'cancelled'
-          ? await api.post<Question>(`/questions/${id}/cancel`, { channel: 'web' })
-          : await api.post<Question>(`/questions/${id}/answer`, { ...answer, channel: 'web' }),
-      );
+      const { path, body } = answerRequest(id, answer);
+      setQuestion(await api.post<Question>(path, body));
     } catch (e) {
       // Either way the question may have moved on: show what it is now.
       await load();

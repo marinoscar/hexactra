@@ -2,7 +2,7 @@
 // GET /api/inbox; apps/api/src/questions/questions.contract.ts).
 import { answerLabel } from '@app/shared/question-rules';
 
-export type QuestionInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover' | 'credentials' | 'form' | 'memory';
+export type QuestionInput = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover' | 'credentials' | 'form' | 'memory' | 'save_login';
 
 /** A field of a `form` question (#552): one missing value of a task run, asked before it starts. */
 export interface FormField {
@@ -25,6 +25,23 @@ export interface MemoryProposal {
   /** The active memory whose values this would replace. */
   supersedes: string | null;
 }
+
+/** "Save this login?" (E37.4b): what the card shows. The password is never here: it is held by the fabric and goes from there to the provider. */
+export interface SaveLoginCard {
+  /** The host of the sign-in page. */
+  site: string;
+  /** Its registrable domain: the unit "Never for this site" is remembered at. */
+  domain: string;
+  /** The name the agent suggests; the owner edits it. */
+  name: string;
+  /** The username the owner typed. */
+  username: string;
+  /** When the fabric stops holding the password: after it, it is too late to save. */
+  valueExpiresAt: string;
+}
+
+/** What a settled "Save this login?" says when the fabric no longer held the password. */
+export const SAVE_TOO_LATE_TEXT = 'Too late to save this time; it will be offered at the next sign-in.';
 
 export interface QuestionOption {
   id: string;
@@ -60,7 +77,9 @@ export interface AskedQuestion {
   fields?: FormField[] | null;
   /** memory (#553): the proposed memory. */
   proposal?: MemoryProposal | null;
-  /** False for a memory proposal (#553): no run waits on it. */
+  /** save_login (E37.4b): the sign-in offered to be saved. */
+  saveLogin?: SaveLoginCard | null;
+  /** False for a memory proposal (#553) and a "Save this login?" card (E37.4b): no run waits on it. */
   blocking?: boolean;
   /** What "Don't ask again" would remember (#555), computed by the server; null or absent when it cannot be remembered. */
   rememberable?: Rememberable | null;
@@ -105,6 +124,10 @@ export interface QuestionResponse {
   memoryId?: string;
   /** The saved approval this answer made ("Don't ask again", #555). */
   ruleId?: string;
+  /** save_login (E37.4b): declined with "Never for this site". */
+  neverForSite?: boolean;
+  /** save_login: the name the login was saved under. */
+  savedAs?: string;
   channel?: string;
   by?: string;
   answeredAt: string;
@@ -159,6 +182,10 @@ export interface AnswerBody {
   memory?: { kind?: MemoryProposal['kind']; label: string; aliases?: string[]; attributes: Record<string, string> };
   /** "Don't ask again" (#555): make a saved approval of this approval. */
   rememberRule?: RememberRuleBody;
+  /** save_login (E37.4b): Save, with the name as the owner edited it. */
+  saveLogin?: { name: string };
+  /** save_login: "Never for this site", sent with a declined answer. */
+  neverForSite?: true;
 }
 
 export const KIND_LABEL: Record<string, string> = {
@@ -186,9 +213,13 @@ export function askerText(askedBy: string): string {
 /** The final state of a settled question, in words (a secret is never shown). */
 export function answerText(q: Pick<Question, 'status' | 'response' | 'input' | 'options' | 'constraints' | 'confirmLabel' | 'denyLabel'> & { fields?: FormField[] | null }): string {
   if (q.status === 'pending') return 'Waiting for an answer';
-  if (q.status === 'expired') return q.input === 'memory' ? 'This suggestion expired. Nothing was saved.' : 'This question expired before anyone answered.';
+  if (q.status === 'expired') return q.input === 'memory' ? 'This suggestion expired. Nothing was saved.' : q.input === 'save_login' ? SAVE_TOO_LATE_TEXT : 'This question expired before anyone answered.';
   const r = q.response;
   if (q.input === 'memory') return r?.outcome === 'completed' ? 'Saved to Memories.' : 'Not saved.';
+  if (q.input === 'save_login') {
+    if (r?.outcome === 'completed') return r.savedAs ? `Saved as “${r.savedAs}” in your vault.` : 'Saved in your vault.';
+    return r?.neverForSite ? 'Not saved. You will not be asked to save a login for this site again.' : 'Not saved.';
+  }
   const via = r?.channel ? ` (from ${r.channel})` : '';
   if (!r || r.outcome === 'cancelled') return `Declined${via}.`;
   if (r.valueWithheld) return `Answered${via}. The secret went to the agent and is not shown.`;
@@ -219,8 +250,23 @@ export function digitsOnly(pattern: string | undefined): boolean {
 /** Whether the API refused an answer because the question is already settled (answered elsewhere, expired). */
 export function isSettledError(e: unknown): boolean {
   const status = (e as { status?: number; statusCode?: number } | null)?.status ?? (e as { statusCode?: number } | null)?.statusCode;
+  // A save that was refused for a reason the owner can fix (the name is taken, the vault needs reconnecting or is switched off) is
+  // not a settled question: the card stays and says what to do (E37.4b).
+  if (status === 409 && SAVE_RETRYABLE_CODES.includes((e as { code?: string } | null)?.code ?? '')) return false;
   return status === 409 || status === 410;
 }
+
+/**
+ * Where the web app sends an answer (channel `web`): a plain decline goes to `/cancel`; everything else, a "Save this login?" decline with
+ * "Never for this site" included (it carries a body), goes to `/answer`.
+ */
+export function answerRequest(id: string, a: AnswerBody): { path: string; body: Record<string, unknown> } {
+  if (a.outcome === 'cancelled' && !a.neverForSite) return { path: `/questions/${id}/cancel`, body: { channel: 'web' } };
+  return { path: `/questions/${id}/answer`, body: { ...a, channel: 'web' } };
+}
+
+/** The 409 codes of a "Save this login?" answer that leave the card open (the owner can change the name, reconnect or try again). */
+export const SAVE_RETRYABLE_CODES: readonly string[] = ['SAVE_NAME_TAKEN', 'SAVE_RECONNECT', 'SAVE_DISABLED'];
 
 /** "4 min 05 s" until `iso` (or "expired"). */
 export function remaining(iso: string, now: number): string {

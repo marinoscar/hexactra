@@ -178,6 +178,9 @@ pub enum SecretPurpose {
     Form,
     /// Paying with a card.
     Purchase,
+    /// Saving a login the owner typed in by hand and that worked (Vault's
+    /// agent contract 1.3). Only ever sent to a provider's create route.
+    SaveLogin,
 }
 
 impl SecretPurpose {
@@ -190,6 +193,7 @@ impl SecretPurpose {
             SecretPurpose::Mfa => "mfa",
             SecretPurpose::Form => "form",
             SecretPurpose::Purchase => "purchase",
+            SecretPurpose::SaveLogin => "save_login",
         }
     }
 }
@@ -436,6 +440,9 @@ pub mod provider_error_codes {
     /// target is not an `input` of type `password` (nor a text input the page
     /// presents as one); nothing was fetched or typed.
     pub const TARGET_NOT_PASSWORD: &str = "target_not_password";
+    /// `save-login`: the owner already has a secret with that name; ask for
+    /// another (E37.4b).
+    pub const NAME_TAKEN: &str = "name_taken";
 }
 
 /// The provider implementations a registration can name.
@@ -501,6 +508,59 @@ pub struct SecretsProviderView {
     pub registered_at: DateTime<Utc>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<DateTime<Utc>>,
+}
+
+/// Longest name a saved login may be given.
+pub const MAX_SAVE_LOGIN_NAME: usize = 200;
+
+/// `POST /v1/secrets-providers/{owner_id}/{provider}/save-login` (E37.4b):
+/// save the sign-in the owner typed into a `credentials` handoff, so the next
+/// run does not ask. The control plane takes the password from its own memory
+/// (a handoff created with `offer_save`); the caller never holds it.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SaveLoginRequest {
+    /// The answered `credentials` handoff that holds the password.
+    pub handoff_id: Uuid,
+    /// What the owner calls the login (1-200 characters, one line).
+    pub name: String,
+    /// The origin of the sign-in page, as the caller read it from the
+    /// browser (`https`, or `http` on loopback). The provider binds the login
+    /// to exactly this origin.
+    pub origin: String,
+    /// The run the save belongs to, for the audit trail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
+    /// What the owner sees as the app.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_label: Option<String>,
+}
+
+impl SaveLoginRequest {
+    /// Check bounds before anything is taken from memory.
+    pub fn validate(&self) -> Result<(), ActionValidationError> {
+        let n = self.name.trim().chars().count();
+        if n == 0 || n > MAX_SAVE_LOGIN_NAME {
+            return invalid(format!("name must be 1-{MAX_SAVE_LOGIN_NAME} characters"));
+        }
+        if self.name.chars().any(char::is_control) {
+            return invalid("name must be one line of text");
+        }
+        if self.origin.trim().is_empty() || self.origin.len() > MAX_URL_LEN {
+            return invalid("origin is required");
+        }
+        Ok(())
+    }
+}
+
+/// What a save answers: that it was saved and the provider's id of the new
+/// login. Never the password.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SaveLoginResult {
+    pub saved: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub item_id: Option<String>,
 }
 
 /// A single bounded browser operation.
@@ -2315,7 +2375,21 @@ pub struct CreateHandoffRequest {
     /// person to tick or not; the answer's `remember` says what they chose.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remember: Option<HandoffRemember>,
+    /// `credentials` only (E37.4b): keep a copy of the password in the
+    /// control plane's memory after a `type_secret` action types it, so the
+    /// owner can still ask the secrets provider to save the sign-in for
+    /// [`SAVE_OFFER_TTL_SECS`] seconds after they gave it (`POST
+    /// /v1/secrets-providers/{owner_id}/{provider}/save-login`). The copy is
+    /// zeroed when used, when the time is up and on a restart; it is never
+    /// returned or persisted. Off by default: without it the password is gone
+    /// once typed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub offer_save: bool,
 }
+
+/// How long a saved-login offer keeps the password after the person gave it:
+/// the same lifetime as an unused secret answer.
+pub const SAVE_OFFER_TTL_SECS: u64 = 10 * 60;
 
 impl CreateHandoffRequest {
     /// A request with no options or constraints.
@@ -2332,6 +2406,7 @@ impl CreateHandoffRequest {
             timeout_ms: None,
             page: None,
             remember: None,
+            offer_save: false,
         }
     }
 
@@ -2360,6 +2435,9 @@ impl CreateHandoffRequest {
             if r.label.chars().any(char::is_control) {
                 return invalid("remember.label must be one line of text");
             }
+        }
+        if self.offer_save && self.input != HandoffInput::Credentials {
+            return invalid("offer_save applies to input \"credentials\" only");
         }
         if let Some(t) = self.timeout_ms {
             if !(MIN_HANDOFF_TIMEOUT_MS..=MAX_HANDOFF_TIMEOUT_MS).contains(&t) {
@@ -3601,6 +3679,60 @@ mod tests {
         let v: CreateHandoffRequest =
             serde_json::from_value(json!({"kind": "captcha", "prompt": "Solve it"})).unwrap();
         assert_eq!(v.input, HandoffInput::None);
+    }
+
+    // E37.4b: `offer_save` keeps a sign-in's password for the provider, only for a sign-in.
+    #[test]
+    fn offer_save_is_for_a_sign_in_only_and_is_off_on_the_wire_by_default() {
+        let mut r = q(HandoffInput::Credentials);
+        assert!(!r.offer_save);
+        assert!(serde_json::to_value(&r)
+            .unwrap()
+            .get("offer_save")
+            .is_none());
+        r.offer_save = true;
+        assert!(r.validate().is_ok());
+        assert_eq!(serde_json::to_value(&r).unwrap()["offer_save"], json!(true));
+        let again = parse(
+            json!({"kind": "login", "prompt": "Sign in", "input": "credentials", "offer_save": true}),
+        );
+        assert!(again.offer_save && again.validate().is_ok());
+        for input in [HandoffInput::Secret, HandoffInput::Text, HandoffInput::None] {
+            let mut r = q(input);
+            r.offer_save = true;
+            assert!(err(&r).contains("offer_save"), "{input:?}");
+        }
+        // Older clients never send it.
+        assert!(
+            !parse(json!({"kind": "login", "prompt": "Sign in", "input": "credentials"}))
+                .offer_save
+        );
+    }
+
+    #[test]
+    fn a_save_login_request_is_bounded() {
+        let ok = SaveLoginRequest {
+            handoff_id: Uuid::new_v4(),
+            name: "Example sign-in".into(),
+            origin: "https://signin.example.test".into(),
+            run_id: None,
+            client_label: None,
+        };
+        assert!(ok.validate().is_ok());
+        let bad = |f: &dyn Fn(&mut SaveLoginRequest)| {
+            let mut r = ok.clone();
+            f(&mut r);
+            r.validate().is_err()
+        };
+        assert!(bad(&|r| r.name = "   ".into()));
+        assert!(bad(&|r| r.name = "x".repeat(MAX_SAVE_LOGIN_NAME + 1)));
+        assert!(bad(&|r| r.name = "two\nlines".into()));
+        assert!(bad(&|r| r.origin = "".into()));
+        assert_eq!(SecretPurpose::SaveLogin.as_str(), "save_login");
+        assert_eq!(
+            serde_json::to_value(SecretPurpose::SaveLogin).unwrap(),
+            json!("save_login")
+        );
     }
 
     fn q(input: HandoffInput) -> CreateHandoffRequest {

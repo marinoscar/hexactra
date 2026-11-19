@@ -11,6 +11,7 @@ import { enqueueGoalRun } from '../runner/goal-run.enqueue';
 import { FabricSession, handoffOutcome, type CreatedHandoff, type FabricHandoff } from '../runner/fabric-session';
 import { CHANNEL_RULES, channelId, mayAnswerOn, mayRememberOn } from './channels/channel-rules';
 import { QuestionEvents, type QuestionEventType } from './question-events';
+import { SAVE_ERROR_STATUS, SAVE_TOO_LATE_TEXT, SaveLoginError, type SaveLoginPort } from './save-login.port';
 import { TaskRunStarter } from './task-run-starter';
 import type { FormField } from '../tasks/task-params';
 import {
@@ -25,7 +26,9 @@ import {
   validateAnswer,
   MEMORY_PROPOSAL_TTL_MS,
   memoryProposalSchema,
+  saveLoginProposalSchema,
   type MemoryProposal,
+  type SaveLoginProposal,
   type NormalizedAnswer,
   type QuestionAnswerInput,
   type QuestionGate,
@@ -91,6 +94,17 @@ export interface QuestionView {
   proposal: MemoryProposal | null;
   /** The chat a memory proposal came from (#553); null otherwise. */
   conversationId: string | null;
+  /** save_login (E37.4b): what the card shows (the site, the suggested name, the username, when the fabric stops holding the password); null for every other input. */
+  saveLogin: SaveLoginCard | null;
+}
+
+/** A "Save this login?" proposal as the API returns it: the fabric's handoff id and the provider stay on the server. */
+export type SaveLoginCard = Pick<SaveLoginProposal, 'site' | 'domain' | 'name' | 'username' | 'valueExpiresAt'>;
+
+export function saveLoginCardOf(q: Pick<Question, 'input' | 'proposal'>): SaveLoginCard | null {
+  if (q.input !== 'save_login') return null;
+  const p = saveLoginProposalSchema.safeParse(q.proposal ?? {});
+  return p.success ? { site: p.data.site, domain: p.data.domain, name: p.data.name, username: p.data.username, valueExpiresAt: p.data.valueExpiresAt } : null;
 }
 
 /** The client columns a question stores (#464). */
@@ -134,11 +148,18 @@ export function toQuestionView(q: Question): QuestionView {
     blocking: q.blocking,
     proposal: q.input === 'memory' ? ((q.proposal as unknown as MemoryProposal | null) ?? null) : null,
     conversationId: q.conversationId,
+    saveLogin: saveLoginCardOf(q),
   };
 }
 
 /** What a memory proposal's question says wherever it is listed or notified: never the proposal's values (#553). */
 export const MEMORY_PROPOSAL_PROMPT = 'The agent suggests remembering something.';
+
+/** What a "Save this login?" question says wherever it is listed or notified: never the site, the name or the username (E37.4b). */
+export const SAVE_LOGIN_PROMPT = 'The agent offers to save the sign-in you just typed.';
+
+/** The inputs only the owner answers on a card of their own, signed in, and no AI app or MCP client reads (a memory proposal, a "Save this login?"). */
+export const isOwnerCardInput = (input: string): boolean => input === 'memory' || input === 'save_login';
 
 /** A fabric handoff's input or kind, mapped onto the console's (unknown values fall back). */
 function inputOf(v: string): QuestionInputType {
@@ -160,6 +181,13 @@ function kindOf(v: string): string {
 @Injectable()
 export class QuestionsService {
   private readonly log = new Logger(QuestionsService.name);
+  /** Carries out a "Save this login?" answer (E37.4b); set by the secrets module when it is mounted. */
+  private saveLogins: SaveLoginPort | null = null;
+
+  /** The secrets module registers how a "Save this login?" answer is carried out. */
+  useSaveLogin(port: SaveLoginPort): void {
+    this.saveLogins = port;
+  }
 
   constructor(
     private readonly prisma: PrismaService,
@@ -237,6 +265,32 @@ export class QuestionsService {
         proposal: memoryProposalSchema.parse(proposal) as unknown as Prisma.InputJsonValue,
         proposalKey: opts.proposalKey,
         expiresAt: new Date(Date.now() + MEMORY_PROPOSAL_TTL_MS),
+      },
+    });
+    await this.emit('question.asked', q);
+    return toQuestionView(q);
+  }
+
+  /**
+   * "Save this login?" (E37.4b): a question no run waits on, answered only on the owner's signed-in card. Created by the
+   * server only (`SaveLoginService`), never from a question spec. Its prompt is fixed and names nothing, and it expires when
+   * the fabric stops holding the password (`proposal.valueExpiresAt`): afterwards the card says it is too late.
+   */
+  async createSaveLoginProposal(ownerUserId: string, proposal: SaveLoginProposal, opts: { askedBy: string; proposalKey: string; runId?: string | null; conversationId?: string | null }): Promise<QuestionView> {
+    const parsed = saveLoginProposalSchema.parse(proposal);
+    const q = await this.db(ownerUserId).question.create({
+      data: {
+        ownerUserId,
+        askedBy: opts.askedBy.slice(0, 200),
+        runId: opts.runId ?? null,
+        conversationId: opts.conversationId ?? null,
+        input: 'save_login',
+        kind: 'login',
+        prompt: SAVE_LOGIN_PROMPT,
+        blocking: false,
+        proposal: parsed as unknown as Prisma.InputJsonValue,
+        proposalKey: opts.proposalKey,
+        expiresAt: new Date(parsed.valueExpiresAt),
       },
     });
     await this.emit('question.asked', q);
@@ -449,6 +503,9 @@ export class QuestionsService {
       if (q.input === 'memory') {
         throw new ForbiddenException({ code: 'CHANNEL_NOT_ALLOWED', message: `A memory the agent suggests is saved or declined only in Hexactra, signed in (the web app or the Android app), not from ${where}` });
       }
+      if (q.input === 'save_login') {
+        throw new ForbiddenException({ code: 'CHANNEL_NOT_ALLOWED', message: `Saving a login is decided only in Hexactra, signed in (the web app or the Android app), not from ${where}` });
+      }
       throw new ForbiddenException({
         code: 'CHANNEL_NOT_ALLOWED',
         message: `${q.input === 'credentials' ? 'A sign-in' : q.input === 'secret' ? 'A code or password' : 'A high-risk confirmation'} cannot be answered from ${where}: answer it in the Hexactra inbox, signed in`,
@@ -463,6 +520,10 @@ export class QuestionsService {
     } catch (e) {
       if (e instanceof AnswerInvalidError) throw new BadRequestException({ code: 'INVALID_ANSWER', message: e.message });
       throw e;
+    }
+    // Saving a login needs the secrets module that carries it out (E37.4b); without it the question is not claimed.
+    if (q.input === 'save_login' && answer.outcome === 'completed' && !this.saveLogins) {
+      throw new HttpException({ code: 'SAVE_UNAVAILABLE', message: 'Saving a login is not available on this server.' }, SAVE_ERROR_STATUS.SAVE_UNAVAILABLE);
     }
     // A form's values are checked with the task's parameter rules before the answer is recorded (#552).
     let formValues: Record<string, string> | null = null;
@@ -519,6 +580,8 @@ export class QuestionsService {
         throw e;
       }
     }
+
+    if (q.input === 'save_login') await this.settleSaveLogin(actor, q, status, answer, now);
 
     if (q.handoffId) {
       const session = new FabricSession(this.fabric);
@@ -590,6 +653,41 @@ export class QuestionsService {
       question: { id: q.id, userId: actor.id, rememberable: rememberable!, taskId: run?.taskId ?? null, conversationId: run?.conversationId ?? null },
       choice: { scope: r.scope, maxAmount: r.maxAmount ?? null, expiresInDays: r.expiresInDays ?? null },
     };
+  }
+
+  /**
+   * Carries out the answer to a "Save this login?" card (E37.4b), after the answer won. Save: the fabric sends the password it
+   * still holds to the provider (the console never has it). "Never for this site": remembered for the owner and the registrable
+   * domain. A save that did not happen puts the question back to pending (the owner may pick another name or try again) and
+   * throws the card's words; one that came too late settles it as expired.
+   */
+  private async settleSaveLogin(actor: QuestionActor, q: Question, status: 'answered' | 'cancelled', answer: NormalizedAnswer, now: Date): Promise<void> {
+    const db = this.db(actor.id);
+    const revert = (next: 'pending' | 'expired') =>
+      db.question.updateMany({
+        where: { id: q.id, status, answeredAt: now },
+        data: { status: next, response: Prisma.DbNull, answeredByUserId: null, answeredChannel: null, answeredAt: null },
+      });
+    const proposal = saveLoginProposalSchema.parse(q.proposal ?? {});
+    try {
+      if (status === 'cancelled') {
+        if (answer.neverForSite) await this.saveLogins?.never(actor.id, proposal.domain);
+        return;
+      }
+      await this.saveLogins!.save(actor.id, proposal, answer.saveLogin!.name, { questionId: q.id, runId: q.runId });
+    } catch (e) {
+      if (e instanceof SaveLoginError) {
+        const tooLate = e.code === 'SAVE_TOO_LATE';
+        await revert(tooLate ? 'expired' : 'pending');
+        if (tooLate) {
+          const fresh = await db.question.findFirst({ where: { id: q.id } });
+          if (fresh) await this.emit('question.expired', fresh);
+        }
+        throw new HttpException({ code: e.code, message: tooLate ? SAVE_TOO_LATE_TEXT : e.message }, SAVE_ERROR_STATUS[e.code]);
+      }
+      await revert('pending');
+      throw e;
+    }
   }
 
   /**

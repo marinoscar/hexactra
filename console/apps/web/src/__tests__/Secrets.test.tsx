@@ -365,6 +365,54 @@ describe('what the agent can reach and what it used', () => {
   });
 });
 
+describe('saving a login the owner typed (E37.4b)', () => {
+  it('the write switch says the agent offers to save a login on a card, and that the password never passes through Hexactra', async () => {
+    renderPage({ 'GET /secrets/status': status({ ...CONNECTED, scopes: [...CONNECTED.scopes, 'vault:items_write'] }) });
+    const sw = await screen.findByRole('switch', { name: 'Let the agent save and change logins' });
+    expect(sw).toBeChecked();
+    expect(sw).toHaveAccessibleDescription(/offers to save that login on a card; you decide each time, and the password never passes through Hexactra/);
+    expect(document.body.textContent).not.toMatch(/Saving a sign-in from a run is not available yet/);
+  });
+
+  it('lists the sites the owner said "Never for this site" for, and "Offer again" removes one and announces it', async () => {
+    const host = renderPage({
+      'GET /secrets/status': status(CONNECTED),
+      'GET /user-settings': { secrets: { neverSaveLoginSites: ['example.com', 'shop.example.org'] } },
+      'PATCH /user-settings': (r: TestApiRequest) => r.body,
+    });
+    const section = await screen.findByTestId('never-save-sites');
+    expect(within(section).getByText('example.com')).toBeInTheDocument();
+    expect(within(section).getByText('shop.example.org')).toBeInTheDocument();
+    fireEvent.click(within(section).getByRole('button', { name: 'Offer to save logins again for example.com' }));
+    await waitFor(() => expect(host.requests.find((r) => r.method === 'PATCH')).toMatchObject({ path: '/user-settings', body: { secrets: { neverSaveLoginSites: ['shop.example.org'] } } }));
+    await waitFor(() => expect(within(screen.getByTestId('never-save-sites')).queryByText('example.com')).toBeNull());
+    expect(within(screen.getByTestId('never-save-sites')).getByText('shop.example.org')).toBeInTheDocument();
+    expect(screen.getAllByRole('status').map((n) => n.textContent).join(' ')).toContain('The agent may offer to save a login for example.com again.');
+  });
+
+  it('has no such section while the owner has not said never anywhere, and a viewer cannot offer again', async () => {
+    renderPage({ 'GET /secrets/status': status(CONNECTED), 'GET /user-settings': { secrets: {} } });
+    await screen.findByRole('switch', { name: 'Let the agent use saved logins' });
+    expect(screen.queryByTestId('never-save-sites')).toBeNull();
+    cleanup();
+    renderPage({ 'GET /secrets/status': status(CONNECTED), 'GET /user-settings': { secrets: { neverSaveLoginSites: ['example.com'] } } }, ['secrets:read', 'runs:read']);
+    expect(await screen.findByRole('button', { name: 'Offer to save logins again for example.com' })).toBeDisabled();
+  });
+
+  it('the Activity list words a save as the sign-in you typed, and a refused save with its reason', async () => {
+    const items: ActivityItem[] = [
+      { id: 's1', at: '2026-11-19T09:10:00.000Z', event: 'release', runId: RUN, site: 'login.example.com', field: 'password', purpose: 'save_login', outcome: 'saved', refused: false, matches: null },
+      { id: 's2', at: '2026-11-19T09:05:00.000Z', event: 'release', runId: RUN, site: 'login.example.com', field: 'password', purpose: 'save_login', outcome: 'name_taken', refused: true, matches: null },
+    ];
+    renderPage({ 'GET /secrets/status': status(CONNECTED), 'GET /secrets/activity': { items, providerActivityUrl: null } });
+    const table = await screen.findByRole('table', { name: 'Saved login activity' });
+    expect(within(table).getAllByText('Saved the sign-in you typed')).toHaveLength(2);
+    expect(within(table).queryByText('Typed the password')).toBeNull();
+    expect(within(table).getByText('Saved')).toBeInTheDocument();
+    expect(within(table).getByText('Not saved: you already have a secret with that name')).toBeInTheDocument();
+  });
+});
+
 describe('the avatar menu entry', () => {
   it('shows for secrets:read only', () => {
     const view = (permissions: string[]) => {

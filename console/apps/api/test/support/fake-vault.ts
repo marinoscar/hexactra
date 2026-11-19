@@ -1,6 +1,6 @@
 // A FAKE VAULT for tests (E37.2, #591): a small HTTP server that behaves like Vault's OAuth server and agent
-// credential API as documented in marinoscar/vault `docs/agent-credential-api.md` (commit 749cbc69, contract 1.2,
-// beta). It holds only invented data (`Person A`, `*.example.test`, random canaries as the values).
+// credential API as documented in marinoscar/vault `docs/agent-credential-api.md` (commit 749cbc69, contract 1.2, beta; plus
+// contract 1.3, marinoscar/vault#233: the purpose `save_login` on `POST /credentials` and the feature id `save_login` in `whoami`). It holds only invented data (`Person A`, `*.example.test`, random canaries as the values).
 //
 // What it implements:
 //   OAuth      discovery (`/api/oauth/.well-known/authorization-server`), `GET /api/oauth/authorize` (PKCE S256,
@@ -8,7 +8,9 @@
 //              and `iss`), `POST /api/oauth/token` (authorization code and refresh token; refresh tokens ROTATE ON
 //              USE and replaying a used one revokes the WHOLE grant; `client_secret_post` or `client_secret_basic`),
 //              `POST /api/oauth/revoke`. Form bodies only, RFC 6749 error JSON.
-//   Agent API  `/api/agent/v1`: `GET /whoami`, `GET /credentials?origin=`, `POST /credentials/{id}/fill`,
+//   Agent API  `/api/agent/v1`: `GET /whoami`, `GET /credentials?origin=`, `POST /credentials` (create: exactly one of
+//              `password` and `generate`; scope `vault:items_write`; `409` with no code for a name already used; a purpose outside
+//              the contract's set is a `400`, `save_login` only from contract 1.3), `POST /credentials/{id}/fill`,
 //              `POST /credentials/{id}/totp`. The deployment kill switch (`403 AGENT_ACCESS_DISABLED`), scopes
 //              (`403` with `WWW-Authenticate: ... insufficient_scope`), per-login opt-in with ONE identical `404`,
 //              exact origin binding (`403 ORIGIN_MISMATCH`; a site-only match is listed but never fillable),
@@ -55,6 +57,8 @@ export interface FakeVaultOptions {
   refreshGraceMs?: number;
   /** Extra delay on every refresh grant, to make concurrent refreshes overlap. */
   refreshDelayMs?: number;
+  /** The agent contract this Vault speaks: `1.3` (default) adds the purpose and the feature `save_login`; `1.2` rejects the purpose with a `400`. */
+  contract?: '1.2' | '1.3';
 }
 
 /** What the server saw: no secret values; the token requests keep their field NAMES and the non-secret values. */
@@ -115,6 +119,7 @@ export class FakeVault {
       agentAccess: options.agentAccess ?? true,
       refreshGraceMs: options.refreshGraceMs ?? 0,
       refreshDelayMs: options.refreshDelayMs ?? 0,
+      contract: options.contract ?? '1.3',
     };
     const canary = (label: string) => `CANARY-${label}-${b64u(randomBytes(9))}`;
     this.logins = [
@@ -308,6 +313,14 @@ export class FakeVault {
     return this.json(res, 400, { error: 'unsupported_grant_type' });
   }
 
+  /** A grant holding `scopes` with a live `oat_` access token, for a spec that needs a bearer without the OAuth flow. */
+  directAccessToken(scopes: string[], clientId = this.options.clientId): string {
+    const access = token('oat_');
+    const id = randomUUID();
+    this.grants.set(id, { id, clientId, userId: this.userId, scopes, revoked: false, refresh: '', rotatedAt: Date.now(), retired: new Map(), access: new Set([access]) });
+    return access;
+  }
+
   private issue(grant: Grant, res: ServerResponse): number {
     const access = token('oat_');
     grant.access.add(access);
@@ -375,11 +388,22 @@ export class FakeVault {
     const insufficient = () => this.json(res, 403, { message: 'Insufficient scope' }, { 'www-authenticate': 'Bearer error="insufficient_scope"' });
     if (route === '/whoami' && req.method === 'GET') {
       if (!need('vault:items_read')) return insufficient();
-      return this.json(res, 200, { data: { userId: grant.userId, scopes: grant.scopes.filter((s) => s !== 'offline_access'), clientId: grant.clientId, contract: { version: '1.2', features: ['logins', 'totp'] } } });
+      return this.json(res, 200, { data: { userId: grant.userId, scopes: grant.scopes.filter((s) => s !== 'offline_access'), clientId: grant.clientId, contract: { version: this.options.contract, features: this.options.contract === '1.3' ? ['logins', 'totp', 'save_login'] : ['logins', 'totp'] } } });
     }
     if (route === '/credentials' && req.method === 'GET') {
       if (!need('vault:items_read')) return insufficient();
       return this.lookup(res, url.searchParams.get('origin') ?? '');
+    }
+    if (route === '/credentials' && req.method === 'POST') {
+      if (!need('vault:items_write')) return insufficient();
+      let body: Record<string, unknown> = {};
+      try {
+        body = JSON.parse(await this.readBody(req)) as typeof body;
+      } catch {
+        return this.json(res, 400, { message: 'Invalid body' });
+      }
+      rec.params = { origin: String(body.origin ?? ''), purpose: String(body.purpose ?? '') };
+      return this.create(res, body);
     }
     if (route === '/identity' && req.method === 'GET') {
       if (!need('vault:identity_read')) return insufficient();
@@ -443,6 +467,22 @@ export class FakeVault {
       })
       .sort((a, b) => (a.matchKind === b.matchKind ? 0 : a.matchKind === 'exact' ? -1 : 1));
     return this.json(res, 200, { data: out });
+  }
+
+  /** Saves a login (`POST /credentials`). The password is kept in `logins` like any other canary value; it is never echoed. */
+  private create(res: ServerResponse, body: Record<string, unknown>): number {
+    const purposes = this.options.contract === '1.3' ? ['login', 'signup', 'save_login', 'password_change', 'mfa'] : ['login', 'signup', 'password_change', 'mfa'];
+    const origin = FakeVault.normalizeOrigin(String(body.origin ?? ''));
+    const given = Number(body.password !== undefined) + Number(body.generate !== undefined);
+    if (typeof body.name !== 'string' || !body.name || typeof body.username !== 'string' || !origin || !purposes.includes(String(body.purpose)) || given !== 1) {
+      return this.json(res, 400, { message: 'Invalid body' });
+    }
+    // A name the owner already uses: no `code`, as Vault answers it.
+    if (this.logins.some((l) => l.name === body.name)) return this.json(res, 409, { message: `A secret named "${body.name}" already exists` });
+    const password = typeof body.password === 'string' ? body.password : `GENERATED-${b64u(randomBytes(9))}`;
+    const login: FakeLogin = { id: randomUUID(), name: body.name, username: body.username, password, origins: [origin], open: true, totpSeed: null };
+    this.logins.push(login);
+    return this.json(res, 201, { data: { id: login.id, name: login.name, username: login.username, origins: login.origins } });
   }
 
   /** The ONE identical 404 of the opt-in rule. */

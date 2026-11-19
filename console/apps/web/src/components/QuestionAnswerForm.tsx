@@ -24,6 +24,7 @@ import { numberError, numberHint, selectionBounds, selectionHelp, selectionOk, t
 
 import { FormQuestion } from '../taskParams/FormQuestion';
 import { MemoryProposalForm } from './MemoryProposalForm';
+import { SaveLoginForm } from './SaveLoginForm';
 import { digitsOnly, secretLabel, type AnswerBody, type AskedQuestion, type QuestionOption } from './questions';
 import { NO_REMEMBER, RememberRuleField, amountError, rememberRuleOf, type RememberRuleState } from './RememberRuleField';
 
@@ -114,6 +115,10 @@ export function QuestionAnswerForm(props: QuestionAnswerFormProps) {
   // A memory the agent proposes (#553): its own card, Save or Not now.
   if (props.question.input === 'memory') {
     return props.question.proposal ? <MemoryProposalForm proposal={props.question.proposal} onSubmit={props.onSubmit} disabled={props.disabled} busy={props.busy} /> : null;
+  }
+  // "Save this login?" (E37.4b): its own card, Save, Not now or Never for this site.
+  if (props.question.input === 'save_login') {
+    return props.question.saveLogin ? <SaveLoginForm card={props.question.saveLogin} onSubmit={props.onSubmit} disabled={props.disabled} busy={props.busy} /> : null;
   }
   return <TypedAnswerForm {...props} />;
 }

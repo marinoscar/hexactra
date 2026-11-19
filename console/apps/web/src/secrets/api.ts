@@ -62,6 +62,8 @@ export interface ActivityItem {
   /** The saved login's name, as the run recorded it; null when unknown. */
   loginName?: string | null;
   field: ActivityField | null;
+  /** Why a value was handed over; `save_login` (E37.4b) is the password the owner typed, sent to the provider to be saved. */
+  purpose?: 'login' | 'signup' | 'password_change' | 'mfa' | 'form' | 'purchase' | 'save_login' | null;
   outcome: string;
   refused: boolean;
   matches: number | null;
@@ -170,6 +172,18 @@ export async function getDefaultUseSavedLogins(api: PlatformApiClient): Promise<
 export async function setDefaultUseSavedLogins(api: PlatformApiClient, on: boolean): Promise<boolean> {
   const doc = await api.patch<{ secrets?: { defaultUseSavedLogins?: boolean } | null }>('/user-settings', { secrets: { defaultUseSavedLogins: on } });
   return doc.secrets?.defaultUseSavedLogins === true;
+}
+
+/** The sites the owner chose "Never for this site" for on a "Save this login?" card (E37.4b): the user setting `secrets.neverSaveLoginSites`. */
+export async function getNeverSaveSites(api: PlatformApiClient): Promise<string[]> {
+  const doc = await api.get<{ secrets?: { neverSaveLoginSites?: string[] } | null }>('/user-settings');
+  return doc.secrets?.neverSaveLoginSites ?? [];
+}
+
+/** Replaces the list (removing a site is how the owner is asked again). */
+export async function setNeverSaveSites(api: PlatformApiClient, sites: string[]): Promise<string[]> {
+  const doc = await api.patch<{ secrets?: { neverSaveLoginSites?: string[] } | null }>('/user-settings', { secrets: { neverSaveLoginSites: sites } });
+  return doc.secrets?.neverSaveLoginSites ?? [];
 }
 
 export async function getDeploymentSwitch(api: PlatformApiClient): Promise<{ enabled: boolean; version: number }> {

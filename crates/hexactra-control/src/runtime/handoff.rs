@@ -35,6 +35,18 @@ pub(super) struct HeldSecret {
     expires_at: DateTime<Utc>,
 }
 
+/// The password of a sign-in the owner typed by hand, kept so the secrets
+/// provider can still be asked to save it (E37.4b). It is made only for a
+/// `credentials` handoff created with `offer_save`, when a `type_secret`
+/// action types the password; it lives until it is used, until
+/// [`SECRET_TTL`] after the answer, or a restart, and survives the end of the
+/// session (the run usually ends before the owner decides). Zeroed when
+/// dropped; never persisted, returned or logged.
+pub(super) struct SaveOffer {
+    pub(super) password: Zeroizing<String>,
+    pub(super) expires_at: DateTime<Utc>,
+}
+
 /// Event published to webhook dispatchers and other listeners.
 #[derive(Debug, Clone)]
 pub struct RuntimeEvent {
@@ -71,6 +83,9 @@ pub(super) struct HandoffEntry {
     view: HandoffView,
     token_digest: Option<[u8; 32]>,
     secret: Option<HeldSecret>,
+    /// Created with `offer_save` (not persisted: an offer never outlives a restart).
+    offer_save: bool,
+    offer: Option<SaveOffer>,
     tx: watch::Sender<HandoffStatus>,
 }
 
@@ -245,6 +260,8 @@ impl RuntimeStore {
                     view: view.clone(),
                     token_digest: Some(digest(&token)),
                     secret: None,
+                    offer_save: req.offer_save,
+                    offer: None,
                     tx,
                 },
             );
@@ -310,6 +327,8 @@ impl RuntimeStore {
                     view: r.view,
                     token_digest: r.token_digest,
                     secret: None,
+                    offer_save: false,
+                    offer: None,
                     tx,
                 },
             );
@@ -510,12 +529,18 @@ impl RuntimeStore {
         let Some(h) = inner.handoffs.get_mut(&id) else {
             return false;
         };
+        let mut erased = false;
         if h.secret.as_ref().is_some_and(|s| s.expires_at <= now) {
             h.secret = None;
             tracing::info!(handoff_id = %id, "unused handoff secret erased");
-            return true;
+            erased = true;
         }
-        false
+        if h.offer.as_ref().is_some_and(|o| o.expires_at <= now) {
+            h.offer = None;
+            tracing::info!(handoff_id = %id, "unused save offer erased");
+            erased = true;
+        }
+        erased
     }
 
     /// Take a handoff's secret answer, once. With `session_id`, the handoff
@@ -561,7 +586,76 @@ impl RuntimeStore {
                 "the secret expired unused; ask the person again".into(),
             ));
         }
+        // A sign-in created with `offer_save` keeps the password for the
+        // secrets provider to save, until the secret's own deadline.
+        if h.offer_save && h.view.input == HandoffInput::Credentials {
+            h.offer = Some(SaveOffer {
+                password: Zeroizing::new(secret.value.as_str().to_string()),
+                expires_at: secret.expires_at,
+            });
+        }
         Ok(secret.value)
+    }
+
+    /// Take the password kept for saving a sign-in (E37.4b), once, for the
+    /// owner `owner_id` who owns the handoff's session. Along with it comes the
+    /// username the person gave. A handoff of another owner, or one without an
+    /// offer, is "not found"; an offer that is gone, used, being saved by
+    /// another call or past its deadline is `SecretUnavailable`. Give it back
+    /// with [`Self::return_save_offer`] when the save did not happen.
+    pub(super) fn take_save_offer(
+        &self,
+        id: Uuid,
+        owner_id: &str,
+        now: DateTime<Utc>,
+    ) -> Result<(SaveOffer, String, Uuid), StoreError> {
+        let mut inner = self.lock();
+        let owner_of = |inner: &Inner, session: Uuid| {
+            inner
+                .sessions
+                .get(&session)
+                .and_then(|s| s.owner_id.clone())
+        };
+        let h = inner
+            .handoffs
+            .get(&id)
+            .ok_or(StoreError::NotFound("handoff"))?;
+        if owner_of(&inner, h.view.session_id).as_deref() != Some(owner_id) || !h.offer_save {
+            return Err(StoreError::NotFound("handoff"));
+        }
+        let session_id = h.view.session_id;
+        let username = h
+            .view
+            .response
+            .as_ref()
+            .and_then(|r| r.value.clone())
+            .unwrap_or_default();
+        let h = inner
+            .handoffs
+            .get_mut(&id)
+            .ok_or(StoreError::NotFound("handoff"))?;
+        let gone = || {
+            StoreError::SecretUnavailable(
+                "the password is no longer held (it was saved, erased, expired or is being saved now)"
+                    .into(),
+            )
+        };
+        let offer = h.offer.take().ok_or_else(gone)?;
+        if offer.expires_at <= now {
+            return Err(gone());
+        }
+        Ok((offer, username, session_id))
+    }
+
+    /// Put an offer back after a save that did not happen (the name was taken,
+    /// the provider was unreachable): the owner may try again until it expires.
+    pub(super) fn return_save_offer(&self, id: Uuid, offer: SaveOffer) {
+        let mut inner = self.lock();
+        if let Some(h) = inner.handoffs.get_mut(&id) {
+            if offer.expires_at > Utc::now() {
+                h.offer = Some(offer);
+            }
+        }
     }
 
     /// Return a secret value once, then erase it. Deprecated: a
@@ -1303,5 +1397,114 @@ mod tests {
         assert_eq!(r.outcome, HandoffOutcome::Completed);
         assert_eq!(r.answered_at, d.resolved_at);
         assert_eq!(r.by, None);
+    }
+
+    // E37.4b: a sign-in created with `offer_save` keeps its password for the
+    // provider after the agent typed it; one without does not.
+    fn owned_setup() -> (RuntimeStore, Uuid) {
+        let s = RuntimeStore::new();
+        let h = s.register_host(None, "h".into(), "0".into());
+        let sess = s
+            .create_session_owned(Some(h), None, None, false, &[], Some("owner-a".into()))
+            .unwrap();
+        (s, sess.id)
+    }
+
+    fn offered_sign_in(s: &RuntimeStore, sess: Uuid, offer: bool) -> Uuid {
+        let mut r = sign_in(None);
+        r.offer_save = offer;
+        let (h, _) = s.create_handoff(sess, r).unwrap();
+        s.respond_handoff(
+            h.id,
+            Responder::Operator,
+            signed_in("person-a", Some("CANARY-offer-pw"), None),
+        )
+        .unwrap();
+        h.id
+    }
+
+    #[tokio::test]
+    async fn a_save_offer_is_kept_only_when_asked_for_and_only_after_the_password_is_typed() {
+        let (s, sess) = owned_setup();
+        let plain = offered_sign_in(&s, sess, false);
+        s.enqueue(sess, type_secret(plain), Duration::from_secs(1))
+            .unwrap();
+        assert!(matches!(
+            s.take_save_offer(plain, "owner-a", Utc::now()),
+            Err(StoreError::NotFound("handoff"))
+        ));
+
+        let id = offered_sign_in(&s, sess, true);
+        // Typed by the agent first: nothing to offer before that.
+        assert!(matches!(
+            s.take_save_offer(id, "owner-a", Utc::now()),
+            Err(StoreError::SecretUnavailable(_))
+        ));
+        s.enqueue(sess, type_secret(id), Duration::from_secs(1))
+            .unwrap();
+        // The password is consumed for typing and the offer holds its own copy.
+        assert!(matches!(
+            s.enqueue(sess, type_secret(id), Duration::from_secs(1)),
+            Err(StoreError::SecretUnavailable(_))
+        ));
+        // Another owner never gets it, and asking does not spend it.
+        assert!(matches!(
+            s.take_save_offer(id, "owner-b", Utc::now()),
+            Err(StoreError::NotFound("handoff"))
+        ));
+        let (offer, username, session) = s.take_save_offer(id, "owner-a", Utc::now()).unwrap();
+        assert_eq!(
+            (offer.password.as_str(), username.as_str(), session),
+            ("CANARY-offer-pw", "person-a", sess)
+        );
+        // One save at a time: while it is out, a second call finds nothing.
+        assert!(matches!(
+            s.take_save_offer(id, "owner-a", Utc::now()),
+            Err(StoreError::SecretUnavailable(_))
+        ));
+        // Given back (a taken name), it can be taken again.
+        s.return_save_offer(id, offer);
+        let (offer, _, _) = s.take_save_offer(id, "owner-a", Utc::now()).unwrap();
+        // Used: dropped, never given back.
+        drop(offer);
+        assert!(matches!(
+            s.take_save_offer(id, "owner-a", Utc::now()),
+            Err(StoreError::SecretUnavailable(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_save_offer_outlives_its_session_and_dies_at_the_secrets_deadline() {
+        let (s, sess) = owned_setup();
+        let id = offered_sign_in(&s, sess, true);
+        s.enqueue(sess, type_secret(id), Duration::from_secs(1))
+            .unwrap();
+        // The run ends before the owner decides: the offer is still there.
+        s.end_session(sess).unwrap();
+        let (offer, _, _) = s.take_save_offer(id, "owner-a", Utc::now()).unwrap();
+        s.return_save_offer(id, offer);
+
+        // Not yet due: nothing is erased.
+        assert!(!s.erase_expired_secret(id, Utc::now()));
+        // Past the deadline the timer erases it.
+        let later = Utc::now() + chrono::Duration::from_std(SECRET_TTL).unwrap();
+        assert!(s.erase_expired_secret(id, later + chrono::Duration::seconds(1)));
+        assert!(matches!(
+            s.take_save_offer(id, "owner-a", Utc::now()),
+            Err(StoreError::SecretUnavailable(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_late_save_is_refused_even_before_the_timer_runs() {
+        let (s, sess) = owned_setup();
+        let id = offered_sign_in(&s, sess, true);
+        s.enqueue(sess, type_secret(id), Duration::from_secs(1))
+            .unwrap();
+        let later = Utc::now() + chrono::Duration::from_std(SECRET_TTL).unwrap();
+        assert!(matches!(
+            s.take_save_offer(id, "owner-a", later + chrono::Duration::seconds(1)),
+            Err(StoreError::SecretUnavailable(_))
+        ));
     }
 }

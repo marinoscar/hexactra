@@ -12,12 +12,14 @@ import {
   getCards,
   getDefaultUseSavedLogins,
   getIdentity,
+  getNeverSaveSites,
   getReach,
   getStatus,
   getStoreStatus,
   saveClient,
   setAgentUse,
   setDefaultUseSavedLogins,
+  setNeverSaveSites,
   setProvider,
   type ActivityItem,
   type ActivityList,
@@ -355,6 +357,33 @@ function StoreCard({ store }: { store: StoreStatus }) {
   );
 }
 
+/**
+ * The sites the owner said "Never for this site" for on a "Save this login?" card (E37.4b). Shown only when there is one; removing a site is
+ * how the owner is offered to save a login there again.
+ */
+function NeverSaveSection({ sites, canWrite, busy, onRemove }: { sites: string[]; canWrite: boolean; busy: boolean; onRemove: (site: string) => void }) {
+  return (
+    <Box component="section" aria-labelledby="never-title" data-testid="never-save-sites">
+      <Typography id="never-title" variant="h6" component="h2" sx={{ mb: 0.5 }}>
+        Sites where the agent will not offer to save a login
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+        You chose &ldquo;Never for this site&rdquo; on these. Remove one to be offered again after you sign in there yourself.
+      </Typography>
+      <Stack spacing={1} component="ul" sx={{ listStyle: 'none', p: 0, m: 0 }} aria-label="Sites never offered">
+        {sites.map((site) => (
+          <Paper key={site} component="li" variant="outlined" sx={{ p: 1.5, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { sm: 'center' }, gap: 1 }}>
+            <Typography sx={{ flexGrow: 1, minWidth: 0, fontWeight: 500, overflowWrap: 'anywhere' }}>{site}</Typography>
+            <Button size="small" variant="outlined" disabled={!canWrite || busy} onClick={() => onRemove(site)} aria-label={`Offer to save logins again for ${site}`} sx={{ ...TOUCH, alignSelf: { xs: 'stretch', sm: 'center' } }}>
+              Offer again
+            </Button>
+          </Paper>
+        ))}
+      </Stack>
+    </Box>
+  );
+}
+
 function ReachSection({ reach, manageUrl, store }: { reach: Reach; manageUrl: string | null; store?: StoreStatus | null }) {
   return (
     <Box component="section" aria-labelledby="reach-title">
@@ -581,6 +610,8 @@ export function SecretsSettingsPage() {
   // The card approvals Hexactra remembers (E37.7): the saved approvals that are bound to a card.
   const [cardRules, setCardRules] = useState<ApprovalRule[]>([]);
   const [defaultOn, setDefaultOn] = useState(false);
+  // The sites the owner chose "Never for this site" for on a "Save this login?" card (E37.4b).
+  const [neverSites, setNeverSites] = useState<string[]>([]);
   // The built-in store (E37.5): null when this deployment does not offer it.
   const [store, setStore] = useState<StoreStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -597,6 +628,7 @@ export function SecretsSettingsPage() {
       getIdentity(api).then(setIdentity, () => setIdentity({ available: false, reason: 'unavailable', items: [], manageUrl: null }));
       api.get<ApprovalRulesList>('/approval-rules').then((l) => setCardRules(l.rules.filter((r) => Boolean(r.cardRef))), () => setCardRules([]));
       getDefaultUseSavedLogins(api).then(setDefaultOn, () => setDefaultOn(false));
+      getNeverSaveSites(api).then(setNeverSites, () => setNeverSites([]));
       getStoreStatus(api).then(setStore);
     } catch (e) {
       setLoadError(e instanceof Error && e.message ? e.message : 'Could not load your secrets settings');
@@ -665,6 +697,13 @@ export function SecretsSettingsPage() {
     if (saved === undefined) return;
     setDefaultOn(saved);
     setMessage({ severity: 'info', text: saved ? 'New tasks and chats will start with saved logins on.' : 'New tasks and chats will start with saved logins off.' });
+  };
+
+  const offerAgain = async (site: string) => {
+    const saved = await action.run('never', () => setNeverSaveSites(api, neverSites.filter((s) => s !== site)));
+    if (saved === undefined) return;
+    setNeverSites(saved);
+    setMessage({ severity: 'info', text: `The agent may offer to save a login for ${site} again.` });
   };
 
   const toggleWrite = async (on: boolean) => {
@@ -751,7 +790,7 @@ export function SecretsSettingsPage() {
                   help={
                     !connected
                       ? 'Connect your provider first.'
-                      : 'Asks Vault for permission to save and change logins. You approve it in Vault. Saving a sign-in from a run is not available yet.'
+                      : 'Asks Vault for permission to save and change logins. You approve it in Vault. After you sign in yourself during a run, the agent offers to save that login on a card; you decide each time, and the password never passes through Hexactra.'
                   }
                   checked={connected && hasWriteScope(vault.scopes)}
                   disabled={!canWrite || !connected}
@@ -790,6 +829,7 @@ export function SecretsSettingsPage() {
             </Stack>
           </Paper>
 
+          {neverSites.length > 0 && <NeverSaveSection sites={neverSites} canWrite={canWrite} busy={action.busy === 'never'} onRemove={(site) => void offerAgain(site)} />}
           {reach && <ReachSection reach={reach} manageUrl={manageUrl} store={store} />}
           {store?.provider !== 'builtin' && <CardsSection connected={vault.status === 'connected'} hasScope={hasCardsScope(vault.scopes)} manageUrl={manageUrl} remembered={cardRules} />}
           {identity && store?.provider !== 'builtin' && <IdentitySection identity={identity} manageUrl={identity.manageUrl ?? manageUrl} />}

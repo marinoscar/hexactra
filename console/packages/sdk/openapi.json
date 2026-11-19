@@ -41410,6 +41410,12 @@
               "MEMORY_LIMIT",
               "MEMORY_NOT_ACTIVE",
               "MEMORY_HOLDS_SECRET",
+              "SAVE_TOO_LATE",
+              "SAVE_NAME_TAKEN",
+              "SAVE_RECONNECT",
+              "SAVE_DISABLED",
+              "SAVE_UNAVAILABLE",
+              "SAVE_REFUSED",
               "INVALID_CRON",
               "INVALID_TIMEZONE",
               "CRON_TOO_FREQUENT",
@@ -44374,6 +44380,17 @@
               "defaultUseSavedLogins": {
                 "description": "New tasks and chats start with \"Sign in with my saved logins\" on (E37.3). Off by default. Each task and chat still has its own switch.",
                 "type": "boolean"
+              },
+              "neverSaveLoginSites": {
+                "description": "Registrable domains the owner chose \"Never for this site\" for on a \"Save this login?\" card (E37.4b): the agent does not offer to save a sign-in there. Empty by default.",
+                "maxItems": 200,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 253,
+                  "pattern": "^[a-z0-9.-]+$"
+                }
               }
             },
             "required": [
@@ -44815,6 +44832,17 @@
               "defaultUseSavedLogins": {
                 "description": "New tasks and chats start with \"Sign in with my saved logins\" on (E37.3). Off by default. Each task and chat still has its own switch.",
                 "type": "boolean"
+              },
+              "neverSaveLoginSites": {
+                "description": "Registrable domains the owner chose \"Never for this site\" for on a \"Save this login?\" card (E37.4b): the agent does not offer to save a sign-in there. Empty by default.",
+                "maxItems": 200,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 253,
+                  "pattern": "^[a-z0-9.-]+$"
+                }
               }
             },
             "required": [
@@ -45286,6 +45314,16 @@
                   },
                   "defaultUseSavedLogins": {
                     "type": "boolean"
+                  },
+                  "neverSaveLoginSites": {
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 253,
+                      "pattern": "^[a-z0-9.-]+$"
+                    }
                   }
                 }
               },
@@ -50590,6 +50628,17 @@
                   "defaultUseSavedLogins": {
                     "description": "New tasks and chats start with \"Sign in with my saved logins\" on (E37.3). Off by default. Each task and chat still has its own switch.",
                     "type": "boolean"
+                  },
+                  "neverSaveLoginSites": {
+                    "description": "Registrable domains the owner chose \"Never for this site\" for on a \"Save this login?\" card (E37.4b): the agent does not offer to save a sign-in there. Empty by default.",
+                    "maxItems": 200,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 253,
+                      "pattern": "^[a-z0-9.-]+$"
+                    }
                   }
                 },
                 "required": [
@@ -72637,9 +72686,29 @@
                   ],
                   "description": "Which field was typed. Never its value."
                 },
+                "purpose": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "login",
+                        "signup",
+                        "password_change",
+                        "mfa",
+                        "form",
+                        "purchase",
+                        "save_login"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Why a value was handed over: `login`, `mfa`, `form`, `purchase`, or `save_login` (E37.4b: the password you typed, sent to your provider to be saved). Null for a lookup."
+                },
                 "outcome": {
                   "type": "string",
-                  "description": "A closed code: `typed`, `selected`, `ok`, or why nothing was typed (`origin_mismatch`, `not_found`, `disabled`, `rate_limited`, ...)."
+                  "description": "A closed code: `typed`, `selected`, `saved`, `ok`, or why nothing was typed or saved (`origin_mismatch`, `not_found`, `name_taken`, `disabled`, `rate_limited`, ...)."
                 },
                 "refused": {
                   "type": "boolean",
@@ -72688,6 +72757,7 @@
                 "site",
                 "loginName",
                 "field",
+                "purpose",
                 "outcome",
                 "refused",
                 "matches",
@@ -83077,9 +83147,10 @@
               "takeover",
               "credentials",
               "memory",
-              "form"
+              "form",
+              "save_login"
             ],
-            "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes; only the server creates one"
+            "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): \"Save this login?\" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it"
           },
           "kind": {
             "type": "string"
@@ -83428,6 +83499,14 @@
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                   },
+                  "neverForSite": {
+                    "description": "save_login (E37.4b): declined with \"Never for this site\"",
+                    "type": "boolean"
+                  },
+                  "savedAs": {
+                    "description": "save_login (E37.4b): the name the login was saved under",
+                    "type": "string"
+                  },
                   "channel": {
                     "type": "string"
                   },
@@ -83583,6 +83662,46 @@
               }
             ]
           },
+          "saveLogin": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "site": {
+                    "type": "string",
+                    "description": "The host of the sign-in page"
+                  },
+                  "domain": {
+                    "type": "string",
+                    "description": "Its registrable domain: the unit \"Never for this site\" is remembered at"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "The name the agent suggests; the owner edits it on the card"
+                  },
+                  "username": {
+                    "type": "string",
+                    "description": "The username the owner typed (the password is never shown, returned or stored by the console)"
+                  },
+                  "valueExpiresAt": {
+                    "type": "string",
+                    "description": "When the fabric stops holding the password: after it the card says it is too late to save"
+                  }
+                },
+                "required": [
+                  "site",
+                  "domain",
+                  "name",
+                  "username",
+                  "valueExpiresAt"
+                ],
+                "description": "save_login (E37.4b): what the card shows"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "conversationId": {
             "anyOf": [
               {
@@ -83625,6 +83744,7 @@
           "client",
           "blocking",
           "proposal",
+          "saveLogin",
           "conversationId"
         ]
       },
@@ -83948,6 +84068,24 @@
             ],
             "additionalProperties": false
           },
+          "saveLogin": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "neverForSite": {
+            "type": "boolean",
+            "const": true
+          },
           "channel": {
             "type": "string",
             "pattern": "^[a-z0-9][a-z0-9_.-]{0,39}$"
@@ -84098,6 +84236,24 @@
               "attributes"
             ],
             "additionalProperties": false
+          },
+          "saveLogin": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false
+          },
+          "neverForSite": {
+            "type": "boolean",
+            "const": true
           }
         },
         "additionalProperties": false
@@ -84468,9 +84624,10 @@
               "takeover",
               "credentials",
               "memory",
-              "form"
+              "form",
+              "save_login"
             ],
-            "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes; only the server creates one"
+            "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): \"Save this login?\" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it"
           },
           "choices": {
             "type": "array",
@@ -84747,7 +84904,7 @@
           },
           "blocking": {
             "type": "boolean",
-            "description": "False for a memory proposal (#553): no run waits on it; the Inbox lists it in its own group"
+            "description": "False for a memory proposal (#553) and \"Save this login?\" (E37.4b): no run waits on it; the Inbox lists it in its own group"
           },
           "proposal": {
             "anyOf": [
@@ -84808,6 +84965,46 @@
                 "type": "null"
               }
             ]
+          },
+          "saveLogin": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "site": {
+                    "type": "string",
+                    "description": "The host of the sign-in page"
+                  },
+                  "domain": {
+                    "type": "string",
+                    "description": "Its registrable domain: the unit \"Never for this site\" is remembered at"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "The name the agent suggests; the owner edits it on the card"
+                  },
+                  "username": {
+                    "type": "string",
+                    "description": "The username the owner typed (the password is never shown, returned or stored by the console)"
+                  },
+                  "valueExpiresAt": {
+                    "type": "string",
+                    "description": "When the fabric stops holding the password: after it the card says it is too late to save"
+                  }
+                },
+                "required": [
+                  "site",
+                  "domain",
+                  "name",
+                  "username",
+                  "valueExpiresAt"
+                ],
+                "description": "save_login (E37.4b): what the card shows"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -84833,7 +85030,8 @@
           "createdAt",
           "expiresAt",
           "blocking",
-          "proposal"
+          "proposal",
+          "saveLogin"
         ]
       },
       "OkResponseDto": {

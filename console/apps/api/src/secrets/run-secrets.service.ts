@@ -6,6 +6,7 @@
 // Vault connection files and a test can hand it a plain object. The runner never receives a token, a login or a code.
 import { Injectable, Logger } from '@nestjs/common';
 
+import { SaveLoginService, type SaveLoginOffer, type SaveLoginOrigin } from './save-login.service';
 import { SecretsPolicyService } from './secrets-policy.service';
 import { SecretsProviderRegistrar, type RegistrationResult } from './secrets-provider.registrar';
 import { VaultConnectionService, type ProviderOutcome } from './vault-connection.service';
@@ -19,6 +20,7 @@ export class RunSecretsService {
     private readonly registrar: SecretsProviderRegistrar,
     private readonly connection: VaultConnectionService,
     private readonly policy: SecretsPolicyService,
+    private readonly saveLogins: SaveLoginService,
   ) {}
 
   /**
@@ -62,6 +64,24 @@ export class RunSecretsService {
     } catch (e) {
       this.log.warn(`could not read the granted scopes (${e instanceof Error ? e.name : 'error'})`);
       return false;
+    }
+  }
+
+  /**
+   * Whether a sign-in the owner types by hand can be offered to their provider (E37.4b): both switches on, the Vault connected with
+   * the write scope and speaking contract 1.3. The runner asks it when it opens a `credentials` card. Never throws.
+   */
+  saveLoginSupported(userId: string): Promise<boolean> {
+    return this.saveLogins.supported(userId);
+  }
+
+  /** Offers the sign-in of a typed `credentials` handoff as a "Save this login?" card (E37.4b). Never the password; never throws. */
+  async proposeSaveLogin(userId: string, args: { handoffId: string; origin: string; name: string | null; from: SaveLoginOrigin }): Promise<SaveLoginOffer> {
+    try {
+      return await this.saveLogins.propose(userId, args);
+    } catch (e) {
+      this.log.warn(`could not offer to save a sign-in (${e instanceof Error ? e.name : 'error'})`);
+      return { proposed: false, message: 'Could not offer to save the sign-in right now.' };
     }
   }
 

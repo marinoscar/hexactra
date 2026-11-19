@@ -1,6 +1,6 @@
 //! A fake Vault for tests (E37.2, #591): a small HTTP server that serves the
 //! agent credential API (`/api/agent/v1`) the way marinoscar/vault's
-//! `docs/agent-credential-api.md` documents it (contract 1.2, beta), so the
+//! `docs/agent-credential-api.md` documents it (contract 1.3, beta), so the
 //! Vault provider and the control plane's end-to-end tests run against real
 //! HTTP. It mirrors the console's `test/support/fake-vault.ts` for the routes
 //! the fabric calls (`whoami`, `credentials`, `fill`, `totp`); the OAuth
@@ -46,6 +46,9 @@ pub const FORUM_ORIGIN: &str = "https://forum.example.test";
 pub const CLOSED_ID: &str = "7f1c2e9a-0000-4000-8000-000000000004";
 /// The scopes the console asks for.
 pub const SCOPES_READ_FILL: [&str; 2] = ["vault:items_read", "vault:items_fill"];
+/// Logins plus saving and changing them (`vault:items_write`).
+pub const SCOPES_WITH_WRITE: [&str; 3] =
+    ["vault:items_read", "vault:items_fill", "vault:items_write"];
 /// Logins plus identity details (contract 1.1).
 pub const SCOPES_WITH_IDENTITY: [&str; 4] = [
     "vault:items_read",
@@ -399,6 +402,16 @@ impl FakeVault {
         self.inner.lock().unwrap_or_else(|e| e.into_inner())
     }
 
+    /// A token for what the console asks with "let the agent save and change logins".
+    pub fn write_token(&self) -> String {
+        self.token(&SCOPES_WITH_WRITE)
+    }
+
+    /// The login the owner saved under `name` (through `POST /credentials`), if any.
+    pub fn login_named(&self, name: &str) -> Option<FakeLogin> {
+        self.lock().logins.iter().find(|l| l.name == name).cloned()
+    }
+
     /// Issue an `oat_` access token holding `scopes`.
     pub fn token(&self, scopes: &[&str]) -> String {
         let mut g = self.lock();
@@ -691,7 +704,8 @@ fn route(
         if !need("vault:items_read") {
             return insufficient();
         }
-        let mut features = vec!["logins", "totp"];
+        // Contract 1.3: `save_login` is always there, after `totp`.
+        let mut features = vec!["logins", "totp", "save_login"];
         if g.card_access {
             features.push("cards");
         }
@@ -702,7 +716,55 @@ fn route(
             200,
             json!({"data": {"userId": "vault-user-person-a", "scopes": token.scopes,
                 "clientId": "hexactra-test-client",
-                "contract": {"version": "1.2", "features": features}}}),
+                "contract": {"version": "1.3", "features": features}}}),
+            &[],
+        );
+    }
+    if route == "/credentials" && method == "POST" {
+        // Contract 1.0 create, with the purpose `save_login` of 1.3.
+        if !need("vault:items_write") {
+            return insufficient();
+        }
+        let str_of = |k: &str| body.get(k).and_then(Value::as_str);
+        let origin = str_of("origin").and_then(|o| Origin::from_stored(o).ok());
+        let purpose_ok = matches!(
+            str_of("purpose"),
+            Some("login" | "signup" | "save_login" | "password_change" | "mfa")
+        );
+        let secret_given =
+            body.get("password").is_some() as u8 + body.get("generate").is_some() as u8;
+        let (Some(name), Some(username), Some(origin), true, 1) = (
+            str_of("name"),
+            str_of("username"),
+            origin,
+            purpose_ok,
+            secret_given,
+        ) else {
+            return error(400, None, "Invalid body");
+        };
+        if g.logins.iter().any(|l| l.name == name) {
+            // No `code`, as Vault answers it.
+            return error(
+                409,
+                None,
+                &format!("A secret named \"{name}\" already exists"),
+            );
+        }
+        let password = str_of("password").unwrap_or("GENERATED-CANARY-password-0001");
+        let id = format!("7f1c2e9a-0000-4000-8000-0000000001{:02}", g.logins.len());
+        g.logins.push(login(
+            &id,
+            name,
+            username,
+            password,
+            &origin.to_string(),
+            true,
+            false,
+        ));
+        return json_response(
+            201,
+            json!({"data": {"id": id, "name": name, "username": username,
+                "origins": [origin.to_string()]}}),
             &[],
         );
     }

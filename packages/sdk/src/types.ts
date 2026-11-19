@@ -162,6 +162,14 @@ export interface CreateHandoffRequest {
   /** 10 seconds to 24 hours; defaults to 10 minutes. */
   timeout_ms?: number;
   page?: HandoffPage;
+  /**
+   * `credentials` only: keep a copy of the typed password in the control
+   * plane's memory after a `type_secret` action types it, so the owner's
+   * secrets provider can still be asked to save the sign-in for ten minutes
+   * after the answer (`POST /v1/secrets-providers/{owner_id}/{provider}/save-login`).
+   * Never returned or persisted. Off by default.
+   */
+  offer_save?: boolean;
 }
 
 /** The human's answer as visible to readers. */

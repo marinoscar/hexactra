@@ -19,6 +19,6 @@ export function transcriptLine(m: Pick<ChatMessage, 'role' | 'kind' | 'text' | '
   if (m.kind === 'result') return `[run ${String((m.meta as { status?: unknown } | null)?.status ?? 'ended')}] ${text}`;
   if (m.kind === 'task_draft') return `[task drafted] ${text}`;
   // A memory proposal (#553): the card waits for the owner; whether it was saved is not the model's to claim.
-  if (m.kind === 'memory') return `[memory proposed] ${text}`;
+  if (m.kind === 'memory') return (m.meta as { card?: unknown } | null)?.card === 'save_login' ? `[login save offered] ${text}` : `[memory proposed] ${text}`;
   return `[${m.role}] ${text}`;
 }

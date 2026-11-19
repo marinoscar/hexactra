@@ -5,6 +5,7 @@ import { FabricModule } from '../fabric/fabric.module';
 import { OAuthClientModule } from '../oauth-client';
 import { FABRIC_SECRETS_REGISTRY, FabricSessionSecretsRegistry } from './fabric-secrets-registry';
 import { RunSecretsService } from './run-secrets.service';
+import { SaveLoginService } from './save-login.service';
 import { SecretsPolicyService } from './secrets-policy.service';
 import { SecretsProviderRegistrar } from './secrets-provider.registrar';
 import { SecretsActivityController } from './secrets-activity.controller';
@@ -30,7 +31,8 @@ import { VaultTokenService } from './vault-token.service';
  * line. Mounted only with the credentials and notifications slices (app.module.ts).
  *
  * `FABRIC_SECRETS_REGISTRY` is bound to `FabricSessionSecretsRegistry`: the fabric's secrets-provider resource (E37.1, #590).
- * `RunSecretsService` (E37.3, #592) is what the goal runner uses.
+ * `RunSecretsService` (E37.3, #592) is what the goal runner uses. `SaveLoginService` (E37.4b) offers a sign-in the owner typed by
+ * hand to their provider ("Save this login?") and carries out the owner's answer through the fabric.
  */
 @Module({
   imports: [CredentialsModule, UserCredentialsModule, OAuthClientModule, FabricModule],
@@ -52,12 +54,13 @@ import { VaultTokenService } from './vault-token.service';
     VaultDefaultClientService,
     SecretsProviderRegistrar,
     RunSecretsService,
+    SaveLoginService,
     VaultKeepFresh,
     VaultKeepFreshHandler,
     VaultKeepFreshTask,
     VaultConnectionsCheck,
     VaultEgressContributor,
   ],
-  exports: [FABRIC_SECRETS_REGISTRY, RunSecretsService, SecretsPolicyService, SecretsProviderRegistrar, VaultConnectionService, VaultTokenService],
+  exports: [FABRIC_SECRETS_REGISTRY, RunSecretsService, SaveLoginService, SecretsPolicyService, SecretsProviderRegistrar, VaultConnectionService, VaultTokenService],
 })
 export class SecretsModule {}

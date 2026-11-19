@@ -227,6 +227,7 @@ mod tests {
                 timeout_ms: None,
                 page: None,
                 remember: None,
+                offer_save: false,
             };
             // An answered secret handoff: its value must not be persisted.
             let (a, at) = store

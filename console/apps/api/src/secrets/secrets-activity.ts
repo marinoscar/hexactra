@@ -39,8 +39,8 @@ export const ACTIVITY_FIELDS = [
   'holder_name',
   'security_code',
 ] as const;
-/** The purposes the fabric sends (Vault's `purpose` for fill and totp). */
-export const ACTIVITY_PURPOSES = ['login', 'signup', 'password_change', 'mfa', 'form', 'purchase'] as const;
+/** The purposes the fabric sends (Vault's `purpose` for fill, totp and create). */
+export const ACTIVITY_PURPOSES = ['login', 'signup', 'password_change', 'mfa', 'form', 'purchase', 'save_login'] as const;
 /**
  * The closed outcome codes of the fabric (`typed` and `ok` for success, the rest are `Fail` codes of
  * runtime/secrets.rs). Anything else is stored as `other`.
@@ -72,6 +72,11 @@ export const ACTIVITY_OUTCOMES = [
   'frame_unknown',
   // A login's password named a field that is not a password field (E37.10).
   'target_not_password',
+  // "Save this login?" (E37.4b): the fabric sent the owner's typed password to the provider (`saved`), or why it did not.
+  'saved',
+  'name_taken',
+  'secret_unavailable',
+  'unsupported',
   'timed_out',
   'internal',
   'other',
@@ -79,7 +84,7 @@ export const ACTIVITY_OUTCOMES = [
 export type ActivityOutcome = (typeof ACTIVITY_OUTCOMES)[number];
 
 /** An outcome that is the fabric refusing or failing, not a success. */
-export const isRefusal = (outcome: string): boolean => outcome !== 'typed' && outcome !== 'selected' && outcome !== 'ok';
+export const isRefusal = (outcome: string): boolean => outcome !== 'typed' && outcome !== 'selected' && outcome !== 'ok' && outcome !== 'saved';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** A provider item id: the characters of a uuid or a short slug, nothing that could be text. */

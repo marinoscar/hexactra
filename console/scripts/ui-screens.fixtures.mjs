@@ -183,6 +183,17 @@ const memoryProposal = {
   proposal: { kind: 'person', label: 'My partner', aliases: ['partner'], attributes: { name: 'Person B', phone: '555-010-6020', relation: 'partner' }, supersedes: null },
 };
 
+/**
+ * "Save this login?" (E37.4b): after the owner signed in by hand, the agent offers to save that login. Non-blocking, so the Inbox lists it with the
+ * suggestions, the chat thread shows it as a card and its own page shows it as a question. The password is not in any fixture: it is held by the fabric.
+ */
+const saveLogin = {
+  ...question, questionId: '5555555b-5555-4555-8555-555555555555', id: '5555555b-5555-4555-8555-555555555555', runId: runs[1].id, goal: runs[1].goal, handoffId: null,
+  askedBy: `run:${runs[1].id}`, browserBound: false, prompt: 'The agent offers to save the sign-in you just typed.', pageTitle: null, kind: 'login', input: 'save_login', constraints: null, rememberLabel: null,
+  expiresAt: iso(9 * 60_000), blocking: false, conversationId: IDS.chat,
+  saveLogin: { site: 'login.example.com', domain: 'example.com', name: 'Example Bank sign-in', username: 'person-a@example.test', valueExpiresAt: iso(9 * 60_000) },
+};
+
 const hosts = [
   {
     id: IDS.host, name: 'mini-pc', version: '0.9.2', online: true, browserConnected: true, onDemand: true, draining: false, viewerUrl: null, mode: 'unattended', desktop: true,
@@ -382,6 +393,8 @@ const chatMessages = [
   chatMessage(8, 'assistant', 'run', 'Book 2 tickets for the 7:30 PM showing of the new space film tonight at the usual cinema, middle rows preferred, otherwise the row right behind them.', { runId: IDS.liveRun }),
   // The agent offers to remember a person the owner named (#553): the "Remember this?" card.
   chatMessage(9, 'assistant', 'memory', 'Suggested remembering: My partner', { meta: { questionId: memoryProposal.id } }),
+  // The agent offers to save the sign-in the owner typed by hand (E37.4b): the "Save this sign-in for <site>?" card.
+  chatMessage(10, 'assistant', 'memory', 'Offered to save the sign-in for login.example.com', { meta: { questionId: saveLogin.id, card: 'save_login' } }),
 ];
 const chatRow = (id, title, extra = {}) => ({ ...chatBase, id, title, lastMessageAt: iso(-120_000), preview: { role: 'assistant', kind: 'run', text: 'Book 2 tickets for the 7:30 PM showing of the new space film tonight.' }, liveRun: null, ...extra });
 const chatRows = [
@@ -512,9 +525,10 @@ export const RESPONSES = {
   'POST /fleet/enrollments': { enrollmentToken: 'hxe_placeholder', expiresAt: iso(900_000), command: 'curl -fsSL https://console.example.test/install.sh | sh -s -- agent install --url https://console.example.test --enrollment-token hxe_placeholder_0123456789abcdef --mode unattended' },
   'GET /chats': (url) => ({ items: url.searchParams.get('status') === 'archived' ? [] : chatRows, nextCursor: null }),
   [`GET /chats/${IDS.chat}`]: { ...chatBase, id: IDS.chat, title: chatRows[0].title, lastMessageAt: iso(-120_000), messages: chatMessages, hasMore: false, liveRun: { id: IDS.liveRun, status: 'running' }, thinking: false },
-  'GET /inbox': [question, confirmation, cardConfirmation, memoryProposal],
+  'GET /inbox': [question, confirmation, cardConfirmation, memoryProposal, saveLogin],
   [`GET /questions/${IDS.question}`]: question,
   [`GET /questions/${memoryProposal.id}`]: memoryProposal,
+  [`GET /questions/${saveLogin.id}`]: saveLogin,
   'GET /agent-policies': policies,
   [`GET /agent-policies/${IDS.policy}`]: policies[2],
   'GET /agent-policies/default': { policyId: 'builtin:balanced' },
@@ -576,4 +590,4 @@ RESPONSES[`GET /runs/${IDS.paramRun}`] = paramRun;
 RESPONSES['GET /inbox'] = [formQuestion, ...RESPONSES['GET /inbox']];
 
 /** The ids a mock run puts in the parameterized routes. */
-export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun };
+export const MOCK_IDS = { liveRun: IDS.liveRun, finishedRun: IDS.finishedRun, chatRun: IDS.chatRun, traceRun: IDS.traceRun, task: IDS.task, host: IDS.host, question: IDS.question, policy: IDS.policy, group: IDS.group, chat: IDS.chat, app: IDS.app, paramTask: IDS.paramTask, formQuestion: IDS.formQuestion, paramRun: IDS.paramRun, saveLoginQuestion: saveLogin.id };

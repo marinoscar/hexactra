@@ -7,7 +7,8 @@
 //                          Connect (the client secret is a system credential, purpose `secrets_vault_client`).
 //     vault.allowedHosts   exact host names exempt from the private-address check (an on-premises Vault);
 //                          `https` is still required.
-//   user `secrets`    the OWNER's switch (default OFF): `agentUse.enabled`.
+//   user `secrets`    the OWNER's switch (default OFF): `agentUse.enabled`; their provider and default for new tasks; and the
+//                     registrable domains they chose "Never for this site" for on a "Save this login?" card (E37.4b).
 //
 // Both switches must be on for anything to be looked up or released. Registered before
 // `SettingsModule.forRoot()` composes the request bodies (the import in src/platform/platform.ts).
@@ -15,6 +16,9 @@ import { registerSystemSettingsNamespaces, registerUserSettingsNamespaces, type 
 import { z } from 'zod';
 
 const hostName = z.string().trim().toLowerCase().min(1).max(253).regex(/^[a-z0-9.-]+$/, 'A host name, such as vault.example.test');
+/** At most this many sites are remembered as "Never for this site". */
+export const MAX_NEVER_SAVE_SITES = 200;
+const registrableDomainName = z.string().trim().toLowerCase().min(1).max(253).regex(/^[a-z0-9.-]+$/, 'A site such as example.test');
 const vaultUrl = z
   .string()
   .trim()
@@ -107,9 +111,19 @@ export const secretsUserSettingsSchema = z.object({
     .boolean()
     .optional()
     .describe('New tasks and chats start with "Sign in with my saved logins" on (E37.3). Off by default. Each task and chat still has its own switch.'),
+  neverSaveLoginSites: z
+    .array(registrableDomainName)
+    .max(MAX_NEVER_SAVE_SITES)
+    .optional()
+    .describe('Registrable domains the owner chose "Never for this site" for on a "Save this login?" card (E37.4b): the agent does not offer to save a sign-in there. Empty by default.'),
 });
 export type SecretsUserSettings = z.infer<typeof secretsUserSettingsSchema>;
-export const secretsUserSettingsPatchSchema = z.object({ provider: z.enum(SECRETS_PROVIDER_IDS).optional(), agentUse: z.object({ enabled: z.boolean() }).partial().optional(), defaultUseSavedLogins: z.boolean().optional() });
+export const secretsUserSettingsPatchSchema = z.object({
+  provider: z.enum(SECRETS_PROVIDER_IDS).optional(),
+  agentUse: z.object({ enabled: z.boolean() }).partial().optional(),
+  defaultUseSavedLogins: z.boolean().optional(),
+  neverSaveLoginSites: z.array(registrableDomainName).max(MAX_NEVER_SAVE_SITES).optional(),
+});
 type SecretsUserPatch = z.infer<typeof secretsUserSettingsPatchSchema>;
 
 /** The owner's switch as stored in their settings document (off when never set). */
@@ -128,6 +142,12 @@ export function secretsDefaultUseSavedLoginsOf(doc: unknown): boolean {
   return (doc as { secrets?: { defaultUseSavedLogins?: unknown } } | null | undefined)?.secrets?.defaultUseSavedLogins === true;
 }
 
+/** The sites the owner chose "Never for this site" for (E37.4b), as stored in their settings document. */
+export function neverSaveLoginSitesOf(doc: unknown): string[] {
+  const v = (doc as { secrets?: { neverSaveLoginSites?: unknown } } | null | undefined)?.secrets?.neverSaveLoginSites;
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+}
+
 export const SECRETS_USER_SETTINGS = {
   key: 'secrets',
   description: 'Secrets: whether the agent may use your saved logins and one-time codes (off by default), and whether new tasks and chats start with them on (off by default).',
@@ -140,9 +160,10 @@ export const SECRETS_USER_SETTINGS = {
     const enabled = patch.agentUse?.enabled ?? current?.agentUse?.enabled ?? false;
     const useByDefault = patch.defaultUseSavedLogins ?? current?.defaultUseSavedLogins ?? false;
     const provider = patch.provider ?? current?.provider;
-    // Defaults are never stored: `vault`, "off" and "off".
-    if (!enabled && !useByDefault && provider !== 'builtin') return undefined;
-    return { agentUse: { enabled }, ...(useByDefault ? { defaultUseSavedLogins: true } : {}), ...(provider === 'builtin' ? { provider } : {}) };
+    const never = [...new Set(patch.neverSaveLoginSites ?? current?.neverSaveLoginSites ?? [])];
+    // Defaults are never stored: `vault`, "off", "off" and no site.
+    if (!enabled && !useByDefault && provider !== 'builtin' && never.length === 0) return undefined;
+    return { agentUse: { enabled }, ...(useByDefault ? { defaultUseSavedLogins: true } : {}), ...(provider === 'builtin' ? { provider } : {}), ...(never.length > 0 ? { neverSaveLoginSites: never } : {}) };
   },
 } satisfies Omit<UserSettingsNamespace<'secrets', SecretsUserSettings, SecretsUserPatch>, never> & { defaults: SecretsUserSettings };
 

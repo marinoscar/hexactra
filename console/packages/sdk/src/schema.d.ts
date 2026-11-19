@@ -8051,6 +8051,12 @@ export interface components {
              * @example MEMORY_LIMIT
              * @example MEMORY_NOT_ACTIVE
              * @example MEMORY_HOLDS_SECRET
+             * @example SAVE_TOO_LATE
+             * @example SAVE_NAME_TAKEN
+             * @example SAVE_RECONNECT
+             * @example SAVE_DISABLED
+             * @example SAVE_UNAVAILABLE
+             * @example SAVE_REFUSED
              * @example INVALID_CRON
              * @example INVALID_TIMEZONE
              * @example CRON_TOO_FREQUENT
@@ -9070,6 +9076,8 @@ export interface components {
                 };
                 /** @description New tasks and chats start with "Sign in with my saved logins" on (E37.3). Off by default. Each task and chat still has its own switch. */
                 defaultUseSavedLogins?: boolean;
+                /** @description Registrable domains the owner chose "Never for this site" for on a "Save this login?" card (E37.4b): the agent does not offer to save a sign-in there. Empty by default. */
+                neverSaveLoginSites?: string[];
             };
             memories?: {
                 /** @description Let the agent suggest memories for you to approve. On by default. */
@@ -9166,6 +9174,8 @@ export interface components {
                 };
                 /** @description New tasks and chats start with "Sign in with my saved logins" on (E37.3). Off by default. Each task and chat still has its own switch. */
                 defaultUseSavedLogins?: boolean;
+                /** @description Registrable domains the owner chose "Never for this site" for on a "Save this login?" card (E37.4b): the agent does not offer to save a sign-in there. Empty by default. */
+                neverSaveLoginSites?: string[];
             };
             memories?: {
                 /** @description Let the agent suggest memories for you to approve. On by default. */
@@ -9259,6 +9269,7 @@ export interface components {
                     enabled?: boolean;
                 };
                 defaultUseSavedLogins?: boolean;
+                neverSaveLoginSites?: string[];
             } | null;
             memories?: {
                 /** @description Let the agent suggest memories for you to approve. On by default. */
@@ -10389,6 +10400,8 @@ export interface components {
                     };
                     /** @description New tasks and chats start with "Sign in with my saved logins" on (E37.3). Off by default. Each task and chat still has its own switch. */
                     defaultUseSavedLogins?: boolean;
+                    /** @description Registrable domains the owner chose "Never for this site" for on a "Save this login?" card (E37.4b): the agent does not offer to save a sign-in there. Empty by default. */
+                    neverSaveLoginSites?: string[];
                 };
                 memories?: {
                     /** @description Let the agent suggest memories for you to approve. On by default. */
@@ -15134,7 +15147,9 @@ export interface components {
                 loginName: string | null;
                 /** @description Which field was typed. Never its value. */
                 field: ("username" | "password" | "one_time_code" | "full_name" | "date_of_birth" | "id_type" | "id_number" | "id_issuing_country" | "address_line1" | "address_line2" | "city" | "region" | "postal_code" | "country" | "phone" | "email" | "number" | "expiry" | "exp_month" | "exp_year" | "holder_name" | "security_code") | null;
-                /** @description A closed code: `typed`, `selected`, `ok`, or why nothing was typed (`origin_mismatch`, `not_found`, `disabled`, `rate_limited`, ...). */
+                /** @description Why a value was handed over: `login`, `mfa`, `form`, `purchase`, or `save_login` (E37.4b: the password you typed, sent to your provider to be saved). Null for a lookup. */
+                purpose: ("login" | "signup" | "password_change" | "mfa" | "form" | "purchase" | "save_login") | null;
+                /** @description A closed code: `typed`, `selected`, `saved`, `ok`, or why nothing was typed or saved (`origin_mismatch`, `not_found`, `name_taken`, `disabled`, `rate_limited`, ...). */
                 outcome: string;
                 /** @description Nothing was typed: the fabric or the provider refused or failed. */
                 refused: boolean;
@@ -17703,10 +17718,10 @@ export interface components {
             handoffId: string | null;
             browserBound: boolean;
             /**
-             * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes; only the server creates one
+             * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it
              * @enum {string}
              */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "memory" | "form";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "memory" | "form" | "save_login";
             kind: string;
             prompt: string;
             options: {
@@ -17799,6 +17814,10 @@ export interface components {
                  * @description memory (#553): the memory the approved proposal saved
                  */
                 memoryId?: string;
+                /** @description save_login (E37.4b): declined with "Never for this site" */
+                neverForSite?: boolean;
+                /** @description save_login (E37.4b): the name the login was saved under */
+                savedAs?: string;
                 channel?: string;
                 /** @description Who answered, e.g. user:<id> */
                 by?: string;
@@ -17833,6 +17852,18 @@ export interface components {
                 };
                 /** @description The active memory whose values this would replace */
                 supersedes: string | null;
+            } | null;
+            saveLogin: {
+                /** @description The host of the sign-in page */
+                site: string;
+                /** @description Its registrable domain: the unit "Never for this site" is remembered at */
+                domain: string;
+                /** @description The name the agent suggests; the owner edits it on the card */
+                name: string;
+                /** @description The username the owner typed (the password is never shown, returned or stored by the console) */
+                username: string;
+                /** @description When the fabric stops holding the password: after it the card says it is too late to save */
+                valueExpiresAt: string;
             } | null;
             /** @description The chat a memory proposal came from (#553) */
             conversationId: string | null;
@@ -17905,6 +17936,11 @@ export interface components {
                     [key: string]: string;
                 };
             };
+            saveLogin?: {
+                name: string;
+            };
+            /** @constant */
+            neverForSite?: true;
             channel?: string;
         };
         /** @default {} */
@@ -17941,6 +17977,11 @@ export interface components {
                     [key: string]: string;
                 };
             };
+            saveLogin?: {
+                name: string;
+            };
+            /** @constant */
+            neverForSite?: true;
         };
         OpenDto: {
             /** @default default */
@@ -18016,10 +18057,10 @@ export interface components {
             kind: string;
             prompt: string;
             /**
-             * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes; only the server creates one
+             * @description `form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes. `save_login` (E37.4b): "Save this login?" after the owner signed in by hand; only the server creates one, and only the signed-in web and Android app answer it
              * @enum {string}
              */
-            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "memory" | "form";
+            input: "none" | "text" | "secret" | "choice" | "multi_choice" | "number" | "confirm" | "takeover" | "credentials" | "memory" | "form" | "save_login";
             choices: string[];
             options: {
                 id: string;
@@ -18085,7 +18126,7 @@ export interface components {
             createdAt: string;
             /** @description ISO 8601 timestamp */
             expiresAt: string;
-            /** @description False for a memory proposal (#553): no run waits on it; the Inbox lists it in its own group */
+            /** @description False for a memory proposal (#553) and "Save this login?" (E37.4b): no run waits on it; the Inbox lists it in its own group */
             blocking: boolean;
             proposal: {
                 /** @enum {string} */
@@ -18097,6 +18138,18 @@ export interface components {
                 };
                 /** @description The active memory whose values this would replace */
                 supersedes: string | null;
+            } | null;
+            saveLogin: {
+                /** @description The host of the sign-in page */
+                site: string;
+                /** @description Its registrable domain: the unit "Never for this site" is remembered at */
+                domain: string;
+                /** @description The name the agent suggests; the owner edits it on the card */
+                name: string;
+                /** @description The username the owner typed (the password is never shown, returned or stored by the console) */
+                username: string;
+                /** @description When the fabric stops holding the password: after it the card says it is too late to save */
+                valueExpiresAt: string;
             } | null;
         };
         OkResponseDto: {

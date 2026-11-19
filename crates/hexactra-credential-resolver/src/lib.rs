@@ -111,6 +111,41 @@ pub struct CodeRequest {
     pub client_label: Option<String>,
 }
 
+/// A login the owner typed in by hand and that worked, to be saved in the
+/// provider (E37.4b). The password is a [`SecretValue`]: the caller wipes it
+/// after the call.
+pub struct NewLogin {
+    pub owner: OwnerId,
+    /// What the owner calls it.
+    pub name: String,
+    /// The username (not secret).
+    pub username: String,
+    /// The origin of the sign-in page: the login is bound to exactly this one.
+    pub origin: Origin,
+    pub password: SecretValue,
+    /// The run the call belongs to (audit).
+    pub run_id: Option<String>,
+    /// What the owner sees as the app (audit).
+    pub client_label: Option<String>,
+}
+
+impl fmt::Debug for NewLogin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("NewLogin")
+            .field("owner", &self.owner)
+            .field("name", &self.name)
+            .field("origin", &self.origin.to_string())
+            .field("password", &"[secret]")
+            .finish_non_exhaustive()
+    }
+}
+
+/// What a provider says about a login it saved: its id. Never a value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SavedLogin {
+    pub id: String,
+}
+
 /// Why a provider did not answer.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ProviderError {
@@ -136,6 +171,12 @@ pub enum ProviderError {
     /// a message from the provider's body).
     #[error("the provider refused: {0}")]
     Refused(String),
+    /// Saving a login: the owner already has a secret with that name.
+    #[error("the owner already has a secret with that name")]
+    NameTaken,
+    /// The provider does not do what was asked (this one cannot save a login).
+    #[error("the provider does not support this")]
+    Unsupported,
 }
 
 impl ProviderError {
@@ -150,6 +191,8 @@ impl ProviderError {
             ProviderError::RateLimited { .. } => c::RATE_LIMITED,
             ProviderError::Unavailable => c::UNAVAILABLE,
             ProviderError::Unauthorized => c::UNAUTHORIZED,
+            ProviderError::NameTaken => c::NAME_TAKEN,
+            ProviderError::Unsupported => c::UNSUPPORTED,
             // A card refusal keeps its own code, so the console can say why
             // (Vault's `CARD_*` codes, lower-cased by the provider).
             ProviderError::Refused(r) => match r.as_str() {
@@ -194,4 +237,11 @@ pub trait SecretsProvider: Send + Sync {
         &self,
         req: CodeRequest,
     ) -> Result<(SecretValue, DateTime<Utc>), ProviderError>;
+
+    /// Save a login the owner typed in by hand (E37.4b), bound to the
+    /// sign-in page's origin. Only a provider that can create logins on the
+    /// owner's behalf does; the default says so.
+    async fn save_login(&self, _req: NewLogin) -> Result<SavedLogin, ProviderError> {
+        Err(ProviderError::Unsupported)
+    }
 }

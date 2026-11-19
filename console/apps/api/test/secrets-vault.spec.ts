@@ -240,7 +240,7 @@ describe('the fake Vault follows the documented agent API rules', () => {
   it('whoami answers the contract, with no-store on every response', async () => {
     const r = await call('GET', '/whoami');
     expect(r.status).toBe(200);
-    expect(r.body.data).toMatchObject({ userId: vault.userId, scopes: ['vault:items_read', 'vault:items_fill'], contract: { version: '1.2' } });
+    expect(r.body.data).toMatchObject({ userId: vault.userId, scopes: ['vault:items_read', 'vault:items_fill'], contract: { version: '1.3', features: ['logins', 'totp', 'save_login'] } });
     expect(r.headers.get('cache-control')).toBe('no-store');
     expect(r.headers.get('pragma')).toBe('no-cache');
   });

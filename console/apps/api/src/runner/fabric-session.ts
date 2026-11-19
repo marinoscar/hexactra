@@ -95,6 +95,11 @@ export interface HandoffRequest {
   risk?: 'low' | 'high' | null;
   /** credentials and secret: the site's "remember me" option, in the page's words (#527). */
   rememberLabel?: string | null;
+  /**
+   * credentials only (E37.4b): the fabric keeps the typed password in its memory after `type_secret` types it, for ten minutes
+   * after the answer, so the owner's secrets provider can still be asked to save the sign-in (`saveLogin`). Never returned.
+   */
+  offerSave?: boolean;
   timeoutMs?: number;
 }
 
@@ -143,6 +148,7 @@ export function handoffBody(req: HandoffRequest): Record<string, unknown> {
     ...(req.denyLabel ? { deny_label: req.denyLabel } : {}),
     ...(req.risk ? { risk: req.risk } : {}),
     ...(req.rememberLabel ? { remember: { label: req.rememberLabel } } : {}),
+    ...(req.offerSave ? { offer_save: true } : {}),
     timeout_ms: req.timeoutMs,
   };
 }
@@ -376,6 +382,30 @@ export class FabricSession {
   /** Drop an owner's provider registration, and with it the fabric's copy of its token. Idempotent. */
   async unregisterSecretsProvider(ownerId: string, provider: string): Promise<void> {
     await this.fabric.request('DELETE', `/v1/secrets-providers/${encodeURIComponent(ownerId)}/${encodeURIComponent(provider)}`);
+  }
+
+  /**
+   * Save the sign-in the owner typed into a `credentials` handoff created with `offerSave` (E37.4b): the fabric sends the
+   * password it still holds to the provider's create route (purpose `save_login`), bound to `origin`. The answer is the
+   * provider's id of the new login, never the password. Throws {@link SecretsProviderError}: `secret_unavailable` means the
+   * fabric no longer holds the password (too late), `name_taken` that the owner has a secret with that name.
+   */
+  async saveLogin(ownerId: string, provider: string, req: { handoffId: string; name: string; origin: string; runId?: string; clientLabel?: string }): Promise<{ itemId: string | null }> {
+    try {
+      const r = await this.fabric.request<{ saved?: boolean; item_id?: string | null }>('POST', `/v1/secrets-providers/${encodeURIComponent(ownerId)}/${encodeURIComponent(provider)}/save-login`, {
+        body: { handoff_id: req.handoffId, name: req.name, origin: req.origin, ...(req.runId ? { run_id: req.runId } : {}), ...(req.clientLabel ? { client_label: req.clientLabel } : {}) },
+        timeoutMs: 30_000,
+        retries: 0,
+      });
+      if (r.saved !== true) throw new SecretsProviderError('unknown', 'The provider did not confirm the save');
+      return { itemId: r.item_id ?? null };
+    } catch (e) {
+      if (e instanceof FabricError && e.kind === 'api') {
+        const known = (SECRETS_ERROR_CODES as readonly string[]).includes(e.code ?? '');
+        throw new SecretsProviderError(known ? (e.code as SecretsErrorCode) : 'unknown', e.message);
+      }
+      throw e;
+    }
   }
 
   /** The owner's live registrations (never a token). */

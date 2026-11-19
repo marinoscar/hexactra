@@ -62,7 +62,9 @@ export function fieldsWords(fields: readonly ActivityField[]): string {
 }
 
 /** What the agent did, for one activity row. */
-export function whatWords(item: Pick<ActivityItem, 'event' | 'field' | 'matches'> & { outcome?: string; amount?: string | null; currency?: string | null; frameSite?: string | null }): string {
+export function whatWords(item: Pick<ActivityItem, 'event' | 'field' | 'matches'> & { purpose?: ActivityItem['purpose']; outcome?: string; amount?: string | null; currency?: string | null; frameSite?: string | null }): string {
+  // The sign-in the owner typed, sent to their provider to be saved (E37.4b): not something the agent typed.
+  if (item.purpose === 'save_login') return 'Saved the sign-in you typed';
   if (item.event === 'lookup') {
     if (item.matches === null) return 'Looked for a saved login';
     return item.matches === 0 ? 'Looked for a saved login: none found' : `Looked for a saved login: ${item.matches} found`;
@@ -88,6 +90,10 @@ const OUTCOME_WORDS: Record<string, string> = {
   cards_disabled: 'Refused: card payments are switched off in your provider',
   frame_unknown: 'Refused: the payment frame could not be verified',
   target_not_password: 'Refused: that field was not a password field',
+  saved: 'Saved',
+  name_taken: 'Not saved: you already have a secret with that name',
+  secret_unavailable: 'Not saved: it was too late, the password was no longer held',
+  unsupported: 'Not saved: this provider cannot save logins',
   ok: 'Done',
   no_provider: 'Refused: no provider was connected',
   not_found: 'Refused: no saved login for this page',

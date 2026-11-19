@@ -10,6 +10,7 @@ import { BrowserCard, ResultCard } from './ChatBrowser';
 import { clarifyOptions, type ThreadRow } from './chatThread';
 import type { RunFrame } from './useRunFrame';
 import { MemoryProposalCard } from './MemoryProposalCard';
+import { SaveLoginCard } from './SaveLoginCard';
 
 const BUBBLE_MAX = { xs: '88%', sm: '76%' } as const;
 
@@ -152,7 +153,11 @@ export function MessageRow({ message, answerable, onAnswer, cards }: MessageRowP
       ) : message.kind === 'task_draft' ? (
         <DraftCard message={message} onReview={cards.onReviewDraft} />
       ) : message.kind === 'memory' && typeof (message.meta as { questionId?: unknown } | null)?.questionId === 'string' ? (
-        <MemoryProposalCard questionId={(message.meta as { questionId: string }).questionId} />
+        (message.meta as { card?: unknown }).card === 'save_login' ? (
+          <SaveLoginCard questionId={(message.meta as { questionId: string }).questionId} />
+        ) : (
+          <MemoryProposalCard questionId={(message.meta as { questionId: string }).questionId} />
+        )
       ) : (
         <Box
           sx={{

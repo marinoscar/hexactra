@@ -86,6 +86,7 @@ impl Modify for Bearer {
         super::secrets_api::register,
         super::secrets_api::remove,
         super::secrets_api::list,
+        super::secrets_api::save_login,
         super::events_api::events,
         super::handoff_api::create,
         super::handoff_api::list,
