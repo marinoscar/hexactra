@@ -50,9 +50,9 @@ export function maskedOutputValue(def: Pick<TaskOutput, 'sensitive'>, value: Out
 /**
  * A run's outputs for a view or an export: one entry per definition the run STARTED with (`runs.outputs_spec`, never the
  * task's current ones, so an edit never relabels an old run), with the stored value, masked. Null for a run without outputs.
- * A sensitive value is hidden whole; its note is kept only when it holds no value (the reasons are written without one).
+ * A sensitive value is hidden whole; a note never holds a value (the reasons are written without one). `finished`: whether the run has ended.
  */
-export function outputsView(specRaw: unknown, storedRaw: unknown): OutputView[] | null {
+export function outputsView(specRaw: unknown, storedRaw: unknown, finished = true): OutputView[] | null {
   const spec = readOutputs(specRaw);
   if (spec.length === 0) return null;
   const stored = readStoredOutputs(storedRaw);
@@ -66,7 +66,8 @@ export function outputsView(specRaw: unknown, storedRaw: unknown): OutputView[] 
       sensitive: def.sensitive === true,
       value: maskedOutputValue(def, s?.value),
       ok: s ? s.ok === true : false,
-      note: s?.note ? maskSensitive(String(s.note)).text : s ? null : 'Not found',
+      // No stored value on a finished run is "not found"; on a live run it is just not there yet.
+      note: s?.note ? maskSensitive(String(s.note)).text : s || !finished ? null : 'Not found',
     };
   });
 }

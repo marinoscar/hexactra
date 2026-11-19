@@ -251,7 +251,7 @@ export class RunTraceService {
           activeMs: run.activeMs,
         },
       },
-      outputs: outputsView(run.outputsSpec, run.outputs),
+      outputs: outputsView(run.outputsSpec, run.outputs, TERMINAL_RUN_STATUSES.includes(run.status as RunStatus)),
       outputsComplete: run.outputsComplete,
       // The spec and where it came from; never the snapshot's app limits or resolved provider details.
       policy: snapshot ? { id: snapshot.ref, name: snapshot.name, version: snapshot.version, builtin: snapshot.builtin, source: run.policySource ?? snapshot.source ?? null, spec: snapshot.spec } : null,

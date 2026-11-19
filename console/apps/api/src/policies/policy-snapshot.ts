@@ -1,6 +1,7 @@
 import type { AgentPolicySpec, Tier } from './agent-policy.schema';
 import { maskRunGoal, runInputsView } from '../tasks/task-params';
 import { outputsView } from '../tasks/task-outputs';
+import { isTerminal, type RunStatus } from '../tasks/run-status';
 import type { OutputView } from '../tasks/task-outputs.schemas';
 import { agentPolicySpecSchema } from './agent-policy.schema';
 import { builtinPolicy } from './builtin-policies';
@@ -144,7 +145,7 @@ export function runView<R extends RunPolicyColumns>(run: R): Omit<R, 'policyRef'
     ...('goal' in rest && typeof (rest as { goal?: unknown }).goal === 'string' ? { goal: maskRunGoal((rest as { goal: string }).goal) } : {}),
     ...('inputs' in rest ? { inputs: runInputsView((rest as { inputs?: unknown }).inputs) } : {}),
     // What the run returned (E39.5): the definitions it started with joined with the values, a sensitive one hidden. A row without the columns (a list) has none.
-    ...(outputs !== undefined || outputsSpec !== undefined ? { outputs: outputsView(outputsSpec, outputs) } : {}),
+    ...(outputs !== undefined || outputsSpec !== undefined ? { outputs: outputsView(outputsSpec, outputs, isTerminal((rest as { status?: RunStatus }).status ?? 'running')) } : {}),
   };
   return { ...rest, ...confirmed, ...shown, policy: summarize(snapshot), budget: snapshotBudgetView(snapshot, run), tier: runTierView(snapshot, run) };
 }
