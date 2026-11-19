@@ -61,8 +61,6 @@ import { PrismaModule } from './prisma/prisma.service';
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [SecretsModule] : []),
     // Connections (E39.2): the owner's Google and Microsoft accounts, several per service. Needs the credential store and notifications.
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [ConnectionsModule, GoogleConnectionsModule] : []),
-    // Deliveries after a run (E39.6): an email with the report, a signed webhook, a spreadsheet row, files in a folder. Mounted with Connections.
-    ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [DeliveriesModule] : []),
     // The built-in secrets store (E37.5): the Vault packages embedded, OFF by default. With SECRETS_STORE_ENABLED unset no
     // Vault package is loaded; with it on and no valid SECRETS_STORE_KEY the API refuses to start (one clear error).
     ...(secretsStoreEnabled() ? [loadSecretsStoreModule()] : []),
@@ -82,6 +80,8 @@ import { PrismaModule } from './prisma/prisma.service';
     ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [webhooksModule] : []),
     // Alerts (Administration → Alerts): the platform slice plus the console's rule kinds.
     ...(alertsMounted() ? [alertsModule, HexactraAlertsModule] : []),
+    // Deliveries after a run (E39.6): an email with the report, a signed webhook, a spreadsheet row, files in a folder. Mounted with Connections; last, so its routes follow the others in the OpenAPI document.
+    ...(isSliceEnabled('credentials') && isSliceEnabled('notifications') ? [DeliveriesModule] : []),
   ],
   providers: [
     { provide: APP_PIPE, useClass: ZodValidationPipe },

@@ -19,6 +19,10 @@ export type Schema<K extends keyof components['schemas']> = components['schemas'
 export type AgentPolicySpec = Schema<'AgentPolicyResponseDto'>['spec'];
 /** An agent policy as the API returns it. */
 export type AgentPolicy = Schema<'AgentPolicyResponseDto'>;
+/** What a task sends when a run ends (`GET /api/tasks/{id}/deliveries`, E39.6): an email with the PDF report, a signed webhook, a spreadsheet row, files in a folder. */
+export type TaskDelivery = Schema<'DeliveryResponseDto'>;
+/** What was sent for one run (`GET /api/runs/{id}/deliveries`): status, attempts and a closed reason; never content. */
+export type RunDelivery = Schema<'RunDeliveryResponseDto'>;
 /** A page of tasks: what `GET /api/tasks?envelope=1` returns in `data` (the document types that route as the plain array). */
 export type TaskPage = Schema<'TaskPageResponseDto'>;
 /** A task with its `summary` (`include=summary`; also what creating a task returns). */
@@ -109,6 +113,10 @@ export interface TasksClient {
    * by key (a sensitive value reads `[hidden]`). Pass `nextCursor` back as `cursor`; `null` is the end. 404 for a task that is not yours.
    */
   outputs(id: string, query?: { limit?: number; cursor?: string }): Promise<TaskOutputsPage>;
+  /** What the task sends when a run ends, in the order it is sent (E39.6). Recipients and destinations are fixed here, by you: nothing in a run can change one. */
+  deliveries(id: string): Promise<TaskDelivery[]>;
+  /** Send a clearly marked TEST with sample values to one delivery's destination. A failure answers `ok: false` with a `code`; no run is read. */
+  testDelivery(id: string, deliveryId: string): Promise<Schema<'DeliveryTestResponseDto'>>;
   /** Pause every schedule of the task ("disable" it): it still runs when started by hand, the API or MCP. 409 `NO_SCHEDULES` without one. */
   pauseSchedules(id: string): Promise<Schema<'TaskSchedulesChangedResponseDto'>>;
   /** Resume every schedule of the task; `skipped` lists the schedules that could not be resumed. */
@@ -133,6 +141,10 @@ export interface RunsClient {
    * 413 `EXPORT_TOO_LARGE` over 50 MB with screenshots; 429 `EXPORT_RATE_LIMITED` past 10 a minute.
    */
   export(id: string, options?: { screenshots?: 'embed' | 'none' }): Promise<RunTrace>;
+  /** What was sent for the run (E39.6): one entry per delivery with its status, attempts and a closed `errorCode`. */
+  deliveries(id: string): Promise<RunDelivery[]>;
+  /** Retry a delivery that failed (or is stuck): it gets a fresh set of attempts. 409 `DELIVERY_NOT_RETRYABLE` otherwise. */
+  retryDelivery(id: string, runDeliveryId: string): Promise<RunDelivery>;
 }
 
 export interface SchedulesClient {
@@ -182,6 +194,8 @@ export function createConsoleClient(options: ConsoleClientOptions): ConsoleClien
     update: (id, body) => data(api.PATCH('/api/tasks/{id}', { params: { path: { id } }, body })) as never,
     run: (id, o) => data(api.POST('/api/tasks/{id}/runs', { params: { path: { id } }, body: o?.policyId ? { policyId: o.policyId } : {} } as never)) as never,
     outputs: (id, query) => data(api.GET('/api/tasks/{id}/outputs', { params: { path: { id }, query: { ...query } } } as never)) as never,
+    deliveries: (id) => data(api.GET('/api/tasks/{id}/deliveries', { params: { path: { id } } })) as never,
+    testDelivery: (id, deliveryId) => data(api.POST('/api/tasks/{id}/deliveries/{deliveryId}/test', { params: { path: { id, deliveryId } } })) as never,
     pauseSchedules: (id) => data(api.POST('/api/tasks/{id}/schedules/pause', { params: { path: { id } } })) as never,
     resumeSchedules: (id) => data(api.POST('/api/tasks/{id}/schedules/resume', { params: { path: { id } } })) as never,
   };
@@ -195,6 +209,8 @@ export function createConsoleClient(options: ConsoleClientOptions): ConsoleClien
     deleteMany: (body) => data(api.POST('/api/runs/delete', { body })) as never,
     // The file is not wrapped in `{ data }`: `data()` passes it through as it is.
     export: (id, o) => data(api.GET('/api/runs/{id}/export', { params: { path: { id }, query: { format: 'json', screenshots: o?.screenshots ?? 'embed' } } } as never)) as Promise<RunTrace>,
+    deliveries: (id) => data(api.GET('/api/runs/{id}/deliveries', { params: { path: { id } } })) as never,
+    retryDelivery: (id, runDeliveryId) => data(api.POST('/api/runs/{id}/deliveries/{runDeliveryId}/retry', { params: { path: { id, runDeliveryId } } })) as never,
   };
   const schedules: SchedulesClient = {
     preview: (body) => data(api.POST('/api/schedules/preview', { body })) as never,
