@@ -25,7 +25,7 @@ export interface Harness {
   addAccount(init: FakeAccountInit): FakeAccount;
 }
 
-export function createHarness(opts: { now?: () => number } = {}): Harness {
+export function createHarness(opts: { now?: () => number; telemetry?: GraphTelemetry } = {}): Harness {
   const fake = new FakeGraph();
   const telemetry: GraphCallRecord[] = [];
   const sleeps: number[] = [];
@@ -33,7 +33,7 @@ export function createHarness(opts: { now?: () => number } = {}): Harness {
   const sink: GraphTelemetry = { record: (c) => void telemetry.push(c) };
   const graph = new GraphClient({
     fetch: (...a) => fake.fetch(...a),
-    telemetry: sink,
+    telemetry: opts.telemetry ?? sink,
     sleep: async (ms) => void sleeps.push(ms),
     random: () => 0.5,
     tokens: async (ctx: ConnectionContext, o) => {

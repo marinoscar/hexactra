@@ -3,7 +3,7 @@
 import type { PlatformApiClient } from '@marinoscar/platform-web/core';
 
 export type Provider = 'google' | 'microsoft';
-export type Capability = 'mail_read' | 'mail_send' | 'calendar_read' | 'calendar_write' | 'docs_read' | 'docs_write';
+export type Capability = 'mail_read' | 'mail_send' | 'mail_modify' | 'calendar_read' | 'calendar_write' | 'docs_read' | 'docs_write';
 export type CapabilityGroup = 'mail' | 'calendar' | 'docs';
 export type ConnectionStatus = 'active' | 'paused' | 'needs_reconnect' | 'revoked';
 
@@ -77,7 +77,7 @@ export interface AdminProvider {
   accountTypes: AccountType[];
 }
 
-export const CAPABILITY_ORDER: Capability[] = ['mail_read', 'mail_send', 'calendar_read', 'calendar_write', 'docs_read', 'docs_write'];
+export const CAPABILITY_ORDER: Capability[] = ['mail_read', 'mail_send', 'mail_modify', 'calendar_read', 'calendar_write', 'docs_read', 'docs_write'];
 
 export const listConnections = (api: PlatformApiClient) => api.get<Connection[]>('/connections');
 export const getConnection = (api: PlatformApiClient, id: string) => api.get<ConnectionDetail>(`/connections/${id}`);

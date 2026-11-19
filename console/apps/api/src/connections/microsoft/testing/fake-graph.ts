@@ -320,6 +320,11 @@ export class FakeGraph {
     this.scripts.push({ match, times, kind: 'drop' });
   }
 
+  /** Forgets every scripted failure that has not happened yet. */
+  clearScripts(): void {
+    this.scripts.length = 0;
+  }
+
   /** The next matching request never answers (until its signal aborts): for Stop and timeouts. */
   hang(match: (r: Recorded) => boolean, times = 1): void {
     this.scripts.push({ match, times, kind: 'hang' });

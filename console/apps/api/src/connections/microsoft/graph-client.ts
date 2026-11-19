@@ -41,13 +41,13 @@ export interface GraphTelemetry {
   record(call: GraphCallRecord): void;
 }
 
-const tracer = trace.getTracer('hexactra-console.connections.microsoft');
+const TRACER_NAME = 'hexactra-console.connections.microsoft';
 const logger = new Logger('MicrosoftGraph');
 
 /** Spans and one line per failed call; operation, connection id, status and sizes only. */
 export const defaultTelemetry: GraphTelemetry = {
   record(c) {
-    const span = tracer.startSpan(`graph ${c.op}`, { attributes: { 'connection.id': c.connectionId, 'graph.operation': c.op, 'http.response.status_code': c.status, 'graph.attempt': c.attempt, 'graph.request_bytes': c.requestBytes, 'graph.response_bytes': c.responseBytes, 'graph.duration_ms': c.durationMs } });
+    const span = trace.getTracer(TRACER_NAME).startSpan(`graph ${c.op}`, { attributes: { 'connection.id': c.connectionId, 'graph.operation': c.op, 'http.response.status_code': c.status, 'graph.attempt': c.attempt, 'graph.request_bytes': c.requestBytes, 'graph.response_bytes': c.responseBytes, 'graph.duration_ms': c.durationMs } });
     if (c.status >= 400 || c.status === 0) span.setStatus({ code: SpanStatusCode.ERROR });
     span.end();
     if (c.status >= 400 || c.status === 0) logger.warn(`graph ${c.op} answered ${c.status} (attempt ${c.attempt}, ${c.durationMs} ms)`);

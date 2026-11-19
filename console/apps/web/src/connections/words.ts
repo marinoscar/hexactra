@@ -4,8 +4,29 @@ import type { Capability, CapabilityGroup, Connection, ConnectionStatus, Provide
 
 export const PROVIDER_NAME: Record<Provider, string> = { google: 'Google', microsoft: 'Microsoft' };
 
-export const GROUPS: { group: CapabilityGroup; name: string; read: Capability; write: Capability; readWords: string; writeWords: string }[] = [
-  { group: 'mail', name: 'Mail', read: 'mail_read', write: 'mail_send', readWords: 'Read and search your email.', writeWords: 'Send email as you.' },
+export interface GroupDef {
+  group: CapabilityGroup;
+  name: string;
+  read: Capability;
+  write: Capability;
+  readWords: string;
+  writeWords: string;
+  /** A third switch some groups have: Mail's "organize" (archive, labels, mark read, drafts). It needs read, and is not write. */
+  modify?: Capability;
+  modifyWords?: string;
+}
+
+export const GROUPS: GroupDef[] = [
+  {
+    group: 'mail',
+    name: 'Mail',
+    read: 'mail_read',
+    write: 'mail_send',
+    readWords: 'Read and search your email.',
+    writeWords: 'Send email as you.',
+    modify: 'mail_modify',
+    modifyWords: 'Archive, label and mark messages as read, and save drafts. The provider treats this as a more sensitive permission than sending.',
+  },
   { group: 'calendar', name: 'Calendar', read: 'calendar_read', write: 'calendar_write', readWords: 'See your events and free time.', writeWords: 'Create and change events.' },
   { group: 'docs', name: 'Documents', read: 'docs_read', write: 'docs_write', readWords: 'Read your documents, spreadsheets and files.', writeWords: 'Create and change documents, add spreadsheet rows, save files.' },
 ];
@@ -13,14 +34,16 @@ export const GROUPS: { group: CapabilityGroup; name: string; read: Capability; w
 export const CAPABILITY_WORDS: Record<Capability, string> = {
   mail_read: 'Read mail',
   mail_send: 'Send mail',
+  mail_modify: 'Organize mail',
   calendar_read: 'Read calendar',
   calendar_write: 'Change calendar',
   docs_read: 'Read documents',
   docs_write: 'Change documents',
 };
 
-/** `read`, `read and write` or null: how a group's chip reads for the switches that are on. */
-export function levelOf(caps: readonly Capability[], g: (typeof GROUPS)[number]): 'read' | 'read and write' | null {
+/** `read`, `read and write` (mail: also `read and organize`, `read, send and organize`) or null: how a group's chip reads for the switches that are on. */
+export function levelOf(caps: readonly Capability[], g: GroupDef): string | null {
+  if (g.modify && caps.includes(g.modify)) return caps.includes(g.write) ? 'read, send and organize' : 'read and organize';
   if (caps.includes(g.write)) return 'read and write';
   if (caps.includes(g.read)) return 'read';
   return null;
@@ -56,6 +79,10 @@ export function testCodeWords(code: string | null): string {
       return 'The sign-in was refused';
     case 'UNAVAILABLE':
       return 'The provider could not be reached';
+    case 'API_DISABLED':
+      return 'The service is switched off in your administrator\'s app at the provider';
+    case 'RATE_LIMITED':
+      return 'The provider asked to slow down; try again in a minute';
     default:
       return 'Failed';
   }
