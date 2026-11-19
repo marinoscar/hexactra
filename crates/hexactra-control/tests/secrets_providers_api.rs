@@ -359,19 +359,27 @@ async fn the_registration_resource_never_returns_or_keeps_a_token() {
         .status(),
         400
     );
-    let vault = f
-        .put_provider(
-            OWNER,
-            "vault",
-            json!({"kind": "vault", "base_url": "https://vault.example.test", "access_token": "t"}),
-        )
+    // The console-hosted provider is not built yet.
+    let console = f
+        .put_provider(OWNER, "builtin", json!({"kind": "console"}))
         .await;
-    assert_eq!(vault.status(), 501);
-    assert!(vault
+    assert_eq!(console.status(), 501);
+    assert!(console
         .text()
         .await
         .unwrap()
         .contains("provider_kind_unsupported"));
+    // A Vault needs its address, a token and an expiry.
+    assert_eq!(
+        f.put_provider(
+            OWNER,
+            "vault",
+            json!({"kind": "vault", "base_url": "https://vault.example.test", "access_token": "t"})
+        )
+        .await
+        .status(),
+        400
+    );
     assert_eq!(
         reqwest::Client::new()
             .put(format!("{}/v1/secrets-providers/{OWNER}/test", f.url))
@@ -1094,4 +1102,449 @@ fn the_registry_is_a_plain_value() {
     // The registry can be built and shared without a server.
     let r = SecretsProviders::default();
     assert!(r.list("nobody").is_empty());
+}
+
+// ------------------------------------------------------------- the Vault
+
+/// The remote Vault provider (#591) through the whole fabric path: a real
+/// HTTP fake of Vault's agent credential API, a real control plane and a
+/// fake extension that records what it is asked to type.
+mod vault_provider {
+    use super::*;
+    use hexactra_credential_resolver::fake_vault::{
+        FakeVault, CLOSED_ID, FORUM_ID_1, SHOP_ID, SHOP_ORIGIN, SHOP_PASSWORD, SHOP_USERNAME,
+    };
+
+    const SHOP_PAGE: &str = "https://app.example.test/signin";
+
+    impl Fabric {
+        /// What the console does: hand the owner's Vault to the fabric with a
+        /// short-lived access token.
+        async fn register_vault(&self, vault: &FakeVault, token: &str) -> reqwest::Response {
+            self.register_vault_until(vault, token, "2999-01-01T00:00:00Z")
+                .await
+        }
+
+        async fn register_vault_until(
+            &self,
+            vault: &FakeVault,
+            token: &str,
+            expires_at: &str,
+        ) -> reqwest::Response {
+            self.put_provider(
+                OWNER,
+                "vault",
+                json!({"kind": "vault", "base_url": vault.base_url, "access_token": token, "expires_at": expires_at}),
+            )
+            .await
+        }
+    }
+
+    async fn ready() -> (Fabric, FakeVault, String, Uuid) {
+        let f = start().await;
+        let vault = FakeVault::start().await;
+        let token = vault.default_token();
+        let r = f.register_vault(&vault, &token).await;
+        assert_eq!(r.status(), 200, "{}", r.text().await.unwrap());
+        f.ext.goto(&[SHOP_PAGE]);
+        let s = f.session(Some(OWNER)).await;
+        (f, vault, token, s)
+    }
+
+    #[tokio::test]
+    async fn a_login_is_looked_up_and_typed_and_no_result_holds_a_value() {
+        let (f, vault, token, s) = ready().await;
+        vault.queue_totp_codes(["482913"]);
+
+        // Registration answers without the token.
+        let list = reqwest::Client::new()
+            .get(format!("{}/v1/secrets-providers/{OWNER}", f.url))
+            .bearer_auth(TOKEN)
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
+        assert!(
+            list.contains("\"kind\":\"vault\"") && !list.contains(&token),
+            "{list}"
+        );
+
+        // Lookup: the shop login is the exact match; summaries only.
+        let op = f.act(s, lookup()).await;
+        assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
+        let r = op.result.clone().unwrap();
+        assert_eq!(r["provider"], "vault");
+        assert_eq!(r["origin"], SHOP_ORIGIN);
+        let items = r["items"].as_array().unwrap();
+        assert_eq!(items[0]["id"], SHOP_ID);
+        assert_eq!(items[0]["match_kind"], "exact");
+        assert_eq!(items[0]["username"], SHOP_USERNAME);
+        assert_eq!(items[0]["has_code"], true);
+        assert!(items[1..].iter().all(|i| i["match_kind"] == "site"));
+
+        // Username, password and a code are typed.
+        let user = f
+            .act(s, type_from(SHOP_ID, SecretField::Username, "#user"))
+            .await;
+        let pw = f
+            .act(s, type_from(SHOP_ID, SecretField::Password, "#pw"))
+            .await;
+        let code = f.act(s, type_code(SHOP_ID, "#otp")).await;
+        for op in [&user, &pw, &code] {
+            assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
+        }
+        assert_eq!(user.result, Some(json!({"typed": true})));
+        assert_eq!(code.result.as_ref().unwrap()["typed"], true);
+        assert!(code.result.as_ref().unwrap()["expires_at"].is_string());
+        let typed = |selector: &str, text: &str, clear: bool, submit: bool| RemoteAction::Type {
+            selector: selector.into(),
+            text: text.into(),
+            clear,
+            submit,
+            sensitive: true,
+            tab_id: Some(TAB),
+        };
+        assert_eq!(
+            f.ext.typed(),
+            vec![
+                typed("#user", SHOP_USERNAME, true, false),
+                typed("#pw", SHOP_PASSWORD, true, false),
+                typed("#otp", "482913", false, true),
+            ]
+        );
+        // No operation result, as a caller reads it, holds a value or the token.
+        for op in [&user, &pw, &code] {
+            for shown in [
+                text_of(op),
+                text_of(&f.client.operation(op.id).await.unwrap()),
+            ] {
+                for v in [SHOP_PASSWORD, "482913", token.as_str()] {
+                    assert!(!shown.contains(v), "{v} in {shown}");
+                }
+            }
+        }
+
+        // Vault was asked for one field per call, with the page's own origin
+        // and the purpose; the audit trail has no value.
+        let fills = vault.requests_to("/fill");
+        assert_eq!(fills.len(), 2);
+        assert_eq!(fills[0].params["field"], "username");
+        assert_eq!(fills[1].params["field"], "password");
+        assert!(fills.iter().all(|r| r.params["origin"] == SHOP_ORIGIN
+            && r.params["purpose"] == "login"
+            && r.status == 200));
+        let totp = vault.requests_to("/totp");
+        assert_eq!((totp.len(), totp[0].params["purpose"].as_str()), (1, "mfa"));
+        let all = text_of(&f.events("secrets.release")) + &text_of(&f.events("secrets.lookup"));
+        for v in [SHOP_PASSWORD, "482913", token.as_str()] {
+            assert!(!all.contains(v), "{all}");
+        }
+        let releases = f.events("secrets.release");
+        assert_eq!(releases.len(), 3);
+        assert_eq!(releases[1]["provider"], "vault");
+        assert_eq!(releases[1]["outcome"], "typed");
+    }
+
+    #[tokio::test]
+    async fn vault_refusals_map_to_codes_and_nothing_is_typed() {
+        let (f, vault, token, s) = ready().await;
+
+        // A page on a sibling subdomain: a site match is not fillable, and a
+        // mismatch is not retried.
+        f.ext.goto(&["https://login.example.test/"]);
+        failed_with(
+            &f.act(s, type_from(SHOP_ID, SecretField::Password, "#pw"))
+                .await,
+            "origin_mismatch",
+        );
+        assert_eq!(vault.requests_to("/fill").len(), 1);
+        failed_with(
+            &f.act(s, type_code(SHOP_ID, "#otp")).await,
+            "origin_mismatch",
+        );
+        assert_eq!(vault.requests_to("/totp").len(), 1);
+        f.ext.goto(&[SHOP_PAGE]);
+
+        // Closed, missing and no-authenticator are one `not_found`.
+        failed_with(
+            &f.act(s, type_from(CLOSED_ID, SecretField::Password, "#pw"))
+                .await,
+            "not_found",
+        );
+        failed_with(
+            &f.act(
+                s,
+                type_from(
+                    "7f1c2e9a-0000-4000-8000-0000000000ff",
+                    SecretField::Password,
+                    "#pw",
+                ),
+            )
+            .await,
+            "not_found",
+        );
+        f.ext.goto(&["https://forum.example.test/"]);
+        failed_with(&f.act(s, type_code(FORUM_ID_1, "#otp")).await, "not_found");
+        f.ext.goto(&[SHOP_PAGE]);
+
+        // A short rate limit is waited out once; a long one fails.
+        vault.throttle_next(1, 1);
+        let ok = f
+            .act(s, type_from(SHOP_ID, SecretField::Username, "#user"))
+            .await;
+        assert_eq!(ok.state, OperationState::Succeeded, "{ok:?}");
+        vault.throttle_next(1, 60);
+        let limited = f
+            .act(s, type_from(SHOP_ID, SecretField::Username, "#user"))
+            .await;
+        failed_with(&limited, "rate_limited");
+        assert!(limited.error.unwrap().contains("60"));
+
+        // Vault down, kill switch off, token revoked.
+        vault.fail_next(503);
+        failed_with(
+            &f.act(s, type_from(SHOP_ID, SecretField::Password, "#pw"))
+                .await,
+            "unavailable",
+        );
+        vault.set_agent_access(false);
+        failed_with(&f.act(s, lookup()).await, "disabled");
+        failed_with(
+            &f.act(s, type_from(SHOP_ID, SecretField::Password, "#pw"))
+                .await,
+            "disabled",
+        );
+        vault.set_agent_access(true);
+        vault.revoke_token(&token);
+        failed_with(
+            &f.act(s, type_from(SHOP_ID, SecretField::Password, "#pw"))
+                .await,
+            "unauthorized",
+        );
+        failed_with(&f.act(s, lookup()).await, "unauthorized");
+
+        // Only the one successful username was ever typed.
+        assert_eq!(f.ext.typed().len(), 1);
+        // A read-only token cannot fill (scope), and says so with a short code.
+        let read_only = vault.token(&["vault:items_read"]);
+        assert_eq!(f.register_vault(&vault, &read_only).await.status(), 200);
+        assert_eq!(f.act(s, lookup()).await.state, OperationState::Succeeded);
+        let refused = f
+            .act(s, type_from(SHOP_ID, SecretField::Password, "#pw"))
+            .await;
+        failed_with(&refused, "refused");
+        assert!(refused.error.unwrap().contains("insufficient_scope"));
+        assert_eq!(f.ext.typed().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_new_registration_replaces_the_token_and_expiry_drops_it() {
+        let f = start().await;
+        let vault = FakeVault::start().await;
+        f.ext.goto(&[SHOP_PAGE]);
+        let s = f.session(Some(OWNER)).await;
+        let old = vault.default_token();
+        assert_eq!(f.register_vault(&vault, &old).await.status(), 200);
+        assert_eq!(f.act(s, lookup()).await.state, OperationState::Succeeded);
+
+        // The console replaces the token before expiry; the old one is dead.
+        vault.revoke_token(&old);
+        let fresh = vault.default_token();
+        assert_eq!(f.register_vault(&vault, &fresh).await.status(), 200);
+        assert_eq!(f.state.secrets.list(OWNER).len(), 1);
+        assert_eq!(f.act(s, lookup()).await.state, OperationState::Succeeded);
+        let calls = vault.requests().len();
+
+        // A registration with a short expiry disappears; nothing is called.
+        let soon = (chrono::Utc::now() + chrono::Duration::milliseconds(800)).to_rfc3339();
+        assert_eq!(
+            f.register_vault_until(&vault, &fresh, &soon).await.status(),
+            200
+        );
+        assert_eq!(f.act(s, lookup()).await.state, OperationState::Succeeded);
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+        failed_with(&f.act(s, lookup()).await, "no_provider");
+        assert!(f.state.secrets.list(OWNER).is_empty());
+        assert_eq!(vault.requests().len(), calls + 1);
+
+        // Disconnecting drops it too.
+        assert_eq!(f.register_vault(&vault, &fresh).await.status(), 200);
+        assert!(f.state.secrets.remove(OWNER, "vault"));
+        failed_with(&f.act(s, lookup()).await, "no_provider");
+    }
+
+    #[tokio::test]
+    async fn another_owner_does_not_reach_the_vault() {
+        let (f, vault, _token, _s) = ready().await;
+        let other = f.session(Some("user-b")).await;
+        failed_with(&f.act(other, lookup()).await, "no_provider");
+        let none = f.session(None).await;
+        failed_with(&f.act(none, lookup()).await, "no_provider");
+        assert!(vault.requests().is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_canary_scan_passes_with_the_vault_provider() {
+        const CODE: &str = "cnry-vault-otp-3a7bd3e2360a3d29eea436fcfb7e44c7";
+        let logs = LogBuf::default();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(logs.clone())
+            .with_max_level(tracing::Level::DEBUG)
+            .with_span_events(FmtSpan::FULL)
+            .with_ansi(false)
+            .finish();
+        // This test's runtime is current-thread: the server, the store and
+        // the provider's HTTP calls all run under this default.
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        let (f, vault, token, s) = ready().await;
+        vault.queue_totp_codes([CODE]);
+        let canaries: Vec<String> = vault
+            .canaries()
+            .into_iter()
+            .chain([CODE.to_string(), token.clone()])
+            .collect();
+
+        // A scripted session: look up, type the username, the password and a
+        // code, then fail in the ways Vault can.
+        let mut ops = vec![f.act(s, lookup()).await];
+        ops.push(
+            f.act(s, type_from(SHOP_ID, SecretField::Username, "#user"))
+                .await,
+        );
+        ops.push(
+            f.act(s, type_from(SHOP_ID, SecretField::Password, "#pw"))
+                .await,
+        );
+        ops.push(f.act(s, type_code(SHOP_ID, "#otp")).await);
+        ops.push(
+            f.act(
+                s,
+                RemoteAction::TypeFromProvider {
+                    item_id: SHOP_ID.into(),
+                    field: SecretField::Password,
+                    selector: None,
+                    point: Some(ViewportPoint { x: 10, y: 10 }),
+                    purpose: SecretPurpose::Login,
+                    clear: true,
+                    submit: true,
+                    provider: None,
+                    run_id: None,
+                    client_label: None,
+                    tab_id: None,
+                },
+            )
+            .await,
+        );
+        f.ext.goto(&["https://login.example.test/"]);
+        ops.push(
+            f.act(s, type_from(SHOP_ID, SecretField::Password, "#pw"))
+                .await,
+        );
+        f.ext.goto(&[SHOP_PAGE]);
+        vault.set_agent_access(false);
+        ops.push(
+            f.act(s, type_from(SHOP_ID, SecretField::Password, "#pw"))
+                .await,
+        );
+        vault.set_agent_access(true);
+        vault.revoke_token(&token);
+        ops.push(
+            f.act(s, type_from(SHOP_ID, SecretField::Password, "#pw"))
+                .await,
+        );
+        f.client.end_session(s).await.unwrap();
+
+        // The browser is the one place the values reached.
+        let typed = f.ext.typed();
+        for want in [SHOP_PASSWORD, CODE, SHOP_USERNAME] {
+            assert!(
+                typed.iter().any(|a| matches!(a,
+                    RemoteAction::Type { text, .. } | RemoteAction::TypeKeys { text, .. }
+                        if text == want)),
+                "{want} was not typed"
+            );
+        }
+        assert!(text_of(&typed).contains(SHOP_PASSWORD), "positive control");
+        assert_eq!(
+            ops.iter()
+                .filter(|o| o.state == OperationState::Succeeded)
+                .count(),
+            5
+        );
+
+        // Every operation the fabric knows, as a caller reads it.
+        let mut results = vec![text_of(&ops)];
+        let mut seen = std::collections::HashSet::new();
+        for e in f.store.log.recent() {
+            if let Some(id) = e.data.get("op_id").and_then(Value::as_str) {
+                if seen.insert(id.to_string()) {
+                    results.push(text_of(
+                        &f.client.operation(id.parse().unwrap()).await.unwrap(),
+                    ));
+                }
+            }
+        }
+        assert!(
+            seen.len() > 12,
+            "too few operations were read: {}",
+            seen.len()
+        );
+        results.push(text_of(&f.client.sessions().await.unwrap()));
+        let listed = reqwest::Client::new()
+            .get(format!("{}/v1/secrets-providers/{OWNER}", f.url))
+            .bearer_auth(TOKEN)
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
+        results.push(listed);
+
+        // The state database (and its WAL), after a save.
+        let dir = tempfile::tempdir().unwrap();
+        let db = StateDb::open(&dir.path().join("state.db")).unwrap();
+        db.flush(&f.store, &f.state.credentials);
+        let files: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .collect();
+        assert!(!files.is_empty());
+
+        let events = text_of(&f.store.log.recent());
+        assert!(
+            events.contains("secrets.release"),
+            "events were not captured"
+        );
+        let logs = String::from_utf8(logs.0.lock().unwrap().clone()).unwrap();
+        assert!(
+            logs.contains("provider action started"),
+            "logs were not captured"
+        );
+
+        for canary in &canaries {
+            for (what, text) in [("events", &events), ("logs", &logs)] {
+                assert!(!text.contains(canary.as_str()), "{what} leak {canary}");
+            }
+            for r in &results {
+                assert!(
+                    !r.contains(canary.as_str()),
+                    "an operation, session or registration leaks {canary}: {r}"
+                );
+            }
+            for path in &files {
+                let bytes = std::fs::read(path).unwrap();
+                assert!(
+                    !bytes.windows(canary.len()).any(|w| w == canary.as_bytes()),
+                    "{} leaks {canary}",
+                    path.display()
+                );
+            }
+        }
+        // Vault was reached with the registered token and nothing leaked it.
+        assert!(vault.requests().len() >= 5);
+    }
 }

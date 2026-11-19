@@ -3,8 +3,7 @@ import { CredentialsModule, UserCredentialsModule } from '@marinoscar/platform-a
 
 import { FabricModule } from '../fabric/fabric.module';
 import { OAuthClientModule } from '../oauth-client';
-import { FabricClientSecretsRegistry } from './fabric-client-secrets-registry';
-import { FABRIC_SECRETS_REGISTRY } from './fabric-secrets-registry';
+import { FABRIC_SECRETS_REGISTRY, FabricSessionSecretsRegistry } from './fabric-secrets-registry';
 import { RunSecretsService } from './run-secrets.service';
 import { SecretsPolicyService } from './secrets-policy.service';
 import { SecretsProviderRegistrar } from './secrets-provider.registrar';
@@ -25,14 +24,14 @@ import { VaultTokenService } from './vault-token.service';
  * switches (`secrets.agentUse.enabled`, the deployment's and the owner's), `GET /api/secrets/status` and a Doctor
  * line. Mounted only with the credentials and notifications slices (app.module.ts).
  *
- * `FABRIC_SECRETS_REGISTRY` is bound to `FabricClientSecretsRegistry`, the adapter over the fabric's secrets-provider
- * resource (E37.1, #590). `RunSecretsService` (E37.3, #592) is what the goal runner uses.
+ * `FABRIC_SECRETS_REGISTRY` is bound to `FabricSessionSecretsRegistry`: the fabric's secrets-provider resource (E37.1, #590).
+ * `RunSecretsService` (E37.3, #592) is what the goal runner uses.
  */
 @Module({
   imports: [CredentialsModule, UserCredentialsModule, OAuthClientModule, FabricModule],
   controllers: [SecretsController],
   providers: [
-    { provide: FABRIC_SECRETS_REGISTRY, useClass: FabricClientSecretsRegistry },
+    { provide: FABRIC_SECRETS_REGISTRY, useClass: FabricSessionSecretsRegistry },
     SecretsPolicyService,
     SecretsEvents,
     VaultApiClient,

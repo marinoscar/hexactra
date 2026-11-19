@@ -134,7 +134,7 @@ beforeAll(async () => {
   registrar = app.get(SecretsProviderRegistrar, { strict: false });
   policy = app.get(SecretsPolicyService, { strict: false });
   fabric = app.get<FabricSecretsRegistry>(FABRIC_SECRETS_REGISTRY, { strict: false });
-  // The fabric path of E37.1 is not on main yet: record what the console hands the fabric.
+  // Record what the console hands the fabric (the real adapter would call the fabric over HTTP; its own spec is fabric-secrets-registry.spec.ts).
   jest.spyOn(fabric, 'registerSecretsProvider').mockImplementation(async (ownerId, registration) => {
     fabricCalls.push({ op: 'register', ownerId, registration: { ...registration } });
   });

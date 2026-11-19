@@ -1,8 +1,5 @@
 // The pure parts of signing in from a saved login (E37.3, #592): references, masking, the lookup the model reads, the
 // error-to-instruction table, and the list of logins a run used.
-import { FabricError, type FabricClient } from '../src/fabric/fabric.client';
-import { FabricClientSecretsRegistry } from '../src/secrets/fabric-client-secrets-registry';
-import { FabricSecretsUnavailable } from '../src/secrets/fabric-secrets-registry';
 import { SECRETS_ERROR_CODES, type ItemSummary } from '../src/secrets/secrets-provider.port';
 import { appendUsedSavedLogin, failureOf, loginLabel, lookupOf, lookupText, maskUsername, readUsedSavedLogins, refFor, MAX_USED_SAVED_LOGINS } from '../src/runner/saved-logins';
 
@@ -98,40 +95,5 @@ describe('what a run used', () => {
     expect(readUsedSavedLogins(many)).toHaveLength(MAX_USED_SAVED_LOGINS);
     expect(readUsedSavedLogins([{ provider: 'vault' }, null, 3, ...first])).toEqual(first);
     expect(readUsedSavedLogins(null)).toEqual([]);
-  });
-});
-
-describe('the fabric registry adapter', () => {
-  const fabricOf = (answer: (method: string, path: string, body?: unknown) => unknown) => {
-    const calls: [string, string, unknown][] = [];
-    const client = {
-      request: jest.fn(async (method: string, path: string, opts: { body?: unknown } = {}) => {
-        calls.push([method, path, opts.body]);
-        return answer(method, path, opts.body);
-      }),
-    } as unknown as FabricClient;
-    return { client, calls };
-  };
-
-  it('registers the owner\'s vault with its address, access token and expiry, and forgets it', async () => {
-    const { client, calls } = fabricOf(() => ({ owner_id: 'u1', provider: 'vault', kind: 'vault', registered_at: '2030-01-01T00:00:00Z' }));
-    const registry = new FabricClientSecretsRegistry(client);
-    await registry.registerSecretsProvider('u 1', { kind: 'vault', baseUrl: 'https://vault.example.test', accessToken: 'oat_x', expiresAt: '2030-01-01T00:05:00.000Z' });
-    expect(calls[0]).toEqual(['PUT', '/v1/secrets-providers/u%201/vault', { kind: 'vault', base_url: 'https://vault.example.test', access_token: 'oat_x', expires_at: '2030-01-01T00:05:00.000Z' }]);
-    await registry.unregisterSecretsProvider('u 1', 'vault');
-    expect(calls[1]).toEqual(['DELETE', '/v1/secrets-providers/u%201/vault', undefined]);
-  });
-
-  it('says the fabric cannot take the provider without carrying the token, and treats a missing registration as forgotten', async () => {
-    const refused = fabricOf(() => {
-      throw new FabricError('api', 'provider_kind_unsupported oat_secret', 501, 'provider_kind_unsupported');
-    });
-    const err = await new FabricClientSecretsRegistry(refused.client).registerSecretsProvider('u1', { kind: 'vault', baseUrl: 'https://v.example.test', accessToken: 'oat_secret', expiresAt: '2030-01-01T00:00:00Z' }).catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(FabricSecretsUnavailable);
-    expect(JSON.stringify(err) + String((err as Error).message)).not.toContain('oat_secret');
-    const gone = fabricOf(() => {
-      throw new FabricError('api', 'not found', 404, 'not_found');
-    });
-    await expect(new FabricClientSecretsRegistry(gone.client).unregisterSecretsProvider('u1', 'vault')).resolves.toBeUndefined();
   });
 });

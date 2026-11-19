@@ -1314,6 +1314,7 @@ name = "hexactra-credential-resolver"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "axum",
  "chrono",
  "hexactra-core",
  "psl",

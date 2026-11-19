@@ -11,7 +11,7 @@ use std::time::Duration;
 use reqwest::header::{HeaderMap, HeaderValue, CACHE_CONTROL, PRAGMA};
 
 /// How long a provider call may take, connection included.
-pub const PROVIDER_TIMEOUT: Duration = Duration::from_secs(8);
+pub const PROVIDER_TIMEOUT: Duration = Duration::from_secs(10);
 /// How long connecting may take.
 pub const PROVIDER_CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 

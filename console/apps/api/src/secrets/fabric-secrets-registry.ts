@@ -5,11 +5,12 @@
 // and a short-lived ACCESS token with its expiry. It holds them in memory (never in its state database) and the
 // console replaces the token before it expires while a run is live (`SecretsProviderRegistrar`).
 //
-// This is a port. `FabricSecretsRegistry` is implemented against the fabric's "secrets providers" resource (the
-// `registerSecretsProvider(ownerId, { kind: 'vault', baseUrl, accessToken, expiresAt })` call E37.1 adds to the
-// fabric client). Until that call exists on `main`, the module binds `UnwiredFabricSecretsRegistry`, which says so
-// instead of pretending: TODO(#590, E37.1): bind `FABRIC_SECRETS_REGISTRY` to the real fabric client method.
+// `FabricSecretsRegistry` is the port; `FabricSessionSecretsRegistry` implements it over the fabric's "secrets
+// providers" resource (`FabricSession.registerSecretsProvider`, `PUT /v1/secrets-providers/{owner}/{provider}`).
 import { Injectable } from '@nestjs/common';
+
+import { FabricClient, FabricError } from '../fabric/fabric.client';
+import { FabricSession } from '../runner/fabric-session';
 
 /** What the fabric is told about a provider. `expiresAt` is ISO 8601. */
 export interface SecretsProviderRegistration {
@@ -31,7 +32,7 @@ export interface FabricSecretsRegistry {
 /** Injection token of the fabric-side registry. */
 export const FABRIC_SECRETS_REGISTRY = Symbol('FABRIC_SECRETS_REGISTRY');
 
-/** The fabric could not be given the provider: not wired yet, not configured, or not answering. Never carries a token. */
+/** The fabric could not be given the provider: no fabric connection is configured, it is not answering, or it refused. Never carries a token. */
 export class FabricSecretsUnavailable extends Error {
   constructor(readonly reason: 'not_wired' | 'unreachable' | 'refused') {
     super(`The fabric cannot take a secrets provider (${reason}).`);
@@ -39,16 +40,52 @@ export class FabricSecretsUnavailable extends Error {
   }
 }
 
-/** The binding until E37.1's fabric method lands: refuses honestly, so nothing reports a provider the fabric does not hold. */
+/**
+ * The real binding: registers and removes the owner's Vault through the fabric's secrets-provider resource. The
+ * token travels in the request body of the `PUT` only; every failure is turned into a {@link FabricSecretsUnavailable}
+ * that carries a reason and nothing else (the original error is dropped, so no token or URL can ride along).
+ */
 @Injectable()
-export class UnwiredFabricSecretsRegistry implements FabricSecretsRegistry {
-  registerSecretsProvider(): Promise<void> {
-    return Promise.reject(new FabricSecretsUnavailable('not_wired'));
+export class FabricSessionSecretsRegistry implements FabricSecretsRegistry {
+  private readonly session: FabricSession;
+
+  constructor(fabric: FabricClient) {
+    this.session = new FabricSession(fabric);
   }
 
-  unregisterSecretsProvider(): Promise<void> {
-    return Promise.resolve();
+  async registerSecretsProvider(ownerId: string, registration: SecretsProviderRegistration): Promise<void> {
+    const expiresAt = new Date(registration.expiresAt);
+    if (Number.isNaN(expiresAt.getTime())) throw new FabricSecretsUnavailable('refused');
+    try {
+      // The provider id actions name is the kind: `vault`.
+      await this.session.registerSecretsProvider(ownerId, {
+        provider: registration.kind,
+        kind: registration.kind,
+        baseUrl: registration.baseUrl,
+        accessToken: registration.accessToken,
+        expiresAt,
+      });
+    } catch (e) {
+      throw unavailableOf(e);
+    }
   }
+
+  async unregisterSecretsProvider(ownerId: string, kind: SecretsProviderRegistration['kind']): Promise<void> {
+    try {
+      await this.session.unregisterSecretsProvider(ownerId, kind);
+    } catch (e) {
+      throw unavailableOf(e);
+    }
+  }
+}
+
+/** Why the fabric did not take the call: no fabric connection, not reachable, or it refused (a 4xx or 5xx, `501 provider_kind_unsupported` among them). */
+function unavailableOf(e: unknown): FabricSecretsUnavailable {
+  if (e instanceof FabricError) {
+    if (e.kind === 'not_configured') return new FabricSecretsUnavailable('not_wired');
+    if (e.kind === 'unreachable') return new FabricSecretsUnavailable('unreachable');
+  }
+  return new FabricSecretsUnavailable('refused');
 }
 
 /** A registry that records what it was given, for tests (and for a dev run without a fabric). Holds tokens in memory only. */
