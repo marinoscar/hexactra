@@ -162,6 +162,7 @@ describe('creating a task', () => {
       confirmRiskyActions: true,
       useSavedLogins: false,
       useSavedIdentity: false,
+      useSavedCards: false,
       unattendedPayments: 'ask',
       schedules: [{ cron: '0 9 * * 1-5', timezone: expect.any(String), enabled: true, concurrency: 'skip', policyId: OWN_ID }],
     });

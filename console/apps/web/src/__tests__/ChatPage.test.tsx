@@ -325,7 +325,7 @@ describe('the chat menu', () => {
     expect(confirmSwitch).toBeChecked();
     fireEvent.click(confirmSwitch);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(sent(host, 'PATCH', `/chats/${CHAT_ID}`)[0]?.body).toEqual({ profile: 'default', hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, useSavedLogins: false, useSavedIdentity: false }));
+    await waitFor(() => expect(sent(host, 'PATCH', `/chats/${CHAT_ID}`)[0]?.body).toEqual({ profile: 'default', hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, useSavedLogins: false, useSavedIdentity: false, useSavedCards: false }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Chat settings' })).not.toBeInTheDocument());
   });
 });
