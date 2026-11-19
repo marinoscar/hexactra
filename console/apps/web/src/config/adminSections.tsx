@@ -9,6 +9,7 @@ import { factoryResetSettingsPage } from '@marinoscar/platform-web/user-data/ui'
 import { webhooksAdminSections } from '@marinoscar/platform-web/webhooks/ui';
 
 import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
+import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import PaidOutlinedIcon from '@mui/icons-material/PaidOutlined';
@@ -105,6 +106,16 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
         description: 'ChatGPT, Claude and agent frameworks: the kill switch, rate limits and per-app ceilings, sensitive sites, every connected app and what they did.',
         Icon: SmartToyOutlinedIcon,
         path: '/admin/settings/ai-app-limits',
+        permission: 'system_settings:read',
+      },
+      // Secrets (#593): the `secrets` namespace of the system settings document (the kill switch, off by default),
+      // the default Vault, and counts. `system_settings:read` is what GET /api/secrets/admin/summary and
+      // GET /api/secrets/vault/default-client enforce; the switch and the default need `:write`, checked in the page.
+      {
+        title: 'Secrets',
+        description: 'The kill switch for the agent using saved logins, the default Vault your users connect to, and how much it is used.',
+        Icon: KeyOutlinedIcon,
+        path: '/admin/settings/secrets',
         permission: 'system_settings:read',
       },
     ],
