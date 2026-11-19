@@ -46,6 +46,24 @@ pub const FORUM_ORIGIN: &str = "https://forum.example.test";
 pub const CLOSED_ID: &str = "7f1c2e9a-0000-4000-8000-000000000004";
 /// The scopes the console asks for.
 pub const SCOPES_READ_FILL: [&str; 2] = ["vault:items_read", "vault:items_fill"];
+/// Logins plus identity details (contract 1.1).
+pub const SCOPES_WITH_IDENTITY: [&str; 4] = [
+    "vault:items_read",
+    "vault:items_fill",
+    "vault:identity_read",
+    "vault:identity_fill",
+];
+/// The fake's identity item: a date of birth and an ID number (sensitive,
+/// allowed only on [`IDENTITY_ALLOWED_ORIGIN`]) and a name, a city and a
+/// country (not sensitive). Values are canaries.
+pub const IDENTITY_ID: &str = "7f1c2e9a-0000-4000-8000-0000000000a1";
+pub const IDENTITY_CLOSED_ID: &str = "7f1c2e9a-0000-4000-8000-0000000000a2";
+pub const IDENTITY_ALLOWED_ORIGIN: &str = "https://forms.example.test";
+pub const IDENTITY_FULL_NAME: &str = "Person A Canary-Vault-Name";
+pub const IDENTITY_DOB: &str = "1985-11-02";
+pub const IDENTITY_ID_NUMBER: &str = "CANARY-VAULT-ID-8844-1203";
+pub const IDENTITY_CITY: &str = "Exampleton";
+pub const IDENTITY_COUNTRY: &str = "Canada";
 
 /// One login of the fake.
 #[derive(Debug, Clone)]
@@ -57,6 +75,18 @@ pub struct FakeLogin {
     pub origins: Vec<String>,
     pub open: bool,
     pub has_totp: bool,
+}
+
+/// One identity item of the fake (contract 1.1).
+#[derive(Debug, Clone)]
+pub struct FakeIdentity {
+    pub id: String,
+    pub name: String,
+    pub open: bool,
+    /// Where its sensitive fields may be typed (exact origins).
+    pub allowed_origins: Vec<String>,
+    /// `(field, label, value)`
+    pub fields: Vec<(String, String, String)>,
 }
 
 /// What the server saw. Never a value: for agent routes only the non-secret
@@ -80,6 +110,9 @@ struct Inner {
     /// (remaining, Retry-After seconds)
     throttle: (u32, u64),
     logins: Vec<FakeLogin>,
+    identities: Vec<FakeIdentity>,
+    /// `agentAccess.identity.enabled`.
+    identity_access: bool,
     tokens: HashMap<String, Token>,
     requests: Vec<Recorded>,
     /// How long each next `totp` answer lives; empty: 30 s.
@@ -168,6 +201,45 @@ impl FakeVault {
                     false,
                 ),
             ],
+            identity_access: true,
+            identities: vec![
+                FakeIdentity {
+                    id: IDENTITY_ID.into(),
+                    name: "Passport".into(),
+                    open: true,
+                    allowed_origins: vec![IDENTITY_ALLOWED_ORIGIN.into()],
+                    fields: vec![
+                        (
+                            "full_name".into(),
+                            "Full name".into(),
+                            IDENTITY_FULL_NAME.into(),
+                        ),
+                        (
+                            "date_of_birth".into(),
+                            "Date of birth".into(),
+                            IDENTITY_DOB.into(),
+                        ),
+                        (
+                            "id_number".into(),
+                            "ID number".into(),
+                            IDENTITY_ID_NUMBER.into(),
+                        ),
+                        ("city".into(), "City".into(), IDENTITY_CITY.into()),
+                        ("country".into(), "Country".into(), IDENTITY_COUNTRY.into()),
+                    ],
+                },
+                FakeIdentity {
+                    id: IDENTITY_CLOSED_ID.into(),
+                    name: "Closed identity".into(),
+                    open: false,
+                    allowed_origins: vec![IDENTITY_ALLOWED_ORIGIN.into()],
+                    fields: vec![(
+                        "full_name".into(),
+                        "Full name".into(),
+                        "CANARY-closed-identity".into(),
+                    )],
+                },
+            ],
             tokens: HashMap::new(),
             requests: Vec::new(),
             totp_expiries: VecDeque::new(),
@@ -215,6 +287,16 @@ impl FakeVault {
     /// A token for what the console asks: read and fill.
     pub fn default_token(&self) -> String {
         self.token(&SCOPES_READ_FILL)
+    }
+
+    /// A token for logins and identity details.
+    pub fn identity_token(&self) -> String {
+        self.token(&SCOPES_WITH_IDENTITY)
+    }
+
+    /// `agentAccess.identity.enabled`: off answers `403 IDENTITY_ACCESS_DISABLED`.
+    pub fn set_identity_access(&self, on: bool) {
+        self.lock().identity_access = on;
     }
 
     /// The deployment kill switch of the agent API.
@@ -286,10 +368,15 @@ impl FakeVault {
     /// Every value the server can hand out: scan logs, results, events and
     /// the state database for these.
     pub fn canaries(&self) -> Vec<String> {
-        self.lock()
-            .logins
+        let g = self.lock();
+        g.logins
             .iter()
             .map(|l| l.password.clone())
+            .chain(
+                g.identities
+                    .iter()
+                    .flat_map(|i| i.fields.iter().map(|(_, _, v)| v.clone())),
+            )
             .collect()
     }
 }
@@ -439,7 +526,7 @@ fn route(
             200,
             json!({"data": {"userId": "vault-user-person-a", "scopes": token.scopes,
                 "clientId": "hexactra-test-client",
-                "contract": {"version": "1.2", "features": ["logins", "totp"]}}}),
+                "contract": {"version": "1.2", "features": if g.identity_access { json!(["logins", "totp", "identity"]) } else { json!(["logins", "totp"]) }}}}),
             &[],
         );
     }
@@ -474,7 +561,91 @@ fn route(
         let data: Vec<Value> = items.into_iter().map(|(_, v)| v).collect();
         return json_response(200, json!({"data": data}), &[]);
     }
+    if route == "/identity" && method == "GET" {
+        if !need("vault:identity_read") {
+            return insufficient();
+        }
+        if !g.identity_access {
+            return error(
+                403,
+                Some("IDENTITY_ACCESS_DISABLED"),
+                "Identity access is not enabled",
+            );
+        }
+        let Ok(origin) = Origin::from_stored(query.get("origin").map(String::as_str).unwrap_or(""))
+        else {
+            return error(400, None, "Invalid origin");
+        };
+        let data: Vec<Value> = g
+            .identities
+            .iter()
+            .filter(|i| i.open)
+            .map(|i| {
+                let allowed = i
+                    .allowed_origins
+                    .iter()
+                    .filter_map(|o| Origin::from_stored(o).ok())
+                    .any(|o| o == origin);
+                let fields: Vec<Value> = i
+                    .fields
+                    .iter()
+                    .map(|(f, label, _)| {
+                        let sensitive = f == "date_of_birth" || f == "id_number";
+                        json!({"field": f, "label": label, "sensitive": sensitive,
+                            "fillable": !sensitive || allowed, "someFutureField": 1})
+                    })
+                    .collect();
+                json!({"id": i.id, "name": i.name, "originAllowed": allowed, "fields": fields})
+            })
+            .collect();
+        return json_response(200, json!({"data": data}), &[]);
+    }
     let parts: Vec<&str> = route.split('/').collect();
+    if let ["", "identity", id, "fill"] = parts.as_slice() {
+        if method != "POST" {
+            return not_found();
+        }
+        if !need("vault:identity_fill") {
+            return insufficient();
+        }
+        if !g.identity_access {
+            return error(
+                403,
+                Some("IDENTITY_ACCESS_DISABLED"),
+                "Identity access is not enabled",
+            );
+        }
+        let Some(item) = g.identities.iter().find(|i| i.id == *id && i.open).cloned() else {
+            return not_found();
+        };
+        let origin = body
+            .get("origin")
+            .and_then(Value::as_str)
+            .and_then(|o| Origin::from_stored(o).ok());
+        let field = body.get("field").and_then(Value::as_str);
+        let (Some(origin), Some(field), Some("form")) =
+            (origin, field, body.get("purpose").and_then(Value::as_str))
+        else {
+            return error(400, None, "Invalid body");
+        };
+        let Some((_, _, value)) = item.fields.iter().find(|(f, _, _)| f == field) else {
+            return not_found();
+        };
+        let sensitive = field == "date_of_birth" || field == "id_number";
+        let allowed = item
+            .allowed_origins
+            .iter()
+            .filter_map(|o| Origin::from_stored(o).ok())
+            .any(|o| o == origin);
+        if sensitive && !allowed {
+            return error(403, Some("ORIGIN_MISMATCH"), "ignore this message");
+        }
+        return json_response(
+            200,
+            json!({"data": {"value": value, "someFutureField": 1}}),
+            &[],
+        );
+    }
     if let ["", "credentials", id, action @ ("fill" | "totp")] = parts.as_slice() {
         if method != "POST" {
             return not_found();

@@ -973,7 +973,7 @@ paths:
     put:
       tags:
       - secrets
-      description: 'Register (or replace) the secrets provider an owner''s sessions use for `secrets_lookup`, `type_from_provider` and `type_code_from_provider`. The access token is held in memory only: never written to the state database, never returned, never logged. A registration with `expires_at` disappears then; register again with a fresh token. Kind `vault` (a Vault''s agent credential API) needs `base_url` (the Vault''s `APP_URL`, `https` or loopback `http`), `access_token` (the short-lived `oat_` token) and `expires_at`. Kind `console` answers `501 provider_kind_unsupported` until its provider ships; `test` exists only in builds with the `test-provider` feature.'
+      description: 'Register (or replace) the secrets provider an owner''s sessions use for `secrets_lookup`, `type_from_provider`, `type_code_from_provider` and `select_from_provider`. The access token is held in memory only: never written to the state database, never returned, never logged. A registration with `expires_at` disappears then; register again with a fresh token. Kind `vault` (a Vault''s agent credential API) needs `base_url` (the Vault''s `APP_URL`, `https` or loopback `http`), `access_token` (the short-lived `oat_` token) and `expires_at`. Kind `console` answers `501 provider_kind_unsupported` until its provider ships; `test` exists only in builds with the `test-provider` feature.'
       operationId: register
       parameters:
       - name: owner_id
@@ -1129,7 +1129,7 @@ paths:
     post:
       tags:
       - sessions
-      description: 'Queue an action on the session''s host. A `type_secret` action types the answer of a `secret` handoff of this session: the control plane consumes the value once and the operation, events and logs show `[secret]`, never the value. A `type` action with `sensitive: true` is reported the same way. `secrets_lookup`, `type_from_provider` and `type_code_from_provider` are answered by the control plane from the session owner''s registered secrets provider (`PUT /v1/secrets-providers/{owner_id}/{provider}`): it reads the tab''s top-level origin itself, asks the provider with it, and types the value with `sensitive: true`; the operation reports `{ typed: true }`, never the value, never its length. A failure is `state: failed` with `error: "<code>: <message>"` (`no_provider`, `not_found`, `origin_mismatch`, `disabled`, `rate_limited`, `unavailable`, `unauthorized`, `refused`, `origin_unavailable`, `cross_origin_frame`, `typing_failed`, `timed_out`).'
+      description: 'Queue an action on the session''s host. A `type_secret` action types the answer of a `secret` handoff of this session: the control plane consumes the value once and the operation, events and logs show `[secret]`, never the value. A `type` action with `sensitive: true` is reported the same way. `secrets_lookup`, `type_from_provider`, `type_code_from_provider` and `select_from_provider` are answered by the control plane from the session owner''s registered secrets provider (`PUT /v1/secrets-providers/{owner_id}/{provider}`): it reads the tab''s top-level origin itself, asks the provider with it, and types the value with `sensitive: true` (or, for `select_from_provider`, picks the matching `<select>` option itself); the operation reports `{ typed: true }` or `{ selected: true }`, never the value, never its length. A sensitive identity field (a date of birth, an ID number) is only typed into an `https` page. A failure is `state: failed` with `error: "<code>: <message>"` (`no_provider`, `not_found`, `origin_mismatch`, `disabled`, `rate_limited`, `unavailable`, `unauthorized`, `refused`, `origin_unavailable`, `cross_origin_frame`, `typing_failed`, `insecure_origin`, `no_option`, `timed_out`).'
       operationId: run_action
       parameters:
       - name: id
@@ -2728,6 +2728,53 @@ components:
             - type_code_from_provider
       - type: object
         description: |-
+          Choose the `<select>` option that matches one field of one item from
+          the owner's provider (E37.6): a country, or the day, month or year of a
+          date of birth split into three selects (`part`). The control plane
+          reads the page's origin, lists the select's options, asks the provider
+          for the value bound to that origin, picks the matching option itself
+          and wipes the value. Result: [`ProviderSelectedResult`]; never the
+          value, never which option. Failure `no_option` when nothing matches.
+        required:
+        - item_id
+        - field
+        - selector
+        - type
+        properties:
+          client_label:
+            type:
+            - string
+            - 'null'
+          field:
+            $ref: '#/components/schemas/SecretField'
+          item_id:
+            type: string
+          part:
+            oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/SelectPart'
+              description: 'For a date field in separate selects: `day`, `month` or `year`.'
+          provider:
+            type:
+            - string
+            - 'null'
+          run_id:
+            type:
+            - string
+            - 'null'
+          selector:
+            type: string
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - select_from_provider
+      - type: object
+        description: |-
           Press a key (e.g. `Enter`, `Escape`, `Tab`, `ArrowDown`) on the focused
           element or on `selector` when given.
         required:
@@ -3511,6 +3558,15 @@ components:
         registered_at:
           type: string
           format: date-time
+    SelectPart:
+      type: string
+      description: |-
+        Which part of a date a `select_from_provider` action chooses, when a date
+        of birth is split into three selects.
+      enum:
+      - day
+      - month
+      - year
     ServiceTokenList:
       type: object
       required:

@@ -19,12 +19,13 @@ use hexactra_control::runtime::webhooks::Webhooks;
 use hexactra_control::runtime::{self, ApiState, RuntimeStore};
 use hexactra_core::remote::{
     CreateSessionRequest, ItemKind, OperationResult, OperationState, OperationView,
-    RegisterHostRequest, RemoteAction, SecretField, SecretPurpose, SecretsProviderKind,
+    RegisterHostRequest, RemoteAction, SecretField, SecretPurpose, SecretsProviderKind, SelectPart,
     ViewportPoint, REDACTED_TEXT,
 };
 use hexactra_credential_resolver::test_provider::{
-    TestItem, TestProvider, FIXTURE_CODE, FIXTURE_ITEM_ID, FIXTURE_ORIGIN, FIXTURE_PASSWORD,
-    FIXTURE_SITE_ITEM_ID, FIXTURE_USERNAME,
+    TestItem, TestProvider, FIXTURE_CITY, FIXTURE_CODE, FIXTURE_COUNTRY, FIXTURE_DOB,
+    FIXTURE_FULL_NAME, FIXTURE_IDENTITY_ID, FIXTURE_ID_NUMBER, FIXTURE_ITEM_ID, FIXTURE_ORIGIN,
+    FIXTURE_PASSWORD, FIXTURE_SITE_ITEM_ID, FIXTURE_USERNAME,
 };
 use hexactra_credential_resolver::ProviderError;
 use serde_json::{json, Value};
@@ -68,6 +69,8 @@ struct Ext {
     received: Arc<Mutex<Vec<RemoteAction>>>,
     /// While set, `type` and `type_keys` wait before answering.
     hold: Arc<AtomicBool>,
+    /// What the options probe of `select_from_provider` answers.
+    select: Arc<Mutex<Value>>,
 }
 
 impl Ext {
@@ -140,6 +143,9 @@ async fn start_with(webhooks: Webhooks) -> Fabric {
         )),
         received: Default::default(),
         hold: Default::default(),
+        select: Arc::new(Mutex::new(
+            json!({"found": true, "select": true, "options": []}),
+        )),
     };
     {
         let (host, ext) = (host.clone(), ext.clone());
@@ -164,6 +170,14 @@ async fn start_with(webhooks: Webhooks) -> Fabric {
                             {"id": 3, "window_id": 2, "url": "https://other.example.test/", "title": "other", "active": false},
                             {"id": TAB, "window_id": 1, "url": url, "title": "page", "active": true},
                         ]})
+                    }
+                    // The choose step of `select_from_provider`.
+                    RemoteAction::Evaluate { script, .. } if script.contains("selectedIndex=") => {
+                        json!({"value": {"ok": true}})
+                    }
+                    // The options probe of `select_from_provider`.
+                    RemoteAction::Evaluate { script, .. } if script.contains("e.options") => {
+                        json!({"value": ext.select.lock().unwrap().clone()})
                     }
                     RemoteAction::Evaluate { .. } => {
                         json!({"value": ext.frame.lock().unwrap().clone()})
@@ -925,6 +939,433 @@ async fn lookups_and_releases_leave_audit_events_without_a_value() {
     assert!(!text_of(&reg).contains("token-registered"));
 }
 
+// ------------------------------------------------------- identity (E37.6)
+
+fn lookup_identity() -> RemoteAction {
+    RemoteAction::SecretsLookup {
+        kind: ItemKind::Identity,
+        provider: None,
+        run_id: Some("run-1".into()),
+        client_label: Some("Console".into()),
+        tab_id: None,
+    }
+}
+
+fn form_from(field: SecretField, selector: &str) -> RemoteAction {
+    match type_from(FIXTURE_IDENTITY_ID, field, selector) {
+        RemoteAction::TypeFromProvider {
+            item_id,
+            field,
+            selector,
+            point,
+            clear,
+            submit,
+            provider,
+            run_id,
+            client_label,
+            tab_id,
+            ..
+        } => RemoteAction::TypeFromProvider {
+            item_id,
+            field,
+            selector,
+            point,
+            purpose: SecretPurpose::Form,
+            clear,
+            submit,
+            provider,
+            run_id,
+            client_label,
+            tab_id,
+        },
+        _ => unreachable!(),
+    }
+}
+
+fn select_from(field: SecretField, part: Option<SelectPart>, selector: &str) -> RemoteAction {
+    RemoteAction::SelectFromProvider {
+        item_id: FIXTURE_IDENTITY_ID.into(),
+        field,
+        selector: selector.into(),
+        part,
+        provider: None,
+        run_id: Some("run-1".into()),
+        client_label: Some("Console".into()),
+        tab_id: None,
+    }
+}
+
+fn options(list: &[(&str, &str)]) -> Value {
+    json!({"found": true, "select": true, "options": list.iter().map(|(v, t)| json!({"v": v, "t": t})).collect::<Vec<_>>()})
+}
+
+const IDENTITY_VALUES: [&str; 5] = [
+    FIXTURE_FULL_NAME,
+    FIXTURE_DOB,
+    FIXTURE_ID_NUMBER,
+    FIXTURE_COUNTRY,
+    FIXTURE_CITY,
+];
+
+#[tokio::test]
+async fn identity_lookup_returns_labels_and_flags_only() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    // On the item's allowed origin every field is usable here.
+    let op = f.act(s, lookup_identity()).await;
+    assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
+    let item = &op.result.as_ref().unwrap()["items"][0];
+    assert_eq!(item["id"], FIXTURE_IDENTITY_ID);
+    assert_eq!(item["name"], "Passport");
+    assert_eq!(item["match_kind"], "exact");
+    let dob = item["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["key"] == "date_of_birth")
+        .unwrap();
+    assert_eq!(
+        dob,
+        &json!({"key": "date_of_birth", "label": "Date of birth", "sensitive": true, "usable_here": true})
+    );
+    // Elsewhere the sensitive fields are listed and not usable.
+    f.ext.goto(&["https://other.example.test/form"]);
+    let op = f.act(s, lookup_identity()).await;
+    let fields = op.result.as_ref().unwrap()["items"][0]["fields"].clone();
+    let usable = |k: &str| {
+        fields
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|f| f["key"] == k)
+            .unwrap()["usable_here"]
+            .as_bool()
+            .unwrap()
+    };
+    assert!(usable("full_name") && usable("city") && usable("country"));
+    assert!(!usable("date_of_birth") && !usable("id_number"));
+    // No value, no length, anywhere a caller can read.
+    for what in [
+        text_of(&op),
+        text_of(&f.client.operation(op.id).await.unwrap()),
+    ] {
+        for v in IDENTITY_VALUES {
+            assert!(!what.contains(v), "{what}");
+        }
+    }
+    assert_eq!(f.ext.kinds(), vec!["tabs", "tabs"]);
+}
+
+#[tokio::test]
+async fn a_non_sensitive_field_types_on_any_site_a_sensitive_one_only_on_its_allowed_origin() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+
+    // Not sensitive: another site is fine.
+    f.ext.goto(&["https://other.example.test/form"]);
+    let op = f.act(s, form_from(SecretField::FullName, "#name")).await;
+    assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
+    assert_eq!(op.result, Some(json!({"typed": true})));
+    assert_eq!(
+        f.ext.typed(),
+        vec![RemoteAction::Type {
+            selector: "#name".into(),
+            text: FIXTURE_FULL_NAME.into(),
+            clear: true,
+            submit: false,
+            sensitive: true,
+            tab_id: Some(TAB),
+        }]
+    );
+    // Sensitive on that site: the provider refuses, and nothing more is typed.
+    let before = f.ext.typed().len();
+    failed_with(
+        &f.act(s, form_from(SecretField::IdNumber, "#id")).await,
+        "origin_mismatch",
+    );
+    assert_eq!(f.ext.typed().len(), before);
+    // A look-alike of the allowed origin is another origin.
+    f.ext.goto(&["https://login.example.test.evil.test/"]);
+    failed_with(
+        &f.act(s, form_from(SecretField::DateOfBirth, "#dob")).await,
+        "origin_mismatch",
+    );
+    // On the allowed origin it is typed.
+    f.ext.goto(&[&format!("{FIXTURE_ORIGIN}/form")]);
+    let op = f.act(s, form_from(SecretField::IdNumber, "#id")).await;
+    assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
+    assert!(f.ext.typed().iter().any(
+        |a| matches!(a, RemoteAction::Type { text, selector, .. } if text == FIXTURE_ID_NUMBER && selector == "#id")
+    ));
+    // Whatever the outcome, no operation shows a value.
+    for v in IDENTITY_VALUES {
+        assert!(!text_of(&op).contains(v));
+    }
+    // The audit trail says which field went where, never the value.
+    let releases = f.events("secrets.release");
+    assert_eq!(releases.len(), 4);
+    assert_eq!(releases[0]["purpose"], "form");
+    assert_eq!(releases[0]["field"], "full_name");
+    assert_eq!(releases[1]["outcome"], "origin_mismatch");
+    assert_eq!(releases[3]["field"], "id_number");
+    assert_eq!(releases[3]["outcome"], "typed");
+    for v in IDENTITY_VALUES {
+        assert!(!text_of(&releases).contains(v));
+    }
+}
+
+#[tokio::test]
+async fn a_sensitive_field_is_never_typed_into_an_http_page() {
+    let f = start().await;
+    // A provider whose item allows a loopback http origin: the provider would
+    // release it; the fabric still refuses to type it there.
+    let mut item = TestProvider::fixture_identity();
+    item.allowed_origins = vec!["http://127.0.0.1:8080".into()];
+    f.state.secrets.register_provider(
+        OWNER,
+        "test",
+        Arc::new(TestProvider::empty().with_identity(item)),
+        SecretsProviderKind::Test,
+        None,
+    );
+    let s = f.session(Some(OWNER)).await;
+    f.ext.goto(&["http://127.0.0.1:8080/form"]);
+    for field in [SecretField::IdNumber, SecretField::DateOfBirth] {
+        failed_with(&f.act(s, form_from(field, "#x")).await, "insecure_origin");
+    }
+    // The same page takes a non-sensitive field.
+    let op = f.act(s, form_from(SecretField::City, "#city")).await;
+    assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
+    assert_eq!(f.ext.typed().len(), 1);
+    // A select is refused the same way, and the provider was never asked
+    // for the sensitive value.
+    failed_with(
+        &f.act(
+            s,
+            select_from(SecretField::DateOfBirth, Some(SelectPart::Month), "#m"),
+        )
+        .await,
+        "insecure_origin",
+    );
+}
+
+#[tokio::test]
+async fn select_from_provider_picks_the_matching_option_and_returns_no_value() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    f.ext.goto(&[&format!("{FIXTURE_ORIGIN}/form")]);
+
+    // A country (not sensitive): matched by the option's text.
+    *f.ext.select.lock().unwrap() =
+        options(&[("", "Choose..."), ("us", "United States"), ("ca", "Canada")]);
+    let op = f
+        .act(s, select_from(SecretField::Country, None, "#country"))
+        .await;
+    assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
+    assert_eq!(op.result, Some(json!({"selected": true})));
+    let chosen: Vec<String> = f
+        .ext
+        .received
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|a| match a {
+            RemoteAction::Evaluate { script, .. } if script.contains("selectedIndex=") => {
+                Some(script.clone())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(chosen.len(), 1);
+    assert!(chosen[0].contains("selectedIndex=2"), "{}", chosen[0]);
+    assert!(chosen[0].contains("\"#country\""));
+
+    // A date of birth split in three selects (1990-03-27): day, month, year.
+    for (part, selector, list, want) in [
+        (
+            SelectPart::Day,
+            "#d",
+            options(&[("", "Day"), ("26", "26"), ("27", "27")]),
+            2,
+        ),
+        (
+            SelectPart::Month,
+            "#m",
+            options(&[
+                ("", "Month"),
+                ("1", "January"),
+                ("2", "February"),
+                ("3", "March"),
+            ]),
+            3,
+        ),
+        (
+            SelectPart::Year,
+            "#y",
+            options(&[("", "Year"), ("1989", "1989"), ("1990", "1990")]),
+            2,
+        ),
+    ] {
+        *f.ext.select.lock().unwrap() = list;
+        let op = f
+            .act(
+                s,
+                select_from(SecretField::DateOfBirth, Some(part), selector),
+            )
+            .await;
+        assert_eq!(
+            op.result,
+            Some(json!({"selected": true})),
+            "{part:?} {op:?}"
+        );
+        let script = f
+            .ext
+            .received
+            .lock()
+            .unwrap()
+            .iter()
+            .rev()
+            .find_map(|a| match a {
+                RemoteAction::Evaluate { script, .. } if script.contains("selectedIndex=") => {
+                    Some(script.clone())
+                }
+                _ => None,
+            })
+            .unwrap();
+        assert!(
+            script.contains(&format!("selectedIndex={want}")),
+            "{part:?} {script}"
+        );
+        for v in IDENTITY_VALUES {
+            assert!(!text_of(&op).contains(v));
+        }
+    }
+    // Nothing was typed: a select is chosen, not typed.
+    assert!(f.ext.typed().is_empty());
+    // The audit event says which field, never which option or the value.
+    let sel = f.events("secrets.release");
+    assert_eq!(sel.len(), 4);
+    assert_eq!(sel[0]["field"], "country");
+    assert_eq!(sel[0]["outcome"], "selected");
+    assert_eq!(sel[0]["purpose"], "form");
+    for v in IDENTITY_VALUES {
+        assert!(!text_of(&sel).contains(v));
+    }
+}
+
+#[tokio::test]
+async fn select_from_provider_fails_cleanly_when_nothing_matches() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    f.ext.goto(&[&format!("{FIXTURE_ORIGIN}/form")]);
+    // No option is the value.
+    *f.ext.select.lock().unwrap() = options(&[("us", "United States"), ("fr", "France")]);
+    let op = f
+        .act(s, select_from(SecretField::Country, None, "#c"))
+        .await;
+    failed_with(&op, "no_option");
+    assert!(!text_of(&op).contains(FIXTURE_COUNTRY));
+    // Not a select element.
+    *f.ext.select.lock().unwrap() = json!({"found": true, "select": false});
+    failed_with(
+        &f.act(s, select_from(SecretField::Country, None, "#c"))
+            .await,
+        "no_option",
+    );
+    // No such element.
+    *f.ext.select.lock().unwrap() = json!({"found": false});
+    failed_with(
+        &f.act(s, select_from(SecretField::Country, None, "#c"))
+            .await,
+        "typing_failed",
+    );
+    // A page that navigated while the value was fetched is not touched.
+    *f.ext.select.lock().unwrap() = options(&[("ca", "Canada")]);
+    f.ext.goto(&[
+        &format!("{FIXTURE_ORIGIN}/form"),
+        "https://evil.example.test/",
+    ]);
+    let before = f.ext.kinds().iter().filter(|k| **k == "evaluate").count();
+    let op = f
+        .act(s, select_from(SecretField::Country, None, "#c"))
+        .await;
+    failed_with(&op, "origin_mismatch");
+    // Only the options probe ran; no option was chosen.
+    let evals = f.ext.kinds().iter().filter(|k| **k == "evaluate").count();
+    assert_eq!(evals - before, 1);
+    // A provider refusal for the origin leaves the page alone too.
+    f.ext.goto(&["https://other.example.test/form"]);
+    let before = f.ext.kinds().iter().filter(|k| **k == "evaluate").count();
+    *f.ext.select.lock().unwrap() = options(&[("1990", "1990")]);
+    failed_with(
+        &f.act(
+            s,
+            select_from(SecretField::DateOfBirth, Some(SelectPart::Year), "#y"),
+        )
+        .await,
+        "origin_mismatch",
+    );
+    assert_eq!(
+        f.ext.kinds().iter().filter(|k| **k == "evaluate").count() - before,
+        1
+    );
+}
+
+#[tokio::test]
+async fn identity_values_reach_nothing_but_the_browser() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    f.ext.goto(&[&format!("{FIXTURE_ORIGIN}/form")]);
+    *f.ext.select.lock().unwrap() = options(&[("1990", "1990")]);
+    let mut ops = vec![f.act(s, lookup_identity()).await];
+    for (field, sel) in [
+        (SecretField::FullName, "#n"),
+        (SecretField::IdNumber, "#i"),
+        (SecretField::City, "#c"),
+    ] {
+        ops.push(f.act(s, form_from(field, sel)).await);
+    }
+    ops.push(
+        f.act(
+            s,
+            select_from(SecretField::DateOfBirth, Some(SelectPart::Year), "#y"),
+        )
+        .await,
+    );
+    assert!(
+        ops.iter().all(|o| o.state == OperationState::Succeeded),
+        "{ops:?}"
+    );
+    // Positive control: the browser did receive values.
+    assert!(text_of(&f.ext.typed()).contains(FIXTURE_ID_NUMBER));
+    let mut shown = vec![
+        text_of(&ops),
+        text_of(&f.events("secrets.release")),
+        text_of(&f.events("secrets.lookup")),
+    ];
+    let mut seen = std::collections::HashSet::new();
+    for e in f.store.log.recent() {
+        if let Some(id) = e.data.get("op_id").and_then(Value::as_str) {
+            if seen.insert(id.to_string()) {
+                shown.push(text_of(
+                    &f.client.operation(id.parse().unwrap()).await.unwrap(),
+                ));
+            }
+        }
+    }
+    // The typed `type` operations show `[secret]`; the select's scripts hold an index, not a value.
+    for what in &shown {
+        for v in IDENTITY_VALUES {
+            assert!(!what.contains(v), "{v} leaks in {what}");
+        }
+    }
+}
+
 // ------------------------------------------------------------ canary scan
 
 /// Values only the providers know. If any of them shows up anywhere but the
@@ -1546,5 +1987,124 @@ mod vault_provider {
         }
         // Vault was reached with the registered token and nothing leaked it.
         assert!(vault.requests().len() >= 5);
+    }
+
+    #[tokio::test]
+    async fn identity_details_are_looked_up_and_typed_through_vault_with_no_value_anywhere() {
+        use hexactra_credential_resolver::fake_vault::{
+            IDENTITY_ALLOWED_ORIGIN, IDENTITY_DOB, IDENTITY_FULL_NAME, IDENTITY_ID,
+            IDENTITY_ID_NUMBER,
+        };
+        let f = start().await;
+        let vault = FakeVault::start().await;
+        let token = vault.identity_token();
+        assert_eq!(f.register_vault(&vault, &token).await.status(), 200);
+        let s = f.session(Some(OWNER)).await;
+        f.ext.goto(&[&format!("{IDENTITY_ALLOWED_ORIGIN}/apply")]);
+
+        let look = f.act(s, lookup_identity()).await;
+        assert_eq!(look.state, OperationState::Succeeded, "{look:?}");
+        let item = &look.result.as_ref().unwrap()["items"][0];
+        assert_eq!(
+            (item["id"].as_str(), item["match_kind"].as_str()),
+            (Some(IDENTITY_ID), Some("exact"))
+        );
+        assert_eq!(item["fields"].as_array().unwrap().len(), 5);
+
+        let field = |item: &str, field, selector: &str| match form_from(field, selector) {
+            RemoteAction::TypeFromProvider {
+                field,
+                selector,
+                point,
+                clear,
+                submit,
+                provider,
+                run_id,
+                client_label,
+                tab_id,
+                ..
+            } => RemoteAction::TypeFromProvider {
+                item_id: item.into(),
+                field,
+                selector,
+                point,
+                purpose: SecretPurpose::Form,
+                clear,
+                submit,
+                provider,
+                run_id,
+                client_label,
+                tab_id,
+            },
+            _ => unreachable!(),
+        };
+        let name = f
+            .act(s, field(IDENTITY_ID, SecretField::FullName, "#name"))
+            .await;
+        let id = f
+            .act(s, field(IDENTITY_ID, SecretField::IdNumber, "#id"))
+            .await;
+        assert_eq!(name.result, Some(json!({"typed": true})), "{name:?}");
+        assert_eq!(id.result, Some(json!({"typed": true})), "{id:?}");
+        // Date of birth chosen from a year select.
+        *f.ext.select.lock().unwrap() = options(&[("1984", "1984"), ("1985", "1985")]);
+        let dob = f
+            .act(
+                s,
+                RemoteAction::SelectFromProvider {
+                    item_id: IDENTITY_ID.into(),
+                    field: SecretField::DateOfBirth,
+                    selector: "#y".into(),
+                    part: Some(SelectPart::Year),
+                    provider: None,
+                    run_id: None,
+                    client_label: None,
+                    tab_id: None,
+                },
+            )
+            .await;
+        assert_eq!(dob.result, Some(json!({"selected": true})), "{dob:?}");
+
+        // On another site the allowed list refuses the sensitive field, at Vault.
+        f.ext.goto(&["https://other.example.test/apply"]);
+        failed_with(
+            &f.act(s, field(IDENTITY_ID, SecretField::IdNumber, "#id"))
+                .await,
+            "origin_mismatch",
+        );
+        let ok = f
+            .act(s, field(IDENTITY_ID, SecretField::FullName, "#name"))
+            .await;
+        assert_eq!(ok.state, OperationState::Succeeded, "{ok:?}");
+        // A token without the identity scope is refused with its own reason.
+        let narrow = vault.default_token();
+        assert_eq!(f.register_vault(&vault, &narrow).await.status(), 200);
+        let refused = f.act(s, lookup_identity()).await;
+        failed_with(&refused, "refused");
+        assert!(refused
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("insufficient_scope"));
+
+        // The browser got the values; nothing a caller or a log reads did.
+        assert!(text_of(&f.ext.typed()).contains(IDENTITY_ID_NUMBER));
+        let events = text_of(&f.store.log.recent());
+        for canary in [
+            IDENTITY_FULL_NAME,
+            IDENTITY_DOB,
+            IDENTITY_ID_NUMBER,
+            token.as_str(),
+        ] {
+            assert!(!events.contains(canary), "events leak {canary}");
+            for op in [&look, &name, &id, &dob, &ok, &refused] {
+                assert!(!text_of(op).contains(canary), "{canary} leaks in {op:?}");
+            }
+        }
+        // Vault saw the field, the origin and the purpose `form`.
+        let fills = vault.requests_to("/fill");
+        assert!(fills
+            .iter()
+            .all(|r| r.path.contains("/identity/") && r.params["purpose"] == "form"));
     }
 }
