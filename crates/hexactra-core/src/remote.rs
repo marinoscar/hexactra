@@ -73,6 +73,275 @@ pub enum MouseOp {
 /// typed by `type_secret` or a `type` action with `sensitive: true`.
 pub const REDACTED_TEXT: &str = "[secret]";
 
+/// What a secrets provider stores (E37, #590). Only `login` is implemented
+/// by the first providers; the enum exists so the contract does not change
+/// when identity details and cards arrive.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ItemKind {
+    #[default]
+    Login,
+    Identity,
+    Card,
+}
+
+/// One field of one stored item. A provider releases a single field per
+/// call; there is no call that returns two.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SecretField {
+    // Logins.
+    Username,
+    Password,
+    // Identity details.
+    FullName,
+    DateOfBirth,
+    IdType,
+    IdNumber,
+    IdIssuingCountry,
+    AddressLine1,
+    AddressLine2,
+    City,
+    Region,
+    PostalCode,
+    Country,
+    Phone,
+    Email,
+    // Cards.
+    CardNumber,
+    ExpMonth,
+    ExpYear,
+    HolderName,
+    SecurityCode,
+}
+
+impl SecretField {
+    /// The wire name, for audit events and logs (never a value).
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SecretField::Username => "username",
+            SecretField::Password => "password",
+            SecretField::FullName => "full_name",
+            SecretField::DateOfBirth => "date_of_birth",
+            SecretField::IdType => "id_type",
+            SecretField::IdNumber => "id_number",
+            SecretField::IdIssuingCountry => "id_issuing_country",
+            SecretField::AddressLine1 => "address_line1",
+            SecretField::AddressLine2 => "address_line2",
+            SecretField::City => "city",
+            SecretField::Region => "region",
+            SecretField::PostalCode => "postal_code",
+            SecretField::Country => "country",
+            SecretField::Phone => "phone",
+            SecretField::Email => "email",
+            SecretField::CardNumber => "card_number",
+            SecretField::ExpMonth => "exp_month",
+            SecretField::ExpYear => "exp_year",
+            SecretField::HolderName => "holder_name",
+            SecretField::SecurityCode => "security_code",
+        }
+    }
+}
+
+/// Why a value is released; recorded for the owner.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SecretPurpose {
+    /// Signing in.
+    #[default]
+    Login,
+    /// Creating an account.
+    Signup,
+    /// Changing a password.
+    PasswordChange,
+    /// Entering a one-time code.
+    Mfa,
+    /// Filling a form with identity details.
+    Form,
+    /// Paying with a card.
+    Purchase,
+}
+
+impl SecretPurpose {
+    /// The wire name, for audit events and logs.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SecretPurpose::Login => "login",
+            SecretPurpose::Signup => "signup",
+            SecretPurpose::PasswordChange => "password_change",
+            SecretPurpose::Mfa => "mfa",
+            SecretPurpose::Form => "form",
+            SecretPurpose::Purchase => "purchase",
+        }
+    }
+}
+
+/// How an item's origins relate to the page it was looked up for.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MatchKind {
+    /// One of the item's origins equals the page's origin. The only kind a
+    /// value is ever released for.
+    Exact,
+    /// Same registrable domain, different origin. For information only:
+    /// never fillable.
+    Site,
+}
+
+/// What a provider says about an item the owner opened to the agent. Never
+/// a value (a login's username is not secret).
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ItemSummary {
+    /// The provider's id for the item.
+    pub id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
+    /// The origins the item is for (`scheme://host[:port]`).
+    #[serde(default)]
+    pub origins: Vec<String>,
+    pub match_kind: MatchKind,
+    /// A one-time code can be produced for the item.
+    #[serde(default)]
+    pub has_code: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+/// A point in a page's viewport, in CSS pixels.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ViewportPoint {
+    pub x: i64,
+    pub y: i64,
+}
+
+/// `result` of a `secrets_lookup` action: the page's origin as the browser
+/// reported it, and what the owner's provider offers for it. Never a value.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SecretsLookupResult {
+    pub origin: String,
+    /// The provider that answered.
+    pub provider: String,
+    pub items: Vec<ItemSummary>,
+}
+
+/// `result` of `type_from_provider` and `type_code_from_provider`: that the
+/// value was typed, and for a code when it expires. Never the value, never
+/// its length.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProviderTypedResult {
+    pub typed: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+/// The failure codes of the provider actions. An operation that fails with
+/// one reports `error: "<code>: <message>"`.
+pub mod provider_error_codes {
+    /// The session has no owner, or the owner has no such provider registered.
+    pub const NO_PROVIDER: &str = "no_provider";
+    /// The owner has several providers and the action named none.
+    pub const PROVIDER_REQUIRED: &str = "provider_required";
+    /// The item is missing, not the owner's, or not opened to the agent
+    /// (one code: a caller cannot tell which).
+    pub const NOT_FOUND: &str = "not_found";
+    /// The page's origin is not exactly one of the item's.
+    pub const ORIGIN_MISMATCH: &str = "origin_mismatch";
+    /// The provider's kill switch is off.
+    pub const DISABLED: &str = "disabled";
+    /// Too many calls; the message says when to try again.
+    pub const RATE_LIMITED: &str = "rate_limited";
+    /// The provider could not be reached or answered badly.
+    pub const UNAVAILABLE: &str = "unavailable";
+    /// The provider's token was refused: it must be connected again.
+    pub const UNAUTHORIZED: &str = "unauthorized";
+    /// The provider refused for another reason (its own code follows).
+    pub const REFUSED: &str = "refused";
+    /// The tab's URL could not be read, or is not a page a value may be
+    /// typed into (not `https`, or `http` on loopback).
+    pub const ORIGIN_UNAVAILABLE: &str = "origin_unavailable";
+    /// The target is in a frame of another origin.
+    pub const CROSS_ORIGIN_FRAME: &str = "cross_origin_frame";
+    /// The value was fetched but the browser could not type it.
+    pub const TYPING_FAILED: &str = "typing_failed";
+    /// The provider cannot produce what was asked (for example a code for
+    /// an item without one).
+    pub const UNSUPPORTED: &str = "unsupported";
+}
+
+/// The provider implementations a registration can name.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SecretsProviderKind {
+    /// A Vault, reached over HTTPS with an access token the console mints.
+    Vault,
+    /// A provider that lives in the console (no address of its own): the
+    /// fabric calls back to `base_url` on an internal route.
+    Console,
+    /// A fixed fixture, compiled only for tests and the `test-provider`
+    /// feature.
+    Test,
+}
+
+/// `PUT /v1/secrets-providers/{owner_id}/{provider}`: which provider an
+/// owner's sessions use and what the fabric needs to call it. The token is
+/// Secret Material: held in memory only, never written to the state
+/// database, never returned, never logged.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+pub struct RegisterSecretsProviderRequest {
+    pub kind: SecretsProviderKind,
+    /// Where the provider is (`https`, or `http` on loopback).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    /// The access token the provider takes. Write only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access_token: Option<String>,
+    /// When the token stops working; the registration is dropped then.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<DateTime<Utc>>,
+    /// Provider-specific, non-secret settings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<Value>,
+}
+
+impl std::fmt::Debug for RegisterSecretsProviderRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RegisterSecretsProviderRequest")
+            .field("kind", &self.kind)
+            .field("base_url", &self.base_url)
+            .field(
+                "access_token",
+                &self.access_token.as_ref().map(|_| "[secret]"),
+            )
+            .field("expires_at", &self.expires_at)
+            .finish_non_exhaustive()
+    }
+}
+
+/// A registered provider as reported to clients: never its token.
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SecretsProviderView {
+    pub owner_id: String,
+    pub provider: String,
+    pub kind: SecretsProviderKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    pub registered_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
 /// A single bounded browser operation.
 ///
 /// `tab_id` is optional everywhere: when absent the extension uses the active
@@ -123,6 +392,80 @@ pub enum RemoteAction {
         /// Press Enter / submit the enclosing form after typing.
         #[serde(default)]
         submit: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Ask the session owner's secrets provider which items it offers for the
+    /// page's origin (E37, #590). The control plane reads the tab's top-level
+    /// URL itself, so the model cannot name an origin. Result:
+    /// [`SecretsLookupResult`]; never a value. Answered by the control plane,
+    /// not the host.
+    SecretsLookup {
+        #[serde(default)]
+        kind: ItemKind,
+        /// The provider to ask; omit when the owner has only one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        provider: Option<String>,
+        /// The run the call belongs to, for the audit trail.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        run_id: Option<String>,
+        /// What the owner sees as the app (audit trail).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        client_label: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Fetch one field of one item from the owner's provider and type it
+    /// into the target with trusted input, then wipe it (E37, #590). The
+    /// control plane re-reads the tab's origin at that moment and sends it
+    /// to the provider; the value is never returned, logged or stored. The
+    /// target is a `selector` in the top-level document, or a `point` that
+    /// must not land in a frame of another origin. Result:
+    /// [`ProviderTypedResult`].
+    TypeFromProvider {
+        item_id: String,
+        field: SecretField,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        selector: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        point: Option<ViewportPoint>,
+        #[serde(default)]
+        purpose: SecretPurpose,
+        /// Clear the existing value first.
+        #[serde(default)]
+        clear: bool,
+        /// Press Enter after typing.
+        #[serde(default)]
+        submit: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        provider: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        run_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        client_label: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tab_id: Option<i64>,
+    },
+    /// Like `type_from_provider`, with a one-time code fetched immediately
+    /// before typing. Result: [`ProviderTypedResult`] with `expires_at`.
+    TypeCodeFromProvider {
+        item_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        selector: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        point: Option<ViewportPoint>,
+        /// Clear the existing value first.
+        #[serde(default)]
+        clear: bool,
+        /// Press Enter after typing.
+        #[serde(default)]
+        submit: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        provider: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        run_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        client_label: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tab_id: Option<i64>,
     },
@@ -227,6 +570,10 @@ pub enum RemoteAction {
     /// Trusted typing at the focused element, as a keyboard would.
     TypeKeys {
         text: String,
+        /// The text is sensitive (typed by a provider action): the control
+        /// plane sends it to the host but stores and reports it as `[secret]`.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        sensitive: bool,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tab_id: Option<i64>,
     },
@@ -432,6 +779,53 @@ fn check_text(text: &str) -> Result<(), ActionValidationError> {
     Ok(())
 }
 
+/// Longest provider item id.
+pub const MAX_ITEM_ID_LEN: usize = 256;
+/// Longest run id, provider id or client label on a provider action.
+pub const MAX_PROVIDER_META_LEN: usize = 128;
+
+fn check_item_id(id: &str) -> Result<(), ActionValidationError> {
+    if id.trim().is_empty() || id.len() > MAX_ITEM_ID_LEN || id.chars().any(char::is_control) {
+        return Err(ActionValidationError(format!(
+            "item_id must be 1-{MAX_ITEM_ID_LEN} characters without control characters"
+        )));
+    }
+    Ok(())
+}
+
+/// A provider id: 1-64 characters, lowercase letters, digits, `-` and `_`.
+pub fn valid_provider_id(id: &str) -> bool {
+    let b = id.as_bytes();
+    !b.is_empty()
+        && b.len() <= 64
+        && b.iter()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-' || *c == b'_')
+}
+
+fn check_provider_meta(
+    provider: &Option<String>,
+    run_id: &Option<String>,
+    client_label: &Option<String>,
+) -> Result<(), ActionValidationError> {
+    if let Some(p) = provider {
+        if !valid_provider_id(p) {
+            return Err(ActionValidationError(
+                "provider must be 1-64 characters: lowercase letters, digits, '-' and '_'".into(),
+            ));
+        }
+    }
+    for (name, v) in [("run_id", run_id), ("client_label", client_label)] {
+        if let Some(v) = v {
+            if v.len() > MAX_PROVIDER_META_LEN || v.chars().any(char::is_control) {
+                return Err(ActionValidationError(format!(
+                    "{name} must be at most {MAX_PROVIDER_META_LEN} characters without control characters"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn check_clicks(click_count: Option<u32>) -> Result<(), ActionValidationError> {
     match click_count {
         Some(n) if n == 0 || n > 3 => Err(ActionValidationError(
@@ -450,6 +844,9 @@ impl RemoteAction {
             RemoteAction::Click { .. } => "click",
             RemoteAction::Type { .. } => "type",
             RemoteAction::TypeSecret { .. } => "type_secret",
+            RemoteAction::SecretsLookup { .. } => "secrets_lookup",
+            RemoteAction::TypeFromProvider { .. } => "type_from_provider",
+            RemoteAction::TypeCodeFromProvider { .. } => "type_code_from_provider",
             RemoteAction::Press { .. } => "press",
             RemoteAction::Scroll { .. } => "scroll",
             RemoteAction::Screenshot { .. } => "screenshot",
@@ -495,6 +892,17 @@ impl RemoteAction {
         )
     }
 
+    /// Whether the control plane answers this action itself, from the
+    /// session owner's secrets provider, instead of handing it to a host.
+    pub fn is_provider_action(&self) -> bool {
+        matches!(
+            self,
+            RemoteAction::SecretsLookup { .. }
+                | RemoteAction::TypeFromProvider { .. }
+                | RemoteAction::TypeCodeFromProvider { .. }
+        )
+    }
+
     /// Whether a successful result carries an image (`mime` + base64 `data`)
     /// that the control plane moves into the artifact store.
     pub fn returns_image(&self) -> bool {
@@ -515,6 +923,43 @@ impl RemoteAction {
             RemoteAction::Type { selector, text, .. } => {
                 check_selector(selector)?;
                 check_text(text)
+            }
+            RemoteAction::SecretsLookup {
+                provider,
+                run_id,
+                client_label,
+                ..
+            } => check_provider_meta(provider, run_id, client_label),
+            RemoteAction::TypeFromProvider {
+                item_id,
+                selector,
+                point,
+                provider,
+                run_id,
+                client_label,
+                ..
+            }
+            | RemoteAction::TypeCodeFromProvider {
+                item_id,
+                selector,
+                point,
+                provider,
+                run_id,
+                client_label,
+                ..
+            } => {
+                check_item_id(item_id)?;
+                check_provider_meta(provider, run_id, client_label)?;
+                match (selector, point) {
+                    (Some(_), Some(_)) => Err(ActionValidationError(
+                        "give a selector or a point, not both".into(),
+                    )),
+                    (None, None) => Err(ActionValidationError(
+                        "give a selector or a point to type into".into(),
+                    )),
+                    (Some(s), None) => check_selector(s),
+                    (None, Some(p)) => check_point(p.x, p.y),
+                }
             }
             RemoteAction::Evaluate { script, .. } => {
                 if script.trim().is_empty() {
@@ -782,6 +1227,10 @@ pub struct SessionView {
     /// The session's allowed sites, normalized (#508). Empty: any site.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub allowed_domains: Vec<String>,
+    /// Whose session this is (from the console: the owner's user id). The
+    /// secrets provider actions use the owner's registered providers (#590).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_id: Option<String>,
 }
 
 /// Who opens a remote desktop (from the console: the signed-in person).
@@ -915,6 +1364,10 @@ pub struct CreateSessionRequest {
     /// page starts itself, and reports it as `navigation_blocked`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub allowed_domains: Vec<String>,
+    /// Whose session this is (the console's user id). Needed for the secrets
+    /// provider actions: they use the owner's registered providers (#590).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_id: Option<String>,
 }
 
 /// `POST /v1/sessions/{id}/actions`
@@ -2361,6 +2814,205 @@ mod tests {
         let t: RemoteAction =
             serde_json::from_value(json!({"type": "type", "selector": "#p", "text": "x"})).unwrap();
         assert!(serde_json::to_value(&t).unwrap().get("sensitive").is_none());
+    }
+
+    #[test]
+    fn provider_actions_round_trip() {
+        let cases = [
+            (
+                json!({"type": "secrets_lookup"}),
+                RemoteAction::SecretsLookup {
+                    kind: ItemKind::Login,
+                    provider: None,
+                    run_id: None,
+                    client_label: None,
+                    tab_id: None,
+                },
+                "secrets_lookup",
+            ),
+            (
+                json!({"type": "secrets_lookup", "kind": "card", "provider": "vault", "run_id": "r1", "client_label": "Console", "tab_id": 4}),
+                RemoteAction::SecretsLookup {
+                    kind: ItemKind::Card,
+                    provider: Some("vault".into()),
+                    run_id: Some("r1".into()),
+                    client_label: Some("Console".into()),
+                    tab_id: Some(4),
+                },
+                "secrets_lookup",
+            ),
+            (
+                json!({"type": "type_from_provider", "item_id": "i1", "field": "password", "selector": "#pw", "purpose": "password_change", "clear": true, "submit": true}),
+                RemoteAction::TypeFromProvider {
+                    item_id: "i1".into(),
+                    field: SecretField::Password,
+                    selector: Some("#pw".into()),
+                    point: None,
+                    purpose: SecretPurpose::PasswordChange,
+                    clear: true,
+                    submit: true,
+                    provider: None,
+                    run_id: None,
+                    client_label: None,
+                    tab_id: None,
+                },
+                "type_from_provider",
+            ),
+            (
+                json!({"type": "type_from_provider", "item_id": "i1", "field": "username", "point": {"x": 3, "y": 4}}),
+                RemoteAction::TypeFromProvider {
+                    item_id: "i1".into(),
+                    field: SecretField::Username,
+                    selector: None,
+                    point: Some(ViewportPoint { x: 3, y: 4 }),
+                    purpose: SecretPurpose::Login,
+                    clear: false,
+                    submit: false,
+                    provider: None,
+                    run_id: None,
+                    client_label: None,
+                    tab_id: None,
+                },
+                "type_from_provider",
+            ),
+            (
+                json!({"type": "type_code_from_provider", "item_id": "i1", "selector": "#otp", "submit": true}),
+                RemoteAction::TypeCodeFromProvider {
+                    item_id: "i1".into(),
+                    selector: Some("#otp".into()),
+                    point: None,
+                    clear: false,
+                    submit: true,
+                    provider: None,
+                    run_id: None,
+                    client_label: None,
+                    tab_id: None,
+                },
+                "type_code_from_provider",
+            ),
+        ];
+        for (wire, action, kind) in cases {
+            let parsed: RemoteAction = serde_json::from_value(wire.clone()).unwrap();
+            assert_eq!(parsed, action);
+            assert_eq!(parsed.kind(), kind);
+            assert!(parsed.is_provider_action());
+            assert!(parsed.validate().is_ok(), "{wire}");
+            // Serialising and reading it back is lossless, and defaults stay off the wire.
+            let back: RemoteAction =
+                serde_json::from_value(serde_json::to_value(&parsed).unwrap()).unwrap();
+            assert_eq!(back, parsed);
+        }
+        assert!(!RemoteAction::Tabs.is_provider_action());
+    }
+
+    #[test]
+    fn provider_actions_are_validated() {
+        let bad = [
+            // No target, and two targets.
+            json!({"type": "type_from_provider", "item_id": "i", "field": "password"}),
+            json!({"type": "type_from_provider", "item_id": "i", "field": "password", "selector": "#a", "point": {"x": 1, "y": 1}}),
+            json!({"type": "type_code_from_provider", "item_id": "i"}),
+            // Bad item id, provider id and run id.
+            json!({"type": "type_from_provider", "item_id": " ", "field": "password", "selector": "#a"}),
+            json!({"type": "type_from_provider", "item_id": "i", "field": "password", "selector": "#a", "provider": "Vault!"}),
+            json!({"type": "secrets_lookup", "run_id": "a\nb"}),
+            // A point outside the viewport bounds.
+            json!({"type": "type_from_provider", "item_id": "i", "field": "password", "point": {"x": -1, "y": 1}}),
+        ];
+        for wire in bad {
+            let a: RemoteAction = serde_json::from_value(wire.clone()).unwrap();
+            assert!(a.validate().is_err(), "{wire}");
+        }
+        // An unknown field or purpose is not an action at all.
+        assert!(serde_json::from_value::<RemoteAction>(
+            json!({"type": "type_from_provider", "item_id": "i", "field": "nope", "selector": "#a"})
+        )
+        .is_err());
+        assert!(serde_json::from_value::<RemoteAction>(
+            json!({"type": "type_from_provider", "item_id": "i", "field": "password", "selector": "#a", "purpose": "nope"})
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn provider_results_and_registrations_round_trip() {
+        let item = ItemSummary {
+            id: "i1".into(),
+            name: "Shop login".into(),
+            username: Some("person-a@example.test".into()),
+            origins: vec!["https://app.example.test".into()],
+            match_kind: MatchKind::Exact,
+            has_code: true,
+            updated_at: Some(Utc::now()),
+        };
+        let r = SecretsLookupResult {
+            origin: "https://app.example.test".into(),
+            provider: "test".into(),
+            items: vec![item],
+        };
+        let v = serde_json::to_value(&r).unwrap();
+        assert_eq!(v["items"][0]["match_kind"], "exact");
+        assert_eq!(serde_json::from_value::<SecretsLookupResult>(v).unwrap(), r);
+        let t = ProviderTypedResult {
+            typed: true,
+            expires_at: None,
+        };
+        assert_eq!(serde_json::to_value(&t).unwrap(), json!({"typed": true}));
+        assert_eq!(
+            serde_json::from_value::<ProviderTypedResult>(json!({"typed": true})).unwrap(),
+            t
+        );
+
+        let reg: RegisterSecretsProviderRequest = serde_json::from_value(json!({
+            "kind": "vault", "base_url": "https://vault.example.test", "access_token": "tok-canary", "expires_at": "2030-01-01T00:00:00Z"
+        }))
+        .unwrap();
+        assert_eq!(reg.kind, SecretsProviderKind::Vault);
+        // A registration never prints its token.
+        assert!(!format!("{reg:?}").contains("tok-canary"));
+        let again: RegisterSecretsProviderRequest =
+            serde_json::from_value(serde_json::to_value(&reg).unwrap()).unwrap();
+        assert_eq!(again, reg);
+        let view = SecretsProviderView {
+            owner_id: "user-a".into(),
+            provider: "vault".into(),
+            kind: SecretsProviderKind::Vault,
+            base_url: Some("https://vault.example.test".into()),
+            registered_at: Utc::now(),
+            expires_at: None,
+        };
+        assert!(!serde_json::to_string(&view).unwrap().contains("token"));
+        assert_eq!(
+            serde_json::from_value::<SecretsProviderView>(serde_json::to_value(&view).unwrap())
+                .unwrap(),
+            view
+        );
+    }
+
+    #[test]
+    fn session_owner_and_sensitive_keys_are_optional_on_the_wire() {
+        let req: CreateSessionRequest = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(req.owner_id, None);
+        assert!(serde_json::to_value(&req)
+            .unwrap()
+            .get("owner_id")
+            .is_none());
+        let req: CreateSessionRequest =
+            serde_json::from_value(json!({"owner_id": "user-a"})).unwrap();
+        assert_eq!(req.owner_id.as_deref(), Some("user-a"));
+        let k: RemoteAction =
+            serde_json::from_value(json!({"type": "type_keys", "text": "x"})).unwrap();
+        assert!(serde_json::to_value(&k).unwrap().get("sensitive").is_none());
+        let k: RemoteAction =
+            serde_json::from_value(json!({"type": "type_keys", "text": "x", "sensitive": true}))
+                .unwrap();
+        assert!(matches!(
+            k,
+            RemoteAction::TypeKeys {
+                sensitive: true,
+                ..
+            }
+        ));
     }
 
     #[test]

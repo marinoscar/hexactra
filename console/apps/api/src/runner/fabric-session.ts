@@ -1,4 +1,15 @@
 import { FabricClient, FabricError } from '../fabric/fabric.client';
+import {
+  SECRETS_ERROR_CODES,
+  SecretsProviderError,
+  type ItemKind,
+  type ItemSummary,
+  type SecretField,
+  type SecretPurpose,
+  type SecretsErrorCode,
+  type SecretsProviderRegistration,
+  type SecretsProviderView,
+} from '../secrets/secrets-provider.port';
 
 /** How long a run waits for a person who took over its browser (#342). */
 export const TAKEOVER_WAIT_MS = 30 * 60_000;
@@ -149,10 +160,18 @@ export class FabricSession {
    * Opens a fabric session. `allowedDomains` (#465): the sites the session
    * may visit, sent as `allowed_domains` so a fabric that enforces them does
    * so on its side too; the console checks every navigation itself either way.
+   * `ownerId` (#590): whose session this is. The fabric's secrets provider
+   * actions use the providers registered for that owner.
    */
-  async create(opts: { profile: string; hostId: string | null; label: string; allowedDomains?: readonly string[] }): Promise<string> {
+  async create(opts: { profile: string; hostId: string | null; label: string; allowedDomains?: readonly string[]; ownerId?: string }): Promise<string> {
     const s = await this.fabric.request<{ id: string }>('POST', '/v1/sessions', {
-      body: { profile: opts.profile, label: opts.label, ...(opts.hostId ? { host_id: opts.hostId } : {}), ...(opts.allowedDomains?.length ? { allowed_domains: [...opts.allowedDomains] } : {}) },
+      body: {
+        profile: opts.profile,
+        label: opts.label,
+        ...(opts.hostId ? { host_id: opts.hostId } : {}),
+        ...(opts.allowedDomains?.length ? { allowed_domains: [...opts.allowedDomains] } : {}),
+        ...(opts.ownerId ? { owner_id: opts.ownerId } : {}),
+      },
     });
     return s.id;
   }
@@ -240,4 +259,206 @@ export class FabricSession {
       timeoutMs,
     );
   }
+
+  // ------------------------------------------------- secrets providers (#590)
+
+  /**
+   * Ask the owner's secrets provider which items it offers for the page the
+   * session is on. The fabric reads the tab's top-level origin itself; the
+   * model never names one. Never a value. Throws {@link SecretsProviderError}.
+   */
+  async secretsLookup(sessionId: string, kind: ItemKind = 'login', opts: ProviderCallOptions = {}): Promise<SecretsLookupResult> {
+    const op = await this.act(sessionId, { type: 'secrets_lookup', kind, ...providerMeta(opts) }, opts.timeoutMs, { waitForTakeover: opts.waitForTakeover });
+    const r = secretsResult(op) as { origin: string; provider: string; items?: WireItem[] };
+    return { origin: r.origin, provider: r.provider, items: (r.items ?? []).map(itemOf) };
+  }
+
+  /**
+   * Fetch one field of one item and type it into the target (a `selector` in
+   * the top-level document, or a `point` outside any foreign frame). The
+   * fabric re-reads the tab's origin at that moment, asks the provider with it,
+   * types with trusted input and wipes the value: the answer is only
+   * `{ typed: true }`, never the value, never its length.
+   */
+  async typeFromProvider(sessionId: string, opts: TypeFromProviderOptions): Promise<{ typed: true }> {
+    const op = await this.act(
+      sessionId,
+      {
+        type: 'type_from_provider',
+        item_id: opts.itemId,
+        field: opts.field,
+        ...target(opts),
+        purpose: opts.purpose ?? 'login',
+        clear: opts.clear ?? true,
+        submit: opts.submit ?? false,
+        ...providerMeta(opts),
+      },
+      opts.timeoutMs,
+      { waitForTakeover: opts.waitForTakeover },
+    );
+    secretsResult(op);
+    return { typed: true };
+  }
+
+  /** Like {@link typeFromProvider} with a one-time code fetched immediately before typing. */
+  async typeCodeFromProvider(sessionId: string, opts: TypeCodeFromProviderOptions): Promise<{ typed: true; expiresAt: Date | null }> {
+    const op = await this.act(
+      sessionId,
+      { type: 'type_code_from_provider', item_id: opts.itemId, ...target(opts), clear: opts.clear ?? false, submit: opts.submit ?? false, ...providerMeta(opts) },
+      opts.timeoutMs,
+      { waitForTakeover: opts.waitForTakeover },
+    );
+    const r = secretsResult(op) as { expires_at?: string };
+    return { typed: true, expiresAt: dateOf(r.expires_at) };
+  }
+
+  /**
+   * Tell the fabric which provider an owner's sessions use and how to call it
+   * (`PUT /v1/secrets-providers/{owner}/{provider}`). The token is held in the
+   * fabric's memory only and refreshed by calling this again; it is never
+   * returned. A `FabricError` with code `provider_kind_unsupported` (501) means
+   * this fabric does not implement the kind yet.
+   */
+  async registerSecretsProvider(ownerId: string, config: SecretsProviderRegistration): Promise<SecretsProviderView> {
+    const v = await this.fabric.request<WireProviderView>('PUT', `/v1/secrets-providers/${encodeURIComponent(ownerId)}/${encodeURIComponent(config.provider)}`, {
+      body: {
+        kind: config.kind,
+        ...(config.baseUrl ? { base_url: config.baseUrl } : {}),
+        ...(config.accessToken ? { access_token: config.accessToken } : {}),
+        ...(config.expiresAt ? { expires_at: config.expiresAt.toISOString() } : {}),
+        ...(config.settings ? { settings: config.settings } : {}),
+      },
+    });
+    return providerViewOf(v);
+  }
+
+  /** Drop an owner's provider registration, and with it the fabric's copy of its token. Idempotent. */
+  async unregisterSecretsProvider(ownerId: string, provider: string): Promise<void> {
+    await this.fabric.request('DELETE', `/v1/secrets-providers/${encodeURIComponent(ownerId)}/${encodeURIComponent(provider)}`);
+  }
+
+  /** The owner's live registrations (never a token). */
+  async listSecretsProviders(ownerId: string): Promise<SecretsProviderView[]> {
+    const r = await this.fabric.request<{ providers: WireProviderView[] }>('GET', `/v1/secrets-providers/${encodeURIComponent(ownerId)}`);
+    return r.providers.map(providerViewOf);
+  }
+}
+
+/** What every provider call takes besides its subject. */
+export interface ProviderCallOptions {
+  /** Which provider to use when the owner has several. */
+  provider?: string;
+  runId?: string;
+  /** What the owner sees as the app in the audit trail. */
+  clientLabel?: string;
+  /** Pin the tab; otherwise the active tab of the focused window. */
+  tabId?: number;
+  timeoutMs?: number;
+  /** See {@link FabricSession.act}: wait out a person's takeover (default) or throw at once. */
+  waitForTakeover?: boolean;
+}
+
+/** Where a typed value goes: exactly one of `selector` and `point`. */
+export type ProviderTarget = { selector: string; point?: undefined } | { point: { x: number; y: number }; selector?: undefined };
+
+export type TypeFromProviderOptions = ProviderCallOptions &
+  ProviderTarget & {
+    itemId: string;
+    field: SecretField;
+    purpose?: SecretPurpose;
+    /** Clear the existing value first (default true). */
+    clear?: boolean;
+    /** Press Enter after typing (default false). */
+    submit?: boolean;
+  };
+
+export type TypeCodeFromProviderOptions = ProviderCallOptions &
+  ProviderTarget & {
+    itemId: string;
+    clear?: boolean;
+    submit?: boolean;
+  };
+
+export interface SecretsLookupResult {
+  /** The page's top-level origin as the browser reported it. */
+  origin: string;
+  /** The provider that answered. */
+  provider: string;
+  items: ItemSummary[];
+}
+
+interface WireItem {
+  id: string;
+  name: string;
+  username?: string;
+  origins?: string[];
+  match_kind: 'exact' | 'site';
+  has_code?: boolean;
+  updated_at?: string | null;
+}
+
+interface WireProviderView {
+  owner_id: string;
+  provider: string;
+  kind: 'vault' | 'console' | 'test';
+  base_url?: string;
+  registered_at: string;
+  expires_at?: string | null;
+}
+
+function dateOf(v: string | null | undefined): Date | null {
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function itemOf(i: WireItem): ItemSummary {
+  return {
+    id: i.id,
+    name: i.name,
+    ...(i.username !== undefined ? { username: i.username } : {}),
+    origins: i.origins ?? [],
+    matchKind: i.match_kind,
+    hasCode: i.has_code ?? false,
+    updatedAt: dateOf(i.updated_at),
+  };
+}
+
+function providerViewOf(v: WireProviderView): SecretsProviderView {
+  return { ownerId: v.owner_id, provider: v.provider, kind: v.kind, ...(v.base_url ? { baseUrl: v.base_url } : {}), registeredAt: new Date(v.registered_at), expiresAt: dateOf(v.expires_at) };
+}
+
+function target(t: ProviderTarget): Record<string, unknown> {
+  return t.selector !== undefined ? { selector: t.selector } : { point: { x: t.point.x, y: t.point.y } };
+}
+
+function providerMeta(o: ProviderCallOptions): Record<string, unknown> {
+  return {
+    ...(o.provider ? { provider: o.provider } : {}),
+    ...(o.runId ? { run_id: o.runId } : {}),
+    ...(o.clientLabel ? { client_label: o.clientLabel } : {}),
+    ...(o.tabId !== undefined ? { tab_id: o.tabId } : {}),
+  };
+}
+
+/**
+ * The result of a provider action, or the typed error it failed with. A failed
+ * operation's `error` is `<code>: <message>`; a timed-out or cancelled one has
+ * no code of its own. The message never carries a value.
+ */
+export function secretsResult(op: FabricOperation): Record<string, unknown> {
+  if (op.state === 'succeeded') return op.result ?? {};
+  if (op.state === 'timed_out') throw new SecretsProviderError('timed_out', op.error ?? 'The action timed out', undefined, op.id);
+  if (op.state === 'cancelled') throw new SecretsProviderError('cancelled', op.error ?? 'The action was cancelled', undefined, op.id);
+  throw secretsErrorOf(op);
+}
+
+/** `<code>: <message>` to a {@link SecretsProviderError}; an unknown code is `unknown` (the text is kept). */
+export function secretsErrorOf(op: Pick<FabricOperation, 'id' | 'error'>): SecretsProviderError {
+  const text = op.error ?? 'The provider action failed';
+  const m = /^([a-z_]+): ([\s\S]*)$/.exec(text);
+  const code = m && (SECRETS_ERROR_CODES as readonly string[]).includes(m[1]!) ? (m[1] as SecretsErrorCode) : 'unknown';
+  const message = m && code !== 'unknown' ? m[2]! : text;
+  const retry = code === 'rate_limited' ? /retry in (\d+) s/.exec(message) : null;
+  return new SecretsProviderError(code, message, retry ? Number(retry[1]) : undefined, op.id);
 }

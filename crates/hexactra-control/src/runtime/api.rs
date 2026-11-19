@@ -44,6 +44,8 @@ pub struct ApiState {
     pub credentials: Credentials,
     /// Remote desktop tunnels (#338).
     pub desktop: super::desktop::DesktopTunnels,
+    /// Owners' secrets providers (#590); memory only.
+    pub secrets: super::secrets::SecretsProviders,
 }
 
 impl ApiState {
@@ -73,6 +75,7 @@ impl ApiState {
             webhooks,
             credentials,
             desktop: Default::default(),
+            secrets: Default::default(),
         }
     }
 
@@ -255,6 +258,7 @@ pub fn router(state: ApiState) -> Router {
         .merge(super::handoff_api::protected_routes())
         .merge(super::webhook_api::routes())
         .merge(super::credentials_api::client_routes())
+        .merge(super::secrets_api::routes())
         .merge(super::events_api::routes())
         .merge(super::host_commands_api::client_routes())
         .route("/v1/artifacts/{id}", get(get_artifact))
@@ -531,12 +535,17 @@ async fn create_session(
             "label longer than 200 characters".into(),
         ));
     }
-    let session = s.store.create_session_with(
+    if let Some(o) = &req.owner_id {
+        hexactra_credential_resolver::OwnerId::new(o.clone())
+            .map_err(|m| AppError(StatusCode::BAD_REQUEST, "invalid_request", m))?;
+    }
+    let session = s.store.create_session_owned(
         req.host_id,
         req.label,
         req.profile,
         req.create_profile,
         &req.allowed_domains,
+        req.owner_id,
     )?;
     tracing::info!(session_id = %session.id, host_id = %session.host_id, "session created");
     Ok((StatusCode::CREATED, Json(session)))
@@ -590,7 +599,7 @@ struct ActionQuery {
     tag = "sessions",
     params(("id" = Uuid, Path,), ("async" = Option<bool>, Query, description = "Return 202 at once"), ("inline_artifacts" = Option<bool>, Query, description = "Also return screenshot bytes inline")),
     request_body = ActionRequest,
-    description = "Queue an action on the session's host. A `type_secret` action types the answer of a `secret` handoff of this session: the control plane consumes the value once and the operation, events and logs show `[secret]`, never the value. A `type` action with `sensitive: true` is reported the same way.",
+    description = "Queue an action on the session's host. A `type_secret` action types the answer of a `secret` handoff of this session: the control plane consumes the value once and the operation, events and logs show `[secret]`, never the value. A `type` action with `sensitive: true` is reported the same way. `secrets_lookup`, `type_from_provider` and `type_code_from_provider` are answered by the control plane from the session owner's registered secrets provider (`PUT /v1/secrets-providers/{owner_id}/{provider}`): it reads the tab's top-level origin itself, asks the provider with it, and types the value with `sensitive: true`; the operation reports `{ typed: true }`, never the value, never its length. A failure is `state: failed` with `error: \"<code>: <message>\"` (`no_provider`, `not_found`, `origin_mismatch`, `disabled`, `rate_limited`, `unavailable`, `unauthorized`, `refused`, `origin_unavailable`, `cross_origin_frame`, `typing_failed`, `timed_out`).",
     responses((status = 200, description = "Final state (succeeded, failed, timed_out, cancelled)", body = OperationView), (status = 202, description = "Queued (`?async=true`)", body = OperationView), (status = 400, description = "Invalid action"), (status = 404, description = "Unknown session, or (`type_secret`) unknown handoff"), (status = 409, description = "Session ended, a handoff is pending, or (`type_secret`, `secret_unavailable`) the secret is not answered, already used, erased or expired"), (status = 422, description = "`type_secret`: `handoff_wrong_session` or `handoff_not_secret`"), (status = 401, description = "Missing or invalid token"), (status = 403, description = "Token not allowed here"))
 )]
 async fn run_action(
@@ -608,6 +617,23 @@ async fn run_action(
         .unwrap_or(DEFAULT_ACTION_TIMEOUT)
         .clamp(Duration::from_millis(100), MAX_ACTION_TIMEOUT);
     let kind = req.action.kind();
+    if req.action.is_provider_action() {
+        // Answered by the control plane from the session owner's secrets
+        // provider; never queued for a host as it is (#590).
+        let (op, handle) = super::secrets::start(&s, session_id, req.action, timeout)?;
+        tracing::info!(op_id = %op.id, %session_id, kind, "provider action started");
+        if q.is_async {
+            return Ok((StatusCode::ACCEPTED, Json(op)).into_response());
+        }
+        let done = handle.await.map_err(|_| {
+            AppError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal",
+                "the provider action failed unexpectedly".into(),
+            )
+        })?;
+        return Ok(Json(done).into_response());
+    }
     let inline = req.inline_artifacts || q.inline_artifacts;
     let (op, rx) = s
         .store

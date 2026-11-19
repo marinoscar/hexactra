@@ -16,6 +16,8 @@ mod host_commands_api;
 mod metrics;
 pub mod openapi;
 pub mod persist;
+pub mod secrets;
+mod secrets_api;
 pub mod store;
 pub mod takeover;
 mod webhook_api;

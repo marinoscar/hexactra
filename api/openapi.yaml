@@ -946,6 +946,92 @@ paths:
           description: Token not allowed here
         '404':
           description: Unknown operation
+  /v1/secrets-providers/{owner_id}:
+    get:
+      tags:
+      - secrets
+      description: The owner's live registrations. Never a token.
+      operationId: list
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretsProviderList'
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+  /v1/secrets-providers/{owner_id}/{provider}:
+    put:
+      tags:
+      - secrets
+      description: 'Register (or replace) the secrets provider an owner''s sessions use for `secrets_lookup`, `type_from_provider` and `type_code_from_provider`. The access token is held in memory only: never written to the state database, never returned, never logged. A registration with `expires_at` disappears then; register again with a fresh token. Kinds `vault` and `console` answer `501 provider_kind_unsupported` until their providers ship; `test` exists only in builds with the `test-provider` feature.'
+      operationId: register
+      parameters:
+      - name: owner_id
+        in: path
+        description: The owner's user id, as a session's `owner_id`
+        required: true
+        schema:
+          type: string
+      - name: provider
+        in: path
+        description: 'The id actions name: `vault`, `builtin`, `test`'
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterSecretsProviderRequest'
+        required: true
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretsProviderView'
+        '400':
+          description: Invalid owner, provider id, `base_url` or expiry
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
+        '501':
+          description: '`provider_kind_unsupported`'
+    delete:
+      tags:
+      - secrets
+      description: Drop a registration, and with it the provider's token. Idempotent.
+      operationId: remove
+      parameters:
+      - name: owner_id
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: provider
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: Removed (or there was none)
+        '401':
+          description: Missing or invalid token
+        '403':
+          description: Token not allowed here
   /v1/sessions:
     get:
       tags:
@@ -1043,7 +1129,7 @@ paths:
     post:
       tags:
       - sessions
-      description: 'Queue an action on the session''s host. A `type_secret` action types the answer of a `secret` handoff of this session: the control plane consumes the value once and the operation, events and logs show `[secret]`, never the value. A `type` action with `sensitive: true` is reported the same way.'
+      description: 'Queue an action on the session''s host. A `type_secret` action types the answer of a `secret` handoff of this session: the control plane consumes the value once and the operation, events and logs show `[secret]`, never the value. A `type` action with `sensitive: true` is reported the same way. `secrets_lookup`, `type_from_provider` and `type_code_from_provider` are answered by the control plane from the session owner''s registered secrets provider (`PUT /v1/secrets-providers/{owner_id}/{provider}`): it reads the tab''s top-level origin itself, asks the provider with it, and types the value with `sensitive: true`; the operation reports `{ typed: true }`, never the value, never its length. A failure is `state: failed` with `error: "<code>: <message>"` (`no_provider`, `not_found`, `origin_mismatch`, `disabled`, `rate_limited`, `unavailable`, `unauthorized`, `refused`, `origin_unavailable`, `cross_origin_frame`, `typing_failed`, `timed_out`).'
       operationId: run_action
       parameters:
       - name: id
@@ -1411,6 +1497,13 @@ components:
           type:
           - string
           - 'null'
+        owner_id:
+          type:
+          - string
+          - 'null'
+          description: |-
+            Whose session this is (the console's user id). Needed for the secrets
+            provider actions: they use the owner's registered providers (#590).
         profile:
           type:
           - string
@@ -2207,6 +2300,16 @@ components:
       description: |-
         What `GET /v1/hosts/{id}/next` returns: an operation, or (to agents that
         poll with `commands=true`) a host command wrapped as `{"command": …}`.
+    ItemKind:
+      type: string
+      description: |-
+        What a secrets provider stores (E37, #590). Only `login` is implemented
+        by the first providers; the enum exists so the contract does not change
+        when identity details and cards arrive.
+      enum:
+      - login
+      - identity
+      - card
     Lease:
       type: object
       required:
@@ -2359,6 +2462,36 @@ components:
         host_id:
           type: string
           format: uuid
+    RegisterSecretsProviderRequest:
+      type: object
+      description: |-
+        `PUT /v1/secrets-providers/{owner_id}/{provider}`: which provider an
+        owner's sessions use and what the fabric needs to call it. The token is
+        Secret Material: held in memory only, never written to the state
+        database, never returned, never logged.
+      required:
+      - kind
+      properties:
+        access_token:
+          type:
+          - string
+          - 'null'
+          description: The access token the provider takes. Write only.
+        base_url:
+          type:
+          - string
+          - 'null'
+          description: Where the provider is (`https`, or `http` on loopback).
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the token stops working; the registration is dropped then.
+        kind:
+          $ref: '#/components/schemas/SecretsProviderKind'
+        settings:
+          description: Provider-specific, non-secret settings.
     RemoteAction:
       oneOf:
       - type: object
@@ -2457,6 +2590,142 @@ components:
             type: string
             enum:
             - type_secret
+      - type: object
+        description: |-
+          Ask the session owner's secrets provider which items it offers for the
+          page's origin (E37, #590). The control plane reads the tab's top-level
+          URL itself, so the model cannot name an origin. Result:
+          [`SecretsLookupResult`]; never a value. Answered by the control plane,
+          not the host.
+        required:
+        - type
+        properties:
+          client_label:
+            type:
+            - string
+            - 'null'
+            description: What the owner sees as the app (audit trail).
+          kind:
+            $ref: '#/components/schemas/ItemKind'
+          provider:
+            type:
+            - string
+            - 'null'
+            description: The provider to ask; omit when the owner has only one.
+          run_id:
+            type:
+            - string
+            - 'null'
+            description: The run the call belongs to, for the audit trail.
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - secrets_lookup
+      - type: object
+        description: |-
+          Fetch one field of one item from the owner's provider and type it
+          into the target with trusted input, then wipe it (E37, #590). The
+          control plane re-reads the tab's origin at that moment and sends it
+          to the provider; the value is never returned, logged or stored. The
+          target is a `selector` in the top-level document, or a `point` that
+          must not land in a frame of another origin. Result:
+          [`ProviderTypedResult`].
+        required:
+        - item_id
+        - field
+        - type
+        properties:
+          clear:
+            type: boolean
+            description: Clear the existing value first.
+          client_label:
+            type:
+            - string
+            - 'null'
+          field:
+            $ref: '#/components/schemas/SecretField'
+          item_id:
+            type: string
+          point:
+            oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ViewportPoint'
+          provider:
+            type:
+            - string
+            - 'null'
+          purpose:
+            $ref: '#/components/schemas/SecretPurpose'
+          run_id:
+            type:
+            - string
+            - 'null'
+          selector:
+            type:
+            - string
+            - 'null'
+          submit:
+            type: boolean
+            description: Press Enter after typing.
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - type_from_provider
+      - type: object
+        description: |-
+          Like `type_from_provider`, with a one-time code fetched immediately
+          before typing. Result: [`ProviderTypedResult`] with `expires_at`.
+        required:
+        - item_id
+        - type
+        properties:
+          clear:
+            type: boolean
+            description: Clear the existing value first.
+          client_label:
+            type:
+            - string
+            - 'null'
+          item_id:
+            type: string
+          point:
+            oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ViewportPoint'
+          provider:
+            type:
+            - string
+            - 'null'
+          run_id:
+            type:
+            - string
+            - 'null'
+          selector:
+            type:
+            - string
+            - 'null'
+          submit:
+            type: boolean
+            description: Press Enter after typing.
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - type_code_from_provider
       - type: object
         description: |-
           Press a key (e.g. `Enter`, `Escape`, `Tab`, `ArrowDown`) on the focused
@@ -2690,6 +2959,11 @@ components:
         - text
         - type
         properties:
+          sensitive:
+            type: boolean
+            description: |-
+              The text is sensitive (typed by a provider action): the control
+              plane sends it to the host but stores and reports it as `[secret]`.
           tab_id:
             type:
             - integer
@@ -3158,6 +3432,85 @@ components:
           format: int32
           description: Image width in CSS pixels.
           minimum: 0
+    SecretField:
+      type: string
+      description: |-
+        One field of one stored item. A provider releases a single field per
+        call; there is no call that returns two.
+      enum:
+      - username
+      - password
+      - full_name
+      - date_of_birth
+      - id_type
+      - id_number
+      - id_issuing_country
+      - address_line1
+      - address_line2
+      - city
+      - region
+      - postal_code
+      - country
+      - phone
+      - email
+      - card_number
+      - exp_month
+      - exp_year
+      - holder_name
+      - security_code
+    SecretPurpose:
+      type: string
+      description: Why a value is released; recorded for the owner.
+      enum:
+      - login
+      - signup
+      - password_change
+      - mfa
+      - form
+      - purchase
+    SecretsProviderKind:
+      type: string
+      description: The provider implementations a registration can name.
+      enum:
+      - vault
+      - console
+      - test
+    SecretsProviderList:
+      type: object
+      required:
+      - providers
+      properties:
+        providers:
+          type: array
+          items:
+            $ref: '#/components/schemas/SecretsProviderView'
+    SecretsProviderView:
+      type: object
+      description: 'A registered provider as reported to clients: never its token.'
+      required:
+      - owner_id
+      - provider
+      - kind
+      - registered_at
+      properties:
+        base_url:
+          type:
+          - string
+          - 'null'
+        expires_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        kind:
+          $ref: '#/components/schemas/SecretsProviderKind'
+        owner_id:
+          type: string
+        provider:
+          type: string
+        registered_at:
+          type: string
+          format: date-time
     ServiceTokenList:
       type: object
       required:
@@ -3224,6 +3577,13 @@ components:
           type:
           - string
           - 'null'
+        owner_id:
+          type:
+          - string
+          - 'null'
+          description: |-
+            Whose session this is (from the console: the owner's user id). The
+            secrets provider actions use the owner's registered providers (#590).
         profile:
           type: string
           description: Browser profile this session drives.
@@ -3256,6 +3616,19 @@ components:
           - 'null'
           format: int64
           minimum: 0
+    ViewportPoint:
+      type: object
+      description: A point in a page's viewport, in CSS pixels.
+      required:
+      - x
+      - y
+      properties:
+        x:
+          type: integer
+          format: int64
+        y:
+          type: integer
+          format: int64
     WebhookDelivery:
       type: object
       description: One delivery attempt.
@@ -3346,6 +3719,8 @@ tags:
   description: Server-sent event stream
 - name: artifacts
   description: Short-lived screenshot bytes
+- name: secrets
+  description: Per-owner secrets providers the fabric types stored secrets from
 - name: credentials
   description: Host enrollment and service tokens
 - name: agent

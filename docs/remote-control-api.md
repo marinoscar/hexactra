@@ -116,6 +116,7 @@ data: {"seq":42,"type":"operation.succeeded","at":"…","data":{"op_id":"…","s
 | `session.navigation_blocked` | The browser blocked a top-level navigation outside the session's [allowed sites](#allowed-sites): `{ session_id, operation_id, host, at }` |
 | `operation.queued`, `operation.dispatched`, `operation.succeeded`, `operation.failed`, `operation.timed_out`, `operation.cancelled` | Each action |
 | `handoff.created`, `handoff.resolved`, `handoff.cancelled`, `handoff.expired` | Human handoffs |
+| `secrets.lookup`, `secrets.release`, `secrets.provider_registered`, `secrets.provider_removed` | A [secrets provider](#secrets-from-a-provider-e37) was asked, a value was released (or refused) and typed, a provider was registered or removed. Never a value or a token |
 | `handoff.secret_used`, `handoff.secret_claimed` | A `secret` answer was consumed by a `type_secret` action (with its `op_id`) or by the deprecated claim route. Never the value |
 | `host.command.queued`, `.dispatched`, `.succeeded`, `.failed`, `.timed_out`; `host.draining` | [Host commands](#host-commands) |
 | `reset` | You missed events. Re-read state and continue from the new position |
@@ -231,13 +232,14 @@ Actions are JSON objects tagged by `type`. `tab_id` is optional on tab-scoped ac
 | `click` | `selector` | `{}` |
 | `type` | `selector`, `text`, `clear`?, `submit`?, `sensitive`? | `{}` |
 | `type_secret` | `handoff_id`, `selector`, `clear`?, `submit`? | `{}`. Types the answer of a `secret` handoff; see [secrets](#secrets-typed-by-the-fabric) |
+| `secrets_lookup`, `type_from_provider`, `type_code_from_provider` | see [secrets from a provider](#secrets-from-a-provider-e37) | Answered by the control plane from the session owner's secrets provider; never a value |
 | `press` | `key`, `selector`? | `{}` |
 | `scroll` | `dx`?, `dy`?, `selector`? | `{ x, y }` |
 | `screenshot` | `marks`?, `mask`? | `{ artifact_id, mime, size, expires_at, width, height, url, title }`: fetch the bytes from `GET /v1/artifacts/{artifact_id}` ([artifacts](#artifacts)). The image is in CSS pixels, the coordinates `click_at` takes. With `"marks": true`, interactive elements are boxed and numbered in the image and listed as `marks: [{ n, selector, tag, role, text, x, y, w, h }]`. With `"mask": true`, sensitive regions are covered before the capture and the result adds `masked` (see [masked screenshots](#masked-screenshots)) |
 | `text` | `selector`?, `max_chars`? | `{ text, truncated }` |
 | `elements` | `max_elements`? | `{ elements: [{ selector, tag, role, text, ... }] }` |
 | `wait_for` | `selector`, `timeout_ms`? (≤ 60000) | `{}` |
-| `tabs` | — | `{ tabs: [{ id, url, title, active }] }` |
+| `tabs` | — | `{ tabs: [{ id, url, title, active, last_focused? }] }` |
 | `new_tab` | `url`? | `{ tab_id }` |
 | `activate_tab`, `close_tab` | `tab_id` | `{}` |
 | `back`, `forward`, `reload` | — | `{}` |
@@ -367,6 +369,36 @@ POST /v1/sessions/{session_id}/actions
 - Lifetime: the value is kept in memory only (never persisted) and erased, with its memory zeroed, when it is used, when the session ends, or 10 minutes after the person answered if nothing used it. A value taken by a `type_secret` that then times out before a host picks it up is dropped too; ask the person again.
 - The MCP tool is `browser_type_secret { handoff_id, selector, clear?, submit? }`; `browser_request_human` with `input: "secret"` answers `{"status": "completed", "value_withheld": true, …}`. The CLI is `hexactra-fabric handoff type-secret <id> --selector <css> [--clear] [--submit]`; `handoff request --wait` and `handoff show` never print a secret.
 - `POST /v1/handoffs/{id}/claim` still returns the value once, for operator and service tokens only, with a `Deprecation: true` header. It shares the single use: whichever of claim and `type_secret` comes first gets the value. The Hexactra Console, the SDK and the MCP server no longer call it; it will be removed in a later release.
+
+### Secrets from a provider (E37)
+
+A stored secret (a login's password, a one-time code) can also come from a **secrets provider** the session's owner registered, instead of from a person: the agent names *which* item and field, the control plane fetches the value, types it and wipes it. The model, logs, events, operation results, the state database and screenshots never hold it. Providers (Vault, the console's built-in store) plug into the `SecretsProvider` contract of `crates/hexactra-credential-resolver`.
+
+**Sessions have an owner.** `POST /v1/sessions` takes an optional `owner_id` (the console's user id); `SessionView.owner_id` reports it. The three actions use the providers registered for that owner; a session without an owner, or an owner without a provider, fails with `no_provider`.
+
+**Registering a provider** (client token; the console does this with a freshly minted token and removes it when the owner disconnects):
+
+| Route | |
+|---|---|
+| `PUT /v1/secrets-providers/{owner_id}/{provider}` | Body `{ "kind": "vault" \| "console" \| "test", "base_url"?, "access_token"?, "expires_at"?, "settings"? }`. Replaces any earlier registration. Answers the registration without its token (`Cache-Control: no-store`). `501 provider_kind_unsupported` for a kind this build does not implement (`vault`, `console` and `test` without the `test-provider` feature) |
+| `DELETE /v1/secrets-providers/{owner_id}/{provider}` | Drops the registration and its token. Idempotent, `204` |
+| `GET /v1/secrets-providers/{owner_id}` | `{ "providers": [...] }`, never a token |
+
+The token is Secret Material: kept in the control plane's memory only (never in the state database, never returned, never logged) and gone when `expires_at` passes or the process restarts; the console registers again with a fresh one.
+
+**The actions** (answered by the control plane, not a host):
+
+| `type` | Fields | Result |
+|---|---|---|
+| `secrets_lookup` | `kind`? (`login`), `provider`?, `run_id`?, `client_label`?, `tab_id`? | `{ origin, provider, items: [{ id, name, username?, origins, match_kind: "exact" \| "site", has_code, updated_at? }] }`. Never a value |
+| `type_from_provider` | `item_id`, `field`, `selector` or `point: { x, y }`, `purpose`? (`login`), `clear`?, `submit`?, `provider`?, `run_id`?, `client_label`?, `tab_id`? | `{ typed: true }`. Never the value, never its length |
+| `type_code_from_provider` | `item_id`, `selector` or `point`, `clear`?, `submit`?, `provider`?, `run_id`?, `client_label`?, `tab_id`? | `{ typed: true, expires_at }` |
+
+How a value gets typed: the control plane reads the tab's top-level URL from the extension (`tabs`), so the model never names an origin; normalises it to `scheme://host[:port]` (`https`, or `http` on loopback); pins every later step to that tab; asks the provider, which binds the release to that exact origin; reads the origin again; and only then queues a `type` (or, for a `point`, `click_at` and `type_keys`) with `sensitive: true`, so the existing redaction path hands the real text to the host alone. A `point` that lands in a frame of another origin is refused (`cross_origin_frame`); a `selector` acts on the top-level document. No screenshot is accepted (`409`) between the release and the end of typing. During a takeover, or while a handoff is pending, the actions are refused like any other (`409 takeover_active`, `409 handoff_pending`).
+
+A failed action is `state: "failed"` with `error: "<code>: <message>"`: `no_provider`, `provider_required`, `not_found` (missing, not the owner's, or not opened: one code), `origin_mismatch` (the page is not exactly one of the item's origins, or navigated while the value was fetched), `disabled`, `rate_limited` (`retry in N s`), `unavailable`, `unauthorized` (reconnect), `refused`, `origin_unavailable`, `cross_origin_frame`, `typing_failed`, `unsupported`, `timed_out`. There is no automatic retry after `origin_mismatch`.
+
+Audit: each lookup emits `secrets.lookup` and each release `secrets.release` on the event stream with `owner_id`, `session_id`, `op_id`, `run_id`, `client_label`, `provider`, `item_id`, `field`, `origin`, `purpose`, `outcome` (`ok`, `typed`, or the failure code) and `released`; registrations emit `secrets.provider_registered` and `secrets.provider_removed`. Never a value. The console stores the stream as its audit trail; the fabric keeps the last 2,000 events. Webhooks carry handoff events only.
 
 ## Webhooks: channels that reach a person
 

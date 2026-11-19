@@ -737,6 +737,7 @@ async fn run() -> Result<()> {
                             profile: Some(cli.profile().to_string()),
                             create_profile: *create,
                             allowed_domains: allowed_domains.clone(),
+                            owner_id: None,
                         })
                         .await?;
                     save_current(&s.profile, s.id);
