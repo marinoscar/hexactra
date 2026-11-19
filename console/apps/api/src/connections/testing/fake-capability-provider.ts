@@ -78,6 +78,8 @@ export interface FakeMessage {
   unread: boolean;
   labels: string[];
   attachments: FakeAttachment[];
+  /** What the provider's sender authentication says about the From address (`get` returns it; absent is `unknown`). */
+  senderAuth?: 'pass' | 'fail' | 'unknown';
 }
 
 export type FakeMessageInput = Partial<Omit<FakeMessage, 'from' | 'to' | 'cc' | 'attachments'>> & { from?: string | MailAddress; to?: (string | MailAddress)[]; cc?: (string | MailAddress)[]; attachments?: Partial<FakeAttachment>[] };
@@ -129,6 +131,7 @@ export class FakeAccount {
       unread: input.unread ?? true,
       labels: input.labels ?? ['INBOX'],
       attachments: (input.attachments ?? []).map((a) => ({ id: a.id ?? newId('att'), filename: a.filename ?? 'file.bin', contentType: a.contentType ?? 'application/octet-stream', bytes: a.bytes ?? Buffer.from('x') })),
+      ...(input.senderAuth ? { senderAuth: input.senderAuth } : {}),
     };
     this.messages.push(m);
     return m;
@@ -256,6 +259,7 @@ export class FakeCapabilityProvider implements CapabilityProvider {
           html: opts.body === 'html' ? (m.html ?? m.text) : null,
           truncated: false,
           attachments: m.attachments.map((x) => ({ id: x.id, filename: x.filename, contentType: x.contentType, size: x.bytes.length })),
+          ...(m.senderAuth ? { senderAuth: m.senderAuth } : {}),
         };
       },
       getAttachment: async (messageId: string, attachmentId: string): Promise<FileBytes> => {
