@@ -99,7 +99,7 @@ A **paused** or **needs_reconnect** connection is never chosen: naming one fails
 | Route | Notes |
 |---|---|
 | `GET /api/connections` | Label, provider, account email, capabilities, what the provider granted, defaults, status and reason code, last use. Accounts that need a reconnect first. Never a token or a scope string. |
-| `GET /api/connections/{id}` | The same, with `usedBy` (what uses it: tasks and deliveries, once E39.6 and later register them) |
+| `GET /api/connections/{id}` | The same, with `usedBy` (what uses it: the deliveries of E39.6 today, tools and triggers when E39.7 and E39.8 register them) |
 | `GET /api/connections/providers` | Which providers can be connected here (`ready`, or the `reason`: `not_installed`, `disabled`, `not_configured`) and which kinds of account work, with a note to read before starting |
 | `POST /api/connections/authorize` | Start a connection (above). Sets the binding cookie. |
 | `GET /api/connections/callback/{provider}` | Public; the redirect URI to register at the provider |
@@ -128,5 +128,5 @@ Until the adapter for a provider is installed (E39.3, E39.4) the provider is lis
 
 - **Adapters** implement `ConnectionProviderAdapter` (`src/connections/provider.ts`: `scopesFor`, `authorizeUrl`, `exchangeCode`, `refresh`, `revoke`, `capabilitiesGranted`, `probe`) over `OAuthClientService` (`src/oauth-client/`), and register with `ConnectionProviderRegistry` from their own module's `onModuleInit`. A refused grant must surface as an `OAuthClientError` of kind `invalid_grant`; `TokenSet.scopes` must list what the provider granted.
 - **Callers** use `ConnectionResolverService.resolveConnection` to pick the account, then `ConnectionTokensService.getAccessToken` for a token, and `ConnectionsService.markUsed` to record the use. They catch `ConnectionError` and read `.code`.
-- **Features that reference a connection** (deliveries, tool grants, triggers) register a `ConnectionUsageSource` with `ConnectionUsageRegistry`, so that removing a connection lists what uses it and clears the references.
+- **Features that reference a connection** (deliveries, tool grants, triggers) register a `ConnectionUsageSource` with `ConnectionUsageRegistry`, so that removing a connection lists what uses it and clears the references. Deliveries (E39.6, [deliveries.md](deliveries.md)) are the first: Disconnect lists them and switches them off.
 - **No MCP tool** exposes a connection. If one ever does, it needs its own decision in [parity.md](parity.md).

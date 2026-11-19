@@ -21,6 +21,7 @@ import { DeliveryLimits } from '../src/deliveries/delivery-limits.service';
 import { DeliveryPipeline } from '../src/deliveries/delivery-pipeline.service';
 import { WebhookSender } from '../src/deliveries/senders/webhook.sender';
 import { createApp } from '../src/main';
+import { readPdf } from './helpers/pdf-read';
 import { runWebhookSchema } from '../src/platform/webhooks/hexactra.webhook-events';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { RunNotifier } from '../src/tasks/run-notifier';
@@ -192,6 +193,11 @@ describe('a run ends: four deliveries, each sent once', () => {
     const pdf = Buffer.from(m.attachments![0]!.contentBase64, 'base64');
     expect(m.attachments![0]!.contentType).toBe('application/pdf');
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+    // The attachment is the MASKED report: its text holds the outputs, with the sensitive one hidden.
+    const pdfText = readPdf(pdf).text.join('\n');
+    expect(pdfText).toContain('C-8841');
+    expect(pdfText).toContain('[hidden]');
+    expect(pdfText).not.toContain(SENSITIVE);
     expect(m.from).toBe('"Hexactra" <reports@example.test>');
 
     // The row: the mapped columns, then the run id.
@@ -204,7 +210,11 @@ describe('a run ends: four deliveries, each sent once', () => {
     expect(files).toHaveLength(2);
     expect(files[0]).toMatch(/^Pay the car loan \d{4}-\d{2}-\d{2}\.pdf$/);
     expect(files[1]).toMatch(/\.json$/);
-    const json = [...fake.account(w.connectionId).uploads.values()][1]!.toString();
+    const uploaded = [...fake.account(w.connectionId).uploads.values()];
+    const folderPdf = readPdf(uploaded[0]!).text.join('\n');
+    expect(folderPdf).toContain('[hidden]');
+    expect(folderPdf).not.toContain(SENSITIVE);
+    const json = uploaded[1]!.toString();
     expect(JSON.parse(json).masking.applied).toBe(true);
     expect(json).not.toContain(SENSITIVE);
 
