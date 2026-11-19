@@ -56,6 +56,26 @@ export const VAULT_ERROR_CODES = {
   rateLimited: 'RATE_LIMITED',
 } as const;
 
+/** The error code of the identity routes when the deployment's identity switch is off (contract 1.1). */
+export const VAULT_IDENTITY_DISABLED = 'IDENTITY_ACCESS_DISABLED';
+
+/**
+ * `agentIdentityLookupResponseSchema` (contract 1.1): `{ data: [{ id, name, originAllowed, fields: [{ field, label, sensitive,
+ * fillable }] }] }`. Labels and flags only; unknown fields are ignored. The console reads it only to LIST what the owner saved
+ * (the Secrets page): a value is the fabric's, never the console's.
+ */
+export const vaultIdentityLookupSchema = z.object({
+  data: z.array(
+    z.object({
+      id: z.string().min(1).max(100),
+      name: z.string().min(1).max(200),
+      originAllowed: z.boolean().optional(),
+      fields: z.array(z.object({ field: z.string().min(1).max(40), label: z.string().max(100).default(''), sensitive: z.boolean().default(false), fillable: z.boolean().optional() })).max(40).default([]),
+    }),
+  ),
+});
+export type VaultIdentityItem = z.infer<typeof vaultIdentityLookupSchema>['data'][number];
+
 /** `agentWhoamiResponseSchema`: `{ data: { userId, scopes, clientId, contract? } }`. Unknown fields are ignored (the contract is additive). */
 export const vaultWhoamiSchema = z.object({
   data: z.object({

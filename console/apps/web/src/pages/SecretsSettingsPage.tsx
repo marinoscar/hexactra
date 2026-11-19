@@ -10,6 +10,7 @@ import {
   disconnect,
   getActivity,
   getDefaultUseSavedLogins,
+  getIdentity,
   getReach,
   getStatus,
   getStoreStatus,
@@ -19,12 +20,13 @@ import {
   setProvider,
   type ActivityItem,
   type ActivityList,
+  type IdentityListing,
   type Reach,
   type SecretsStatus,
   type StoreStatus,
   type VaultStatus,
 } from '../secrets/api';
-import { CONNECT_RESULT_WORDS, fieldsWords, hasWriteScope, outcomeWords, permissionWords, whatWords } from '../secrets/words';
+import { CONNECT_RESULT_WORDS, fieldsWords, hasIdentityScope, hasWriteScope, outcomeWords, permissionWords, whatWords } from '../secrets/words';
 import { CardSkeleton, EmptyState, ErrorBanner, ListSkeleton, PageContainer, PageHeader, RelativeTime, ResponsiveList, useApiAction, useConfirm, type Column } from '../ui';
 
 const TOUCH = { minHeight: { xs: 44, sm: 'auto' } } as const;
@@ -397,6 +399,56 @@ function ReachSection({ reach, manageUrl, store }: { reach: Reach; manageUrl: st
 }
 
 /**
+ * The identity details the owner saved (E37.6): item names, field labels and which fields are sensitive, read-only, with a
+ * link to the provider where the items and their allowed sites are managed. Never a value.
+ */
+function IdentitySection({ identity, manageUrl }: { identity: IdentityListing; manageUrl: string | null }) {
+  const reasons: Record<string, string> = {
+    switched_off: 'Turn on “Let the agent use saved logins” to let the agent use identity details.',
+    not_connected: 'Connect your provider to see the identity details you saved.',
+    needs_reconnect: 'Connect your provider again to see the identity details you saved.',
+    needs_scope: 'Turn on “Let the agent fill identity details” above to let the agent see which details you saved.',
+    provider_off: 'Identity details are switched off in your provider.',
+    unavailable: 'Your provider could not be reached. Try again later.',
+  };
+  return (
+    <Box component="section" aria-labelledby="identity-title" data-testid="identity-section">
+      <Typography id="identity-title" variant="h6" component="h2" sx={{ mb: 0.5 }}>
+        Identity details
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+        Things a form asks for that are not logins: an ID number, a date of birth, an address. The agent fills a field by its label and never sees the value. A sensitive field is typed only on the sites you listed for it in your provider. Hexactra does not edit them.
+      </Typography>
+      {!identity.available ? (
+        <Typography color="text.secondary">{reasons[identity.reason] ?? 'Identity details are not available.'}</Typography>
+      ) : identity.items.length === 0 ? (
+        <Typography color="text.secondary">You have not opened any identity item to the agent yet.</Typography>
+      ) : (
+        <Stack spacing={1} component="ul" sx={{ listStyle: 'none', p: 0, m: 0 }} aria-label="Identity details you saved">
+          {identity.items.map((item, i) => (
+            <Paper key={`${item.name}-${i}`} component="li" variant="outlined" sx={{ p: 1.5, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { sm: 'center' }, gap: 1 }}>
+              <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                <Typography sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>{item.name}</Typography>
+                <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                  {item.fields.map((f) => (
+                    <Chip key={f.label} size="small" variant="outlined" color={f.sensitive ? 'warning' : 'default'} label={f.sensitive ? `${f.label} · sensitive` : f.label} />
+                  ))}
+                </Stack>
+              </Box>
+              {manageUrl && (
+                <Link href={manageUrl} target="_blank" rel="noopener noreferrer" sx={{ ...TOUCH, display: 'inline-flex', alignItems: 'center' }} aria-label={`Manage ${item.name} and its allowed sites in Vault`}>
+                  Manage in Vault
+                </Link>
+              )}
+            </Paper>
+          ))}
+        </Stack>
+      )}
+    </Box>
+  );
+}
+
+/**
  * `/settings/secrets` (E37.4, #593): the owner's view of saved secrets. The provider card (connect, reconnect,
  * disconnect), the switches that turn the agent's use off, what the agent can reach, and what it used. Nothing here
  * shows or edits a login: that is the provider's job.
@@ -409,6 +461,7 @@ export function SecretsSettingsPage() {
   const [status, setStatus] = useState<SecretsStatus | null>(null);
   const [activity, setActivity] = useState<ActivityList | null>(null);
   const [reach, setReach] = useState<Reach | null>(null);
+  const [identity, setIdentity] = useState<IdentityListing | null>(null);
   const [defaultOn, setDefaultOn] = useState(false);
   // The built-in store (E37.5): null when this deployment does not offer it.
   const [store, setStore] = useState<StoreStatus | null>(null);
@@ -423,6 +476,7 @@ export function SecretsSettingsPage() {
       // The lists are secondary: a failure of one does not hide the provider card.
       getActivity(api).then(setActivity, () => setActivity({ items: [], providerActivityUrl: null }));
       getReach(api).then(setReach, () => setReach({ listing: 'per_origin', items: [] }));
+      getIdentity(api).then(setIdentity, () => setIdentity({ available: false, reason: 'unavailable', items: [], manageUrl: null }));
       getDefaultUseSavedLogins(api).then(setDefaultOn, () => setDefaultOn(false));
       getStoreStatus(api).then(setStore);
     } catch (e) {
@@ -449,16 +503,16 @@ export function SecretsSettingsPage() {
 
   const vault = status?.providers.vault ?? null;
 
-  const startConnect = (allowWrite: boolean) =>
+  const startConnect = (allowWrite: boolean, allowIdentity = false) =>
     action.run('connect', async () => {
-      const r = await connect(api, { allowWrite, returnTo: '/settings/secrets' });
+      const r = await connect(api, { allowWrite, ...(allowIdentity ? { allowIdentity } : {}), returnTo: '/settings/secrets' });
       window.location.assign(r.authorizeUrl);
     });
 
   const saveAndConnect = (v: { baseUrl: string; clientId: string; clientSecret?: string }) =>
     action.run('connect', async () => {
       await saveClient(api, v);
-      const r = await connect(api, { allowWrite: vault ? hasWriteScope(vault.scopes) : false, returnTo: '/settings/secrets' });
+      const r = await connect(api, { allowWrite: vault ? hasWriteScope(vault.scopes) : false, ...(vault && hasIdentityScope(vault.scopes) ? { allowIdentity: true } : {}), returnTo: '/settings/secrets' });
       window.location.assign(r.authorizeUrl);
     });
 
@@ -499,7 +553,16 @@ export function SecretsSettingsPage() {
       const ok = await confirm({ title: 'Stop letting the agent save and change logins?', body: 'You will go to Vault to approve a connection without that permission.', confirmLabel: 'Continue' });
       if (!ok) return;
     }
-    await startConnect(on);
+    // A new consent keeps what the owner already allowed: only the write permission changes.
+    await startConnect(on, vault ? hasIdentityScope(vault.scopes) : false);
+  };
+
+  const toggleIdentity = async (on: boolean) => {
+    if (!on) {
+      const ok = await confirm({ title: 'Stop letting the agent fill identity details?', body: 'You will go to Vault to approve a connection without that permission.', confirmLabel: 'Continue' });
+      if (!ok) return;
+    }
+    await startConnect(vault ? hasWriteScope(vault.scopes) : false, on);
   };
 
   const deploymentOff = status !== null && !status.agentUse.deployment;
@@ -532,7 +595,7 @@ export function SecretsSettingsPage() {
       {status && vault && (
         <Stack spacing={4}>
           {store && <StoreChoice store={store} vault={vault} canWrite={canWrite} busy={action.busy === 'provider'} onChoose={(p) => void chooseProvider(p)} />}
-          {store?.provider === 'builtin' ? <StoreCard store={store} /> : <ProviderCard vault={vault} canWrite={canWrite} busy={action.busy} onConnect={() => void startConnect(hasWriteScope(vault.scopes))} onSaveAndConnect={(v) => void saveAndConnect(v)} onDisconnect={() => void doDisconnect()} />}
+          {store?.provider === 'builtin' ? <StoreCard store={store} /> : <ProviderCard vault={vault} canWrite={canWrite} busy={action.busy} onConnect={() => void startConnect(hasWriteScope(vault.scopes), hasIdentityScope(vault.scopes))} onSaveAndConnect={(v) => void saveAndConnect(v)} onDisconnect={() => void doDisconnect()} />}
 
           <Paper variant="outlined" component="section" aria-labelledby="switches-title" sx={{ p: { xs: 2, sm: 3 } }}>
             <Typography id="switches-title" variant="h6" component="h2" sx={{ mb: 1 }}>
@@ -569,10 +632,25 @@ export function SecretsSettingsPage() {
                   onChange={(on) => void toggleWrite(on)}
                 />
               )}
+              {store?.provider !== 'builtin' && (
+                <SwitchRow
+                  label="Let the agent fill identity details"
+                  help={
+                    !connected
+                      ? 'Connect your provider first.'
+                      : 'Asks Vault for permission to fill a form with details you saved (a date of birth, an ID number, an address). The agent names the field and never sees the value. You approve it in Vault. Each task and chat has its own switch too. Off by default.'
+                  }
+                  checked={connected && hasIdentityScope(vault.scopes)}
+                  disabled={!canWrite || !connected}
+                  busy={action.busy === 'connect'}
+                  onChange={(on) => void toggleIdentity(on)}
+                />
+              )}
             </Stack>
           </Paper>
 
           {reach && <ReachSection reach={reach} manageUrl={manageUrl} store={store} />}
+          {identity && store?.provider !== 'builtin' && <IdentitySection identity={identity} manageUrl={identity.manageUrl ?? manageUrl} />}
           {activity ? <ActivitySection activity={activity} /> : <ListSkeleton rows={3} />}
         </Stack>
       )}

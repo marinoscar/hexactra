@@ -1124,6 +1124,23 @@
       "web": "/settings/secrets"
     },
     {
+      "id": "secrets.identity",
+      "description": "The identity details the owner saved (a passport, a home address): item names and field labels, read-only, with whether each field is sensitive. Never a value (E37.6)",
+      "rest": [
+        "GET /api/secrets/identity"
+      ],
+      "cli": {
+        "none": "Deliberate: the owner reads it on the Secrets page; the items are managed in the provider"
+      },
+      "mcp": {
+        "none": "Deliberate: a hosted AI app must never read which identity details the owner saved, or fill one (decision of E37.6, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; use the web app"
+      },
+      "web": "/settings/secrets"
+    },
+    {
       "id": "secrets.admin",
       "description": "Administrator: counts of connected owners, fields typed and refusals this week. No owner, site or login (E37.4)",
       "rest": [

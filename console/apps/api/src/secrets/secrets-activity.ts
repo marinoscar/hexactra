@@ -13,15 +13,34 @@ export const SECRETS_ACTIVITY_EVENTS = ['secrets.lookup', 'secrets.release'] as 
 export type SecretsActivityEvent = 'lookup' | 'release';
 
 /** The field kinds a release may name. */
-export const ACTIVITY_FIELDS = ['username', 'password', 'one_time_code'] as const;
+export const ACTIVITY_FIELDS = [
+  'username',
+  'password',
+  'one_time_code',
+  // Identity details (E37.6): the field kind, never a value.
+  'full_name',
+  'date_of_birth',
+  'id_type',
+  'id_number',
+  'id_issuing_country',
+  'address_line1',
+  'address_line2',
+  'city',
+  'region',
+  'postal_code',
+  'country',
+  'phone',
+  'email',
+] as const;
 /** The purposes the fabric sends (Vault's `purpose` for fill and totp). */
-export const ACTIVITY_PURPOSES = ['login', 'signup', 'password_change', 'mfa'] as const;
+export const ACTIVITY_PURPOSES = ['login', 'signup', 'password_change', 'mfa', 'form'] as const;
 /**
  * The closed outcome codes of the fabric (`typed` and `ok` for success, the rest are `Fail` codes of
  * runtime/secrets.rs). Anything else is stored as `other`.
  */
 export const ACTIVITY_OUTCOMES = [
   'typed',
+  'selected',
   'ok',
   'no_provider',
   'not_found',
@@ -34,6 +53,8 @@ export const ACTIVITY_OUTCOMES = [
   'origin_unavailable',
   'cross_origin_frame',
   'typing_failed',
+  'insecure_origin',
+  'no_option',
   'timed_out',
   'internal',
   'other',
@@ -41,7 +62,7 @@ export const ACTIVITY_OUTCOMES = [
 export type ActivityOutcome = (typeof ACTIVITY_OUTCOMES)[number];
 
 /** An outcome that is the fabric refusing or failing, not a success. */
-export const isRefusal = (outcome: string): boolean => outcome !== 'typed' && outcome !== 'ok';
+export const isRefusal = (outcome: string): boolean => outcome !== 'typed' && outcome !== 'selected' && outcome !== 'ok';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** A provider item id: the characters of a uuid or a short slug, nothing that could be text. */

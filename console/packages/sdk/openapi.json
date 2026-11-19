@@ -29927,7 +29927,7 @@
     },
     "/api/secrets/vault/connect": {
       "post": {
-        "description": "Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` (a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.\n\n**Requires:** authentication, plus permission `secrets:write`.",
+        "description": "Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` and `allowIdentity` adds `vault:identity_read vault:identity_fill` (each a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.\n\n**Requires:** authentication, plus permission `secrets:write`.",
         "operationId": "secrets_connect",
         "parameters": [],
         "requestBody": {
@@ -30411,6 +30411,82 @@
           "roles": [],
           "permissions": [
             "system_settings:write"
+          ]
+        }
+      }
+    },
+    "/api/secrets/identity": {
+      "get": {
+        "description": "The identity items you opened to the agent, by name, with each field's label and whether it is sensitive (a date of birth, an ID number: typed only on the sites you listed for the item in your provider). Read-only: manage them, and their allowed sites, in the provider (`manageUrl`). Never a value, never a length. `available` is false, with a `reason`, until Vault is connected with the identity permissions and its identity details are switched on.\n\n**Requires:** authentication, plus permission `secrets:read`.",
+        "operationId": "secretsActivity_identityDetails",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IdentityListingResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "The identity details you saved",
+        "tags": [
+          "Secrets"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "secrets:read"
           ]
         }
       }
@@ -71853,6 +71929,10 @@
             "description": "Also ask for `vault:items_write` (the agent may save and change logins). A new consent. Off by default.",
             "type": "boolean"
           },
+          "allowIdentity": {
+            "description": "Also ask for `vault:identity_read` and `vault:identity_fill` (the agent may fill identity details such as a date of birth or an ID number, without ever seeing them). A new consent. Off by default.",
+            "type": "boolean"
+          },
           "returnTo": {
             "description": "A path on this console to return to after the consent (default `/settings/secrets`).",
             "type": "string",
@@ -72136,6 +72216,78 @@
         },
         "additionalProperties": false
       },
+      "IdentityListingResponseDto": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "Identity details can be read and used: connected, the switches on and the identity permissions granted."
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "not_connected",
+              "needs_reconnect",
+              "needs_scope",
+              "switched_off",
+              "provider_off",
+              "unavailable"
+            ],
+            "description": "Why not, when `available` is false. `needs_scope`: connect again and allow identity details. `provider_off`: the provider has identity details switched off."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "The saved item's name (\"Passport\")"
+                },
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "label": {
+                        "type": "string",
+                        "description": "The field's label (\"Date of birth\")"
+                      },
+                      "sensitive": {
+                        "type": "boolean",
+                        "description": "Typed only on the sites listed for the item in the provider"
+                      }
+                    },
+                    "required": [
+                      "label",
+                      "sensitive"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "fields"
+              ]
+            },
+            "description": "The identity items you opened to the agent, with field labels. Never a value."
+          },
+          "manageUrl": {
+            "description": "The provider's address, where each item's allowed sites are managed.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "available",
+          "reason",
+          "items",
+          "manageUrl"
+        ]
+      },
       "ActivityListResponseDto": {
         "type": "object",
         "properties": {
@@ -72195,7 +72347,20 @@
                       "enum": [
                         "username",
                         "password",
-                        "one_time_code"
+                        "one_time_code",
+                        "full_name",
+                        "date_of_birth",
+                        "id_type",
+                        "id_number",
+                        "id_issuing_country",
+                        "address_line1",
+                        "address_line2",
+                        "city",
+                        "region",
+                        "postal_code",
+                        "country",
+                        "phone",
+                        "email"
                       ]
                     },
                     {
@@ -72206,7 +72371,7 @@
                 },
                 "outcome": {
                   "type": "string",
-                  "description": "A closed code: `typed`, `ok`, or why nothing was typed (`origin_mismatch`, `not_found`, `disabled`, `rate_limited`, ...)."
+                  "description": "A closed code: `typed`, `selected`, `ok`, or why nothing was typed (`origin_mismatch`, `not_found`, `disabled`, `rate_limited`, ...)."
                 },
                 "refused": {
                   "type": "boolean",
@@ -72279,7 +72444,20 @@
                     "enum": [
                       "username",
                       "password",
-                      "one_time_code"
+                      "one_time_code",
+                      "full_name",
+                      "date_of_birth",
+                      "id_type",
+                      "id_number",
+                      "id_issuing_country",
+                      "address_line1",
+                      "address_line2",
+                      "city",
+                      "region",
+                      "postal_code",
+                      "country",
+                      "phone",
+                      "email"
                     ]
                   },
                   "description": "The fields typed so far for this login."
@@ -72508,6 +72686,10 @@
                   "type": "boolean",
                   "description": "Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too)."
                 },
+                "allowSavedIdentity": {
+                  "type": "boolean",
+                  "description": "Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`)."
+                },
                 "paused": {
                   "type": "boolean",
                   "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -72523,6 +72705,7 @@
                 "confirmPurchases",
                 "confirmSensitiveActions",
                 "allowSavedLogins",
+                "allowSavedIdentity",
                 "paused"
               ]
             },
@@ -72875,6 +73058,10 @@
                 "type": "boolean",
                 "description": "Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too)."
               },
+              "allowSavedIdentity": {
+                "type": "boolean",
+                "description": "Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`)."
+              },
               "paused": {
                 "type": "boolean",
                 "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -72890,6 +73077,7 @@
               "confirmPurchases",
               "confirmSensitiveActions",
               "allowSavedLogins",
+              "allowSavedIdentity",
               "paused"
             ]
           },
@@ -73010,6 +73198,10 @@
             "type": "boolean",
             "description": "Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too)."
           },
+          "allowSavedIdentity": {
+            "type": "boolean",
+            "description": "Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`)."
+          },
           "paused": {
             "type": "boolean",
             "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -73025,6 +73217,7 @@
           "confirmPurchases",
           "confirmSensitiveActions",
           "allowSavedLogins",
+          "allowSavedIdentity",
           "paused"
         ]
       },
@@ -73090,6 +73283,9 @@
             "type": "boolean"
           },
           "allowSavedLogins": {
+            "type": "boolean"
+          },
+          "allowSavedIdentity": {
             "type": "boolean"
           },
           "paused": {
@@ -73162,6 +73358,10 @@
           "useSavedLogins": {
             "type": "boolean",
             "description": "Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3)"
+          },
+          "useSavedIdentity": {
+            "type": "boolean",
+            "description": "Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value"
           },
           "unattendedPayments": {
             "type": "string",
@@ -73657,6 +73857,7 @@
           "maxMinutes",
           "confirmRiskyActions",
           "useSavedLogins",
+          "useSavedIdentity",
           "unattendedPayments",
           "model",
           "policyId",
@@ -73735,6 +73936,10 @@
                 "useSavedLogins": {
                   "type": "boolean",
                   "description": "Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3)"
+                },
+                "useSavedIdentity": {
+                  "type": "boolean",
+                  "description": "Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value"
                 },
                 "unattendedPayments": {
                   "type": "string",
@@ -74230,6 +74435,7 @@
                 "maxMinutes",
                 "confirmRiskyActions",
                 "useSavedLogins",
+                "useSavedIdentity",
                 "unattendedPayments",
                 "model",
                 "policyId",
@@ -74324,6 +74530,10 @@
           "useSavedLogins": {
             "type": "boolean",
             "description": "Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3)"
+          },
+          "useSavedIdentity": {
+            "type": "boolean",
+            "description": "Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value"
           },
           "unattendedPayments": {
             "type": "string",
@@ -74819,6 +75029,7 @@
           "maxMinutes",
           "confirmRiskyActions",
           "useSavedLogins",
+          "useSavedIdentity",
           "unattendedPayments",
           "model",
           "policyId",
@@ -74970,7 +75181,7 @@
                   "maxLength": 200
                 },
                 "default": {
-                  "description": "A fixed value (`{ value }`) or an attribute of one of your memories (`{ memory: { id, attribute } }`), resolved when the task runs.",
+                  "description": "A fixed value (`{ value }`), an attribute of one of your memories (`{ memory: { id, attribute } }`), or a field of your saved identity details (`{ identity: { field } }`, E37.6: the goal shows `[provided: <label>]` and the system fills the field without the model seeing it), resolved when the task runs.",
                   "anyOf": [
                     {
                       "type": "object",
@@ -75014,6 +75225,42 @@
                         "memory"
                       ],
                       "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "identity": {
+                          "type": "object",
+                          "properties": {
+                            "field": {
+                              "type": "string",
+                              "enum": [
+                                "full_name",
+                                "date_of_birth",
+                                "id_type",
+                                "id_number",
+                                "id_issuing_country",
+                                "address_line1",
+                                "address_line2",
+                                "city",
+                                "region",
+                                "postal_code",
+                                "country",
+                                "phone",
+                                "email"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "field"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "identity"
+                      ],
+                      "additionalProperties": false
                     }
                   ]
                 },
@@ -75054,6 +75301,10 @@
           "useSavedLogins": {
             "type": "boolean",
             "description": "Let the agent sign in from the owner's saved logins when a page asks (E37.3). Off by default (a new task starts from the owner's `secrets.defaultUseSavedLogins` setting). It works only while the deployment's and the owner's secrets switches are on and a Vault is connected."
+          },
+          "useSavedIdentity": {
+            "type": "boolean",
+            "description": "Let the agent fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): it names the field and the fabric types it, so the model never reads the value. Off by default, and it works only with `useSavedLogins` on and a provider that holds identity details."
           },
           "unattendedPayments": {
             "default": "ask",
@@ -75212,6 +75463,10 @@
           "useSavedLogins": {
             "type": "boolean",
             "description": "Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3)"
+          },
+          "useSavedIdentity": {
+            "type": "boolean",
+            "description": "Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value"
           },
           "unattendedPayments": {
             "type": "string",
@@ -75423,6 +75678,7 @@
           "maxMinutes",
           "confirmRiskyActions",
           "useSavedLogins",
+          "useSavedIdentity",
           "unattendedPayments",
           "model",
           "policyId",
@@ -75567,7 +75823,7 @@
                   "maxLength": 200
                 },
                 "default": {
-                  "description": "A fixed value (`{ value }`) or an attribute of one of your memories (`{ memory: { id, attribute } }`), resolved when the task runs.",
+                  "description": "A fixed value (`{ value }`), an attribute of one of your memories (`{ memory: { id, attribute } }`), or a field of your saved identity details (`{ identity: { field } }`, E37.6: the goal shows `[provided: <label>]` and the system fills the field without the model seeing it), resolved when the task runs.",
                   "anyOf": [
                     {
                       "type": "object",
@@ -75611,6 +75867,42 @@
                         "memory"
                       ],
                       "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "identity": {
+                          "type": "object",
+                          "properties": {
+                            "field": {
+                              "type": "string",
+                              "enum": [
+                                "full_name",
+                                "date_of_birth",
+                                "id_type",
+                                "id_number",
+                                "id_issuing_country",
+                                "address_line1",
+                                "address_line2",
+                                "city",
+                                "region",
+                                "postal_code",
+                                "country",
+                                "phone",
+                                "email"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "field"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "identity"
+                      ],
+                      "additionalProperties": false
                     }
                   ]
                 },
@@ -75651,6 +75943,10 @@
           "useSavedLogins": {
             "type": "boolean",
             "description": "Let the agent sign in from the owner's saved logins when a page asks (E37.3). Off by default (a new task starts from the owner's `secrets.defaultUseSavedLogins` setting). It works only while the deployment's and the owner's secrets switches are on and a Vault is connected."
+          },
+          "useSavedIdentity": {
+            "type": "boolean",
+            "description": "Let the agent fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): it names the field and the fabric types it, so the model never reads the value. Off by default, and it works only with `useSavedLogins` on and a provider that holds identity details."
           },
           "unattendedPayments": {
             "type": "string",
@@ -75817,6 +76113,10 @@
           "useSavedLogins": {
             "type": "boolean",
             "description": "Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3)"
+          },
+          "useSavedIdentity": {
+            "type": "boolean",
+            "description": "Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value"
           },
           "unattendedPayments": {
             "type": "string",
@@ -76321,6 +76621,7 @@
           "maxMinutes",
           "confirmRiskyActions",
           "useSavedLogins",
+          "useSavedIdentity",
           "unattendedPayments",
           "model",
           "policyId",
@@ -77561,6 +77862,42 @@
             },
             "description": "The saved logins the run signed in with (E37.3), oldest first; empty when it used none. \"Signed in with: Shop login\" on the run page."
           },
+          "usedSavedIdentity": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "description": "The secrets provider that held the details (`vault`)"
+                },
+                "itemName": {
+                  "type": "string",
+                  "description": "The saved identity item's name as the owner gave it (\"Passport\")"
+                },
+                "label": {
+                  "type": "string",
+                  "description": "The field filled, by its label (\"Date of birth\"): never its value"
+                },
+                "origin": {
+                  "type": "string",
+                  "description": "The site it was filled on"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "When it was first filled in this run"
+                }
+              },
+              "required": [
+                "provider",
+                "itemName",
+                "label",
+                "origin",
+                "at"
+              ]
+            },
+            "description": "The identity details the run filled (E37.6), oldest first; labels only, empty when it filled none. \"Filled from your saved details: Date of birth, ID number\" on the run page."
+          },
           "inputs": {
             "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
             "anyOf": [
@@ -77586,7 +77923,8 @@
                         "default",
                         "memory",
                         "asked",
-                        "schedule"
+                        "schedule",
+                        "saved_details"
                       ]
                     }
                   },
@@ -77681,6 +78019,7 @@
           "costKnown",
           "confirmedActions",
           "usedSavedLogins",
+          "usedSavedIdentity",
           "memoryIds",
           "createdAt",
           "startedAt",
@@ -78368,6 +78707,42 @@
                   },
                   "description": "The saved logins the run signed in with (E37.3), oldest first; empty when it used none. \"Signed in with: Shop login\" on the run page."
                 },
+                "usedSavedIdentity": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "provider": {
+                        "type": "string",
+                        "description": "The secrets provider that held the details (`vault`)"
+                      },
+                      "itemName": {
+                        "type": "string",
+                        "description": "The saved identity item's name as the owner gave it (\"Passport\")"
+                      },
+                      "label": {
+                        "type": "string",
+                        "description": "The field filled, by its label (\"Date of birth\"): never its value"
+                      },
+                      "origin": {
+                        "type": "string",
+                        "description": "The site it was filled on"
+                      },
+                      "at": {
+                        "type": "string",
+                        "description": "When it was first filled in this run"
+                      }
+                    },
+                    "required": [
+                      "provider",
+                      "itemName",
+                      "label",
+                      "origin",
+                      "at"
+                    ]
+                  },
+                  "description": "The identity details the run filled (E37.6), oldest first; labels only, empty when it filled none. \"Filled from your saved details: Date of birth, ID number\" on the run page."
+                },
                 "inputs": {
                   "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
                   "anyOf": [
@@ -78393,7 +78768,8 @@
                               "default",
                               "memory",
                               "asked",
-                              "schedule"
+                              "schedule",
+                              "saved_details"
                             ]
                           }
                         },
@@ -78488,6 +78864,7 @@
                 "costKnown",
                 "confirmedActions",
                 "usedSavedLogins",
+                "usedSavedIdentity",
                 "memoryIds",
                 "createdAt",
                 "startedAt",
@@ -80583,6 +80960,42 @@
             },
             "description": "The saved logins the run signed in with (E37.3), oldest first; empty when it used none. \"Signed in with: Shop login\" on the run page."
           },
+          "usedSavedIdentity": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "description": "The secrets provider that held the details (`vault`)"
+                },
+                "itemName": {
+                  "type": "string",
+                  "description": "The saved identity item's name as the owner gave it (\"Passport\")"
+                },
+                "label": {
+                  "type": "string",
+                  "description": "The field filled, by its label (\"Date of birth\"): never its value"
+                },
+                "origin": {
+                  "type": "string",
+                  "description": "The site it was filled on"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "When it was first filled in this run"
+                }
+              },
+              "required": [
+                "provider",
+                "itemName",
+                "label",
+                "origin",
+                "at"
+              ]
+            },
+            "description": "The identity details the run filled (E37.6), oldest first; labels only, empty when it filled none. \"Filled from your saved details: Date of birth, ID number\" on the run page."
+          },
           "inputs": {
             "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
             "anyOf": [
@@ -80608,7 +81021,8 @@
                         "default",
                         "memory",
                         "asked",
-                        "schedule"
+                        "schedule",
+                        "saved_details"
                       ]
                     }
                   },
@@ -80999,6 +81413,7 @@
           "costKnown",
           "confirmedActions",
           "usedSavedLogins",
+          "usedSavedIdentity",
           "memoryIds",
           "createdAt",
           "startedAt",
@@ -81708,6 +82123,42 @@
             },
             "description": "The saved logins the run signed in with (E37.3), oldest first; empty when it used none. \"Signed in with: Shop login\" on the run page."
           },
+          "usedSavedIdentity": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "provider": {
+                  "type": "string",
+                  "description": "The secrets provider that held the details (`vault`)"
+                },
+                "itemName": {
+                  "type": "string",
+                  "description": "The saved identity item's name as the owner gave it (\"Passport\")"
+                },
+                "label": {
+                  "type": "string",
+                  "description": "The field filled, by its label (\"Date of birth\"): never its value"
+                },
+                "origin": {
+                  "type": "string",
+                  "description": "The site it was filled on"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "When it was first filled in this run"
+                }
+              },
+              "required": [
+                "provider",
+                "itemName",
+                "label",
+                "origin",
+                "at"
+              ]
+            },
+            "description": "The identity details the run filled (E37.6), oldest first; labels only, empty when it filled none. \"Filled from your saved details: Date of birth, ID number\" on the run page."
+          },
           "inputs": {
             "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
             "anyOf": [
@@ -81733,7 +82184,8 @@
                         "default",
                         "memory",
                         "asked",
-                        "schedule"
+                        "schedule",
+                        "saved_details"
                       ]
                     }
                   },
@@ -81821,6 +82273,7 @@
           "costKnown",
           "confirmedActions",
           "usedSavedLogins",
+          "usedSavedIdentity",
           "memoryIds",
           "createdAt",
           "startedAt",
@@ -85415,6 +85868,10 @@
                   "type": "boolean",
                   "description": "Let the chat's runs sign in from the owner's saved logins (E37.3); off by default"
                 },
+                "useSavedIdentity": {
+                  "type": "boolean",
+                  "description": "Let the chat's runs fill identity details from the owner's saved details (E37.6); off by default"
+                },
                 "lastMessageAt": {
                   "type": "string",
                   "description": "ISO 8601 timestamp"
@@ -85510,6 +85967,7 @@
                 "allowedDomains",
                 "confirmRiskyActions",
                 "useSavedLogins",
+                "useSavedIdentity",
                 "lastMessageAt",
                 "createdAt",
                 "updatedAt",
@@ -85593,6 +86051,10 @@
             "type": "boolean",
             "description": "Let the chat's runs sign in from the owner's saved logins (E37.3); off by default"
           },
+          "useSavedIdentity": {
+            "type": "boolean",
+            "description": "Let the chat's runs fill identity details from the owner's saved details (E37.6); off by default"
+          },
           "lastMessageAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -85617,6 +86079,7 @@
           "allowedDomains",
           "confirmRiskyActions",
           "useSavedLogins",
+          "useSavedIdentity",
           "lastMessageAt",
           "createdAt",
           "updatedAt"
@@ -85681,6 +86144,10 @@
           "useSavedLogins": {
             "type": "boolean",
             "description": "Let the chat's runs sign in from the owner's saved logins (E37.3). Off by default (a new chat starts from the owner's `secrets.defaultUseSavedLogins` setting); it works only while the secrets switches are on and a Vault is connected."
+          },
+          "useSavedIdentity": {
+            "type": "boolean",
+            "description": "Let the chat's runs fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): the agent names the field and the fabric types it. Off by default; it needs `useSavedLogins`."
           }
         }
       },
@@ -85745,6 +86212,10 @@
           "useSavedLogins": {
             "type": "boolean",
             "description": "Let the chat's runs sign in from the owner's saved logins (E37.3); off by default"
+          },
+          "useSavedIdentity": {
+            "type": "boolean",
+            "description": "Let the chat's runs fill identity details from the owner's saved details (E37.6); off by default"
           },
           "lastMessageAt": {
             "type": "string",
@@ -85886,6 +86357,7 @@
           "allowedDomains",
           "confirmRiskyActions",
           "useSavedLogins",
+          "useSavedIdentity",
           "lastMessageAt",
           "createdAt",
           "updatedAt",
@@ -85962,6 +86434,10 @@
           "useSavedLogins": {
             "type": "boolean",
             "description": "Let the chat's runs sign in from the owner's saved logins (E37.3). Off by default (a new chat starts from the owner's `secrets.defaultUseSavedLogins` setting); it works only while the secrets switches are on and a Vault is connected."
+          },
+          "useSavedIdentity": {
+            "type": "boolean",
+            "description": "Let the chat's runs fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): the agent names the field and the fabric types it. Off by default; it needs `useSavedLogins`."
           }
         }
       },
@@ -86102,6 +86578,10 @@
             "type": "boolean",
             "description": "The chat's saved-logins switch (E37.3), carried over to the task"
           },
+          "useSavedIdentity": {
+            "type": "boolean",
+            "description": "The chat's saved-details switch (E37.6), carried over to the task"
+          },
           "parameters": {
             "type": "array",
             "items": {
@@ -86224,6 +86704,7 @@
           "allowedDomains",
           "confirmRiskyActions",
           "useSavedLogins",
+          "useSavedIdentity",
           "parameters"
         ]
       },

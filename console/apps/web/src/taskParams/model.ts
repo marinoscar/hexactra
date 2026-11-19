@@ -23,10 +23,28 @@ export const TYPE_LABEL: Record<TaskParameterType, string> = {
 export const TYPE_ORDER: readonly TaskParameterType[] = ['text', 'number', 'money', 'date', 'choice', 'phone', 'email'];
 
 /** How a parameter gets its value when the task runs. */
-export type DefaultMode = 'ask' | 'value' | 'memory';
+export type DefaultMode = 'ask' | 'value' | 'memory' | 'identity';
+
+/** The saved identity fields a parameter may take its value from (E37.6), with the words a person reads. */
+export const IDENTITY_FIELD_LABEL: Record<string, string> = {
+  full_name: 'Full name',
+  date_of_birth: 'Date of birth',
+  id_type: 'ID type',
+  id_number: 'ID number',
+  id_issuing_country: 'ID issuing country',
+  address_line1: 'Address line 1',
+  address_line2: 'Address line 2',
+  city: 'City',
+  region: 'Region',
+  postal_code: 'Postal code',
+  country: 'Country',
+  phone: 'Phone',
+  email: 'Email',
+};
 
 export function defaultMode(p: Pick<TaskParameter, 'default' | 'sensitive'>): DefaultMode {
   if (p.sensitive || !p.default) return 'ask';
+  if ('identity' in p.default) return 'identity';
   return 'memory' in p.default ? 'memory' : 'value';
 }
 
@@ -68,6 +86,7 @@ export function savedParameters(params: readonly TaskParameter[] | null | undefi
 export function savedValueText(p: TaskParameter, memoryLabel?: (id: string) => string | undefined): string {
   if (!p.default) return 'Asked every time';
   if ('value' in p.default) return maskValue(displayValue(p, p.default.value));
+  if ('identity' in p.default) return `From your saved details: ${IDENTITY_FIELD_LABEL[p.default.identity.field] ?? p.default.identity.field}`;
   const name = memoryLabel?.(p.default.memory.id);
   return name ? `From a memory: ${name} → ${p.default.memory.attribute}` : `From a memory (${p.default.memory.attribute})`;
 }
@@ -195,6 +214,7 @@ export function cleanParameters(params: readonly TaskParameter[]): TaskParameter
     if (help) out.help = help;
     if (!p.sensitive && p.default) {
       if ('value' in p.default && p.default.value.trim()) out.default = { value: p.default.value.trim() };
+      else if ('identity' in p.default && p.default.identity.field) out.default = { identity: { field: p.default.identity.field } };
       else if ('memory' in p.default && p.default.memory.id && p.default.memory.attribute) out.default = { memory: { id: p.default.memory.id, attribute: p.default.memory.attribute } };
     }
     const c = p.constraints ?? {};

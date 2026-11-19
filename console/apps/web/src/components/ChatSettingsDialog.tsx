@@ -20,7 +20,7 @@ export interface ChatSettingsDialogProps {
   onSave: (settings: ChatSettings) => Promise<void>;
 }
 
-const settingsOf = (chat: Chat): ChatSettings => ({ profile: chat.profile, hostId: chat.hostId, hostFallback: chat.hostFallback, policyId: chat.policyId, allowedDomains: chat.allowedDomains, confirmRiskyActions: chat.confirmRiskyActions, useSavedLogins: chat.useSavedLogins ?? false });
+const settingsOf = (chat: Chat): ChatSettings => ({ profile: chat.profile, hostId: chat.hostId, hostFallback: chat.hostFallback, policyId: chat.policyId, allowedDomains: chat.allowedDomains, confirmRiskyActions: chat.confirmRiskyActions, useSavedLogins: chat.useSavedLogins ?? false, useSavedIdentity: chat.useSavedIdentity ?? false });
 
 /**
  * How the chat's runs execute: the machine, the browser profile, the agent
@@ -76,7 +76,12 @@ export function ChatSettingsDialog({ open, chat, onClose, onSave }: ChatSettings
             label="Ask me before a purchase or another step that is hard to undo"
           />
           {/* Disabled, with the reason, while no provider is connected or a switch is off (E37.4, #593). */}
-          <SavedLoginsToggle checked={values.useSavedLogins} disabled={busy} onChange={(useSavedLogins) => setValues((v) => ({ ...v, useSavedLogins }))} />
+          <SavedLoginsToggle
+            checked={values.useSavedLogins}
+            disabled={busy}
+            onChange={(useSavedLogins) => setValues((v) => ({ ...v, useSavedLogins, ...(useSavedLogins ? {} : { useSavedIdentity: false }) }))}
+            identity={{ checked: values.useSavedIdentity, onChange: (useSavedIdentity) => setValues((v) => ({ ...v, useSavedIdentity })) }}
+          />
           {/* A setting of the owner, not of this chat (#553): saved as soon as it is switched. */}
           <div>
             <SuggestMemoriesSwitch disabled={busy} />

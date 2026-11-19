@@ -31,7 +31,7 @@ import { MachinePicker } from './MachinePicker';
 import { ProfilePicker } from './ProfilePicker';
 import { ScheduleEditor } from './ScheduleEditor';
 import { ScheduleSummary, type ScheduleSummaryData } from './ScheduleSummary';
-import { SavedLoginsSwitch } from '../secrets/SavedLoginsSwitch';
+import { SavedIdentitySwitch, SavedLoginsSwitch } from '../secrets/SavedLoginsSwitch';
 import { useSavedLoginsAvailability } from '../secrets/useSavedLoginsAvailability';
 import { runTaskWith } from '../policies/api';
 import { NO_HARD_STOP_WARNING, budgetSummary, hasNoHardStop, startModel, tierRange } from '../policies/format';
@@ -568,8 +568,9 @@ export function TaskForm({ mode, taskId, initial, savedSchedules, cancelTo, onCr
           </Box>
         </Section>
 
-        <Section title="Saved logins" id={`${uid}-saved-logins`}>
-          <SavedLoginsSwitch checked={fields.useSavedLogins} onChange={(useSavedLogins) => setFields({ useSavedLogins })} disabled={busy} availability={savedLogins} />
+        <Section title="Saved logins and details" id={`${uid}-saved-logins`}>
+          <SavedLoginsSwitch checked={fields.useSavedLogins} onChange={(useSavedLogins) => setFields({ useSavedLogins, ...(useSavedLogins ? {} : { useSavedIdentity: false }) })} disabled={busy} availability={savedLogins} />
+          <SavedIdentitySwitch checked={fields.useSavedIdentity} onChange={(useSavedIdentity) => setFields({ useSavedIdentity })} disabled={busy} parentOn={fields.useSavedLogins} availability={savedLogins} />
           <FormControl component="fieldset" disabled={busy || !savedLogins.available || !fields.useSavedLogins} sx={{ ml: { xs: 0, sm: 6 } }}>
             <FormLabel component="legend" id={`${uid}-unattended-label`}>
               When it runs without me and reaches a payment

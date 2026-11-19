@@ -17,6 +17,8 @@ export interface Task {
   confirmRiskyActions: boolean;
   /** Let the agent sign in from the owner's saved logins (E37.3); absent from an older console: off. */
   useSavedLogins?: boolean;
+  /** Let the agent fill identity details from the owner's saved details (E37.6); absent from an older console: off. */
+  useSavedIdentity?: boolean;
   /** What an unattended run that used a saved login does at a payment (E37.3): `ask` or `allow`; absent: `ask`. */
   unattendedPayments?: 'ask' | 'allow';
   /** What the task's runs spent in the last 30 days (#400, #408). */

@@ -5928,7 +5928,7 @@ export interface paths {
         put?: never;
         /**
          * Start connecting your Vault (OAuth 2.1 authorization code with PKCE)
-         * @description Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` (a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.
+         * @description Returns `authorizeUrl`: send the browser there (Vault's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` and `allowIdentity` adds `vault:identity_read vault:identity_fill` (each a new consent). The `resource` indicator is the Vault's `/api/agent/v1`.
          *
          *     **Requires:** authentication, plus permission `secrets:write`.
          */
@@ -6010,6 +6010,28 @@ export interface paths {
          *     **Requires:** authentication, plus permission `system_settings:write`.
          */
         delete: operations["secrets_removeDefault"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/secrets/identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The identity details you saved
+         * @description The identity items you opened to the agent, by name, with each field's label and whether it is sensitive (a date of birth, an ID number: typed only on the sites you listed for the item in your provider). Read-only: manage them, and their allowed sites, in the provider (`manageUrl`). Never a value, never a length. `available` is false, with a `reason`, until Vault is connected with the identity permissions and its identity details are switched on.
+         *
+         *     **Requires:** authentication, plus permission `secrets:read`.
+         */
+        get: operations["secretsActivity_identityDetails"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -14911,6 +14933,8 @@ export interface components {
         ConnectVaultDto: {
             /** @description Also ask for `vault:items_write` (the agent may save and change logins). A new consent. Off by default. */
             allowWrite?: boolean;
+            /** @description Also ask for `vault:identity_read` and `vault:identity_fill` (the agent may fill identity details such as a date of birth or an ID number, without ever seeing them). A new consent. Off by default. */
+            allowIdentity?: boolean;
             /** @description A path on this console to return to after the consent (default `/settings/secrets`). */
             returnTo?: string;
         };
@@ -14988,6 +15012,28 @@ export interface components {
             /** @description The default client secret. Write-only; omit it to keep the stored one. */
             clientSecret?: string;
         };
+        IdentityListingResponseDto: {
+            /** @description Identity details can be read and used: connected, the switches on and the identity permissions granted. */
+            available: boolean;
+            /**
+             * @description Why not, when `available` is false. `needs_scope`: connect again and allow identity details. `provider_off`: the provider has identity details switched off.
+             * @enum {string}
+             */
+            reason: "ok" | "not_connected" | "needs_reconnect" | "needs_scope" | "switched_off" | "provider_off" | "unavailable";
+            /** @description The identity items you opened to the agent, with field labels. Never a value. */
+            items: {
+                /** @description The saved item's name ("Passport") */
+                name: string;
+                fields: {
+                    /** @description The field's label ("Date of birth") */
+                    label: string;
+                    /** @description Typed only on the sites listed for the item in the provider */
+                    sensitive: boolean;
+                }[];
+            }[];
+            /** @description The provider's address, where each item's allowed sites are managed. */
+            manageUrl: string | null;
+        };
         ActivityListResponseDto: {
             items: {
                 /** Format: uuid */
@@ -15006,8 +15052,8 @@ export interface components {
                 /** @description The saved login's name, as the run recorded it when it signed in; null when unknown. Never a username. */
                 loginName: string | null;
                 /** @description Which field was typed. Never its value. */
-                field: ("username" | "password" | "one_time_code") | null;
-                /** @description A closed code: `typed`, `ok`, or why nothing was typed (`origin_mismatch`, `not_found`, `disabled`, `rate_limited`, ...). */
+                field: ("username" | "password" | "one_time_code" | "full_name" | "date_of_birth" | "id_type" | "id_number" | "id_issuing_country" | "address_line1" | "address_line2" | "city" | "region" | "postal_code" | "country" | "phone" | "email") | null;
+                /** @description A closed code: `typed`, `selected`, `ok`, or why nothing was typed (`origin_mismatch`, `not_found`, `disabled`, `rate_limited`, ...). */
                 outcome: string;
                 /** @description Nothing was typed: the fabric or the provider refused or failed. */
                 refused: boolean;
@@ -15022,7 +15068,7 @@ export interface components {
             items: {
                 site: string | null;
                 /** @description The fields typed so far for this login. */
-                fields: ("username" | "password" | "one_time_code")[];
+                fields: ("username" | "password" | "one_time_code" | "full_name" | "date_of_birth" | "id_type" | "id_number" | "id_issuing_country" | "address_line1" | "address_line2" | "city" | "region" | "postal_code" | "country" | "phone" | "email")[];
                 uses: number;
                 lastUsedAt: string;
                 lastRunId: string | null;
@@ -15084,6 +15130,8 @@ export interface components {
                 confirmSensitiveActions: boolean;
                 /** @description Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too). */
                 allowSavedLogins: boolean;
+                /** @description Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`). */
+                allowSavedIdentity: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
             };
@@ -15179,6 +15227,8 @@ export interface components {
                 confirmSensitiveActions: boolean;
                 /** @description Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too). */
                 allowSavedLogins: boolean;
+                /** @description Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`). */
+                allowSavedIdentity: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
             };
@@ -15211,6 +15261,8 @@ export interface components {
             confirmSensitiveActions: boolean;
             /** @description Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too). */
             allowSavedLogins: boolean;
+            /** @description Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`). */
+            allowSavedIdentity: boolean;
             /** @description Refuse new runs and sessions from this app without disconnecting it. */
             paused: boolean;
         };
@@ -15224,6 +15276,7 @@ export interface components {
             confirmPurchases?: boolean;
             confirmSensitiveActions?: boolean;
             allowSavedLogins?: boolean;
+            allowSavedIdentity?: boolean;
             paused?: boolean;
         };
         TaskDetailResponseDto: {
@@ -15251,6 +15304,8 @@ export interface components {
             confirmRiskyActions: boolean;
             /** @description Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3) */
             useSavedLogins: boolean;
+            /** @description Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value */
+            useSavedIdentity: boolean;
             /**
              * @description `ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`
              * @enum {string}
@@ -15404,6 +15459,8 @@ export interface components {
                 confirmRiskyActions: boolean;
                 /** @description Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3) */
                 useSavedLogins: boolean;
+                /** @description Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value */
+                useSavedIdentity: boolean;
                 /**
                  * @description `ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`
                  * @enum {string}
@@ -15561,6 +15618,8 @@ export interface components {
             confirmRiskyActions: boolean;
             /** @description Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3) */
             useSavedLogins: boolean;
+            /** @description Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value */
+            useSavedIdentity: boolean;
             /**
              * @description `ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`
              * @enum {string}
@@ -15736,7 +15795,7 @@ export interface components {
                 options?: string[];
                 /** @description One line under the field. */
                 help?: string;
-                /** @description A fixed value (`{ value }`) or an attribute of one of your memories (`{ memory: { id, attribute } }`), resolved when the task runs. */
+                /** @description A fixed value (`{ value }`), an attribute of one of your memories (`{ memory: { id, attribute } }`), or a field of your saved identity details (`{ identity: { field } }`, E37.6: the goal shows `[provided: <label>]` and the system fills the field without the model seeing it), resolved when the task runs. */
                 default?: {
                     value: string;
                 } | {
@@ -15744,6 +15803,11 @@ export interface components {
                         /** Format: uuid */
                         id: string;
                         attribute: string;
+                    };
+                } | {
+                    identity: {
+                        /** @enum {string} */
+                        field: "full_name" | "date_of_birth" | "id_type" | "id_number" | "id_issuing_country" | "address_line1" | "address_line2" | "city" | "region" | "postal_code" | "country" | "phone" | "email";
                     };
                 };
                 constraints?: {
@@ -15757,6 +15821,8 @@ export interface components {
             }[];
             /** @description Let the agent sign in from the owner's saved logins when a page asks (E37.3). Off by default (a new task starts from the owner's `secrets.defaultUseSavedLogins` setting). It works only while the deployment's and the owner's secrets switches are on and a Vault is connected. */
             useSavedLogins?: boolean;
+            /** @description Let the agent fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): it names the field and the fabric types it, so the model never reads the value. Off by default, and it works only with `useSavedLogins` on and a provider that holds identity details. */
+            useSavedIdentity?: boolean;
             /**
              * @description What an unattended run (a schedule, the API or an AI app) does at a payment step after it signed in with a saved login: `ask` (the default) keeps the confirmation on for that run even when `confirmRiskyActions` is off; `allow` leaves the task's own setting. The owner's saved approvals still apply.
              * @default ask
@@ -15809,6 +15875,8 @@ export interface components {
             confirmRiskyActions: boolean;
             /** @description Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3) */
             useSavedLogins: boolean;
+            /** @description Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value */
+            useSavedIdentity: boolean;
             /**
              * @description `ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`
              * @enum {string}
@@ -15913,7 +15981,7 @@ export interface components {
                 options?: string[];
                 /** @description One line under the field. */
                 help?: string;
-                /** @description A fixed value (`{ value }`) or an attribute of one of your memories (`{ memory: { id, attribute } }`), resolved when the task runs. */
+                /** @description A fixed value (`{ value }`), an attribute of one of your memories (`{ memory: { id, attribute } }`), or a field of your saved identity details (`{ identity: { field } }`, E37.6: the goal shows `[provided: <label>]` and the system fills the field without the model seeing it), resolved when the task runs. */
                 default?: {
                     value: string;
                 } | {
@@ -15921,6 +15989,11 @@ export interface components {
                         /** Format: uuid */
                         id: string;
                         attribute: string;
+                    };
+                } | {
+                    identity: {
+                        /** @enum {string} */
+                        field: "full_name" | "date_of_birth" | "id_type" | "id_number" | "id_issuing_country" | "address_line1" | "address_line2" | "city" | "region" | "postal_code" | "country" | "phone" | "email";
                     };
                 };
                 constraints?: {
@@ -15934,6 +16007,8 @@ export interface components {
             }[];
             /** @description Let the agent sign in from the owner's saved logins when a page asks (E37.3). Off by default (a new task starts from the owner's `secrets.defaultUseSavedLogins` setting). It works only while the deployment's and the owner's secrets switches are on and a Vault is connected. */
             useSavedLogins?: boolean;
+            /** @description Let the agent fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): it names the field and the fabric types it, so the model never reads the value. Off by default, and it works only with `useSavedLogins` on and a provider that holds identity details. */
+            useSavedIdentity?: boolean;
             /**
              * @description What an unattended run (a schedule, the API or an AI app) does at a payment step after it signed in with a saved login: `ask` (the default) keeps the confirmation on for that run even when `confirmRiskyActions` is off; `allow` leaves the task's own setting. The owner's saved approvals still apply.
              * @enum {string}
@@ -15991,6 +16066,8 @@ export interface components {
             confirmRiskyActions: boolean;
             /** @description Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3) */
             useSavedLogins: boolean;
+            /** @description Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value */
+            useSavedIdentity: boolean;
             /**
              * @description `ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`
              * @enum {string}
@@ -16418,6 +16495,19 @@ export interface components {
                 /** @description When it was first used in this run */
                 at: string;
             }[];
+            /** @description The identity details the run filled (E37.6), oldest first; labels only, empty when it filled none. "Filled from your saved details: Date of birth, ID number" on the run page. */
+            usedSavedIdentity: {
+                /** @description The secrets provider that held the details (`vault`) */
+                provider: string;
+                /** @description The saved identity item's name as the owner gave it ("Passport") */
+                itemName: string;
+                /** @description The field filled, by its label ("Date of birth"): never its value */
+                label: string;
+                /** @description The site it was filled on */
+                origin: string;
+                /** @description When it was first filled in this run */
+                at: string;
+            }[];
             /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
             inputs?: {
                 key: string;
@@ -16425,7 +16515,7 @@ export interface components {
                 /** @description Masked like the rest of the run (#538); a sensitive value is never stored: "[provided at run time]" */
                 value: string;
                 /** @enum {string} */
-                source: "provided" | "default" | "memory" | "asked" | "schedule";
+                source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details";
             }[] | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
@@ -16594,6 +16684,19 @@ export interface components {
                     /** @description When it was first used in this run */
                     at: string;
                 }[];
+                /** @description The identity details the run filled (E37.6), oldest first; labels only, empty when it filled none. "Filled from your saved details: Date of birth, ID number" on the run page. */
+                usedSavedIdentity: {
+                    /** @description The secrets provider that held the details (`vault`) */
+                    provider: string;
+                    /** @description The saved identity item's name as the owner gave it ("Passport") */
+                    itemName: string;
+                    /** @description The field filled, by its label ("Date of birth"): never its value */
+                    label: string;
+                    /** @description The site it was filled on */
+                    origin: string;
+                    /** @description When it was first filled in this run */
+                    at: string;
+                }[];
                 /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
                 inputs?: {
                     key: string;
@@ -16601,7 +16704,7 @@ export interface components {
                     /** @description Masked like the rest of the run (#538); a sensitive value is never stored: "[provided at run time]" */
                     value: string;
                     /** @enum {string} */
-                    source: "provided" | "default" | "memory" | "asked" | "schedule";
+                    source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details";
                 }[] | null;
                 /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
                 memoryIds: string[];
@@ -17080,6 +17183,19 @@ export interface components {
                 /** @description When it was first used in this run */
                 at: string;
             }[];
+            /** @description The identity details the run filled (E37.6), oldest first; labels only, empty when it filled none. "Filled from your saved details: Date of birth, ID number" on the run page. */
+            usedSavedIdentity: {
+                /** @description The secrets provider that held the details (`vault`) */
+                provider: string;
+                /** @description The saved identity item's name as the owner gave it ("Passport") */
+                itemName: string;
+                /** @description The field filled, by its label ("Date of birth"): never its value */
+                label: string;
+                /** @description The site it was filled on */
+                origin: string;
+                /** @description When it was first filled in this run */
+                at: string;
+            }[];
             /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
             inputs?: {
                 key: string;
@@ -17087,7 +17203,7 @@ export interface components {
                 /** @description Masked like the rest of the run (#538); a sensitive value is never stored: "[provided at run time]" */
                 value: string;
                 /** @enum {string} */
-                source: "provided" | "default" | "memory" | "asked" | "schedule";
+                source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details";
             }[] | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
@@ -17323,6 +17439,19 @@ export interface components {
                 /** @description When it was first used in this run */
                 at: string;
             }[];
+            /** @description The identity details the run filled (E37.6), oldest first; labels only, empty when it filled none. "Filled from your saved details: Date of birth, ID number" on the run page. */
+            usedSavedIdentity: {
+                /** @description The secrets provider that held the details (`vault`) */
+                provider: string;
+                /** @description The saved identity item's name as the owner gave it ("Passport") */
+                itemName: string;
+                /** @description The field filled, by its label ("Date of birth"): never its value */
+                label: string;
+                /** @description The site it was filled on */
+                origin: string;
+                /** @description When it was first filled in this run */
+                at: string;
+            }[];
             /** @description The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters */
             inputs?: {
                 key: string;
@@ -17330,7 +17459,7 @@ export interface components {
                 /** @description Masked like the rest of the run (#538); a sensitive value is never stored: "[provided at run time]" */
                 value: string;
                 /** @enum {string} */
-                source: "provided" | "default" | "memory" | "asked" | "schedule";
+                source: "provided" | "default" | "memory" | "asked" | "schedule" | "saved_details";
             }[] | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
@@ -18153,6 +18282,8 @@ export interface components {
                 confirmRiskyActions: boolean;
                 /** @description Let the chat's runs sign in from the owner's saved logins (E37.3); off by default */
                 useSavedLogins: boolean;
+                /** @description Let the chat's runs fill identity details from the owner's saved details (E37.6); off by default */
+                useSavedIdentity: boolean;
                 /** @description ISO 8601 timestamp */
                 lastMessageAt: string;
                 /** @description ISO 8601 timestamp */
@@ -18205,6 +18336,8 @@ export interface components {
             confirmRiskyActions: boolean;
             /** @description Let the chat's runs sign in from the owner's saved logins (E37.3); off by default */
             useSavedLogins: boolean;
+            /** @description Let the chat's runs fill identity details from the owner's saved details (E37.6); off by default */
+            useSavedIdentity: boolean;
             /** @description ISO 8601 timestamp */
             lastMessageAt: string;
             /** @description ISO 8601 timestamp */
@@ -18228,6 +18361,8 @@ export interface components {
             confirmRiskyActions?: boolean;
             /** @description Let the chat's runs sign in from the owner's saved logins (E37.3). Off by default (a new chat starts from the owner's `secrets.defaultUseSavedLogins` setting); it works only while the secrets switches are on and a Vault is connected. */
             useSavedLogins?: boolean;
+            /** @description Let the chat's runs fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): the agent names the field and the fabric types it. Off by default; it needs `useSavedLogins`. */
+            useSavedIdentity?: boolean;
         };
         ChatDetailResponseDto: {
             /** Format: uuid */
@@ -18252,6 +18387,8 @@ export interface components {
             confirmRiskyActions: boolean;
             /** @description Let the chat's runs sign in from the owner's saved logins (E37.3); off by default */
             useSavedLogins: boolean;
+            /** @description Let the chat's runs fill identity details from the owner's saved details (E37.6); off by default */
+            useSavedIdentity: boolean;
             /** @description ISO 8601 timestamp */
             lastMessageAt: string;
             /** @description ISO 8601 timestamp */
@@ -18309,6 +18446,8 @@ export interface components {
             confirmRiskyActions?: boolean;
             /** @description Let the chat's runs sign in from the owner's saved logins (E37.3). Off by default (a new chat starts from the owner's `secrets.defaultUseSavedLogins` setting); it works only while the secrets switches are on and a Vault is connected. */
             useSavedLogins?: boolean;
+            /** @description Let the chat's runs fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): the agent names the field and the fabric types it. Off by default; it needs `useSavedLogins`. */
+            useSavedIdentity?: boolean;
         };
         ChatMessageResponseDto: {
             /** Format: uuid */
@@ -18348,6 +18487,8 @@ export interface components {
             confirmRiskyActions: boolean;
             /** @description The chat's saved-logins switch (E37.3), carried over to the task */
             useSavedLogins: boolean;
+            /** @description The chat's saved-details switch (E37.6), carried over to the task */
+            useSavedIdentity: boolean;
             /** @description The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies. */
             parameters: {
                 /** @description The placeholder's key (`Phone Number` → `phone_number`) */
@@ -38026,6 +38167,54 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["DefaultVaultClientViewResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    secretsActivity_identityDetails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["IdentityListingResponseDto"];
                     };
                 };
             };

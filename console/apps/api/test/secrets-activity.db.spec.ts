@@ -126,6 +126,26 @@ describe('ingest', () => {
     expect(responses.join('\n')).not.toContain(MARKER);
   });
 
+  it('stores an identity fill (field kind, purpose form, outcome selected) and lists it in the reach, never a value', async () => {
+    const alice = await login('act-identity');
+    const itemId = randomUUID();
+    await service.ingest([
+      ev(alice.userId, 'secrets.release', { item_id: itemId, field: 'date_of_birth', purpose: 'form', outcome: 'selected', released: true, origin: 'https://forms.example.test/apply?dob=' + MARKER, value: MARKER }),
+      ev(alice.userId, 'secrets.release', { item_id: itemId, field: 'id_number', purpose: 'form', outcome: 'insecure_origin', released: false, origin: 'http://127.0.0.1:8080/form' }),
+      ev(alice.userId, 'secrets.release', { item_id: itemId, field: 'phone', purpose: 'form', outcome: 'typed', released: true, origin: 'https://forms.example.test/apply' }),
+    ]);
+    const list = await get<{ items: { field: string | null; outcome: string; refused: boolean; site: string | null }[] }>(alice, '/api/secrets/activity');
+    expect(list.data.items.map((i) => [i.field, i.outcome, i.refused]).sort()).toEqual([
+      ['date_of_birth', 'selected', false],
+      ['id_number', 'insecure_origin', true],
+      ['phone', 'typed', false],
+    ]);
+    const reach = await get<{ items: { site: string | null; fields: string[] }[] }>(alice, '/api/secrets/reach');
+    expect(reach.data.items).toEqual([expect.objectContaining({ site: 'forms.example.test', fields: expect.arrayContaining(['date_of_birth', 'phone']) })]);
+    expect(JSON.stringify([list, reach])).not.toContain(MARKER);
+    expect(JSON.stringify(await prisma.secretsActivity.findMany({ where: { userId: alice.userId } }))).not.toContain(MARKER);
+  });
+
   it('keeps the newest 100 and drops rows past the retention', async () => {
     const u = await login('act-many');
     const base = Date.now() - 3_600_000;
