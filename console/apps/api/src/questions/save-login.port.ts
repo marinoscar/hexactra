@@ -4,6 +4,8 @@
 // provider and the fabric call. The module registers its handler here on start (`QuestionsService.useSaveLogin`), so the broker
 // does not depend on it and a deployment without the secrets slices simply never makes such a question. Nothing here carries
 // the password: it is in the fabric's memory and goes from there to the provider.
+import { registerErrorCode } from '@marinoscar/platform-api/core';
+
 import type { SaveLoginProposal } from './questions.contract';
 
 /** Why a save did not happen, in the words the card shows. */
@@ -21,6 +23,14 @@ export const SAVE_ERROR_STATUS: Record<SaveLoginErrorCode, number> = {
   SAVE_UNAVAILABLE: 503,
   SAVE_REFUSED: 422,
 };
+
+// The platform's filter passes a `code` through only when it is registered for the response status.
+registerErrorCode({ code: 'SAVE_TOO_LATE', status: 409, description: 'The fabric no longer holds the password of the sign-in (ten minutes passed, or it restarted): it is not saved, and it is offered at the next sign-in. The question becomes `expired`.' });
+registerErrorCode({ code: 'SAVE_NAME_TAKEN', status: 409, description: 'The owner already has a secret with that name in the provider: choose another name. The question stays pending.' });
+registerErrorCode({ code: 'SAVE_RECONNECT', status: 409, description: 'The provider needs to be connected again before the login can be saved. The question stays pending.' });
+registerErrorCode({ code: 'SAVE_DISABLED', status: 409, description: 'Saved logins are switched off, or the provider\'s agent access is. The question stays pending.' });
+registerErrorCode({ code: 'SAVE_UNAVAILABLE', status: 503, description: 'The provider or the browser service could not be reached, or saving is not available on this server. The question stays pending.' });
+registerErrorCode({ code: 'SAVE_REFUSED', status: 422, description: 'The provider did not accept the login: it needs the write permission and agent contract 1.3. The question stays pending.' });
 
 /** A save that did not happen. `message` is for the owner and carries no value. */
 export class SaveLoginError extends Error {

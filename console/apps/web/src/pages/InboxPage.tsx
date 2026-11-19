@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
 
 import { QuestionCard, inboxItemToCard, type AnswerResult } from '../components/QuestionCard';
-import { isSettledError, type AnswerBody, type InboxItem } from '../components/questions';
+import { answerRequest, isSettledError, type AnswerBody, type InboxItem } from '../components/questions';
 import { useNow } from '../components/RunActivity';
 import { useOpenViewer } from '../components/useOpenViewer';
 import { CardSkeleton, EmptyState, ErrorBanner, PageContainer, PageHeader } from '../ui';
@@ -82,8 +82,8 @@ export function InboxPage() {
 
   const respond = async (item: InboxItem, answer: AnswerBody): Promise<AnswerResult> => {
     try {
-      if (answer.outcome === 'cancelled') await api.post(`/questions/${item.questionId}/cancel`, { channel: 'web' });
-      else await api.post(`/questions/${item.questionId}/answer`, { ...answer, channel: 'web' });
+      const { path, body } = answerRequest(item.questionId, answer);
+      await api.post(path, body);
     } catch (e) {
       // Answered on another device, or expired, in the meantime: that is its final state, not an error.
       if (!isSettledError(e)) throw e;
@@ -145,7 +145,7 @@ export function InboxPage() {
             Suggestions
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Things the agent offers to remember. Nothing waits on them: answer when you like.
+            Things the agent offers to remember or to save, such as a login you just typed. Nothing waits on them: answer when you like.
           </Typography>
           {suggestions.map((item) => (
             <QuestionCard

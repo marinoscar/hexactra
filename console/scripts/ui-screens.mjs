@@ -44,7 +44,7 @@
 //
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
 // `{finishedRun}`, `{chatRun}`, `{traceRun}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}`, `{app}`,
-// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556) are filled
+// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556) and `{saveLoginQuestion}` (mock only, E37.4b) are filled
 // in from the account (or the fixtures). The enabled slices' routes are read
 // from apps/web/src/slices/<id>.tsx, so a new slice page needs nothing here.
 // A route's options may carry `action: async (page) => …`, run once the page
@@ -185,6 +185,8 @@ export const ROUTES = [
   ['task-schedule-values', '/tasks/{paramTask}/edit', { action: pressButton('Edit') }],
   ['task-run-dialog', '/tasks/{paramTask}', { action: pressButton('Run now') }],
   ['question-form', '/inbox/q/{formQuestion}'],
+  // "Save this login?" (E37.4b): its own page; the same card is in the Inbox's suggestions (`inbox`) and in the chat thread (`chat-thread`).
+  ['question-save-login', '/inbox/q/{saveLoginQuestion}'],
   ['run-inputs', '/runs/{paramRun}'],
 ];
 

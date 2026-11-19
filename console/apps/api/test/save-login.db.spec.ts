@@ -103,7 +103,7 @@ function world(opts: { supported?: boolean; page?: string } = {}) {
   const questions = new QuestionsService(prisma, fabric.client, { enqueue: async () => undefined } as never, new QuestionEvents());
   const registrar = { ensureRegistered: jest.fn(async () => 'registered') };
   const connection = { recordOutcome: jest.fn(async () => undefined) };
-  const saveLogins = new SaveLoginService(prisma, undefined as never, connection as never, undefined as never, undefined as never, registrar as never, fabric.client, app.get(SecretsEvents, { strict: false }), questions, app.get(UserSettingsService, { strict: false }));
+  const saveLogins = new SaveLoginService(prisma, undefined as never, connection as never, undefined as never, undefined as never, registrar as never, fabric.client, app.get(SecretsEvents, { strict: false }), { get: () => questions } as never, app.get(UserSettingsService, { strict: false }));
   saveLogins.onModuleInit();
   const supported = jest.fn(async () => opts.supported ?? true);
   const seam = {
@@ -411,6 +411,25 @@ describe('Not now and "Never for this site"', () => {
     // The owner can take the site off the list in their settings (a plain setting) and be asked again.
     await app.get(UserSettingsService, { strict: false }).patchSettings(o.userId, { secrets: { neverSaveLoginSites: [] } } as never);
     expect((await signedIn(o, world())).card).not.toBeNull();
+  });
+});
+
+describe('the real wiring', () => {
+  it('the secrets module registers how Save is carried out: a Save from the web app with the saved-logins switch off is a 409 SAVE_DISABLED that keeps the card, over HTTP', async () => {
+    const o = await owner('wiring');
+    const handoffId = '7f1c2e9a-0000-4000-8000-0000000000b9';
+    const real = await app.get(QuestionsService, { strict: false }).createSaveLoginProposal(
+      o.userId,
+      { site: 'login.example.com', origin: ORIGIN, domain: 'example.com', name: 'Example sign-in', username: USERNAME, handoffId, provider: 'vault', valueExpiresAt: new Date(Date.now() + 9 * 60_000).toISOString() },
+      { askedBy: 'run:x', proposalKey: `wiring-${stamp}` },
+    );
+    const res = await app.inject({ method: 'POST', url: `/api/questions/${real.id}/answer`, headers: { authorization: `Bearer ${o.token}` }, payload: { outcome: 'completed', saveLogin: { name: 'Example sign-in' }, channel: 'web' } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ code: string; message: string }>()).toMatchObject({ code: 'SAVE_DISABLED', message: expect.stringMatching(/switched off/) });
+    expect((await prisma.question.findFirstOrThrow({ where: { id: real.id } })).status).toBe('pending');
+    // An MCP-token caller claiming the web channel is recorded as `mcp` and refused; the card does not list for MCP either (the existing rule for owner cards).
+    const view = await app.inject({ method: 'GET', url: '/api/questions', headers: { authorization: `Bearer ${o.token}` } });
+    expect(view.json<{ data: { id: string; saveLogin: unknown }[] }>().data.find((q) => q.id === real.id)).toMatchObject({ saveLogin: { site: 'login.example.com' } });
   });
 });
 

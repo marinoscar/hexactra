@@ -8,6 +8,7 @@
 import { createHash } from 'node:crypto';
 
 import { Injectable, Logger, type OnModuleInit, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { UserSettingsService } from '@marinoscar/platform-api/settings';
 import type { Prisma } from '@prisma/client';
 
@@ -76,11 +77,15 @@ export class SaveLoginService implements SaveLoginPort, OnModuleInit {
     private readonly registrar: SecretsProviderRegistrar,
     private readonly fabric: FabricClient,
     private readonly events: SecretsEvents,
-    private readonly questions: QuestionsService,
+    /** The question broker is found at start (not imported as a module): this slice is optional, the broker is not, and the module graph stays as it was. */
+    private readonly moduleRef: ModuleRef,
     @Optional() private readonly settings?: UserSettingsService,
   ) {}
 
+  private questions!: QuestionsService;
+
   onModuleInit(): void {
+    this.questions = this.moduleRef.get(QuestionsService, { strict: false });
     this.questions.useSaveLogin(this);
   }
 

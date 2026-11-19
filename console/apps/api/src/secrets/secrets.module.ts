@@ -3,7 +3,6 @@ import { CredentialsModule, UserCredentialsModule } from '@marinoscar/platform-a
 
 import { FabricModule } from '../fabric/fabric.module';
 import { OAuthClientModule } from '../oauth-client';
-import { QuestionsModule } from '../questions/questions.module';
 import { FABRIC_SECRETS_REGISTRY, FabricSessionSecretsRegistry } from './fabric-secrets-registry';
 import { RunSecretsService } from './run-secrets.service';
 import { SaveLoginService } from './save-login.service';
@@ -36,7 +35,7 @@ import { VaultTokenService } from './vault-token.service';
  * hand to their provider ("Save this login?") and carries out the owner's answer through the fabric.
  */
 @Module({
-  imports: [CredentialsModule, UserCredentialsModule, OAuthClientModule, FabricModule, QuestionsModule],
+  imports: [CredentialsModule, UserCredentialsModule, OAuthClientModule, FabricModule],
   controllers: [SecretsController, SecretsActivityController],
   providers: [
     { provide: FABRIC_SECRETS_REGISTRY, useClass: FabricSessionSecretsRegistry },

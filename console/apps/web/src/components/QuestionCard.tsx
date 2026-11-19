@@ -6,7 +6,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { savedApprovalHref } from '../approvals/types';
 import { useConfirm } from '../ui';
 import { QuestionAnswerForm } from './QuestionAnswerForm';
-import { KIND_LABEL, answerText, askerText, remaining, type AnswerBody, type AskedQuestion, type InboxItem, type Question, type QuestionResponse } from './questions';
+import { KIND_LABEL, SAVE_TOO_LATE_TEXT, answerText, askerText, remaining, type AnswerBody, type AskedQuestion, type InboxItem, type Question, type QuestionResponse } from './questions';
 import { RunThumbnail } from './RunThumbnail';
 
 /** The first word of the prompt the runner asks with after a saved login was refused on a page that is not its site (`mismatchPrompt`). */
@@ -123,11 +123,13 @@ export function QuestionCard({ question: q, now, canAnswer, onAnswer, onOpenBrow
     }
   };
 
+  // "Save this login?" (E37.4b): the card says which site, in words the signed-in owner reads; the stored prompt names nothing.
+  const prompt = q.input === 'save_login' && q.saveLogin ? `Save this sign-in for ${q.saveLogin.site}?` : q.prompt;
   const card = (
     <Card
       ref={root}
       variant="outlined"
-      aria-label={`${variant === 'list' ? 'Request' : 'Question'}: ${q.prompt}`}
+      aria-label={`${variant === 'list' ? 'Request' : 'Question'}: ${prompt}`}
       aria-current={focused ? 'true' : undefined}
       data-new={isNew ? 'true' : undefined}
       sx={{
@@ -160,7 +162,7 @@ export function QuestionCard({ question: q, now, canAnswer, onAnswer, onOpenBrow
           </Alert>
         ) : (
           <Typography variant={variant === 'page' ? 'h6' : 'body1'} component={variant === 'page' ? 'h2' : 'p'} sx={{ whiteSpace: 'pre-wrap', ...WRAP }}>
-            {q.prompt}
+            {prompt}
           </Typography>
         )}
         <Box sx={{ mt: 1, color: 'text.secondary', ...WRAP }}>
@@ -216,11 +218,11 @@ export function QuestionCard({ question: q, now, canAnswer, onAnswer, onOpenBrow
         )}
         {done !== null ? (
           <Alert severity={done === 'Sent.' ? 'success' : 'info'} role="status" sx={{ mt: 2 }}>
-            {done === 'gone' ? 'This request was already answered or expired.' : done}
+            {done === 'gone' ? (q.input === 'save_login' ? `This offer is no longer open: it was answered, or it is too late to save it. ${SAVE_TOO_LATE_TEXT}` : 'This request was already answered or expired.') : done}
           </Alert>
         ) : expiredNow ? (
           <Alert severity="info" sx={{ mt: 2 }}>
-            This request expired.
+            {q.input === 'save_login' ? SAVE_TOO_LATE_TEXT : 'This request expired.'}
           </Alert>
         ) : !pending ? (
           <Alert severity={q.status === 'answered' ? 'success' : 'info'} sx={{ mt: 2, ...WRAP }}>
