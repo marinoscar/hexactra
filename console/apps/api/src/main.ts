@@ -53,7 +53,8 @@ export async function createApp(): Promise<NestFastifyApplication> {
   // unauthenticated, the OAuth server's authorize and register) count each
   // caller apart. An invalid value throws here, before anything is built.
   const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter({ trustProxy }), { bufferLogs: false });
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule, // `maxParamLength`: the signed links of deliveries (the report link, the unsubscribe link) carry their claims in the path, longer than Fastify's default of 100.
+    new FastifyAdapter({ trustProxy, routerOptions: { maxParamLength: 1024 } }), { bufferLogs: false });
   new Logger('Bootstrap').log(`Trusted proxies: ${describeTrustProxy(trustProxy)}`);
   // Route and caller attributes on the HTTP server span (`http.route`, `app.route.matched`),
   // first so it runs ahead of every other hook. Only when the SDK is installed.

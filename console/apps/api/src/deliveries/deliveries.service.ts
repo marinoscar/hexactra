@@ -236,7 +236,13 @@ export class DeliveriesService {
         throw new BadRequestException({ code: 'INVALID_DELIVERY', message: 'Webhooks are not available on this deployment.', details: { issues: [{ path: 'kind', message: 'webhooks are not available' }] } });
       }
       signingSecret = generateWebhookSecret();
-      await this.secrets.put(userId, row.id, signingSecret);
+      try {
+        await this.secrets.put(userId, row.id, signingSecret);
+      } catch (e) {
+        // A webhook delivery with no secret cannot send: it is not left behind.
+        await this.prisma.taskDelivery.delete({ where: { id: row.id } }).catch(() => undefined);
+        throw e;
+      }
     }
     await this.events.audit(userId, DELIVERY_AUDIT.created, row.id, { taskId, kind: body.kind, enabled, recipients: body.kind === 'email' ? addressesOf(config as EmailConfig).length : 0 });
     return { view: await this.get(userId, taskId, row.id), signingSecret };

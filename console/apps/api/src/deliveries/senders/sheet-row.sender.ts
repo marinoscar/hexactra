@@ -7,6 +7,7 @@
 import { randomBytes } from 'node:crypto';
 import { Injectable, Optional } from '@nestjs/common';
 
+import { isCapabilityError } from '../../connections/capabilities';
 import { ConnectionCapabilities } from '../../connections/connection-capabilities.service';
 import { RunReportLinks } from '../../tasks/run-report-link';
 import { DeliveryFailure, failureFrom, type DeliverySender, type SendContext, type SendOutcome } from '../delivery-sender';
@@ -56,7 +57,14 @@ export class SheetRowSender implements DeliverySender {
       // Headers: a spreadsheet with an empty first row gets them first (the delivery's own, in the same call as the row).
       const first = await docs.readSheet(fileId, { ...(sheet ? { sheet } : {}), range: `A1:${last}1` });
       const needsHeaders = !created && !first.values.some((r) => r.some((c) => c !== null && c !== ''));
-      const res = await docs.appendRows(fileId, sheet, needsHeaders ? [headers, row] : [row]);
+      let res: { ambiguous: boolean; updatedRange: string | null };
+      try {
+        res = await docs.appendRows(fileId, sheet, needsHeaders ? [headers, row] : [row]);
+      } catch (e) {
+        // A request that left and got no definite answer: the same as an ambiguous result, checked before anything is repeated.
+        if (!(isCapabilityError(e) && e.details.outcomeUnknown)) throw e;
+        res = { ambiguous: true, updatedRange: null };
+      }
       if (res.ambiguous) {
         await ctx.record({ appendAmbiguous: true });
         // Look before anything is repeated: if the row is there, the append worked.
