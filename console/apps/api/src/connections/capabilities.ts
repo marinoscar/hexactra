@@ -76,6 +76,10 @@ export const CAPABILITY_ERROR_CODES = [
   'INVALID_INPUT', // the arguments do not satisfy the schema (details.issues lists the paths, never the values)
   'NOT_SUPPORTED', // this provider has no adapter, or the adapter does not offer the operation
   'ABORTED', // the caller's AbortSignal fired
+  // Additions of the Microsoft provider (E39.4, #602), additive: Google never raises them.
+  'CONFLICT', // the item changed since it was read (an eTag precondition failed): read it again and retry
+  'NOTIFY_REQUIRED', // the change would email attendees and the caller did not allow it (Graph has no "do not notify")
+  'ADMIN_CONSENT_REQUIRED', // an administrator of the account's organization has to approve the app (details.adminConsentUrl)
 ] as const;
 export type CapabilityErrorCode = (typeof CAPABILITY_ERROR_CODES)[number];
 
@@ -94,6 +98,9 @@ export const CAPABILITY_ERROR_TEXT: Record<CapabilityErrorCode, string> = {
   INVALID_INPUT: 'The request is not valid.',
   NOT_SUPPORTED: 'The provider does not support this.',
   ABORTED: 'The call was cancelled.',
+  CONFLICT: 'The item changed in the meantime.',
+  NOTIFY_REQUIRED: 'This change would email the attendees, and notifying them was not allowed.',
+  ADMIN_CONSENT_REQUIRED: 'An administrator of the account\'s organization has to approve this app first.',
 };
 
 export interface CapabilityErrorDetails {
@@ -109,6 +116,8 @@ export interface CapabilityErrorDetails {
   reason?: string;
   /** INVALID_INPUT: the paths of the offending fields. */
   issues?: string[];
+  /** ADMIN_CONSENT_REQUIRED: the address an administrator opens to approve the app for the organization (carries the app's client id, no personal data). */
+  adminConsentUrl?: string;
 }
 
 /**
@@ -252,6 +261,11 @@ export const outgoingMail = z
     attachments: z.array(outgoingAttachment).max(20).optional(),
     /** Reply to this message (provider id): the adapter sets `In-Reply-To`, `References` and the thread. */
     inReplyTo: id.optional(),
+    /**
+     * Makes a retry of this send, after an ambiguous failure, return the first send instead of sending twice (a short-lived record
+     * on the server; where the provider gives no id for a send it can only refuse the retry). Without a key, a retry may duplicate.
+     */
+    idempotencyKey: z.string().min(8).max(128).regex(/^[A-Za-z0-9_-]+$/).optional(),
   })
   .refine((m) => m.text !== undefined || m.html !== undefined, { message: 'text or html is required', path: ['text'] });
 export type OutgoingMail = z.infer<typeof outgoingMail>;
@@ -635,7 +649,7 @@ export function limitResult(service: CapabilityService, method: string, result: 
 export interface CapabilityContext extends ConnectionContext {
   limits: CapabilityLimits;
   /** The connection as it is now: its provider, the address (the `From` of mail) and the switches that are on. */
-  connection: { provider: ConnectionProviderId; label: string; accountEmail: string; capabilities: Capability[] };
+  connection: { provider: ConnectionProviderId; label: string; accountEmail: string; capabilities: Capability[]; /** The provider's stable account id (Microsoft: `<tenant id>:<object id>`, which tells a personal account from a work one). */ accountId?: string };
 }
 
 /**

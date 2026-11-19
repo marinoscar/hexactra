@@ -84,4 +84,11 @@ export interface ConnectionProviderAdapter {
   capabilitiesGranted(scopes: readonly string[]): Capability[];
   /** One cheap read call for a capability (`POST /api/connections/{id}/test`). Never throws for a provider answer. */
   probe(input: ProbeInput): Promise<ProbeResult>;
+  /**
+   * Optional (E39.4): tells apart the refusals the provider sends back on the authorization redirect (`error` and `error_description`):
+   * the owner declined, or an administrator has to approve the app. `null` leaves it to the generic handling.
+   */
+  classifyAuthorizationError?(error: string, description: string | null): 'denied' | 'admin_consent_required' | null;
+  /** Optional (E39.4): the address an administrator of the owner's organization opens to approve the app for everyone (Microsoft). */
+  adminConsentUrl?(app: ProviderApp): string | null;
 }

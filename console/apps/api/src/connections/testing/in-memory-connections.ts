@@ -15,6 +15,7 @@ export interface InMemoryConnectionInput {
   provider?: ConnectionProviderId;
   label?: string;
   accountEmail?: string;
+  accountId?: string;
   /** The switches that are on (a write brings its read). */
   capabilities: Capability[];
   /** What the provider granted (default: the switches). Give fewer to test PERMISSION_MISSING. */
@@ -34,6 +35,7 @@ export class InMemoryConnections {
       provider: input.provider ?? 'google',
       label: input.label ?? 'Work',
       accountEmail: input.accountEmail ?? 'person-a@example.test',
+      accountId: input.accountId,
       capabilities: caps,
       granted: input.granted ? normalizeCapabilities(input.granted) : caps,
       status: input.status ?? 'active',
