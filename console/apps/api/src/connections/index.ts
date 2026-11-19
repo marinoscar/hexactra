@@ -8,3 +8,7 @@ export * from './connection-tokens.service';
 export * from './connection-usage.registry';
 export * from './connection-view';
 export { ConnectionsService } from './connections.service';
+export * from './capabilities';
+export * from './capability-hub';
+export * from './capability-provider.registry';
+export * from './connection-capabilities.service';
