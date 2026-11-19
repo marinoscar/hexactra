@@ -44,6 +44,8 @@ export interface FakeMessage {
   isDraft: boolean;
   internetMessageId: string;
   replyTo: string | null;
+  /** The `Authentication-Results` headers of the message as stored, top to bottom (Microsoft's own first when it stamped one). */
+  authenticationResults?: string[];
 }
 
 export interface FakeEvent {
@@ -193,6 +195,7 @@ export class FakeAccount {
       isDraft: m.isDraft ?? false,
       internetMessageId: m.internetMessageId ?? `<${randomUUID()}@example.test>`,
       replyTo: m.replyTo ?? null,
+      ...(m.authenticationResults ? { authenticationResults: m.authenticationResults } : {}),
     };
     this.messages.push(msg);
     return msg;

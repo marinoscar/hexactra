@@ -114,8 +114,13 @@ function messageJson(m: FakeMessage, prefer: string, select: string | undefined)
     categories: m.categories,
     isDraft: m.isDraft,
     internetMessageId: m.internetMessageId,
+    // Graph answers the headers only when asked for them with $select.
+    internetMessageHeaders: m.authenticationResults ? [{ name: 'Received', value: 'from mail.example.test' }, ...m.authenticationResults.map((value) => ({ name: 'Authentication-Results', value }))] : null,
   };
-  if (!select) return all;
+  if (!select) {
+    const { internetMessageHeaders: _omit, ...rest } = all;
+    return rest;
+  }
   const keep = new Set(['id', ...select.split(',').map((s) => s.trim())]);
   return Object.fromEntries(Object.entries(all).filter(([k]) => keep.has(k)));
 }

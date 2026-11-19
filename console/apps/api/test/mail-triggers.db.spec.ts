@@ -12,6 +12,10 @@ import { CapabilityProviderRegistry } from '../src/connections/capability-provid
 import { ConnectionProviderRegistry } from '../src/connections/connection-provider.registry';
 import { SCOPE } from '../src/connections/google/google.scopes';
 import { FakeCapabilityProvider } from '../src/connections/testing';
+import { GraphClient } from '../src/connections/microsoft/graph-client';
+import { MicrosoftCapabilityProvider } from '../src/connections/microsoft/microsoft.provider';
+import { microsoftAccountId } from '../src/connections/microsoft/microsoft.constants';
+import { FakeGraph } from '../src/connections/microsoft/testing/fake-graph';
 import { MCP_TOOLS } from '../src/mcp/mcp.tools';
 import { MailTriggerPoller } from '../src/mail-triggers/mail-trigger.poller';
 import { MailTriggerLimitsService } from '../src/mail-triggers/mail-triggers.limits';
@@ -749,5 +753,49 @@ describe('what was written', () => {
     for (const text of scanned) expect(text).not.toContain(`${MARKER} body`);
     for (const text of scanned) expect(text).not.toContain(`${MARKER} one`);
     expect(responses.filter((r) => r.includes(`${MARKER} body`))).toEqual([]);
+  });
+});
+
+describe('a Microsoft account (E39.4, #602): the sender check comes from Microsoft\'s own header', () => {
+  const graph = new FakeGraph();
+  let savedMicrosoft: unknown;
+
+  beforeAll(() => {
+    const providers = app.get(CapabilityProviderRegistry, { strict: false });
+    savedMicrosoft = providers.get('microsoft');
+    const account = graph.addAccount({ email: OWNER_ADDRESS, kind: 'work' });
+    const token = graph.issue(account);
+    // The real Microsoft capability provider over the fake Graph; the owner's one token stands in for the token service.
+    providers.register(new MicrosoftCapabilityProvider(new GraphClient({ fetch: (...a) => graph.fetch(...a), tokens: async () => token, sleep: async () => undefined })));
+  });
+
+  afterAll(() => {
+    if (savedMicrosoft) app.get(CapabilityProviderRegistry, { strict: false }).register(savedMicrosoft as never);
+    else app.get(CapabilityProviderRegistry, { strict: false }).unregister('microsoft');
+  });
+
+  it('a message Microsoft says passed starts one run, a failed or forged one starts nothing, and nothing needs acceptUnverified', async () => {
+    const s = await login('ms-auth');
+    const account = graph.accounts[0]!;
+    const c = await prisma.connection.create({
+      data: { userId: s.userId, provider: 'microsoft', accountId: microsoftAccountId(account.tenantId, account.objectId), accountEmail: OWNER_ADDRESS, label: `Outlook ${randomUUID().slice(0, 6)}`, capabilities: ['mail_read', 'mail_modify'], grantedScopes: ['Mail.Read', 'Mail.ReadWrite'], status: 'active' },
+    });
+    const t = await task(s);
+    // acceptUnverified is off: only a message Microsoft vouches for may start a run.
+    const trig = await createTrigger(s, t.id, { connectionId: c.id, match: { from: [BILLING] } });
+    const from = { address: BILLING, name: 'Billing' };
+    // Mail from after the trigger was made (it never replays older mail).
+    const now = new Date(Date.now() + 5_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const pass = account.addMessage({ subject: 'Invoice that passed', from, receivedDateTime: now, authenticationResults: ['spf=pass smtp.mailfrom=example.test; dkim=pass header.d=example.test; dmarc=pass action=none header.from=example.test'] });
+    account.addMessage({ subject: 'Invoice that failed', from, receivedDateTime: now, authenticationResults: ['spf=fail smtp.mailfrom=example.test; dmarc=fail header.from=example.test'] });
+    account.addMessage({ subject: 'Invoice with a forged header', from, receivedDateTime: now, authenticationResults: ['attacker.test; dmarc=pass header.from=example.test'] });
+    account.addMessage({ subject: 'Invoice with no header', from, receivedDateTime: now });
+    const polled = await poll(trig.id);
+    expect(polled).toMatchObject({ started: 1, skipped: 3 });
+    const runs = await runsOf(trig.id);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ trigger: 'email', userId: s.userId, context: { mail: { connectionId: c.id, messageId: pass.id } } });
+    const events = await eventsOf(trig.id);
+    expect(events.filter((e) => e.outcome === 'skipped_unverified').map((e) => e.reason).sort()).toEqual(['SENDER_NOT_CHECKED', 'SENDER_NOT_CHECKED', 'SENDER_NOT_VERIFIED']);
   });
 });

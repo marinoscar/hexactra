@@ -39,13 +39,13 @@ describe('listLabels', () => {
     a.masterCategories.push('Blue category', 'Follow up');
     const labels = await mail().listLabels();
     expect(labels).toEqual(expect.arrayContaining([
-      { id: 'folder:inbox', name: 'Inbox', kind: 'system' },
-      { id: 'folder:archive', name: 'Archive', kind: 'system' },
-      { id: 'folder:sentitems', name: 'Sent Items', kind: 'system' },
+      { id: 'INBOX', name: 'Inbox', kind: 'system' },
+      { id: 'ARCHIVE', name: 'Archive', kind: 'system' },
+      { id: 'SENT', name: 'Sent Items', kind: 'system' },
       { id: 'folder:F-1', name: 'Receipts', kind: 'user' },
       { id: 'category:Follow up', name: 'Follow up', kind: 'user' },
     ]));
-    expect(labels.filter((l) => l.kind === 'system').map((l) => l.id)).toEqual(['folder:inbox', 'folder:archive', 'folder:drafts', 'folder:sentitems', 'folder:deleteditems', 'folder:junkemail']);
+    expect(labels.filter((l) => l.kind === 'system').map((l) => l.id)).toEqual(['INBOX', 'ARCHIVE', 'DRAFT', 'SENT', 'TRASH', 'SPAM']);
     expect(labels.filter((l) => l.id === 'folder:F-inbox')).toHaveLength(0);
   });
 });
@@ -57,7 +57,7 @@ describe('search', () => {
     a.addMessage({ subject: 'Old', receivedDateTime: '2025-01-01T00:00:00Z' });
     const page = await mail().search({ from: 'person-b@example.test', after: '2026-01-01T00:00:00Z', before: '2026-12-31T00:00:00+01:00', unread: true, hasAttachment: true, label: 'category:Follow up', pageSize: 10 });
     expect(page.items).toHaveLength(1);
-    expect(page.items[0]).toMatchObject({ subject: 'Quarterly report', threadId: expect.any(String), from: { address: 'person-b@example.test', name: 'Person B' }, to: [{ address: 'person-a@example.test' }], unread: true, hasAttachments: true, date: '2026-03-02T09:30:00Z', labels: ['folder:inbox', 'category:Follow up'] });
+    expect(page.items[0]).toMatchObject({ subject: 'Quarterly report', threadId: expect.any(String), from: { address: 'person-b@example.test', name: 'Person B' }, to: [{ address: 'person-a@example.test' }], unread: true, hasAttachments: true, date: '2026-03-02T09:30:00Z', labels: ['INBOX', 'category:Follow up'] });
     const req = graphCalls((r) => r.path === '/me/messages')[0] as unknown as { query: Record<string, string>; headers: Record<string, string> };
     expect(req.query.$filter).toBe("receivedDateTime ge 2026-01-01T00:00:00Z and receivedDateTime lt 2026-12-30T23:00:00Z and from/emailAddress/address eq 'person-b@example.test' and isRead eq false and hasAttachments eq true and categories/any(c:c eq 'Follow up')");
     expect(req.query.$orderby).toBe('receivedDateTime desc');
@@ -121,9 +121,13 @@ describe('search', () => {
     const { a, mail, graphCalls } = setup();
     a.addMessage({ subject: 'in inbox' });
     a.addMessage({ subject: 'archived', folderId: 'F-archive' });
-    expect((await mail().search({ label: 'folder:archive' })).items.map((m) => m.subject)).toEqual(['archived']);
+    expect((await mail().search({ label: 'ARCHIVE' })).items.map((m) => m.subject)).toEqual(['archived']);
     expect(graphCalls((r) => r.path === '/me/mailFolders/archive/messages')).toHaveLength(1);
-    expect(await code(mail().search({ label: 'INBOX' }))).toBe('INVALID_INPUT');
+    // The neutral system label a caller such as the mail trigger uses, and the folder alias, reach the same folder.
+    expect((await mail().search({ label: 'INBOX' })).items.map((m) => m.subject)).toEqual(['in inbox']);
+    expect((await mail().search({ label: 'folder:inbox' })).items.map((m) => m.subject)).toEqual(['in inbox']);
+    expect((await mail().search({ label: 'inbox' })).items.map((m) => m.subject)).toEqual(['in inbox']);
+    expect(await code(mail().search({ label: 'NOT_A_LABEL' }))).toBe('INVALID_INPUT');
   });
 
   it('pages: a next link becomes an opaque token, the next page continues from it, and the last page has none', async () => {
@@ -222,6 +226,44 @@ describe('get', () => {
     expect(await code(mail().getAttachment(m.id, 'i1'))).toBe('NOT_SUPPORTED');
     expect(await code(mail().getAttachment(m.id, 'big'))).toBe('TOO_LARGE');
     expect(graphCalls((r) => r.path.endsWith('/big/$value'))).toHaveLength(0);
+  });
+});
+
+describe('sender authentication (the mail trigger refuses a fail)', () => {
+  const FROM = { address: 'billing@example.test', name: 'Billing' };
+  const EOP = 'spf=pass (sender IP is 192.0.2.1) smtp.mailfrom=example.test; dkim=pass (signature was verified) header.d=example.test; dmarc=pass action=none header.from=example.test; compauth=pass reason=100';
+  const HOSTED = 'mail.protection.outlook.com;';
+
+  it('reads the topmost header Microsoft stamped: pass, fail, missing, a spoofed From, and forged headers', async () => {
+    const { a, mail, graphCalls } = setup();
+    const pass = a.addMessage({ subject: 'pass', from: FROM, authenticationResults: [EOP] });
+    const named = a.addMessage({ subject: 'named', from: FROM, authenticationResults: [`${HOSTED} dkim=pass header.d=example.test; dmarc=pass header.from=example.test`] });
+    const fail = a.addMessage({ subject: 'fail', from: FROM, authenticationResults: ['spf=fail smtp.mailfrom=example.test; dkim=none; dmarc=fail action=oreject header.from=example.test'] });
+    const none = a.addMessage({ subject: 'none', from: FROM });
+    // The From says example.test, but the signature and the envelope are the attacker's own domain.
+    const spoof = a.addMessage({ subject: 'spoof', from: FROM, authenticationResults: ['spf=pass smtp.mailfrom=x@evil.test; dkim=pass header.d=evil.test; dmarc=none header.from=evil.test'] });
+    // The sender wrote a passing header of their own: it sits below Microsoft's, which says fail.
+    const forged = a.addMessage({ subject: 'forged', from: FROM, authenticationResults: ['spf=fail smtp.mailfrom=example.test; dmarc=fail header.from=example.test', 'attacker.test; dmarc=pass header.from=example.test'] });
+    // A header only the sender wrote, with another server's name on top, is not Microsoft's word.
+    const foreign = a.addMessage({ subject: 'foreign', from: FROM, authenticationResults: ['attacker.test; dmarc=pass header.from=example.test'] });
+    // A look-alike server name is not Microsoft's.
+    const lookalike = a.addMessage({ subject: 'lookalike', from: FROM, authenticationResults: ['outlook.com.attacker.test; dmarc=pass header.from=example.test'] });
+    const auth = async (id: string) => (await mail().get(id, { body: 'none' })).senderAuth;
+    expect([await auth(pass.id), await auth(named.id), await auth(fail.id), await auth(none.id), await auth(spoof.id), await auth(forged.id), await auth(foreign.id), await auth(lookalike.id)]).toEqual(['pass', 'pass', 'fail', 'unknown', 'unknown', 'fail', 'unknown', 'unknown']);
+    // A search carries it on every summary too, and asks Graph for the headers.
+    const found = await mail().search({ from: 'billing@example.test' });
+    expect(Object.fromEntries(found.items.map((m) => [m.id, m.senderAuth]))).toEqual({ [pass.id]: 'pass', [named.id]: 'pass', [fail.id]: 'fail', [none.id]: 'unknown', [spoof.id]: 'unknown', [forged.id]: 'fail', [foreign.id]: 'unknown', [lookalike.id]: 'unknown' });
+    const req = graphCalls((r) => r.path === '/me/messages') as unknown as { query: Record<string, string> }[];
+    expect(req.length).toBeGreaterThan(0);
+    for (const r of req) expect(r.query.$select!.split(',')).toContain('internetMessageHeaders');
+  });
+
+  it('is unknown, never pass, for a message with a header but no usable From, and on a full read with the body', async () => {
+    const { a, mail } = setup();
+    const noFrom = a.addMessage({ subject: 'x', from: null, authenticationResults: [EOP] });
+    expect((await mail().get(noFrom.id, { body: 'text' })).senderAuth).toBe('unknown');
+    const ok = a.addMessage({ subject: 'y', from: FROM, authenticationResults: [EOP] });
+    expect((await mail().get(ok.id, { body: 'text' })).senderAuth).toBe('pass');
   });
 });
 
@@ -432,17 +474,23 @@ describe('modify', () => {
     await mail().modify(m.id, { addLabels: ['folder:F-1'] });
     expect(m.folderId).toBe('F-1');
     const n = a.addMessage({ subject: 'y' });
-    await mail().modify(n.id, { removeLabels: ['folder:inbox'] });
+    await mail().modify(n.id, { removeLabels: ['INBOX'] });
     expect(n.folderId).toBe('F-archive');
+    const o = a.addMessage({ subject: 'z' });
+    await mail().modify(o.id, { addLabels: ['SPAM'] });
+    expect(o.folderId).toBe('F-junkemail');
+    const q = a.addMessage({ subject: 'w' });
+    await mail().modify(q.id, { removeLabels: ['folder:inbox'] });
+    expect(q.folderId).toBe('F-archive');
   });
 
   it('refuses what a folder-and-category model cannot say, before changing anything', async () => {
     const { a, mail, graphCalls } = setup();
     const m = a.addMessage({ subject: 'x' });
     expect(await code(mail().modify(m.id, { addLabels: ['UNREAD'] }))).toBe('INVALID_INPUT');
-    expect(await code(mail().modify(m.id, { addLabels: ['folder:archive', 'folder:drafts'] }))).toBe('INVALID_INPUT');
+    expect(await code(mail().modify(m.id, { addLabels: ['ARCHIVE', 'DRAFT'] }))).toBe('INVALID_INPUT');
     expect(await code(mail().modify(m.id, { archive: true, addLabels: ['folder:drafts'] }))).toBe('INVALID_INPUT');
-    expect(await code(mail().modify(m.id, { removeLabels: ['folder:drafts'] }))).toBe('INVALID_INPUT');
+    expect(await code(mail().modify(m.id, { removeLabels: ['DRAFT'] }))).toBe('INVALID_INPUT');
     expect(graphCalls((r) => r.method !== 'GET')).toHaveLength(0);
     expect(m.folderId).toBe('F-inbox');
   });

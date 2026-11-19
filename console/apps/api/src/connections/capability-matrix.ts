@@ -46,7 +46,7 @@ export const CAPABILITY_MATRIX: Record<MatrixMethod, Record<MatrixColumn, Matrix
   'mail.getAttachment': row(ok, limited('File attachments only; an attached message or a link is not downloadable.')),
   'mail.createDraft': row(ok, ok),
   'mail.send': row(ok, limited('With send-only permission there is no message id in the answer and attachments must be under 3 MB; with the modify switch on, larger ones are sent through a draft.')),
-  'mail.modify': row(ok, limited('Microsoft has folders and categories, not labels: archive moves to Archive, labels map to categories (`category:<name>`) and a folder (`folder:<id>`) moves the message.')),
+  'mail.modify': row(ok, limited('Microsoft has folders and categories, not labels: archive moves to Archive, labels map to categories (`category:<name>`) and a system label (`SPAM`) or folder (`folder:<id>`) moves the message.')),
   'mail.listLabels': row(ok, limited('Returns folders and categories, with the kind.')),
   'calendar.listCalendars': row(ok, ok),
   'calendar.listEvents': row(ok, limited('Text matches the event title.')),

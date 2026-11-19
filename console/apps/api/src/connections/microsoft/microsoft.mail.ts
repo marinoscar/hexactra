@@ -31,6 +31,7 @@ import {
   type OutgoingMail,
   type Page,
 } from '../capabilities';
+import { senderAuthFrom } from '../mail-auth';
 import { GraphClient, decodePageToken, encodePageToken } from './graph-client';
 import { INLINE_ATTACHMENT_BYTES, MAIL_FIELDS, MESSAGE_FIELDS, UPLOAD_CHUNK_BYTES } from './microsoft.constants';
 import { isoZ, odataString, seg } from './microsoft.support';
@@ -39,6 +40,12 @@ type G = Record<string, unknown>;
 
 const WELL_KNOWN = ['inbox', 'archive', 'drafts', 'sentitems', 'deleteditems', 'junkemail'] as const;
 const WELL_KNOWN_NAME: Record<(typeof WELL_KNOWN)[number], string> = { inbox: 'Inbox', archive: 'Archive', drafts: 'Drafts', sentitems: 'Sent Items', deleteditems: 'Deleted Items', junkemail: 'Junk Email' };
+/**
+ * The well-known folders carry the neutral system label ids every provider shares (the interface's "a system label such as `INBOX`"):
+ * callers such as the mail trigger say `INBOX` without knowing the provider. `folder:inbox` (the alias) is accepted as well.
+ */
+const SYSTEM_ID: Record<(typeof WELL_KNOWN)[number], string> = { inbox: 'INBOX', archive: 'ARCHIVE', drafts: 'DRAFT', sentitems: 'SENT', deleteditems: 'TRASH', junkemail: 'SPAM' };
+const ALIAS_OF_SYSTEM = new Map(Object.entries(SYSTEM_ID).map(([alias, id]) => [id, alias]));
 const FOLDER_TTL_MS = 10 * 60_000;
 const DEDUPE_TTL_MS = 10 * 60_000;
 const DEDUPE_MAX = 5_000;
@@ -59,6 +66,8 @@ const addressLike = (v: string | undefined): v is string => !!v && /^[^@\s"'\\]+
 
 export type ParsedLabel = { kind: 'folder'; id: string } | { kind: 'category'; name: string };
 export function parseLabel(label: string): ParsedLabel | null {
+  const alias = ALIAS_OF_SYSTEM.get(label.toUpperCase());
+  if (alias) return { kind: 'folder', id: alias };
   if (label.startsWith('folder:') && label.length > 7) return { kind: 'folder', id: label.slice(7) };
   if (label.startsWith('category:') && label.length > 9) return { kind: 'category', name: label.slice(9) };
   return null;
@@ -124,6 +133,30 @@ export class MicrosoftFolders {
   }
 }
 
+// ---- sender authentication (E39.8: the mail trigger refuses a `fail`) ----
+
+/** Microsoft's own servers: the authserv-id of the header Exchange Online (or Outlook.com) stamps. */
+const MICROSOFT_AUTHSERV = /(^|\.)(protection\.outlook\.com|outlook\.com|hotmail\.com|live\.com|office365\.com|exchangelabs\.com)$/;
+/** Exchange Online often writes the header with no authserv-id at all (`spf=pass ...; dkim=pass ...`); it is given this stand-in name so it can be read and trusted as Microsoft's. */
+const EOP_STAND_IN = 'eop.protection.outlook.com';
+
+/**
+ * Every `Authentication-Results` header of the message, top to bottom (`internetMessageHeaders`). Microsoft prepends its own when it
+ * receives the message, so only the topmost counts, and only when Microsoft's own server wrote it: a header the sender wrote sits
+ * below it and one with another server's name is ignored. (Limit: a header with no server name is read as Microsoft's, because that is
+ * how Exchange Online writes its own; Microsoft stamps every message it receives, so a sender's copy is always below it.)
+ */
+export function authResultsOf(headers: unknown): string[] {
+  if (!Array.isArray(headers)) return [];
+  return (headers as { name?: unknown; value?: unknown }[])
+    .filter((h) => typeof h?.name === 'string' && h.name.toLowerCase() === 'authentication-results' && typeof h.value === 'string')
+    .map((h) => {
+      const v = (h.value as string).trim();
+      return /^[a-z][a-z0-9-]*\s*=/i.test(v) ? `${EOP_STAND_IN}; ${v}` : v;
+    });
+}
+export const isMicrosoftServer = (id: string): boolean => MICROSOFT_AUTHSERV.test(id.toLowerCase());
+
 // ---- mapping ----
 
 const asAddress = (r: unknown): MailAddress | null => {
@@ -146,15 +179,18 @@ export class MicrosoftMail implements MailCapability {
     const folderId = str(m.parentFolderId);
     const alias = folders.aliasOf.get(folderId);
     const cats = Array.isArray(m.categories) ? m.categories.filter((c): c is string => typeof c === 'string').map((c) => `category:${c}`) : [];
-    return [...(folderId ? [`folder:${alias ?? folderId}`] : []), ...cats];
+    return [...(folderId ? [alias ? SYSTEM_ID[alias as keyof typeof SYSTEM_ID] : `folder:${folderId}`] : []), ...cats];
   }
 
   private summary(m: G, folders: FolderMap): MailSummary {
+    const from = asAddress(m.from);
     const received = typeof m.receivedDateTime === 'string' && Number.isFinite(Date.parse(m.receivedDateTime)) ? new Date(m.receivedDateTime).toISOString().replace(/\.\d{3}Z$/, 'Z') : null;
     return {
       id: str(m.id),
       threadId: typeof m.conversationId === 'string' ? m.conversationId : null,
-      from: asAddress(m.from),
+      from,
+      // The receiving server's own SPF, DKIM and DMARC result for the From address: the mail trigger refuses a `fail`.
+      senderAuth: senderAuthFrom(authResultsOf(m.internetMessageHeaders), from?.address, { trusted: isMicrosoftServer }),
       to: asAddresses(m.toRecipients),
       subject: str(m.subject),
       snippet: str(m.bodyPreview),
@@ -435,7 +471,7 @@ export class MicrosoftMail implements MailCapability {
 
   async listLabels(): Promise<MailLabel[]> {
     const folders = await this.shared.folders.load(this.g, this.ctx);
-    const out: MailLabel[] = WELL_KNOWN.filter((a) => folders.idOf.has(a)).map((a) => ({ id: `folder:${a}`, name: WELL_KNOWN_NAME[a], kind: 'system' as const }));
+    const out: MailLabel[] = WELL_KNOWN.filter((a) => folders.idOf.has(a)).map((a) => ({ id: SYSTEM_ID[a], name: WELL_KNOWN_NAME[a], kind: 'system' as const }));
     const list = (await this.g.json<G>(this.ctx, { op: 'mail.folders', method: 'GET', path: '/me/mailFolders', query: { $top: '100', $select: 'id,displayName' }, capability: 'mail_read' })) ?? {};
     for (const f of (Array.isArray(list.value) ? list.value : []) as G[]) if (str(f.id) && !folders.aliasOf.has(str(f.id))) out.push({ id: `folder:${str(f.id)}`, name: str(f.displayName), kind: 'user' });
     const cats = await this.g.request(this.ctx, { op: 'mail.categories_list', method: 'GET', path: '/me/outlook/masterCategories', accept: 'json', okStatuses: [404], capability: 'mail_read' });

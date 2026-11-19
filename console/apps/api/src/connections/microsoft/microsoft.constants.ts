@@ -40,7 +40,7 @@ export const INLINE_ATTACHMENT_BYTES = 3 * 1024 * 1024;
 /** Upload sessions take chunks that are a multiple of 320 KiB. */
 export const UPLOAD_CHUNK_BYTES = 320 * 1024 * 10;
 
-export const MAIL_FIELDS = 'id,conversationId,from,toRecipients,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,categories,parentFolderId,isDraft';
+export const MAIL_FIELDS = 'id,conversationId,from,toRecipients,subject,bodyPreview,receivedDateTime,isRead,hasAttachments,categories,parentFolderId,isDraft,internetMessageHeaders';
 export const MESSAGE_FIELDS = `${MAIL_FIELDS},ccRecipients,replyTo,internetMessageId,body`;
 
 export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
