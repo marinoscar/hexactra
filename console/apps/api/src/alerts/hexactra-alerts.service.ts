@@ -99,6 +99,15 @@ export class HexactraAlertsService implements OnApplicationBootstrap, OnModuleDe
       });
       return rows.map((r) => ({ runId: r.id, userId: r.userId, taskName: r.task?.name ?? null, goal: r.goal, costUsd: Number(r.costUsd), costKnown: r.costKnown }));
     },
+    recoveredRuns: async (minRecoveries, since) => {
+      const rows = await this.prisma.run.findMany({
+        where: { createdAt: { gte: since }, recoveries: { gte: minRecoveries } },
+        select: { id: true, userId: true, goal: true, recoveries: true, task: { select: { name: true } } },
+        orderBy: { recoveries: 'desc' },
+        take: 200,
+      });
+      return rows.map((r) => ({ runId: r.id, userId: r.userId, taskName: r.task?.name ?? null, goal: r.goal, recoveries: r.recoveries }));
+    },
     busyApprovals: (minUses, since) => this.approvals.busyRules(minUses, since),
     cardUsage: async (since) => {
       // Card payments are the `number` releases that were typed (E37.7): counts and the declared amount, never a card or a merchant.
