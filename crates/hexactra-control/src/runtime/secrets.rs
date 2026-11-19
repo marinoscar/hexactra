@@ -651,11 +651,7 @@ fn card_target_script(selector: Option<&str>, point: Option<ViewportPoint>) -> S
 
 /// Read a card target probe's answer: top level, or a frame whose origin is
 /// known and `https`. Anything else is refused.
-fn card_target_of(
-    v: &Value,
-    selector: bool,
-    top: &Origin,
-) -> Result<CardTarget, Fail> {
+fn card_target_of(v: &Value, selector: bool, top: &Origin) -> Result<CardTarget, Fail> {
     if v.get("found").and_then(Value::as_bool) != Some(true) {
         return Err(Fail::new(code::TYPING_FAILED, "there is no such element"));
     }
@@ -875,7 +871,13 @@ impl Run {
         tab_id: Option<i64>,
     ) -> Result<Value, Fail> {
         // A card is never typed this way: it needs a declared purchase (E37.7).
-        if matches!(&source, Source::Field { purpose: SecretPurpose::Purchase, .. }) {
+        if matches!(
+            &source,
+            Source::Field {
+                purpose: SecretPurpose::Purchase,
+                ..
+            }
+        ) {
             return Err(Fail::new(
                 code::REFUSED,
                 "a card is typed with type_card_field, with the purchase's amount and currency",

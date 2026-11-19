@@ -973,7 +973,7 @@ paths:
     put:
       tags:
       - secrets
-      description: 'Register (or replace) the secrets provider an owner''s sessions use for `secrets_lookup`, `type_from_provider`, `type_code_from_provider` and `select_from_provider`. The access token is held in memory only: never written to the state database, never returned, never logged. A registration with `expires_at` disappears then; register again with a fresh token. Kind `vault` (a Vault''s agent credential API) needs `base_url` (the Vault''s `APP_URL`, `https` or loopback `http`), `access_token` (the short-lived `oat_` token) and `expires_at`. Kind `console` (the console''s built-in store, which the fabric calls back) needs `base_url` (the console''s internal address, `https` or `http` on a private network such as `http://api:3000/api/internal/secrets-store/v1`), `access_token` (the owner''s `sct_` credential) and `expires_at`; `test` exists only in builds with the `test-provider` feature.'
+      description: 'Register (or replace) the secrets provider an owner''s sessions use for `secrets_lookup`, `type_from_provider`, `type_code_from_provider`, `select_from_provider` and `type_card_field`. The access token is held in memory only: never written to the state database, never returned, never logged. A registration with `expires_at` disappears then; register again with a fresh token. Kind `vault` (a Vault''s agent credential API) needs `base_url` (the Vault''s `APP_URL`, `https` or loopback `http`), `access_token` (the short-lived `oat_` token) and `expires_at`. Kind `console` (the console''s built-in store, which the fabric calls back) needs `base_url` (the console''s internal address, `https` or `http` on a private network such as `http://api:3000/api/internal/secrets-store/v1`), `access_token` (the owner''s `sct_` credential) and `expires_at`; `test` exists only in builds with the `test-provider` feature.'
       operationId: register
       parameters:
       - name: owner_id
@@ -1129,7 +1129,7 @@ paths:
     post:
       tags:
       - sessions
-      description: 'Queue an action on the session''s host. A `type_secret` action types the answer of a `secret` handoff of this session: the control plane consumes the value once and the operation, events and logs show `[secret]`, never the value. A `type` action with `sensitive: true` is reported the same way. `secrets_lookup`, `type_from_provider`, `type_code_from_provider` and `select_from_provider` are answered by the control plane from the session owner''s registered secrets provider (`PUT /v1/secrets-providers/{owner_id}/{provider}`): it reads the tab''s top-level origin itself, asks the provider with it, and types the value with `sensitive: true` (or, for `select_from_provider`, picks the matching `<select>` option itself); the operation reports `{ typed: true }` or `{ selected: true }`, never the value, never its length. A sensitive identity field (a date of birth, an ID number) is only typed into an `https` page. A failure is `state: failed` with `error: "<code>: <message>"` (`no_provider`, `not_found`, `origin_mismatch`, `disabled`, `rate_limited`, `unavailable`, `unauthorized`, `refused`, `origin_unavailable`, `cross_origin_frame`, `typing_failed`, `insecure_origin`, `no_option`, `timed_out`).'
+      description: 'Queue an action on the session''s host. A `type_secret` action types the answer of a `secret` handoff of this session: the control plane consumes the value once and the operation, events and logs show `[secret]`, never the value. A `type` action with `sensitive: true` is reported the same way. `secrets_lookup`, `type_from_provider`, `type_code_from_provider`, `select_from_provider` and `type_card_field` are answered by the control plane from the session owner''s registered secrets provider (`PUT /v1/secrets-providers/{owner_id}/{provider}`): it reads the tab''s top-level origin itself, asks the provider with it, and types the value with `sensitive: true` (or, for `select_from_provider`, picks the matching `<select>` option itself); the operation reports `{ typed: true }` or `{ selected: true }`, never the value, never its length. A sensitive identity field (a date of birth, an ID number) is only typed into an `https` page. A failure is `state: failed` with `error: "<code>: <message>"` (`no_provider`, `not_found`, `origin_mismatch`, `disabled`, `rate_limited`, `unavailable`, `unauthorized`, `refused`, `origin_unavailable`, `cross_origin_frame`, `typing_failed`, `insecure_origin`, `no_option`, `amount_exceeded`, `currency_mismatch`, `security_code_not_granted`, `grant_expired`, `limit_reached`, `cards_disabled`, `frame_unknown`, `timed_out`). `type_card_field` (E37.7) types one field of a saved card under the owner''s merchant grant: the page must be `https`, the control plane reads the merchant''s top-level origin and, for a point inside an embedded frame, that frame''s origin (`frame_unknown` when it cannot tell), and passes both with the purchase''s `amount` and `currency` to the provider; it reports `{ typed: true, frame_origin? }`.'
       operationId: run_action
       parameters:
       - name: id
@@ -1358,6 +1358,20 @@ components:
           description: When the browser blocked it.
         host:
           type: string
+    CardField:
+      type: string
+      description: |-
+        One card field a `type_card_field` action types (E37.7). `expiry` is
+        composed inside the fabric from the two released parts (`MM/YY`) for a
+        page that has one combined input; it is never returned.
+      enum:
+      - number
+      - expiry
+      - exp_month
+      - exp_year
+      - holder_name
+      - postal_code
+      - security_code
     ClaimedHandoffValue:
       type: object
       description: |-
@@ -2726,6 +2740,67 @@ components:
             type: string
             enum:
             - type_code_from_provider
+      - type: object
+        description: |-
+          Type one field of a saved card into the target (E37.7), under the
+          owner's merchant grant. Like `type_from_provider`, and stricter: the
+          page must be `https`; the fabric reads the tab's **top-level** origin
+          (the merchant) itself and, when the target is inside an embedded frame
+          (a `point` on a payment processor's iframe), that frame's origin too,
+          and passes both to the provider with the purchase's `amount` and
+          `currency`; it refuses when it cannot determine a frame's origin. The
+          caller never names an origin. `field: expiry` composes `MM/YY` from the
+          two released parts. A card field is never submitted. Result:
+          [`CardTypedResult`]; never the value.
+        required:
+        - item_id
+        - field
+        - amount
+        - currency
+        - type
+        properties:
+          amount:
+            type: string
+            description: 'The purchase''s amount: a decimal with at most two places.'
+          clear:
+            type: boolean
+            description: Clear the existing value first.
+          client_label:
+            type:
+            - string
+            - 'null'
+          currency:
+            type: string
+            description: 'The purchase''s currency: ISO 4217, three letters.'
+          field:
+            $ref: '#/components/schemas/CardField'
+          item_id:
+            type: string
+          point:
+            oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/ViewportPoint'
+          provider:
+            type:
+            - string
+            - 'null'
+          run_id:
+            type:
+            - string
+            - 'null'
+          selector:
+            type:
+            - string
+            - 'null'
+          tab_id:
+            type:
+            - integer
+            - 'null'
+            format: int64
+          type:
+            type: string
+            enum:
+            - type_card_field
       - type: object
         description: |-
           Choose the `<select>` option that matches one field of one item from

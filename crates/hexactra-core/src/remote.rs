@@ -998,7 +998,11 @@ pub const MAX_CARD_AMOUNT: f64 = 10_000_000.0;
 /// A purchase's amount: a positive decimal with at most two places and at most
 /// [`MAX_CARD_AMOUNT`] (`"42.50"`, `"7"`).
 pub fn check_amount(amount: &str) -> Result<(), ActionValidationError> {
-    let bad = || ActionValidationError("amount must be a positive decimal with at most two places, at most 10000000.00".into());
+    let bad = || {
+        ActionValidationError(
+            "amount must be a positive decimal with at most two places, at most 10000000.00".into(),
+        )
+    };
     let (whole, frac) = amount.split_once('.').unwrap_or((amount, ""));
     let digits = |p: &str| p.bytes().all(|b| b.is_ascii_digit());
     if whole.is_empty() || whole.len() > 8 || !digits(whole) || frac.len() > 2 || !digits(frac) {
@@ -3300,6 +3304,31 @@ mod tests {
         assert_eq!(
             serde_json::from_value::<ItemSummary>(wire).unwrap(),
             identity
+        );
+        // A card item lists its brand, last four, expiry and grant; nothing else.
+        let card = ItemSummary {
+            card: Some(CardSummary {
+                brand: Some("visa".into()),
+                last4: Some("4242".into()),
+                exp_month: Some("09".into()),
+                exp_year: Some("2031".into()),
+                grant: Some(CardGrantSummary {
+                    max_amount: "500.00".into(),
+                    currency: "USD".into(),
+                    includes_security_code: false,
+                    expires_at: None,
+                }),
+            }),
+            ..item.clone()
+        };
+        let wire = serde_json::to_value(&card).unwrap();
+        assert_eq!(wire["card"]["last4"], "4242");
+        assert_eq!(wire["card"]["grant"]["max_amount"], "500.00");
+        assert!(wire["card"]["grant"].get("expires_at").is_none());
+        assert_eq!(serde_json::from_value::<ItemSummary>(wire).unwrap(), card);
+        assert!(serde_json::to_value(&item).unwrap().get("card").is_none());
+        assert!(
+            SecretField::CardNumber.requires_https() && SecretField::SecurityCode.requires_https()
         );
         assert!(SecretField::IdNumber.requires_https());
         assert!(!SecretField::City.requires_https());

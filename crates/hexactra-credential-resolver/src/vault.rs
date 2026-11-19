@@ -1527,7 +1527,13 @@ mod tests {
 
     // ------------------------------------------------------------ cards (E37.7)
 
-    fn pay(item: &str, field: SecretField, o: &str, amount: &str, frame: Option<&str>) -> ReleaseRequest {
+    fn pay(
+        item: &str,
+        field: SecretField,
+        o: &str,
+        amount: &str,
+        frame: Option<&str>,
+    ) -> ReleaseRequest {
         ReleaseRequest {
             purpose: SecretPurpose::Purchase,
             purchase: Some(crate::PurchaseContext {
@@ -1545,7 +1551,11 @@ mod tests {
         let p = VaultProvider::new(&fake.base_url, fake.card_token(), None).unwrap();
         // A checkout on another subdomain of the merchant matches by site.
         let on = p
-            .lookup(&owner(), &origin("https://checkout.shop.example.test"), ItemKind::Card)
+            .lookup(
+                &owner(),
+                &origin("https://checkout.shop.example.test"),
+                ItemKind::Card,
+            )
             .await
             .unwrap();
         // The closed card is not listed (Vault's opt-in).
@@ -1556,12 +1566,30 @@ mod tests {
         assert_eq!(card.last4.as_deref(), Some("4242"));
         assert_eq!(card.exp_month.as_deref(), Some(CARD_EXP_MONTH));
         let g = card.grant.as_ref().unwrap();
-        assert_eq!((g.max_amount.as_str(), g.currency.as_str()), ("500.00", "USD"));
+        assert_eq!(
+            (g.max_amount.as_str(), g.currency.as_str()),
+            ("500.00", "USD")
+        );
         assert!(!g.includes_security_code);
-        assert!(on.iter().find(|i| i.id == CARD_2_ID).unwrap().card.as_ref().unwrap().grant.as_ref().unwrap().includes_security_code);
+        assert!(
+            on.iter()
+                .find(|i| i.id == CARD_2_ID)
+                .unwrap()
+                .card
+                .as_ref()
+                .unwrap()
+                .grant
+                .as_ref()
+                .unwrap()
+                .includes_security_code
+        );
         // No grant for this merchant: nothing is listed.
         let none = p
-            .lookup(&owner(), &origin("https://other-merchant.test"), ItemKind::Card)
+            .lookup(
+                &owner(),
+                &origin("https://other-merchant.test"),
+                ItemKind::Card,
+            )
             .await
             .unwrap();
         assert!(none.is_empty());
@@ -1572,7 +1600,10 @@ mod tests {
         }
         assert!(!json.contains("4242424242"));
         let seen = fake.requests_to("/cards");
-        assert_eq!(seen[0].params["origin"], "https://checkout.shop.example.test");
+        assert_eq!(
+            seen[0].params["origin"],
+            "https://checkout.shop.example.test"
+        );
     }
 
     #[test]
@@ -1581,7 +1612,10 @@ mod tests {
         for bad in ["4242424242424242", "42a2", "", " ", "12345"] {
             assert_eq!(digits_up_to(bad, 4), None, "{bad}");
         }
-        assert_eq!(clean_brand("  visa<script> ").as_deref(), Some("visascript"));
+        assert_eq!(
+            clean_brand("  visa<script> ").as_deref(),
+            Some("visascript")
+        );
         assert_eq!(clean_brand("\n\u{7}"), None);
     }
 
@@ -1590,7 +1624,13 @@ mod tests {
         let fake = FakeVault::start().await;
         let p = VaultProvider::new(&fake.base_url, fake.card_token(), None).unwrap();
         let v = p
-            .release(pay(CARD_ID, SecretField::CardNumber, CARD_MERCHANT, "42.50", Some(CARD_FRAME)))
+            .release(pay(
+                CARD_ID,
+                SecretField::CardNumber,
+                CARD_MERCHANT,
+                "42.50",
+                Some(CARD_FRAME),
+            ))
             .await
             .unwrap();
         assert_eq!(text(&v), CARD_NUMBER);
@@ -1613,7 +1653,10 @@ mod tests {
             (SecretField::HolderName, CARD_HOLDER),
             (SecretField::PostalCode, CARD_POSTAL),
         ] {
-            let v = p.release(pay(CARD_ID, f, CARD_MERCHANT, "10", None)).await.unwrap();
+            let v = p
+                .release(pay(CARD_ID, f, CARD_MERCHANT, "10", None))
+                .await
+                .unwrap();
             assert_eq!(text(&v), want);
         }
         let last = fake.requests_to("/fill").pop().unwrap();
@@ -1621,11 +1664,21 @@ mod tests {
         assert!(!last.params.contains_key("frameOrigin"));
         // Not a card field, and not a purchase.
         assert_eq!(
-            p.release(pay(CARD_ID, SecretField::Password, CARD_MERCHANT, "10", None)).await.err(),
+            p.release(pay(
+                CARD_ID,
+                SecretField::Password,
+                CARD_MERCHANT,
+                "10",
+                None
+            ))
+            .await
+            .err(),
             Some(ProviderError::Refused("unsupported_field".into()))
         );
         assert_eq!(
-            p.release(release(CARD_ID, SecretField::CardNumber, CARD_MERCHANT)).await.err(),
+            p.release(release(CARD_ID, SecretField::CardNumber, CARD_MERCHANT))
+                .await
+                .err(),
             Some(ProviderError::Refused("unsupported_field".into()))
         );
         let mut no_context = pay(CARD_ID, SecretField::CardNumber, CARD_MERCHANT, "10", None);
@@ -1643,32 +1696,87 @@ mod tests {
         let refused = |r: Result<SecretValue, ProviderError>| r.err().unwrap();
         // Amount over the grant, wrong currency, security code not granted.
         assert_eq!(
-            refused(p.release(pay(CARD_ID, SecretField::CardNumber, CARD_MERCHANT, "500.01", None)).await),
+            refused(
+                p.release(pay(
+                    CARD_ID,
+                    SecretField::CardNumber,
+                    CARD_MERCHANT,
+                    "500.01",
+                    None
+                ))
+                .await
+            ),
             ProviderError::Refused("card_amount_exceeded".into())
         );
         let mut euro = pay(CARD_ID, SecretField::CardNumber, CARD_MERCHANT, "10", None);
         euro.purchase.as_mut().unwrap().currency = "EUR".into();
-        assert_eq!(refused(p.release(euro).await), ProviderError::Refused("card_currency_mismatch".into()));
         assert_eq!(
-            refused(p.release(pay(CARD_ID, SecretField::SecurityCode, CARD_MERCHANT, "10", None)).await),
+            refused(p.release(euro).await),
+            ProviderError::Refused("card_currency_mismatch".into())
+        );
+        assert_eq!(
+            refused(
+                p.release(pay(
+                    CARD_ID,
+                    SecretField::SecurityCode,
+                    CARD_MERCHANT,
+                    "10",
+                    None
+                ))
+                .await
+            ),
             ProviderError::Refused("security_code_not_granted".into())
         );
         // With the grant's flag the code is released.
-        let v = p.release(pay(CARD_2_ID, SecretField::SecurityCode, CARD_MERCHANT, "10", None)).await.unwrap();
+        let v = p
+            .release(pay(
+                CARD_2_ID,
+                SecretField::SecurityCode,
+                CARD_MERCHANT,
+                "10",
+                None,
+            ))
+            .await
+            .unwrap();
         assert_eq!(text(&v), CARD_2_CVV);
         // A wrong merchant (the card is granted elsewhere) and a wrong frame.
         assert_eq!(
-            refused(p.release(pay(CARD_ID, SecretField::CardNumber, "https://other-merchant.test", "10", None)).await),
+            refused(
+                p.release(pay(
+                    CARD_ID,
+                    SecretField::CardNumber,
+                    "https://other-merchant.test",
+                    "10",
+                    None
+                ))
+                .await
+            ),
             ProviderError::OriginMismatch
         );
         assert_eq!(
-            refused(p.release(pay(CARD_ID, SecretField::CardNumber, CARD_MERCHANT, "10", Some("https://evil.example.test"))).await),
+            refused(
+                p.release(pay(
+                    CARD_ID,
+                    SecretField::CardNumber,
+                    CARD_MERCHANT,
+                    "10",
+                    Some("https://evil.example.test")
+                ))
+                .await
+            ),
             ProviderError::OriginMismatch
         );
         // A closed card and a missing one are the identical not found.
-        for id in [CARD_CLOSED_ID, "7f1c2e9a-0000-4000-8000-0000000000ff", "not-a-card"] {
+        for id in [
+            CARD_CLOSED_ID,
+            "7f1c2e9a-0000-4000-8000-0000000000ff",
+            "not-a-card",
+        ] {
             assert_eq!(
-                refused(p.release(pay(id, SecretField::CardNumber, CARD_MERCHANT, "10", None)).await),
+                refused(
+                    p.release(pay(id, SecretField::CardNumber, CARD_MERCHANT, "10", None))
+                        .await
+                ),
                 ProviderError::NotFound
             );
         }
@@ -1686,13 +1794,39 @@ mod tests {
             }],
         );
         assert_eq!(
-            refused(p.release(pay(CARD_2_ID, SecretField::CardNumber, CARD_MERCHANT, "10", None)).await),
+            refused(
+                p.release(pay(
+                    CARD_2_ID,
+                    SecretField::CardNumber,
+                    CARD_MERCHANT,
+                    "10",
+                    None
+                ))
+                .await
+            ),
             ProviderError::Refused("card_grant_expired".into())
         );
         fake.set_card_daily_cap(1);
-        p.release(pay(CARD_ID, SecretField::CardNumber, CARD_MERCHANT, "10", None)).await.unwrap();
+        p.release(pay(
+            CARD_ID,
+            SecretField::CardNumber,
+            CARD_MERCHANT,
+            "10",
+            None,
+        ))
+        .await
+        .unwrap();
         assert_eq!(
-            refused(p.release(pay(CARD_ID, SecretField::CardNumber, CARD_MERCHANT, "10", None)).await),
+            refused(
+                p.release(pay(
+                    CARD_ID,
+                    SecretField::CardNumber,
+                    CARD_MERCHANT,
+                    "10",
+                    None
+                ))
+                .await
+            ),
             ProviderError::Refused("card_daily_cap_reached".into())
         );
         // The codes the fabric reports.
@@ -1716,12 +1850,21 @@ mod tests {
         let fake = FakeVault::start().await;
         let logins = VaultProvider::new(&fake.base_url, fake.default_token(), None).unwrap();
         assert_eq!(
-            logins.lookup(&owner(), &origin(CARD_MERCHANT), ItemKind::Card).await.err(),
+            logins
+                .lookup(&owner(), &origin(CARD_MERCHANT), ItemKind::Card)
+                .await
+                .err(),
             Some(ProviderError::Refused("insufficient_scope".into()))
         );
         assert_eq!(
             logins
-                .release(pay(CARD_ID, SecretField::CardNumber, CARD_MERCHANT, "10", None))
+                .release(pay(
+                    CARD_ID,
+                    SecretField::CardNumber,
+                    CARD_MERCHANT,
+                    "10",
+                    None
+                ))
                 .await
                 .err(),
             Some(ProviderError::Refused("insufficient_scope".into()))
@@ -1729,11 +1872,16 @@ mod tests {
         let p = VaultProvider::new(&fake.base_url, fake.card_token(), None).unwrap();
         fake.set_card_access(false);
         assert_eq!(
-            p.lookup(&owner(), &origin(CARD_MERCHANT), ItemKind::Card).await.err(),
+            p.lookup(&owner(), &origin(CARD_MERCHANT), ItemKind::Card)
+                .await
+                .err(),
             Some(ProviderError::Refused("card_access_disabled".into()))
         );
         // Logins still work.
-        assert!(p.lookup(&owner(), &origin(SHOP_ORIGIN), ItemKind::Login).await.is_ok());
+        assert!(p
+            .lookup(&owner(), &origin(SHOP_ORIGIN), ItemKind::Login)
+            .await
+            .is_ok());
     }
 
     #[tokio::test]

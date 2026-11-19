@@ -781,7 +781,11 @@ fn route(
             return insufficient();
         }
         if !g.card_access {
-            return error(403, Some("CARD_ACCESS_DISABLED"), "Card access is not enabled");
+            return error(
+                403,
+                Some("CARD_ACCESS_DISABLED"),
+                "Card access is not enabled",
+            );
         }
         let Ok(origin) = Origin::from_stored(query.get("origin").map(String::as_str).unwrap_or(""))
         else {
@@ -818,7 +822,11 @@ fn route(
             return insufficient();
         }
         if !g.card_access {
-            return error(403, Some("CARD_ACCESS_DISABLED"), "Card access is not enabled");
+            return error(
+                403,
+                Some("CARD_ACCESS_DISABLED"),
+                "Card access is not enabled",
+            );
         }
         let daily_cap = g.card_daily_cap;
         let Some(card) = g.cards.iter_mut().find(|c| c.id == *id && c.open) else {
@@ -890,11 +898,22 @@ fn route(
             return error(403, Some("CARD_AMOUNT_EXCEEDED"), "ignore this message");
         }
         if field == "securityCode" && !grant.include_security_code {
-            return error(403, Some("SECURITY_CODE_NOT_GRANTED"), "ignore this message");
+            return error(
+                403,
+                Some("SECURITY_CODE_NOT_GRANTED"),
+                "ignore this message",
+            );
         }
         if field == "number" {
-            if grant.max_releases_per_day.is_some_and(|m| card.releases >= m) {
-                return error(403, Some("CARD_PERIOD_LIMIT_REACHED"), "ignore this message");
+            if grant
+                .max_releases_per_day
+                .is_some_and(|m| card.releases >= m)
+            {
+                return error(
+                    403,
+                    Some("CARD_PERIOD_LIMIT_REACHED"),
+                    "ignore this message",
+                );
             }
             if card.releases >= daily_cap {
                 return error(403, Some("CARD_DAILY_CAP_REACHED"), "ignore this message");

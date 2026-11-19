@@ -189,7 +189,12 @@ impl TestProvider {
         let first = id == FIXTURE_CARD_ID;
         TestCard {
             id: id.into(),
-            name: if first { "Everyday card" } else { "Virtual card" }.into(),
+            name: if first {
+                "Everyday card"
+            } else {
+                "Virtual card"
+            }
+            .into(),
             brand: if first { "visa" } else { "mastercard" }.into(),
             number: if first {
                 FIXTURE_CARD_NUMBER
@@ -201,7 +206,12 @@ impl TestProvider {
             exp_year: FIXTURE_CARD_EXP_YEAR.into(),
             holder: FIXTURE_CARD_HOLDER.into(),
             postal: FIXTURE_CARD_POSTAL.into(),
-            cvv: if first { FIXTURE_CARD_CVV } else { "CANARY-CVV-4821" }.into(),
+            cvv: if first {
+                FIXTURE_CARD_CVV
+            } else {
+                "CANARY-CVV-4821"
+            }
+            .into(),
             merchant: FIXTURE_MERCHANT.into(),
             frames: if first {
                 vec![FIXTURE_PAY_FRAME.into()]
@@ -675,7 +685,12 @@ mod tests {
     async fn card_release_enforces_the_grant_and_logs_the_purchase_not_a_value() {
         let p = TestProvider::with_fixture();
         let v = p
-            .release(pay(FIXTURE_CARD_ID, SecretField::CardNumber, "42.50", Some(FIXTURE_PAY_FRAME)))
+            .release(pay(
+                FIXTURE_CARD_ID,
+                SecretField::CardNumber,
+                "42.50",
+                Some(FIXTURE_PAY_FRAME),
+            ))
             .await
             .unwrap();
         assert!(v.expose(|b| b == FIXTURE_CARD_NUMBER.as_bytes()));
@@ -687,20 +702,46 @@ mod tests {
         let refused = |r: Result<SecretValue, ProviderError>| r.err().unwrap();
         // Amount over the grant, a frame that is not listed, no security code granted.
         assert_eq!(
-            refused(p.release(pay(FIXTURE_CARD_2_ID, SecretField::CardNumber, "20.01", None)).await),
+            refused(
+                p.release(pay(
+                    FIXTURE_CARD_2_ID,
+                    SecretField::CardNumber,
+                    "20.01",
+                    None
+                ))
+                .await
+            ),
             ProviderError::Refused("card_amount_exceeded".into())
         );
         assert_eq!(
-            refused(p.release(pay(FIXTURE_CARD_ID, SecretField::CardNumber, "5", Some("https://evil.test"))).await),
+            refused(
+                p.release(pay(
+                    FIXTURE_CARD_ID,
+                    SecretField::CardNumber,
+                    "5",
+                    Some("https://evil.test")
+                ))
+                .await
+            ),
             ProviderError::OriginMismatch
         );
         assert_eq!(
-            refused(p.release(pay(FIXTURE_CARD_2_ID, SecretField::SecurityCode, "5", None)).await),
+            refused(
+                p.release(pay(FIXTURE_CARD_2_ID, SecretField::SecurityCode, "5", None))
+                    .await
+            ),
             ProviderError::Refused("security_code_not_granted".into())
         );
         // A card needs a purchase.
         assert_eq!(
-            refused(p.release(rel(FIXTURE_CARD_ID, SecretField::CardNumber, FIXTURE_MERCHANT)).await),
+            refused(
+                p.release(rel(
+                    FIXTURE_CARD_ID,
+                    SecretField::CardNumber,
+                    FIXTURE_MERCHANT
+                ))
+                .await
+            ),
             ProviderError::Refused("unsupported_purpose".into())
         );
     }
