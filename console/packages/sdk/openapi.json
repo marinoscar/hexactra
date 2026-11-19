@@ -44044,6 +44044,14 @@
           "secrets": {
             "type": "object",
             "properties": {
+              "provider": {
+                "description": "Where the agent finds your saved logins: your Vault (the default) or the built-in store. Switching does not move data.",
+                "type": "string",
+                "enum": [
+                  "vault",
+                  "builtin"
+                ]
+              },
               "agentUse": {
                 "type": "object",
                 "properties": {
@@ -44473,6 +44481,14 @@
           "secrets": {
             "type": "object",
             "properties": {
+              "provider": {
+                "description": "Where the agent finds your saved logins: your Vault (the default) or the built-in store. Switching does not move data.",
+                "type": "string",
+                "enum": [
+                  "vault",
+                  "builtin"
+                ]
+              },
               "agentUse": {
                 "type": "object",
                 "properties": {
@@ -44947,6 +44963,13 @@
               {
                 "type": "object",
                 "properties": {
+                  "provider": {
+                    "type": "string",
+                    "enum": [
+                      "vault",
+                      "builtin"
+                    ]
+                  },
                   "agentUse": {
                     "type": "object",
                     "properties": {
@@ -50226,6 +50249,14 @@
               "secrets": {
                 "type": "object",
                 "properties": {
+                  "provider": {
+                    "description": "Where the agent finds your saved logins: your Vault (the default) or the built-in store. Switching does not move data.",
+                    "type": "string",
+                    "enum": [
+                      "vault",
+                      "builtin"
+                    ]
+                  },
                   "agentUse": {
                     "type": "object",
                     "properties": {
