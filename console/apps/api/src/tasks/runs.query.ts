@@ -1,5 +1,6 @@
 // Reading runs a page at a time (#420): the WHERE builder every run filter
 // shares, the keyset cursor, the paged list and the counts per status.
+import { maskRunGoal, runInputsView } from './task-params';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
@@ -131,7 +132,8 @@ export class RunsQueryService {
     const items = page.map((row) => {
       const { task, policyRef: _ref, policyVersion: _version, policySource: _source, ...run } = withCost(row);
       const x = extras.get(row.id);
-      return { ...run, confirmedActions: readConfirmedActions(row.confirmedActions).length, taskName: task?.name ?? null, policy: policySummary(x), budget: budgetView(x, row, now) };
+      // The goal and the task parameter values as a person reads them: masked (#552, #538).
+      return { ...run, goal: maskRunGoal(run.goal), inputs: runInputsView(run.inputs), confirmedActions: readConfirmedActions(row.confirmedActions).length, taskName: task?.name ?? null, policy: policySummary(x), budget: budgetView(x, row, now) };
     });
     const last = page.at(-1);
     const lastTime = last ? extras.get(last.id)?.c : undefined;

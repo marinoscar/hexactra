@@ -40355,6 +40355,13 @@
               "MEMORY_LIMIT",
               "MEMORY_NOT_ACTIVE",
               "MEMORY_HOLDS_SECRET",
+              "INVALID_CRON",
+              "INVALID_TIMEZONE",
+              "CRON_TOO_FREQUENT",
+              "SCHEDULE_NOT_IN_TASK",
+              "INVALID_TASK_CURSOR",
+              "SCHEDULE_LIMIT",
+              "NO_SCHEDULES",
               "POLICY_PIN_INVALID",
               "POLICY_REF_INVALID",
               "POLICY_BUILTIN_READONLY",
@@ -40367,6 +40374,12 @@
               "POLICY_IMPORT_INVALID",
               "POLICY_IMPORT_UNSUPPORTED_VERSION",
               "POLICY_IMPORT_TOO_LARGE",
+              "INVALID_GOAL",
+              "INVALID_PARAMETERS",
+              "UNKNOWN_INPUT",
+              "INVALID_INPUT",
+              "SENSITIVE_INPUT",
+              "SCHEDULE_INPUTS_MISSING",
               "APP_PAUSED",
               "APP_RUN_LIMIT",
               "APP_COST_LIMIT",
@@ -40380,13 +40393,6 @@
               "COUNT_CHANGED",
               "EXPORT_TOO_LARGE",
               "EXPORT_RATE_LIMITED",
-              "INVALID_CRON",
-              "INVALID_TIMEZONE",
-              "CRON_TOO_FREQUENT",
-              "SCHEDULE_NOT_IN_TASK",
-              "INVALID_TASK_CURSOR",
-              "SCHEDULE_LIMIT",
-              "NO_SCHEDULES",
               "CONFIRMATION_REQUIRED",
               "CONFIRMATION_PENDING",
               "CONFIRMATION_DENIED",
@@ -43075,18 +43081,6 @@
               "imageObjectId"
             ]
           },
-          "memories": {
-            "type": "object",
-            "properties": {
-              "suggest": {
-                "type": "boolean",
-                "description": "Let the agent suggest memories for you to approve. On by default."
-              }
-            },
-            "required": [
-              "suggest"
-            ]
-          },
           "browserAgent": {
             "type": "object",
             "properties": {
@@ -43294,6 +43288,18 @@
             },
             "required": [
               "defaultPolicyRef"
+            ]
+          },
+          "memories": {
+            "type": "object",
+            "properties": {
+              "suggest": {
+                "type": "boolean",
+                "description": "Let the agent suggest memories for you to approve. On by default."
+              }
+            },
+            "required": [
+              "suggest"
             ]
           },
           "runs": {
@@ -43484,18 +43490,6 @@
               "imageSource"
             ]
           },
-          "memories": {
-            "type": "object",
-            "properties": {
-              "suggest": {
-                "type": "boolean",
-                "description": "Let the agent suggest memories for you to approve. On by default."
-              }
-            },
-            "required": [
-              "suggest"
-            ]
-          },
           "browserAgent": {
             "type": "object",
             "properties": {
@@ -43703,6 +43697,18 @@
             },
             "required": [
               "defaultPolicyRef"
+            ]
+          },
+          "memories": {
+            "type": "object",
+            "properties": {
+              "suggest": {
+                "type": "boolean",
+                "description": "Let the agent suggest memories for you to approve. On by default."
+              }
+            },
+            "required": [
+              "suggest"
             ]
           },
           "runs": {
@@ -43917,22 +43923,6 @@
               }
             }
           },
-          "memories": {
-            "anyOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "suggest": {
-                    "type": "boolean",
-                    "description": "Let the agent suggest memories for you to approve. On by default."
-                  }
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "browserAgent": {
             "anyOf": [
               {
@@ -44144,6 +44134,22 @@
                         "type": "null"
                       }
                     ]
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "memories": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "suggest": {
+                    "type": "boolean",
+                    "description": "Let the agent suggest memories for you to approve. On by default."
                   }
                 }
               },
@@ -49020,18 +49026,6 @@
                   "imageObjectId"
                 ]
               },
-              "memories": {
-                "type": "object",
-                "properties": {
-                  "suggest": {
-                    "type": "boolean",
-                    "description": "Let the agent suggest memories for you to approve. On by default."
-                  }
-                },
-                "required": [
-                  "suggest"
-                ]
-              },
               "browserAgent": {
                 "type": "object",
                 "properties": {
@@ -49239,6 +49233,18 @@
                 },
                 "required": [
                   "defaultPolicyRef"
+                ]
+              },
+              "memories": {
+                "type": "object",
+                "properties": {
+                  "suggest": {
+                    "type": "boolean",
+                    "description": "Let the agent suggest memories for you to approve. On by default."
+                  }
+                },
+                "required": [
+                  "suggest"
                 ]
               },
               "runs": {
@@ -71253,6 +71259,124 @@
               "null"
             ]
           },
+          "parameters": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "description": "The placeholder's key (`Phone Number` → `phone_number`)"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "choice",
+                        "phone",
+                        "email"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "options": {
+                      "description": "choice: the options",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "help": {
+                      "type": "string"
+                    },
+                    "default": {
+                      "description": "A fixed value, or an attribute of one of the owner's memories resolved when the task runs",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "value"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "memory": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "attribute": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "attribute"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "memory"
+                          ]
+                        }
+                      ]
+                    },
+                    "constraints": {
+                      "type": "object",
+                      "properties": {
+                        "min": {
+                          "type": "number"
+                        },
+                        "max": {
+                          "type": "number"
+                        },
+                        "maxLength": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "pattern": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "sensitive": {
+                      "description": "Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none"
+          },
           "spend30d": {
             "type": "object",
             "properties": {
@@ -71374,6 +71498,23 @@
                       "type": [
                         "string",
                         "null"
+                      ]
+                    },
+                    "inputs": {
+                      "description": "Preset values for the task's parameters (#552), by key; null for none",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
                       ]
                     }
                   },
@@ -71590,6 +71731,7 @@
           "confirmRiskyActions",
           "model",
           "policyId",
+          "parameters",
           "spend30d",
           "createdAt",
           "updatedAt"
@@ -71675,6 +71817,124 @@
                     "string",
                     "null"
                   ]
+                },
+                "parameters": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "description": "The placeholder's key (`Phone Number` → `phone_number`)"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "text",
+                              "number",
+                              "money",
+                              "date",
+                              "choice",
+                              "phone",
+                              "email"
+                            ]
+                          },
+                          "required": {
+                            "type": "boolean"
+                          },
+                          "options": {
+                            "description": "choice: the options",
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "help": {
+                            "type": "string"
+                          },
+                          "default": {
+                            "description": "A fixed value, or an attribute of one of the owner's memories resolved when the task runs",
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "value"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "memory": {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string",
+                                        "format": "uuid",
+                                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                      },
+                                      "attribute": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id",
+                                      "attribute"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "memory"
+                                ]
+                              }
+                            ]
+                          },
+                          "constraints": {
+                            "type": "object",
+                            "properties": {
+                              "min": {
+                                "type": "number"
+                              },
+                              "max": {
+                                "type": "number"
+                              },
+                              "maxLength": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991
+                              },
+                              "pattern": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "sensitive": {
+                            "description": "Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model",
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "type",
+                          "required"
+                        ]
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none"
                 },
                 "spend30d": {
                   "type": "object",
@@ -71797,6 +72057,23 @@
                             "type": [
                               "string",
                               "null"
+                            ]
+                          },
+                          "inputs": {
+                            "description": "Preset values for the task's parameters (#552), by key; null for none",
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "propertyNames": {
+                                  "type": "string"
+                                },
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              {
+                                "type": "null"
+                              }
                             ]
                           }
                         },
@@ -72013,6 +72290,7 @@
                 "confirmRiskyActions",
                 "model",
                 "policyId",
+                "parameters",
                 "spend30d",
                 "createdAt",
                 "updatedAt"
@@ -72114,6 +72392,124 @@
               "string",
               "null"
             ]
+          },
+          "parameters": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "description": "The placeholder's key (`Phone Number` → `phone_number`)"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "choice",
+                        "phone",
+                        "email"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "options": {
+                      "description": "choice: the options",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "help": {
+                      "type": "string"
+                    },
+                    "default": {
+                      "description": "A fixed value, or an attribute of one of the owner's memories resolved when the task runs",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "value"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "memory": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "attribute": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "attribute"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "memory"
+                          ]
+                        }
+                      ]
+                    },
+                    "constraints": {
+                      "type": "object",
+                      "properties": {
+                        "min": {
+                          "type": "number"
+                        },
+                        "max": {
+                          "type": "number"
+                        },
+                        "maxLength": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "pattern": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "sensitive": {
+                      "description": "Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none"
           },
           "spend30d": {
             "type": "object",
@@ -72236,6 +72632,23 @@
                       "type": [
                         "string",
                         "null"
+                      ]
+                    },
+                    "inputs": {
+                      "description": "Preset values for the task's parameters (#552), by key; null for none",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
                       ]
                     }
                   },
@@ -72452,6 +72865,7 @@
           "confirmRiskyActions",
           "model",
           "policyId",
+          "parameters",
           "spend30d",
           "createdAt",
           "updatedAt",
@@ -72548,6 +72962,138 @@
             ],
             "description": "The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."
           },
+          "parameters": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60,
+                  "description": "The placeholder's key: its name lower-cased, spaces, `_` and `-` as one `_` (`Phone Number` → `phone_number`)."
+                },
+                "label": {
+                  "description": "What a form shows; defaults to the placeholder's name.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "type": {
+                  "default": "text",
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "number",
+                    "money",
+                    "date",
+                    "choice",
+                    "phone",
+                    "email"
+                  ]
+                },
+                "required": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "options": {
+                  "description": "choice: 2 to 50 options.",
+                  "maxItems": 50,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                },
+                "help": {
+                  "description": "One line under the field.",
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "default": {
+                  "description": "A fixed value (`{ value }`) or an attribute of one of your memories (`{ memory: { id, attribute } }`), resolved when the task runs.",
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      },
+                      "required": [
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "memory": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "attribute": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "attribute"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "memory"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "constraints": {
+                  "type": "object",
+                  "properties": {
+                    "min": {
+                      "type": "number"
+                    },
+                    "max": {
+                      "type": "number"
+                    },
+                    "maxLength": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 500
+                    },
+                    "pattern": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "sensitive": {
+                  "description": "Never stored or shown to the model: asked every time in the signed-in console and typed by the browser. No default; never accepted from the API.",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Definitions of the goal's `{{Name}}` placeholders. Each placeholder without one gets a required `text` parameter; a definition without a placeholder is dropped. The response lists every parameter."
+          },
           "schedules": {
             "maxItems": 10,
             "type": "array",
@@ -72585,6 +73131,34 @@
                       "type": "string",
                       "maxLength": 64,
                       "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "inputs": {
+                  "description": "Preset values for the task's parameters (#552), by key or name. An enabled schedule needs a value (here, a default or a memory) for every required parameter: 400 `SCHEDULE_INPUTS_MISSING`. Omitted on an existing schedule: unchanged.",
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 500
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
+                      },
+                      "description": "Values for the task's parameters, by key (`phone_number`) or display name (`Phone Number`)."
                     },
                     {
                       "type": "null"
@@ -72680,6 +73254,124 @@
               "null"
             ]
           },
+          "parameters": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "description": "The placeholder's key (`Phone Number` → `phone_number`)"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "choice",
+                        "phone",
+                        "email"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "options": {
+                      "description": "choice: the options",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "help": {
+                      "type": "string"
+                    },
+                    "default": {
+                      "description": "A fixed value, or an attribute of one of the owner's memories resolved when the task runs",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "value"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "memory": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "attribute": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "attribute"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "memory"
+                          ]
+                        }
+                      ]
+                    },
+                    "constraints": {
+                      "type": "object",
+                      "properties": {
+                        "min": {
+                          "type": "number"
+                        },
+                        "max": {
+                          "type": "number"
+                        },
+                        "maxLength": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "pattern": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "sensitive": {
+                      "description": "Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none"
+          },
           "spend30d": {
             "type": "object",
             "properties": {
@@ -72750,6 +73442,7 @@
           "confirmRiskyActions",
           "model",
           "policyId",
+          "parameters",
           "spend30d",
           "createdAt",
           "updatedAt"
@@ -72838,6 +73531,138 @@
               }
             ],
             "description": "The task's agent policy: an own policy's UUID or `builtin:<key>`. `null` follows the user's default policy."
+          },
+          "parameters": {
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60,
+                  "description": "The placeholder's key: its name lower-cased, spaces, `_` and `-` as one `_` (`Phone Number` → `phone_number`)."
+                },
+                "label": {
+                  "description": "What a form shows; defaults to the placeholder's name.",
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "type": {
+                  "default": "text",
+                  "type": "string",
+                  "enum": [
+                    "text",
+                    "number",
+                    "money",
+                    "date",
+                    "choice",
+                    "phone",
+                    "email"
+                  ]
+                },
+                "required": {
+                  "default": true,
+                  "type": "boolean"
+                },
+                "options": {
+                  "description": "choice: 2 to 50 options.",
+                  "maxItems": 50,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                },
+                "help": {
+                  "description": "One line under the field.",
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "default": {
+                  "description": "A fixed value (`{ value }`) or an attribute of one of your memories (`{ memory: { id, attribute } }`), resolved when the task runs.",
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 500
+                        }
+                      },
+                      "required": [
+                        "value"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "memory": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid",
+                              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                            },
+                            "attribute": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 100
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "attribute"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "memory"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "constraints": {
+                  "type": "object",
+                  "properties": {
+                    "min": {
+                      "type": "number"
+                    },
+                    "max": {
+                      "type": "number"
+                    },
+                    "maxLength": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 500
+                    },
+                    "pattern": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "sensitive": {
+                  "description": "Never stored or shown to the model: asked every time in the signed-in console and typed by the browser. No default; never accepted from the API.",
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "key"
+              ],
+              "additionalProperties": false
+            },
+            "description": "Definitions of the goal's `{{Name}}` placeholders. Each placeholder without one gets a required `text` parameter; a definition without a placeholder is dropped. The response lists every parameter."
           }
         }
       },
@@ -72881,6 +73706,34 @@
                       "type": "string",
                       "maxLength": 64,
                       "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "inputs": {
+                  "description": "Preset values for the task's parameters (#552), by key or name. An enabled schedule needs a value (here, a default or a memory) for every required parameter: 400 `SCHEDULE_INPUTS_MISSING`. Omitted on an existing schedule: unchanged.",
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "propertyNames": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      },
+                      "additionalProperties": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "maxLength": 500
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ]
+                      },
+                      "description": "Values for the task's parameters, by key (`phone_number`) or display name (`Phone Number`)."
                     },
                     {
                       "type": "null"
@@ -72979,6 +73832,124 @@
               "string",
               "null"
             ]
+          },
+          "parameters": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "description": "The placeholder's key (`Phone Number` → `phone_number`)"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "choice",
+                        "phone",
+                        "email"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "options": {
+                      "description": "choice: the options",
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "help": {
+                      "type": "string"
+                    },
+                    "default": {
+                      "description": "A fixed value, or an attribute of one of the owner's memories resolved when the task runs",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "value": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "value"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "memory": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                                },
+                                "attribute": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "attribute"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "memory"
+                          ]
+                        }
+                      ]
+                    },
+                    "constraints": {
+                      "type": "object",
+                      "properties": {
+                        "min": {
+                          "type": "number"
+                        },
+                        "max": {
+                          "type": "number"
+                        },
+                        "maxLength": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "pattern": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "sensitive": {
+                      "description": "Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none"
           },
           "spend30d": {
             "type": "object",
@@ -73101,6 +74072,23 @@
                       "type": [
                         "string",
                         "null"
+                      ]
+                    },
+                    "inputs": {
+                      "description": "Preset values for the task's parameters (#552), by key; null for none",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "null"
+                        }
                       ]
                     }
                   },
@@ -73326,6 +74314,7 @@
           "confirmRiskyActions",
           "model",
           "policyId",
+          "parameters",
           "spend30d",
           "createdAt",
           "updatedAt",
@@ -74531,6 +75520,48 @@
             "maximum": 9007199254740991,
             "description": "How many steps the owner confirmed that the run carried out (#540); the steps themselves are on `GET /runs/{id}`."
           },
+          "inputs": {
+            "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "Masked like the rest of the run (#538); a sensitive value is never stored: \"[provided at run time]\""
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "provided",
+                        "default",
+                        "memory",
+                        "asked",
+                        "schedule"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "value",
+                    "source"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "memoryIds": {
             "type": "array",
             "items": {
@@ -75263,6 +76294,48 @@
                   "minimum": -9007199254740991,
                   "maximum": 9007199254740991,
                   "description": "How many steps the owner confirmed that the run carried out (#540); the steps themselves are on `GET /runs/{id}`."
+                },
+                "inputs": {
+                  "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "string",
+                            "description": "Masked like the rest of the run (#538); a sensitive value is never stored: \"[provided at run time]\""
+                          },
+                          "source": {
+                            "type": "string",
+                            "enum": [
+                              "provided",
+                              "default",
+                              "memory",
+                              "asked",
+                              "schedule"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "label",
+                          "value",
+                          "source"
+                        ]
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "memoryIds": {
                   "type": "array",
@@ -77405,6 +78478,48 @@
             },
             "description": "Steps the owner confirmed that the run then carried out (#540), oldest first; empty when none. \"Run again\" asks before repeating such a run."
           },
+          "inputs": {
+            "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "Masked like the rest of the run (#538); a sensitive value is never stored: \"[provided at run time]\""
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "provided",
+                        "default",
+                        "memory",
+                        "asked",
+                        "schedule"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "value",
+                    "source"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "memoryIds": {
             "type": "array",
             "items": {
@@ -78456,6 +79571,48 @@
             },
             "description": "Steps the owner confirmed that the run then carried out (#540), oldest first; empty when none. \"Run again\" asks before repeating such a run."
           },
+          "inputs": {
+            "description": "The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters",
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string",
+                      "description": "Masked like the rest of the run (#538); a sensitive value is never stored: \"[provided at run time]\""
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": [
+                        "provided",
+                        "default",
+                        "memory",
+                        "asked",
+                        "schedule"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "value",
+                    "source"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "memoryIds": {
             "type": "array",
             "items": {
@@ -78583,9 +79740,10 @@
               "confirm",
               "takeover",
               "credentials",
-              "memory"
+              "memory",
+              "form"
             ],
-            "description": "`memory` (#553): a memory the agent proposes; only the server creates one"
+            "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes; only the server creates one"
           },
           "kind": {
             "type": "string"
@@ -78699,6 +79857,77 @@
               "null"
             ]
           },
+          "fields": {
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "choice",
+                        "phone",
+                        "email"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "options": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "help": {
+                      "type": "string"
+                    },
+                    "constraints": {
+                      "type": "object",
+                      "properties": {
+                        "min": {
+                          "type": "number"
+                        },
+                        "max": {
+                          "type": "number"
+                        },
+                        "maxLength": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "pattern": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "form (#552): the missing values of a task run, asked at once before it starts; answer with `fields: { key: value }`"
+          },
           "gate": {
             "anyOf": [
               {
@@ -78770,6 +79999,16 @@
                   "remember": {
                     "description": "The person's choice for the question's \"remember me\" option",
                     "type": "boolean"
+                  },
+                  "fields": {
+                    "description": "form: the values given, masked",
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    }
                   },
                   "memoryId": {
                     "description": "memory (#553): the memory the approved proposal saved",
@@ -78961,6 +80200,7 @@
           "denyLabel",
           "risk",
           "rememberLabel",
+          "fields",
           "gate",
           "status",
           "response",
@@ -79198,6 +80438,25 @@
           "remember": {
             "type": "boolean"
           },
+          "fields": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 4096
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            }
+          },
           "memory": {
             "type": "object",
             "properties": {
@@ -79298,6 +80557,25 @@
           },
           "remember": {
             "type": "boolean"
+          },
+          "fields": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 4096
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            }
           },
           "memory": {
             "type": "object",
@@ -79712,9 +80990,10 @@
               "confirm",
               "takeover",
               "credentials",
-              "memory"
+              "memory",
+              "form"
             ],
-            "description": "`memory` (#553): a memory the agent proposes; only the server creates one"
+            "description": "`form` (#552): a task run's missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes; only the server creates one"
           },
           "choices": {
             "type": "array",
@@ -79826,6 +81105,77 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "fields": {
+            "description": "form (#552): the fields to fill",
+            "anyOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "text",
+                        "number",
+                        "money",
+                        "date",
+                        "choice",
+                        "phone",
+                        "email"
+                      ]
+                    },
+                    "required": {
+                      "type": "boolean"
+                    },
+                    "options": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "help": {
+                      "type": "string"
+                    },
+                    "constraints": {
+                      "type": "object",
+                      "properties": {
+                        "min": {
+                          "type": "number"
+                        },
+                        "max": {
+                          "type": "number"
+                        },
+                        "maxLength": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        },
+                        "pattern": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "label",
+                    "type",
+                    "required"
+                  ]
+                }
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "pageTitle": {
@@ -81245,6 +82595,26 @@
             "description": "Run under this agent policy for this run only (\"Run with...\"), instead of the schedule's, the task's or the user's default.",
             "type": "string",
             "maxLength": 64
+          },
+          "inputs": {
+            "description": "Values for the task's `{{Name}}` parameters, by key or display name (#552). Unknown names are a 400 `UNKNOWN_INPUT`, invalid values a 400 `INVALID_INPUT` with `details.issues`, a sensitive parameter a 400 `SENSITIVE_INPUT`. A required value still missing after the defaults: the run is created `waiting_human` with one `form` question for every missing value, and starts once it is answered.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            }
           }
         }
       },
@@ -81365,6 +82735,23 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "inputs": {
+            "description": "Preset values for the task's parameters (#552), by key",
+            "anyOf": [
+              {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "description": {
@@ -81544,6 +82931,26 @@
                 "type": "null"
               }
             ]
+          },
+          "inputs": {
+            "description": "Preset values for the task's parameters (#552). An enabled schedule needs a value (here, a default or a memory) for every required parameter: 400 `SCHEDULE_INPUTS_MISSING`.",
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            }
           }
         },
         "required": [
@@ -81581,6 +82988,34 @@
                 "type": "string",
                 "maxLength": 64,
                 "description": "An agent policy's id: a UUID for the user's own policy, or `builtin:<key>` for a built-in one."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inputs": {
+            "description": "Preset values for the task's parameters (#552); null clears them.",
+            "anyOf": [
+              {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 500
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ]
+                },
+                "description": "Values for the task's parameters, by key (`phone_number`) or display name (`Phone Number`)."
               },
               {
                 "type": "null"

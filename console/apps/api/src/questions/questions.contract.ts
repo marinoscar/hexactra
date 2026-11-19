@@ -7,11 +7,13 @@ import { z } from 'zod';
 /** The inputs an agent (or a person's own automation) may ask with. */
 export const QUESTION_INPUTS = ['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials'] as const;
 /**
- * The inputs only the server creates (#553): `memory`, a memory the agent
- * proposes and the owner saves or declines on its card. Never accepted from a
- * question spec (`POST /api/questions`, `request_human`, an external agent).
+ * The inputs only the server creates: `memory` (#553), a memory the agent
+ * proposes and the owner saves or declines on its card; `form` (#552), the
+ * missing parameter values of a task run, asked at once before it starts.
+ * Never accepted from a question spec (`POST /api/questions`, `request_human`,
+ * an external agent).
  */
-export const SERVER_QUESTION_INPUTS = ['memory'] as const;
+export const SERVER_QUESTION_INPUTS = ['memory', 'form'] as const;
 export type AskableInputType = (typeof QUESTION_INPUTS)[number];
 export type QuestionInputType = AskableInputType | (typeof SERVER_QUESTION_INPUTS)[number];
 
@@ -86,6 +88,7 @@ const CONSTRAINT_KEYS: Record<QuestionInputType, readonly (keyof QuestionConstra
   takeover: [],
   secret: [],
   credentials: [],
+  form: [],
   confirm: [],
   choice: [],
   text: ['maxLength', 'pattern', 'multiline'],
@@ -257,6 +260,8 @@ export const questionAnswerSchema = z
     secret: z.string().max(TEXT_MAX_LENGTH).optional(),
     /** The person's choice for the question's "remember me" option. */
     remember: z.boolean().optional(),
+    /** form (#552): the value of each field, by key. */
+    fields: z.record(z.string().min(1).max(80), z.union([z.string().max(TEXT_MAX_LENGTH), z.number().finite()])).optional(),
     /** memory (#553): the memory as the owner saves it, edited on the card; omitted, the proposal is saved as proposed. */
     memory: memoryProposalAnswerSchema.optional(),
   })
@@ -271,6 +276,8 @@ export interface NormalizedAnswer {
   /** credentials: the password, forwarded to the fabric and never stored. */
   secret?: string;
   remember?: boolean;
+  /** form (#552): the values by key, before the parameter checks (the run starter applies them). */
+  fields?: Record<string, string>;
   /** memory: what the owner saves. */
   memory?: MemoryProposalAnswer;
 }
@@ -283,6 +290,8 @@ export interface QuestionResponse {
   valueWithheld: boolean;
   /** What the person chose for the "remember me" option, when one was offered. */
   remember?: boolean;
+  /** form (#552): the values given, masked (#538). */
+  fields?: Record<string, string>;
   /** memory (#553): the memory the answer saved. */
   memoryId?: string;
   channel?: string;
@@ -329,6 +338,7 @@ export function validateAnswer(q: Pick<QuestionSpec, 'input' | 'options' | 'cons
     return a.value as string;
   };
   if (q.input !== 'multi_choice' && a.values !== undefined) fail(`values is only for multi_choice answers`);
+  if (q.input !== 'form' && a.fields !== undefined) fail('fields is only for a form');
   switch (q.input) {
     case 'memory':
       // The memory itself is checked where it is written (the secret check, the label rule, the limit).
@@ -387,6 +397,12 @@ export function validateAnswer(q: Pick<QuestionSpec, 'input' | 'options' | 'cons
       if (v !== 'approve' && v !== 'deny') fail('A confirm answer is approve or deny');
       return { outcome: 'completed', value: v };
     }
+    case 'form': {
+      // The fields are checked against the task's parameter rules by the run starter (#552).
+      if (a.value !== undefined) fail('A form answer uses fields, not value');
+      const f = a.fields ?? fail('A form answer needs fields');
+      return { outcome: 'completed', fields: Object.fromEntries(Object.entries(f).map(([k, v]) => [k, String(v)])) };
+    }
   }
 }
 
@@ -401,6 +417,7 @@ export function toResponse(input: QuestionInputType, a: NormalizedAnswer, meta: 
     ...(a.values !== undefined ? { values: a.values } : {}),
     valueWithheld: withheld,
     ...(a.remember !== undefined ? { remember: a.remember } : {}),
+    ...(a.fields !== undefined ? { fields: a.fields } : {}),
     ...(meta.channel ? { channel: meta.channel } : {}),
     ...(meta.by ? { by: meta.by } : {}),
     answeredAt: meta.answeredAt.toISOString(),

@@ -13,6 +13,44 @@ import { BUDGET_KEYS, RUN_STOP_REASONS } from '../runner/budget';
 const iso = z.string().describe('ISO 8601 timestamp');
 const runStatus = z.enum(['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled']);
 
+const paramType = z.enum(['text', 'number', 'money', 'date', 'choice', 'phone', 'email']);
+const paramConstraints = z.object({ min: z.number().optional(), max: z.number().optional(), maxLength: z.number().int().optional(), pattern: z.string().optional() });
+
+/** A task parameter (#552): one `{{Name}}` placeholder of the goal. */
+export const taskParameterResponseSchema = z.object({
+  key: z.string().describe('The placeholder\'s key (`Phone Number` → `phone_number`)'),
+  label: z.string(),
+  type: paramType,
+  required: z.boolean(),
+  options: z.array(z.string()).optional().describe('choice: the options'),
+  help: z.string().optional(),
+  default: z
+    .union([z.object({ value: z.string() }), z.object({ memory: z.object({ id: z.uuid(), attribute: z.string() }) })])
+    .optional()
+    .describe("A fixed value, or an attribute of one of the owner's memories resolved when the task runs"),
+  constraints: paramConstraints.optional(),
+  sensitive: z.boolean().optional().describe('Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model'),
+});
+
+/** A field of a `form` question (#552): a task run's missing parameter. */
+export const formFieldResponseSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  type: paramType,
+  required: z.boolean(),
+  options: z.array(z.string()).optional(),
+  help: z.string().optional(),
+  constraints: paramConstraints.optional(),
+});
+
+/** A run's parameter value as the API returns it (#552): masked, with where it came from. */
+export const runInputResponseSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  value: z.string().describe('Masked like the rest of the run (#538); a sensitive value is never stored: "[provided at run time]"'),
+  source: z.enum(['provided', 'default', 'memory', 'asked', 'schedule']),
+});
+
 export const taskResponseSchema = z.object({
   id: z.uuid(),
   userId: z.uuid(),
@@ -27,6 +65,7 @@ export const taskResponseSchema = z.object({
   confirmRiskyActions: z.boolean(),
   model: z.string().nullable().meta({ deprecated: true }).describe('Deprecated: see `policyId`'),
   policyId: z.string().nullable().describe("The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default"),
+  parameters: z.array(taskParameterResponseSchema).nullable().describe("The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none"),
   spend30d: z
     .object({
       runs: z.number().int().describe('Runs created in the last 30 days'),
@@ -146,6 +185,7 @@ export const runResponseSchema = z.object({
       }),
     )
     .describe('Steps the owner confirmed that the run then carried out (#540), oldest first; empty when none. "Run again" asks before repeating such a run.'),
+  inputs: z.array(runInputResponseSchema).nullable().optional().describe("The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters"),
   memoryIds: z.array(z.uuid()).describe('The owner\'s memories this run used (#553): the ones its goal names. A deleted memory leaves its id.'),
   createdAt: iso,
   startedAt: iso.nullable(),
@@ -237,7 +277,7 @@ export class RunDetailResponseDto extends createZodDto(
   }),
 ) {}
 
-const questionInput = z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials', 'memory']).describe('`memory` (#553): a memory the agent proposes; only the server creates one');
+const questionInput = z.enum(['none', 'text', 'secret', 'choice', 'multi_choice', 'number', 'confirm', 'takeover', 'credentials', 'memory', 'form']).describe('`form` (#552): a task run\'s missing parameter values, asked before it starts. `memory` (#553): a memory the agent proposes; only the server creates one');
 const memoryProposal = z
   .object({
     kind: z.enum(['person', 'account', 'preference', 'fact']),
@@ -265,6 +305,7 @@ export const questionAnswerResponseSchema = z.object({
   values: z.array(z.string()).optional(),
   valueWithheld: z.boolean().describe('True for a secret and a sign-in: the secret or password went to the browser, single use, and is never returned'),
   remember: z.boolean().optional().describe('The person\'s choice for the question\'s "remember me" option'),
+  fields: z.record(z.string(), z.string()).optional().describe('form: the values given, masked'),
   memoryId: z.uuid().optional().describe('memory (#553): the memory the approved proposal saved'),
   channel: z.string().optional(),
   by: z.string().optional().describe('Who answered, e.g. user:<id>'),
@@ -286,6 +327,7 @@ export const questionResponseSchema = z.object({
   denyLabel: z.string().nullable(),
   risk: z.enum(['low', 'high']).nullable(),
   rememberLabel: z.string().nullable().describe('credentials and secret: the site\'s "remember me" option, in the page\'s words'),
+  fields: z.array(formFieldResponseSchema).nullable().describe('form (#552): the missing values of a task run, asked at once before it starts; answer with `fields: { key: value }`'),
   gate: z
     .object({ host: z.string().nullable(), category: z.string(), label: z.string().nullable() })
     .nullable()
@@ -323,6 +365,7 @@ export const inboxItemResponseSchema = z.object({
   denyLabel: z.string().nullable(),
   risk: z.enum(['low', 'high']).nullable(),
   rememberLabel: z.string().nullable().describe('credentials and secret: the site\'s "remember me" option, in the page\'s words'),
+  fields: z.array(formFieldResponseSchema).nullable().optional().describe('form (#552): the fields to fill'),
   pageTitle: z.string().nullable(),
   viewerUrl: z.string().nullable(),
   createdAt: iso,
@@ -345,6 +388,7 @@ export const scheduleResponseSchema = z.object({
   lastRunId: z.uuid().nullable(),
   consecutiveFailures: z.number().int(),
   policyId: z.string().nullable().describe("Overrides the task's agent policy for scheduled runs; null follows the task"),
+  inputs: z.record(z.string(), z.string()).nullable().optional().describe("Preset values for the task's parameters (#552), by key"),
   description: z.string().describe('The expression in words (English, 24-hour), e.g. "Monday to Friday at 09:00"'),
   createdAt: iso,
   updatedAt: iso,

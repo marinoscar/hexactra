@@ -1,5 +1,5 @@
 /** The input types of a typed question (the REST contract, E26). */
-export type QuestionInputType = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover' | 'credentials';
+export type QuestionInputType = 'none' | 'text' | 'secret' | 'choice' | 'multi_choice' | 'number' | 'confirm' | 'takeover' | 'credentials' | 'form';
 
 export interface RuleOption {
   id: string;
@@ -28,6 +28,8 @@ export interface RuleQuestionLike {
   constraints?: RuleConstraints | null;
   confirmLabel?: string | null;
   denyLabel?: string | null;
+  /** form (#552): its fields; a field marked `sensitive` makes the form need a signed-in channel. */
+  fields?: { key: string; sensitive?: boolean }[] | null;
 }
 
 /** An answer as `POST /api/questions/:id/answer` takes it. */

@@ -25,6 +25,8 @@ export interface TaskSummarySchedule {
   consecutiveFailures: number;
   description: string;
   policyId: string | null;
+  /** Preset task parameter values (#552), by key; null for none. */
+  inputs: Record<string, string> | null;
 }
 
 /** Schedule and run facts of one task (`include=summary`). */
@@ -300,6 +302,7 @@ export class TaskSummaryService {
         consecutiveFailures: s.consecutiveFailures,
         description: describeCron(s.cron),
         policyId: s.policyRef,
+        inputs: (s.inputs as Record<string, string> | null) ?? null,
       });
       byTask.set(s.taskId, list);
     }

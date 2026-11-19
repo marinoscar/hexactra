@@ -96,6 +96,7 @@ export class InboxController {
         confirmLabel: q.confirmLabel,
         denyLabel: q.denyLabel,
         rememberLabel: q.rememberLabel,
+        fields: q.fields ?? null,
         risk: (q.risk as 'low' | 'high' | null) ?? null,
         pageTitle: q.pageTitle,
         viewerUrl: q.viewerUrl,
