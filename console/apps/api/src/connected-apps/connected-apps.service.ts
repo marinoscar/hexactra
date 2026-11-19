@@ -82,6 +82,7 @@ export function limitsOf(row: SettingsRow | null): AppLimits {
     allowSavedLogins: row.allowSavedLogins,
     allowSavedIdentity: row.allowSavedIdentity,
     allowSavedCards: row.allowSavedCards,
+    allowConnections: row.allowConnections,
     paused: row.paused,
   };
 }
@@ -319,6 +320,7 @@ export class ConnectedAppsService {
       allowSavedLogins: next.allowSavedLogins,
       allowSavedIdentity: next.allowSavedIdentity,
       allowSavedCards: next.allowSavedCards,
+      allowConnections: next.allowConnections,
       paused: next.paused,
     };
     const saved = row
@@ -332,7 +334,7 @@ export class ConnectedAppsService {
       credentialKind: 'jwt',
       clientId,
       outcome: 'ok',
-      detail: { changed: Object.keys(patch).sort(), ...(patch.paused !== undefined ? { paused: patch.paused } : {}), ...(patch.confirmSensitiveActions !== undefined ? { confirmSensitiveActions: patch.confirmSensitiveActions } : {}), ...(patch.allowSavedLogins !== undefined ? { allowSavedLogins: patch.allowSavedLogins } : {}), ...(patch.allowSavedIdentity !== undefined ? { allowSavedIdentity: patch.allowSavedIdentity } : {}), ...(patch.allowSavedCards !== undefined ? { allowSavedCards: patch.allowSavedCards } : {}) },
+      detail: { changed: Object.keys(patch).sort(), ...(patch.paused !== undefined ? { paused: patch.paused } : {}), ...(patch.confirmSensitiveActions !== undefined ? { confirmSensitiveActions: patch.confirmSensitiveActions } : {}), ...(patch.allowSavedLogins !== undefined ? { allowSavedLogins: patch.allowSavedLogins } : {}), ...(patch.allowSavedIdentity !== undefined ? { allowSavedIdentity: patch.allowSavedIdentity } : {}), ...(patch.allowSavedCards !== undefined ? { allowSavedCards: patch.allowSavedCards } : {}), ...(patch.allowConnections !== undefined ? { allowConnections: patch.allowConnections } : {}) },
     });
     return clampLimits(limitsOf(saved), ceilings);
   }

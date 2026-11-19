@@ -73,6 +73,7 @@ model Conversation {
   messages ChatMessage[]
   runs     Run[]
   guidance RunGuidance[]
+  connections ConversationConnection[]
 
   /// The chat list: one status, most recent first.
   @@index([userId, status, lastMessageAt])

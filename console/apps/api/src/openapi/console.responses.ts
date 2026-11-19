@@ -3,6 +3,7 @@
 // the platform's `{ data }` envelope. They describe what the services return;
 // the tests in test/sdk.db.spec.ts exercise them through the SDK.
 import { runClientSchema, runOriginSchema } from '../connected-apps/connected-apps.schemas';
+import { connectionSelectionViewSchema } from '../connections/agent-connections';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
@@ -67,6 +68,8 @@ export const taskResponseSchema = z.object({
   useSavedIdentity: z.boolean().describe("Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value"),
   useSavedCards: z.boolean().describe("Whether the agent may pay with a saved card on this task's runs (E37.7), under the owner's per-merchant approval and amount limit; the model never reads a card value"),
   unattendedPayments: z.enum(['ask', 'allow']).describe('`ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`'),
+  needsBrowser: z.enum(['auto', 'always', 'never']).describe("Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool"),
+  connections: z.array(connectionSelectionViewSchema).describe('The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default.'),
   model: z.string().nullable().meta({ deprecated: true }).describe('Deprecated: see `policyId`'),
   policyId: z.string().nullable().describe("The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default"),
   parameters: z.array(taskParameterResponseSchema).nullable().describe("The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none"),

@@ -1,5 +1,6 @@
 // Response shapes of the chat routes (#483), for the OpenAPI document and the
 // generated SDK. `@ApiDataResponse` wraps each in the platform's `{ data }` envelope.
+import { connectionSelectionViewSchema } from '../connections/agent-connections';
 import { taskParameterResponseSchema } from './console.responses';
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
@@ -25,6 +26,7 @@ export const chatResponseSchema = z.object({
   useSavedLogins: z.boolean().describe("Let the chat's runs sign in from the owner's saved logins (E37.3); off by default"),
   useSavedIdentity: z.boolean().describe("Let the chat's runs fill identity details from the owner's saved details (E37.6); off by default"),
   useSavedCards: z.boolean().describe("Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default"),
+  connections: z.array(connectionSelectionViewSchema).describe('The connections the chat may use, and how (E39.7). Empty: none; nothing is available by default.'),
   lastMessageAt: iso,
   createdAt: iso,
   updatedAt: iso,

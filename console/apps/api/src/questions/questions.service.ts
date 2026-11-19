@@ -651,7 +651,7 @@ export class QuestionsService {
     }
     return {
       question: { id: q.id, userId: actor.id, rememberable: rememberable!, taskId: run?.taskId ?? null, conversationId: run?.conversationId ?? null },
-      choice: { scope: r.scope, maxAmount: r.maxAmount ?? null, expiresInDays: r.expiresInDays ?? null },
+      choice: { scope: r.scope, maxAmount: r.maxAmount ?? null, expiresInDays: r.expiresInDays ?? null, ...(r.recipientsFrom ? { recipientsFrom: r.recipientsFrom } : {}) },
     };
   }
 

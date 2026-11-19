@@ -62,6 +62,8 @@ export interface SnapshotAppLimits {
   allowSavedIdentity: boolean;
   /** The owner allowed this app's runs to pay with a saved card (E37.7); false when absent. */
   allowSavedCards: boolean;
+  /** The owner allowed this app's runs to use their connections (E39.7); false when absent. */
+  allowConnections: boolean;
   policyId: string | null;
   allowedPolicyIds: string[];
   appliedPolicyId: string | null;
@@ -83,6 +85,7 @@ export function readAppLimits(value: unknown): SnapshotAppLimits | null {
     allowSavedLogins: v.allowSavedLogins === true,
     allowSavedIdentity: v.allowSavedIdentity === true,
     allowSavedCards: v.allowSavedCards === true,
+    allowConnections: v.allowConnections === true,
     policyId: typeof v.policyId === 'string' ? v.policyId : null,
     allowedPolicyIds: Array.isArray(v.allowedPolicyIds) ? v.allowedPolicyIds.filter((d): d is string => typeof d === 'string') : [],
     appliedPolicyId: typeof v.appliedPolicyId === 'string' ? v.appliedPolicyId : null,

@@ -36,6 +36,8 @@ model ConnectedAppSettings {
   allowSavedIdentity Boolean @default(false) @map("allow_saved_identity")
   /// Let this app's runs pay with the owner's saved cards (E37.7). Off by default; needs `allowSavedLogins`, and its "confirm purchases" limit still applies.
   allowSavedCards Boolean @default(false) @map("allow_saved_cards")
+  /// Let this app's runs use the owner's connections (mail, calendar, documents: E39.7) when the task lists them. Off by default: an AI app never gets the owner's mailbox unless the owner allows it here.
+  allowConnections Boolean @default(false) @map("allow_connections")
   /// Refuse new runs and sessions from this app without disconnecting it.
   paused            Boolean  @default(false)
   /// The scopes the owner was already told about (`app.connected`, `app.scope_added`), so a step-up announces only what it adds.

@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
+import { assertSelectable, replaceTaskConnections, taskConnectionViews, type ConnectionSelectionView } from '../connections/agent-connections';
 import { PrismaService } from '../prisma/prisma.service';
 import { ownerDefaultUseSavedLogins } from '../secrets/saved-logins-default';
 import { readConfirmedActions, withConfirmedLead } from '../runner/confirmed-actions';
@@ -93,9 +94,11 @@ export class TasksService {
     return out;
   }
 
-  private async withSpend<T extends { id: string }>(userId: string, tasks: T[]): Promise<(T & { spend30d: TaskSpend })[]> {
+  private async withSpend<T extends { id: string }>(userId: string, tasks: T[]): Promise<(T & { spend30d: TaskSpend; connections: ConnectionSelectionView[] })[]> {
     const spend = await this.spendByTask(userId, tasks.map((t) => t.id));
-    return tasks.map((t) => ({ ...t, spend30d: spend.get(t.id) ?? NO_SPEND }));
+    // The connections the task may use (E39.7): who and how, never anything the connection holds.
+    const connections = await taskConnectionViews(this.prisma, tasks.map((t) => t.id));
+    return tasks.map((t) => ({ ...t, spend30d: spend.get(t.id) ?? NO_SPEND, connections: connections.get(t.id) ?? [] }));
   }
 
   async listTasks(userId: string) {
@@ -120,7 +123,8 @@ export class TasksService {
    * `request` supplies the device time zone for a schedule that names none.
    */
   async createTask(userId: string, input: CreateTaskDto, request?: RequestWithHeaders) {
-    const { policyId, schedules, parameters: defs, useSavedLogins, ...fields } = input;
+    const { policyId, schedules, parameters: defs, useSavedLogins, connections, ...fields } = input;
+    if (connections) await assertSelectable(this.prisma, userId, connections);
     // The goal's `{{Name}}` parameters (#552): inferred where not defined, checked (400 names the problem).
     const parameters = prepareParameters(fields.goal, defs);
     await this.policies?.assertAssignable(userId, policyId);
@@ -137,19 +141,21 @@ export class TasksService {
       parameters: parameters as unknown as Prisma.InputJsonValue,
       useSavedLogins: useSavedLogins ?? (await ownerDefaultUseSavedLogins(this.prisma, userId)),
     };
-    if (prepared.length === 0) return { ...(await this.db(userId).task.create({ data })), spend30d: NO_SPEND };
+    if (prepared.length === 0 && !connections?.length) return (await this.withSpend(userId, [await this.db(userId).task.create({ data })]))[0]!;
     const t = await this.prisma.$transaction(async (tx) => {
       const task = await tx.task.create({ data });
-      await tx.taskSchedule.createMany({ data: this.taskSchedules!.rows(userId, task.id, prepared) });
+      if (prepared.length > 0) await tx.taskSchedule.createMany({ data: this.taskSchedules!.rows(userId, task.id, prepared) });
+      if (connections?.length) await replaceTaskConnections(tx, task.id, connections);
       return task;
     });
-    return { ...t, spend30d: NO_SPEND };
+    return (await this.withSpend(userId, [t]))[0]!;
   }
 
   /** Update a task. A legacy limit in the patch re-derives the task's policy unless `policyId` is also given. */
   async updateTask(userId: string, id: string, patch: UpdateTaskDto) {
-    const { policyId, parameters: defs, ...fields } = patch;
+    const { policyId, parameters: defs, connections, ...fields } = patch;
     await this.policies?.assertAssignable(userId, policyId);
+    if (connections) await assertSelectable(this.prisma, userId, connections);
     const data: Prisma.TaskUpdateManyMutationInput = { ...fields };
     // A new goal or new definitions: the parameters are reconciled with the goal again (#552).
     if (fields.goal !== undefined || defs !== undefined) {
@@ -168,8 +174,13 @@ export class TasksService {
       // Back at the defaults with no pinned model: follow the user's default again.
       data.policyRef = isDefaultLimits(limits) ? null : await this.policies.ensureLegacyPolicy(userId, fields.name ?? task.name, limits);
     }
-    const { count } = await this.db(userId).task.updateMany({ where: { id }, data });
-    if (count === 0) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
+    if (connections && !(await this.db(userId).task.findFirst({ where: { id }, select: { id: true } }))) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
+    if (Object.keys(data).length > 0) {
+      const { count } = await this.db(userId).task.updateMany({ where: { id }, data });
+      if (count === 0) throw new NotFoundException({ code: 'TASK_NOT_FOUND', message: 'Task not found' });
+    }
+    // Only the task's own list changes: a run already started keeps the snapshot it took (E39.7).
+    if (connections) await this.prisma.$transaction((tx) => replaceTaskConnections(tx, id, connections));
     return this.getTask(userId, id);
   }
 

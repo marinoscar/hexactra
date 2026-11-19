@@ -3,6 +3,7 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+import { connectionSelectionsField } from '../connections/agent-connections';
 import { policyRefSchema } from '../policies/policies.schemas';
 import { domainSchema } from '../tasks/tasks.schemas';
 
@@ -24,6 +25,7 @@ const runSettings = {
   useSavedLogins: z.boolean().describe("Let the chat's runs sign in from the owner's saved logins (E37.3). Off by default (a new chat starts from the owner's `secrets.defaultUseSavedLogins` setting); it works only while the secrets switches are on and a Vault is connected."),
   useSavedIdentity: z.boolean().describe("Let the chat's runs fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): the agent names the field and the fabric types it. Off by default; it needs `useSavedLogins`."),
   useSavedCards: z.boolean().describe("Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: the agent never sees a card value. Off by default; it needs `useSavedLogins`."),
+  connections: connectionSelectionsField.describe("The connections (mail, calendar, documents) the chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). Off until listed."),
 };
 
 /** `GET /chats`. */
@@ -45,6 +47,7 @@ export const createChatSchema = z.object({
   useSavedLogins: runSettings.useSavedLogins.optional(),
   useSavedIdentity: runSettings.useSavedIdentity.optional(),
   useSavedCards: runSettings.useSavedCards.optional(),
+  connections: runSettings.connections.optional(),
 });
 
 /** `PATCH /chats/:id`: at least one field. `status` archives and unarchives. */
@@ -61,6 +64,7 @@ export const updateChatSchema = z
   useSavedLogins: runSettings.useSavedLogins.optional(),
   useSavedIdentity: runSettings.useSavedIdentity.optional(),
   useSavedCards: runSettings.useSavedCards.optional(),
+  connections: runSettings.connections.optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: 'Nothing to update' });
 

@@ -6,8 +6,12 @@
 // only when they are equal after `normaliseLabel`.
 import { parse } from 'tldts';
 
-/** The kinds of rule: a step the server stops for (`gate`), or a question the agent asks on its own (`ask`). */
-export const APPROVAL_RULE_KINDS = ['gate', 'ask'] as const;
+/**
+ * The kinds of rule: a step the server stops for (`gate`), a question the agent asks on its own (`ask`), or a call that changes something
+ * through one of the owner's connections (`connection`, E39.7). A connection rule is keyed on `(connection id, tool)`: the connection's id
+ * is stored in `host` and the tool's name in `matchKey`; no site is involved, and no site rule ever matches one.
+ */
+export const APPROVAL_RULE_KINDS = ['gate', 'ask', 'connection'] as const;
 export type ApprovalRuleKind = (typeof APPROVAL_RULE_KINDS)[number];
 
 /** The gate's categories (runner/policy.ts `RISK_CATEGORIES`, #550), repeated here so this file stays pure and dependency-free. */
@@ -51,6 +55,34 @@ export function cardMatchKey(currency: string): string {
 export function cardRefOf(provider: string, itemId: string): string | null {
   const ok = /^[a-z][a-z0-9_-]{0,19}$/.test(provider) && /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(itemId);
   return ok ? `${provider}:${itemId}` : null;
+}
+
+/**
+ * The recipients of a connection call (E39.7), as a rule stores them: an address, lower-case (`person@example.test`), or a whole domain
+ * (`@example.test`, the addresses at exactly that domain: not its subdomains). Anything else is dropped. There is no "anyone".
+ */
+export function normaliseRecipient(raw: string | null | undefined): string | null {
+  const v = (raw ?? '').trim().toLowerCase();
+  if (!v || v.length > 254 || /[\s,;<>"()[\]\\]/.test(v) || v.includes('*')) return null;
+  const at = v.lastIndexOf('@');
+  if (at < 0 || v.indexOf('@') !== at) return null;
+  const domain = v.slice(at + 1);
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(domain)) return null;
+  if (at === 0) return v;
+  return /^[^@]{1,64}@/.test(v) ? v : null;
+}
+
+/** The domain entry (`@example.test`) of an address; null for an address that is not valid. */
+export function recipientDomain(address: string): string | null {
+  const n = normaliseRecipient(address);
+  return n && !n.startsWith('@') ? n.slice(n.lastIndexOf('@')) : null;
+}
+
+/** Whether a rule's approved set covers an address: the address itself, or its domain. */
+export function recipientCovered(approved: readonly string[], address: string): boolean {
+  const a = normaliseRecipient(address);
+  if (!a || a.startsWith('@')) return false;
+  return approved.includes(a) || approved.includes(a.slice(a.lastIndexOf('@')));
 }
 
 /** At most this many characters of a normalised label. */
@@ -98,6 +130,8 @@ export function normaliseLabel(label: string | null | undefined): string {
 /** The sentence the owner reads and the rule stores: "Press 'Pay' on bankofamerica.com", "Choose dates on bankofamerica.com". */
 export function ruleSummary(r: { kind: ApprovalRuleKind; host: string; label?: string | null; topic?: string | null; card?: string | null }): string {
   if (r.card) return `Pay with ${r.card.replace(/\s+/g, ' ').trim().slice(0, 80)} on ${r.host}`.slice(0, 300);
+  // A connection rule (E39.7) is worded by the server from the connection's label and the tool: `label` is the account's name, `topic` the tool.
+  if (r.kind === 'connection') return `${(r.topic ?? 'a tool').replace(/_/g, ' ')} with ${(r.label ?? 'a connection').replace(/\s+/g, ' ').trim().slice(0, 60)}`.slice(0, 300);
   if (r.kind === 'ask') {
     const phrase = ASK_TOPIC_PHRASES[(r.topic ?? 'other') as AskTopic] ?? ASK_TOPIC_PHRASES.other;
     return `${phrase} on ${r.host}`.slice(0, 300);
@@ -117,6 +151,8 @@ export interface MatchableRule {
   conversationId: string | null;
   /** A saved card (E37.7): `<provider>:<item id>`; empty or absent for every other rule. */
   cardRef?: string | null;
+  /** `connection` rules: the approved recipients (addresses or `@domain`); empty for every other rule. */
+  recipients?: readonly string[] | null;
   /** A number, or a decimal string as Prisma returns it; null for no limit. */
   maxAmount: number | string | { toString(): string } | null;
   expiresAt: Date | null;
@@ -136,6 +172,8 @@ export interface MatchQuery {
   conversationId: string | null;
   /** A card use (E37.7): the card's reference. Absent for everything else, so a card rule never matches a plain click. */
   cardRef?: string | null;
+  /** `connection` queries: every address the call would reach. A rule matches only when it covers all of them. */
+  recipients?: readonly string[] | null;
   /** The amount at stake when the owner's inputs make one known; null or undefined when unknown. */
   amount?: number | null;
   now: Date;
@@ -163,6 +201,11 @@ export function ruleMatches(rule: MatchableRule, q: MatchQuery): boolean {
   if (rule.conversationId && rule.conversationId !== q.conversationId) return false;
   // A card rule matches only the same card, and a rule for no card never matches a card use (E37.7).
   if ((rule.cardRef || null) !== (q.cardRef || null)) return false;
+  // A connection rule (E39.7) covers the recipients the owner approved and no one else: a call that reaches anyone outside the set asks again.
+  if (q.kind === 'connection') {
+    const approved = rule.recipients ?? [];
+    for (const r of q.recipients ?? []) if (!recipientCovered(approved, r)) return false;
+  }
   const limit = amountOf(rule.maxAmount);
   // A card rule without an amount limit matches nothing: the limit is required, whatever a row says.
   if (rule.cardRef && limit === null) return false;

@@ -106,11 +106,15 @@ model Task {
   /// What an unattended run (a schedule, the API, MCP) that signed in with a saved login does at a payment step (E37.3):
   /// `ask` (the default) keeps the confirmation on for that run even if `confirm_risky_actions` is off; `allow` leaves it as set.
   unattendedPayments String @default("ask") @map("unattended_payments") @db.VarChar(8)
+  /// Whether the task's runs open a browser (E39.7): `auto` opens it when the first browser tool is called if the run has connections (a
+  /// run without any connection is a browser job and opens it at the start, as before), `always` opens it at the start, `never` offers no browser tool.
+  needsBrowser   String   @default("auto") @map("needs_browser") @db.VarChar(8)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
   user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   runs Run[]
+  connections TaskConnection[]
 
   // composed from app:schedules.prisma
   schedules TaskSchedule[]
