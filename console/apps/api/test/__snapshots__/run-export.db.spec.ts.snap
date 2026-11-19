@@ -83,6 +83,8 @@ exports[`GET /runs/{id}/export sends a JSON attachment (no data envelope) that v
       "tier": "frontier",
     },
   ],
+  "outputs": null,
+  "outputsComplete": null,
   "partial": false,
   "policy": {
     "builtin": true,

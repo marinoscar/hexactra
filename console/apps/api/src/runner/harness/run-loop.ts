@@ -10,7 +10,7 @@ import type { RunContext } from './run-context';
 import { MAX_IDLE_CHUNKS, observePage, type StallSignal } from './stall';
 import { maybeDeEscalate } from './tiers';
 import { clip } from './text';
-import { LeaseLost, StopLoop, TIER_LABEL, type HarnessMemory, type RunOutcome } from './types';
+import { LeaseLost, StopLoop, structuredPatch, TIER_LABEL, type HarnessMemory, type RunOutcome } from './types';
 
 type Ctx = RunContext<HarnessMemory>;
 
@@ -167,12 +167,21 @@ export async function runLoop(ctx: Ctx, profile: LoopProfile<Ctx>): Promise<RunO
     if ((control.pauseRequested || flags.pauseRequested) && !(state.stop === 'finish' && state.finished)) return pauseNow(ctx);
     if (state.stop === 'finish' && state.finished) {
       const to = state.finished.success ? 'succeeded' : 'failed';
-      await closeRun(ctx, to, state.finished.success ? { result: state.finished.result, stopReason: 'finished' } : { result: state.finished.result, error: 'The agent could not reach the goal', stopReason: 'finished' });
+      const done = state.finished;
+      await closeRun(ctx, to, done.success ? { result: done.result, stopReason: 'finished', ...structuredPatch(done) } : { result: done.result, error: 'The agent could not reach the goal', stopReason: 'finished', ...structuredPatch(done) });
       return to;
     }
     if (state.stop === 'budget' && state.budgetKey) return wrapUp(ctx, profile, state.budgetKey);
     if (state.stop === 'hop') return 'continue';
     if (result && result.stopReason === 'completed') {
+      // A toolset that needs a structured result (task outputs, E39.5) asks for it first, twice at most; otherwise the answer is the result.
+      const ask = profile.beforeImplicitFinish?.(ctx) ?? null;
+      if (ask) {
+        memory.pendingNudge = ask.nudge;
+        await ctx.note('note', null, ask.note, { ok: false });
+        await ctx.checkpoint();
+        continue;
+      }
       // The model answered without calling finish: take its answer as the result.
       await closeRun(ctx, 'succeeded', { result: clip(result.outputText || 'Done.', 7_900), stopReason: 'finished' });
       return 'succeeded';

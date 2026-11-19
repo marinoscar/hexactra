@@ -9,6 +9,7 @@ import { RunNotifier } from '../tasks/run-notifier';
 import { TaskSchedulesService } from '../tasks/task-schedules.service';
 import { TasksService } from '../tasks/tasks.service';
 import { MEMORY_VALUE_RESOLVER, checkValues, formFields, keyInputs, renderRunGoal, resolveInputs, type FormField, type MemoryValueResolver } from '../tasks/task-params';
+import { outputsSpecOf } from '../tasks/task-outputs';
 import { readParameters, readRunInputs, type InputSource, type RunInputs, type TaskParameter } from '../tasks/task-params.schemas';
 import { QuestionEvents } from './question-events';
 import { QUESTION_TIMEOUT } from './questions.contract';
@@ -88,6 +89,8 @@ export class TaskRunStarter {
     const given = checkValues(params, keyInputs(params, opts.inputs), { timeZone });
     const resolved = await resolveInputs(userId, params, given, { presets: opts.presets, presetSource: 'schedule', resolver: this.memories ?? null, timeZone });
     const inputs: RunInputs | null = params.length ? { values: resolved.values, sensitive: resolved.sensitive, identity: resolved.identity } : null;
+    // The task's outputs as they are now (E39.5, #600): a run keeps its own copy, so a later edit never relabels it, and no caller can redefine them.
+    const outputsSpec = outputsSpecOf(task.outputs);
     const base = {
       ...opts.data,
       userId,
@@ -96,6 +99,7 @@ export class TaskRunStarter {
       hostId: task.hostId,
       hostFallback: task.hostFallback,
       ...(inputs ? { inputs: inputs as unknown as Prisma.InputJsonValue } : {}),
+      ...(outputsSpec ? { outputsSpec: outputsSpec as unknown as Prisma.InputJsonValue } : {}),
     };
     const db = this.prisma.forUser({ userId });
     if (resolved.missing.length === 0) {

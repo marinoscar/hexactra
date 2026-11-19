@@ -130,8 +130,8 @@ export class PrismaRunStore implements RunStorePort {
     return pauseRunRaw(this.d, this.userId, this.runId, patch);
   }
 
-  finish(to: 'succeeded' | 'failed' | 'cancelled', patch: { result?: string; error?: string; stopReason?: string }): Promise<void> {
-    return finishRun(this.d, this.userId, this.runId, this.hooks.sessionId(), this.hooks.session, to, patch as { result?: string; error?: string; stopReason?: RunStopReason });
+  finish(to: 'succeeded' | 'failed' | 'cancelled', patch: { result?: string; error?: string; stopReason?: string; outputs?: Record<string, { value: unknown; ok: boolean; note?: string }>; outputsComplete?: boolean }): Promise<void> {
+    return finishRun(this.d, this.userId, this.runId, this.hooks.sessionId(), this.hooks.session, to, patch as { result?: string; error?: string; stopReason?: RunStopReason; outputs?: Record<string, { value: unknown; ok: boolean; note?: string }>; outputsComplete?: boolean });
   }
 }
 

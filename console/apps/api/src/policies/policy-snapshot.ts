@@ -1,5 +1,8 @@
 import type { AgentPolicySpec, Tier } from './agent-policy.schema';
 import { maskRunGoal, runInputsView } from '../tasks/task-params';
+import { outputsView } from '../tasks/task-outputs';
+import { isTerminal, type RunStatus } from '../tasks/run-status';
+import type { OutputView } from '../tasks/task-outputs.schemas';
 import { agentPolicySpecSchema } from './agent-policy.schema';
 import { builtinPolicy } from './builtin-policies';
 import { readConfirmedActions } from '../runner/confirmed-actions';
@@ -161,8 +164,8 @@ interface RunPolicyColumns extends Partial<BudgetRunColumns>, RunTierColumns {
  * and `tier: { start, max, current, escalations, model }` (#408, null until then).
  * `stopReason` is a column and passes through.
  */
-export function runView<R extends RunPolicyColumns>(run: R): Omit<R, 'policyRef' | 'policyVersion' | 'policySnapshot' | 'policySource'> & { policy: RunPolicySummary | null; budget: RunBudgetView | null; tier: RunTierView | null } {
-  const { policyRef: _r, policyVersion: _v, policySnapshot, policySource: _s, ...rest } = run;
+export function runView<R extends RunPolicyColumns>(run: R): Omit<R, 'policyRef' | 'policyVersion' | 'policySnapshot' | 'policySource' | 'outputs' | 'outputsSpec'> & { outputs?: OutputView[] | null; policy: RunPolicySummary | null; budget: RunBudgetView | null; tier: RunTierView | null } {
+  const { policyRef: _r, policyVersion: _v, policySnapshot, policySource: _s, outputsSpec, outputs, ...rest } = run as R & { outputsSpec?: unknown; outputs?: unknown };
   const snapshot = readSnapshot(policySnapshot);
   // A full run carries its confirmed steps as a list (#540), never null; a list row's count passes through.
   const confirmed = 'confirmedActions' in rest && typeof (rest as { confirmedActions?: unknown }).confirmedActions !== 'number' ? { confirmedActions: readConfirmedActions((rest as { confirmedActions?: unknown }).confirmedActions) } : {};
@@ -170,6 +173,8 @@ export function runView<R extends RunPolicyColumns>(run: R): Omit<R, 'policyRef'
   const shown = {
     ...('goal' in rest && typeof (rest as { goal?: unknown }).goal === 'string' ? { goal: maskRunGoal((rest as { goal: string }).goal) } : {}),
     ...('inputs' in rest ? { inputs: runInputsView((rest as { inputs?: unknown }).inputs) } : {}),
+    // What the run returned (E39.5): the definitions it started with joined with the values, a sensitive one hidden. A row without the columns (a list) has none.
+    ...(outputs !== undefined || outputsSpec !== undefined ? { outputs: outputsView(outputsSpec, outputs, isTerminal((rest as { status?: RunStatus }).status ?? 'running')) } : {}),
   };
   return { ...rest, ...confirmed, ...shown, policy: summarize(snapshot), budget: snapshotBudgetView(snapshot, run), tier: runTierView(snapshot, run) };
 }

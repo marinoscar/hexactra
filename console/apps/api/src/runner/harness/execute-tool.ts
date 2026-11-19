@@ -46,7 +46,7 @@ export function offerTools<C extends AnyContext>(ctx: C, registry: ToolRegistry<
   return registry.list(ctx).map((tool) => ({
     name: tool.name,
     description: tool.description,
-    parameters: tool.parameters,
+    parameters: tool.parametersFor ? tool.parametersFor(ctx) : tool.parameters,
     execute: (args: never) => executeTool(ctx, tool, args, pipeline),
   }));
 }

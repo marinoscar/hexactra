@@ -22,7 +22,7 @@ export const PROVIDER_INFO: Record<ConnectionProviderId, ProviderInfo> = {
   google: {
     displayName: 'Google',
     accountTypes: [
-      { id: 'personal', label: 'Personal Gmail account', supported: true, note: 'Expected to work once the administrator has published the Google app ("In production"); you will see a "Google has not verified this app" page and must continue through it. While the app is in testing mode Google ends the sign-in after about a week.' },
+      { id: 'personal', label: 'Personal Gmail account', supported: true, note: 'Expected to work once the administrator has published the Google app ("In production"); you will see a "Google has not verified this app" page and must continue through it. While the app is in testing mode Google ends the sign-in after about a week. Documents: the agent can open a file by its link, and can search only files it created or you picked.' },
       { id: 'workspace', label: 'Google Workspace account', supported: true, note: "You will see the same unverified-app page. Your organization's administrator may have to mark the app as trusted before it works." },
       { id: 'advanced_protection', label: 'Account in Google Advanced Protection', supported: false, note: 'Google allows only verified apps on these accounts.' },
     ],
@@ -31,6 +31,7 @@ export const PROVIDER_INFO: Record<ConnectionProviderId, ProviderInfo> = {
       'Configure the Google Auth Platform (the OAuth consent screen): choose External and set the publishing status to "In production". A project left in testing mode ends every sign-in after about a week. You do not need to submit the app for verification for your own use; users accept an unverified-app warning when they connect.',
       'Create an OAuth client of type "Web application" and add the redirect URI shown on this page. It must be an https address with a public domain name.',
       'Paste the client id and client secret here and switch Google on.',
+      'When you connect an account, tick every permission Google lists: an unticked one leaves that capability off. Reading and organizing mail use Google\'s restricted Gmail permissions; for your own accounts the unverified-app page is the only consequence. Use an AI model provider that does not train on API inputs.',
       'Google Workspace only: in the Google Admin console (Security, API controls) mark the client as trusted if your organization blocks unverified apps.',
     ],
   },

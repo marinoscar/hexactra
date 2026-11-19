@@ -405,6 +405,117 @@
       ],
       "additionalProperties": false
     },
+    "outputs": {
+      "description": "What the run returned (E39.5): the task's outputs as they were when the run started, with their values, masked (a sensitive output is `[hidden]`). Null for a run without outputs; absent from files written before outputs existed.",
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "number",
+                  "money",
+                  "date",
+                  "datetime",
+                  "boolean",
+                  "url",
+                  "choice"
+                ]
+              },
+              "required": {
+                "type": "boolean"
+              },
+              "sensitive": {
+                "type": "boolean"
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "amount": {
+                            "type": "number"
+                          },
+                          "currency": {
+                            "description": "ISO 4217, or null when the page gave none",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "amount",
+                          "currency"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "text, number, date and datetime (ISO), url and choice: a string or number; boolean: a boolean; money: `{ amount, currency }`; null: not found. A sensitive output is the string `[hidden]`."
+              },
+              "ok": {
+                "type": "boolean",
+                "description": "The value was returned and valid (an optional output left empty is ok)"
+              },
+              "note": {
+                "description": "Why a value is missing or was refused (\"Not found\", \"Not a number\"); null when ok",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "key",
+              "label",
+              "type",
+              "required",
+              "sensitive",
+              "value",
+              "ok",
+              "note"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "outputsComplete": {
+      "description": "Whether every output was returned and valid; null when the run has no outputs or has not finished",
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
     "policy": {
       "anyOf": [
         {

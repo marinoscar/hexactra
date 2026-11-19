@@ -22,6 +22,7 @@ import type { RequestWithHeaders } from '@marinoscar/platform-api/core';
 import { TaskSchedulesService } from './task-schedules.service';
 import { prepareParameters } from './task-params';
 import { readParameters } from './task-params.schemas';
+import { prepareOutputs } from './task-outputs';
 
 /** Fields a status change may set. */
 export interface RunPatch {
@@ -36,6 +37,10 @@ export interface RunPatch {
   activity?: Prisma.InputJsonValue;
   /** With a terminal status: why the run stopped (#404). */
   stopReason?: RunStopReason | null;
+  /** With a terminal status: what the agent returned (E39.5), `{ [key]: { value, ok, note? } }`, already validated. */
+  outputs?: Prisma.InputJsonValue;
+  /** With `outputs`: whether every output was returned and valid. */
+  outputsComplete?: boolean | null;
 }
 
 /**
@@ -123,10 +128,12 @@ export class TasksService {
    * `request` supplies the device time zone for a schedule that names none.
    */
   async createTask(userId: string, input: CreateTaskDto, request?: RequestWithHeaders) {
-    const { policyId, schedules, parameters: defs, useSavedLogins, connections, ...fields } = input;
+    const { policyId, schedules, parameters: defs, outputs: outputDefs, useSavedLogins, connections, ...fields } = input;
     if (connections) await assertSelectable(this.prisma, userId, connections);
     // The goal's `{{Name}}` parameters (#552): inferred where not defined, checked (400 names the problem).
     const parameters = prepareParameters(fields.goal, defs);
+    // The values a run must return (E39.5, #600): keys derived, checked; none stored as null.
+    const outputs = prepareOutputs(outputDefs);
     await this.policies?.assertAssignable(userId, policyId);
     const prepared = schedules?.length && this.taskSchedules ? await this.taskSchedules.prepare(userId, schedules, { request, parameters }) : [];
     const limits = { maxSteps: fields.maxSteps, maxMinutes: fields.maxMinutes, model: fields.model ?? null };
@@ -139,6 +146,7 @@ export class TasksService {
       model: fields.model ?? null,
       policyRef,
       parameters: parameters as unknown as Prisma.InputJsonValue,
+      outputs: outputs.length ? (outputs as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
       useSavedLogins: useSavedLogins ?? (await ownerDefaultUseSavedLogins(this.prisma, userId)),
     };
     if (prepared.length === 0 && !connections?.length) return (await this.withSpend(userId, [await this.db(userId).task.create({ data })]))[0]!;
@@ -153,7 +161,7 @@ export class TasksService {
 
   /** Update a task. A legacy limit in the patch re-derives the task's policy unless `policyId` is also given. */
   async updateTask(userId: string, id: string, patch: UpdateTaskDto) {
-    const { policyId, parameters: defs, connections, ...fields } = patch;
+    const { policyId, parameters: defs, outputs: outputDefs, connections, ...fields } = patch;
     await this.policies?.assertAssignable(userId, policyId);
     if (connections) await assertSelectable(this.prisma, userId, connections);
     const data: Prisma.TaskUpdateManyMutationInput = { ...fields };
@@ -161,6 +169,11 @@ export class TasksService {
     if (fields.goal !== undefined || defs !== undefined) {
       const task = await this.getTask(userId, id);
       data.parameters = prepareParameters(fields.goal ?? task.goal, defs ?? readParameters(task.parameters)) as unknown as Prisma.InputJsonValue;
+    }
+    // New output definitions replace the task's (E39.5): an empty list removes them. Runs already started keep theirs.
+    if (outputDefs !== undefined) {
+      const outputs = prepareOutputs(outputDefs);
+      data.outputs = outputs.length ? (outputs as unknown as Prisma.InputJsonValue) : Prisma.DbNull;
     }
     if (policyId !== undefined) {
       data.policyRef = policyId;
@@ -209,7 +222,7 @@ export class TasksService {
   async transition(userId: string, id: string, to: RunStatus, patch: RunPatch = {}) {
     const db = this.db(userId);
     for (let attempt = 0; attempt < 5; attempt++) {
-      const run = await db.run.findFirst({ where: { id }, select: { status: true, startedAt: true, createdAt: true, trigger: true, activeMs: true, activeSince: true, result: true, confirmedActions: true, cancelRequestedAt: true } });
+      const run = await db.run.findFirst({ where: { id }, select: { status: true, startedAt: true, createdAt: true, trigger: true, activeMs: true, activeSince: true, result: true, confirmedActions: true, cancelRequestedAt: true, outputsSpec: true, outputsComplete: true } });
       if (!run) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
       assertTransition(run.status as RunStatus, to);
       const now = new Date();
@@ -220,6 +233,8 @@ export class TasksService {
         const confirmed = readConfirmedActions(run.confirmedActions);
         if (confirmed.length) fields.result = withConfirmedLead(fields.result ?? run.result ?? '', confirmed, to).slice(0, 8000);
       }
+      // A run with outputs that ends without having returned them (Stop, an error, a lost node) has not got them all (E39.5).
+      if (isTerminal(to) && run.outputsSpec !== null && run.outputsComplete === null && fields.outputsComplete === undefined) fields.outputsComplete = false;
       // Compare-and-set on the old status, so two writers cannot both win.
       const { count } = await db.run.updateMany({
         where: { id, status: run.status },

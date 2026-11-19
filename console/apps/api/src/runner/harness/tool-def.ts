@@ -36,6 +36,11 @@ export interface RunnerTool<C extends AnyContext = AnyContext, P extends z.ZodTy
   group: string;
   description: string;
   parameters: P;
+  /**
+   * The parameters this run's model is given, when they depend on the run (the `finish` tool takes the task's outputs). Must be a pure
+   * function of the run's own facts, so the offered schema is identical in every round. Without it `parameters` is offered.
+   */
+  parametersFor?(ctx: C): z.ZodTypeAny;
   /** The tool can do something irreversible (a click that passes the risk gate, typing a secret, later sending mail): the call is commit-class and its action is intent-recorded. */
   commits?: boolean;
   /** Which gates apply, and what each looks at. */

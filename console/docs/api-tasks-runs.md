@@ -24,6 +24,7 @@ The per-endpoint reference is the OpenAPI document the API serves (`/api/docs`, 
 | `PUT /tasks/:id/schedules` | Replace the task's schedules: update by `id`, create without, delete the unlisted | `tasks:write` | `200`, the task with its `summary` | the four schedule codes above, `400 SCHEDULE_NOT_IN_TASK`, `404 NOT_FOUND` |
 | `POST /tasks/:id/schedules/pause` | Disable every schedule of the task | `tasks:write` | `200`, the task with its `summary` and `skipped` | `404 NOT_FOUND`, `409 NO_SCHEDULES` |
 | `POST /tasks/:id/schedules/resume` | Enable every schedule of the task and compute the next firings | `tasks:write` | `200`, as above | `404 NOT_FOUND`, `409 NO_SCHEDULES` |
+| `GET /tasks/:id/outputs` | What the task's finished runs returned, newest first, keyset paged (`limit` 1 to 100, default 20; `cursor`): `{ columns, items: [{ runId, status, createdAt, finishedAt, outputsComplete, values }], nextCursor }` ([Task outputs](#task-outputs)) | `runs:read` | `200` | `400 INVALID_CURSOR`, `404 TASK_NOT_FOUND` |
 | `GET /tasks/:id/stats` | The task's run statistics for `days` (7 to 90, default 30) | `runs:read` | `200 { days, timezone, totals, avgDurationSeconds, p95DurationSeconds, avgSteps, avgCostPerSuccessUsd, series, stopReasons }` | `400 BAD_REQUEST`, `404 NOT_FOUND` |
 | `POST /schedules/preview` | What `{ cron, timezone?, count? }` means and when it fires next. Saves nothing | `tasks:read` | always `200`: `{ valid: true, cron, timezone, description, next, intervalSeconds }` or `{ valid: false, code, message }` | inside the answer: `INVALID_CRON`, `INVALID_TIMEZONE`, `CRON_TOO_FREQUENT` |
 | `GET /schedules/defaults` | The time zone a new schedule gets: `{ timezone, source }` | `tasks:read` | `200` | |
@@ -128,6 +129,49 @@ Send ${{Amount}} today to {{Phone Number}} using Zelle on my Bank of America acc
 - CLI: `hexactra tasks run <task> --input amount=25 --input "Phone Number=555 010 6020"`; at a terminal, each missing value is prompted for. A sensitive parameter is never prompted: the CLI prints the console link.
 - SDK: `packages/sdk/src/examples/task-parameters.ts`.
 - MCP: `task_run` takes `inputs`; `tasks_list`, `task_create` and `task_update` return `parameters` with `has_default` and never a default's value; `schedule_create` takes `inputs`; `inbox_answer` takes `fields`. Scopes, effects and titles are unchanged.
+
+### Task outputs
+
+A task can name the values its runs must return (E39.5, #600): a payment's amount, its confirmation number, the date, the remaining balance. The agent has to give them when it finishes; they are checked on the server, kept on the run, shown, listed per task and sent on by the webhook. A row in a spreadsheet needs columns, not a paragraph.
+
+**Definitions** (`outputs` on `POST /api/tasks` and `PATCH /api/tasks/:id`, returned on every task; at most 30): `{ key, label, type, required, options?, help?, sensitive? }`.
+
+- `key`: snake_case, unique in the task, 1 to 40 characters (`a-z`, `0-9`, `_`). Omitted, it is derived from the label (`Confirmation number` → `confirmation_number`; a derived key that is taken gets `_2`). Types are the shared ones of `packages/shared/task-fields.js`, which task parameters share the names of (`text`, `number`, `money`, `date`, `choice`) plus `datetime`, `boolean` and `url`.
+- `required` defaults to `true`. `options` (2 to 50) only for a `choice`. `help` is one line telling the agent what to look for. `sensitive: true` masks the value wherever a person, an export or an AI app sees it ([below](#what-is-masked-in-an-output)).
+- `outputs: []` on a `PATCH` removes them. Definition problems are `400 INVALID_OUTPUTS` with `details.issues` per key. A schedule, the API (`POST /tasks/:id/runs`), MCP and the chat all start a run with the task's outputs; none of them can redefine them, and a start body has no `outputs`.
+- A chat job (no task) has no outputs. A chat that starts a saved task with `run_task` does.
+
+**The agent's side.** When the run's task has outputs the instructions gain a section that lists each one (key, label, type, required, `help`) and says: collect these while you work; give every required one in `finish`; write a value exactly as the page shows it; if one cannot be found give `null` and say why in the result. The section depends only on the definitions the run started with, so it is part of the stable prefix and identical in every round. `finish` takes `outputs`, an object with exactly the task's keys (each nullable; `number`, `money` and `boolean` also take the page's text), built into the tool's JSON schema. A task without outputs gets today's `{ success, result }` schema unchanged.
+
+**Validation, on the server.** Unknown keys are dropped; each value is read by its type:
+
+| Type | Reads | Stored as |
+|---|---|---|
+| `text` | a line of at most 500 characters | the text |
+| `number` | `1,234.50`, `1.234,50`, `12,50`, `(12.5)` (a negative), `-3` | a number |
+| `money` | a number with an optional sign or ISO code before or after: `$1,234.50`, `EUR 20`, `20.00 CAD`, `US$ 5`. A bare `$` reads as USD | `{ amount, currency }` (`currency` null when the page gave none) |
+| `date` | ISO `YYYY-MM-DD`, or when unambiguous `03/25/2026`, `25/03/2026`, `25.03.2026`, `March 25, 2026`, `25 March 2026`. `03/04/2026` is refused | `YYYY-MM-DD` |
+| `datetime` | ISO 8601 with a time, or a local date then a time (`March 25, 2026 3:30 PM`) | `YYYY-MM-DDTHH:MM:SS` (with `Z` or the offset the page gave) |
+| `boolean` | `true`/`false`, `yes`/`no`, `y`/`n`, `1`/`0`, `on`/`off` | a boolean |
+| `url` | an absolute `http` or `https` address | the address |
+| `choice` | one of the options, case-insensitive | the option |
+
+On a success finish with a missing required value or a value that does not parse, `finish` does **not** end the run: it answers the model with what is wrong ("`confirmation_number` is required", "`amount_paid` is not an amount of money: 'ten dollars'") and the run goes on, **twice at most**. After that the run finishes with what it has: an invalid field is `null` with its reason, and `outputsComplete` is `false`. A `success: false` finish may omit outputs and is never refused; whatever it gives is validated and stored. The wrap-up call after a budget or a stall uses the same schema (and is never refused), so a stopped run still returns the fields it found. A model that stops without calling `finish` is asked for the outputs by the same rule. A run with outputs that ends without having returned them (Stop, an error) has `outputsComplete: false`. The agent's words are scrubbed of a sensitive output's value before they are stored as the result.
+
+A value is data. Nothing downstream reads it as an instruction, and it cannot name a recipient or a destination: deliveries (E39.6) take those from the task only.
+
+**Storage and views.**
+
+- `runs.outputs_spec` copies the task's definitions when the run **starts**, so editing the task never relabels an old run. `runs.outputs` is `{ [key]: { value, ok, note? } }`; `runs.outputs_complete` says whether every output was returned and valid (`null` without outputs or before the run ends).
+- `GET /api/runs/{id}` returns `outputs: [{ key, label, type, required, sensitive, value, ok, note }]` (definitions as the run started with them, values masked) and `outputsComplete`. A list row (`GET /api/runs`) carries only `outputsComplete`. `note` is "Not found" or the reason a value was refused ("Not a number"); it never holds a value.
+- `GET /api/tasks/{id}/outputs?limit=&cursor=` answers the history the task page shows: `columns` (the task's outputs now, then any key an older run reported that the task no longer has) and `items`, the task's finished runs that had outputs, newest first, each with `values` by key. `404 TASK_NOT_FOUND` for a task that is not yours.
+- The chat result message's `meta` carries `outputs` and `outputsComplete`; the webhook `runs.run.finished` payload gains `outputs` (additive: absent for a task without outputs); MCP `run_status`, `run_wait`, `run_goal`, `task_run` and `run_cancel` return `outputs` (and `outputs_complete` in the `progress` block), and `tasks_list` returns each task's `outputs` definitions; the JSON trace file (`outputs`, `outputsComplete`) and the PDF report (an "Outputs" section after the outcome) include them.
+
+#### What is masked in an output
+
+A `sensitive` output is stored whole (the owner may configure a delivery to carry it, E39.6) and reads `[hidden]` in the run view, the history table, the chat message, the webhook payload, the MCP results, the JSON trace and the PDF report. It is never in a step, a log or a span. Any other text value passes the same masking as the rest of a trace ([runs.md, "What is masked"](runs.md)): a long digit run that looks like a card number is masked, so a confirmation number that long should be a `sensitive` output only if it must not be seen. A hosted AI app sees what the REST view returns: never an unmasked sensitive value.
+
+**Clients.** Web: the task form's **Outputs** section (rows of label, type, required, what to look for and sensitive; add, remove, reorder; the key under **More**; a hint for a scheduled task with none), an **Outputs** block under a finished run's result and in the chat's result card, an **Outputs** table on the task page, and a chat draft that proposes outputs from what the finished run reported. CLI: `hexactra runs show <id>` prints them; `hexactra tasks outputs <task> [--limit n] [--csv|--json]` prints the history as a table or a CSV (one column per output; money as an amount and a currency column; a cell that would read as a formula is prefixed). SDK: `hx.tasks.outputs(taskId, { limit, cursor })` and `src/examples/task-outputs.ts`. MCP: no new tool.
 
 ### Saved logins on a task (E37.3)
 

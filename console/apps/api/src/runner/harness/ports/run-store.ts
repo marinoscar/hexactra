@@ -88,5 +88,5 @@ export interface RunStorePort {
   /** Pauses the run this job holds. False: it was stopped or finished in the meantime (the job has nothing more to do). */
   pause(patch?: { handoffId?: string | null }): Promise<boolean>;
   /** Ends the run: releases what it holds (the browser), moves the status, notifies the owner. */
-  finish(to: 'succeeded' | 'failed' | 'cancelled', patch: { result?: string; error?: string; stopReason?: string }): Promise<void>;
+  finish(to: 'succeeded' | 'failed' | 'cancelled', patch: { result?: string; error?: string; stopReason?: string; outputs?: Record<string, { value: unknown; ok: boolean; note?: string }>; outputsComplete?: boolean }): Promise<void>;
 }

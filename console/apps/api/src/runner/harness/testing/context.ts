@@ -81,7 +81,7 @@ export function fakeRun<X = Record<string, never>>(options: FakeRunOptions<X> = 
     run: { id: 'run-1', userId: 'user-1', orgId: null, goal: 'Do the thing', trigger: null, taskId: null, conversationId: null },
     ports,
     memory,
-    state: { stepCount: 0, seq: 0, stall: null, stop: null, budgetKey: null, finished: null, handoffId: null, handoffExpiresAt: null, handoffAsk: null },
+    state: { stepCount: 0, seq: 0, stall: null, stop: null, budgetKey: null, finished: null, wrappingUp: false, handoffId: null, handoffExpiresAt: null, handoffAsk: null },
     tracker: new BudgetTracker(options.policy?.effectiveBudget ?? UNLIMITED, {}),
     stall: newStallState(),
     tier: 'standard',

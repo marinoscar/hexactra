@@ -67,6 +67,7 @@ export function fakeBrowserRun(options: FakeBrowserRunOptions = {}): FakeRun<Bro
     sensitiveParams: () => [],
     masking: NO_MASKING,
     hooks: {},
+    outputs: null,
   };
   const run = fakeRun<BrowserExt>({ ...options, ext });
   return { ...run, ctx: run.ctx as BrowserContext, browser, gates: [siteGate, riskGate] };

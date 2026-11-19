@@ -87,6 +87,23 @@
       ]
     },
     {
+      "id": "tasks.outputs",
+      "description": "What a task's finished runs returned (the named values its outputs ask for): a history, newest first, and as a CSV",
+      "rest": [
+        "GET /api/tasks/{id}/outputs"
+      ],
+      "cli": "tasks outputs",
+      "mcp": {
+        "none": "run_status and run_wait carry a run's outputs; the history across runs is for the web app and the CLI (a spreadsheet's job), not a chat"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; this is a table to read or export, so use the CLI or the web app"
+      },
+      "web": [
+        "/tasks/:id"
+      ]
+    },
+    {
       "id": "policies.read",
       "description": "List and read agent policies (the built-ins and your own) and the default",
       "rest": [

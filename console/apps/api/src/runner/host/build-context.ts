@@ -14,6 +14,8 @@ import { browserInstructions } from '../browser/instructions';
 import { currentUrl, currentUrlOf } from '../browser/page';
 import { domainAllowed } from '../browser/policy';
 import { browserTools } from '../browser/tools';
+import { instructionsWithOutputs, outputsHandle, outputsNudge, outputsWrapUpNote } from '../outputs';
+import { readOutputs } from '../../tasks/task-outputs.schemas';
 import { BudgetTracker, GatePipeline, RunUsage, ToolRegistry, type LoopProfile, type Ports, type RunnerTool } from '../harness';
 import { createRunContext } from '../harness/engine';
 import { guidanceSummary } from '../trace';
@@ -137,6 +139,8 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     sensitiveParams: () => [...(readRunInputs(run.inputs)?.sensitive ?? []), ...(flags.savedIdentity ? [] : identityParams.map((p) => ({ key: p.key, label: p.label })))],
     masking,
     hooks,
+    // What this run must return (E39.5): the task's outputs as they were when the run started.
+    outputs: outputsHandle(readOutputs(run.outputsSpec)),
     d,
     db,
     fabric: { session, sessionId },
@@ -162,6 +166,7 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
       stop: null,
       budgetKey: null,
       finished: null,
+      wrappingUp: false,
       handoffId: null,
       handoffExpiresAt: null,
       handoffAsk: null,
@@ -213,7 +218,8 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
   registry.register(browserTools.finish as unknown as RunnerTool<HostContext>);
 
   const profile: LoopProfile<HostContext> = {
-    instructions: browserInstructions(ASK_TOPICS, registry.usageNotes(ctx)),
+    // The shared instructions, then (for a task with outputs) the list of what to return: the same text every round (the stable prefix, #406).
+    instructions: instructionsWithOutputs(browserInstructions(ASK_TOPICS, registry.usageNotes(ctx)), readOutputs(run.outputsSpec)),
     registry,
     pipeline: new GatePipeline<HostContext>([siteGate as never, riskGate as never, connectionGate as never]),
     visionNotes: VISION_NOTES,
@@ -222,6 +228,8 @@ export async function buildRun(d: HostDeps, s: RunStart): Promise<BuiltRun> {
     contextLines: (c) => [sitesLine(c as never)],
     summarizeGuidance: guidanceSummary,
     aboutOwner: await aboutOwner(d, userId, run, memory.context),
+    beforeImplicitFinish: (c) => outputsNudge(c.ext.outputs, c.memory),
+    wrapUpNote: (c) => outputsWrapUpNote(c.ext.outputs),
   };
   return { ctx, profile };
 }

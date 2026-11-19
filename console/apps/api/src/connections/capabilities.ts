@@ -107,6 +107,11 @@ export interface CapabilityErrorDetails {
   label?: string;
   /** A stable reason code (`GRANT_REVOKED`, `SCOPE`, `LIMIT_BYTES`), never a message. */
   reason?: string;
+  /**
+   * A write whose request was sent and got no definite answer (a timeout, a reset, a 5xx) where the provider has no idempotency
+   * key: the change may or may not have happened. It was not retried, and a caller retrying could duplicate it.
+   */
+  outcomeUnknown?: boolean;
   /** INVALID_INPUT: the paths of the offending fields. */
   issues?: string[];
 }
@@ -132,8 +137,9 @@ export class CapabilityError extends Error {
     return this.details.status;
   }
 
-  /** `true` for a failure a retry could cure (rate limit, provider 5xx or unreachable). */
+  /** `true` for a failure a retry could cure (rate limit, provider 5xx or unreachable) and cannot duplicate (not `outcomeUnknown`). */
   get retryable(): boolean {
+    if (this.details.outcomeUnknown) return false;
     return this.code === 'RATE_LIMITED' || (this.code === 'PROVIDER_ERROR' && (this.details.status === 0 || (this.details.status ?? 0) >= 500));
   }
 

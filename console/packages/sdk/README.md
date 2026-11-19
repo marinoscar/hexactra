@@ -36,6 +36,12 @@ const inbox = await hx.data(hx.api.GET('/api/inbox')); // what the agent is wait
   await hx.runs.delete(runId);                                         // permanent; 409 RUN_LIVE for a live run
   await hx.runs.deleteMany({ filter: { taskId: task.id, to: '2026-08-01T00:00:00Z' }, expectedCount: 40 }); // or { ids }
   ```
+  and for a task that must return values (E39.5, [Task outputs](../../docs/api-tasks-runs.md#task-outputs)):
+  ```ts
+  const task = await hx.tasks.create({ name: 'Pay the rent', goal: 'Pay the rent and read the receipt', outputs: [{ label: 'Confirmation number', type: 'text' }, { label: 'Amount paid', type: 'money' }] });
+  const run = await hx.tasks.run(task.id);                              // run.outputs: the definitions the run started with, values once it finishes
+  const history = await hx.tasks.outputs(task.id, { limit: 20 });       // { columns, items: [{ runId, values }], nextCursor }, newest first
+  ```
   Deleting needs the `runs:delete` permission. The routes, their answers and error codes: [docs/api-tasks-runs.md](../../docs/api-tasks-runs.md).
 - **`hx.api`** is an [openapi-fetch](https://openapi-ts.dev/openapi-fetch/) client over the whole API, including the platform's routes (personal access tokens, notifications, …).
 - **`hx.data(call)`** unwraps the console's `{ data }` envelope. On an error status it throws `ConsoleApiError`, with `status`, a stable `code` and the prose `message`.
@@ -47,7 +53,7 @@ const inbox = await hx.data(hx.api.GET('/api/inbox')); // what the agent is wait
 HEXACTRA_CONSOLE_URL=https://console.example.test HEXACTRA_TOKEN=pat_… node dist/examples/tasks.js
 ```
 
-The example (`src/examples/tasks.ts`) saves a task, changes its goal, lists tasks and runs, then uses the schedule preview, a task with schedules, pause and resume, a page of runs and a delete by filter. `src/examples/policies.ts` creates, edits, exports and imports a policy, then runs a goal and a task under it. CI runs both against a live console: `apps/api/test/sdk.db.spec.ts`.
+The example (`src/examples/tasks.ts`) saves a task, changes its goal, lists tasks and runs, then uses the schedule preview, a task with schedules, pause and resume, a page of runs and a delete by filter. `src/examples/policies.ts` creates, edits, exports and imports a policy, then runs a goal and a task under it. `src/examples/task-outputs.ts` saves a task with outputs, starts a run and reads the history of what runs returned. CI runs both against a live console: `apps/api/test/sdk.db.spec.ts`.
 
 ## Regenerating
 

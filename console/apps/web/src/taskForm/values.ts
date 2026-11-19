@@ -8,6 +8,7 @@
 import { isPlatformApiError } from '@marinoscar/platform-web/core';
 
 import { draftFromSchedule, draftToItem, newScheduleDraft, type ScheduleDraft, type ScheduleItemInput } from '../schedule/draft';
+import { cleanOutputs, outputProblems, type TaskOutput } from '../taskOutputs/model';
 import { cleanParameters, syncParameters, type TaskParameter } from '../taskParams/model';
 import type { Task } from '../types/tasks';
 
@@ -55,6 +56,8 @@ export interface TaskFormValues {
    * what is saved is this list kept in step with the goal.
    */
   parameters: TaskParameter[];
+  /** The values the agent must return when it finishes (E39.5, #600): rows the form edits; empty rows are not saved. */
+  outputs: TaskOutput[];
   /** Each carries an optional `policyId` override. */
   schedules: ScheduleDraft[];
 }
@@ -70,7 +73,7 @@ export interface TaskWithSchedules extends Task {
 }
 
 export function emptyValues(): TaskFormValues {
-  return { name: '', goal: '', profile: DEFAULT_PROFILE, hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, useSavedLogins: false, useSavedIdentity: false, useSavedCards: false, unattendedPayments: 'ask', parameters: [], schedules: [] };
+  return { name: '', goal: '', profile: DEFAULT_PROFILE, hostId: null, hostFallback: true, policyId: null, allowedDomains: [], confirmRiskyActions: false, useSavedLogins: false, useSavedIdentity: false, useSavedCards: false, unattendedPayments: 'ask', parameters: [], outputs: [], schedules: [] };
 }
 
 /** The form values of a saved task. */
@@ -89,6 +92,7 @@ export function valuesFromTask(task: TaskWithSchedules): TaskFormValues {
     useSavedCards: task.useSavedCards === true,
     unattendedPayments: task.unattendedPayments === 'allow' ? 'allow' : 'ask',
     parameters: (task.parameters ?? []).map((p) => ({ ...p })),
+    outputs: (task.outputs ?? []).map((o) => ({ ...o })),
     schedules: (task.summary?.schedules ?? []).map(draftFromSchedule),
   };
 }
@@ -165,6 +169,8 @@ export function validateValues(values: TaskFormValues, options: { checkProfile: 
   const invalid = values.allowedDomains.filter((d) => !isValidDomain(d));
   if (invalid.length > 0) errors.allowedDomains = `${invalid.map((d) => `“${d}”`).join(', ')} ${invalid.length === 1 ? 'is not a site' : 'are not sites'}. Use a hostname such as example.test or *.example.test.`;
   else if (values.allowedDomains.length > MAX_ALLOWED_DOMAINS) errors.allowedDomains = `At most ${MAX_ALLOWED_DOMAINS} sites`;
+  // The outputs (E39.5): a row's message is `output:<row>`, the section's is `outputs`.
+  for (const [row, message] of Object.entries(outputProblems(values.outputs))) errors[Number(row) === -1 ? 'outputs' : `output:${row}`] = message;
   return errors;
 }
 
@@ -187,6 +193,8 @@ export interface CreateTaskBody {
   policyId?: string | null;
   /** The goal's parameters (#556): present only when the goal has a placeholder. */
   parameters?: TaskParameter[];
+  /** The task's outputs (E39.5): present only when the form has some; an empty list on a change removes them. */
+  outputs?: TaskOutput[];
   /** Present only when the form has schedules. */
   schedules?: ScheduleItemInput[];
 }
@@ -196,7 +204,7 @@ export function savedParameters(values: Pick<TaskFieldValues, 'goal' | 'paramete
   return cleanParameters(syncParameters(values.goal.trim(), values.parameters).parameters);
 }
 
-function fieldBody(values: TaskFieldValues): Omit<CreateTaskBody, 'policyId' | 'schedules' | 'parameters'> & { parameters: TaskParameter[] } {
+function fieldBody(values: TaskFieldValues): Omit<CreateTaskBody, 'policyId' | 'schedules' | 'parameters' | 'outputs'> & { parameters: TaskParameter[]; outputs: TaskOutput[] } {
   return {
     name: values.name.trim(),
     goal: values.goal.trim(),
@@ -210,6 +218,7 @@ function fieldBody(values: TaskFieldValues): Omit<CreateTaskBody, 'policyId' | '
     useSavedCards: values.useSavedCards,
     unattendedPayments: values.unattendedPayments,
     parameters: savedParameters(values),
+    outputs: cleanOutputs(values.outputs),
   };
 }
 
@@ -219,10 +228,11 @@ export function scheduleItems(schedules: readonly ScheduleDraft[]): ScheduleItem
 
 /** The body of `POST /tasks`: the task and its schedules in one request. */
 export function createBody(values: TaskFormValues, options: { sendPolicy: boolean }): CreateTaskBody {
-  const { parameters, ...fields } = fieldBody(values);
+  const { parameters, outputs, ...fields } = fieldBody(values);
   return {
     ...fields,
     ...(parameters.length > 0 ? { parameters } : {}),
+    ...(outputs.length > 0 ? { outputs } : {}),
     ...(options.sendPolicy ? { policyId: values.policyId } : {}),
     ...(values.schedules.length > 0 ? { schedules: scheduleItems(values.schedules) } : {}),
   };
@@ -262,7 +272,7 @@ export interface MappedError {
   banner: string | null;
 }
 
-const TASK_FIELDS = ['name', 'goal', 'profile', 'hostId', 'hostFallback', 'policyId', 'allowedDomains', 'confirmRiskyActions', 'useSavedLogins', 'useSavedIdentity', 'useSavedCards', 'unattendedPayments', 'parameters'];
+const TASK_FIELDS = ['name', 'goal', 'profile', 'hostId', 'hostFallback', 'policyId', 'allowedDomains', 'confirmRiskyActions', 'useSavedLogins', 'useSavedIdentity', 'useSavedCards', 'unattendedPayments', 'parameters', 'outputs'];
 
 /** `allowedDomains.2` (zod) and `schedules[1].cron` (the schedule checks) in one spelling: `a[2]`, `schedules[1].cron`. */
 export function normalizePath(path: unknown): string {
@@ -275,6 +285,9 @@ export function fieldOfPath(path: string): string | null {
   const schedule = /^schedules\[(\d+)\]/.exec(path);
   if (schedule) return `schedules[${schedule[1]}]`;
   if (path === 'schedules') return 'schedules';
+  // An output's definition (`outputs[2].label`) is that row: the form maps the index of what it sent back to its row.
+  const output = /^outputs\[(\d+)\]/.exec(path);
+  if (output) return `outputs[${output[1]}]`;
   // A parameter's definition (`parameters[2].default`) is that parameter's row only when the key is known: the caller maps it.
   const head = path.split(/[.[]/)[0] ?? '';
   return TASK_FIELDS.includes(head) ? head : null;
@@ -297,6 +310,15 @@ export function mapApiError(error: unknown, fallback: string): MappedError {
   const details = (error.details && typeof error.details === 'object' ? error.details : {}) as { path?: unknown; issues?: { path?: unknown; message?: unknown }[] };
   const issues: { path: string; message: string }[] = [];
   const fields: FieldErrors = {};
+  // The server's check of the outputs (E39.5) names each problem by key: it goes on that output's row (`output-key:<key>`).
+  if (error.code === 'INVALID_OUTPUTS' && Array.isArray(details.issues)) {
+    for (const issue of details.issues as { key?: unknown; message?: unknown }[]) {
+      const text = typeof issue?.message === 'string' ? issue.message : message;
+      const field = typeof issue?.key === 'string' && issue.key ? `output-key:${issue.key}` : 'outputs';
+      if (!(field in fields)) fields[field] = text;
+    }
+    return { fields, banner: null };
+  }
   if (Array.isArray(details.issues)) {
     for (const issue of details.issues as { path?: unknown; key?: unknown; message?: unknown }[]) {
       // A parameter's problem (#552) names its key: it goes on that parameter's row.
