@@ -25,6 +25,15 @@ const code = async (p: Promise<unknown>): Promise<string> => {
   }
 };
 
+const fail = async (p: Promise<unknown>): Promise<CapabilityError> => {
+  try {
+    await p;
+  } catch (e) {
+    return e as CapabilityError;
+  }
+  throw new Error('expected a CapabilityError');
+};
+
 describe('method tags', () => {
   it('tags every method with an effect and a capability, and writes with a write capability', () => {
     expect(METHOD_TAGS.length).toBe(Object.values(CAPABILITY_METHODS).reduce((n, m) => n + Object.keys(m).length, 0));
@@ -99,7 +108,7 @@ describe('validation and limits', () => {
   it('rejects invalid input with the paths and never the values', async () => {
     const t = createTestCapabilities();
     const c = t.connections.add({ capabilities: ['mail_read'] });
-    const e = await t.hub.mail(t.ctx(c)).search({ from: 'secret-marker\nBcc: x@example.test', pageSize: 500 }).catch((x: unknown) => x as CapabilityError);
+    const e = await fail(t.hub.mail(t.ctx(c)).search({ from: 'secret-marker\nBcc: x@example.test', pageSize: 500 }));
     expect(e.code).toBe('INVALID_INPUT');
     expect(e.details.issues).toEqual(expect.arrayContaining(['0.from', '0.pageSize']));
     expect(JSON.stringify(e.toJSON())).not.toContain('secret-marker');
@@ -198,7 +207,7 @@ describe('the double', () => {
     const t = createTestCapabilities();
     const c = t.connections.add({ capabilities: ['mail_read'] });
     t.fake.failNext('mail.listLabels', new CapabilityError('RATE_LIMITED', { retryAfterMs: 1500 }));
-    const e = await t.hub.mail(t.ctx(c)).listLabels().catch((x: unknown) => x as CapabilityError);
+    const e = await fail(t.hub.mail(t.ctx(c)).listLabels());
     expect(e.code).toBe('RATE_LIMITED');
     expect(e.retryAfterMs).toBe(1500);
     expect(e.retryable).toBe(true);
