@@ -154,7 +154,8 @@ model User {
   secretsConnections SecretsConnection[]
 
   // composed from app:secrets-store.prisma
-  secretsStoreDataKey SecretsStoreDataKey?
+  secretsStoreDataKey        SecretsStoreDataKey?
+  secretsStoreCallbackTokens SecretsStoreCallbackToken[]
 
   // composed from app:tasks.prisma
   tasks Task[]

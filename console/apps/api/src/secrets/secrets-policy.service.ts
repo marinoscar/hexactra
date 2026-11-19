@@ -5,7 +5,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { resolveSecretsSystemSettings, secretsAgentUseOf, type ResolvedSecretsSystemSettings } from './secrets.settings';
+import { resolveSecretsSystemSettings, secretsAgentUseOf, secretsProviderOf, type ResolvedSecretsSystemSettings, type SecretsProviderId } from './secrets.settings';
 
 /** How stale the cached system settings may be: a switch takes effect within a few seconds. */
 export const SECRETS_SETTINGS_CACHE_MS = 5_000;
@@ -56,6 +56,12 @@ export class SecretsPolicyService {
   async userSwitch(userId: string): Promise<boolean> {
     const row = await this.prisma.userSettings.findUnique({ where: { userId }, select: { value: true } });
     return secretsAgentUseOf(row?.value);
+  }
+
+  /** Which provider the owner chose (`vault` unless they picked the built-in store). One is active at a time. */
+  async activeProvider(userId: string): Promise<SecretsProviderId> {
+    const row = await this.prisma.userSettings.findUnique({ where: { userId }, select: { value: true } });
+    return secretsProviderOf(row?.value);
   }
 
   /** The state of both switches for an owner. `effective` is what `secrets_lookup` and the fabric registration obey. */

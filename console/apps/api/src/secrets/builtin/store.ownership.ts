@@ -20,6 +20,7 @@ export type StoreModelName =
   | 'SecretType'
   | 'SecretAttachment'
   | 'SecretsStoreDataKey'
+  | 'SecretsStoreCallbackToken'
   | 'MediaFolder'
   | 'MediaFolderFile'
   | 'BackupRun'
@@ -59,6 +60,13 @@ export const STORE_USER_OWNED_MODELS: readonly UserOwnedModelDef<StoreModelName>
     export: 'exclude',
     rationale: "The owner's data key, wrapped under the deployment's store key. Deleted with the user (their secrets go with it); never exported: it is key material.",
   },
+  {
+    model: 'SecretsStoreCallbackToken',
+    ownerField: 'userId',
+    purge: 'delete',
+    export: 'exclude',
+    rationale: "The fabric's short-lived credential for one owner's release route: only a SHA-256 hash, deleted with the user, never exported.",
+  },
   // Tables of Vault slices that are not mounted in the console (media, backups, card grants). They exist because the
   // schema is Vault's; nothing writes them, but a row that ever referenced a user must still be purged.
   { model: 'MediaFolder', ownerField: 'userId', purge: 'delete', export: 'exclude', rationale: 'Vault media folders are not mounted in the console; any row is deleted with its user.' },
@@ -74,6 +82,7 @@ export const STORE_MODEL_OWNERSHIP: readonly ModelOwnershipDef<StoreModelName>[]
   { model: 'SecretAttachment', kind: 'user', rationale: "An attachment belongs to its secret version (attachments are not mounted in the console)." },
   { model: 'SecretType', kind: 'system', rationale: 'Shared secret-type definitions: system types are code-seeded.' },
   { model: 'SecretsStoreDataKey', kind: 'user', rationale: "One owner's wrapped data key." },
+  { model: 'SecretsStoreCallbackToken', kind: 'user', rationale: "The hash of the credential the fabric presents for one owner." },
   { model: 'MediaFolder', kind: 'user', rationale: 'Not mounted in the console.' },
   { model: 'MediaFolderFile', kind: 'system', orgReference: 'orgId', rationale: 'Side table placing a storage object in a folder; org_id is half of the composite key to storage_objects. Not mounted in the console.' },
   { model: 'BackupSchedule', kind: 'system', rationale: 'Not mounted in the console.' },

@@ -96,16 +96,27 @@ export const SECRETS_SYSTEM_SETTINGS = {
 
 // ---- user ----
 
+/** Which store the owner's agent uses: their Vault, or the console's built-in store (E37.5). One at a time. */
+export const SECRETS_PROVIDER_IDS = ['vault', 'builtin'] as const;
+export type SecretsProviderId = (typeof SECRETS_PROVIDER_IDS)[number];
+
 export const secretsUserSettingsSchema = z.object({
+  provider: z.enum(SECRETS_PROVIDER_IDS).optional().describe('Where the agent finds your saved logins: your Vault (the default) or the built-in store. Switching does not move data.'),
   agentUse: z.object({ enabled: z.boolean().describe('Let the agent use your saved logins and one-time codes on pages (it never sees them). Off by default.') }),
 });
 export type SecretsUserSettings = z.infer<typeof secretsUserSettingsSchema>;
-export const secretsUserSettingsPatchSchema = z.object({ agentUse: z.object({ enabled: z.boolean() }).partial().optional() });
+export const secretsUserSettingsPatchSchema = z.object({ provider: z.enum(SECRETS_PROVIDER_IDS).optional(), agentUse: z.object({ enabled: z.boolean() }).partial().optional() });
 type SecretsUserPatch = z.infer<typeof secretsUserSettingsPatchSchema>;
 
 /** The owner's switch as stored in their settings document (off when never set). */
 export function secretsAgentUseOf(doc: unknown): boolean {
   return (doc as { secrets?: { agentUse?: { enabled?: unknown } } } | null | undefined)?.secrets?.agentUse?.enabled === true;
+}
+
+/** The owner's chosen provider as stored (`vault` when never set). */
+export function secretsProviderOf(doc: unknown): SecretsProviderId {
+  const v = (doc as { secrets?: { provider?: unknown } } | null | undefined)?.secrets?.provider;
+  return v === 'builtin' ? 'builtin' : 'vault';
 }
 
 export const SECRETS_USER_SETTINGS = {
@@ -117,9 +128,11 @@ export const SECRETS_USER_SETTINGS = {
   merge: (current: SecretsUserSettings | undefined, patch: SecretsUserPatch | null | undefined): SecretsUserSettings | undefined => {
     if (patch === null) return undefined;
     if (patch === undefined) return current;
-    const enabled = patch.agentUse?.enabled ?? current?.agentUse.enabled ?? false;
-    // The default is never stored.
-    return enabled ? { agentUse: { enabled } } : undefined;
+    const enabled = patch.agentUse?.enabled ?? current?.agentUse?.enabled ?? false;
+    const provider = patch.provider ?? current?.provider;
+    // Defaults are never stored: `vault` and "off".
+    const next: SecretsUserSettings = { agentUse: { enabled }, ...(provider === 'builtin' ? { provider } : {}) };
+    return enabled || next.provider ? next : undefined;
   },
 } satisfies Omit<UserSettingsNamespace<'secrets', SecretsUserSettings, SecretsUserPatch>, never> & { defaults: SecretsUserSettings };
 

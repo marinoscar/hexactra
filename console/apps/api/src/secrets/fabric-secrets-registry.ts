@@ -13,10 +13,11 @@ import { Injectable } from '@nestjs/common';
 
 /** What the fabric is told about a provider. `expiresAt` is ISO 8601. */
 export interface SecretsProviderRegistration {
-  kind: 'vault';
-  /** The Vault's `APP_URL` (the fabric appends `/api/agent/v1`). */
+  /** `vault`: the fabric calls the owner's Vault itself. `console`: the built-in store (E37.5): the fabric calls back into the console. */
+  kind: 'vault' | 'console';
+  /** `vault`: the Vault's `APP_URL` (the fabric appends `/api/agent/v1`). `console`: the console's internal address the fabric calls back (`/api/internal/secrets-store/v1`). */
   baseUrl: string;
-  /** The `oat_` access token. Secret Material: memory only, never logged. */
+  /** `vault`: the `oat_` access token. `console`: the owner's `sct_` callback credential. Secret Material: memory only, never logged. */
   accessToken: string;
   expiresAt: string;
 }
