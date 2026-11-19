@@ -160,3 +160,32 @@ An agent that can pay with a saved card is the highest-risk thing this console d
 - **Unattended payments.** A task with `unattendedPayments: allow` pays without the owner there, only at a shop and up to the limit the owner remembered. Say so to your owners; leave it off for tasks they do not fully trust.
 - **Not a payment service.** This is for an owner's own card on their own deployment. Offering saved cards to other people (a hosted service for customers) needs a card-industry compliance review (PCI DSS scope) first; nothing here claims it.
 - Incident: an owner who suspects a card was misused revokes the card's merchant grants in Vault (effective at once, the next release is refused) and reads the use in the run, the Activity list and Vault's own agent activity; to stop everything, switch the deployment's `secrets.agentUse.enabled` off.
+
+## 9. Connections and deliveries on a public console (E39)
+
+Connections let the agent read and send the owner's mail, read and change their calendar and documents, start a task from a mail, and send a run's result out. The threat model is [../security-connections.md](../security-connections.md): for each threat, what stops it and what does not. Read it before turning Google or Microsoft on for a console the internet can reach. The setup itself is in [../connections.md](../connections.md#administrator-setup-bring-your-own-app).
+
+- **Nothing about a connection is reachable by an AI app.** An OAuth app's `oat_` token is confined to `/api/mcp`, and no MCP tool lists, uses or changes a connection, a mail trigger or a delivery. A run an app starts gets the connection tools only with the app's limit `allowConnections` (default **off**) and only when the task lists the connections, which an app cannot do. Leave the limit off unless an owner means it.
+- **The sign-in callback** is `<APP_URL>/api/connections/callback/google` and `/microsoft`. The provider redirects **the owner's browser** to it with a one-time `code`, so it must be an `https` address that browser can reach when the owner connects an account (Google refuses a raw IP address and a private name in the redirect URI). Its nginx location (`infra/nginx/app.d/locations/connections-callback.conf`) turns the access log off for these two paths so the `code` is not logged: **keep that file** if you replace the nginx overlays. In shape (c) the callback and `/settings/connections` must be reachable from the owner's browser, privately or publicly; the provider never calls the console.
+- **Links that recipients open.** An email a delivery sends can carry two links that work with **no session**, because the signed token is the authority: `GET /api/reports/{token}` (the masked PDF of one run, 7 days, only when the PDF was too large to attach) and `GET|POST /api/deliveries/unsubscribe/{token}` (the "Stop these emails" page, in every report to someone who is not the owner). A recipient opens them from anywhere. In shapes (a) and (b) they work as they are. **In shape (c) the public proxy does not forward them**: add, to the proxy of section 2,
+
+  ```nginx
+  location ~ ^/api/(reports/|deliveries/unsubscribe/) {
+      proxy_pass http://10.0.0.5:3535;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-Proto https;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+  ```
+
+  or the links answer `404` for the people they were sent to. Both are rate limited by the API and answer with `Cache-Control: no-store`. The tokens are signed with a key derived from `JWT_SECRET`: rotating `JWT_SECRET` ends every outstanding link (and signs everyone out). The email's button to the run needs a console sign-in as always.
+- **Secrets.** Provider tokens and the app's client secrets are rows of the encrypted credential store under `SECRETS_ENCRYPTION_KEY`. Keep that key apart from database backups ([operations.md, section 2](operations.md#2-back-up)): a backup without it holds no usable token, a backup with it holds all of them. A webhook delivery's signing secret is shown once when the delivery is created.
+- **Switches and limits, in order of reach:** the administrator's provider switch (Administration → Browser agent → Connections; off stops new connections, existing ones keep refreshing); each connection's capability switches and **Pause**; each task's and chat's list of connections with `read` or `read_write`; the app limit `allowConnections`; the deployment's `deliveries` limits (`maxRecipientsPerTask`, `maxEmailsPerDay`, `maxAttachmentMb`) and `mailTriggers` limits (`minPollSeconds`, `maxTriggersPerUser`, `maxRunsPerUserPerDay`), set with `PATCH /api/system-settings`.
+- **Watch it.** The audit events `connection.*` and `delivery.*` carry ids, providers, kinds and counts, never content; `app.connections.events`, `app.deliveries`, `app.mail_triggers.*` are the counters; the alert rule **Delivery keeps failing** (`hexactra.delivery_failing`) and **Saved approval used a lot** (`hexactra.approval_busy`) are on by default.
+- **Incident: "something sent a mail I did not expect."**
+  1. **Stop the run** (Runs, the run, Stop, or `hexactra runs cancel <id>`); its steps list the recipients and the subject of every send, never the body.
+  2. **Pause the connection**: Settings → Connections → Pause (or `hexactra connections pause <connection>`). Nothing uses it until it is resumed; the health job keeps its sign-in alive so you can look.
+  3. **Turn off what remembered it**: Settings → Browser agent → Saved approvals, **Pause all**, then delete the `connection` rule that let the send through; switch off the task's mail triggers and deliveries if they are involved.
+  4. **Disconnect** the account if you cannot tell what happened: Google is asked to revoke the grant; **Microsoft cannot be asked**, so remove the app at the account's own page (`account.live.com/consent/Manage`, or My Apps for a work or school account).
+  5. If a client secret may have leaked, [rotate it](operations.md#rotate-the-providers-app-secret).
+
