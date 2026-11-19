@@ -326,7 +326,8 @@ export class MicrosoftMail implements MailCapability {
       if (seen?.state === 'sent') return { messageId: seen.messageId };
       if (seen?.state === 'pending') throw new CapabilityError('CONFLICT', { reason: 'IN_FLIGHT' });
       if (seen?.state === 'ambiguous') throw new CapabilityError('CONFLICT', { reason: 'SEND_AMBIGUOUS' });
-      if (seen?.state === 'draft') return this.finishSend(key, seen.draftId);
+      // A retry of a draft whose send was left unknown: a draft that is gone was sent (this code made it, nobody else is known to delete it).
+      if (seen?.state === 'draft') return this.finishSend(key, seen.draftId, true);
       dedupe.set(key, { state: 'pending' });
     }
     try {
@@ -350,9 +351,12 @@ export class MicrosoftMail implements MailCapability {
     }
   }
 
-  private async finishSend(key: string | null, draftId: string): Promise<{ messageId: string }> {
+  private async finishSend(key: string | null, draftId: string, goneMeansSent = false): Promise<{ messageId: string }> {
     try {
-      const r = await this.sendDraft(draftId);
+      const r = await this.sendDraft(draftId).catch((e: unknown) => {
+        if (goneMeansSent && e instanceof CapabilityError && e.code === 'NOT_FOUND') return { messageId: draftId };
+        throw e;
+      });
       if (key) this.shared.dedupe.set(key, { state: 'sent', messageId: r.messageId });
       return r;
     } catch (e) {
