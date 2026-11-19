@@ -655,8 +655,23 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
     }
     case 'tabs': {
       const tabs = await chrome.tabs.query({});
+      // The window actions without a tab_id use (#590): the control plane
+      // reads a tab's origin from this listing and must pick the same tab.
+      let focusedWindow: number | undefined;
+      try {
+        focusedWindow = (await chrome.windows?.getLastFocused?.())?.id;
+      } catch {
+        // Unknown: `last_focused` is then omitted.
+      }
       return {
-        tabs: tabs.map((t) => ({ id: t.id, window_id: t.windowId, url: t.url, title: t.title, active: t.active })),
+        tabs: tabs.map((t) => ({
+          id: t.id,
+          window_id: t.windowId,
+          url: t.url,
+          title: t.title,
+          active: t.active,
+          ...(focusedWindow !== undefined ? { last_focused: t.windowId === focusedWindow } : {}),
+        })),
       };
     }
     case 'new_tab': {

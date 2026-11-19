@@ -96,6 +96,18 @@ describe('handleRequest', () => {
     const r = await handleRequest(req({ type: 'tabs' }));
     expect(r.ok).toBe(true);
     expect((r.result as { tabs: unknown[] }).tabs).toHaveLength(2);
+    // Without a window API the listing carries no focus information.
+    expect((r.result as { tabs: Array<Record<string, unknown>> }).tabs[0]).not.toHaveProperty('last_focused');
+  });
+
+  it('marks the tabs of the last focused window (#590)', async () => {
+    (chromeMock.windows as Record<string, unknown>).getLastFocused = vi.fn(async () => ({ id: 10 }));
+    const r = await handleRequest(req({ type: 'tabs' }));
+    const tabs = (r.result as { tabs: Array<{ id: number; last_focused?: boolean }> }).tabs;
+    expect(tabs.map((t) => t.last_focused)).toEqual([true, true]);
+    (chromeMock.windows as Record<string, unknown>).getLastFocused = vi.fn(async () => ({ id: 99 }));
+    const other = await handleRequest(req({ type: 'tabs' }));
+    expect((other.result as { tabs: Array<{ last_focused?: boolean }> }).tabs.map((t) => t.last_focused)).toEqual([false, false]);
   });
 
   it('maps page-side errors to a failed response', async () => {
