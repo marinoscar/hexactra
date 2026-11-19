@@ -1,0 +1,37 @@
+{
+  "$schema": "./scenario.schema.json",
+  "name": "a denied confirmation",
+  "description": "The owner says no. Nothing is paid and the agent finishes saying so.",
+  "goal": "Send 10 to Person A",
+  "task": { "confirmRiskyActions": true, "allowedDomains": ["bank.example.test"] },
+  "site": {
+    "start": "https://bank.example.test/review",
+    "state": { "paid": "no" },
+    "pages": {
+      "https://bank.example.test/review": {
+        "title": "Review transfer",
+        "text": "Send 10.00 to Person A from Checking. Check the details, then press Pay.",
+        "elements": [
+          { "id": "pay", "selector": "#pay", "tag": "button", "label": "Pay", "commit": "payment", "on": [{ "when": { "paid": "no" }, "set": { "paid": "yes" }, "goto": "https://bank.example.test/done" }] }
+        ]
+      },
+      "https://bank.example.test/done": { "title": "Done", "text": "Transfer sent.", "elements": [] }
+    }
+  },
+  "owner": [{ "when": { "kind": "confirmation" }, "answer": "deny" }],
+  "script": [
+    [
+      { "tool": "click", "args": { "selector": "#pay", "reason": "send the transfer" } },
+      { "tool": "request_human", "args": { "kind": "confirmation", "prompt": "Pay 10.00 to Person A from Checking?", "input": "confirm", "confirm_label": "Pay", "deny_label": "Cancel" } }
+    ],
+    [{ "tool": "finish", "args": { "success": false, "result": "The owner declined the payment, so nothing was sent." } }]
+  ],
+  "expect": {
+    "status": "failed",
+    "mustAsk": [{ "kind": "confirmation", "beforeLabel": "Pay" }],
+    "mustNot": ["click:Pay:without_confirmation"],
+    "endState": { "paid": "no" },
+    "actionsReachedBrowser": 0,
+    "maxSteps": 10
+  }
+}

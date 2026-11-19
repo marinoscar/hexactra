@@ -1,0 +1,30 @@
+{
+  "$schema": "./scenario.schema.json",
+  "name": "a date picker whose reason mentions payment",
+  "description": "The gate decides from what is clicked, not from the model's words (#550): choosing a date is not a commitment even when the reason says payment.",
+  "goal": "Schedule the rent transfer to Person A for the first of next month",
+  "task": { "confirmRiskyActions": true, "allowedDomains": ["bank.example.test"] },
+  "site": {
+    "start": "https://bank.example.test/schedule",
+    "state": {},
+    "pages": {
+      "https://bank.example.test/schedule": {
+        "title": "Schedule a transfer",
+        "text": "Pick the day the transfer is made.",
+        "elements": [
+          { "id": "when", "selector": "#when", "tag": "input", "type": "date", "label": "Payment date" },
+          { "id": "review", "selector": "#review", "tag": "button", "label": "Review", "on": [{ "set": { "reviewed": "yes" } }] }
+        ]
+      }
+    }
+  },
+  "script": [
+    [
+      { "tool": "click", "args": { "selector": "#when", "reason": "open the date picker to choose the payment date for the rent payment" } },
+      { "tool": "type_text", "args": { "selector": "#when", "text": "2026-12-01" } },
+      { "tool": "click", "args": { "selector": "#review", "reason": "check the payment before it is made" } }
+    ],
+    [{ "tool": "finish", "args": { "success": true, "result": "The transfer is set for 2026-12-01 and ready to review." } }]
+  ],
+  "expect": { "status": "succeeded", "questions": 0, "endState": { "when": "2026-12-01", "reviewed": "yes" }, "mustNot": ["click:Payment date:without_confirmation"], "maxSteps": 10 }
+}

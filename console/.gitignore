@@ -13,3 +13,5 @@ coverage/
 
 # The LICENSE copy that `npm pack` of a hexactra package writes (scripts/copy-license.mjs)
 packages/hexactra-*/LICENSE
+# The replay suite's reports (apps/api/scripts/scenarios.ts, scenarios-live.ts)
+apps/api/test-results/
