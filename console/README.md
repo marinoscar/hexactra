@@ -125,6 +125,7 @@ Once per deployment, in this order. Each step links to its reference.
 | [docs/connections.md](docs/connections.md) | Connected Google and Microsoft accounts: capabilities, defaults, how tokens are kept, what needs reconnect means, the administrator's setup |
 | [docs/secrets.md](docs/secrets.md), [docs/security-secrets.md](docs/security-secrets.md) | Saved logins, identity details and cards the agent uses but never sees: the chapter, and its threat model |
 | [docs/runbooks/public-exposure.md](docs/runbooks/public-exposure.md) | Putting the console on the internet safely |
+| [docs/runner.md](docs/runner.md) | How a browser run is driven in code: the harness, browser and host layers, the ports, the life of one tool call and the checklist for adding a tool |
 | [docs/agent-frameworks.md](docs/agent-frameworks.md) | Hermes Agent, OpenClaw and Pi with a personal access token |
 | [docs/parity.md](docs/parity.md), [docs/directory-readiness.md](docs/directory-readiness.md) | Which client does what; what a ChatGPT or Claude directory listing would still need |
 
@@ -218,7 +219,7 @@ If none gives a model the run fails at once, before a browser is allocated, with
 
 ### Budgets
 
-A run is held to six budgets: **actions**, **model calls**, **active minutes** (time waiting for a person never counts), **input tokens**, **output tokens** and **cost** (US dollars, from the admin price table; an unpriced call counts nothing toward the limit and the run shows "at least"). The budget engine is `console/apps/api/src/runner/budget.ts` (`BudgetTracker`, pure and unit tested).
+A run is held to six budgets: **actions**, **model calls**, **active minutes** (time waiting for a person never counts), **input tokens**, **output tokens** and **cost** (US dollars, from the admin price table; an unpriced call counts nothing toward the limit and the run shows "at least"). The budget engine is `console/apps/api/src/runner/harness/budget.ts` (`BudgetTracker`, pure and unit tested).
 
 - **`null` is unlimited ("No limit" in the editor).** A policy with every budget `null` (the built-in Unlimited) has no hard stop: the run ends when it finishes, when you stop it, or when it stalls. The first line of its run log says so, and the editor warns (but does not block saving). Stop and takeover always work.
 - **Ceilings.** The deployment's admin sets ceilings in the `browserAgentCeilings` system setting (**Administration → Browser agent → Agent budget ceilings**; same keys as a policy's budget, each nullable, none by default). A run's effective limit is `min(policy, ceiling)`; it is unlimited only when both are `null`, so a ceiling also caps an Unlimited policy. The effective budget is written to the run's snapshot at its first step (`policy_snapshot.effectiveBudget`, with where each limit came from: `policy` or `ceiling`), so changing a policy or a ceiling never changes a run in flight.

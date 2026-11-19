@@ -176,7 +176,7 @@ describe('StatusChip', () => {
 
   it('has a label for every stop reason of the API', () => {
     // The API's enum (`RUN_STOP_REASONS`), read from its source: the web cannot import the API.
-    const source = readFileSync(join(process.cwd(), '..', 'api', 'src', 'runner', 'budget.ts'), 'utf8');
+    const source = readFileSync(join(process.cwd(), '..', 'api', 'src', 'runner', 'harness', 'budget.ts'), 'utf8');
     const block = /export const RUN_STOP_REASONS = \[([^\]]+)\]/.exec(source);
     expect(block).not.toBeNull();
     const reasons = [...block![1]!.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]!);

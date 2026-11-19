@@ -1,0 +1,37 @@
+// What a toolset gives the loop (E38.5): the instructions, the tools and gates, and how a round is shown to the model. The loop itself
+// knows nothing about browsers: a toolset with no screens returns no images and the loop behaves the same.
+import type { GatePipeline } from './gate-pipeline';
+import type { AnyContext } from './run-context';
+import type { ToolRegistry } from './registry';
+import type { PageState } from './stall';
+import type { VisionNotes } from './tiers';
+
+/** What the model sees at the start of a round besides the text: the screens, and a digest of the page for the stall detector. */
+export interface Observation {
+  /** The images to send, oldest first; empty when the round has none. Opaque to the loop. */
+  images: unknown[];
+  /** The page as the stall detector sees it: a digest of what is on it, never the image (#405). */
+  page: PageState | null;
+  /** The address of what the model is looking at, for the owner's ask rules on this site. */
+  url: string | null;
+}
+
+export const NO_OBSERVATION: Observation = { images: [], page: null, url: null };
+
+export interface LoopProfile<C extends AnyContext = AnyContext> {
+  /** The system instructions, identical in every round of a run (the provider caches them). */
+  instructions: string;
+  registry: ToolRegistry<C>;
+  pipeline: GatePipeline<C>;
+  visionNotes: VisionNotes;
+  /** Before each chunk: takes the screens when the model can see them. Must not throw: a failure is a note in the log. */
+  observe(ctx: C): Promise<Observation>;
+  /** The round's text and status as the model input: text alone, or text with the images. */
+  assembleInput(text: string, observation: Observation, status: string): unknown;
+  /** Lines of the stable prefix between the earlier-conversation context and the progress log (for a browser: the allowed sites). */
+  contextLines(ctx: C): string[];
+  /** The words of a `guidance` step: the owner's message, masked and cut. */
+  summarizeGuidance(note: string): string;
+  /** The memory block about the owner (#553): information for the model, after the goal. '' without memories. */
+  aboutOwner: string;
+}
