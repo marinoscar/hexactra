@@ -6125,6 +6125,240 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your connected accounts
+         * @description Label, provider, account email, the capabilities that are on (`mail_read`, `mail_send`, `calendar_read`, `calendar_write`, `docs_read`, `docs_write`), what the provider granted, the defaults, the status and the last use. Accounts that need a reconnect come first. Never a token or a scope string.
+         *
+         *     **Requires:** authentication, plus permission `connections:read`.
+         */
+        get: operations["connections_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Which providers can be connected here
+         * @description For each provider: whether this deployment has it installed, switched on and configured by the administrator (`ready`, else `reason`), and which kinds of account work, with a note to read before starting. Never the app credentials.
+         *
+         *     **Requires:** authentication, plus permission `connections:read`.
+         */
+        get: operations["connections_providers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start connecting an account (OAuth 2.1 authorization code with PKCE)
+         * @description Returns `authorizeUrl`: send the browser there (the provider's own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes and only once. Connecting the same account again updates its connection (no duplicate); a different account of the same provider is a second connection. Only the permissions the capabilities need are asked for. `loginHint` pre-selects the account (use it to reconnect one).
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        post: operations["connections_authorize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/callback/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The provider redirects the browser here after the consent
+         * @description The redirect URI to register at the provider: `/api/connections/callback/google` or `/api/connections/callback/microsoft` under this console's address. Not called by API clients.
+         */
+        get: operations["connections_callback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one connection
+         * @description With `usedBy`: the tasks and deliveries that use it, which removing it clears.
+         *
+         *     **Requires:** authentication, plus permission `connections:read`.
+         */
+        get: operations["connections_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect an account
+         * @description Revokes the grant at the provider (best effort: `revoked: false` when it could not be asked), clears the references from tasks and deliveries (they show "connection removed"), deletes the tokens and the connection.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        delete: operations["connections_remove"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename a connection, change what it can do, or make it the default
+         * @description Turning a capability off is immediate and local: the permission stays granted at the provider until you disconnect the account. Adding a capability the provider has not granted starts an incremental consent for just the extra permissions (`consent.authorizeUrl`, with the account as login hint, bound to this browser by a cookie set on this response); the switch comes on when the consent returns. `defaultFor` takes the default of those groups from the account that had it.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        patch: operations["connections_update"];
+        trace?: never;
+    };
+    "/api/connections/{id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pause a connection
+         * @description A paused connection is not used by anything (no task, chat or delivery); its sign-in is kept alive. Resume it to use it again.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        post: operations["connections_pause"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume a paused connection
+         * @description **Requires:** authentication, plus permission `connections:write`.
+         */
+        post: operations["connections_resume"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test a connection
+         * @description One cheap read call per capability that is on; each answers `ok` or a closed reason `code`. Reads nothing of the owner's mail, calendar or files beyond what the call needs, and returns none of it.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        post: operations["connections_test"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/admin/apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The deployment's apps at Google and Microsoft
+         * @description Per provider: the switch, the client id, whether a client secret is stored (never the secret), the redirect URI to register, the setup checklist and the kinds of account that work. Never a user's connection.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:read`.
+         */
+        get: operations["connectionsAdmin_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/admin/apps/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a provider's app
+         * @description The client id, the write-only client secret (omit it to keep the stored one), the Microsoft tenant and the switch. Owners can connect a provider only while it is on and fully set. Existing connections keep refreshing when it is switched off.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:write`.
+         */
+        put: operations["connectionsAdmin_save"];
+        post?: never;
+        /**
+         * Remove a provider's app
+         * @description Removes the client id and secret and switches the provider off. Existing connections stay, but cannot refresh until an app is set again.
+         *
+         *     **Requires:** authentication, plus permission `system_settings:write`.
+         */
+        delete: operations["connectionsAdmin_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/connected-apps": {
         parameters: {
             query?: never;
@@ -8162,6 +8396,17 @@ export interface components {
              * @example SECRETS_VAULT_NEEDS_RECONNECT
              * @example SECRETS_VAULT_UNAVAILABLE
              * @example SECRETS_VAULT_CONNECT_FAILED
+             * @example CONNECTION_NOT_FOUND
+             * @example CONNECTION_LABEL_TAKEN
+             * @example CONNECTION_LIMIT
+             * @example CONNECTION_PROVIDER_UNAVAILABLE
+             * @example CONNECTION_NEEDS_RECONNECT
+             * @example CONNECTION_PAUSED
+             * @example CONNECTION_CAPABILITY_OFF
+             * @example CONNECTION_AMBIGUOUS
+             * @example CONNECTION_NONE
+             * @example CONNECTION_UNAVAILABLE
+             * @example CONNECTION_DEFAULT_NEEDS_CAPABILITY
              * @example ERROR
              */
             code: string;
@@ -9454,6 +9699,19 @@ export interface components {
                 /** @description Most a run may cost in US dollars. `null` sets no ceiling. */
                 maxCostUsd: number | null;
             };
+            connections: {
+                providers?: {
+                    google?: {
+                        enabled?: boolean;
+                        clientId?: string | null;
+                    };
+                    microsoft?: {
+                        enabled?: boolean;
+                        clientId?: string | null;
+                        tenant?: string;
+                    };
+                };
+            };
             storage: {
                 provider: string;
                 drivers: {
@@ -9699,6 +9957,19 @@ export interface components {
                 maxOutputTokens: number | null;
                 /** @description Most a run may cost in US dollars. `null` sets no ceiling. */
                 maxCostUsd: number | null;
+            };
+            connections?: {
+                providers?: {
+                    google?: {
+                        enabled?: boolean;
+                        clientId?: string | null;
+                    };
+                    microsoft?: {
+                        enabled?: boolean;
+                        clientId?: string | null;
+                        tenant?: string;
+                    };
+                };
             };
             storage?: {
                 provider: string;
@@ -9950,6 +10221,19 @@ export interface components {
                 maxOutputTokens?: number | null;
                 /** @description Most a run may cost in US dollars. `null` sets no ceiling. */
                 maxCostUsd?: number | null;
+            };
+            connections?: {
+                providers?: {
+                    google?: {
+                        enabled?: boolean;
+                        clientId?: string | null;
+                    };
+                    microsoft?: {
+                        enabled?: boolean;
+                        clientId?: string | null;
+                        tenant?: string;
+                    };
+                };
             };
             storage?: {
                 provider?: string;
@@ -15237,6 +15521,178 @@ export interface components {
             usesThisWeek: number;
             /** @description Lookups and releases that were refused or failed in the last 7 days. */
             refusalsThisWeek: number;
+        };
+        ConnectionResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            provider: "google" | "microsoft" | "mcp";
+            label: string;
+            accountEmail: string;
+            accountName: string | null;
+            /** @description The switches that are on. */
+            capabilities: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            /** @description What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected. */
+            granted: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            defaultFor: ("mail" | "calendar" | "docs")[];
+            /** @enum {string} */
+            status: "active" | "paused" | "needs_reconnect" | "revoked";
+            /** @description A stable code (`GRANT_REVOKED`, ...), never a message. */
+            statusReason: string | null;
+            /** @description ISO 8601 timestamp */
+            connectedAt: string;
+            lastUsedAt: string | null;
+            lastRefreshAt: string | null;
+        };
+        ProviderAvailabilityResponseDto: {
+            /** @enum {string} */
+            provider: "google" | "microsoft";
+            displayName: string;
+            /** @description The provider can be connected now. */
+            ready: boolean;
+            /** @description Why not: the code is not installed, the administrator switched it off, or the setup is unfinished. */
+            reason: ("not_installed" | "disabled" | "not_configured") | null;
+            /** @description Which kinds of account work, and what to know before starting. */
+            accountTypes: {
+                id: string;
+                label: string;
+                supported: boolean;
+                note: string;
+            }[];
+        };
+        AuthorizeResponseDto: {
+            /** @description Send the browser here: the provider's consent screen. The flow is bound to this browser by an HttpOnly cookie set on this response. */
+            authorizeUrl: string;
+            /** @description The flow must finish by then (10 minutes). */
+            expiresAt: string;
+        };
+        AuthorizeConnectionDto: {
+            /**
+             * @description `google` or `microsoft`.
+             * @enum {string}
+             */
+            provider: "google" | "microsoft";
+            /** @description What the account may be used for. A write capability brings its read capability. */
+            capabilities: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            /** @description What you call it ("Work", "Personal"). Defaults to the provider and the account. */
+            label?: string;
+            /** @description The account to pre-select at the provider (the email). Connecting the same account again updates its connection. */
+            loginHint?: string;
+            /** @description A path on this console to return to after the consent (default `/settings/connections`). */
+            returnTo?: string;
+        };
+        ConnectionDetailResponseDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            provider: "google" | "microsoft" | "mcp";
+            label: string;
+            accountEmail: string;
+            accountName: string | null;
+            /** @description The switches that are on. */
+            capabilities: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            /** @description What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected. */
+            granted: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            defaultFor: ("mail" | "calendar" | "docs")[];
+            /** @enum {string} */
+            status: "active" | "paused" | "needs_reconnect" | "revoked";
+            /** @description A stable code (`GRANT_REVOKED`, ...), never a message. */
+            statusReason: string | null;
+            /** @description ISO 8601 timestamp */
+            connectedAt: string;
+            lastUsedAt: string | null;
+            lastRefreshAt: string | null;
+            /** @description What uses this connection (tasks, deliveries): removing it clears these and they show "connection removed". */
+            usedBy: {
+                kind: string;
+                id: string;
+                name: string;
+            }[];
+        };
+        UpdateConnectionResponseDto: {
+            connection: {
+                /** Format: uuid */
+                id: string;
+                /** @enum {string} */
+                provider: "google" | "microsoft" | "mcp";
+                label: string;
+                accountEmail: string;
+                accountName: string | null;
+                /** @description The switches that are on. */
+                capabilities: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+                /** @description What the provider granted. Switching one of these on needs no new consent; a permission stays granted at the provider until the account is disconnected. */
+                granted: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+                defaultFor: ("mail" | "calendar" | "docs")[];
+                /** @enum {string} */
+                status: "active" | "paused" | "needs_reconnect" | "revoked";
+                /** @description A stable code (`GRANT_REVOKED`, ...), never a message. */
+                statusReason: string | null;
+                /** @description ISO 8601 timestamp */
+                connectedAt: string;
+                lastUsedAt: string | null;
+                lastRefreshAt: string | null;
+            };
+            consent: {
+                /** @description Send the browser here: the provider's consent screen. The flow is bound to this browser by an HttpOnly cookie set on this response. */
+                authorizeUrl: string;
+                /** @description The flow must finish by then (10 minutes). */
+                expiresAt: string;
+            } | null;
+        };
+        UpdateConnectionDto: {
+            label?: string;
+            /** @description The full set of switches. Turning one off is immediate; adding one the provider has not granted starts an incremental consent (`consent.authorizeUrl`). */
+            capabilities?: ("mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write")[];
+            /** @description The groups (`mail`, `calendar`, `docs`) this account is the default for. At most one default per provider and group: it is taken from the other account. */
+            defaultFor?: ("mail" | "calendar" | "docs")[];
+            /** @description A path on this console to return to after the consent (default `/settings/connections`). */
+            returnTo?: string;
+        };
+        TestConnectionResponseDto: {
+            results: {
+                /** @enum {string} */
+                capability: "mail_read" | "mail_send" | "calendar_read" | "calendar_write" | "docs_read" | "docs_write";
+                ok: boolean;
+                /** @description A closed reason code when it failed (`UNAUTHORIZED`, `FORBIDDEN`, `UNAVAILABLE`, ...). */
+                code: string | null;
+            }[];
+        };
+        RemoveConnectionResponseDto: {
+            /** @description The provider confirmed the revocation. `false`: it could not be asked; remove the app in the provider's account settings. The tokens here are deleted either way. */
+            revoked: boolean;
+            /** @description How many tasks or deliveries referenced it and now show "connection removed". */
+            clearedReferences: number;
+        };
+        AdminProviderResponseDto: {
+            /** @enum {string} */
+            provider: "google" | "microsoft";
+            displayName: string;
+            enabled: boolean;
+            clientId: string | null;
+            /** @description A client secret is stored (never returned). */
+            hasClientSecret: boolean;
+            tenant: string | null;
+            /** @description The code for this provider is installed on this deployment. */
+            installed: boolean;
+            /** @description The redirect URI to register at the provider for this app. */
+            redirectUri: string;
+            setupSteps: string[];
+            accountTypes: {
+                id: string;
+                label: string;
+                supported: boolean;
+                note: string;
+            }[];
+        };
+        SaveConnectionAppDto: {
+            /** @description Whether owners may connect this provider. Off by default. */
+            enabled?: boolean;
+            /** @description The OAuth client id of the app you registered. `null` clears it. */
+            clientId?: string | null;
+            /** @description The client secret. Write-only; omit it to keep the stored one. */
+            clientSecret?: string;
+            /** @description Microsoft only: `common`, `organizations`, `consumers` or a tenant id. */
+            tenant?: string;
         };
         ConnectedAppListResponseDto: {
             /** @description `oauth_clients.id` */
@@ -38783,6 +39239,686 @@ export interface operations {
                 content: {
                     "application/json": {
                         data: components["schemas"]["AdminSummaryResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connections_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ConnectionResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connections_providers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ProviderAvailabilityResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connections_authorize: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthorizeConnectionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AuthorizeResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `CONNECTION_PROVIDER_UNAVAILABLE` (`details.reason`: `not_installed`, `disabled`, `not_configured`) or `CONNECTION_LABEL_TAKEN`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connections_callback: {
+        parameters: {
+            query?: {
+                code?: string;
+                state?: string;
+                error?: string;
+                error_description?: string;
+                iss?: string;
+                scope?: string;
+                authuser?: string;
+                prompt?: string;
+                hd?: string;
+                session_state?: string;
+                client_info?: string;
+            };
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Back to the page that started the connection (`/settings/connections` by default) with `connect=connected` (plus `connection=<id>` and `missing=<capabilities the provider did not grant>`), or `connect=<reason>` (`denied`, `expired`, `state_invalid`, `binding_invalid`, `exchange_failed`, `account_mismatch`, `nothing_granted`, ...). */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ConnectionDetailResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connections_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["RemoveConnectionResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connections_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateConnectionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["UpdateConnectionResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `CONNECTION_LABEL_TAKEN`, or `CONNECTION_NEEDS_RECONNECT` for a revoked connection. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `CONNECTION_DEFAULT_NEEDS_CAPABILITY`: a default needs a capability of its group switched on. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connections_pause: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ConnectionResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connections_resume: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ConnectionResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connections_test: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TestConnectionResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `CONNECTION_PAUSED` or `CONNECTION_NEEDS_RECONNECT`: the account cannot be used at all. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `CONNECTION_UNAVAILABLE`: the provider could not be reached. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectionsAdmin_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdminProviderResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectionsAdmin_save: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: "google" | "microsoft";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveConnectionAppDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdminProviderResponseDto"][];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectionsAdmin_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: "google" | "microsoft";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["AdminProviderResponseDto"][];
                     };
                 };
             };
