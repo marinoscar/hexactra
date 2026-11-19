@@ -423,6 +423,7 @@ impl Server {
                 profile: Some(guard.profile.clone()),
                 create_profile: guard.create,
                 allowed_domains: Vec::new(),
+                owner_id: None,
             })
             .await?;
         guard.id = Some(s.id);
