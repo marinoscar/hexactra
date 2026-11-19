@@ -144,6 +144,26 @@ export interface QuestionSpec {
    * a `rememberable` sent by a model or an API caller is dropped.
    */
   rememberable?: QuestionRememberable | null;
+  /**
+   * A call through one of the owner's connections the owner is asked to approve (E39.7). Set by the runner only, from the tool's validated
+   * arguments: not in `questionSpecSchema`, so one sent by a model or an API caller is dropped. Such a question needs no browser.
+   */
+  action?: QuestionAction | null;
+}
+
+/**
+ * What the card of a connection call shows (E39.7), built by the SERVER from the validated arguments, never from model text. `lines` are the
+ * labelled facts (from, to, cc, subject, a body preview, attachments by name and size; an event's title, time and attendees; a file's name and
+ * the cells); `body` is the whole text for "show all" (at most 20,000 characters). No token, no mailbox content.
+ */
+export interface QuestionAction {
+  connectionId: string;
+  connectionLabel: string;
+  tool: string;
+  lines: { label: string; value: string }[];
+  body?: string;
+  /** A hash of the validated arguments the card shows: only that exact call goes through once approved. */
+  hash?: string;
 }
 
 /** The kinds of question a saved approval can be made from (#555). */

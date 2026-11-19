@@ -15,6 +15,11 @@ export interface ApprovalPort {
   matchGate(target: { host: string; category: string; label: string }): Promise<SavedApproval | null>;
   /** A rule that lets an ask the agent made on its own through, or null. */
   matchAsk(topic: string, pageUrl: string): Promise<SavedApproval | null>;
+  /**
+   * A rule that lets a call through one of the owner's connections go ahead (E39.7), or null: for this connection and tool, in this run's
+   * task or chat, covering every recipient the call reaches. `recipients` are the addresses the server read from the validated call.
+   */
+  matchConnection(target: { connectionId: string; tool: string; recipients: readonly string[] }): Promise<SavedApproval | null>;
   recordUse(rule: SavedApproval, use: { stepSeq: number }): Promise<void>;
   /** What "Don't ask again" offers for a gate. */
   rememberableGate(gate: { host: string | null; category: string; label: string | null }): unknown;

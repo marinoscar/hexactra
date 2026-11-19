@@ -13,11 +13,19 @@ export interface QuestionSpec {
   gate?: unknown;
   /** What "Don't ask again" would remember. */
   rememberable?: unknown;
+  /**
+   * A call through one of the owner's connections the owner is asked to approve (E39.7): built by the server from the tool's validated
+   * arguments, never from model text. Such a question needs no browser.
+   */
+  action?: unknown;
 }
 
 export interface OpenedQuestion {
-  /** The id the answer comes back under (a handoff id). */
-  handoffId: string;
+  /**
+   * The id the answer comes back under (a browser handoff id). Null for a question that needs no browser (E39.7): it is asked in the
+   * owner's inbox, the run waits for it with no handoff, and its answer resumes the run through the question's own id.
+   */
+  handoffId: string | null;
   expiresAt: Date | null;
   /** The broker's own id, so the step that asked links to it; null without a broker. */
   questionId: string | null;

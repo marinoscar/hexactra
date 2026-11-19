@@ -3,6 +3,7 @@ import { withAppOrigin } from '../../connected-apps/app-origin';
 import { questionSpecSchema, type QuestionSpec as BrokerSpec } from '../../questions/questions.contract';
 import type { FabricSession } from '../fabric-session';
 import type { QuestionPort, QuestionSpec } from '../harness';
+import { QUESTION_TIMEOUT } from '../../questions/questions.contract';
 import type { HostDeps } from './deps';
 import { mirror } from './finish-run';
 import type { RunMemory } from './run-memory';
@@ -16,8 +17,15 @@ export interface QuestionContext {
   session: FabricSession;
   sessionId: () => string;
   memory: RunMemory;
+  /** Opens the run's browser when a question needs one and there is none yet (E39.7). */
+  ensureSession?: () => Promise<void>;
   /** A Vault that can save a typed sign-in is connected (E37.4b): the browser host keeps the typed password for a few minutes. */
   saveLoginOn: boolean;
+}
+
+/** Whether answering the question needs the run's browser: a secret typed into a page, a sign-in, a takeover, a CAPTCHA or a passkey. */
+function needsBrowser(spec: BrokerSpec): boolean {
+  return spec.input === 'secret' || spec.input === 'credentials' || spec.input === 'takeover' || spec.kind === 'captcha' || spec.kind === 'passkey' || spec.kind === 'login';
 }
 
 export function questionPort(c: QuestionContext): QuestionPort {
@@ -30,6 +38,14 @@ export function questionPort(c: QuestionContext): QuestionPort {
     prepare: (spec) => withAppOrigin(spec as unknown as BrokerSpec, c.run) as unknown as QuestionSpec,
     async open(asked) {
       const spec = asked as unknown as BrokerSpec;
+      // A question that needs no browser is asked in the owner's inbox with no handoff (E39.7): a call through a connection they are asked to
+      // approve, or any question of a run that has no browser yet. The run waits on it, and its answer resumes the run through its own id.
+      if (!needsBrowser(spec) && (spec.action || !c.sessionId())) {
+        if (!c.d.questions) throw new Error('questions are not available here');
+        const q = await c.d.questions.create({ id: c.userId }, spec.action ? { ...spec, timeoutMs: QUESTION_TIMEOUT.maxMs } : spec, { askedBy: `run:${c.runId}`, runId: c.runId });
+        return { handoffId: null, expiresAt: new Date(q.expiresAt), questionId: q.id };
+      }
+      if (!c.sessionId() && c.ensureSession) await c.ensureSession();
       const created = await c.session.openHandoff(c.sessionId(), {
         kind: spec.kind,
         prompt: spec.prompt,

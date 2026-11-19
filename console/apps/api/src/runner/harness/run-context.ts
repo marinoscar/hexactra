@@ -60,7 +60,7 @@ export interface RunContext<M extends HarnessMemory = HarnessMemory, X = unknown
    */
   record(kind: string, action: string | null, args: Record<string, unknown> | null, ok: boolean, summary: string, started: number, reasoning?: string, extra?: StepExtra, intentSeq?: number | null): Promise<void>;
   /** An action that can commit something is about to be sent (E38.3): its step row is written first, in phase `intent`. Null: the job lost the run. */
-  openIntent(action: string, args: Record<string, unknown>, gate: GateTarget | null): Promise<number | null>;
+  openIntent(action: string, args: Record<string, unknown>, gate: GateTarget | null, what?: string): Promise<number | null>;
   /** A record of the trace that is not an action: takes a `seq`, never the step count. */
   note(kind: string, action: string | null, summary: string, extra?: { questionId?: string | null; ok?: boolean }): Promise<number>;
   /** A routing step (#405): a tier change or a provider fallback. */

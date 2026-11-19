@@ -18,6 +18,8 @@ export const VISION_NOTES = {
 export async function observeRound(ctx: BrowserContext): Promise<Observation> {
   const { memory, ext } = ctx;
   if (memory.visionOff || !ext.shotWindow.enabled) return NO_OBSERVATION;
+  // No browser yet (E39.7): a round with only connection tools looks at nothing, and never opens a browser by looking.
+  if (ext.browser.hasSession && !ext.browser.hasSession()) return NO_OBSERVATION;
   await ctx.setActivity('looking');
   const screen = memory.look ?? 'page';
   memory.look = null;

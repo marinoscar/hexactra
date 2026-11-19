@@ -11,29 +11,44 @@ function asBrowserError(e: unknown): unknown {
 }
 
 export class FabricBrowser implements BrowserPort {
+  /**
+   * `ensure` opens the run's browser session on first use (E39.7): a run with connections starts without one, and the first browser call
+   * (an action, a typed secret, a screenshot) opens it. It throws a `BrowserError` when no browser can be had; absent, the session exists.
+   */
   constructor(
     private readonly session: FabricSession,
     private readonly fabric: FabricClient,
     private readonly sessionId: () => string,
+    private readonly ensure?: () => Promise<void>,
   ) {}
 
+  hasSession(): boolean {
+    return Boolean(this.sessionId());
+  }
+
+  private async ready(): Promise<string> {
+    if (!this.sessionId() && this.ensure) await this.ensure();
+    return this.sessionId();
+  }
+
   async act(action: Record<string, unknown>, timeoutMs: number = ACTION_TIMEOUT_MS, opts: { signal?: AbortSignal; waitForTakeover?: boolean } = {}): Promise<ActionOp> {
+    const id = await this.ready();
     try {
-      return await this.session.act(this.sessionId(), action, timeoutMs, opts);
+      return await this.session.act(id, action, timeoutMs, opts);
     } catch (e) {
       throw asBrowserError(e);
     }
   }
 
   async typeSecret(opts: { handoffId: string; selector: string; clear?: boolean; submit?: boolean }): Promise<ActionOp> {
-    return this.session.typeSecret(this.sessionId(), opts);
+    return this.session.typeSecret(await this.ready(), opts);
   }
 
-  capture(screen: Screen): Promise<ScreenView> {
-    return captureScreen(this.session, this.fabric, this.sessionId(), screen);
+  async capture(screen: Screen): Promise<ScreenView> {
+    return captureScreen(this.session, this.fabric, await this.ready(), screen);
   }
 
-  captureTrace(): Promise<TraceShot> {
-    return captureTrace(this.session, this.fabric, this.sessionId());
+  async captureTrace(): Promise<TraceShot> {
+    return captureTrace(this.session, this.fabric, await this.ready());
   }
 }

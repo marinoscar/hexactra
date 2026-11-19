@@ -2,6 +2,7 @@
 // collaborators an app tool may use. These tools live in the host layer because they reach console services; they are still tools: they take
 // everything from the context and import neither the loop nor another tool.
 import type { FabricSession } from '../fabric-session';
+import type { RunConnectionsInfo } from './connections/memory';
 import type { BrowserExt } from '../browser/context';
 import type { RunContext } from '../harness';
 import type { UsedSavedCard } from '../saved-cards';
@@ -36,6 +37,8 @@ export interface HostExt extends BrowserExt {
   /** The AI app asks before purchases (#464). */
   appConfirmsPurchases: boolean;
   used: UsedSaved;
+  /** The connections this run may use (E39.7), fixed at its start. */
+  connections: RunConnectionsInfo;
   /** The saved-secret tool families this run is offered. */
   flags: { savedLogins: boolean; savedIdentity: boolean; savedCards: boolean; saveLogin: boolean };
 }

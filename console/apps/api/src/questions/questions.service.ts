@@ -33,6 +33,7 @@ import {
   type QuestionAnswerInput,
   type QuestionGate,
   type QuestionRememberable,
+  type QuestionAction,
   type QuestionConstraints,
   type QuestionInputType,
   type QuestionOption,
@@ -79,6 +80,8 @@ export interface QuestionView {
   gate: QuestionGate | null;
   /** What "Don't ask again" would remember (#555), computed by the server only; null when the question cannot be remembered. */
   rememberable: QuestionRememberable | null;
+  /** A call through one of the owner's connections this question asks to approve (E39.7), set by the server only; null otherwise. */
+  action: QuestionAction | null;
   status: QuestionStatusType;
   response: QuestionResponse | null;
   pageTitle: string | null;
@@ -137,6 +140,7 @@ export function toQuestionView(q: Question): QuestionView {
     fields: (q.fields as unknown as FormField[] | null) ?? null,
     gate: (q.gate as unknown as QuestionGate | null) ?? null,
     rememberable: (q.rememberable as unknown as QuestionRememberable | null) ?? null,
+    action: (q.action as unknown as QuestionAction | null) ?? null,
     status: q.status,
     response: (q.response as unknown as QuestionResponse | null) ?? null,
     pageTitle: q.pageTitle,
@@ -310,6 +314,7 @@ export class QuestionsService {
       rememberLabel: spec.rememberLabel,
       gate: spec.gate ? (spec.gate as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
       rememberable: spec.rememberable ? (spec.rememberable as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+      action: spec.action ? (spec.action as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
     };
   }
 
@@ -485,12 +490,20 @@ export class QuestionsService {
     if (run.status === 'waiting_human' && !run.handoffId && !opts.expectHandoffId) {
       const form = await this.db(actor.id).question.findFirst({ where: { runId, input: 'form', status: 'pending' }, orderBy: { createdAt: 'desc' } });
       if (form) return this.answerQuestion(actor, form, input, opts.channel ?? 'inbox');
+      // A question that needs no browser (a call through a connection the owner is asked to approve, E39.7): the run waits on it with no handoff.
+      const free = await this.freeQuestionOf(actor.id, runId);
+      if (free) return this.answerQuestion(actor, free, input, opts.channel ?? 'inbox');
     }
     if (run.status !== 'waiting_human' || !run.handoffId || (opts.expectHandoffId && run.handoffId !== opts.expectHandoffId)) {
       throw new ConflictException({ code: 'NOT_WAITING', message: 'This run is not waiting for you' });
     }
     const q = await this.questionForHandoff(actor.id, runId, run.handoffId);
     return this.answerQuestion(actor, q, input, opts.channel ?? 'inbox');
+  }
+
+  /** The newest pending question a run waits on that has no browser handoff (E39.7), or null. */
+  private freeQuestionOf(userId: string, runId: string): Promise<Question | null> {
+    return this.db(userId).question.findFirst({ where: { runId, status: 'pending', blocking: true, handoffId: null, input: { notIn: ['form', 'memory', 'save_login'] } }, orderBy: { createdAt: 'desc' } });
   }
 
   private async answerQuestion(actor: QuestionActor, q: Question, input: QuestionAnswerInput, channel: string, rememberAllowed = true): Promise<QuestionView> {
@@ -725,7 +738,15 @@ export class QuestionsService {
 
   /** The AI runner resumes its own runs at once; an external agent polls its handoff. */
   private async resumeRun(actor: QuestionActor, q: Question): Promise<void> {
-    if (!q.runId || !q.handoffId) return;
+    if (!q.runId) return;
+    if (!q.handoffId) {
+      // A question that needs no browser (E39.7): its answer resumes the run that waits on it (no handoff, so `handoffId` is null on both).
+      if (!q.blocking || q.input === 'form' || q.input === 'memory' || q.input === 'save_login') return;
+      const waiting = await this.db(actor.id).run.findFirst({ where: { id: q.runId }, select: { status: true, handoffId: true, trigger: true } });
+      if (!waiting || waiting.trigger === 'external' || waiting.status !== 'waiting_human' || waiting.handoffId !== null) return;
+      await enqueueGoalRun(this.jobs, { runId: q.runId, userId: actor.id, orgId: actor.activeOrgId ?? null }, 'handoff_answered');
+      return;
+    }
     const run = await this.db(actor.id).run.findFirst({ where: { id: q.runId }, select: { status: true, handoffId: true, trigger: true } });
     if (!run || run.trigger === 'external' || run.status !== 'waiting_human' || run.handoffId !== q.handoffId) return;
     await enqueueGoalRun(this.jobs, { runId: q.runId, userId: actor.id, orgId: actor.activeOrgId ?? null }, 'handoff_answered');

@@ -361,8 +361,8 @@ const questionConstraints = z.object({
   maxSelections: z.number().int().optional(),
 });
 const questionRememberable = z.object({
-  kind: z.enum(['gate', 'ask']),
-  host: z.string().describe('The registrable domain of the page the browser reported'),
+  kind: z.enum(['gate', 'ask', 'connection']),
+  host: z.string().describe("The registrable domain of the page the browser reported; for a `connection` question, the connection's id"),
   category: z.string().nullable().describe('gate: payment, purchase, send, delete or submit'),
   matchKey: z.string().describe('gate: the element\'s label; ask: the topic'),
   summary: z.string().describe("What the owner reads: \"Press 'Pay' on bankofamerica.com\""),
@@ -370,7 +370,18 @@ const questionRememberable = z.object({
   requiresLimit: z.boolean().optional().describe('A saved card (E37.7): the owner\'s amount limit is required for "Don\'t ask again"; the answer is refused without it'),
   currency: z.string().optional().describe('A saved card: the currency of the limit and of the purchase'),
   amount: z.string().optional().describe('A saved card: the purchase this approval is for, a decimal with two places'),
+  recipients: z.array(z.string()).optional().describe('A connection call that reaches people (E39.7): the addresses the approved call reaches; "Don\'t ask again" remembers these people (`rememberRule.recipientsFrom: these`) or anyone at their domains (`domain`)'),
 });
+const questionAction = z
+  .object({
+    connectionId: z.uuid(),
+    connectionLabel: z.string(),
+    tool: z.string().describe('The tool the agent called: `mail_send`, `calendar_create_event`, `sheet_append_rows`, ...'),
+    lines: z.array(z.object({ label: z.string(), value: z.string() })).describe('The labelled facts the card shows: from, to, subject, a body preview, an event\'s time and attendees, a file\'s name and the cells'),
+    body: z.string().optional().describe('The whole text for "show all" (at most 20,000 characters)'),
+    hash: z.string().optional().describe('A hash of the validated arguments the card shows; only that exact call goes through once approved'),
+  })
+  .describe("A call through one of the owner's connections this question asks to approve (E39.7), built by the server from the tool's validated arguments. Set by the server only.");
 export const questionAnswerResponseSchema = z.object({
   outcome: z.enum(['completed', 'cancelled']),
   value: z.string().optional().describe('Never present for a secret; for a sign-in (credentials), the username'),
@@ -410,6 +421,7 @@ export const questionResponseSchema = z.object({
   rememberable: questionRememberable
     .nullable()
     .describe('What "Don\'t ask again" would remember (#555): the kind, the site, the category and the label or topic, and the summary the owner reads. Computed by the server only; null when the question cannot be remembered.'),
+  action: questionAction.nullable().describe("The call through one of the owner's connections this question asks to approve (E39.7); null for every other question"),
   status: z.enum(['pending', 'answered', 'cancelled', 'expired']),
   response: questionAnswerResponseSchema.nullable(),
   pageTitle: z.string().nullable(),

@@ -15,9 +15,9 @@ import { dirname, join, normalize, relative, sep } from 'node:path';
 const RUNNER = join(__dirname, '../src/runner');
 
 /** Files that list the tools of a family: they may import the tool files they list. */
-const COMPOSERS = new Set(['browser/tools/index.ts', 'host/tools/saved-card-tools.ts']);
+const COMPOSERS = new Set(['browser/tools/index.ts', 'host/tools/saved-card-tools.ts', 'host/tools/connections/index.ts']);
 /** Modules under a tools/ folder that are shared support, not tools. */
-const TOOL_SUPPORT = new Set(['host/tools/secrets-support.ts', 'host/tools/saved-card-helpers.ts']);
+const TOOL_SUPPORT = new Set(['host/tools/secrets-support.ts', 'host/tools/saved-card-helpers.ts', 'host/tools/connections/support.ts', 'host/tools/connections/commit.ts', 'host/tools/connections/artifacts.ts']);
 /** The loop: what no tool or gate may import. */
 const LOOP_FILES = ['harness/engine', 'harness/run-loop', 'harness/outcomes', 'harness/create-context', 'harness/execute-tool', 'harness/model-call', 'goal-runner.service'];
 

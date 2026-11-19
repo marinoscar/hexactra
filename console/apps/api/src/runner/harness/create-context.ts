@@ -99,7 +99,7 @@ export function createRunContext<M extends HarnessMemory, X>(init: RunContextIni
       return ctx.budgetStop();
     },
     record: (...args) => record(ctx as never, ...args),
-    openIntent: (action, args, gate) => openIntent(ctx as never, action, args, gate),
+    openIntent: (action, args, gate, what) => openIntent(ctx as never, action, args, gate, what),
     note: (kind, action, summary, extra) => note(ctx as never, kind, action, summary, extra),
     routing: (from, to, reason, extra) => routing(ctx as never, from, to, reason, extra),
     async shoot(moment: string): Promise<Picture> {

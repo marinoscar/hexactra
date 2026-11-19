@@ -7,6 +7,7 @@ import type { GateTarget } from '../browser/policy';
 import type { SavedCardsMemory } from '../saved-cards';
 import type { SavedIdentityMemory } from '../saved-identity';
 import type { SavedLoginsMemory } from '../saved-logins';
+import type { ConnectionsMemory } from './connections/memory';
 
 /** What the run keeps between chunks and across a handoff (`runs.transcript`). Never secrets. */
 export interface RunMemory extends BrowserMemory {
@@ -81,6 +82,8 @@ export interface RunMemory extends BrowserMemory {
   saveLogin?: SaveLoginMemory;
   /** `visionOff` was set because the tier's model has no vision (not because a call refused images). */
   visionOffByTier?: boolean;
+  /** Connection tools (E39.7): the owner's answer to a call it was asked to approve, the calls it declined, what the run has read. Never content. */
+  connections?: ConnectionsMemory;
   /** The highest step `seq` this memory already tells the model about (E38.3): a job that finds later rows reconciles them. */
   lastSeq?: number;
   /** Actions that may or may not have happened (E38.3): their target is asked again, and no saved approval covers it. Never a value. */

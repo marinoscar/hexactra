@@ -48,6 +48,32 @@ export interface RunPolicySnapshot {
    * risky steps need a person. Absent on a run no app started.
    */
   appLimits?: SnapshotAppLimits | null;
+  /**
+   * The connections the run may use (E39.7), as its task or chat listed them when the run started: a later change to the list never alters
+   * a live run. Absent (or empty): none. An AI app's run has none unless the app's limits allow connections.
+   */
+  connections?: SnapshotConnection[];
+}
+
+/** One connection a run may use: which, how, and what was switched on at the start (the tools offered follow it). */
+export interface SnapshotConnection {
+  connectionId: string;
+  access: 'read' | 'read_write';
+  label: string;
+  provider: string;
+  /** The capabilities switched on when the run started. */
+  capabilities: string[];
+}
+
+/** The connections of a snapshot, read defensively. */
+export function readSnapshotConnections(snapshot: Pick<RunPolicySnapshot, 'connections'> | null | undefined): SnapshotConnection[] {
+  const raw = snapshot?.connections;
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((c): SnapshotConnection[] => {
+    const v = c as Partial<SnapshotConnection> | null;
+    if (!v || typeof v.connectionId !== 'string' || typeof v.label !== 'string') return [];
+    return [{ connectionId: v.connectionId, access: v.access === 'read_write' ? 'read_write' : 'read', label: v.label, provider: typeof v.provider === 'string' ? v.provider : '', capabilities: Array.isArray(v.capabilities) ? v.capabilities.filter((x): x is string => typeof x === 'string') : [] }];
+  });
 }
 
 /** What a snapshot keeps of an app's limits (`RunAppLimits` of connected-apps.schemas.ts). */

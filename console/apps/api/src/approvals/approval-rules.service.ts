@@ -214,9 +214,9 @@ export class ApprovalRulesService {
     return [...new Set(rows.filter((r) => findRule([matchable(r)], { kind: 'ask', host, category: null, matchKey: r.matchKey, taskId: q.taskId, conversationId: q.conversationId, amount: null, now })).map((r) => r.matchKey))];
   }
 
-  /** The gate rules a run used, one entry per use, oldest first (#555): the end-of-run notification and the chat's result card. */
+  /** The gate and connection rules a run used, one entry per use, oldest first (#555): the end-of-run notification and the chat's result card. */
   async gateUsesOfRun(userId: string, runId: string): Promise<{ ruleId: string; summary: string }[]> {
-    const uses = await this.prisma.approvalRuleUse.findMany({ where: { runId, rule: { userId, kind: 'gate' } }, orderBy: { usedAt: 'asc' }, select: { ruleId: true, rule: { select: { summary: true } } } });
+    const uses = await this.prisma.approvalRuleUse.findMany({ where: { runId, rule: { userId, kind: { in: ['gate', 'connection'] } } }, orderBy: { usedAt: 'asc' }, select: { ruleId: true, rule: { select: { summary: true } } } });
     return uses.map((u) => ({ ruleId: u.ruleId, summary: u.rule.summary }));
   }
 
