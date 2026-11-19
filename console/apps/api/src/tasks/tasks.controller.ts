@@ -14,7 +14,9 @@ import { TasksService } from './tasks.service';
 import { RunPauseService } from './run-pause.service';
 import { runView } from '../policies/policy-snapshot';
 import { RunCountsResponseDto, RunDetailResponseDto, RunListItemResponseDto, RunPageResponseDto, RunResponseDto, TaskResponseDto } from '../openapi/console.responses';
-import { TaskDetailResponseDto, TaskPageResponseDto, TaskWithSummaryResponseDto } from '../openapi/tasks.responses';
+import { TaskDetailResponseDto, TaskOutputsPageResponseDto, TaskPageResponseDto, TaskWithSummaryResponseDto } from '../openapi/tasks.responses';
+import { TaskOutputsQueryDto } from './task-outputs.schemas';
+import { readOutputs } from './task-outputs.schemas';
 import { GetTaskQueryDto, ListTasksDto } from './task-list.schemas';
 import { TaskSummaryService } from './task-summary.service';
 
@@ -42,6 +44,7 @@ export class TasksController {
   constructor(
     private readonly tasks: TasksService,
     private readonly summaries: TaskSummaryService,
+    private readonly runs: RunsQueryService,
   ) {}
 
   @Get()
@@ -71,6 +74,19 @@ export class TasksController {
   @Auth({ permissions: ['tasks:read'] })
   async get(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Query() q: GetTaskQueryDto) {
     return taskView(q.include === 'summary' ? await this.summaries.one(userId, id) : await this.tasks.getTask(userId, id));
+  }
+
+  @Get(':id/outputs')
+  @ApiOperation({
+    summary: "The outputs of a task's last runs",
+    description:
+      "What the task's finished runs returned (E39.5): `columns` are the task's outputs, `items` the runs, newest first, each with its `values` by key (the labels and types the run started with; a sensitive value is `[hidden]`). Keyset paged: pass `nextCursor` back as `cursor`. 404 `TASK_NOT_FOUND` for a task that is not yours.",
+  })
+  @ApiDataResponse(TaskOutputsPageResponseDto)
+  @Auth({ permissions: ['runs:read'] })
+  async outputs(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string, @Query() q: TaskOutputsQueryDto) {
+    const task = await this.tasks.getTask(userId, id);
+    return this.runs.outputsPage(userId, id, readOutputs(task.outputs), q);
   }
 
   @Post()

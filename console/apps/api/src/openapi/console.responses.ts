@@ -32,6 +32,37 @@ export const taskParameterResponseSchema = z.object({
   sensitive: z.boolean().optional().describe('Asked for every time in the signed-in console, typed by the browser, never stored or shown to the model'),
 });
 
+const outputType = z.enum(['text', 'number', 'money', 'date', 'datetime', 'boolean', 'url', 'choice']);
+
+/** A task output (E39.5, #600): one named value the agent must return when it finishes. */
+export const taskOutputResponseSchema = z.object({
+  key: z.string().describe('snake_case, unique in the task'),
+  label: z.string(),
+  type: outputType,
+  required: z.boolean(),
+  options: z.array(z.string()).optional().describe('choice: the options'),
+  help: z.string().optional().describe('What to look for; the agent reads it'),
+  sensitive: z.boolean().optional().describe('Masked in every view and export, and never sent to an AI app'),
+});
+
+/** An output value: text, a number, a boolean, `{ amount, currency }` for money, or null (not found). A sensitive output reads `[hidden]`. */
+export const outputValueResponseSchema = z
+  .union([z.string(), z.number(), z.boolean(), z.object({ amount: z.number(), currency: z.string().nullable().describe('ISO 4217, or null when the page gave none') })])
+  .nullable()
+  .describe('text, number, date and datetime (ISO), url and choice: a string or number; boolean: a boolean; money: `{ amount, currency }`; null: not found. A sensitive output is the string `[hidden]`.');
+
+/** One output of a run (E39.5): the definition as the run started with it, and the value, masked. */
+export const runOutputResponseSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  type: outputType,
+  required: z.boolean(),
+  sensitive: z.boolean(),
+  value: outputValueResponseSchema,
+  ok: z.boolean().describe('The value was returned and valid (an optional output left empty is ok)'),
+  note: z.string().nullable().describe('Why a value is missing or was refused ("Not found", "Not a number"); null when ok'),
+});
+
 /** A field of a `form` question (#552): a task run's missing parameter. */
 export const formFieldResponseSchema = z.object({
   key: z.string(),
@@ -70,6 +101,7 @@ export const taskResponseSchema = z.object({
   model: z.string().nullable().meta({ deprecated: true }).describe('Deprecated: see `policyId`'),
   policyId: z.string().nullable().describe("The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default"),
   parameters: z.array(taskParameterResponseSchema).nullable().describe("The goal's `{{Name}}` parameters, in order of appearance (#552); empty or null when it has none"),
+  outputs: z.array(taskOutputResponseSchema).nullable().describe('The values the agent must return when it finishes (E39.5, #600); empty or null when the task has none'),
   spend30d: z
     .object({
       runs: z.number().int().describe('Runs created in the last 30 days'),
@@ -232,6 +264,12 @@ export const runResponseSchema = z.object({
     )
     .describe('The saved cards the run paid with (E37.7), oldest first; empty when it used none. "Paid with Visa ending 4242 at shop.example.test: 42.50 USD" on the run page; a warning when the declared and the confirmed amounts differ.'),
   inputs: z.array(runInputResponseSchema).nullable().optional().describe("The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters"),
+  outputsComplete: z.boolean().nullable().describe('Whether the run returned every output and each was valid (E39.5, #600); null for a run without outputs or one that has not finished'),
+  outputs: z
+    .array(runOutputResponseSchema)
+    .nullable()
+    .optional()
+    .describe("What the run returned (E39.5, #600), with the labels and types of the task's outputs as they were when the run started; sensitive values are `[hidden]`. Returned by `GET /runs/{id}` (and the run tools); a list row has only `outputsComplete`. Null for a run without outputs."),
   memoryIds: z.array(z.uuid()).describe('The owner\'s memories this run used (#553): the ones its goal names. A deleted memory leaves its id.'),
   createdAt: iso,
   startedAt: iso.nullable(),

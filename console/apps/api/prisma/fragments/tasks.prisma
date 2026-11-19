@@ -91,6 +91,9 @@ model Task {
   /// The goal's `{{Name}}` parameters (#552): `[{ key, label, type, required, options?, help?, default?, constraints?, sensitive? }]`,
   /// one per placeholder in order of appearance (src/tasks/task-params.ts). Null or empty: the goal has none.
   parameters     Json?
+  /// The values the agent must return when it finishes (E39.5, #600): `[{ key, label, type, required, options?, help?, sensitive? }]`
+  /// (src/tasks/task-outputs.schemas.ts). Null or empty: the task has none. A run copies it to `runs.outputs_spec` when it starts.
+  outputs        Json?
   /// Let the agent sign in from the owner's saved login when a page asks (E37.3): an opt-in, off by default.
   /// A run uses saved logins only when this is on AND both secrets switches are on AND a provider is connected.
   useSavedLogins Boolean  @default(false) @map("use_saved_logins")
@@ -224,6 +227,14 @@ model Run {
   /// The task parameter values the run was started with (#552): `{ values: { key: { value, source } }, sensitive: [{ key, label }] }`,
   /// source `provided` | `default` | `memory` | `asked` | `schedule`. Never a `sensitive` value (asked as a secret, typed by the fabric).
   inputs           Json?
+  /// The task's output definitions as they were when the run started (E39.5, #600), so a later edit of the task never relabels an
+  /// old run: `[{ key, label, type, required, options?, help?, sensitive? }]`. Null: the run has no outputs.
+  outputsSpec      Json?         @map("outputs_spec")
+  /// What the agent returned (E39.5): `{ [key]: { value, ok, note? } }`, validated on the server. A `sensitive` value is stored whole and
+  /// masked in every view and export. Null until the run finishes (and for a run without outputs).
+  outputs          Json?
+  /// Whether every output was returned and valid; null while the run has none or has not finished.
+  outputsComplete  Boolean?      @map("outputs_complete")
   /// The owner's memories this run used (#553): the ones its goal names. Plain ids, not foreign keys: a deleted memory leaves its id.
   memoryIds        String[]      @default([]) @map("memory_ids") @db.Uuid
   /// The saved logins the run signed in with (E37.3): `[{ provider, itemName, origin, at }]`, at most 20, deduplicated by
