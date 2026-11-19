@@ -1195,6 +1195,110 @@
         "none": "The TUI is for watching and answering; use the web app"
       },
       "web": "/admin/settings/secrets"
+    },
+    {
+      "id": "connections.read",
+      "description": "List your connected accounts (Google, Microsoft) with their label, capabilities, status and defaults, read one with what uses it, and see which providers can be connected here",
+      "rest": [
+        "GET /api/connections",
+        "GET /api/connections/{id}",
+        "GET /api/connections/providers"
+      ],
+      "cli": "connections list",
+      "mcp": {
+        "none": "Deliberate: hosted AI apps cannot list, add or use the owner's connected accounts directly; they reach them only through runs, under the rules of E39.7 (E39.2, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
+      },
+      "web": "/settings/connections"
+    },
+    {
+      "id": "connections.connect",
+      "description": "Connect an account (the consent happens at the provider), rename it, change what it can do (an incremental consent for a new permission) and make it the default for Mail, Calendar or Documents",
+      "rest": [
+        "POST /api/connections/authorize",
+        "GET /api/connections/callback/{provider}",
+        "PATCH /api/connections/{id}"
+      ],
+      "cli": {
+        "none": "Deliberate: the consent screen is a browser flow, so connecting and changing permissions is done in the web app"
+      },
+      "mcp": {
+        "none": "Deliberate: hosted AI apps cannot list, add or use the owner's connected accounts directly; they reach them only through runs, under the rules of E39.7 (E39.2, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
+      },
+      "web": "/settings/connections"
+    },
+    {
+      "id": "connections.test",
+      "description": "Test a connection with one cheap read call per capability that is on",
+      "rest": [
+        "POST /api/connections/{id}/test"
+      ],
+      "cli": "connections test",
+      "mcp": {
+        "none": "Deliberate: hosted AI apps cannot list, add or use the owner's connected accounts directly; they reach them only through runs, under the rules of E39.7 (E39.2, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
+      },
+      "web": "/settings/connections"
+    },
+    {
+      "id": "connections.pause",
+      "description": "Pause a connection so nothing uses it, and resume it",
+      "rest": [
+        "POST /api/connections/{id}/pause",
+        "POST /api/connections/{id}/resume"
+      ],
+      "cli": [
+        "connections pause",
+        "connections resume"
+      ],
+      "mcp": {
+        "none": "Deliberate: hosted AI apps cannot list, add or use the owner's connected accounts directly; they reach them only through runs, under the rules of E39.7 (E39.2, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
+      },
+      "web": "/settings/connections"
+    },
+    {
+      "id": "connections.remove",
+      "description": "Disconnect an account: revoke it at the provider, clear what references it and delete its tokens",
+      "rest": [
+        "DELETE /api/connections/{id}"
+      ],
+      "cli": "connections rm",
+      "mcp": {
+        "none": "Deliberate: hosted AI apps cannot list, add or use the owner's connected accounts directly; they reach them only through runs, under the rules of E39.7 (E39.2, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
+      },
+      "web": "/settings/connections"
+    },
+    {
+      "id": "connections.admin",
+      "description": "Administrator: the deployment's apps at Google and Microsoft (client id, write-only secret, tenant, the per-provider switch), the redirect URIs and the setup checklist. No access to users' connections",
+      "rest": [
+        "GET /api/connections/admin/apps",
+        "PUT /api/connections/admin/apps/{provider}",
+        "DELETE /api/connections/admin/apps/{provider}"
+      ],
+      "cli": {
+        "none": "Deliberate: an administrator sets the deployment's apps in Administration; the client secret is write-only"
+      },
+      "mcp": {
+        "none": "Deliberate: hosted AI apps cannot list, add or use the owner's connected accounts directly; they reach them only through runs, under the rules of E39.7 (E39.2, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
+      },
+      "web": "/admin/settings/connections"
     }
   ]
 }
