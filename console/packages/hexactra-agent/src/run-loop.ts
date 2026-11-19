@@ -162,7 +162,7 @@ export async function runLoop(ctx: Ctx, profile: LoopProfile<Ctx>): Promise<RunO
     // Stop (E38.1): the signal heard it, or the flag is set (the signal's poll has not run yet).
     const flags = await control.readFlags();
     if (control.requested || flags.cancelRequested) return cancelRun(ctx);
-    if (state.stop === 'pause' && state.handoffId) return pauseForPerson(ctx);
+    if (state.stop === 'pause' && (state.handoffId || state.handoffAsk)) return pauseForPerson(ctx);
     // The owner paused the run (E38.2): after the chunk's usage is saved, before anything else is decided (a finished run still finishes).
     if ((control.pauseRequested || flags.pauseRequested) && !(state.stop === 'finish' && state.finished)) return pauseNow(ctx);
     if (state.stop === 'finish' && state.finished) {

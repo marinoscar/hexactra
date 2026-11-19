@@ -3,6 +3,7 @@ import { AiService } from '@marinoscar/platform-api/ai';
 import { SystemSettingsService } from '@marinoscar/platform-api/settings';
 
 import { ApprovalRulesService } from '../approvals/approval-rules.service';
+import { ConnectionCapabilities } from '../connections/connection-capabilities.service';
 import { ASK_TOPICS } from '../approvals/approval-match';
 import { FabricClient } from '../fabric/fabric.client';
 import { MemoryContext } from '../memories/memory-context';
@@ -15,6 +16,7 @@ import { QuestionsService } from '../questions/questions.service';
 import { RunSecretsService } from '../secrets/run-secrets.service';
 import { RUN_ARTIFACT_STORE, type RunArtifactStore } from '../tasks/run-delete.service';
 import { RunNotifier } from '../tasks/run-notifier';
+import { RunTraceService } from '../tasks/run-trace.service';
 import { TasksService } from '../tasks/tasks.service';
 import { AgentTrace } from './agent-trace';
 import { browserInstructions } from '@marinoscar/hexactra-browser-agent/instructions';
@@ -67,6 +69,10 @@ export class GoalRunnerService {
     @Optional() public approvals?: ApprovalRulesService,
     /** The owner's secrets providers (E37.3): absent without the secrets module, and then no run signs in from a saved login. */
     @Optional() public secrets?: RunSecretsService,
+    /** The owner's connections (E39.7): absent without the connections module, and then no run is offered a connection tool. */
+    @Optional() public connections?: ConnectionCapabilities,
+    /** The run's PDF report, for `file_upload` (E39.7). */
+    @Optional() public traces?: RunTraceService,
   ) {}
 
   /** The wall clock; tests replace it to pass time without waiting. */
@@ -90,6 +96,8 @@ export class GoalRunnerService {
       proposals: this.proposals,
       approvals: this.approvals,
       secrets: this.secrets,
+      connections: this.connections,
+      traces: this.traces,
       clock: () => this.clock(),
       log: this.log,
     };

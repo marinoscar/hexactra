@@ -7,10 +7,12 @@
 // normalised label: never on anything a model or a page says.
 // Registered in the user-owned data registry (src/approvals/approvals.ownership.ts).
 
-/// `gate`: a step the server would stop for (a commitment). `ask`: a question the agent would ask on its own.
+/// `gate`: a step the server would stop for (a commitment). `ask`: a question the agent would ask on its own. `connection`: a call that
+/// changes something through one of the owner's connections (E39.7): keyed on the connection and the tool, with no site.
 enum ApprovalRuleKind {
   gate
   ask
+  connection
 
   @@map("approval_rule_kind")
 }
@@ -35,6 +37,9 @@ model ApprovalRule {
   /// A saved card (E37.7): `<provider>:<item id>`; empty for every other rule. A card rule is a `gate` rule of category `payment`
   /// bound to the merchant's site AND this card, with a REQUIRED `maxAmount` (in the currency named by its match key). Part of the key.
   cardRef               String           @default("") @map("card_ref") @db.VarChar(200)
+  /// `connection` rules (E39.7) that send mail or invite people: the recipients the owner approved, as addresses or `@domain`. Empty for every
+  /// other rule. A later call to anyone outside this set asks again.
+  recipients            String[]         @default([])
   expiresAt             DateTime?        @map("expires_at") @db.Timestamptz
   enabled               Boolean          @default(true)
   createdFromQuestionId String?          @map("created_from_question_id") @db.Uuid

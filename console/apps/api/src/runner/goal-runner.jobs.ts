@@ -90,6 +90,7 @@ export class HandoffCheckHandler implements JobHandler, OnModuleInit {
   }
 
   async process(): Promise<void> {
+    await this.resumeFreeQuestions();
     if (!(await this.fabric.config())) return;
     const waiting = await this.prisma.run.findMany({
       // External runs are resumed by their own agent, never by the AI runner.
@@ -103,6 +104,23 @@ export class HandoffCheckHandler implements JobHandler, OnModuleInit {
       // Settle the mirrored question too (expired or cancelled on the fabric, or answered by another channel there).
       if (h && h.status !== 'pending') await this.questions.reconcileHandoff(h);
       if (!h || h.status !== 'pending') {
+        await enqueueGoalRun(this.jobs, { runId: r.id, userId: r.userId, orgId: null }, 'handoff_resolved');
+      }
+    }
+  }
+
+  /**
+   * A run that waits on a question that needs no browser (E39.7) is resumed by the answer. This is the safety net for an answer whose resume was
+   * lost and for a question that expired unanswered (the run is told the owner did not help). Only the run's newest such question counts.
+   */
+  private async resumeFreeQuestions(): Promise<void> {
+    const waiting = await this.prisma.run.findMany({ where: { status: 'waiting_human', handoffId: null, trigger: { not: 'external' } }, select: { id: true, userId: true }, take: 200 });
+    for (const r of waiting) {
+      const q = await this.prisma.question.findFirst({ where: { runId: r.id, blocking: true, handoffId: null, input: { notIn: ['form', 'memory', 'save_login'] } }, orderBy: { createdAt: 'desc' }, select: { status: true, expiresAt: true } });
+      if (!q) continue;
+      const lapsed = q.status === 'pending' && q.expiresAt.getTime() <= Date.now();
+      if (q.status !== 'pending' || lapsed) {
+        if (lapsed) await this.questions.expireDue({ ownerUserId: r.userId });
         await enqueueGoalRun(this.jobs, { runId: r.id, userId: r.userId, orgId: null }, 'handoff_resolved');
       }
     }

@@ -8464,6 +8464,7 @@ export interface components {
              * @example INVALID_INPUT
              * @example SENSITIVE_INPUT
              * @example SCHEDULE_INPUTS_MISSING
+             * @example CONNECTION_SELECTION_INVALID
              * @example INVALID_CRON
              * @example INVALID_TIMEZONE
              * @example CRON_TOO_FREQUENT
@@ -8509,16 +8510,6 @@ export interface components {
              * @example WEBHOOK_EVENT_UNKNOWN
              * @example WEBHOOK_EVENT_NOT_PERMITTED
              * @example WEBHOOK_LIMIT_REACHED
-             * @example CHAT_NOT_FOUND
-             * @example CHAT_ARCHIVED
-             * @example CHAT_RUN_LIVE
-             * @example SECRETS_VAULT_NOT_CONFIGURED
-             * @example SECRETS_VAULT_URL_REFUSED
-             * @example SECRETS_VAULT_DISCONNECT_FIRST
-             * @example SECRETS_VAULT_NOT_CONNECTED
-             * @example SECRETS_VAULT_NEEDS_RECONNECT
-             * @example SECRETS_VAULT_UNAVAILABLE
-             * @example SECRETS_VAULT_CONNECT_FAILED
              * @example CONNECTION_NOT_FOUND
              * @example CONNECTION_LABEL_TAKEN
              * @example CONNECTION_LIMIT
@@ -8530,6 +8521,16 @@ export interface components {
              * @example CONNECTION_NONE
              * @example CONNECTION_UNAVAILABLE
              * @example CONNECTION_DEFAULT_NEEDS_CAPABILITY
+             * @example CHAT_NOT_FOUND
+             * @example CHAT_ARCHIVED
+             * @example CHAT_RUN_LIVE
+             * @example SECRETS_VAULT_NOT_CONFIGURED
+             * @example SECRETS_VAULT_URL_REFUSED
+             * @example SECRETS_VAULT_DISCONNECT_FIRST
+             * @example SECRETS_VAULT_NOT_CONNECTED
+             * @example SECRETS_VAULT_NEEDS_RECONNECT
+             * @example SECRETS_VAULT_UNAVAILABLE
+             * @example SECRETS_VAULT_CONNECT_FAILED
              * @example MAIL_TRIGGER_NOT_FOUND
              * @example MAIL_TRIGGER_LIMIT
              * @example MAIL_TRIGGER_CONNECTION_INVALID
@@ -14657,6 +14658,10 @@ export interface components {
                     callsPerChunk: number;
                     /** @description Most characters of one page observation sent to the model. */
                     observationChars: number;
+                    /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
+                    connectionReadMessages?: number;
+                    /** @description Most characters of content a run may read through the owner's connections: mail bodies, documents, sheets, events (E39.7). Default 200000. */
+                    connectionReadChars?: number;
                 };
             };
             /** @description True for the user's default policy. */
@@ -14867,6 +14872,10 @@ export interface components {
                         callsPerChunk: number;
                         /** @description Most characters of one page observation sent to the model. */
                         observationChars: number;
+                        /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
+                        connectionReadMessages?: number;
+                        /** @description Most characters of content a run may read through the owner's connections: mail bodies, documents, sheets, events (E39.7). Default 200000. */
+                        connectionReadChars?: number;
                     };
                 };
             }[];
@@ -15001,6 +15010,10 @@ export interface components {
                     callsPerChunk: number;
                     /** @description Most characters of one page observation sent to the model. */
                     observationChars: number;
+                    /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
+                    connectionReadMessages?: number;
+                    /** @description Most characters of content a run may read through the owner's connections: mail bodies, documents, sheets, events (E39.7). Default 200000. */
+                    connectionReadChars?: number;
                 };
             };
         };
@@ -15083,6 +15096,10 @@ export interface components {
                     callsPerChunk: number;
                     /** @description Most characters of one page observation sent to the model. */
                     observationChars: number;
+                    /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
+                    connectionReadMessages?: number;
+                    /** @description Most characters of content a run may read through the owner's connections: mail bodies, documents, sheets, events (E39.7). Default 200000. */
+                    connectionReadChars?: number;
                 };
             };
         };
@@ -15272,11 +15289,11 @@ export interface components {
                 /** Format: uuid */
                 id: string;
                 /**
-                 * @description `gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own.
+                 * @description `gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own. `connection`: a call that changes something through one of the owner's connections (E39.7).
                  * @enum {string}
                  */
-                kind: "gate" | "ask";
-                /** @description The registrable domain it applies on. */
+                kind: "gate" | "ask" | "connection";
+                /** @description The registrable domain it applies on; for a `connection` rule, the connection's id. */
                 host: string;
                 /** @description For `gate`: payment, purchase, send, delete or submit. */
                 category: string | null;
@@ -15294,6 +15311,8 @@ export interface components {
                 maxAmount: number | null;
                 /** @description A saved card (E37.7): `<provider>:<item id>`. Such a rule is for paying with that one card on this site, up to `maxAmount` in the currency of its match key (`saved card usd`); null for every other rule. */
                 cardRef: string | null;
+                /** @description `connection` rules that send mail or invite people (E39.7): the addresses (or `@domain`) the owner approved. A call to anyone else asks again. Empty for every other rule. */
+                recipients: string[];
                 expiresAt: string | null;
                 enabled: boolean;
                 /** @description The question whose answer made the rule. */
@@ -15317,11 +15336,11 @@ export interface components {
             /** Format: uuid */
             id: string;
             /**
-             * @description `gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own.
+             * @description `gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own. `connection`: a call that changes something through one of the owner's connections (E39.7).
              * @enum {string}
              */
-            kind: "gate" | "ask";
-            /** @description The registrable domain it applies on. */
+            kind: "gate" | "ask" | "connection";
+            /** @description The registrable domain it applies on; for a `connection` rule, the connection's id. */
             host: string;
             /** @description For `gate`: payment, purchase, send, delete or submit. */
             category: string | null;
@@ -15339,6 +15358,8 @@ export interface components {
             maxAmount: number | null;
             /** @description A saved card (E37.7): `<provider>:<item id>`. Such a rule is for paying with that one card on this site, up to `maxAmount` in the currency of its match key (`saved card usd`); null for every other rule. */
             cardRef: string | null;
+            /** @description `connection` rules that send mail or invite people (E39.7): the addresses (or `@domain`) the owner approved. A call to anyone else asks again. Empty for every other rule. */
+            recipients: string[];
             expiresAt: string | null;
             enabled: boolean;
             /** @description The question whose answer made the rule. */
@@ -15361,11 +15382,11 @@ export interface components {
             /** Format: uuid */
             id: string;
             /**
-             * @description `gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own.
+             * @description `gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own. `connection`: a call that changes something through one of the owner's connections (E39.7).
              * @enum {string}
              */
-            kind: "gate" | "ask";
-            /** @description The registrable domain it applies on. */
+            kind: "gate" | "ask" | "connection";
+            /** @description The registrable domain it applies on; for a `connection` rule, the connection's id. */
             host: string;
             /** @description For `gate`: payment, purchase, send, delete or submit. */
             category: string | null;
@@ -15383,6 +15404,8 @@ export interface components {
             maxAmount: number | null;
             /** @description A saved card (E37.7): `<provider>:<item id>`. Such a rule is for paying with that one card on this site, up to `maxAmount` in the currency of its match key (`saved card usd`); null for every other rule. */
             cardRef: string | null;
+            /** @description `connection` rules that send mail or invite people (E39.7): the addresses (or `@domain`) the owner approved. A call to anyone else asks again. Empty for every other rule. */
+            recipients: string[];
             expiresAt: string | null;
             enabled: boolean;
             /** @description The question whose answer made the rule. */
@@ -16028,6 +16051,29 @@ export interface components {
              */
             unattendedPayments: "ask" | "allow";
             /**
+             * @description Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool
+             * @enum {string}
+             */
+            needsBrowser: "auto" | "always" | "never";
+            /** @description The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default. */
+            connections: {
+                /**
+                 * Format: uuid
+                 * @description A connection of the caller (`GET /api/connections`).
+                 */
+                connectionId: string;
+                /**
+                 * @description `read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time).
+                 * @enum {string}
+                 */
+                access: "read" | "read_write";
+                label: string;
+                provider: string;
+                accountEmail: string;
+                /** @description The connection's status now (`active`, `paused`, `needs_reconnect`): a run cannot use one that is not active. */
+                status: string;
+            }[];
+            /**
              * @deprecated
              * @description Deprecated: see `policyId`
              */
@@ -16201,6 +16247,29 @@ export interface components {
                  * @enum {string}
                  */
                 unattendedPayments: "ask" | "allow";
+                /**
+                 * @description Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool
+                 * @enum {string}
+                 */
+                needsBrowser: "auto" | "always" | "never";
+                /** @description The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default. */
+                connections: {
+                    /**
+                     * Format: uuid
+                     * @description A connection of the caller (`GET /api/connections`).
+                     */
+                    connectionId: string;
+                    /**
+                     * @description `read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time).
+                     * @enum {string}
+                     */
+                    access: "read" | "read_write";
+                    label: string;
+                    provider: string;
+                    accountEmail: string;
+                    /** @description The connection's status now (`active`, `paused`, `needs_reconnect`): a run cannot use one that is not active. */
+                    status: string;
+                }[];
                 /**
                  * @deprecated
                  * @description Deprecated: see `policyId`
@@ -16430,6 +16499,29 @@ export interface components {
              * @enum {string}
              */
             unattendedPayments: "ask" | "allow";
+            /**
+             * @description Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool
+             * @enum {string}
+             */
+            needsBrowser: "auto" | "always" | "never";
+            /** @description The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default. */
+            connections: {
+                /**
+                 * Format: uuid
+                 * @description A connection of the caller (`GET /api/connections`).
+                 */
+                connectionId: string;
+                /**
+                 * @description `read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time).
+                 * @enum {string}
+                 */
+                access: "read" | "read_write";
+                label: string;
+                provider: string;
+                accountEmail: string;
+                /** @description The connection's status now (`active`, `paused`, `needs_reconnect`): a run cannot use one that is not active. */
+                status: string;
+            }[];
             /**
              * @deprecated
              * @description Deprecated: see `policyId`
@@ -16677,6 +16769,25 @@ export interface components {
              * @enum {string}
              */
             unattendedPayments?: "ask" | "allow";
+            /**
+             * @description Whether the task's runs open a browser (E39.7). `auto` (the default): a run that has connections opens the browser when its first browser tool is called, so a job that needs only mail, a calendar or documents never allocates a node; a run with no connection opens it at the start, as before. `always`: open it at the start. `never`: no browser tool is offered and none is opened.
+             * @default auto
+             * @enum {string}
+             */
+            needsBrowser?: "auto" | "always" | "never";
+            /** @description The connections the agent may use in this task or chat, and how. Off until listed: nothing is available by default. A run takes a snapshot when it starts. */
+            connections?: {
+                /**
+                 * Format: uuid
+                 * @description A connection of the caller (`GET /api/connections`).
+                 */
+                connectionId: string;
+                /**
+                 * @description `read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time).
+                 * @enum {string}
+                 */
+                access: "read" | "read_write";
+            }[];
             /** @description Schedules created with the task, in the same transaction: one invalid schedule and nothing is created. */
             schedules?: {
                 /** @description A 5-field cron expression that fires at most every 5 minutes, e.g. `0 9 * * 1-5`. */
@@ -16732,6 +16843,29 @@ export interface components {
              * @enum {string}
              */
             unattendedPayments: "ask" | "allow";
+            /**
+             * @description Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool
+             * @enum {string}
+             */
+            needsBrowser: "auto" | "always" | "never";
+            /** @description The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default. */
+            connections: {
+                /**
+                 * Format: uuid
+                 * @description A connection of the caller (`GET /api/connections`).
+                 */
+                connectionId: string;
+                /**
+                 * @description `read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time).
+                 * @enum {string}
+                 */
+                access: "read" | "read_write";
+                label: string;
+                provider: string;
+                accountEmail: string;
+                /** @description The connection's status now (`active`, `paused`, `needs_reconnect`): a run cannot use one that is not active. */
+                status: string;
+            }[];
             /**
              * @deprecated
              * @description Deprecated: see `policyId`
@@ -16905,6 +17039,24 @@ export interface components {
              * @enum {string}
              */
             unattendedPayments?: "ask" | "allow";
+            /**
+             * @description Whether the task's runs open a browser (E39.7). `auto` (the default): a run that has connections opens the browser when its first browser tool is called, so a job that needs only mail, a calendar or documents never allocates a node; a run with no connection opens it at the start, as before. `always`: open it at the start. `never`: no browser tool is offered and none is opened.
+             * @enum {string}
+             */
+            needsBrowser?: "auto" | "always" | "never";
+            /** @description The connections the agent may use in this task or chat, and how. Off until listed: nothing is available by default. A run takes a snapshot when it starts. */
+            connections?: {
+                /**
+                 * Format: uuid
+                 * @description A connection of the caller (`GET /api/connections`).
+                 */
+                connectionId: string;
+                /**
+                 * @description `read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time).
+                 * @enum {string}
+                 */
+                access: "read" | "read_write";
+            }[];
         };
         ReplaceTaskSchedulesDto: {
             schedules: {
@@ -16966,6 +17118,29 @@ export interface components {
              * @enum {string}
              */
             unattendedPayments: "ask" | "allow";
+            /**
+             * @description Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool
+             * @enum {string}
+             */
+            needsBrowser: "auto" | "always" | "never";
+            /** @description The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default. */
+            connections: {
+                /**
+                 * Format: uuid
+                 * @description A connection of the caller (`GET /api/connections`).
+                 */
+                connectionId: string;
+                /**
+                 * @description `read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time).
+                 * @enum {string}
+                 */
+                access: "read" | "read_write";
+                label: string;
+                provider: string;
+                accountEmail: string;
+                /** @description The connection's status now (`active`, `paused`, `needs_reconnect`): a run cannot use one that is not active. */
+                status: string;
+            }[];
             /**
              * @deprecated
              * @description Deprecated: see `policyId`
@@ -17949,6 +18124,10 @@ export interface components {
                         callsPerChunk: number;
                         /** @description Most characters of one page observation sent to the model. */
                         observationChars: number;
+                        /** @description Most mail messages a run may read through the owner's connections (E39.7). Default 25. */
+                        connectionReadMessages?: number;
+                        /** @description Most characters of content a run may read through the owner's connections: mail bodies, documents, sheets, events (E39.7). Default 200000. */
+                        connectionReadChars?: number;
                     };
                 };
             } | null;
@@ -18679,8 +18858,8 @@ export interface components {
             /** @description What "Don't ask again" would remember (#555): the kind, the site, the category and the label or topic, and the summary the owner reads. Computed by the server only; null when the question cannot be remembered. */
             rememberable: {
                 /** @enum {string} */
-                kind: "gate" | "ask";
-                /** @description The registrable domain of the page the browser reported */
+                kind: "gate" | "ask" | "connection";
+                /** @description The registrable domain of the page the browser reported; for a `connection` question, the connection's id */
                 host: string;
                 /** @description gate: payment, purchase, send, delete or submit */
                 category: string | null;
@@ -18696,6 +18875,27 @@ export interface components {
                 currency?: string;
                 /** @description A saved card: the purchase this approval is for, a decimal with two places */
                 amount?: string;
+                /** @description A connection call that reaches people (E39.7): the addresses the approved call reaches; "Don't ask again" remembers these people (`rememberRule.recipientsFrom: these`) or anyone at their domains (`domain`) */
+                recipients?: string[];
+            } | null;
+            /** @description The call through one of the owner's connections this question asks to approve (E39.7); null for every other question */
+            action: {
+                /** Format: uuid */
+                connectionId: string;
+                connectionLabel: string;
+                /** @description The tool the agent called: `mail_send`, `calendar_create_event`, `sheet_append_rows`, ... */
+                tool: string;
+                /** @description The labelled facts the card shows: from, to, subject, a body preview, an event's time and attendees, a file's name and the cells */
+                lines: {
+                    label: string;
+                    value: string;
+                }[];
+                /** @description What it does in one line, with no body and no cells: what the run's step and the notifications say */
+                summary: string;
+                /** @description The whole text for "show all" (at most 20,000 characters) */
+                body?: string;
+                /** @description A hash of the validated arguments the card shows; only that exact call goes through once approved */
+                hash?: string;
             } | null;
             /** @enum {string} */
             status: "pending" | "answered" | "cancelled" | "expired";
@@ -18832,6 +19032,8 @@ export interface components {
                 scope?: "everywhere" | "this_task" | "this_chat";
                 maxAmount?: number;
                 expiresInDays?: number;
+                /** @enum {string} */
+                recipientsFrom?: "these" | "domain";
             };
             fields?: {
                 [key: string]: string | number;
@@ -18873,6 +19075,8 @@ export interface components {
                 scope?: "everywhere" | "this_task" | "this_chat";
                 maxAmount?: number;
                 expiresInDays?: number;
+                /** @enum {string} */
+                recipientsFrom?: "these" | "domain";
             };
             fields?: {
                 [key: string]: string | number;
@@ -18943,6 +19147,8 @@ export interface components {
                 allowSavedIdentity: boolean;
                 /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
                 allowSavedCards: boolean;
+                /** @description Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner. */
+                allowConnections: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
             };
@@ -19042,6 +19248,8 @@ export interface components {
                 allowSavedIdentity: boolean;
                 /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
                 allowSavedCards: boolean;
+                /** @description Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner. */
+                allowConnections: boolean;
                 /** @description Refuse new runs and sessions from this app without disconnecting it. */
                 paused: boolean;
             };
@@ -19078,6 +19286,8 @@ export interface components {
             allowSavedIdentity: boolean;
             /** @description Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's "confirm purchases" limit still makes every card use ask. */
             allowSavedCards: boolean;
+            /** @description Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner. */
+            allowConnections: boolean;
             /** @description Refuse new runs and sessions from this app without disconnecting it. */
             paused: boolean;
         };
@@ -19093,6 +19303,7 @@ export interface components {
             allowSavedLogins?: boolean;
             allowSavedIdentity?: boolean;
             allowSavedCards?: boolean;
+            allowConnections?: boolean;
             paused?: boolean;
         };
         OpenDto: {
@@ -19198,8 +19409,8 @@ export interface components {
             /** @description What "Don't ask again" would remember (#555): the kind, the site, the category and the label or topic, and the summary the owner reads. Computed by the server only; null when the question cannot be remembered. */
             rememberable: {
                 /** @enum {string} */
-                kind: "gate" | "ask";
-                /** @description The registrable domain of the page the browser reported */
+                kind: "gate" | "ask" | "connection";
+                /** @description The registrable domain of the page the browser reported; for a `connection` question, the connection's id */
                 host: string;
                 /** @description gate: payment, purchase, send, delete or submit */
                 category: string | null;
@@ -19215,6 +19426,8 @@ export interface components {
                 currency?: string;
                 /** @description A saved card: the purchase this approval is for, a decimal with two places */
                 amount?: string;
+                /** @description A connection call that reaches people (E39.7): the addresses the approved call reaches; "Don't ask again" remembers these people (`rememberRule.recipientsFrom: these`) or anyone at their domains (`domain`) */
+                recipients?: string[];
             } | null;
             /** @description form (#552): the fields to fill */
             fields?: {
@@ -19689,6 +19902,24 @@ export interface components {
                 useSavedIdentity: boolean;
                 /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default */
                 useSavedCards: boolean;
+                /** @description The connections the chat may use, and how (E39.7). Empty: none; nothing is available by default. */
+                connections: {
+                    /**
+                     * Format: uuid
+                     * @description A connection of the caller (`GET /api/connections`).
+                     */
+                    connectionId: string;
+                    /**
+                     * @description `read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time).
+                     * @enum {string}
+                     */
+                    access: "read" | "read_write";
+                    label: string;
+                    provider: string;
+                    accountEmail: string;
+                    /** @description The connection's status now (`active`, `paused`, `needs_reconnect`): a run cannot use one that is not active. */
+                    status: string;
+                }[];
                 /** @description ISO 8601 timestamp */
                 lastMessageAt: string;
                 /** @description ISO 8601 timestamp */
@@ -19745,6 +19976,24 @@ export interface components {
             useSavedIdentity: boolean;
             /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default */
             useSavedCards: boolean;
+            /** @description The connections the chat may use, and how (E39.7). Empty: none; nothing is available by default. */
+            connections: {
+                /**
+                 * Format: uuid
+                 * @description A connection of the caller (`GET /api/connections`).
+                 */
+                connectionId: string;
+                /**
+                 * @description `read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time).
+                 * @enum {string}
+                 */
+                access: "read" | "read_write";
+                label: string;
+                provider: string;
+                accountEmail: string;
+                /** @description The connection's status now (`active`, `paused`, `needs_reconnect`): a run cannot use one that is not active. */
+                status: string;
+            }[];
             /** @description ISO 8601 timestamp */
             lastMessageAt: string;
             /** @description ISO 8601 timestamp */
@@ -19772,6 +20021,19 @@ export interface components {
             useSavedIdentity?: boolean;
             /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: the agent never sees a card value. Off by default; it needs `useSavedLogins`. */
             useSavedCards?: boolean;
+            /** @description The connections (mail, calendar, documents) the chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). Off until listed. */
+            connections?: {
+                /**
+                 * Format: uuid
+                 * @description A connection of the caller (`GET /api/connections`).
+                 */
+                connectionId: string;
+                /**
+                 * @description `read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time).
+                 * @enum {string}
+                 */
+                access: "read" | "read_write";
+            }[];
         };
         ChatDetailResponseDto: {
             /** Format: uuid */
@@ -19800,6 +20062,24 @@ export interface components {
             useSavedIdentity: boolean;
             /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default */
             useSavedCards: boolean;
+            /** @description The connections the chat may use, and how (E39.7). Empty: none; nothing is available by default. */
+            connections: {
+                /**
+                 * Format: uuid
+                 * @description A connection of the caller (`GET /api/connections`).
+                 */
+                connectionId: string;
+                /**
+                 * @description `read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time).
+                 * @enum {string}
+                 */
+                access: "read" | "read_write";
+                label: string;
+                provider: string;
+                accountEmail: string;
+                /** @description The connection's status now (`active`, `paused`, `needs_reconnect`): a run cannot use one that is not active. */
+                status: string;
+            }[];
             /** @description ISO 8601 timestamp */
             lastMessageAt: string;
             /** @description ISO 8601 timestamp */
@@ -19861,6 +20141,19 @@ export interface components {
             useSavedIdentity?: boolean;
             /** @description Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: the agent never sees a card value. Off by default; it needs `useSavedLogins`. */
             useSavedCards?: boolean;
+            /** @description The connections (mail, calendar, documents) the chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). Off until listed. */
+            connections?: {
+                /**
+                 * Format: uuid
+                 * @description A connection of the caller (`GET /api/connections`).
+                 */
+                connectionId: string;
+                /**
+                 * @description `read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time).
+                 * @enum {string}
+                 */
+                access: "read" | "read_write";
+            }[];
         };
         ChatMessageResponseDto: {
             /** Format: uuid */

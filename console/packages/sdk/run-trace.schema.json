@@ -812,6 +812,18 @@
                       "minimum": 500,
                       "maximum": 20000,
                       "description": "Most characters of one page observation sent to the model."
+                    },
+                    "connectionReadMessages": {
+                      "description": "Most mail messages a run may read through the owner's connections (E39.7). Default 25.",
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 500
+                    },
+                    "connectionReadChars": {
+                      "description": "Most characters of content a run may read through the owner's connections: mail bodies, documents, sheets, events (E39.7). Default 200000.",
+                      "type": "integer",
+                      "minimum": 1000,
+                      "maximum": 2000000
                     }
                   },
                   "required": [

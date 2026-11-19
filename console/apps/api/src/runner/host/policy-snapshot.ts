@@ -8,6 +8,7 @@ import { priceTableOf } from '../agent-pricing.settings';
 import { computeEffectiveBudget, enforcementFor, isUnlimited, UNLIMITED_LOG_LINE, type BudgetCeilings } from '@marinoscar/hexactra-agent';
 import type { PriceTable } from '@marinoscar/hexactra-agent';
 import type { RunMemory } from './run-memory';
+import { runConnections } from './connections/run-connections';
 import type { HostDeps } from './deps';
 
   /** The admin's price table; empty when unreadable (calls are then unpriced, never free). */
@@ -37,7 +38,7 @@ export async function ceilings(d: HostDeps): Promise<BudgetCeilings> {
    */
 export async function policySnapshot(
   d: HostDeps,
-  db: ReturnType<PrismaService['forUser']>, run: { id: string; userId: string; taskId: string | null; policyRef: string | null; policySource: RunPolicySnapshot['source'] | null; policySnapshot: Prisma.JsonValue | null; appLimits?: Prisma.JsonValue | null; trigger?: string | null; task: { policyRef: string | null } | null }, memory: RunMemory): Promise<RunPolicySnapshot> {
+  db: ReturnType<PrismaService['forUser']>, run: { id: string; userId: string; taskId: string | null; conversationId?: string | null; policyRef: string | null; policySource: RunPolicySnapshot['source'] | null; policySnapshot: Prisma.JsonValue | null; appLimits?: Prisma.JsonValue | null; trigger?: string | null; task: { policyRef: string | null } | null }, memory: RunMemory): Promise<RunPolicySnapshot> {
     const stored = readSnapshot(run.policySnapshot);
     if (stored) {
       // Upgrade an older snapshot once, then never change it: the effective budget (#404) and the model tiers (#403).
@@ -72,6 +73,9 @@ export async function policySnapshot(
     // The limits of the AI app that started it (#464), recorded on the run at its start: the snapshot keeps them.
     const appLimits = readAppLimits(run.appLimits);
     if (appLimits) snapshot = { ...snapshot, appLimits };
+    // The connections it may use (E39.7), as the task or chat lists them now: fixed for the run.
+    const connections = await runConnections(d, run, appLimits);
+    if (connections.length > 0) snapshot = { ...snapshot, connections };
     // Compare-and-set: only the first writer's snapshot stands (a retried job re-reads it).
     const { count } = await db.run.updateMany({
       where: { id: run.id, policySnapshot: { equals: Prisma.DbNull } },

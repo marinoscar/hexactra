@@ -55,7 +55,7 @@ export class NotificationsQuestionChannel implements QuestionChannel, OnModuleIn
     const base = (this.config.get<string>('appUrl') ?? '').replace(/\/+$/, '');
     return {
       questionId: q.id,
-      prompt: q.prompt.slice(0, 300),
+      prompt: (q.action ? q.action.summary : q.prompt).slice(0, 300),
       input: q.input,
       kind: q.kind,
       questionUrl: `${base}${questionPath(q.id)}`,

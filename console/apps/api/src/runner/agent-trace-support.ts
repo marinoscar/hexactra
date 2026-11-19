@@ -14,6 +14,7 @@ export interface PendingTool {
   action?: string;
   host?: string;
   gate?: string;
+  attrs?: Record<string, string | number | boolean>;
 }
 
 /** What `onStep` hands over about a model round trip (a structural subset of `AiToolStep`). */

@@ -1,6 +1,7 @@
 import { createZodDto } from 'nestjs-zod';
 import { z } from 'zod';
 
+import { connectionSelectionsField } from '../connections/agent-connections';
 import { profileNameSchema } from '../fleet/fleet.schemas';
 import { policyRefSchema } from '../policies/policies.schemas';
 import { TASK_DEFAULTS } from './task-defaults';
@@ -18,6 +19,10 @@ export const domainSchema = z
 /** `Task.unattendedPayments`: what an unattended run that used a saved login does at a payment step (E37.3). */
 export const UNATTENDED_PAYMENTS = ['ask', 'allow'] as const;
 export type UnattendedPayments = (typeof UNATTENDED_PAYMENTS)[number];
+
+/** `Task.needsBrowser` (E39.7): whether the task's runs open a browser. */
+export const NEEDS_BROWSER = ['auto', 'always', 'never'] as const;
+export type NeedsBrowser = (typeof NEEDS_BROWSER)[number];
 
 const taskFields = {
   name: z.string().trim().min(1).max(200),
@@ -55,6 +60,12 @@ const taskFields = {
     .describe(
       "What an unattended run (a schedule, the API or an AI app) does at a payment step after it signed in with a saved login: `ask` (the default) keeps the confirmation on for that run even when `confirmRiskyActions` is off; `allow` leaves the task's own setting. The owner's saved approvals still apply.",
     ),
+  needsBrowser: z
+    .enum(NEEDS_BROWSER)
+    .describe(
+      "Whether the task's runs open a browser (E39.7). `auto` (the default): a run that has connections opens the browser when its first browser tool is called, so a job that needs only mail, a calendar or documents never allocates a node; a run with no connection opens it at the start, as before. `always`: open it at the start. `never`: no browser tool is offered and none is opened.",
+    ),
+  connections: connectionSelectionsField,
 };
 
 export const createTaskSchema = z.object({
@@ -77,6 +88,8 @@ export const createTaskSchema = z.object({
   useSavedIdentity: taskFields.useSavedIdentity.optional(),
   useSavedCards: taskFields.useSavedCards.optional(),
   unattendedPayments: taskFields.unattendedPayments.default('ask'),
+  needsBrowser: taskFields.needsBrowser.default('auto'),
+  connections: taskFields.connections.optional(),
   schedules: taskSchedulesField.optional(),
 });
 export class CreateTaskDto extends createZodDto(createTaskSchema) {}

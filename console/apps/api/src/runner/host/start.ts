@@ -3,13 +3,11 @@
 import { ConflictException } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 
-import { chooseHost } from '../host-choice';
 import { FabricSession, handoffOutcome } from '../fabric-session';
 import type { RunLease } from '../lease';
-import { readAppLimits, type RunPolicySnapshot } from '../../policies/policy-snapshot';
+import { readAppLimits, readSnapshotConnections, type RunPolicySnapshot, type SnapshotConnection } from '../../policies/policy-snapshot';
 import { tierHasVision, tierProblem } from '../tier-request';
 import type { QuestionConstraints, QuestionGate, QuestionInputType, QuestionOption, QuestionResponse } from '../../questions/questions.contract';
-import { fabricAllowedSites } from '@marinoscar/hexactra-browser-agent/policy';
 import { askedKey } from '../saved-identity';
 import { approvalFromAsk, reconcileCardsOnStart } from '../saved-card-tools';
 import { clearUnknown, readStallState, reconcileSteps, resetStall, runActivity, type RunOutcome, type StallState, type Tier } from '@marinoscar/hexactra-agent';
@@ -20,7 +18,10 @@ import type { RunStopSignal } from '../stop-signal';
 import type { HostDeps } from './deps';
 import { finishRun, pauseEarly, recordAnswer } from './finish-run';
 import { answerLine } from '@marinoscar/hexactra-browser-agent/request-human-spec';
+import { foldConnectionAnswer, handoffOfQuestion } from './connections/answer';
 import { pausedFor } from './paused-for';
+import { openFabricSession } from './browser-session';
+import { readNeedsBrowser, type NeedsBrowser } from './connections/run-connections';
 import { policySnapshot } from './policy-snapshot';
 import type { RunMemory } from './run-memory';
 
@@ -42,6 +43,8 @@ export interface RunStart {
   stall: StallState;
   active: { activeMs: number; activeSince: Date | null };
   jobStartedAt: number;
+  /** The connections the run may use and whether its browser opens at the first browser tool (E39.7). */
+  connections: { list: SnapshotConnection[]; needsBrowser: NeedsBrowser; lazyBrowser: boolean };
   /** Which saved-secret tool families this run may be offered. */
   flags: { savedLogins: boolean; savedIdentity: boolean; savedCards: boolean; saveLogin: boolean };
 }
@@ -75,6 +78,8 @@ export async function startRun(d: HostDeps, runId: string, userId: string, orgId
     const recovery = await reconcileSteps(new PrismaRunStore(d, userId, run.id, lease, { run, session, sessionId: () => run.sessionId }), { memory, stepCount: run.stepCount, interrupted: run.status === 'running' && lease.previous !== null });
     if (recovery.recovered || recovery.unknown.length > 0) {
       run.stepCount += recovery.appended;
+      // The owner's approval was for a call that may have happened: it is spent (the gate asks again).
+      if (recovery.unknown.length > 0 && memory.connections) memory.connections.approved = null;
       await db.run.updateMany({ where: { id: run.id, ...lease.guard }, data: { transcript: memory as never, stepCount: run.stepCount, recoveries: { increment: 1 } } });
       d.tasks.metrics.recovered(recovery.unknown.length);
       d.log.warn(`run ${run.id}: recovered after an interruption, ${recovery.appended} step(s) reconciled, ${recovery.unknown.length} unknown`);
@@ -127,15 +132,18 @@ export async function startRun(d: HostDeps, runId: string, userId: string, orgId
     if (run.status === 'waiting_human') {
       // A task run waiting for its parameter values (#552) waits on a form, with no browser yet: nothing to do until it is answered.
       if (!run.handoffId && (await db.question.count({ where: { runId: run.id, input: 'form', status: 'pending' } })) > 0) return 'waiting_human';
-      if (!run.handoffId) {
+      // A question that needs no browser (E39.7) is asked with no handoff: its answer is read back from the broker.
+      const free = !run.handoffId ? await db.question.findFirst({ where: { runId: run.id, blocking: true, handoffId: null, input: { notIn: ['form', 'memory', 'save_login'] } }, orderBy: { createdAt: 'desc' }, select: { id: true, status: true, input: true, kind: true, prompt: true, action: true, response: true } }) : null;
+      if (!run.handoffId && !free) {
         await d.tasks.transition(userId, run.id, 'failed', { error: 'Waiting for a person without a handoff', stopReason: 'error' });
         return 'failed';
       }
-      const h = await session.getHandoff(run.handoffId);
+      if (free?.status === 'pending') return 'waiting_human';
+      const h = free ? handoffOfQuestion(free) : await session.getHandoff(run.handoffId!);
       if (h.status === 'pending') return 'waiting_human';
-      await d.questions?.reconcileHandoff(h);
+      if (!free) await d.questions?.reconcileHandoff(h);
       // The answer as the broker recorded it (labels of choices), else as the fabric reports it.
-      const q = await db.question.findFirst({ where: { handoffId: h.id }, select: { id: true, response: true, options: true, constraints: true, input: true, rememberLabel: true, prompt: true, gate: true } });
+      const q = await db.question.findFirst({ where: free ? { id: free.id } : { handoffId: h.id }, select: { id: true, response: true, options: true, constraints: true, input: true, rememberLabel: true, prompt: true, gate: true, action: true } });
       const resp = (q?.response as unknown as QuestionResponse | null) ?? null;
       const outcome = resp?.outcome ?? handoffOutcome(h);
       tr.answered({ kind: h.kind, input: (q?.input as string | undefined) ?? h.input, channel: resp?.channel ?? h.response?.channel ?? null, outcome: outcome ?? h.status, waitedMs: run.waitingSince ? d.clock() - run.waitingSince.getTime() : null });
@@ -175,6 +183,8 @@ export async function startRun(d: HostDeps, runId: string, userId: string, orgId
         if (h.input === 'secret' && memory.askingParam) memory.paramSecrets = { ...(memory.paramSecrets ?? {}), [memory.askingParam]: h.id };
         else if (h.input === 'secret' || h.input === 'credentials') memory.secretHandoffId = h.id;
         const approved = h.kind === 'confirmation' && (h.input !== 'confirm' || (resp?.value ?? h.response?.value) === 'approve');
+        // A call through a connection the owner was asked to approve (E39.7): the approval lets exactly that call through once.
+        const connectionLine = q?.action ? foldConnectionAnswer(memory, q, approved) : null;
         // The owner answered the card question (E37.7): an approval lets exactly this card, shop and amount through, once.
         const askedCard = memory.savedCards?.asking ?? null;
         const cardAnswered = Boolean(askedCard && q?.input === 'confirm' && h.kind === 'confirmation');
@@ -200,15 +210,15 @@ export async function startRun(d: HostDeps, runId: string, userId: string, orgId
         }
         // The step the person allowed (#540): the next successful action is recorded as carried out.
         // The card question's approval is recorded when the card is typed (`confirmedAction`), not on the next action.
-        if (approved && !cardAnswered) memory.pendingConfirmation = { prompt: q?.prompt ?? memory.askedPrompt ?? '', tries: 0 };
-        memory.log.push(line);
+        if (approved && !cardAnswered && !connectionLine) memory.pendingConfirmation = { prompt: q?.prompt ?? memory.askedPrompt ?? '', tries: 0 };
+        memory.log.push(connectionLine ?? line);
       } else if (memory.askingParam) {
         // A sensitive task parameter was not provided (#552): the run cannot do its job.
         memory.askingParam = null;
         await finishRun(d, userId, run.id, run.sessionId, session, 'cancelled', { error: 'The values were not provided.', stopReason: 'cancelled' });
         return 'cancelled';
       } else {
-        memory.log.push(`The person did not help (handoff ${h.status}${outcome === 'cancelled' ? ', declined' : ''}). Do not retry the same request; finish if you cannot continue.`);
+        memory.log.push((q?.action ? foldConnectionAnswer(memory, q, false) : null) ?? `The person did not help (handoff ${h.status}${outcome === 'cancelled' ? ', declined' : ''}). Do not retry the same request; finish if you cannot continue.`);
       }
       memory.askingParam = null;
       // The answer is a step of the trace (#541): what the owner said, masked; never a secret or a withheld value. Not an action.
@@ -295,26 +305,20 @@ export async function startRun(d: HostDeps, runId: string, userId: string, orgId
       sessionId = null;
       await db.run.updateMany({ where: { id: run.id }, data: { sessionId: null } });
     }
-    if (!sessionId) {
-      try {
-        const hosts = run.hostId ? await d.fabric.hosts() : [];
-        const choice = chooseHost(hosts, run.hostId, run.hostFallback);
-        if (choice.kind === 'fail') {
-          await finishRun(d, userId, run.id, null, session, 'failed', { error: choice.error, stopReason: 'error' });
-          return 'failed';
-        }
-        if (choice.note) {
-          memory.log.push(choice.note);
-          d.log.log(`run ${run.id}: ${choice.note}`);
-        }
-        // The browser enforces the run's allowed sites too (#508), so a page cannot leave them on its own.
-        const sites = fabricAllowedSites(run.task?.allowedDomains ?? run.conversation?.allowedDomains ?? [], readAppLimits(run.appLimits)?.allowedDomains ?? []);
-        sessionId = await session.create({ profile: run.profile, hostId: choice.hostId, label: `run ${run.id}`, allowedDomains: sites, ...(savedLoginsOn ? { ownerId: userId } : {}) });
-      } catch (e) {
-        await finishRun(d, userId, run.id, null, session, 'failed', { error: `No browser available: ${e instanceof Error ? e.message : String(e)}`, stopReason: 'error' });
+    // A run with connections opens its browser when the first browser tool is called (E39.7): a job that needs only mail, a calendar or
+    // documents never allocates a node. A run with none is a browser job and opens it now, as before. `never` opens none.
+    const connections = readSnapshotConnections(snapshot);
+    const needsBrowser = readNeedsBrowser(run.task?.needsBrowser);
+    const lazy = needsBrowser === 'never' || (needsBrowser === 'auto' && connections.length > 0);
+    if (!sessionId && !lazy) {
+      const opened = await openFabricSession(d, session, run, savedLoginsOn ? { ownerId: userId } : {});
+      if (opened.kind === 'fail') {
+        await finishRun(d, userId, run.id, null, session, 'failed', { error: opened.error, stopReason: 'error' });
         return 'failed';
       }
+      if (opened.note) memory.log.push(opened.note);
+      sessionId = opened.sessionId;
       await db.run.updateMany({ where: { id: run.id }, data: { sessionId } });
     }
-  return { run, db, userId, orgId, lease, tr, stop, session, sessionId: sessionId!, memory, snapshot, tier, stall, active: current, jobStartedAt, flags: { savedLogins: savedLoginsOn, savedIdentity: savedIdentityOn, savedCards: savedCardsOn, saveLogin: saveLoginOn } };
+  return { run, db, userId, orgId, lease, tr, stop, session, sessionId: sessionId ?? '', memory, snapshot, tier, stall, active: current, jobStartedAt, connections: { list: connections, needsBrowser, lazyBrowser: lazy }, flags: { savedLogins: savedLoginsOn, savedIdentity: savedIdentityOn, savedCards: savedCardsOn, saveLogin: saveLoginOn } };
 }

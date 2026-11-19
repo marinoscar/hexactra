@@ -38,6 +38,15 @@ export function approvalPort(c: ApprovalContext): ApprovalPort {
         return null;
       }
     },
+    async matchConnection(target) {
+      if (!d.approvals) return null;
+      try {
+        return await d.approvals.matchConnection(c.userId, { connectionId: target.connectionId, tool: target.tool, recipients: target.recipients, taskId: run.taskId ?? null, conversationId: run.conversationId ?? null });
+      } catch (e) {
+        d.log.warn(`run ${run.id}: could not read saved approvals: ${e instanceof Error ? e.message : String(e)}`);
+        return null;
+      }
+    },
     async matchAsk(topic, pageUrl) {
       if (!d.approvals) return null;
       return d.approvals.match(c.userId, { kind: 'ask', pageUrl, category: null, matchKey: topic, taskId: run.taskId ?? null, conversationId: run.conversationId ?? null, amount: null });

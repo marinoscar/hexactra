@@ -1,7 +1,7 @@
 // Saved approval matching (#554): the registrable domain, the label
 // normalisation, exact-only matching, scope, expiry, the amount limit, Pause
 // all and specificity. Pure: no database.
-import { findRule, normaliseLabel, registrableDomain, ruleMatches, ruleSummary, type MatchQuery, type MatchableRule } from '../src/approvals/approval-match';
+import { findRule, normaliseLabel, normaliseRecipient, recipientCovered, recipientDomain, registrableDomain, ruleMatches, ruleSummary, type MatchQuery, type MatchableRule } from '../src/approvals/approval-match';
 
 const NOW = new Date('2026-11-18T12:00:00.000Z');
 const TASK = '11111111-1111-4111-8111-111111111111';
@@ -157,5 +157,56 @@ describe('findRule', () => {
 
   it('no rules, no match', () => {
     expect(findRule([], query())).toBeNull();
+  });
+});
+
+describe('connection rules (E39.7)', () => {
+  const CONN = '44444444-4444-4444-8444-444444444444';
+  const connRule = (over: Partial<MatchableRule> = {}) => rule({ kind: 'connection', host: CONN, category: null, matchKey: 'mail_send', recipients: ['person-b@example.test'], ...over });
+  const connQuery = (over: Partial<MatchQuery> = {}) => query({ kind: 'connection', host: CONN, category: null, matchKey: 'mail_send', recipients: ['person-b@example.test'], ...over });
+
+  it('normalises recipients: lower-case addresses and whole domains, nothing else', () => {
+    expect(normaliseRecipient('  Person-B@Example.TEST ')).toBe('person-b@example.test');
+    expect(normaliseRecipient('@Example.test')).toBe('@example.test');
+    for (const bad of ['', 'person', 'person@', '@', '*@example.test', '*', 'a@b@example.test', 'a b@example.test', 'a@example', 'a@exa mple.test', '<a@example.test>', '@.test', 'a,b@example.test']) expect([bad, normaliseRecipient(bad)]).toEqual([bad, null]);
+    expect(recipientDomain('Person-B@Example.test')).toBe('@example.test');
+    expect(recipientDomain('@example.test')).toBeNull();
+  });
+
+  it('covers an address by itself or by its exact domain, never by a subdomain, a look-alike or "anyone"', () => {
+    expect(recipientCovered(['person-b@example.test'], 'PERSON-B@example.test')).toBe(true);
+    expect(recipientCovered(['person-b@example.test'], 'person-c@example.test')).toBe(false);
+    expect(recipientCovered(['@example.test'], 'person-c@example.test')).toBe(true);
+    expect(recipientCovered(['@example.test'], 'person-c@mail.example.test')).toBe(false);
+    expect(recipientCovered(['@example.test'], 'person-c@example.test.evil.test')).toBe(false);
+    expect(recipientCovered([], 'person-b@example.test')).toBe(false);
+    expect(recipientCovered(['*'], 'person-b@example.test')).toBe(false);
+    expect(recipientCovered(['@example.test'], '@example.test')).toBe(false);
+  });
+
+  it('matches the same connection, tool and recipients', () => {
+    expect(findRule([connRule()], connQuery())?.id).toBe('r1');
+  });
+
+  it('asks again for a new recipient, even when the others are covered', () => {
+    expect(findRule([connRule()], connQuery({ recipients: ['person-b@example.test', 'person-c@example.test'] }))).toBeNull();
+    expect(findRule([connRule({ recipients: ['@example.test'] })], connQuery({ recipients: ['person-b@example.test', 'person-c@example.test'] }))?.id).toBe('r1');
+  });
+
+  it('covers a call that reaches no one, and a rule with no recipients covers no one', () => {
+    expect(findRule([connRule({ matchKey: 'sheet_append_rows', recipients: [] })], connQuery({ matchKey: 'sheet_append_rows', recipients: [] }))?.id).toBe('r1');
+    expect(findRule([connRule({ recipients: [] })], connQuery())).toBeNull();
+  });
+
+  it('needs the same connection and the same tool, and is not covered by a gate or an ask rule', () => {
+    expect(findRule([connRule()], connQuery({ host: '55555555-5555-4555-8555-555555555555' }))).toBeNull();
+    expect(findRule([connRule()], connQuery({ matchKey: 'calendar_create_event' }))).toBeNull();
+    expect(findRule([rule({ kind: 'ask', host: CONN, category: null, matchKey: 'mail_send' })], connQuery())).toBeNull();
+    expect(findRule([rule({ host: CONN, matchKey: 'mail_send', category: null })], connQuery())).toBeNull();
+    expect(findRule([connRule()], connQuery({ paused: true }))).toBeNull();
+  });
+
+  it('words the rule from the connection and the tool', () => {
+    expect(ruleSummary({ kind: 'connection', host: CONN, label: 'Work', topic: 'mail_send' })).toBe('mail send with Work');
   });
 });

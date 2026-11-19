@@ -30,7 +30,7 @@ import { context, createContextKey, ROOT_CONTEXT, SpanKind, SpanStatusCode, trac
 import type { AiDefinedTool } from '@marinoscar/platform-api/ai';
 
 import type { RunMetrics } from '../tasks/run-metrics';
-import { ATTR, EVENT, ERROR_TYPE, LINK, OPERATION, SPAN, TRACER_NAME, type JobReason } from './trace-attributes';
+import { ATTR, TOOL_ATTRIBUTES, EVENT, ERROR_TYPE, LINK, OPERATION, SPAN, TRACER_NAME, type JobReason } from './trace-attributes';
 
 export const tracer = () => trace.getTracer(TRACER_NAME);
 
@@ -300,6 +300,13 @@ export class AgentTrace {
     if (entry) entry.gate = category;
   }
 
+  /** Closed, content-free attributes of the tool call now running (`TOOL_ATTRIBUTES`): any other name is dropped. */
+  toolAttributes(attrs: Record<string, string | number | boolean>): void {
+    const entry = context.active().getValue(TOOL_KEY) as PendingTool | undefined;
+    if (!entry) return;
+    for (const [k, v] of Object.entries(attrs)) if (TOOL_ATTRIBUTES.includes(k)) (entry.attrs ??= {})[k] = v;
+  }
+
   /** Ends one tool span with what is known about the call. */
   private endTool(entry: PendingTool, record: { callId?: string; status?: string } | null, at: number): void {
     const span = entry.span;
@@ -313,6 +320,7 @@ export class AgentTrace {
       ...(entry.action ? { [ATTR.actionType]: entry.action } : {}),
       ...(entry.host ? { [ATTR.pageHost]: entry.host } : {}),
       ...(entry.gate ? { [ATTR.gateCategory]: entry.gate } : {}),
+      ...(entry.attrs ?? {}),
     });
     if (failed) {
       span.setAttribute(ATTR.errorType, status === 'timeout' ? ERROR_TYPE.timeout : status === 'invalid_arguments' ? ERROR_TYPE.invalidArguments : status === 'unknown_tool' ? ERROR_TYPE.unknownTool : status === 'error' ? ERROR_TYPE.toolError : ERROR_TYPE.actionFailed);

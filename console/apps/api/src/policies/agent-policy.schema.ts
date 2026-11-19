@@ -80,6 +80,8 @@ const contextSchema = z
     pruneBatch: z.number().int().min(1).max(50).describe('How many old tool results are pruned together once the context grows.'),
     callsPerChunk: z.number().int().min(1).max(20).describe('Model calls per chunk; the model tier only changes between chunks.'),
     observationChars: z.number().int().min(500).max(20_000).describe('Most characters of one page observation sent to the model.'),
+    connectionReadMessages: z.number().int().min(1).max(500).optional().describe("Most mail messages a run may read through the owner's connections (E39.7). Default 25."),
+    connectionReadChars: z.number().int().min(1_000).max(2_000_000).optional().describe("Most characters of content a run may read through the owner's connections: mail bodies, documents, sheets, events (E39.7). Default 200000."),
   })
   .describe('Context efficiency: how much the model sees each round.');
 
