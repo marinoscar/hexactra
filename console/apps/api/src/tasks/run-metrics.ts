@@ -124,6 +124,33 @@ export const RUN_METRICS: readonly AppMetricDef[] = [
     description: 'Saved-card uses (E37.7), by outcome: typed, asked (the owner was asked), refused (amount, shop, limit, other), an unattended run that waits for the owner, or an amount mismatch after paying. No card, shop or user in a label.',
     attributes: { outcome: { kind: 'enum', values: CARD_USE_OUTCOMES } },
   },
+  {
+    key: 'runModelCallDuration',
+    name: 'app.runs.model_call_duration',
+    kind: 'histogram',
+    unit: 's',
+    description: 'One model call of a browser agent (E38.4), by model and tier: the GenAI client operation duration. The metric registry only accepts `app.` names, so the GenAI client metric names themselves cannot be used.',
+    buckets: [0.25, 0.5, 1, 2, 4, 8, 16, 32, 64],
+    attributes: { model: { kind: 'free' }, tier: { kind: 'free' } },
+  },
+  {
+    key: 'runModelCallTokens',
+    name: 'app.runs.model_call_tokens',
+    kind: 'histogram',
+    unit: '{token}',
+    description: 'Tokens of one model call of a browser agent (E38.4), by direction, model and tier: the GenAI client token usage.',
+    buckets: [100, 500, 1000, 2000, 4000, 8000, 16000, 32000, 64000, 128000],
+    attributes: { direction: { kind: 'enum', values: ['input', 'output'] }, model: { kind: 'free' }, tier: { kind: 'free' } },
+  },
+  {
+    key: 'runToolDuration',
+    name: 'app.runs.tool_duration',
+    kind: 'histogram',
+    unit: 's',
+    description: 'One tool call of a browser agent or the chat (E38.4), by tool name and outcome (`ok`, `error`). Never an argument, a page or a result.',
+    buckets: [0.05, 0.25, 0.5, 1, 2, 5, 15, 45, 120],
+    attributes: { tool: { kind: 'free' }, outcome: { kind: 'enum', values: ['ok', 'error'] } },
+  },
 ];
 registerAppMetrics(RUN_METRICS);
 
@@ -187,6 +214,19 @@ export class RunMetrics {
   /** One exported run file (#542): its format and whether images were embedded; never a run or user id. */
   exported(format: 'json' | 'pdf', screenshots: 'embed' | 'none'): void {
     this.metrics?.add('runsExported', 1, { format, screenshots });
+  }
+
+  /** One model call (E38.4): its wall time and tokens by model and tier; never a run, user or prompt as a label. */
+  modelCallDone(model: string, tier: string, seconds: number, inputTokens: number, outputTokens: number): void {
+    const labels = { model, tier };
+    if (seconds >= 0) this.metrics?.record('runModelCallDuration', seconds, labels);
+    if (inputTokens > 0) this.metrics?.record('runModelCallTokens', inputTokens, { direction: 'input', ...labels });
+    if (outputTokens > 0) this.metrics?.record('runModelCallTokens', outputTokens, { direction: 'output', ...labels });
+  }
+
+  /** One tool call (E38.4): its name and outcome; never an argument or a result. */
+  toolDone(tool: string, ok: boolean, seconds: number): void {
+    if (seconds >= 0) this.metrics?.record('runToolDuration', seconds, { tool, outcome: ok ? 'ok' : 'error' });
   }
 
   /** The spend of a finished run; never a run, task or user id as a label. */

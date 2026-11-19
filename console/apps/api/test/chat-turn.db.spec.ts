@@ -17,6 +17,8 @@ import { TasksService } from '../src/tasks/tasks.service';
 import { TaskSchedulesService } from '../src/tasks/task-schedules.service';
 import { QuestionEvents } from '../src/questions/question-events';
 import { TaskRunStarter } from '../src/questions/task-run-starter';
+import { ATTR } from '../src/runner/trace-attributes';
+import { installMemoryTracing } from './helpers/otel-memory';
 
 let app: NestFastifyApplication;
 let prisma: PrismaService;
@@ -474,5 +476,30 @@ describe('POST /chats/:id/messages', () => {
     const jobs = await prisma.job.findMany({ where: { type: CHAT_TURN_JOB, subjectId: chat.id } });
     expect(jobs).toHaveLength(2);
     expect(jobs[0]!.payload).toMatchObject({ conversationId: chat.id, userId: alice.userId });
+  });
+});
+
+describe('the chat orchestrator trace (E38.4)', () => {
+  it("is one invoke_agent trace with its model call and tool calls, and the run it starts holds the turn's trace for its first job to link to", async () => {
+    const otel = installMemoryTracing();
+    try {
+      const alice = await login('trace');
+      const id = await chatWith(alice, 'Find a travel stroller under $100 (marker-chat-1c9e).');
+      const model = scriptedAi([[['start_run', { goal: 'Find a travel stroller under $100 (marker-goal-5d21).' }]]]);
+      expect(await engine(model.ai).run(id, alice.userId, null)).toBe('answered');
+      const spans = otel.spans();
+      const [root] = spans.filter((s) => s.name === 'invoke_agent hexactra.chat_orchestrator');
+      expect(root!.attributes).toMatchObject({ [ATTR.operationName]: 'invoke_agent', [ATTR.conversationId]: id });
+      const kids = spans.filter((s) => s.parentSpanContext?.spanId === root!.spanContext().spanId).map((s) => s.name);
+      expect(kids).toEqual(expect.arrayContaining(['chat unknown', 'execute_tool start_run']));
+      const [run] = await runsOf(id);
+      expect(run).toMatchObject({ traceId: root!.spanContext().traceId, spanId: root!.spanContext().spanId });
+      // Neither the owner's message nor the goal is in the trace.
+      const text = JSON.stringify(spans.map((s) => ({ n: s.name, a: s.attributes, e: s.events, l: s.links })));
+      expect(text).not.toContain('marker-chat-1c9e');
+      expect(text).not.toContain('marker-goal-5d21');
+    } finally {
+      await otel.uninstall();
+    }
   });
 });

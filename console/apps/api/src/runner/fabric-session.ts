@@ -10,6 +10,7 @@ import {
   type SecretsProviderRegistration,
   type SecretsProviderView,
 } from '../secrets/secrets-provider.port';
+import { traceFabric } from './agent-trace';
 
 /** How long a run waits for a person who took over its browser (#342). */
 export const TAKEOVER_WAIT_MS = 30 * 60_000;
@@ -184,18 +185,21 @@ export class FabricSession {
    * decides itself when to retry).
    */
   async act(sessionId: string, action: Record<string, unknown>, timeoutMs = ACTION_TIMEOUT_MS, opts: { waitForTakeover?: boolean } = {}): Promise<FabricOperation> {
-    const until = Date.now() + TAKEOVER_WAIT_MS;
-    for (;;) {
-      try {
-        return await this.fabric.request<FabricOperation>('POST', `/v1/sessions/${sessionId}/actions`, {
-          body: { action, timeout_ms: timeoutMs },
-          timeoutMs: timeoutMs + 15_000,
-        });
-      } catch (e) {
-        if (opts.waitForTakeover === false || !isTakeoverActive(e) || Date.now() >= until) throw e;
-        await this.sleep(TAKEOVER_POLL_MS);
+    // Inside a run's trace this is a `hexactra.fabric <action>` span (E38.4); anywhere else, no span. Only the action's type is named.
+    return traceFabric(String(action.type ?? 'action'), async () => {
+      const until = Date.now() + TAKEOVER_WAIT_MS;
+      for (;;) {
+        try {
+          return await this.fabric.request<FabricOperation>('POST', `/v1/sessions/${sessionId}/actions`, {
+            body: { action, timeout_ms: timeoutMs },
+            timeoutMs: timeoutMs + 15_000,
+          });
+        } catch (e) {
+          if (opts.waitForTakeover === false || !isTakeoverActive(e) || Date.now() >= until) throw e;
+          await this.sleep(TAKEOVER_POLL_MS);
+        }
       }
-    }
+    });
   }
 
   async end(sessionId: string): Promise<void> {
