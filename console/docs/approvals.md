@@ -110,3 +110,13 @@ A looser rule is made by answering a new request with "Don't ask again" ticked.
 ## The residual risk
 
 "Anything I tick" removes the last brake on a remembered payment: a page on the same site that manages to steer the agent could reach the remembered button. The server matching the page's real site and the element's exact label, the owner's optional limits, the recorded and audited uses, the alert and Pause all lower that risk; they do not remove it.
+
+## Cards (E37.7)
+
+A rule can also be bound to **a saved card**: "Pay with Visa ending 4242 on shop.example.com, up to 100.00 USD". It is a `gate` rule of category `payment` whose `matchKey` is not a button label but `saved card <currency>` (`saved card usd`), with a `cardRef` (`<provider>:<item id>`) and a **required** `maxAmount` in that currency. It is made the same way as every other rule, **only by the owner's tick on a server-issued request**: the runner asks "pay with this card at this shop, this amount" (the question's `rememberable` carries the `cardRef`, `requiresLimit`, the currency and the amount, all computed by the server from its own record of the card), the web card shows **Pay without asking up to (USD)** as a required field under the box, and the answer is refused with `CARD_RULE_NEEDS_AMOUNT_LIMIT` (`422`) without one, or `CARD_RULE_LIMIT_TOO_LOW` when the limit is below this purchase. Nothing else creates one (the test that enumerates every REST operation, MCP tool and CLI source still holds).
+
+How it matches (`approval-match.ts`, `saved-cards.spec.ts`): the same site, category, key and scope rules, **and** the same `cardRef`. A rule with a `cardRef` never matches a plain click, and a rule **without** one (the site-wide "Press 'Pay'" rule) never matches a card use, so a routine rule cannot cover a card. A card rule with no limit matches nothing, whatever its row says. A limit can only be lowered afterwards (`RULE_CANNOT_WIDEN`), like any limit.
+
+In a run (`saved-card-tools.ts`): a matching rule lets `pay_with_saved_card` type the card without a question, **but only for an attended run** (a chat), or a run of a task with `unattendedPayments: allow`, and never for an AI app run whose "confirm purchases" limit is on. The use is recorded (`approval_rule_uses`, audit `approval_rule.used`, the run's confirmed actions "by saved approval: Pay with Visa ending 4242 on shop.example.com"). The approval for a card, from the owner's answer or from a rule, also covers **the one pay click** of that charge; it does not apply after a payment that may already have happened.
+
+The Saved approvals page shows such a rule with the chip **Card payment**, its limit with the currency ("up to 100.00 USD"), and the Secrets page lists them under **Shops Hexactra remembers**.
