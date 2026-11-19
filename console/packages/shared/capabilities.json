@@ -1344,6 +1344,27 @@
       "web": "/settings/connections"
     },
     {
+      "id": "connections.files",
+      "description": "Browse an account's spreadsheets and folders, create a folder, make a picked file usable and open Google's file picker, for the delivery editor's choosers",
+      "rest": [
+        "GET /api/connections/{id}/files",
+        "GET /api/connections/{id}/files/{fileId}",
+        "POST /api/connections/{id}/files/picked",
+        "POST /api/connections/{id}/folders",
+        "POST /api/connections/{id}/picker"
+      ],
+      "cli": {
+        "none": "Deliberate: the choosers are part of the web form, and the picker is Google's own browser dialog; a script names a file by its id in the delivery's configuration"
+      },
+      "mcp": {
+        "none": "Deliberate: hosted AI apps cannot list, add or use the owner's connected accounts or files directly; they reach them only through runs, under the rules of E39.7 (E39.10, docs/parity.md)"
+      },
+      "tui": {
+        "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
+      },
+      "web": "/tasks (the delivery editor)"
+    },
+    {
       "id": "connections.admin",
       "description": "Administrator: the deployment's apps at Google and Microsoft (client id, write-only secret, tenant, the per-provider switch), the redirect URIs and the setup checklist. No access to users' connections",
       "rest": [

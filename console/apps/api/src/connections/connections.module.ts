@@ -12,6 +12,8 @@ import { ConnectionResolverService } from './connection-resolver.service';
 import { ConnectionTokenStore } from './connection-token.store';
 import { ConnectionTokensService } from './connection-tokens.service';
 import { ConnectionUsageRegistry } from './connection-usage.registry';
+import { ConnectionFilesController } from './connection-files.controller';
+import { ConnectionFilesService } from './connection-files.service';
 import { ConnectionsAdminController } from './connections-admin.controller';
 import { ConnectionsController } from './connections.controller';
 import { ConnectionEvents } from './connections.events';
@@ -29,7 +31,7 @@ import { ConnectionsService } from './connections.service';
  */
 @Module({
   imports: [CredentialsModule, UserCredentialsModule],
-  controllers: [ConnectionsController, ConnectionsAdminController],
+  controllers: [ConnectionsController, ConnectionsAdminController, ConnectionFilesController],
   providers: [
     ConnectionProviderRegistry,
     CapabilityProviderRegistry,
@@ -41,6 +43,7 @@ import { ConnectionsService } from './connections.service';
     ConnectionFlowService,
     ConnectionResolverService,
     ConnectionsService,
+    ConnectionFilesService,
     ConnectionCapabilities,
     ConnectionsHealth,
     ConnectionsHealthHandler,

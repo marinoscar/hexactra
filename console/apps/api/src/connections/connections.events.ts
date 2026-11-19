@@ -23,6 +23,9 @@ export const CONNECTION_AUDIT = {
   connectFailed: 'connection.connect_failed',
   appSaved: 'connection.app_saved',
   appRemoved: 'connection.app_removed',
+  folderCreated: 'connection.folder_created',
+  filePicked: 'connection.file_picked',
+  pickerOpened: 'connection.picker_opened',
 } as const;
 
 export const CONNECTION_OUTCOMES = ['connected', 'reconnected', 'consent_added', 'denied', 'failed', 'refreshed', 'needs_reconnect', 'unavailable', 'removed', 'paused', 'resumed', 'tested'] as const;

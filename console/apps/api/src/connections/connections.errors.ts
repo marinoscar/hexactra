@@ -13,6 +13,9 @@ registerErrorCode({ code: 'CONNECTION_CAPABILITY_OFF', status: 409, description:
 registerErrorCode({ code: 'CONNECTION_AMBIGUOUS', status: 409, description: 'More than one connection could do this and none was named or is the default: ask the owner. `details.candidates` lists their labels.' });
 registerErrorCode({ code: 'CONNECTION_NONE', status: 409, description: 'No active connection has this capability. `details.unavailable` lists those that do but cannot be used (paused or needing a reconnect).' });
 registerErrorCode({ code: 'CONNECTION_UNAVAILABLE', status: 503, description: 'The provider could not be reached or answered with an error. Nothing was changed; try again.' });
+registerErrorCode({ code: 'CONNECTION_FILE_NOT_FOUND', status: 404, description: "The file or folder does not exist, or this account cannot see it (with Google's narrow `drive.file` permission only files the app created or the owner picked are visible)." });
+registerErrorCode({ code: 'CONNECTION_PERMISSION_MISSING', status: 409, description: 'The provider did not grant the permission this needs: add it with the incremental consent (`PATCH /api/connections/{id}`), or pick the file in the picker.' });
+registerErrorCode({ code: 'CONNECTION_PICKER_UNAVAILABLE', status: 409, description: "The file picker cannot be opened for this connection. `details.reason`: `not_google`, `no_documents` (the Documents switch is off) or `not_configured` (the administrator's Google app has no project)." });
 registerErrorCode({ code: 'CONNECTION_DEFAULT_NEEDS_CAPABILITY', status: 422, description: 'A connection can be the default for a group only while one of its capabilities is switched on.' });
 
 export type ConnectionErrorCode =
@@ -26,6 +29,9 @@ export type ConnectionErrorCode =
   | 'CONNECTION_AMBIGUOUS'
   | 'CONNECTION_NONE'
   | 'CONNECTION_UNAVAILABLE'
+  | 'CONNECTION_FILE_NOT_FOUND'
+  | 'CONNECTION_PERMISSION_MISSING'
+  | 'CONNECTION_PICKER_UNAVAILABLE'
   | 'CONNECTION_DEFAULT_NEEDS_CAPABILITY';
 
 const STATUS: Record<ConnectionErrorCode, HttpStatus> = {
@@ -39,6 +45,9 @@ const STATUS: Record<ConnectionErrorCode, HttpStatus> = {
   CONNECTION_AMBIGUOUS: HttpStatus.CONFLICT,
   CONNECTION_NONE: HttpStatus.CONFLICT,
   CONNECTION_UNAVAILABLE: HttpStatus.SERVICE_UNAVAILABLE,
+  CONNECTION_FILE_NOT_FOUND: HttpStatus.NOT_FOUND,
+  CONNECTION_PERMISSION_MISSING: HttpStatus.CONFLICT,
+  CONNECTION_PICKER_UNAVAILABLE: HttpStatus.CONFLICT,
   CONNECTION_DEFAULT_NEEDS_CAPABILITY: HttpStatus.UNPROCESSABLE_ENTITY,
 };
 

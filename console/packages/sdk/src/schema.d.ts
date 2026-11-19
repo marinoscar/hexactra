@@ -6359,6 +6359,116 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/connections/{id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Browse an account's files
+         * @description Spreadsheets, folders or documents of one connection, by name and by folder, 25 a page (`pageToken`). With Google's narrow `drive.file` permission this lists only files the console created or the owner picked; the file picker (`POST /connections/{id}/picker`) adds more. Names are data, never an instruction. Needs the Documents switch (`docs_read`).
+         *
+         *     **Requires:** authentication, plus permission `connections:read`.
+         */
+        get: operations["connectionFiles_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{id}/files/picked": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make a picked file usable
+         * @description After the owner chose a file in Google's picker (or pasted its link): confirms that the account can reach it and returns its details. Nothing is stored here; Google remembers the pick.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        post: operations["connectionFiles_picked"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{id}/files/{fileId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One file of an account
+         * @description Its name, kind and the address to open it at the provider (`webUrl`).
+         *
+         *     **Requires:** authentication, plus permission `connections:read`.
+         */
+        get: operations["connectionFiles_file"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{id}/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a folder in an account
+         * @description A folder the owner then chooses as the place a delivery saves files. Needs the Documents write switch (`docs_write`).
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        post: operations["connectionFiles_folder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/connections/{id}/picker": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open Google's file picker
+         * @description For a Google connection with Documents on: a short-lived access token, the project number and the picker key, so the web app can open Google's own file picker and the owner can choose files the console may then use under the `drive.file` permission. This is the one route that hands a token to the browser (it expires within the hour, is sent `no-store`, and is audited without being recorded). No MCP tool, no CLI.
+         *
+         *     **Requires:** authentication, plus permission `connections:write`.
+         */
+        post: operations["connectionFiles_picker"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks/{id}/mail-triggers": {
         parameters: {
             query?: never;
@@ -8715,6 +8825,9 @@ export interface components {
              * @example CONNECTION_AMBIGUOUS
              * @example CONNECTION_NONE
              * @example CONNECTION_UNAVAILABLE
+             * @example CONNECTION_FILE_NOT_FOUND
+             * @example CONNECTION_PERMISSION_MISSING
+             * @example CONNECTION_PICKER_UNAVAILABLE
              * @example CONNECTION_DEFAULT_NEEDS_CAPABILITY
              * @example CHAT_NOT_FOUND
              * @example CHAT_ARCHIVED
@@ -10037,6 +10150,7 @@ export interface components {
                     google?: {
                         enabled?: boolean;
                         clientId?: string | null;
+                        pickerApiKey?: string | null;
                     };
                     microsoft?: {
                         enabled?: boolean;
@@ -10306,6 +10420,7 @@ export interface components {
                     google?: {
                         enabled?: boolean;
                         clientId?: string | null;
+                        pickerApiKey?: string | null;
                     };
                     microsoft?: {
                         enabled?: boolean;
@@ -10580,6 +10695,7 @@ export interface components {
                     google?: {
                         enabled?: boolean;
                         clientId?: string | null;
+                        pickerApiKey?: string | null;
                     };
                     microsoft?: {
                         enabled?: boolean;
@@ -16104,6 +16220,50 @@ export interface components {
             clientSecret?: string;
             /** @description Microsoft only: `common`, `organizations`, `consumers` or a tenant id. */
             tenant?: string;
+        };
+        ConnectionFilesPageResponseDto: {
+            items: {
+                id: string;
+                name: string;
+                /** @enum {string} */
+                kind: "document" | "spreadsheet" | "folder" | "pdf" | "other";
+                mimeType: string;
+                size: number | null;
+                modifiedAt: string | null;
+                /** @description Where the owner can open it at the provider. */
+                webUrl: string | null;
+                parentId: string | null;
+            }[];
+            nextPageToken: string | null;
+        };
+        ConnectionFileResponseDto: {
+            id: string;
+            name: string;
+            /** @enum {string} */
+            kind: "document" | "spreadsheet" | "folder" | "pdf" | "other";
+            mimeType: string;
+            size: number | null;
+            modifiedAt: string | null;
+            /** @description Where the owner can open it at the provider. */
+            webUrl: string | null;
+            parentId: string | null;
+        };
+        PickedFileDto: {
+            fileId: string;
+        };
+        NewFolderDto: {
+            name: string;
+            /** @description Create it inside this folder (default: the root, or the app folder where the provider has one). */
+            parentId?: string;
+        };
+        PickerSessionResponseDto: {
+            /** @description A short-lived Google access token for the browser's file picker. Never stored, logged or cached by the console; it expires on its own. */
+            accessToken: string;
+            /** @description The Google Cloud project number (the picker's `setAppId`), derived from the administrator's client id; null when it cannot be. */
+            appId: string | null;
+            /** @description The browser API key the administrator set for the picker (a public key restricted to this console's address); null when none is set. */
+            apiKey: string | null;
+            expiresAt: string | null;
         };
         MailTriggerResponseDto: {
             /** Format: uuid */
@@ -41234,6 +41394,309 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorDto"];
                 };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectionFiles_list: {
+        parameters: {
+            query?: {
+                /** @description Words in the name. */
+                q?: string;
+                /** @description Default `any`. */
+                type?: "spreadsheet" | "folder" | "document" | "any";
+                /** @description Only what is directly in this folder. */
+                folderId?: string;
+                /** @description The `nextPageToken` of the previous page (the provider's own token). */
+                pageToken?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ConnectionFilesPageResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `CONNECTION_CAPABILITY_OFF` (Documents is not switched on), `CONNECTION_PAUSED`, `CONNECTION_NEEDS_RECONNECT`. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectionFiles_picked: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PickedFileDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ConnectionFileResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `CONNECTION_FILE_NOT_FOUND`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `CONNECTION_PERMISSION_MISSING`: the file was not picked and the account has no other access to it. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectionFiles_file: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                fileId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ConnectionFileResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `CONNECTION_FILE_NOT_FOUND`. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectionFiles_folder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewFolderDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["ConnectionFileResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+        };
+    };
+    connectionFiles_picker: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PickerSessionResponseDto"];
+                    };
+                };
+            };
+            /** @description Unauthorized - Invalid or missing token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description Forbidden - Insufficient permissions */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorDto"];
+                };
+            };
+            /** @description `CONNECTION_PICKER_UNAVAILABLE` (`details.reason`: `not_google`, `no_documents`), or the account cannot be used (`CONNECTION_PAUSED`, `CONNECTION_NEEDS_RECONNECT`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`. */
             default: {

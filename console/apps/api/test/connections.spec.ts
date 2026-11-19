@@ -71,15 +71,18 @@ describe('the callback in logs', () => {
 
 describe('the connections system settings', () => {
   it('are off by default, with no client id and the common tenant', () => {
-    expect(resolveConnectionsSystemSettings(null)).toEqual({ google: { enabled: false, clientId: null }, microsoft: { enabled: false, clientId: null, tenant: 'common' } });
+    expect(resolveConnectionsSystemSettings(null)).toEqual({ google: { enabled: false, clientId: null, pickerApiKey: null }, microsoft: { enabled: false, clientId: null, tenant: 'common' } });
   });
 
   it('merge a patch field by field, keep the rest, and tolerate a write to another namespace', () => {
     const merge = CONNECTIONS_SYSTEM_SETTINGS.merge as (c: unknown, p: unknown) => unknown;
     const base = merge(undefined, { providers: { google: { enabled: true, clientId: 'gid' }, microsoft: { tenant: 'consumers' } } });
-    expect(resolveConnectionsSystemSettings(base as never)).toEqual({ google: { enabled: true, clientId: 'gid' }, microsoft: { enabled: false, clientId: null, tenant: 'consumers' } });
+    expect(resolveConnectionsSystemSettings(base as never)).toEqual({ google: { enabled: true, clientId: 'gid', pickerApiKey: null }, microsoft: { enabled: false, clientId: null, tenant: 'consumers' } });
     const next = merge(base, { providers: { google: { clientId: null } } });
-    expect(resolveConnectionsSystemSettings(next as never).google).toEqual({ enabled: true, clientId: null });
+    expect(resolveConnectionsSystemSettings(next as never).google).toEqual({ enabled: true, clientId: null, pickerApiKey: null });
+    const keyed = merge(next, { providers: { google: { pickerApiKey: 'AIzaSyExampleKeyNotReal-0001' } } });
+    expect(resolveConnectionsSystemSettings(keyed as never).google.pickerApiKey).toBe('AIzaSyExampleKeyNotReal-0001');
+    expect(resolveConnectionsSystemSettings(merge(keyed, { providers: { google: { pickerApiKey: null } } }) as never).google.pickerApiKey).toBeNull();
     expect(() => merge(base, undefined)).not.toThrow();
     expect(resolveConnectionsSystemSettings(merge(base, undefined) as never).google.clientId).toBe('gid');
   });
