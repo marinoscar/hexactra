@@ -79419,8 +79419,7 @@
               "policy",
               "mailTriggers",
               "deliveries"
-            ],
-            "description": "Schedule and run facts of the task, present with `include=summary`"
+            ]
           }
         },
         "required": [
@@ -80134,8 +80133,7 @@
                     "policy",
                     "mailTriggers",
                     "deliveries"
-                  ],
-                  "description": "Schedule and run facts of the task, present with `include=summary`"
+                  ]
                 }
               },
               "required": [
@@ -81088,8 +81086,7 @@
               "policy",
               "mailTriggers",
               "deliveries"
-            ],
-            "description": "Schedule and run facts of the task, present with `include=summary`"
+            ]
           }
         },
         "required": [
@@ -83142,8 +83139,7 @@
               "policy",
               "mailTriggers",
               "deliveries"
-            ],
-            "description": "Schedule and run facts of the task, present with `include=summary`"
+            ]
           },
           "skipped": {
             "type": "array",
@@ -84714,19 +84710,6 @@
               }
             ]
           },
-          "mailTriggerId": {
-            "description": "The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it.",
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "memoryIds": {
             "type": "array",
             "items": {
@@ -85794,19 +85777,6 @@
                           "note"
                         ]
                       }
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "mailTriggerId": {
-                  "description": "The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it.",
-                  "anyOf": [
-                    {
-                      "type": "string",
-                      "format": "uuid",
-                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     {
                       "type": "null"
@@ -88431,19 +88401,6 @@
               }
             ]
           },
-          "mailTriggerId": {
-            "description": "The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it.",
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "memoryIds": {
             "type": "array",
             "items": {
@@ -88751,6 +88708,19 @@
                 "createdAt"
               ]
             }
+          },
+          "mailTriggerId": {
+            "description": "The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it. REST only: the MCP tools do not carry it.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "memories": {
             "type": "array",
@@ -89829,19 +89799,6 @@
                     "note"
                   ]
                 }
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "mailTriggerId": {
-            "description": "The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it.",
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid",
-                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               },
               {
                 "type": "null"

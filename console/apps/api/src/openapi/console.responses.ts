@@ -273,7 +273,6 @@ export const runResponseSchema = z.object({
     .nullable()
     .optional()
     .describe("What the run returned (E39.5, #600), with the labels and types of the task's outputs as they were when the run started; sensitive values are `[hidden]`. Returned by `GET /runs/{id}` (and the run tools); a list row has only `outputsComplete`. Null for a run without outputs."),
-  mailTriggerId: z.uuid().nullable().optional().describe('The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it.'),
   memoryIds: z.array(z.uuid()).describe('The owner\'s memories this run used (#553): the ones its goal names. A deleted memory leaves its id.'),
   createdAt: iso,
   startedAt: iso.nullable(),
@@ -360,6 +359,7 @@ export const runStepResponseSchema = z.object({
 export class RunDetailResponseDto extends createZodDto(
   runResponseSchema.extend({
     steps: z.array(runStepResponseSchema),
+    mailTriggerId: z.uuid().nullable().optional().describe('The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it. REST only: the MCP tools do not carry it.'),
     memories: z
       .array(z.object({ id: z.uuid(), label: z.string(), status: z.enum(['active', 'superseded', 'archived']) }))
       .describe('The memories of `memoryIds` that still exist, with their labels (#553): the run page says "Used: …"'),

@@ -16586,7 +16586,6 @@ export interface components {
             createdAt: string;
             /** @description ISO 8601 timestamp */
             updatedAt: string;
-            /** @description Schedule and run facts of the task, present with `include=summary` */
             summary?: {
                 /** @description Oldest first */
                 schedules: {
@@ -16785,7 +16784,6 @@ export interface components {
                 createdAt: string;
                 /** @description ISO 8601 timestamp */
                 updatedAt: string;
-                /** @description Schedule and run facts of the task, present with `include=summary` */
                 summary?: {
                     /** @description Oldest first */
                     schedules: {
@@ -17039,7 +17037,6 @@ export interface components {
             createdAt: string;
             /** @description ISO 8601 timestamp */
             updatedAt: string;
-            /** @description Schedule and run facts of the task, present with `include=summary` */
             summary: {
                 /** @description Oldest first */
                 schedules: {
@@ -17660,7 +17657,6 @@ export interface components {
             createdAt: string;
             /** @description ISO 8601 timestamp */
             updatedAt: string;
-            /** @description Schedule and run facts of the task, present with `include=summary` */
             summary: {
                 /** @description Oldest first */
                 schedules: {
@@ -18106,8 +18102,6 @@ export interface components {
                 /** @description Why a value is missing or was refused ("Not found", "Not a number"); null when ok */
                 note: string | null;
             }[] | null;
-            /** @description The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it. */
-            mailTriggerId?: string | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
             /** @description ISO 8601 timestamp */
@@ -18351,8 +18345,6 @@ export interface components {
                     /** @description Why a value is missing or was refused ("Not found", "Not a number"); null when ok */
                     note: string | null;
                 }[] | null;
-                /** @description The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it. */
-                mailTriggerId?: string | null;
                 /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
                 memoryIds: string[];
                 /** @description ISO 8601 timestamp */
@@ -18934,8 +18926,6 @@ export interface components {
                 /** @description Why a value is missing or was refused ("Not found", "Not a number"); null when ok */
                 note: string | null;
             }[] | null;
-            /** @description The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it. */
-            mailTriggerId?: string | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
             /** @description ISO 8601 timestamp */
@@ -18996,6 +18986,8 @@ export interface components {
                 /** @description ISO 8601 timestamp */
                 createdAt: string;
             }[];
+            /** @description The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it. REST only: the MCP tools do not carry it. */
+            mailTriggerId?: string | null;
             /** @description The memories of `memoryIds` that still exist, with their labels (#553): the run page says "Used: …" */
             memories: {
                 /** Format: uuid */
@@ -19246,8 +19238,6 @@ export interface components {
                 /** @description Why a value is missing or was refused ("Not found", "Not a number"); null when ok */
                 note: string | null;
             }[] | null;
-            /** @description The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it. */
-            mailTriggerId?: string | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
             /** @description ISO 8601 timestamp */

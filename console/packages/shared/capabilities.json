@@ -1363,7 +1363,7 @@
       "tui": {
         "none": "The TUI is for watching and answering; connections are managed in the web app or the CLI"
       },
-      "web": "/tasks (the delivery editor)"
+      "web": "/tasks/new"
     },
     {
       "id": "connections.admin",

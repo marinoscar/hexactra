@@ -48,15 +48,23 @@ export const taskSummarySchema = z
       .nullable()
       .describe("The agent policy a run started now would use: the task's, else the user's default, else `builtin:balanced` (a deleted policy falls through). Null only when it could not be resolved."),
     mailTriggers: z.number().int().describe('Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`.'),
-    deliveries: z.number().int().describe('Deliveries that are switched on (E39.6, E39.10): what is sent when a run of the task ends (an email, a spreadsheet row, files, a webhook). Read and manage them with `GET|POST /tasks/{id}/deliveries`.'),
   })
   .describe('Schedule and run facts of the task, present with `include=summary`');
 
 export const taskWithSummarySchema = taskResponseSchema.extend({ summary: taskSummarySchema });
-export class TaskWithSummaryResponseDto extends createZodDto(taskWithSummarySchema) {}
+
+/**
+ * What the REST routes answer: the summary also counts the deliveries (E39.10). The MCP tools keep `taskSummarySchema` (their output schemas are
+ * pinned, and no tool carries a delivery: a hosted app must not see where a task's results go).
+ */
+export const taskSummaryRestSchema = taskSummarySchema.extend({
+  deliveries: z.number().int().describe('Deliveries that are switched on (E39.6, E39.10): what is sent when a run of the task ends (an email, a spreadsheet row, files, a webhook). Read and manage them with `GET|POST /tasks/{id}/deliveries`.'),
+});
+export const taskWithSummaryRestSchema = taskResponseSchema.extend({ summary: taskSummaryRestSchema });
+export class TaskWithSummaryResponseDto extends createZodDto(taskWithSummaryRestSchema) {}
 
 /** `GET /tasks/:id`: `summary` only with `include=summary`. */
-export const taskDetailSchema = taskResponseSchema.extend({ summary: taskSummarySchema.optional() });
+export const taskDetailSchema = taskResponseSchema.extend({ summary: taskSummaryRestSchema.optional() });
 export class TaskDetailResponseDto extends createZodDto(taskDetailSchema) {}
 
 export const taskPageSchema = z.object({
@@ -67,7 +75,7 @@ export const taskPageSchema = z.object({
 export class TaskPageResponseDto extends createZodDto(taskPageSchema) {}
 
 export class TaskSchedulesChangedResponseDto extends createZodDto(
-  taskWithSummarySchema.extend({ skipped: z.array(z.uuid()).describe('Resume only: schedules left as they were because their stored expression is no longer valid. Normally empty.') }),
+  taskWithSummaryRestSchema.extend({ skipped: z.array(z.uuid()).describe('Resume only: schedules left as they were because their stored expression is no longer valid. Normally empty.') }),
 ) {}
 
 /** One object for both answers (a class cannot extend a union): `valid` says which fields are present. */
