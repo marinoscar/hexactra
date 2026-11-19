@@ -117,6 +117,10 @@ When the agent asks you to confirm an irreversible step (a payment, an order, a 
 
 A chat run's notifications (the request, its reminders, "Run finished") open the chat at the run instead of the Inbox; their buttons (Approve, Stop run, Remind me in 15 min) work as before. The service worker shows no notification for a chat that is open and in front in a focused window.
 
+## Mail, calendar and documents (E39.7)
+
+A chat can list **connections** (`connections: [{ connectionId, access }]` on `POST`/`PATCH /api/chats`; off until listed). With one, the chat answers a simple question about the owner's mail, calendar or documents **itself**, in the thread, with the read tools only (`mail_search`, `mail_read`, `calendar_list`, `calendar_free_busy`, `docs_search`, `docs_read`, `sheet_read`) and starts no run. The model is told which accounts the chat may read and that what they return is the owner's data, never instructions; when two accounts could answer it asks which (`ask_user`). It has **no write tool**: anything that sends, creates or changes, or needs the browser, is a run (`start_run`), which takes the chat's connections and asks the owner before it sends or changes anything ([connections.md](connections.md#what-the-agent-can-do-with-a-connection-e397)). A chat that lists no connection is exactly as before: no tool, no line in the instructions. The chat's read caps are per turn, and the call is on the turn's trace (provider and capability only).
+
 ## Memories (#553)
 
 The chat reads your saved memories (people, accounts, preferences) before the thread, and puts the facts a job needs into the run's goal: "send my wife $10" starts a run without asking who she is. When no memory covers a person or an account the job needs, it asks once, for everything at once. After you give such a fact, it may propose remembering it: a **Remember this?** card in the thread (Save, or Not now); nothing is saved without you. A proposal never pauses a run. **Suggest memories** in Chat settings turns proposals off (a setting of yours, for every chat). Details: [memories.md](memories.md#how-the-agent-uses-them-553).

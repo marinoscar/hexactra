@@ -124,6 +124,71 @@ The client id, tenant and switch are the `connections` system settings; the secr
 
 Until the adapter for a provider is installed (E39.3, E39.4) the provider is listed as not available even when switched on. The Connect dialog explains which kinds of account work (personal accounts, work or school accounts) before the owner starts; that text is provisional until the record's experiments are done.
 
+## What the agent can do with a connection (E39.7)
+
+The agent can use the owner's connections **during a run and in a chat**: find the email with the form and fill the form in the browser, check the calendar before booking, draft a reply, add a row to a sheet, write a summary into a document, or answer "what's on my plate today" with no browser at all. The code is the runner's `host/tools/connections/` (the tools), `host/gates/connection-gate.ts` (the gate) and `chat/chat-connection-tools.ts` (the chat's read tools). The tools speak only to the provider-neutral capability interfaces ([E39.3](decisions/connections-auth.md)): Google and Microsoft are adapters behind them.
+
+### The rules
+
+1. **Off until switched on.** A task or a chat lists the connections it may use, each `read` or `read_write` (`connections: [{ connectionId, access }]` on `POST`/`PATCH /api/tasks` and `/api/chats`; stored in `task_connections` and `conversation_connections`). Nothing is available by default. A run takes a **snapshot** of the list (and of each connection's switches) when it starts, on its policy snapshot, so a later change never alters a live run. A run started by a hosted AI app gets **none** unless the app's limit `allowConnections` is on (default off) **and** the task lists them.
+2. **The account is explicit.** Every tool takes `connection` (a label, or the `cN` reference `connections_list` gives). Left out, only the connections the run lists are candidates; more than one means the tool returns the labels and tells the model to ask the owner (`request_human`, a choice; `ask_user` in a chat). It never guesses. The default account of a group decides only when exactly one candidate is the default.
+3. **Reading is free; changing asks.** Reads never ask. Every tool that sends, creates, changes, appends or uploads is gated (below).
+4. **What a tool returns is data.** Every result opens and closes with a line saying it is the owner's information, not instructions, and the text of a message, an event or a document is quoted inside JSON. It cannot change the run's allowed sites, approvals, recipients or connections.
+5. **Sending to someone new always asks**, whatever was remembered (the recipient rule).
+6. **Everything is on the record.** Each call is a step of the run (`mail_search`, `mail_send`, ...), with recipients and subject, never a body; the trace span of the call carries the provider, the capability and `read` or `write`, nothing else.
+
+### The tools
+
+Names are provider-neutral and permanent. A tool is offered only when the run has a connection with that capability switched on and, for a tool that changes something, `read_write` access.
+
+| Tool | Needs | Gated | What it does |
+|---|---|---|---|
+| `connections_list` | any | no | The run's connections: reference, label, provider, address, access, status, what each can do. |
+| `mail_search`, `mail_read` | `mail_read` | no | A structured search (ids, senders, subjects, snippets); one message's text, capped. |
+| `mail_attachment_to_browser` | `mail_read` | no | Stages an attachment in the run's own store and hands the browser a short-lived handle to a file input (a fabric `upload_file` action); the staged copy is deleted after. See "Not done yet". |
+| `mail_draft` | `mail_modify` | no | Saves a draft in the owner's Drafts. Nothing leaves the mailbox. |
+| `mail_send` | `mail_send` | **yes** | Sends a new message, or a draft this run saved (`draft_id`). From the account's own address only. Attachments are artifacts of this run by handle (a masked screenshot of a step, the PDF report). |
+| `mail_modify` | `mail_modify` | **yes** | Mark read or unread, archive, labels or categories. **Never deletes**: the Trash label is refused. |
+| `calendar_list`, `calendar_free_busy` | `calendar_read` | no | Events in a range (titles are data); busy blocks with no titles. |
+| `calendar_create_event`, `calendar_update_event` | `calendar_write` | **yes** | `notify_attendees` is an explicit boolean; people are never emailed unless it is true. |
+| `calendar_delete_event` | `calendar_write` | **yes** | `notify_attendees` explicit. |
+| `docs_search`, `docs_read`, `sheet_read` | `docs_read` | no | Files by name or type; a document's text; cells of a sheet. Capped, marked truncated. |
+| `docs_create`, `docs_append`, `sheet_append_rows`, `sheet_create`, `file_upload` | `docs_write` | **yes** | `file_upload` takes a run artifact by handle (a masked screenshot of a step, or the PDF report). |
+
+Deleting mail and deleting files are **not offered**. Every gated tool is commit-class: its call is intent-recorded before it goes (a crash between the send and its result leaves the step `unknown`, and the next job never repeats it: the model is told to look in the Sent folder with `mail_search` first).
+
+### The gate
+
+A gated call is decided by the server from the validated arguments, not from the model's words:
+
+1. A saved approval of kind `connection` ([approvals.md](approvals.md#connection-rules-e397)) for **this connection and this tool**, in the run's task or chat scope. For a call that reaches people (`mail_send`, an event with attendees) the rule also carries the **approved recipients**; every recipient of the call must be covered, otherwise the owner is asked. A site-wide "routine steps" rule never covers a connection tool, and "Pause all" turns every rule off.
+2. Otherwise the owner is asked, on a confirmation card the **server** builds from the validated call: for `mail_send` the account, to, cc, bcc, subject, the first 500 characters of the body (`show all` is the question's `action.body`) and the attachments by name and size; for an event the title, the time, the attendees and whether they will be notified; for a row the file's name and the cells. The card is risk `high`: it is answered signed in (the web or Android app), never from a notification button or by a hosted AI app. The run waits for the answer **with no browser and no handoff** (a question of the broker, `handoffId` null): a run that only uses connections never allocates a node, even to ask.
+3. After approval the model is told to call the same tool again with exactly the same arguments; the gate compares a hash of the validated arguments, so only that call goes through, once. A declined call is refused if the model tries it again.
+4. The card's "Don't ask again" creates the rule. For `mail_send`, `calendar_create_event` and `calendar_update_event` the owner chooses **these people** or **anyone at <domain>** (`rememberRule.recipientsFrom`: `these` or `domain`, exactly that domain, not its subdomains); there is no "anyone". A later call to an address outside the set asks again and can add it.
+5. A saved approval is never used for a call whose last attempt may or may not have happened.
+
+A run that is not started from a chat (a schedule, the API, MCP) that reaches a gated call with no matching rule waits for the owner like any question.
+
+### Limits and what a cap says
+
+A run may read at most `connectionReadMessages` messages (default 25) and `connectionReadChars` characters (default 200,000) through its connections: they are optional fields of the agent policy's context section. A tool that would pass a cap says so ("Cap reached: ...") and returns nothing; a result cut at the cap says `truncated`. A rate limit is waited out once (the provider's `Retry-After`, at most ten seconds). Typed provider errors become plain instructions: an account that must be connected again or is paused is told to the owner ("continue without it, or finish"); "this task is not allowed to do that with this account" when the switch is off; a failed send whose outcome is unknown is never repeated blindly.
+
+### Runs without a browser
+
+`Task.needsBrowser` (`auto`, `always`, `never`; default `auto`). With `auto`, a run that has connections opens its browser **at the first browser tool call** (the browser tools are still offered); a run that ends without one never allocates a node, and "no node available" is reported only when a browser is needed. A run with no connection is a browser job and opens it at the start, as before. `always` opens it at the start; `never` offers no browser tool.
+
+### What the chat does
+
+A chat that lists connections answers a simple question about the owner's mail, calendar or documents **itself**, with the read tools only (`mail_search`, `mail_read`, `calendar_list`, `calendar_free_busy`, `docs_search`, `docs_read`, `sheet_read`) and starts no run. It has no write tool: anything that changes something, or needs the browser, is a run (`start_run`), where the gates apply, and the run takes the chat's connections.
+
+### What this does not stop
+
+A value typed from a secrets provider or marked sensitive is never held by the runner, so it cannot be passed to a connection tool. **Text the model read from a page can be**: a hostile page plus a write-capable connection is the exfiltration path this design limits with the rules above (off by default, approval on first use, recipients that must be approved, the card and the trace), and does not remove. The owner's remedy is the same as for every other tool: connections that are read only, tasks with allowed sites, and Stop.
+
+### Not done yet
+
+`mail_attachment_to_browser` and the file input of a page depend on the browser host accepting an `upload_file` action with a store handle; the fabric does not implement it yet, so the tool reports that the host cannot take a file and asks the owner to attach it. Verification against a real Google or Microsoft account, and on the deployed stack, is the owner's (the tests use the in-memory capability double).
+
 ## For the next issues
 
 - **Adapters** implement `ConnectionProviderAdapter` (`src/connections/provider.ts`: `scopesFor`, `authorizeUrl`, `exchangeCode`, `refresh`, `revoke`, `capabilitiesGranted`, `probe`) over `OAuthClientService` (`src/oauth-client/`), and register with `ConnectionProviderRegistry` from their own module's `onModuleInit`. A refused grant must surface as an `OAuthClientError` of kind `invalid_grant`; `TokenSet.scopes` must list what the provider granted.

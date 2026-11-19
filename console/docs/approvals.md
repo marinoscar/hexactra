@@ -6,12 +6,13 @@ A saved approval is the owner's standing answer to one kind of question: "on thi
 
 | Field | Meaning |
 |---|---|
-| `kind` | `gate`: a step the server's confirmation gate stops for, because the clicked element commits something (a payment, a purchase, a send, a delete, a submit; see [questions.md, "The confirmation gate"](questions.md)). `ask`: a question the agent asks on its own about a step the server would not stop for (opening a menu, choosing a date). |
-| `host` | The **registrable domain** of the page: `bankofamerica.com` for `https://www.secure.bankofamerica.com/…`. Never empty, never a wildcard. |
+| `kind` | `gate`: a step the server's confirmation gate stops for, because the clicked element commits something (a payment, a purchase, a send, a delete, a submit; see [questions.md, "The confirmation gate"](questions.md)). `connection`: a call through one of the owner's connections (E39.7, below). `ask`: a question the agent asks on its own about a step the server would not stop for (opening a menu, choosing a date). |
+| `host` | The **registrable domain** of the page (for a `connection` rule, the connection's id, E39.7): `bankofamerica.com` for `https://www.secure.bankofamerica.com/…`. Never empty, never a wildcard. |
 | `category` | For `gate`: `payment`, `purchase`, `send`, `delete` or `submit`. Empty for `ask`. |
 | `matchKey` | For `gate`: the element's label, normalised (below). For `ask`: a topic from a fixed list: `open_menu`, `choose_date`, `choose_option`, `fill_form`, `navigate`, `dismiss_dialog`, `scroll_or_expand`, `download`, `upload` (`other` is never remembered). |
 | `summary` | What the owner reads: "Press 'Pay' on bankofamerica.com", "Choose dates on bankofamerica.com". |
 | `taskId`, `conversationId` | Optional scope: only runs of this task, or of this chat. |
+| `recipients` | `connection` rules for a tool that reaches people (E39.7): the approved addresses or `@domain`s. Empty for every other rule. See [Connection rules](#connection-rules-e397). |
 | `maxAmount` | Optional: only when the amount at stake is known and not larger. |
 | `expiresAt` | Optional: the rule stops matching after this time. |
 | `enabled` | The owner's switch for this rule. |
@@ -61,6 +62,15 @@ The rule is created by `createFromAnswer` **in the same transaction as the answe
 - **Label.** `normaliseLabel(label)`: lower-case, trademark signs removed, every number replaced by `#`, whitespace collapsed, punctuation at the ends removed, at most 200 characters. "Pay $10.00" and "Pay $975.10" are both `pay $#`. Two labels match **only when equal** after this: no prefix, substring or pattern matching, so "pay" never matches "pay all" or "prepay".
 - **Rule.** `findRule(rules, query)` matches a rule when it is enabled, not expired, its host, kind, category and key equal the query's, its task or chat scope (when set) equals the run's, and, when it has `maxAmount`, an amount is known and not larger. **A rule with `maxAmount` and an unknown amount does not match.** The most specific match wins: a scoped rule before an unscoped one.
 - **Pause all.** While the owner's `approvals.paused` user setting is on, nothing matches.
+
+## Connection rules (E39.7)
+
+A third kind of rule, `connection`, lets a call that **changes something through one of the owner's connections** (send mail, create an event, append a row; see [connections.md](connections.md#what-the-agent-can-do-with-a-connection-e397)) go ahead without a card. It has no site: `host` holds the connection's id, `matchKey` the tool (`mail_send`, `calendar_create_event`, `sheet_append_rows`, ...), `category` is empty, and the unique key is the same as for the other kinds (so one rule per connection, tool and scope).
+
+- **Recipients.** A rule for a tool that reaches people carries `recipients`: addresses (`person@example.test`) or whole domains (`@example.test`, exactly that domain). The server fills it from the **validated call the card showed**, never from the model; the owner chooses **these people** or **anyone at their domains** with `rememberRule.recipientsFrom` (`these` by default, `domain`). A call matches only when its rule's set covers **every** address it reaches, so mail to someone new always asks, whatever was remembered; a rule with an empty set covers no one, so there is no "anyone". A later approval of a call to new people (ticked "Don't ask again") adds them to the same rule; nothing else adds a recipient.
+- **What never matches one.** A site-wide "routine steps" (`ask`) or `gate` rule; another connection; another tool; a recipient outside the set; a call whose last attempt may or may not have happened; any call while "Pause all" is on. A change that tells an event's *existing* attendees cannot name them, so it is never remembered ("Don't ask again" is not offered) and always asks.
+- **How it is asked.** The card is built by the server from the validated arguments (`question.action`: lines, the whole text for "show all", a hash of the call) and is risk `high` (signed in only). The one-line summary with no content ("send an email from Work to 1 recipient (subject: ...)") is what the run's step, its memory, the notification and the webhook say.
+- **Narrowing.** Like every rule, a connection rule can be narrowed (a task or chat scope, a shorter expiry) and disabled or deleted, never widened. A rule used by a run is counted and listed in the end-of-run notification ("1 step went ahead on a saved approval: send mail with Work").
 
 ## What a rule never does
 
