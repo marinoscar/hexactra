@@ -11,6 +11,7 @@ import { CreateTaskDto, UpdateTaskDto } from './tasks.schemas';
 import { ListRunsDto, RunCountsQueryDto } from './runs.schemas';
 import { RunsQueryService } from './runs.query';
 import { TasksService } from './tasks.service';
+import { RunPauseService } from './run-pause.service';
 import { runView } from '../policies/policy-snapshot';
 import { RunCountsResponseDto, RunDetailResponseDto, RunListItemResponseDto, RunPageResponseDto, RunResponseDto, TaskResponseDto } from '../openapi/console.responses';
 import { TaskDetailResponseDto, TaskPageResponseDto, TaskWithSummaryResponseDto } from '../openapi/tasks.responses';
@@ -111,6 +112,7 @@ export class RunsController {
     private readonly tasks: TasksService,
     private readonly runs: RunsQueryService,
     private readonly traces: RunTraceService,
+    private readonly pauses: RunPauseService,
   ) {}
 
   /**
@@ -192,5 +194,30 @@ export class RunsController {
   @Auth({ permissions: ['runs:write'] })
   async cancel(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string) {
     return runView(await this.tasks.cancel(userId, id));
+  }
+
+  @Post(':id/pause')
+  @ApiOperation({
+    summary: 'Pause a run',
+    description:
+      'Freezes the run: it sets `pauseRequested` and answers the run. A running or queued run ends its current step and pauses before its next action (`status` becomes `paused`, the browser stays where it is, no budget time runs); a run waiting for a person pauses once the question is answered, before the agent acts on the answer. Already paused: answers the run unchanged. 409 `RUN_FINISHED` for a finished run; 409 `RUN_NOT_PAUSABLE` for an external agent\'s run. A paused run never resumes by itself: `POST /runs/{id}/resume` or Stop.',
+  })
+  @ApiDataResponse(RunResponseDto)
+  @HttpCode(200)
+  @Auth({ permissions: ['runs:write'] })
+  async pause(@CurrentUser('id') userId: string, @Param('id', ParseUUIDPipe) id: string) {
+    return runView(await this.pauses.pause(userId, id));
+  }
+
+  @Post(':id/resume')
+  @ApiOperation({
+    summary: 'Resume a paused run',
+    description: 'From `paused`: clears the pause, moves the run to `queued` and starts its job (reason `resumed`); the agent looks at the page again before it acts. 409 `RUN_NOT_PAUSED` when the run is not paused.',
+  })
+  @ApiDataResponse(RunResponseDto)
+  @HttpCode(200)
+  @Auth({ permissions: ['runs:write'] })
+  async resume(@CurrentUser() user: { id: string; activeOrgId?: string | null }, @Param('id', ParseUUIDPipe) id: string) {
+    return runView(await this.pauses.resume(user.id, id, user.activeOrgId ?? null));
   }
 }

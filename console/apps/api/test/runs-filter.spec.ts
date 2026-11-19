@@ -78,7 +78,7 @@ describe('runWhere', () => {
   });
 
   it('expands state to its statuses', () => {
-    expect(runWhere({ state: 'live' })).toEqual({ status: { in: ['queued', 'running', 'waiting_human'] } });
+    expect(runWhere({ state: 'live' })).toEqual({ status: { in: ['queued', 'running', 'waiting_human', 'paused'] } });
     expect(runWhere({ state: 'finished' })).toEqual({ status: { in: ['succeeded', 'failed', 'cancelled'] } });
   });
 

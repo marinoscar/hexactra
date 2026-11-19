@@ -11,8 +11,19 @@ export class RunStopRequested extends Error {
   }
 }
 
+/** Thrown in place of a result when the owner paused the run. */
+export class RunPauseRequested extends Error {
+  constructor() {
+    super('Paused by the owner.');
+    this.name = 'RunPauseRequested';
+  }
+}
+
 /** What the model reads when a tool is not carried out because the owner pressed Stop. */
 export const STOPPED_TEXT = 'Stopped by the owner.';
+
+/** What the model reads when a tool is not carried out because the owner paused the run (E38.2). The chunk ends; nothing was done. */
+export const PAUSED_TEXT = 'The owner paused the run. This was not done.';
 
 /** How often the database flag is read while a job works (the guarantee when the API and the worker are not one process). */
 export const STOP_POLL_MS = 1_000;
@@ -21,7 +32,9 @@ export interface RunStopSource {
   runId: string;
   /** Reads `runs.cancel_requested`. Errors are ignored: the next poll tries again. */
   isRequested: () => Promise<boolean>;
-  /** `RunEvents.subscribe`: the fast path (`run.cancel`), cross-process with the postgres bus. */
+  /** Reads `runs.pause_requested` (E38.2). Absent: the signal never sees a pause. */
+  isPauseRequested?: () => Promise<boolean>;
+  /** `RunEvents.subscribe`: the fast path (`run.cancel`, `run.pause`), cross-process with the postgres bus. */
   subscribe?: (handler: (e: RunEvent) => void) => () => void;
   pollMs?: number;
 }
@@ -32,9 +45,15 @@ export interface RunStopSource {
  * spans processes) and by a poll of `runs.cancel_requested` every second (the guarantee when it does not, or
  * when an event is lost). `abortSignal` aborts the model call and the fabric wait in flight; `requested` is
  * what the runner checks before it does anything.
+ *
+ * The same signal carries the owner's Pause (E38.2: the `run.pause` event and `runs.pause_requested`). A pause ends the chunk the
+ * way Stop does, with two differences: it never aborts an action in flight (`abortSignal` is Stop's alone; the host finishes the
+ * action and the run pauses after it), and a model call in flight is aborted through `haltSignal`, which either one trips.
  */
 export class RunStopSignal {
   private readonly controller = new AbortController();
+  private readonly halt = new AbortController();
+  private paused = false;
   private unsubscribe: (() => void) | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private polling: Promise<void> | null = null;
@@ -46,7 +65,9 @@ export class RunStopSignal {
   static start(source: RunStopSource): RunStopSignal {
     const signal = new RunStopSignal(source);
     signal.unsubscribe = source.subscribe?.((e) => {
-      if (e.type === 'run.cancel' && e.runId === source.runId) signal.request();
+      if (e.runId !== source.runId) return;
+      if (e.type === 'run.cancel') signal.request();
+      else if (e.type === 'run.pause') signal.requestPause();
     }) ?? null;
     signal.timer = setInterval(() => void signal.poll(), source.pollMs ?? STOP_POLL_MS);
     // A pending poll never keeps a process alive.
@@ -58,8 +79,24 @@ export class RunStopSignal {
     return this.controller.signal.aborted;
   }
 
+  /** Stop's own signal: aborts the fabric wait of an action in flight. A pause never trips it. */
   get abortSignal(): AbortSignal {
     return this.controller.signal;
+  }
+
+  /** The owner pressed Pause (E38.2) and Stop has not been pressed. */
+  get pauseRequested(): boolean {
+    return this.paused && !this.requested;
+  }
+
+  /** Aborts on Stop or on Pause: the model call in flight, which has done nothing yet that would need to finish. */
+  get haltSignal(): AbortSignal {
+    return this.halt.signal;
+  }
+
+  /** Stop or Pause: nothing more is started. */
+  get halted(): boolean {
+    return this.requested || this.paused;
   }
 
   throwIfRequested(): void {
@@ -68,7 +105,16 @@ export class RunStopSignal {
 
   /** Mark Stop as requested (also what the event and the poll do). Idempotent. */
   request(): void {
-    if (!this.disposed && !this.controller.signal.aborted) this.controller.abort(new RunStopRequested());
+    if (this.disposed) return;
+    if (!this.controller.signal.aborted) this.controller.abort(new RunStopRequested());
+    if (!this.halt.signal.aborted) this.halt.abort(new RunStopRequested());
+  }
+
+  /** Mark Pause as requested (also what the event and the poll do). Idempotent. */
+  requestPause(): void {
+    if (this.disposed || this.paused) return;
+    this.paused = true;
+    if (!this.halt.signal.aborted) this.halt.abort(new RunPauseRequested());
   }
 
   /** One read of the database flag now. */
@@ -77,6 +123,7 @@ export class RunStopSignal {
     this.polling = (async () => {
       try {
         if (await this.source.isRequested()) this.request();
+        else if (!this.paused && this.source.isPauseRequested && (await this.source.isPauseRequested())) this.requestPause();
       } catch {
         // Best effort: the next poll tries again.
       } finally {
@@ -106,13 +153,23 @@ export class RunStopSignal {
  * `STOPPED_TEXT` and `onStopped` ends the chunk. Other wrappers around execution (a pause check, a
  * crash-safety marker) compose here, beside this one.
  */
-export function stoppable(tools: readonly AiDefinedTool[], stop: Pick<RunStopSignal, 'requested'>, onStopped: () => void): AiDefinedTool[] {
+export function stoppable(
+  tools: readonly AiDefinedTool[],
+  stop: Pick<RunStopSignal, 'requested'> & Partial<Pick<RunStopSignal, 'pauseRequested'>>,
+  onStopped: () => void,
+  onPaused?: () => void,
+): AiDefinedTool[] {
   return tools.map((t) => ({
     ...t,
     execute: async (args, ctx) => {
       if (stop.requested) {
         onStopped();
         return STOPPED_TEXT;
+      }
+      // The owner paused the run (E38.2): the same seam, a different word; the chunk ends and the run pauses.
+      if (stop.pauseRequested && onPaused) {
+        onPaused();
+        return PAUSED_TEXT;
       }
       return t.execute(args, ctx);
     },

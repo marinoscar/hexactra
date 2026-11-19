@@ -3,7 +3,7 @@
 import { defineTool } from '@marinoscar/platform-api/ai';
 import { z } from 'zod';
 
-import { RunStopRequested, RunStopSignal, stoppable, STOPPED_TEXT, stoppedResult, withinMs } from '../src/runner/stop-signal';
+import { PAUSED_TEXT, RunStopRequested, RunStopSignal, stoppable, STOPPED_TEXT, stoppedResult, withinMs } from '../src/runner/stop-signal';
 import { RunEvents, type RunEvent } from '../src/tasks/run-events';
 
 const RUN = '00000000-0000-4000-8000-000000000001';
@@ -106,7 +106,80 @@ describe('RunStopSignal', () => {
   });
 });
 
+describe('RunStopSignal carries the owner\'s Pause (E38.2)', () => {
+  const pauseEvent = (runId: string): RunEvent => ({ type: 'run.pause', runId, ownerUserId: 'u' });
+
+  it('hears run.pause of its own run, aborts the model call (haltSignal) but never the action wait (abortSignal), and is not Stop', async () => {
+    const events = new RunEvents();
+    const stop = RunStopSignal.start({ runId: RUN, isRequested: async () => false, subscribe: (h) => events.subscribe(h), pollMs: 10_000 });
+    try {
+      await events.publish(pauseEvent(OTHER));
+      expect(stop.pauseRequested).toBe(false);
+      await events.publish(pauseEvent(RUN));
+      expect(stop.pauseRequested).toBe(true);
+      expect(stop.halted).toBe(true);
+      expect(stop.haltSignal.aborted).toBe(true);
+      expect(stop.requested).toBe(false);
+      expect(stop.abortSignal.aborted).toBe(false);
+      expect(() => stop.throwIfRequested()).not.toThrow();
+      // Stop after Pause still wins and now aborts the action wait too.
+      stop.request();
+      expect(stop.requested).toBe(true);
+      expect(stop.abortSignal.aborted).toBe(true);
+      expect(stop.pauseRequested).toBe(false);
+    } finally {
+      stop.dispose();
+    }
+  });
+
+  it('polls the pause flag, and keeps polling for Stop while pausing', async () => {
+    let pause = false;
+    let cancel = false;
+    const stop = RunStopSignal.start({ runId: RUN, isRequested: async () => cancel, isPauseRequested: async () => pause, pollMs: 15 });
+    try {
+      await tick(50);
+      expect(stop.pauseRequested).toBe(false);
+      pause = true;
+      const started = Date.now();
+      while (!stop.pauseRequested && Date.now() - started < 1000) await tick(5);
+      expect(stop.pauseRequested).toBe(true);
+      cancel = true;
+      while (!stop.requested && Date.now() - started < 1000) await tick(5);
+      expect(stop.requested).toBe(true);
+    } finally {
+      stop.dispose();
+    }
+  });
+
+  it('never sees a pause without a pause source', async () => {
+    const stop = RunStopSignal.start({ runId: RUN, isRequested: async () => false, pollMs: 10 });
+    try {
+      await tick(40);
+      expect(stop.pauseRequested).toBe(false);
+    } finally {
+      stop.dispose();
+    }
+  });
+});
+
 describe('stoppable (the one wrapper around tool execution)', () => {
+  it('does not run the tool once Pause is requested, says so, and tells the runner (Stop is checked first)', async () => {
+    const fn = jest.fn(async () => 'did it');
+    const t = defineTool({ name: 'click', description: 'click', parameters: z.object({ selector: z.string() }), execute: fn });
+    const onStopped = jest.fn();
+    const onPaused = jest.fn();
+    const stop = { requested: false, pauseRequested: false };
+    const [wrapped] = stoppable([t], stop, onStopped, onPaused);
+    stop.pauseRequested = true;
+    expect(await wrapped!.execute({ selector: '#a' }, { userId: 'u' } as never)).toBe(PAUSED_TEXT);
+    expect(fn).not.toHaveBeenCalled();
+    expect(onPaused).toHaveBeenCalledTimes(1);
+    expect(onStopped).not.toHaveBeenCalled();
+    stop.requested = true;
+    expect(await wrapped!.execute({ selector: '#a' }, { userId: 'u' } as never)).toBe(STOPPED_TEXT);
+    expect(onStopped).toHaveBeenCalledTimes(1);
+  });
+
   const run = jest.fn(async () => 'did it');
   const tool = defineTool({ name: 'click', description: 'click', parameters: z.object({ selector: z.string() }), execute: run });
 

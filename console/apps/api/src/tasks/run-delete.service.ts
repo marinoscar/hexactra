@@ -1,6 +1,6 @@
 // Deleting runs (#421): one run, a list of ids, or every finished run that
 // matches a filter. A delete is permanent and never touches a live run
-// (queued, running, waiting_human): the status is checked again inside the
+// (queued, running, waiting_human, paused): the status is checked again inside the
 // transaction that deletes.
 //
 // What goes with a run: its steps and its questions (foreign keys with ON

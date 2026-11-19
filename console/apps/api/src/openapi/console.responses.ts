@@ -11,7 +11,7 @@ import { policySummarySchema } from '../policies/policies.schemas';
 import { BUDGET_KEYS, RUN_STOP_REASONS } from '../runner/budget';
 
 const iso = z.string().describe('ISO 8601 timestamp');
-const runStatus = z.enum(['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled']);
+const runStatus = z.enum(['queued', 'running', 'waiting_human', 'paused', 'succeeded', 'failed', 'cancelled']);
 
 const paramType = z.enum(['text', 'number', 'money', 'date', 'choice', 'phone', 'email']);
 const paramConstraints = z.object({ min: z.number().optional(), max: z.number().optional(), maxLength: z.number().int().optional(), pattern: z.string().optional() });
@@ -166,6 +166,8 @@ export const runResponseSchema = z.object({
   error: z.string().nullable(),
   cancelRequested: z.boolean(),
   cancelRequestedAt: iso.nullable().describe('When the owner pressed Stop (E38.1); null if they did not. The start of the stop-latency measure.'),
+  pauseRequested: z.boolean().describe('The owner pressed Pause (E38.2): the run pauses before its next action, or once its question is answered. Stays true while it is `paused`; Resume clears it.'),
+  pausedAt: iso.nullable().describe('When the run was paused (`paused` only, until it runs again); null otherwise'),
   stepCount: z.number().int(),
   activity: runActivitySchema.nullable(),
   inputTokens: z.number().int(),
@@ -240,7 +242,7 @@ export class RunResponseDto extends createZodDto(runResponseSchema) {}
 /** A run in a list (`GET /runs`): the run, with its task's name and a budget only while it is live. */
 export const runListItemResponseSchema = runResponseSchema.extend({
   taskName: z.string().nullable().describe("The run's task name; null for a run without a task (ad-hoc, external) or whose task was deleted"),
-  budget: runBudgetSchema.nullable().describe('The run budget while the run is live (queued, running, waiting_human); null on a finished run in a list (read it from `GET /runs/{id}`).'),
+  budget: runBudgetSchema.nullable().describe('The run budget while the run is live (queued, running, waiting_human, paused); null on a finished run in a list (read it from `GET /runs/{id}`).'),
   confirmedActions: z.number().int().describe('How many steps the owner confirmed that the run carried out (#540); the steps themselves are on `GET /runs/{id}`.'),
 });
 export class RunListItemResponseDto extends createZodDto(runListItemResponseSchema) {}
@@ -255,11 +257,12 @@ export class RunPageResponseDto extends createZodDto(runPageResponseSchema) {}
 /** `GET /runs/counts`. */
 export const runCountsResponseSchema = z.object({
   total: z.number().int().describe('Runs that match the filter'),
-  live: z.number().int().describe('Of those: queued + running + waiting_human'),
+  live: z.number().int().describe('Of those: queued + running + waiting_human + paused'),
   byStatus: z.object({
     queued: z.number().int(),
     running: z.number().int(),
     waiting_human: z.number().int(),
+    paused: z.number().int(),
     succeeded: z.number().int(),
     failed: z.number().int(),
     cancelled: z.number().int(),

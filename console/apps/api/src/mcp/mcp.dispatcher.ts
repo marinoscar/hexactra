@@ -323,7 +323,7 @@ export class McpDispatcher {
   private runSources(): RunEventSource[] {
     if (!this.runEvents) return [];
     const runs = this.runEvents;
-    const sources: RunEventSource[] = [(h) => runs.subscribe((e) => (e.type === 'run.cancel' ? undefined : h({ runId: e.runId, kind: e.type === 'run.step' ? 'step' : 'status' })))];
+    const sources: RunEventSource[] = [(h) => runs.subscribe((e) => (e.type === 'run.cancel' || e.type === 'run.pause' ? undefined : h({ runId: e.runId, kind: e.type === 'run.step' ? 'step' : 'status' })))];
     const questions = this.questionEvents;
     if (questions) sources.push((h) => questions.subscribe((e) => h({ runId: e.runId, kind: 'question' })));
     return sources;

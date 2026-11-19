@@ -12,7 +12,7 @@
       "openWorldHint": true
     },
     "inputSchema": "598c2026b404ec09",
-    "outputSchema": "2e6617b94c68763a"
+    "outputSchema": "b1e4506e0eba9f26"
   },
   {
     "name": "run_status",
@@ -27,7 +27,7 @@
       "openWorldHint": false
     },
     "inputSchema": "ccc45f61684b506f",
-    "outputSchema": "48c1f543d581650e"
+    "outputSchema": "29a18f21294dc2c7"
   },
   {
     "name": "run_wait",
@@ -42,7 +42,7 @@
       "openWorldHint": false
     },
     "inputSchema": "a15cb892c5955d1e",
-    "outputSchema": "f8866183d5b82f93"
+    "outputSchema": "5c44360fbd19f4ee"
   },
   {
     "name": "runs_list",
@@ -56,8 +56,8 @@
       "idempotentHint": true,
       "openWorldHint": false
     },
-    "inputSchema": "ba6a4bcb152ad3e3",
-    "outputSchema": "390172031abfcab9"
+    "inputSchema": "ac6591144e58419a",
+    "outputSchema": "3502230842680752"
   },
   {
     "name": "run_cancel",
@@ -72,7 +72,37 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "2e6617b94c68763a"
+    "outputSchema": "b1e4506e0eba9f26"
+  },
+  {
+    "name": "run_pause",
+    "title": "Pause a run",
+    "scope": "runs:write",
+    "effect": "write",
+    "annotations": {
+      "title": "Pause a run",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "50c568c511c93b3c",
+    "outputSchema": "b1e4506e0eba9f26"
+  },
+  {
+    "name": "run_resume",
+    "title": "Resume a paused run",
+    "scope": "runs:write",
+    "effect": "write",
+    "annotations": {
+      "title": "Resume a paused run",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": "50c568c511c93b3c",
+    "outputSchema": "b1e4506e0eba9f26"
   },
   {
     "name": "run_export",
@@ -87,7 +117,7 @@
       "openWorldHint": false
     },
     "inputSchema": "50c568c511c93b3c",
-    "outputSchema": "1811b5d8b87150c0"
+    "outputSchema": "7b0d042fd028eb25"
   },
   {
     "name": "tasks_list",
@@ -117,7 +147,7 @@
       "openWorldHint": false
     },
     "inputSchema": "323e8c40a2c0aee4",
-    "outputSchema": "3ad1a24e27c6b7df"
+    "outputSchema": "2f425ebe0c405ab0"
   },
   {
     "name": "task_update",
@@ -147,7 +177,7 @@
       "openWorldHint": true
     },
     "inputSchema": "c1aba3cd46e48851",
-    "outputSchema": "2e6617b94c68763a"
+    "outputSchema": "b1e4506e0eba9f26"
   },
   {
     "name": "schedule_create",
@@ -192,7 +222,7 @@
       "openWorldHint": false
     },
     "inputSchema": "f822a505f1af2ccd",
-    "outputSchema": "84d254dbf91a9483"
+    "outputSchema": "2b4b741462adc79d"
   },
   {
     "name": "task_resume",
@@ -207,7 +237,7 @@
       "openWorldHint": false
     },
     "inputSchema": "f822a505f1af2ccd",
-    "outputSchema": "84d254dbf91a9483"
+    "outputSchema": "2b4b741462adc79d"
   },
   {
     "name": "schedules_list",
@@ -252,7 +282,7 @@
       "openWorldHint": false
     },
     "inputSchema": "c5cb75215b11476a",
-    "outputSchema": "ae9ed5c9bdf639e1"
+    "outputSchema": "477b19d5bfaeefed"
   },
   {
     "name": "ask_human",
@@ -852,7 +882,7 @@
       "openWorldHint": false
     },
     "inputSchema": "5b0d5bd2f2456d07",
-    "outputSchema": "2e6617b94c68763a"
+    "outputSchema": "b1e4506e0eba9f26"
   },
   {
     "name": "question_card_answer",
@@ -867,6 +897,6 @@
       "openWorldHint": false
     },
     "inputSchema": "58d3555a5ec2c48e",
-    "outputSchema": "ae9ed5c9bdf639e1"
+    "outputSchema": "477b19d5bfaeefed"
   }
 ]

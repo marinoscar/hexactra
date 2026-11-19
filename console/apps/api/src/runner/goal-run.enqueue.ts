@@ -14,6 +14,7 @@ export const GOAL_RUN_REASONS = {
   handoffResolved: { id: 'handoff_resolved', label: 'Handoff resolved' },
   schedule: { id: 'schedule', label: 'Scheduled run' },
   continued: { id: 'run_continued', label: 'Run continued in a new job' },
+  resumed: { id: 'resumed', label: 'Run resumed after a pause' },
 } as const;
 export type GoalRunReason = (typeof GOAL_RUN_REASONS)[keyof typeof GOAL_RUN_REASONS]['id'];
 for (const r of Object.values(GOAL_RUN_REASONS)) registerJobReason(r);
@@ -32,7 +33,7 @@ export interface GoalRunPayload {
 }
 
 /** Queue one advance of a run (start, or resume after a handoff). */
-export async function enqueueGoalRun(jobs: JobsService, payload: GoalRunPayload, reason: GoalRunReason): Promise<void> {
+export async function enqueueGoalRun(jobs: JobsService, payload: GoalRunPayload, reason: GoalRunReason, opts: { skipDedup?: boolean } = {}): Promise<void> {
   await jobs.enqueue({
     type: GOAL_RUN_JOB,
     reason,
@@ -40,6 +41,7 @@ export async function enqueueGoalRun(jobs: JobsService, payload: GoalRunPayload,
     subjectId: payload.runId,
     orgId: payload.orgId,
     payload: { ...payload },
+    ...(opts.skipDedup ? { skipDedup: true } : {}),
   });
 }
 

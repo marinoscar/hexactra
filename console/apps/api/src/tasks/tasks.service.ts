@@ -221,7 +221,9 @@ export class TasksService {
           ...(to === 'waiting_human' ? startWaiting(now, handoffExpiresAt ?? null) : run.status === 'waiting_human' ? STOP_WAITING : {}),
           ...(to === 'running' && !run.startedAt ? { startedAt: now } : {}),
           // Active time: open a stretch on entering `running`, settle it on leaving (#399).
-          ...(to === 'running' ? { activeSince: now } : {}),
+          ...(to === 'running' ? { activeSince: now, pausedAt: null } : {}),
+          // Paused (E38.2): the moment, for "paused for N minutes" and the one-hour notice; a pause is a fresh start of that notice.
+          ...(to === 'paused' ? { pausedAt: now, pauseNotifiedAt: null } : {}),
           ...(run.status === 'running' && to !== 'running' ? { activeMs: activeElapsedMs(run, now.getTime()), activeSince: null } : {}),
           ...(isTerminal(to) ? { finishedAt: now } : {}),
         },
@@ -263,6 +265,11 @@ export class TasksService {
     if (isTerminal(run.status as RunStatus)) return run;
     await this.db(userId).run.updateMany({ where: { id, cancelRequestedAt: null }, data: { cancelRequestedAt: new Date() } });
     if (run.status === 'queued') return this.transition(userId, id, 'cancelled', { error: 'Cancelled before it started', stopReason: 'cancelled' });
+    // Paused (E38.2): no job holds it. End the browser session and cancel now.
+    if (run.status === 'paused') {
+      if (this.fabric && run.sessionId) await this.fabric.request('DELETE', `/v1/sessions/${run.sessionId}`).catch(() => undefined);
+      return this.transition(userId, id, 'cancelled', { error: 'Cancelled by the user', stopReason: 'cancelled' });
+    }
     // Waiting for a person, nothing is running to see the flag: withdraw the
     // request, end the browser session and cancel now (best effort on the fabric).
     if (run.status === 'waiting_human') {

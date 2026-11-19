@@ -57,7 +57,7 @@ Every tool also carries `securitySchemes: [{ "type": "oauth2", "scopes": [<its s
 | Scope | Consent page | Risk | Default | Also needs | Tools | Console permissions |
 |---|---|---|---|---|---|---|
 | `runs:read` | See your runs, tasks, schedules and machines | low | yes | — | `run_status`, `run_wait`, `runs_list`, `run_export`, `tasks_list`, `schedule_preview`, `schedules_list`, `policies_list`, `policy_get`, `policies_export`, `hosts_list`, `run_card_poll` | `runs:read`, `tasks:read`, `fleet:read`, `agent_policies:read` |
-| `runs:write` | Give goals to your Hexactra agent, start and stop runs | low | yes | — | `run_goal`, `run_cancel`, `task_run` | `runs:write`, `runs:read` |
+| `runs:write` | Give goals to your Hexactra agent, start and stop runs | low | yes | — | `run_goal`, `run_cancel`, `run_pause`, `run_resume`, `task_run` | `runs:write`, `runs:read` |
 | `tasks:write` | Create and change tasks and schedules | low | yes | — | `task_create`, `task_update`, `schedule_create`, `task_pause`, `task_resume` | `tasks:write` |
 | `inbox:read` | See questions your agent is waiting on | low | yes | — | `inbox_list`, `question_status` | `runs:read` |
 | `inbox:write` | Ask you questions and pass on answers you give in the chat | low | yes | — | `inbox_answer`, `ask_human`, `question_card_answer` | `runs:write`, `runs:read` |
@@ -267,6 +267,8 @@ Every tool, as `tools/list` announces it (generated from the registry by `apps/a
 | `run_wait` | Wait for a run | `runs:read` | read | no | yes | yes |
 | `runs_list` | List runs | `runs:read` | read | no | yes | yes |
 | `run_cancel` | Stop a run | `runs:write` | destructive | no | yes | yes |
+| `run_pause` | Pause a run | `runs:write` | write | no | yes | yes |
+| `run_resume` | Resume a paused run | `runs:write` | write | no | yes | yes |
 | `run_export` | Export a run's trace | `runs:read` | read | no | yes | yes |
 | `tasks_list` | List saved tasks | `runs:read` | read | no | yes | yes |
 | `task_create` | Save a task | `tasks:write` | write | no | no | yes |

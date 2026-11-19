@@ -199,7 +199,7 @@ export class SchedulesService {
       }
 
       if (s.concurrency === 'skip') {
-        const live = await this.prisma.run.count({ where: { taskId: s.taskId, status: { in: ['queued', 'running', 'waiting_human'] } } });
+        const live = await this.prisma.run.count({ where: { taskId: s.taskId, status: { in: ['queued', 'running', 'waiting_human', 'paused'] } } });
         if (live > 0) {
           skipped += 1;
           continue;

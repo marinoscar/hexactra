@@ -158,11 +158,11 @@ export class AgentTrace {
    * chat turn that started it) and the ids the run row keeps. `write` is the run's own `updateMany` data.
    */
   async beginRun(
-    run: { trigger: string; origin: string; status: string; startedAt: Date | null; traceId?: string | null; spanId?: string | null; traceIds?: readonly string[] | null },
+    run: { trigger: string; origin: string; status: string; startedAt: Date | null; pausedAt?: Date | null; traceId?: string | null; spanId?: string | null; traceIds?: readonly string[] | null },
     write: (data: { traceId: string; spanId: string; traceIds: string[] }) => Promise<unknown>,
   ): Promise<void> {
     if (!this.recording) return;
-    const resumed = run.status === 'waiting_human';
+    const resumed = run.status === 'waiting_human' || (run.status === 'queued' && Boolean(run.pausedAt));
     const continued = !resumed && run.startedAt !== null;
     this.describe({ [ATTR.runTrigger]: run.trigger, [ATTR.runOrigin]: run.origin });
     this.setReason(resumed ? 'resumed' : continued ? 'continued' : 'started');

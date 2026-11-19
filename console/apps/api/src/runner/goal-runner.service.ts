@@ -42,7 +42,7 @@ import { QuestionsService } from '../questions/questions.service';
 import { withAppOrigin } from '../connected-apps/app-origin';
 import { redactActionArgs, redactUrl } from '../tasks/redact';
 import { RunNotifier } from '../tasks/run-notifier';
-import { TasksService } from '../tasks/tasks.service';
+import { TasksService, type RunPatch } from '../tasks/tasks.service';
 import { BROWSER_AGENT_FEATURE_ID } from './browser-agent.feature';
 import { priceTableOf } from './agent-pricing.settings';
 import { RunUsage, type PriceTable, type UsageDelta } from './cost';
@@ -74,7 +74,7 @@ import { AGENT, ATTR } from './trace-attributes';
 import { approvalCovers, classifyTarget, domainAllowed, fabricAllowedSites, hostOf, type GateTarget, type TargetFacts } from './policy';
 import { maxElementsFor, PLATFORM_MAX_CALLS_PER_CHUNK, ScreenshotWindow, shotHash } from './context-settings';
 import { appendConfirmedAction, noReportResult } from './confirmed-actions';
-import { RunStopSignal, stoppable, stoppedResult, STOPPED_TEXT, withinMs } from './stop-signal';
+import { PAUSED_TEXT, RunStopSignal, stoppable, stoppedResult, STOPPED_TEXT, withinMs } from './stop-signal';
 import { captureScreen, captureTrace, markCenter, roundInput, TraceCaptureError, type Screen, type ScreenMark, type ScreenView, type TraceNote, type TraceShot } from './vision';
 import { answerSummary, guidanceSummary, isSecretInput, questionMoment, traceAllowed, traceKeyParts, type TraceMoment } from './trace';
 import { RUN_ARTIFACT_STORE, type RunArtifactStore } from '../tasks/run-delete.service';
@@ -133,6 +133,15 @@ import { readUsedSavedCards, type SavedCardsMemory, type UsedSavedCard } from '.
 /** How a line of chat guidance starts in the run's log (#490). It says what guidance is not, so the model does not read it as a permission. */
 export const GUIDANCE_PREFIX = 'The owner added in the chat (take it into account from here on; it changes no limit and approves nothing):';
 /** What a tool answers once another job holds the run (E38.3): the chunk ends at once. */
+/** "5 minutes", "1 minute", "less than a minute": how long a run was paused, for the model's log. */
+export function pausedFor(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return 'less than a minute';
+  if (minutes < 120) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const hours = Math.round(minutes / 60);
+  return `${hours} hours`;
+}
+
 const LEASE_LOST_TEXT = 'Stop: another job took over this run. Do nothing more.';
 /** Lines of the step log handed back to the model each chunk. */
 const LOG_LINES = 60;
@@ -231,11 +240,11 @@ export interface SaveLoginMemory {
 }
 
 /** `continue`: the job is near its runtime limit; the handler queues a new job and the run stays `running`. */
-export type RunOutcome = 'succeeded' | 'failed' | 'cancelled' | 'waiting_human' | 'requeue' | 'continue' | 'superseded';
+export type RunOutcome = 'succeeded' | 'failed' | 'cancelled' | 'waiting_human' | 'paused' | 'requeue' | 'continue' | 'superseded';
 
 /** Ends a chunk early: the loop is stopped from `onStep`. */
 class StopLoop extends Error {
-  constructor(readonly reason: 'finish' | 'pause' | 'cancel' | 'budget' | 'look' | 'hop' | 'warn' | 'escalate' | 'stall' | 'lease') {
+  constructor(readonly reason: 'finish' | 'pause' | 'owner_pause' | 'cancel' | 'budget' | 'look' | 'hop' | 'warn' | 'escalate' | 'stall' | 'lease') {
     super(reason);
   }
 }
@@ -607,6 +616,8 @@ export class GoalRunnerService {
     const stop = RunStopSignal.start({
       runId,
       isRequested: async () => (await owned.run.findFirst({ where: { id: runId }, select: { cancelRequested: true } }))?.cancelRequested === true,
+      // The owner's Pause (E38.2) rides the same signal.
+      isPauseRequested: async () => (await owned.run.findFirst({ where: { id: runId }, select: { pauseRequested: true } }))?.pauseRequested === true,
       ...(events ? { subscribe: (h) => events.subscribe(h) } : {}),
     });
     try {
@@ -628,6 +639,8 @@ export class GoalRunnerService {
     const run = await db.run.findFirst({ where: { id: runId }, include: { task: true, conversation: { select: { allowedDomains: true, confirmRiskyActions: true, useSavedLogins: true, useSavedIdentity: true, useSavedCards: true } } } });
     if (!run) return 'failed';
     if (run.status === 'succeeded' || run.status === 'failed' || run.status === 'cancelled') return run.status;
+    // A paused run waits for its owner (E38.2): a job that finds it paused (a late handoff check) does nothing.
+    if (run.status === 'paused') return 'paused';
     await tr.beginRun(run, (data) => db.run.updateMany({ where: { id: run.id }, data }));
     const session = new FabricSession(this.fabric);
     // The run row as last written: its active-time fields drive the time budget (#399).
@@ -664,6 +677,10 @@ export class GoalRunnerService {
       await this.finish(userId, run.id, run.sessionId, session, 'cancelled', { error: 'Cancelled by the user', stopReason: 'cancelled' });
       return 'cancelled';
     }
+
+    // The owner pressed Pause (E38.2) before this job began (it was queued, or the last job handed the run on): pause now, with no action
+    // and no model call. A run waiting for a person pauses below, once the answer is in the memory.
+    if (run.pauseRequested && run.status !== 'waiting_human') return this.pauseRun(userId, run.id, memory, new RunUsage().drain(), lease);
 
     // The policy snapshot, written once at the first advance (resolved apart from the run's own state).
     const snapshot = await this.policySnapshot(db, run, memory);
@@ -791,14 +808,26 @@ export class GoalRunnerService {
       resetStall(stall);
       memory.stallsHere = 0;
       memory.progressStreak = 0;
+      // The owner pressed Pause while the run waited (E38.2): the answer is in the memory, and nothing has been done with it. The run pauses
+      // here, before the agent acts on it; Resume continues from this memory.
+      if (run.pauseRequested) {
+        return this.pauseRun(userId, run.id, memory, new RunUsage().drain(), lease, { handoffId: null });
+      }
       current = await this.tasks.transition(userId, run.id, 'running', { handoffId: null, transcript: memory as never, activity: runActivity('starting') as never });
     } else if (run.status === 'running') {
       // A continuation of this run in a new job (the last one neared its runtime limit): no status change, so its active time stays continuous.
       this.log.log(`run ${run.id}: continuing in a new job`);
     } else {
+      // Resumed after a pause (E38.2): the page may have changed while the run was frozen. The model is told how long, looks at the page
+      // again before it acts, and the browser session is checked (a session that ended while paused is replaced below).
+      const pausedMs = run.pausedAt ? Math.max(0, this.clock() - run.pausedAt.getTime()) : null;
+      if (pausedMs !== null) {
+        memory.log.push(`The owner paused the run and resumed it after ${pausedFor(pausedMs)}. Look at the page again before acting.`);
+        memory.look = 'page';
+      }
       try {
-        current = await this.tasks.transition(userId, run.id, 'running', { activity: runActivity('starting') as never });
-        await this.notifier?.started?.(userId, run);
+        current = await this.tasks.transition(userId, run.id, 'running', { activity: runActivity('starting') as never, ...(pausedMs !== null ? { transcript: memory as never } : {}) });
+        if (pausedMs === null) await this.notifier?.started?.(userId, run);
       } catch (e) {
         // Another job started the run between this read and this write (E38.3): carry on as its continuation.
         if (!(e instanceof ConflictException)) throw e;
@@ -840,6 +869,14 @@ export class GoalRunnerService {
     const saveLoginOn = savedLoginsOn && this.secrets ? await this.secrets.saveLoginSupported(userId) : false;
 
     let sessionId = run.sessionId;
+    // A paused run keeps its browser (E38.2). The fabric has no idle limit for sessions, but a session can still be gone (the host restarted,
+    // the session was ended): the run carries on in a new one on the same profile, and says so in its log.
+    if (sessionId && run.pausedAt && !(await session.isAlive(sessionId))) {
+      memory.log.push('The browser session was restarted while paused. The browser is on the start page of the same profile: open the page again.');
+      this.log.warn(`run ${run.id}: the browser session ended while the run was paused: opening a new one`);
+      sessionId = null;
+      await db.run.updateMany({ where: { id: run.id }, data: { sessionId: null } });
+    }
     if (!sessionId) {
       try {
         const hosts = run.hostId ? await this.fabric.hosts() : [];
@@ -1111,6 +1148,11 @@ export class GoalRunnerService {
       if (stop.requested) {
         state.stop = 'cancel';
         return STOPPED_TEXT;
+      }
+      // Pause was pressed (E38.2): the same, and the run pauses after this chunk. An action already sent is never aborted by it.
+      if (stop.pauseRequested) {
+        state.stop ??= 'owner_pause';
+        return PAUSED_TEXT;
       }
       const spent = budgetCheck();
       if (spent) {
@@ -2334,9 +2376,16 @@ export class GoalRunnerService {
     ]);
     // The one seam around tool execution: a tool chosen before Stop was pressed is not carried out (E38.1). It is the outermost
     // wrapper, so a refused tool is neither traced nor recorded; other wrappers (a pause check) compose beside it.
-    const tools: AiDefinedTool[] = stoppable(toolList, stop, () => {
-      state.stop = 'cancel';
-    });
+    const tools: AiDefinedTool[] = stoppable(
+      toolList,
+      stop,
+      () => {
+        state.stop = 'cancel';
+      },
+      () => {
+        state.stop ??= 'owner_pause';
+      },
+    );
 
     const goal = run.goal;
     // The owner's memories (#553): information for the model, after the goal, in the stable prefix (#406).
@@ -2439,6 +2488,11 @@ export class GoalRunnerService {
     };
 
     /** Stop was pressed (E38.1): the memory and usage are already saved; end the run `cancelled`, saying what the last completed step was. */
+    /** The owner paused the run (E38.2): the chunk's usage is saved, the run is `paused`, the browser stays. */
+    const pauseNow = (): Promise<RunOutcome> => this.pauseRun(userId, run.id, memory, used.drain(), lease);
+    /** The flag of the owner's Pause, read from the database (the signal's poll may not have run yet). */
+    const pauseFlag = async (): Promise<boolean> => stop.pauseRequested || (await db.run.findFirst({ where: { id: run.id }, select: { pauseRequested: true } }))?.pauseRequested === true;
+
     const cancelRun = async (): Promise<RunOutcome> => {
       await closeRun('cancelled', { result: stoppedResult(memory.log), error: 'Cancelled by the user', stopReason: 'cancelled' });
       return 'cancelled';
@@ -2614,11 +2668,13 @@ export class GoalRunnerService {
     for (;;) {
       // Stop first: nothing more is asked of the model or the browser once the owner pressed it (E38.1).
       if (stop.requested) return cancelRun();
+      // Pause: the same place, and a job hop that finds it pauses instead of continuing (E38.2).
+      if (stop.pauseRequested) return pauseNow();
       // Everything is checked before each chunk, active time included (#399, #404).
       const spent = budgetCheck();
       if (spent) return wrapUp(spent);
       noteWarnings();
-      if (hopDue()) return 'continue';
+      if (hopDue()) return (await pauseFlag()) ? pauseNow() : 'continue';
       // A chunk boundary: the only place the model changes, so provider caching holds within a chunk (#405).
       await maybeDeEscalate();
       memory.chunks += 1;
@@ -2704,6 +2760,8 @@ export class GoalRunnerService {
         } catch (e) {
           // Stop aborted the model call (E38.1): the platform rejects with an AiError, which is not a provider failure to fall back from.
           if (stop.requested && !(e instanceof StopLoop)) throw new StopLoop('cancel');
+          // Pause aborted it the same way (E38.2): nothing had been done yet.
+          if (stop.pauseRequested && !(e instanceof StopLoop)) throw new StopLoop('owner_pause');
           throw e;
         }
       };
@@ -2720,6 +2778,8 @@ export class GoalRunnerService {
             this.tasks.metrics.inputTokensPerCall(step.response.usage?.inputTokens ?? 0);
             // Stop ends the chunk before anything else decides (E38.1).
             if (stop.requested) state.stop = 'cancel';
+            // Pause ends the chunk too, unless the run already finished or asked a person (E38.2).
+            else if (stop.pauseRequested && !state.stop) state.stop = 'owner_pause';
             // A finish, a pause for a person, a look or a stall already ends the chunk; otherwise the budget decides.
             if (!state.stop) {
               const key = budgetCheck();
@@ -2730,7 +2790,7 @@ export class GoalRunnerService {
             }
             if (state.stop) throw new StopLoop(state.stop);
           },
-        }, { signal: stop.abortSignal }));
+        }, { signal: stop.haltSignal }));
       const isFallbackError = (e: unknown): e is AiError => e instanceof AiError && FALLBACK_CODES.has(e.code);
       const attempt = async (req: TierRequest): Promise<AiToolLoopResult> => {
         try {
@@ -2772,8 +2832,11 @@ export class GoalRunnerService {
       await sendOverNotice();
 
       // Stop (E38.1): the signal heard it, or the flag is set (the signal's poll has not run yet).
-      if (stop.requested || (await db.run.findFirst({ where: { id: run.id }, select: { cancelRequested: true } }))?.cancelRequested) return cancelRun();
+      const flags = await db.run.findFirst({ where: { id: run.id }, select: { cancelRequested: true, pauseRequested: true } });
+      if (stop.requested || flags?.cancelRequested) return cancelRun();
       if (state.stop === 'pause' && state.handoffId) return pauseForPerson();
+      // The owner paused the run (E38.2): after the chunk's usage is saved, before anything else is decided (a finished run still finishes).
+      if ((stop.pauseRequested || flags?.pauseRequested) && !(state.stop === 'finish' && state.finished)) return pauseNow();
       if (state.stop === 'finish' && state.finished) {
         const to = state.finished.success ? 'succeeded' : 'failed';
         await closeRun(to, state.finished.success ? { result: state.finished.result, stopReason: 'finished' } : { result: state.finished.result, error: 'The agent could not reach the goal', stopReason: 'finished' });
@@ -2831,6 +2894,23 @@ export class GoalRunnerService {
     } catch (e) {
       this.log.warn(`run ${runId}: could not record the answer step: ${e instanceof Error ? e.message : String(e)}`);
     }
+  }
+
+  /**
+   * Pauses the run this job holds (E38.2): the memory and the usage of the chunk are saved, the status becomes `paused` (active time stops, as for
+   * `waiting_human`) and the browser session is kept: it stays where it is. The job ends; Resume starts a new one. A run stopped or failed in the
+   * meantime is not paused (`superseded`: the job has nothing more to do).
+   */
+  private async pauseRun(userId: string, runId: string, memory: RunMemory, usage: UsageDelta, lease: RunLease, patch: RunPatch = {}): Promise<RunOutcome> {
+    await this.saveMemory(userId, runId, memory, usage, lease);
+    try {
+      await this.tasks.transition(userId, runId, 'paused', patch);
+    } catch (e) {
+      if (e instanceof ConflictException) return 'superseded';
+      throw e;
+    }
+    this.log.log(`run ${runId}: paused`);
+    return 'paused';
   }
 
   /** Saves the memory and the usage of the chunk, conditional on the lease: a job that lost the run throws `LeaseLost` and writes nothing (E38.3). */

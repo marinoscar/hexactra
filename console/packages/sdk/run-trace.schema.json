@@ -97,6 +97,7 @@
             "queued",
             "running",
             "waiting_human",
+            "paused",
             "succeeded",
             "failed",
             "cancelled"

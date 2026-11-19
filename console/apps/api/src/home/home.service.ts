@@ -245,8 +245,8 @@ export class HomeService {
              (count(*) OVER ())::int AS total, (count(*) FILTER (WHERE r.status = 'running') OVER ())::int AS running
       FROM runs r
       LEFT JOIN tasks t ON t.id = r.task_id AND t.user_id = r.user_id
-      WHERE r.user_id = ${userId}::uuid AND r.status IN ('queued', 'running', 'waiting_human')
-      ORDER BY CASE r.status WHEN 'running' THEN 0 WHEN 'waiting_human' THEN 1 ELSE 2 END, r.created_at DESC, r.id DESC
+      WHERE r.user_id = ${userId}::uuid AND r.status IN ('queued', 'running', 'waiting_human', 'paused')
+      ORDER BY CASE r.status WHEN 'running' THEN 0 WHEN 'waiting_human' THEN 1 WHEN 'paused' THEN 2 ELSE 3 END, r.created_at DESC, r.id DESC
       LIMIT ${HOME_LIMITS.liveRuns}`);
     return {
       count: rows[0]?.total ?? 0,

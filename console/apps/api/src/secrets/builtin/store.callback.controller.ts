@@ -30,7 +30,7 @@ import { BuiltinSecretsProvider } from './store.provider';
 
 export const STORE_CALLBACK_PATH = 'internal/secrets-store/v1';
 /** Runs that can be using a stored secret. */
-const LIVE_RUN_STATUSES = ['queued', 'running', 'waiting_human'] as const;
+const LIVE_RUN_STATUSES = ['queued', 'running', 'waiting_human', 'paused'] as const;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const FIELDS = ['username', 'password', 'full_name', 'date_of_birth', 'id_type', 'id_number', 'id_issuing_country', 'address_line1', 'address_line2', 'city', 'region', 'postal_code', 'country', 'phone', 'email', 'card_number', 'exp_month', 'exp_year', 'holder_name', 'security_code'] as const;

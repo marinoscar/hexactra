@@ -46,6 +46,9 @@ function notFoundByTool(tool: string): [string, string] {
 /** The next step after a conflict, by the route's code. */
 const CONFLICT_NEXT_STEP: Readonly<Record<string, string>> = {
   RUN_LIVE: 'Wait for the run to finish (run_status) or stop it with run_cancel, then try again.',
+  RUN_FINISHED: 'The run has already finished, so it cannot be paused: read it with run_status.',
+  RUN_NOT_PAUSED: 'The run is not paused: read it with run_status. To hold a running run use run_pause.',
+  RUN_NOT_PAUSABLE: 'An external agent drives this run, so it cannot be paused here.',
   RUN_BUSY: 'Wait a moment and try again; follow the run with run_status.',
   RUN_NOT_LIVE: 'The run has already finished: read it with run_status.',
   NOT_WAITING: 'Nothing is waiting for an answer any more: check run_status or inbox_list.',

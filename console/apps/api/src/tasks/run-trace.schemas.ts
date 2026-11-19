@@ -43,7 +43,7 @@ export const runExportQuerySchema = z.object({
 export class RunExportQueryDto extends createZodDto(runExportQuerySchema) {}
 
 const iso = z.string().describe('ISO 8601 timestamp');
-const runStatus = z.enum(['queued', 'running', 'waiting_human', 'succeeded', 'failed', 'cancelled']);
+const runStatus = z.enum(['queued', 'running', 'waiting_human', 'paused', 'succeeded', 'failed', 'cancelled']);
 
 const screenshotSchema = z
   .object({
