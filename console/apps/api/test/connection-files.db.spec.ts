@@ -214,3 +214,19 @@ describe('GET /api/connections/:id/activity', () => {
     expect((await call(stranger, 'GET', `/api/connections/${c.id}/activity`)).status).toBe(404);
   });
 });
+
+describe('the run that an email started', () => {
+  it('names its trigger in `mailTriggerId`, on the run and in the list', async () => {
+    const user = await login('trigger-run');
+    const c = await connection(user, { label: 'Trigger Work', capabilities: ['mail_read'] });
+    const task = await prisma.task.create({ data: { userId: user.userId, name: 'Invoices', goal: 'Pay' } });
+    const trigger = await prisma.mailTrigger.create({ data: { userId: user.userId, taskId: task.id, connectionId: c.id, name: 'Invoices', match: { from: ['billing@example.test'] } } });
+    const run = await prisma.run.create({ data: { userId: user.userId, taskId: task.id, goal: 'Pay', status: 'succeeded', trigger: 'email', mailTriggerId: trigger.id } });
+    const one = await call<{ mailTriggerId: string | null; trigger: string }>(user, 'GET', `/api/runs/${run.id}`);
+    expect(one.status).toBe(200);
+    expect(one.data.trigger).toBe('email');
+    expect(one.data.mailTriggerId).toBe(trigger.id);
+    const plain = await prisma.run.create({ data: { userId: user.userId, goal: 'g', status: 'succeeded' } });
+    expect((await call<{ mailTriggerId: string | null }>(user, 'GET', `/api/runs/${plain.id}`)).data.mailTriggerId).toBeNull();
+  });
+});

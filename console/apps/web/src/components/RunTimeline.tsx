@@ -13,6 +13,7 @@ import { Link as RouterLink, useInRouterContext } from 'react-router-dom';
 
 import { savedApprovalHref } from '../approvals/types';
 import type { RunStep } from '../types/runs';
+import { ConnectionStepBody, isConnectionStep } from './connectionSteps';
 import { RunPictures, StepThumbnail } from './RunPictures';
 import { routingRow } from './runRouting';
 import { formatStepDuration, groupSteps, type TimelineOrder, type TimelineStep } from './runTimeline';
@@ -136,6 +137,7 @@ function StepRow({ step, repeats, nested }: { step: RunTimelineStep; repeats: nu
   const question = isQuestionStep(step);
   const guidance = isGuidanceStep(step);
   const answer = isAnswerStep(step);
+  const account = !question && !guidance && !answer && isConnectionStep(step);
   const Icon = !step.ok && !answer ? ErrorOutlineIcon : question ? HelpOutlineIcon : guidance ? ChatBubbleOutlineIcon : answer ? ReplyIcon : null;
   return (
     <ListItem divider sx={{ pl: nested ? 6 : 2, alignItems: 'flex-start' }} data-testid={`step-${step.seq}`} data-kind={question ? 'question' : guidance ? 'guidance' : answer ? 'answer' : step.kind}>
@@ -151,6 +153,8 @@ function StepRow({ step, repeats, nested }: { step: RunTimelineStep; repeats: nu
           <ListItemText primary={guidanceText(step.summary)} slotProps={{ primary: { sx: { overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' } } }} sx={{ m: 0 }} />
         ) : answer ? (
           <ListItemText primary={`${step.seq}. ${step.summary}`} slotProps={{ primary: { color: 'text.secondary', sx: { overflowWrap: 'anywhere' } } }} sx={{ m: 0 }} />
+        ) : account ? (
+          <ConnectionStepBody seq={step.seq} step={{ action: step.action, kind: step.kind, args: step.args, summary: step.summary, ok: step.ok }} />
         ) : (
           <ListItemText
             primary={`${label(step)}${repeats > 1 ? ` (×${repeats} in a row)` : ''}`}

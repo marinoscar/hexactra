@@ -16652,6 +16652,8 @@ export interface components {
                 } | null;
                 /** @description Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`. */
                 mailTriggers: number;
+                /** @description Deliveries that are switched on (E39.6, E39.10): what is sent when a run of the task ends (an email, a spreadsheet row, files, a webhook). Read and manage them with `GET|POST /tasks/{id}/deliveries`. */
+                deliveries: number;
             };
         };
         TaskPageResponseDto: {
@@ -16849,6 +16851,8 @@ export interface components {
                     } | null;
                     /** @description Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`. */
                     mailTriggers: number;
+                    /** @description Deliveries that are switched on (E39.6, E39.10): what is sent when a run of the task ends (an email, a spreadsheet row, files, a webhook). Read and manage them with `GET|POST /tasks/{id}/deliveries`. */
+                    deliveries: number;
                 };
             }[];
             /** @description Pass as `cursor` for the next page; null on the last page. Opaque. */
@@ -17101,6 +17105,8 @@ export interface components {
                 } | null;
                 /** @description Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`. */
                 mailTriggers: number;
+                /** @description Deliveries that are switched on (E39.6, E39.10): what is sent when a run of the task ends (an email, a spreadsheet row, files, a webhook). Read and manage them with `GET|POST /tasks/{id}/deliveries`. */
+                deliveries: number;
             };
         };
         CreateTaskDto: {
@@ -17720,6 +17726,8 @@ export interface components {
                 } | null;
                 /** @description Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`. */
                 mailTriggers: number;
+                /** @description Deliveries that are switched on (E39.6, E39.10): what is sent when a run of the task ends (an email, a spreadsheet row, files, a webhook). Read and manage them with `GET|POST /tasks/{id}/deliveries`. */
+                deliveries: number;
             };
             /** @description Resume only: schedules left as they were because their stored expression is no longer valid. Normally empty. */
             skipped: string[];
@@ -18098,6 +18106,8 @@ export interface components {
                 /** @description Why a value is missing or was refused ("Not found", "Not a number"); null when ok */
                 note: string | null;
             }[] | null;
+            /** @description The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it. */
+            mailTriggerId?: string | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
             /** @description ISO 8601 timestamp */
@@ -18341,6 +18351,8 @@ export interface components {
                     /** @description Why a value is missing or was refused ("Not found", "Not a number"); null when ok */
                     note: string | null;
                 }[] | null;
+                /** @description The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it. */
+                mailTriggerId?: string | null;
                 /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
                 memoryIds: string[];
                 /** @description ISO 8601 timestamp */
@@ -18922,6 +18934,8 @@ export interface components {
                 /** @description Why a value is missing or was refused ("Not found", "Not a number"); null when ok */
                 note: string | null;
             }[] | null;
+            /** @description The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it. */
+            mailTriggerId?: string | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
             /** @description ISO 8601 timestamp */
@@ -19232,6 +19246,8 @@ export interface components {
                 /** @description Why a value is missing or was refused ("Not found", "Not a number"); null when ok */
                 note: string | null;
             }[] | null;
+            /** @description The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it. */
+            mailTriggerId?: string | null;
             /** @description The owner's memories this run used (#553): the ones its goal names. A deleted memory leaves its id. */
             memoryIds: string[];
             /** @description ISO 8601 timestamp */

@@ -79401,6 +79401,12 @@
                 "minimum": -9007199254740991,
                 "maximum": 9007199254740991,
                 "description": "Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`."
+              },
+              "deliveries": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Deliveries that are switched on (E39.6, E39.10): what is sent when a run of the task ends (an email, a spreadsheet row, files, a webhook). Read and manage them with `GET|POST /tasks/{id}/deliveries`."
               }
             },
             "required": [
@@ -79411,7 +79417,8 @@
               "liveRunId",
               "runCounts",
               "policy",
-              "mailTriggers"
+              "mailTriggers",
+              "deliveries"
             ],
             "description": "Schedule and run facts of the task, present with `include=summary`"
           }
@@ -80109,6 +80116,12 @@
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991,
                       "description": "Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`."
+                    },
+                    "deliveries": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Deliveries that are switched on (E39.6, E39.10): what is sent when a run of the task ends (an email, a spreadsheet row, files, a webhook). Read and manage them with `GET|POST /tasks/{id}/deliveries`."
                     }
                   },
                   "required": [
@@ -80119,7 +80132,8 @@
                     "liveRunId",
                     "runCounts",
                     "policy",
-                    "mailTriggers"
+                    "mailTriggers",
+                    "deliveries"
                   ],
                   "description": "Schedule and run facts of the task, present with `include=summary`"
                 }
@@ -81056,6 +81070,12 @@
                 "minimum": -9007199254740991,
                 "maximum": 9007199254740991,
                 "description": "Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`."
+              },
+              "deliveries": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Deliveries that are switched on (E39.6, E39.10): what is sent when a run of the task ends (an email, a spreadsheet row, files, a webhook). Read and manage them with `GET|POST /tasks/{id}/deliveries`."
               }
             },
             "required": [
@@ -81066,7 +81086,8 @@
               "liveRunId",
               "runCounts",
               "policy",
-              "mailTriggers"
+              "mailTriggers",
+              "deliveries"
             ],
             "description": "Schedule and run facts of the task, present with `include=summary`"
           }
@@ -83103,6 +83124,12 @@
                 "minimum": -9007199254740991,
                 "maximum": 9007199254740991,
                 "description": "Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`."
+              },
+              "deliveries": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Deliveries that are switched on (E39.6, E39.10): what is sent when a run of the task ends (an email, a spreadsheet row, files, a webhook). Read and manage them with `GET|POST /tasks/{id}/deliveries`."
               }
             },
             "required": [
@@ -83113,7 +83140,8 @@
               "liveRunId",
               "runCounts",
               "policy",
-              "mailTriggers"
+              "mailTriggers",
+              "deliveries"
             ],
             "description": "Schedule and run facts of the task, present with `include=summary`"
           },
@@ -84686,6 +84714,19 @@
               }
             ]
           },
+          "mailTriggerId": {
+            "description": "The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "memoryIds": {
             "type": "array",
             "items": {
@@ -85753,6 +85794,19 @@
                           "note"
                         ]
                       }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "mailTriggerId": {
+                  "description": "The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it.",
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                     },
                     {
                       "type": "null"
@@ -88377,6 +88431,19 @@
               }
             ]
           },
+          "mailTriggerId": {
+            "description": "The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "memoryIds": {
             "type": "array",
             "items": {
@@ -89762,6 +89829,19 @@
                     "note"
                   ]
                 }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mailTriggerId": {
+            "description": "The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
               },
               {
                 "type": "null"
