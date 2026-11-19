@@ -27,6 +27,8 @@ model ConnectedAppSettings {
   confirmPurchases  Boolean  @default(true) @map("confirm_purchases")
   /// Ask the user (a high-risk confirm in the console) before this app's sensitive browser actions (#465): secrets, payment and password forms, sensitive hosts, the desktop, network-reaching JavaScript.
   confirmSensitiveActions Boolean @default(true) @map("confirm_sensitive_actions")
+  /// Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here.
+  allowSavedLogins  Boolean  @default(false) @map("allow_saved_logins")
   /// Refuse new runs and sessions from this app without disconnecting it.
   paused            Boolean  @default(false)
   /// The scopes the owner was already told about (`app.connected`, `app.scope_added`), so a step-up announces only what it adds.
