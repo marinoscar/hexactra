@@ -83,14 +83,30 @@ export interface AskedQuestion {
   blocking?: boolean;
   /** What "Don't ask again" would remember (#555), computed by the server; null or absent when it cannot be remembered. */
   rememberable?: Rememberable | null;
+  /** A call through one of the owner's accounts this question asks to approve (E39.7): the card the server built. Null or absent for any other question. */
+  action?: QuestionAction | null;
 }
 
 /** The scopes a saved approval may be limited to (#555). */
 export type RememberScope = 'everywhere' | 'this_task' | 'this_chat';
 
 /** What a "Don't ask again" tick makes a rule of (#555): set by the server only. */
+/** The card of a call through one of the owner's accounts, built by the server from the validated call. */
+export interface QuestionAction {
+  connectionId: string;
+  connectionLabel: string;
+  tool: string;
+  lines: { label: string; value: string }[];
+  /** The whole text for "Show all". */
+  body?: string;
+  summary: string;
+}
+
+/** Which people a "Don't ask again" for a call that reaches people covers: those addresses, or anyone at their domains. */
+export type RecipientsFrom = 'these' | 'domain';
+
 export interface Rememberable {
-  kind: 'gate' | 'ask';
+  kind: 'gate' | 'ask' | 'connection';
   host: string;
   category: string | null;
   matchKey: string;
@@ -101,6 +117,8 @@ export interface Rememberable {
   requiresLimit?: boolean;
   currency?: string;
   amount?: string;
+  /** A call that reaches people (E39.7): the addresses it reaches. */
+  recipients?: string[];
 }
 
 /** The "Don't ask again" tick with its optional limits (#555). Distinct from `remember`, a site's own "remember me". */
@@ -109,6 +127,8 @@ export interface RememberRuleBody {
   scope?: RememberScope;
   maxAmount?: number;
   expiresInDays?: number;
+  /** A call that reaches people: remember these people, or anyone at their domains. There is no "anyone". */
+  recipientsFrom?: RecipientsFrom;
 }
 
 export interface QuestionResponse {
