@@ -9,7 +9,7 @@ import { RUN_STOP_REASONS } from '../runner/budget';
 
 const iso = z.string().describe('ISO 8601 timestamp');
 const tier = z.enum(['fast', 'standard', 'frontier']);
-const trigger = z.enum(['manual', 'schedule', 'api', 'mcp', 'external', 'chat']);
+const trigger = z.enum(['manual', 'schedule', 'api', 'mcp', 'external', 'chat', 'email']);
 
 const homeQuestionSchema = z.object({
   questionId: z.uuid(),

@@ -89,7 +89,7 @@ export const runTraceSchema = z
       stopReason: z.enum(RUN_STOP_REASONS).nullable(),
       result: z.string().nullable(),
       error: z.string().nullable(),
-      trigger: z.enum(['manual', 'schedule', 'api', 'mcp', 'external', 'chat']),
+      trigger: z.enum(['manual', 'schedule', 'api', 'mcp', 'external', 'chat', 'email']),
       origin: runOriginSchema,
       client: runClientSchema.nullable(),
       taskId: z.uuid().nullable(),

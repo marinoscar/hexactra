@@ -12,6 +12,7 @@ import { getTaskDetail, getTaskRun, goalIsLong, nextSchedule, TASK_DETAIL_LIVE_R
 import { ScheduledControl, TaskOverflowMenu, TaskRunButton } from '../components/TaskListItems';
 import { taskPaths } from '../components/taskList';
 import { TaskSchedulesSection } from '../components/TaskSchedulesSection';
+import { MailTriggersSection } from '../mailTriggers/MailTriggersSection';
 import { TaskStats } from '../components/TaskStats';
 import { useTaskActions } from '../components/useTaskActions';
 import { TaskOutputsTable } from '../taskOutputs/TaskOutputsTable';
@@ -444,6 +445,8 @@ export function TaskDetailPage() {
           </Section>
 
           <TaskSchedulesSection task={task} canWrite={canWrite} canReadRuns={canReadRuns} catalog={policyCatalog} onChanged={() => void refresh()} />
+
+          <MailTriggersSection taskId={task.id} parameters={task.parameters ?? []} canWrite={canRun} canRead={canReadRuns} canReadConnections={viewer.hasPermission('connections:read')} />
 
           <Section title="Configuration" collapsible startCollapsed={foldGoal} action={editLink}>
             <Paper variant="outlined" sx={{ px: 2, py: 1 }}>
