@@ -23,6 +23,9 @@ export const CONNECTION_AUDIT = {
   connectFailed: 'connection.connect_failed',
   appSaved: 'connection.app_saved',
   appRemoved: 'connection.app_removed',
+  folderCreated: 'connection.folder_created',
+  filePicked: 'connection.file_picked',
+  pickerOpened: 'connection.picker_opened',
   // MCP servers (E39.9): no tool name, argument or result is ever in these; a tool is named by its id and its name.
   mcpAdded: 'connection.mcp_added',
   mcpToolsRefreshed: 'connection.mcp_tools_refreshed',

@@ -26,6 +26,7 @@ import { FormQuestion } from '../taskParams/FormQuestion';
 import { MemoryProposalForm } from './MemoryProposalForm';
 import { SaveLoginForm } from './SaveLoginForm';
 import { digitsOnly, secretLabel, type AnswerBody, type AskedQuestion, type QuestionOption } from './questions';
+import { ConnectionActionCard } from './ConnectionActionCard';
 import { NO_REMEMBER, RememberRuleField, amountError, rememberRuleOf, type RememberRuleState } from './RememberRuleField';
 
 export interface QuestionAnswerFormProps {
@@ -242,7 +243,8 @@ function TypedAnswerForm({ question: q, onSubmit, onOpenBrowser, disabled: off, 
     if (confirming) {
       return (
         <Box sx={{ mt: 2 }}>
-          <Alert severity="warning" role="alert" sx={{ overflowWrap: 'anywhere' }}>
+          {q.action && <ConnectionActionCard action={q.action} />}
+          <Alert severity="warning" role="alert" sx={{ overflowWrap: 'anywhere', mt: q.action ? 1.5 : 0 }}>
             This is a high-risk action. Are you sure you want to {confirmLabel.toLowerCase()}?
           </Alert>
           <Stack data-testid="question-actions" direction={{ xs: 'column', sm: 'row' }} spacing={1} useFlexGap sx={{ flexWrap: { sm: 'wrap' }, mt: 2 }}>
@@ -258,6 +260,7 @@ function TypedAnswerForm({ question: q, onSubmit, onOpenBrowser, disabled: off, 
     }
     return (
       <>
+        {q.action && <ConnectionActionCard action={q.action} />}
         {actions(
           <>
             <Button variant="contained" disabled={disabled || ruleBlocked} loading={busy} onClick={() => (high ? setConfirming(true) : send({ outcome: 'completed', value: 'approve', ...ruleAnswer }))} sx={ACTION_SX}>

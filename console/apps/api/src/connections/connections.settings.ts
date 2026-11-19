@@ -13,6 +13,15 @@ import { registerSystemSettingsNamespaces, type SystemSettingsNamespace } from '
 import { z } from 'zod';
 
 const clientId = z.string().trim().min(1).max(300).nullable().optional();
+/** The browser API key of Google's file picker (a public key restricted to this console's address in Google Cloud, not a secret). */
+const pickerApiKey = z
+  .string()
+  .trim()
+  .min(10)
+  .max(100)
+  .regex(/^[A-Za-z0-9_-]+$/, 'A Google API key')
+  .nullable()
+  .optional();
 const tenant = z
   .string()
   .trim()
@@ -35,7 +44,7 @@ export const connectionsSystemSettingsSchema = z.object({
   mcp: z.object({ enabled: z.boolean().optional(), allowedHosts: hostList.optional(), blockedHosts: hostList.optional() }).optional(),
   providers: z
     .object({
-      google: z.object({ enabled: z.boolean().optional(), clientId }).optional(),
+      google: z.object({ enabled: z.boolean().optional(), clientId, pickerApiKey }).optional(),
       microsoft: z.object({ enabled: z.boolean().optional(), clientId, tenant }).optional(),
     })
     .optional(),
@@ -52,13 +61,13 @@ export interface ResolvedMcpSettings {
 
 export interface ResolvedConnectionsSystemSettings {
   mcp: ResolvedMcpSettings;
-  google: { enabled: boolean; clientId: string | null };
+  google: { enabled: boolean; clientId: string | null; pickerApiKey: string | null };
   microsoft: { enabled: boolean; clientId: string | null; tenant: string };
 }
 
 export const CONNECTIONS_SYSTEM_DEFAULTS: ResolvedConnectionsSystemSettings = {
   mcp: { enabled: false, allowedHosts: [], blockedHosts: [] },
-  google: { enabled: false, clientId: null },
+  google: { enabled: false, clientId: null, pickerApiKey: null },
   microsoft: { enabled: false, clientId: null, tenant: 'common' },
 };
 
@@ -67,7 +76,7 @@ export function resolveConnectionsSystemSettings(v: ConnectionsSystemSettings | 
   const m = v?.providers?.microsoft;
   return {
     mcp: { enabled: v?.mcp?.enabled === true, allowedHosts: v?.mcp?.allowedHosts ?? [], blockedHosts: v?.mcp?.blockedHosts ?? [] },
-    google: { enabled: g?.enabled === true, clientId: g?.clientId ?? null },
+    google: { enabled: g?.enabled === true, clientId: g?.clientId ?? null, pickerApiKey: g?.pickerApiKey ?? null },
     microsoft: { enabled: m?.enabled === true, clientId: m?.clientId ?? null, tenant: m?.tenant ?? 'common' },
   };
 }
@@ -87,7 +96,7 @@ const merge = (current: ConnectionsSystemSettings | undefined, patch: Connection
   return {
     mcp,
     providers: {
-      google: { enabled: g?.enabled ?? google.enabled, clientId: g && 'clientId' in g ? (g.clientId ?? null) : google.clientId },
+      google: { enabled: g?.enabled ?? google.enabled, clientId: g && 'clientId' in g ? (g.clientId ?? null) : google.clientId, pickerApiKey: g && 'pickerApiKey' in g ? (g.pickerApiKey ?? null) : google.pickerApiKey },
       microsoft: { enabled: m?.enabled ?? microsoft.enabled, clientId: m && 'clientId' in m ? (m.clientId ?? null) : microsoft.clientId, tenant: m?.tenant ?? microsoft.tenant },
     },
   };

@@ -5,6 +5,7 @@ import type { TaskOutput } from '@app/shared/task-fields';
 import type { TaskParameter } from '@app/shared/task-params';
 
 import type { TaskSpend } from '../components/runBudget';
+import type { ConnectionSelectionView, NeedsBrowser } from '../taskConnections/model';
 
 /** A task, as `GET /api/tasks` returns it. */
 export interface Task {
@@ -32,6 +33,10 @@ export interface Task {
   parameters?: TaskParameter[] | null;
   /** The values a run must return when it finishes (E39.5, #600); empty or null when the task has none. */
   outputs?: TaskOutput[] | null;
+  /** The accounts the agent may use in this task, and how (E39.7, #604); empty or absent: none. */
+  connections?: ConnectionSelectionView[] | null;
+  /** Whether the task's runs open a browser (E39.7); absent: `auto`. */
+  needsBrowser?: NeedsBrowser;
   createdAt?: string;
   /** When the task was last edited. */
   updatedAt?: string;
@@ -94,6 +99,8 @@ export interface TaskSummary {
   policy: { id: string; name: string; builtin: boolean; isDefault: boolean } | null;
   /** Email triggers that are switched on (E39.8). */
   mailTriggers?: number;
+  /** Deliveries that are switched on (E39.6, E39.10). */
+  deliveries?: number;
 }
 
 /** A task with its summary: a row of `GET /api/tasks?envelope=1&include=summary`. */

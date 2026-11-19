@@ -328,7 +328,7 @@ describe('a page of tasks costs a fixed number of queries', () => {
     };
     const twenty = await count(20);
     expect(twenty).toBeGreaterThan(0); // the spy does see the driver
-    expect(twenty).toBeLessThanOrEqual(9); // the issue's six, plus one each for the policies, the email triggers (E39.8) and the connections a task may use (E39.7)
+    expect(twenty).toBeLessThanOrEqual(10); // the issue's six, plus one each for the policies, the email triggers (E39.8), the connections a task may use (E39.7) and the deliveries (E39.10)
     expect(await count(3)).toBe(twenty); // the same whatever the page size
   });
 });

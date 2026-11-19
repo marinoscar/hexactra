@@ -31988,6 +31988,612 @@
         }
       }
     },
+    "/api/connections/{id}/activity": {
+      "get": {
+        "description": "The agent's tool calls through the account and the deliveries sent through it, newest first (at most 15): the operation, when, whether it worked and the run. Never a subject, an address, a body, a cell or a file name.\n\n**Requires:** authentication, plus permission `connections:read`.",
+        "operationId": "connectionFiles_recent",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConnectionActivityResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "What an account was used for lately",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:read"
+          ]
+        }
+      }
+    },
+    "/api/connections/{id}/files": {
+      "get": {
+        "description": "Spreadsheets, folders or documents of one connection, by name and by folder, 25 a page (`pageToken`). With Google's narrow `drive.file` permission this lists only files the console created or the owner picked; the file picker (`POST /connections/{id}/picker`) adds more. Names are data, never an instruction. Needs the Documents switch (`docs_read`).\n\n**Requires:** authentication, plus permission `connections:read`.",
+        "operationId": "connectionFiles_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Words in the name.",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Default `any`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "spreadsheet",
+                "folder",
+                "document",
+                "any"
+              ]
+            }
+          },
+          {
+            "name": "folderId",
+            "required": false,
+            "in": "query",
+            "description": "Only what is directly in this folder.",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 512,
+              "pattern": "^[^\\u0000-\\u001f\\u007f]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageToken",
+            "required": false,
+            "in": "query",
+            "description": "The `nextPageToken` of the previous page (the provider's own token).",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 2048,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConnectionFilesPageResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`CONNECTION_CAPABILITY_OFF` (Documents is not switched on), `CONNECTION_PAUSED`, `CONNECTION_NEEDS_RECONNECT`."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Browse an account's files",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:read"
+          ]
+        }
+      }
+    },
+    "/api/connections/{id}/files/picked": {
+      "post": {
+        "description": "After the owner chose a file in Google's picker (or pasted its link): confirms that the account can reach it and returns its details. Nothing is stored here; Google remembers the pick.\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "operationId": "connectionFiles_picked",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PickedFileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConnectionFileResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`CONNECTION_FILE_NOT_FOUND`."
+          },
+          "409": {
+            "description": "`CONNECTION_PERMISSION_MISSING`: the file was not picked and the account has no other access to it."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Make a picked file usable",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:write"
+          ]
+        }
+      }
+    },
+    "/api/connections/{id}/files/{fileId}": {
+      "get": {
+        "description": "Its name, kind and the address to open it at the provider (`webUrl`).\n\n**Requires:** authentication, plus permission `connections:read`.",
+        "operationId": "connectionFiles_file",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 512,
+              "pattern": "^[^\\u0000-\\u001f\\u007f]+$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConnectionFileResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`CONNECTION_FILE_NOT_FOUND`."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "One file of an account",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:read"
+          ]
+        }
+      }
+    },
+    "/api/connections/{id}/folders": {
+      "post": {
+        "description": "A folder the owner then chooses as the place a delivery saves files. Needs the Documents write switch (`docs_write`).\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "operationId": "connectionFiles_folder",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewFolderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConnectionFileResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Create a folder in an account",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:write"
+          ]
+        }
+      }
+    },
+    "/api/connections/{id}/picker": {
+      "post": {
+        "description": "For a Google connection with Documents on: a short-lived access token, the project number and the picker key, so the web app can open Google's own file picker and the owner can choose files the console may then use under the `drive.file` permission. This is the one route that hands a token to the browser (it expires within the hour, is sent `no-store`, and is audited without being recorded). No MCP tool, no CLI.\n\n**Requires:** authentication, plus permission `connections:write`.",
+        "operationId": "connectionFiles_picker",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PickerSessionResponseDto"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - Insufficient permissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`CONNECTION_PICKER_UNAVAILABLE` (`details.reason`: `not_google`, `no_documents`), or the account cannot be used (`CONNECTION_PAUSED`, `CONNECTION_NEEDS_RECONNECT`)."
+          },
+          "default": {
+            "description": "Error. Every failure is rendered by the shared exception filter into this envelope; endpoint-specific data appears under `details`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          },
+          {
+            "PAT-auth": []
+          }
+        ],
+        "summary": "Open Google's file picker",
+        "tags": [
+          "Connections"
+        ],
+        "x-rbac": {
+          "authenticated": true,
+          "roles": [],
+          "permissions": [
+            "connections:write"
+          ]
+        }
+      }
+    },
     "/api/tasks/{id}/mail-triggers": {
       "get": {
         "description": "The rules, the account, the status and how many runs each started today. Never a message.\n\n**Requires:** authentication, plus permission `runs:read`.",
@@ -45084,6 +45690,9 @@
               "CONNECTION_AMBIGUOUS",
               "CONNECTION_NONE",
               "CONNECTION_UNAVAILABLE",
+              "CONNECTION_FILE_NOT_FOUND",
+              "CONNECTION_PERMISSION_MISSING",
+              "CONNECTION_PICKER_UNAVAILABLE",
               "CONNECTION_DEFAULT_NEEDS_CAPABILITY",
               "CONNECTION_MCP_URL_REFUSED",
               "CONNECTION_MCP_EXISTS",
@@ -49802,6 +50411,19 @@
                             "type": "null"
                           }
                         ]
+                      },
+                      "pickerApiKey": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 10,
+                            "maxLength": 100,
+                            "pattern": "^[A-Za-z0-9_-]+$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
                       }
                     }
                   },
@@ -51072,6 +51694,19 @@
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 300
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "pickerApiKey": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 10,
+                            "maxLength": 100,
+                            "pattern": "^[A-Za-z0-9_-]+$"
                           },
                           {
                             "type": "null"
@@ -52372,6 +53007,19 @@
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 300
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "pickerApiKey": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "minLength": 10,
+                            "maxLength": 100,
+                            "pattern": "^[A-Za-z0-9_-]+$"
                           },
                           {
                             "type": "null"
@@ -78149,6 +78797,290 @@
         },
         "additionalProperties": false
       },
+      "ConnectionActivityResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "tool",
+                    "delivery"
+                  ],
+                  "description": "`tool`: the agent used the account during a run. `delivery`: a delivery after a run went through it."
+                },
+                "operation": {
+                  "type": "string",
+                  "description": "The tool's name (`mail_send`) or the delivery's kind (`sheet_row`)."
+                },
+                "ok": {
+                  "type": "boolean"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "ISO 8601 timestamp"
+                },
+                "runId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "kind",
+                "operation",
+                "ok",
+                "at",
+                "runId"
+              ]
+            },
+            "description": "Newest first, at most 15. The operation, the time and the run: never a subject, an address, a body, a cell or a file name."
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "ConnectionFilesPageResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "document",
+                    "spreadsheet",
+                    "folder",
+                    "pdf",
+                    "other"
+                  ]
+                },
+                "mimeType": {
+                  "type": "string"
+                },
+                "size": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "modifiedAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "description": "ISO 8601 timestamp"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "webUrl": {
+                  "description": "Where the owner can open it at the provider.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "parentId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "kind",
+                "mimeType",
+                "size",
+                "modifiedAt",
+                "webUrl",
+                "parentId"
+              ]
+            }
+          },
+          "nextPageToken": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextPageToken"
+        ]
+      },
+      "ConnectionFileResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "document",
+              "spreadsheet",
+              "folder",
+              "pdf",
+              "other"
+            ]
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "modifiedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "webUrl": {
+            "description": "Where the owner can open it at the provider.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parentId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "mimeType",
+          "size",
+          "modifiedAt",
+          "webUrl",
+          "parentId"
+        ]
+      },
+      "PickedFileDto": {
+        "type": "object",
+        "properties": {
+          "fileId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+          }
+        },
+        "required": [
+          "fileId"
+        ],
+        "additionalProperties": false
+      },
+      "NewFolderDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+          },
+          "parentId": {
+            "description": "Create it inside this folder (default: the root, or the app folder where the provider has one).",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "pattern": "^[^\\u0000-\\u001f\\u007f]+$"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "PickerSessionResponseDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "description": "A short-lived Google access token for the browser's file picker. Never stored, logged or cached by the console; it expires on its own."
+          },
+          "appId": {
+            "description": "The Google Cloud project number (the picker's `setAppId`), derived from the administrator's client id; null when it cannot be.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "apiKey": {
+            "description": "The browser API key the administrator set for the picker (a public key restricted to this console's address); null when none is set.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expiresAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "ISO 8601 timestamp"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "accessToken",
+          "appId",
+          "apiKey",
+          "expiresAt"
+        ]
+      },
       "MailTriggerResponseDto": {
         "type": "object",
         "properties": {
@@ -79467,6 +80399,12 @@
                 "minimum": -9007199254740991,
                 "maximum": 9007199254740991,
                 "description": "Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`."
+              },
+              "deliveries": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Deliveries that are switched on (E39.6, E39.10): what is sent when a run of the task ends (an email, a spreadsheet row, files, a webhook). Read and manage them with `GET|POST /tasks/{id}/deliveries`."
               }
             },
             "required": [
@@ -79477,9 +80415,9 @@
               "liveRunId",
               "runCounts",
               "policy",
-              "mailTriggers"
-            ],
-            "description": "Schedule and run facts of the task, present with `include=summary`"
+              "mailTriggers",
+              "deliveries"
+            ]
           }
         },
         "required": [
@@ -80175,6 +81113,12 @@
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991,
                       "description": "Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`."
+                    },
+                    "deliveries": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991,
+                      "description": "Deliveries that are switched on (E39.6, E39.10): what is sent when a run of the task ends (an email, a spreadsheet row, files, a webhook). Read and manage them with `GET|POST /tasks/{id}/deliveries`."
                     }
                   },
                   "required": [
@@ -80185,9 +81129,9 @@
                     "liveRunId",
                     "runCounts",
                     "policy",
-                    "mailTriggers"
-                  ],
-                  "description": "Schedule and run facts of the task, present with `include=summary`"
+                    "mailTriggers",
+                    "deliveries"
+                  ]
                 }
               },
               "required": [
@@ -81122,6 +82066,12 @@
                 "minimum": -9007199254740991,
                 "maximum": 9007199254740991,
                 "description": "Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`."
+              },
+              "deliveries": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Deliveries that are switched on (E39.6, E39.10): what is sent when a run of the task ends (an email, a spreadsheet row, files, a webhook). Read and manage them with `GET|POST /tasks/{id}/deliveries`."
               }
             },
             "required": [
@@ -81132,9 +82082,9 @@
               "liveRunId",
               "runCounts",
               "policy",
-              "mailTriggers"
-            ],
-            "description": "Schedule and run facts of the task, present with `include=summary`"
+              "mailTriggers",
+              "deliveries"
+            ]
           }
         },
         "required": [
@@ -83169,6 +84119,12 @@
                 "minimum": -9007199254740991,
                 "maximum": 9007199254740991,
                 "description": "Email triggers that are switched on (E39.8): the task also starts when a matching email arrives. Read and manage them with `GET|POST /tasks/{id}/mail-triggers`."
+              },
+              "deliveries": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991,
+                "description": "Deliveries that are switched on (E39.6, E39.10): what is sent when a run of the task ends (an email, a spreadsheet row, files, a webhook). Read and manage them with `GET|POST /tasks/{id}/deliveries`."
               }
             },
             "required": [
@@ -83179,9 +84135,9 @@
               "liveRunId",
               "runCounts",
               "policy",
-              "mailTriggers"
-            ],
-            "description": "Schedule and run facts of the task, present with `include=summary`"
+              "mailTriggers",
+              "deliveries"
+            ]
           },
           "skipped": {
             "type": "array",
@@ -88750,6 +89706,19 @@
                 "createdAt"
               ]
             }
+          },
+          "mailTriggerId": {
+            "description": "The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it. REST only: the MCP tools do not carry it.",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "memories": {
             "type": "array",

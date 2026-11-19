@@ -24,6 +24,8 @@ import {
   Typography,
 } from '@mui/material';
 import { usePlatformHost } from '@marinoscar/platform-web/core';
+
+import { useConnections } from '../connections/useConnections';
 import { useCallback, useEffect, useState } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 
@@ -228,6 +230,9 @@ export function SavedApprovalsPage() {
   const { api, viewer } = usePlatformHost();
   const confirm = useConfirm();
   const canWrite = viewer.hasPermission('approvals:write');
+  const accounts = useConnections();
+  // A rule for one of the owner's accounts names the account, not its id (E39.10).
+  const accountLabels = new Map((accounts.connections ?? []).map((c) => [c.id, `${c.label} (account)`]));
   const [list, setList] = useState<ApprovalRulesList | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [limiting, setLimiting] = useState<ApprovalRule | null>(null);
@@ -317,7 +322,7 @@ export function SavedApprovalsPage() {
           {groupBySite(list.rules).map((g) => (
             <Box key={g.host} component="section" aria-labelledby={`site-${g.host}`}>
               <Typography id={`site-${g.host}`} variant="h6" component="h2" sx={{ mb: 1, overflowWrap: 'anywhere' }}>
-                {g.host}
+                {accountLabels.get(g.host) ?? g.host}
               </Typography>
               <Stack spacing={1}>
                 {g.rules.map((r) => (

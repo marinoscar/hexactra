@@ -13,6 +13,9 @@ import { ConnectionResolverService } from './connection-resolver.service';
 import { ConnectionTokenStore } from './connection-token.store';
 import { ConnectionTokensService } from './connection-tokens.service';
 import { ConnectionUsageRegistry } from './connection-usage.registry';
+import { ConnectionActivityService } from './connection-activity.service';
+import { ConnectionFilesController } from './connection-files.controller';
+import { ConnectionFilesService } from './connection-files.service';
 import { ConnectionsAdminController } from './connections-admin.controller';
 import { ConnectionsController } from './connections.controller';
 import { ConnectionEvents } from './connections.events';
@@ -37,7 +40,7 @@ import { McpSecretStore } from './mcp/mcp-secrets';
  */
 @Module({
   imports: [CredentialsModule, UserCredentialsModule, OAuthClientModule],
-  controllers: [ConnectionsController, ConnectionsAdminController],
+  controllers: [ConnectionsController, ConnectionsAdminController, ConnectionFilesController],
   providers: [
     ConnectionProviderRegistry,
     CapabilityProviderRegistry,
@@ -49,6 +52,8 @@ import { McpSecretStore } from './mcp/mcp-secrets';
     ConnectionFlowService,
     ConnectionResolverService,
     ConnectionsService,
+    ConnectionFilesService,
+    ConnectionActivityService,
     ConnectionCapabilities,
     ConnectionsHealth,
     ConnectionsHealthHandler,

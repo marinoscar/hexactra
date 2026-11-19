@@ -104,9 +104,12 @@ export function InboxPage() {
   // The focused request first; everything else in the order the person already sees.
   const ordered = useMemo(() => [...(items ?? [])].sort((a, b) => Number(focused(b)) - Number(focused(a))), [items, focused]);
   // Requests a run waits on first; the agent's memory suggestions (#553) below, in their own quiet group.
-  const requests = ordered.filter((i) => i.blocking !== false);
+  const blocking = ordered.filter((i) => i.blocking !== false);
+  // Calls through the owner's accounts that wait on them (E39.10): in their own group, so an unattended run's send or change is easy to find.
+  const requests = blocking.filter((i) => !i.action);
+  const accountApprovals = blocking.filter((i) => Boolean(i.action));
   const suggestions = ordered.filter((i) => i.blocking === false);
-  const waiting = requests.filter((i) => !settled.has(i.questionId)).length;
+  const waiting = blocking.filter((i) => !settled.has(i.questionId)).length;
   // One clock for every card's countdown.
   const now = useNow(ordered.length > 0);
 
@@ -139,6 +142,29 @@ export function InboxPage() {
           />
         ))}
       </Box>
+      {accountApprovals.length > 0 && (
+        <Box component="section" aria-label="Account approvals" sx={{ minWidth: 0, mt: requests.length ? 3 : 0 }}>
+          <Typography variant="overline" component="h2" color="text.secondary">
+            Waiting for your approval
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            A task or chat wants to send, create or change something with one of your accounts. Nothing happens until you answer.
+          </Typography>
+          {accountApprovals.map((item) => (
+            <QuestionCard
+              key={item.questionId}
+              variant="list"
+              question={inboxItemToCard(item)}
+              now={now}
+              canAnswer={canAnswer}
+              focused={focused(item)}
+              isNew={fresh.has(item.questionId)}
+              onAnswer={(answer) => respond(item, answer)}
+              onLeft={() => left(item.questionId)}
+            />
+          ))}
+        </Box>
+      )}
       {suggestions.length > 0 && (
         <Box component="section" aria-label="Suggestions" sx={{ minWidth: 0, mt: requests.length ? 3 : 0 }}>
           <Typography variant="overline" component="h2" color="text.secondary">

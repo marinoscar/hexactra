@@ -359,6 +359,7 @@ export const runStepResponseSchema = z.object({
 export class RunDetailResponseDto extends createZodDto(
   runResponseSchema.extend({
     steps: z.array(runStepResponseSchema),
+    mailTriggerId: z.uuid().nullable().optional().describe('The email trigger that started the run (E39.8, E39.10), or null; a deleted trigger leaves null. `GET /tasks/{id}/mail-triggers` names it. REST only: the MCP tools do not carry it.'),
     memories: z
       .array(z.object({ id: z.uuid(), label: z.string(), status: z.enum(['active', 'superseded', 'archived']) }))
       .describe('The memories of `memoryIds` that still exist, with their labels (#553): the run page says "Used: …"'),

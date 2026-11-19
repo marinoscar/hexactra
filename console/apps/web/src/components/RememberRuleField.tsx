@@ -3,7 +3,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { Alert, Box, Button, Checkbox, Collapse, FormControl, FormControlLabel, FormLabel, InputAdornment, MenuItem, Radio, RadioGroup, Stack, TextField, Typography } from '@mui/material';
 import { useId, useState } from 'react';
 
-import type { RememberRuleBody, RememberScope, Rememberable } from './questions';
+import type { RecipientsFrom, RememberRuleBody, RememberScope, Rememberable } from './questions';
 
 /** The categories that move money: the amount limit is offered for these. */
 const AMOUNT_CATEGORIES: readonly string[] = ['payment', 'purchase', 'send'];
@@ -18,9 +18,14 @@ export interface RememberRuleState {
   amount: string;
   /** How long the rule lasts: always, or a number of days. */
   days: 'always' | '30' | '7';
+  /** A connection call that reaches people: these people or anyone at their domains. */
+  recipientsFrom: RecipientsFrom;
 }
 
-export const NO_REMEMBER: RememberRuleState = { ticked: false, scope: 'everywhere', amount: '', days: 'always' };
+export const NO_REMEMBER: RememberRuleState = { ticked: false, scope: 'everywhere', amount: '', days: 'always', recipientsFrom: 'these' };
+
+/** The domains of some addresses (`@example.test`), once each. */
+export const domainsOf = (addresses: readonly string[]): string[] => [...new Set(addresses.map((a) => a.split('@')[1]?.toLowerCase()).filter((d): d is string => Boolean(d)))];
 
 /** Why the amount limit is not a positive amount, or null ('' is no limit, unless one is required: a saved card, E37.7). */
 export function amountError(amount: string, required = false): string | null {
@@ -40,6 +45,7 @@ export function rememberRuleOf(r: Rememberable | null | undefined, s: RememberRu
     ...(s.scope !== 'everywhere' && scopes.includes(s.scope) ? { scope: s.scope } : {}),
     ...(withAmount && s.amount.trim() ? { maxAmount: Number(s.amount.trim()) } : {}),
     ...(s.days !== 'always' ? { expiresInDays: Number(s.days) } : {}),
+    ...(r.kind === 'connection' && (r.recipients?.length ?? 0) > 0 ? { recipientsFrom: s.recipientsFrom } : {}),
   };
 }
 
@@ -86,6 +92,16 @@ export function RememberRuleField({ rememberable: r, value: s, onChange, disable
       />
       {s.ticked && (
         <Box sx={{ pl: { xs: 0, sm: 4 } }}>
+          {r.kind === 'connection' && (r.recipients?.length ?? 0) > 0 && (
+            <FormControl disabled={disabled} sx={{ mt: 1 }}>
+              <FormLabel id={`${id}-people`}>Who it covers</FormLabel>
+              <RadioGroup aria-labelledby={`${id}-people`} value={s.recipientsFrom} onChange={(e) => set({ recipientsFrom: e.target.value as RecipientsFrom })}>
+                <FormControlLabel value="these" control={<Radio />} label={`Only these people: ${r.recipients!.join(', ')}`} sx={{ minHeight: { xs: 44, sm: 'auto' } }} />
+                <FormControlLabel value="domain" control={<Radio />} label={`Anyone at ${domainsOf(r.recipients!).join(', ')}`} sx={{ minHeight: { xs: 44, sm: 'auto' } }} />
+              </RadioGroup>
+              <Typography variant="caption" color="text.secondary">A message to anyone else still asks.</Typography>
+            </FormControl>
+          )}
           {warn && (
             <Alert severity="warning" variant="outlined" sx={{ mt: 1, overflowWrap: 'anywhere' }}>
               {card

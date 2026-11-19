@@ -44,7 +44,7 @@
 //
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
 // `{finishedRun}`, `{chatRun}`, `{traceRun}`, `{pausedRun}`, `{pausedChat}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}`, `{app}`,
-// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556), `{outputsTask}` and `{outputsRun}` (mock only, E39.5) and `{saveLoginQuestion}` (mock only, E37.4b) are filled
+// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556), `{outputsTask}` and `{outputsRun}` (mock only, E39.5), `{carTask}` and `{carRun}` (mock only, E39.10) and `{saveLoginQuestion}` (mock only, E37.4b) are filled
 // in from the account (or the fixtures). The enabled slices' routes are read
 // from apps/web/src/slices/<id>.tsx, so a new slice page needs nothing here.
 // A route's options may carry `action: async (page) => …`, run once the page
@@ -226,7 +226,69 @@ export const ROUTES = [
   ['task-edit-outputs', '/tasks/{outputsTask}/edit'],
   ['task-outputs', '/tasks/{outputsTask}'],
   ['run-outputs', '/runs/{outputsRun}'],
+  // Connections in the console (E39.10): the task form with the accounts and deliveries sections open, each delivery editor, the guided setup,
+  // the task page, a run an email started with account steps and deliveries, the Connections page with an account's details, and the approval cards.
+  ['task-edit-accounts', '/tasks/{carTask}/edit', { action: openSections }],
+  ['task-edit-delivery-email', '/tasks/{carTask}/edit', { viewport: true, action: openDelivery('Email to 2 people') }],
+  ['task-edit-delivery-sheet', '/tasks/{carTask}/edit', { viewport: true, action: openDelivery('Add a row to') }],
+  ['task-edit-delivery-folder', '/tasks/{carTask}/edit', { viewport: true, action: openDelivery('Save the PDF report') }],
+  ['task-edit-delivery-webhook', '/tasks/{carTask}/edit', { viewport: true, action: openDelivery('Send the run') }],
+  ['task-edit-file-chooser', '/tasks/{carTask}/edit', { viewport: true, action: chooseFile }],
+  ['task-new-guided-setup', '/tasks/new', { viewport: true, action: openGuided }],
+  ['task-connections-detail', '/tasks/{carTask}'],
+  ['run-connections', '/runs/{carRun}'],
+  ['settings-connections-details', '/settings/connections', { action: openConnectionDetails }],
+  ['inbox-account-approvals', '/inbox', {
+    action: async (page) => {
+      await page.getByRole('button', { name: 'Show all' }).first().click({ timeout: 5_000 });
+      await page.getByRole('checkbox', { name: /^Don't ask again: Send mail with Work/ }).first().click({ timeout: 5_000 });
+      await page.waitForTimeout(400);
+    },
+  }],
 ];
+
+/** The task form: open "Accounts the agent may use" and "Where the result goes". */
+async function openSections(page) {
+  await page.getByRole('button', { name: /Accounts the agent may use/ }).click({ timeout: 8_000 });
+  await page.getByRole('button', { name: /Where the result goes/ }).click({ timeout: 8_000 });
+  await page.waitForTimeout(600);
+}
+
+/** The task form: open the Deliveries section and the editor of the delivery whose summary starts with `text`. */
+function openDelivery(text) {
+  return async (page) => {
+    await page.getByRole('button', { name: /Where the result goes/ }).click({ timeout: 8_000 });
+    const row = page.getByTestId(/^delivery-/).filter({ hasText: text }).first();
+    await row.getByRole('button', { name: 'Edit', exact: true }).click({ timeout: 5_000 });
+    await page.getByRole('dialog').waitFor({ timeout: 5_000 });
+    await page.waitForTimeout(500);
+  };
+}
+
+/** The spreadsheet delivery's file chooser. */
+async function chooseFile(page) {
+  await page.getByRole('button', { name: /Where the result goes/ }).click({ timeout: 8_000 });
+  const row = page.getByTestId(/^delivery-/).filter({ hasText: 'Add a row to' }).first();
+  await row.getByRole('button', { name: 'Edit', exact: true }).click({ timeout: 5_000 });
+  await page.getByRole('button', { name: 'Change', exact: true }).click({ timeout: 5_000 });
+  await page.getByRole('dialog', { name: /Choose a spreadsheet/ }).waitFor({ timeout: 5_000 });
+  await page.waitForTimeout(600);
+}
+
+/** The new task form: the guided setup of the deliveries section. */
+async function openGuided(page) {
+  await page.getByRole('button', { name: /Where the result goes/ }).click({ timeout: 8_000 });
+  await page.getByRole('button', { name: 'Keep a record of each run' }).click({ timeout: 5_000 });
+  await page.getByRole('dialog').waitFor({ timeout: 5_000 });
+  await page.waitForTimeout(400);
+}
+
+/** The Connections page: open the first account's "What it is used for". */
+async function openConnectionDetails(page) {
+  await page.getByRole('button', { name: 'What it is used for' }).first().click({ timeout: 5_000 });
+  await page.getByText('Recent activity').first().waitFor({ timeout: 5_000 });
+  await page.waitForTimeout(500);
+}
 
 /** `run-trace`: scroll through the page so every lazy picture loads, then back to the top. */
 async function loadPictures(page) {
