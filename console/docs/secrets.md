@@ -24,7 +24,7 @@ Then, in Vault, each owner opens the logins the agent may use (**Allow agents to
 ## Connect (the owner)
 
 1. **Set the client** (once): `PUT /api/secrets/vault/client` with the Vault's address (`https://vault.example.test`, its `APP_URL`), the client id and the client secret. The secret is write-only. An administrator may instead set a **deployment default** (`PUT /api/secrets/vault/default-client`, `system_settings:write`), so owners only press Connect; an owner's own entries take precedence.
-2. **Connect**: `POST /api/secrets/vault/connect` returns `authorizeUrl`; the browser goes to Vault's own consent screen (the owner sees "Hexactra" and the scopes). Scopes asked: `vault:items_read vault:items_fill offline_access`. `{ "allowWrite": true }` adds `vault:items_write`: a **new consent**.
+2. **Connect**: `POST /api/secrets/vault/connect` returns `authorizeUrl`; the browser goes to Vault's own consent screen (the owner sees "Hexactra" and the scopes). Scopes asked: `vault:items_read vault:items_fill offline_access`. `{ "allowWrite": true }` adds `vault:items_write` and `{ "allowIdentity": true }` adds `vault:identity_read vault:identity_fill`: each a **new consent**.
 3. Vault redirects to `GET /api/secrets/vault/callback`; the console exchanges the code, calls `whoami`, stores the grant and sends the browser back to `/settings/secrets?vault=connected` (or `vault=<reason>`: `denied`, `expired`, `state_invalid`, `binding_invalid`, `issuer_mismatch`, `exchange_failed`, `no_refresh_token`, `whoami_failed`).
 4. `GET /api/secrets/status` shows the connection.
 
@@ -143,6 +143,62 @@ The address is checked when it is saved, when Connect starts and on **every** ca
 - Development (`NODE_ENV` not `production`): `http` and loopback targets are allowed so a Vault on the developer's machine works.
 - A Vault on a private network (an on-premises Vault): an administrator lists its exact host name in system setting `secrets.vault.allowedHosts`; `https` is still required.
 
+## Identity details (E37.6)
+
+Forms ask for things that are sensitive but are not logins: a government ID number, a date of birth, a home address, a phone number. With this, the owner saves them once in the provider and the agent fills a field by naming it. **The model sees a field's label and flags, never its value, not even its length.**
+
+**Two classes of field.** A provider marks each identity field `sensitive` or not.
+
+| Class | Fields (Vault's `Identity` type) | Where the fabric may type it |
+|---|---|---|
+| Not sensitive | `full_name`, `id_type`, `id_issuing_country`, `address_line1`, `address_line2`, `city`, `region`, `postal_code`, `country`, `phone`, `email` | Any `https` site the run is allowed to visit |
+| **Sensitive** | `date_of_birth`, `id_number` | Only a site on **that item's allowed-origins list** (exact origin, set by the owner in the provider), as for a login; elsewhere the provider answers `origin_mismatch` |
+
+In both cases the value is typed by the fabric and never shown to the model; the difference is only **where**. On top of the provider's rule the fabric refuses a sensitive field (an ID number, a date of birth, a card number or security code) when the tab's origin is not `https`, whatever the provider says (`insecure_origin`).
+
+**What it takes.** Everything saved logins need ([How the agent signs in](#how-the-agent-signs-in)), plus identity use as its own sub-switch, off by default at every level:
+
+| Where | Field | Default |
+|---|---|---|
+| Task | `useSavedIdentity` (`POST`/`PATCH /api/tasks`) | off |
+| Chat | `useSavedIdentity` (`POST`/`PATCH /api/chats`, Chat settings) | off |
+| Connected AI app | limit `allowSavedIdentity` (needs `allowSavedLogins`) | off |
+| Owner's grant | the Vault consent includes `vault:identity_read` and `vault:identity_fill` (**Let the agent fill identity details** on the Secrets page: a new consent, like the write permission) | not asked |
+| Vault | `agentAccess.identity.enabled` in Vault's admin settings (contract 1.1) | off |
+
+The per-task switch of E37.3 is worded **Use my saved logins and details**, with **Also fill my saved identity details** under it; an identity switch cannot stay on while saved logins are off. A run offers the two tools below only when the task or chat has `useSavedIdentity`, an AI app (if one started the run) has `allowSavedIdentity`, saved logins are usable and the grant holds both identity scopes. Anything else: no identity tool, and the run asks the owner for the details as it always did.
+
+**The two tools** (group `secrets`):
+
+| Tool | Parameters | What the model reads |
+|---|---|---|
+| `saved_identity` | none | For the page on screen: `none`, or `{ ref, name, fields: [{ key, label, sensitive, usableHere }] }` per saved item. `ref` is a per-run reference (`details-1`), never the provider's id. No value, no length. |
+| `fill_from_identity` | `ref`, `field` (the key), `selector`, `part` (`day`, `month`, `year` or null) | "Filled <label>" or a reason. It commits nothing: filling a field is not a commitment, submitting the form is, and the confirmation gate handles that. |
+
+The instructions: on a form that asks for personal details, call `saved_identity`, fill each field the form asks for from it, never type such a value from the goal, a memory or the page. If a needed field is not listed, ask the owner **once**, listing every missing detail in one request (`request_human`, input `text`).
+
+**Inputs and selects.** The page says what the target is (one read of the element, not an action). An input is typed with `type_from_provider` (purpose `form`). A `<select>` (a country, or a date of birth split into three selects) is chosen with the fabric's `select_from_provider { item_id, field, selector, part? }`: the fabric lists the options, asks the provider for the value bound to the page's origin, picks the matching option **itself** (a month matches its number, name or abbreviation) and answers only `{ selected: true }`. `part` is only for `date_of_birth`. A select none of whose options is the value fails with `no_option`; an element that is not a select does too.
+
+**A sensitive detail this site is not allowed to have.** `saved_identity` marks it `usableHere: false` and `fill_from_identity` explains "This detail is saved but not allowed on this site". The owner is asked through one card (a choice) with two answers: **Allow this site for <label>** (the card says which site to add to which item, and links to the provider by its address; Hexactra cannot widen a provider's allowed list itself) or **Type it this time** (the run then asks for a `secret`, which the fabric keeps and types with `type_handoff_secret`; the model never sees it). After "Allow" the next fill asks the provider, which decides; a detail still refused is asked about at most twice per run and site.
+
+**Reading back is filtered.** After the fabric fills an input from a provider (an identity field, or the username, password or code of a saved login), the runner knows **which selectors** were filled (never a value) and keeps them out of what the model can read back:
+
+- `observe_elements` reports a filled input's text as `[filled from your saved details]`; `read_text` of that element (or one that holds it) returns the same marker;
+- `run_javascript` whose script could read a control's value (`value`, `FormData`, `innerHTML`, `outerHTML`, `selectedIndex` and similar) returns the marker while a filled input is on the page;
+- every screenshot the model is shown, and every trace screenshot, is taken with an opaque box over each filled input (drawn in the page before the pixels are read and removed after; if it cannot be drawn, no picture is taken), and the mark of a filled input in the model's listing is masked. A desktop screenshot cannot be covered, so none is taken while a filled input is on the page.
+
+**This is best effort, and it says so.** A page that copies the value elsewhere (a "review your answers" panel, a confirmation line, a script of its own that mirrors an input into a `<div>`) shows it in text the filter does not know to hide. The run's stored trace screenshots are masked at capture (E35: `docs/runs.md`), and the box over a filled input is part of that, but a copy of the value rendered elsewhere on the page is covered only by the sensitive-text patterns of #538 and #539 (card, account and ID-number shapes), not by the fill record. Keep the sites a task may visit narrow (`allowedDomains`) and the owner's own confirmation on for anything irreversible.
+
+**What the run records.** Steps read "looked up saved details: 1 item, 5 fields" and "filled ID number from the saved details 'Passport'": the item's name and the **label**. `Run.usedSavedIdentity` (`[{ provider, itemName, label, origin, at }]`, at most 40, one per item, label and site) is returned by `GET /api/runs/{id}` and shown on the run page as "Filled from your saved details: Date of birth, ID number". The Activity list shows the field kind and the site ("Filled the ID number", "Chose the date of birth"; outcome `selected`), never a value. A run holds no value in a step, its memory, a question, a tool result or the model's input (`test/saved-identity.db.spec.ts`, marker test).
+
+**The Secrets page** lists the identity items the owner opened to the agent, by name, with each field's label and whether it is sensitive, **read-only**, linking to the provider (`GET /api/secrets/identity`, `secrets:read`). The console reads the provider's identity lookup (labels and flags, never a value) with the owner's own access token, only to show the list; Vault's agent API does not return each item's allowed sites, so the page says they are managed in the provider. With no list the page says why (`needs_scope`, `provider_off`, ...).
+
+**Task parameters.** A parameter may take its default from an identity field (`default: { identity: { field } }`, "From your saved details: ID number" in the form): the goal the model reads then holds `[provided: <label>]`, the run records the field (never a value; the Inputs block says "from your saved details") and the model fills it with `fill_from_identity`, the same mechanism as a sensitive parameter. Where saved details cannot be used for the run, the value is asked for like a sensitive one.
+
+**Memories.** A memory may name an identity item ("My passport: saved details 'Passport'"), never hold its number: the memory secret check (#538 patterns) still refuses an ID number, an account number or a card number.
+
+**Provider support.** The remote Vault (contract 1.1: `GET /identity?origin=`, `POST /identity/{id}/fill` with purpose `form`, scopes `vault:identity_read` and `vault:identity_fill`, errors `IDENTITY_ACCESS_DISABLED` and `ORIGIN_MISMATCH`). The built-in store (E37.5) holds logins only (its type is `Credential`, enforced by `store.interceptor.ts`), so it has no identity items: its provider answers none for an identity lookup and a run with the built-in store chosen is not offered the identity tools (`RunSecretsService.identitySupported`). Holding identity items in the built-in store (the Identity type, its page, Vault's `agentAccess.identity` switch bound to the deployment's) is a follow-up of E37.
+
 ## Routes
 
 | Route | Permission | |
@@ -155,6 +211,7 @@ The address is checked when it is saved, when Connect starts and on **every** ca
 | `GET\|PUT\|DELETE /api/secrets/vault/default-client` | `system_settings:read` / `:write` | The administrator's default address, client id and client secret |
 | `GET /api/secrets/activity` | `secrets:read` | The owner's newest 100 uses and refusals (below), and the provider's own activity page |
 | `GET /api/secrets/reach` | `secrets:read` | The logins the agent has used so far, by site |
+| `GET /api/secrets/identity` | `secrets:read` | The identity items the owner saved: names and field labels with a sensitive flag; never a value |
 | `GET /api/secrets/admin/summary` | `system_settings:read` | Counts for the administrator: owners connected, fields typed and refusals this week |
 
 `secrets:read` goes to contributors, viewers and organization admins; `secrets:write` to contributors and organization admins. There is no MCP tool and no CLI command: a hosted AI app or a personal access token must not rewire the owner's secrets provider, and no MCP tool reads what the agent used (`packages/shared/capabilities.json`, [parity.md](parity.md#what-secrets-added-e37)).

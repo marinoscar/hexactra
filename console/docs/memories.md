@@ -23,6 +23,8 @@ No Secret Material. A write is refused with `422 MEMORY_HOLDS_SECRET`, naming ea
 
 The value patterns are the masking table of the run trace (`packages/shared/sensitive-patterns.js`, #538), so what a trace masks and what a memory refuses agree. Keep the **last four digits** instead: "ending 0659" is accepted, and so are phone numbers, email addresses and names. The check runs on the label, the aliases and the note as well (`apps/api/src/memories/memory-secrets.ts`).
 
+**Full ID and account numbers go in your secrets provider, not here.** A memory may point to a saved identity item by its name ("My passport: saved details 'Passport'"), and the agent then fills the form from that item without ever reading a number; a memory never holds the number itself. See [secrets.md](secrets.md#identity-details-e376).
+
 ## Rules
 
 - At most **500 active** memories per user (`409 MEMORY_LIMIT`).

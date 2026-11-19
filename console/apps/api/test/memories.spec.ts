@@ -97,3 +97,15 @@ describe('the memories export file', () => {
     expect(memoryFileName(now)).toBe('hexactra-memories-20261118.json');
   });
 });
+
+describe('identity details (E37.6): a memory may name a saved item, never hold its number', () => {
+  it('accepts a reference to a saved item by name and refuses the numbers an identity item holds', () => {
+    expect(findMemorySecrets({ label: 'My passport', attributes: { saved_details: "Passport (in your secrets provider)", expires: 'March 2031' } })).toEqual([]);
+    // A full ID or account number, an SSN and a long digit run are refused wherever they appear.
+    expect(refused({ id: '123-45-6789' })).toHaveLength(1);
+    expect(refused({ 'id number': '4111 1111 1111 1111' })).toHaveLength(1);
+    expect(refused({ note: 'ID 123456789012' })).toHaveLength(1);
+    // The last four are fine.
+    expect(refused({ id: 'ending 6789' })).toEqual([]);
+  });
+});

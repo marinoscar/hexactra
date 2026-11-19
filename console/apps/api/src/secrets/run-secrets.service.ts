@@ -6,6 +6,7 @@
 // Vault connection files and a test can hand it a plain object. The runner never receives a token, a login or a code.
 import { Injectable, Logger } from '@nestjs/common';
 
+import { SecretsPolicyService } from './secrets-policy.service';
 import { SecretsProviderRegistrar, type RegistrationResult } from './secrets-provider.registrar';
 import { VaultConnectionService, type ProviderOutcome } from './vault-connection.service';
 import { hasIdentityScopes } from './vault-contract';
@@ -17,6 +18,7 @@ export class RunSecretsService {
   constructor(
     private readonly registrar: SecretsProviderRegistrar,
     private readonly connection: VaultConnectionService,
+    private readonly policy: SecretsPolicyService,
   ) {}
 
   /**
@@ -34,11 +36,13 @@ export class RunSecretsService {
   }
 
   /**
-   * Whether the owner's connected provider can look up and fill identity details (E37.6): the Vault grant holds both identity
-   * scopes. The runner asks this only for a run whose task or chat opted in to identity. Never throws.
+   * Whether the owner's active provider can look up and fill identity details (E37.6): the remote Vault, with a grant that holds
+   * both identity scopes. The built-in store holds logins only. The runner asks this only for a run whose task or chat opted in
+   * to identity. Never throws.
    */
   async identitySupported(userId: string): Promise<boolean> {
     try {
+      if ((await this.policy.activeProvider(userId)) !== 'vault') return false;
       return hasIdentityScopes(await this.connection.grantedScopes(userId));
     } catch (e) {
       this.log.warn(`could not read the granted scopes (${e instanceof Error ? e.name : 'error'})`);
