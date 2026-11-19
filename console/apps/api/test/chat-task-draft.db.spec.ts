@@ -72,6 +72,18 @@ async function finishedChat(s: Session) {
 }
 
 describe('the task draft the AI writes', () => {
+  it('proposes outputs from what the finished run reported, keys derived, none sensitive (E39.5)', async () => {
+    const alice = await login('outputs');
+    const { chat } = await finishedChat(alice);
+    const model = writer('{"name": "Cinema", "goal": "Book 2 tickets for tonight.", "outputs": [{"label": "Booking reference", "type": "text", "help": "On the confirmation page"}, {"label": "Total paid", "type": "money"}, {"label": "Total paid", "type": "text"}]}');
+    const draft = await new ChatTaskDraftService(prisma, model.ai).draft(alice.userId, chat.id, 'org-1');
+    expect(draft.outputs).toEqual([
+      { key: 'booking_reference', label: 'Booking reference', type: 'text', required: true, help: 'On the confirmation page' },
+      { key: 'total_paid', label: 'Total paid', type: 'money', required: true },
+    ]);
+    expect(model.asked[0]!.instructions).toContain('Outputs:');
+  });
+
   it('takes its name and goal from the model and everything else from the chat', async () => {
     const alice = await login('write');
     const { chat } = await finishedChat(alice);
@@ -92,6 +104,7 @@ describe('the task draft the AI writes', () => {
       useSavedCards: false,
       // Nothing in it varies between runs: no parameters.
       parameters: [],
+      outputs: [],
     });
     expect(model.features).toEqual([{ feature: 'chat_orchestrator', orgId: 'org-1' }]);
     expect(model.asked[0]!.instructions).toBe(TASK_DRAFT_INSTRUCTIONS);
@@ -297,7 +310,7 @@ describe('the draft_task tool', () => {
     expect(outputs).toEqual(['Drafted. The owner reviews and saves it from the chat.']);
     const last = await prisma.chatMessage.findFirstOrThrow({ where: { conversationId: chat.id }, orderBy: { seq: 'desc' } });
     expect(last).toMatchObject({ role: 'assistant', kind: 'task_draft', text: 'Book 2 tickets for the 7:30 PM showing.' });
-    expect(last.meta).toEqual({ name: 'Cinema tickets', goal: 'Book 2 tickets for the 7:30 PM showing.', profile: 'home', hostId: null, hostFallback: false, policyId: 'builtin:economy', allowedDomains: ['cinema.example.test'], confirmRiskyActions: true, useSavedLogins: false, useSavedIdentity: false, useSavedCards: false, parameters: [] });
+    expect(last.meta).toEqual({ name: 'Cinema tickets', goal: 'Book 2 tickets for the 7:30 PM showing.', profile: 'home', hostId: null, hostFallback: false, policyId: 'builtin:economy', allowedDomains: ['cinema.example.test'], confirmRiskyActions: true, useSavedLogins: false, useSavedIdentity: false, useSavedCards: false, parameters: [], outputs: [] });
   });
 });
 

@@ -44,7 +44,7 @@
 //
 // TO ADD A PAGE: append one line to ROUTES. `{task}`, `{liveRun}`,
 // `{finishedRun}`, `{chatRun}`, `{traceRun}`, `{pausedRun}`, `{pausedChat}`, `{host}`, `{question}`, `{policy}`, `{group}`, `{chat}`, `{app}`,
-// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556) and `{saveLoginQuestion}` (mock only, E37.4b) are filled
+// `{paramTask}`, `{formQuestion}` and `{paramRun}` (mock only, #556), `{outputsTask}` and `{outputsRun}` (mock only, E39.5) and `{saveLoginQuestion}` (mock only, E37.4b) are filled
 // in from the account (or the fixtures). The enabled slices' routes are read
 // from apps/web/src/slices/<id>.tsx, so a new slice page needs nothing here.
 // A route's options may carry `action: async (page) => …`, run once the page
@@ -192,6 +192,10 @@ export const ROUTES = [
   // "Save this login?" (E37.4b): its own page; the same card is in the Inbox's suggestions (`inbox`) and in the chat thread (`chat-thread`).
   ['question-save-login', '/inbox/q/{saveLoginQuestion}'],
   ['run-inputs', '/runs/{paramRun}'],
+  // Task outputs (E39.5): the form's Outputs section, the task page's history table, a finished run's Outputs block.
+  ['task-edit-outputs', '/tasks/{outputsTask}/edit'],
+  ['task-outputs', '/tasks/{outputsTask}'],
+  ['run-outputs', '/runs/{outputsRun}'],
 ];
 
 /** `run-trace`: scroll through the page so every lazy picture loads, then back to the top. */

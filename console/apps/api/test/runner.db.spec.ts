@@ -1804,7 +1804,7 @@ describe('task outputs (E39.5, #600)', () => {
     const [first] = reqs(runTools);
     expect(first!.instructions).toContain('Outputs to return:');
     expect(first!.instructions).toContain('- confirmation_number (Confirmation number): text, required. Shown on the receipt');
-    const json = z.toJSONSchema(first!.tools.find((t) => t.tool.name === 'finish')!.tool.parameters) as { properties: { outputs: { properties: Record<string, unknown> } } };
+    const json = z.toJSONSchema(first!.tools.find((t) => t.tool.name === 'finish')!.tool.parameters) as unknown as { properties: { outputs: { properties: Record<string, unknown> } } };
     expect(Object.keys(json.properties.outputs.properties)).toEqual(FOUR.map((o) => o.key));
   });
 
@@ -1891,7 +1891,7 @@ describe('task outputs (E39.5, #600)', () => {
     expect(wrap.tools.map((t) => t.tool.name)).toEqual(['finish']);
     expect(wrap.instructions).toBe(reqs(runTools)[0]!.instructions);
     expect(wrap.input).toMatch(/Give the outputs in finish too/);
-    const json = z.toJSONSchema(wrap.tools[0]!.tool.parameters) as { properties: { outputs: { properties: Record<string, unknown> } } };
+    const json = z.toJSONSchema(wrap.tools[0]!.tool.parameters) as unknown as { properties: { outputs: { properties: Record<string, unknown> } } };
     expect(Object.keys(json.properties.outputs.properties)).toEqual(FOUR.map((o) => o.key));
     const done = await db.run.findFirstOrThrow({ where: { id: run.id } });
     expect(done).toMatchObject({ status: 'failed', stopReason: 'budget_actions', result: WRAP, outputsComplete: false });
