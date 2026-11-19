@@ -116,7 +116,7 @@ Send ${{Amount}} today to {{Phone Number}} using Zelle on my Bank of America acc
 
 - Answer it like any question: `POST /api/questions/:id/answer` with `{ outcome: "completed", fields: { amount: "25" } }`, or `POST /api/inbox/:runId/respond` with the same body. Every field is checked with the parameter rules; a bad answer is `400 INVALID_INPUT` with `details.issues` and the run keeps waiting. A good one fills the goal, moves the run to `queued` and starts it. The stored answer keeps the values masked.
 - Declined or expired (24 hours), the run ends `cancelled` with "The values were not provided."
-- Channels: answered in the signed-in web and Android app, the CLI, and by an AI app through `inbox_answer` with `fields` (a form never holds a sensitive field). Notifications and webhooks carry a link.
+- Channels: answered in the signed-in web and Android app, the Inbox, and by an AI app through `inbox_answer` with `fields` (a form never holds a sensitive field). Notifications and webhooks carry a link. The CLI does not answer a form: `hexactra tasks run` asks for missing values before it starts the run.
 
 **Schedules.** A schedule stores `inputs` (presets, checked like a run's). Saving, enabling or resuming a schedule whose task has a required parameter with no preset, no default and no memory is `400 SCHEDULE_INPUTS_MISSING`. If a value is missing at fire time anyway (a memory was deleted), the run waits on the form and the owner is notified.
 
