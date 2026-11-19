@@ -1,0 +1,23 @@
+{
+  "$schema": "./scenario.schema.json",
+  "name": "a simple lookup",
+  "description": "Open the shop, read the price, finish. No commitment, nothing to ask.",
+  "goal": "Find the price of the Blue Kettle on shop.example.test",
+  "task": { "confirmRiskyActions": true, "allowedDomains": ["shop.example.test"] },
+  "site": {
+    "start": "https://shop.example.test/",
+    "pages": {
+      "https://shop.example.test/": {
+        "title": "Shop",
+        "text": "Welcome to the shop.",
+        "elements": [{ "id": "kettle", "selector": "#kettle", "tag": "a", "role": "link", "label": "Blue Kettle", "on": [{ "goto": "https://shop.example.test/kettle" }] }]
+      },
+      "https://shop.example.test/kettle": { "title": "Blue Kettle", "text": "Blue Kettle. Price: 24.00. In stock.", "elements": [] }
+    }
+  },
+  "script": [
+    [{ "tool": "observe_elements" }, { "tool": "click", "args": { "selector": "#kettle" } }, { "tool": "read_text" }],
+    [{ "tool": "finish", "args": { "success": true, "result": "The Blue Kettle costs 24.00." } }]
+  ],
+  "expect": { "status": "succeeded", "finishIncludes": "24.00", "maxSteps": 6, "mustNot": ["navigate:outside_allowed_sites"] }
+}
