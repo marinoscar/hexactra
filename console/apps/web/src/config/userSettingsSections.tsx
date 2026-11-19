@@ -5,6 +5,7 @@ import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import PsychologyOutlinedIcon from '@mui/icons-material/PsychologyOutlined';
 import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
+import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
 import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/ui';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { DANGER_ZONE_GROUP_LABEL } from '@marinoscar/platform-web/user-data/headless';
@@ -103,6 +104,15 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
         Icon: VerifiedUserOutlinedIcon,
         path: '/settings/approvals',
         permission: 'approvals:read',
+      },
+      // Secrets (E37.4, E37.5). `secrets:read` is what `GET /api/secrets/status` enforces
+      // (apps/api/src/secrets/secrets.controller.ts); the choices need `secrets:write`, checked in the page.
+      {
+        title: 'Secrets',
+        description: 'Logins the agent can use without seeing them: choose between storing them in Hexactra and connecting your own Vault.',
+        Icon: KeyOutlinedIcon,
+        path: '/settings/secrets',
+        permission: 'secrets:read',
       },
     ],
   },

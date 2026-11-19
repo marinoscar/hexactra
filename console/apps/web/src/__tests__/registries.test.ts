@@ -91,6 +91,7 @@ describe('browser agent cards', () => {
   const group = (sections: typeof ADMIN_SECTIONS) => sections.find((s) => s.label === 'Browser agent');
   const policiesController = read('../../../api/src/policies/policies.controller.ts');
   const approvalsController = read('../../../api/src/approvals/approval-rules.controller.ts');
+  const secretsController = read('../../../api/src/secrets/secrets.controller.ts');
   // The platform's system settings routes (GET /api/system-settings) and their permission ids.
   const settingsPermissions = readFileSync(join(__dirname, '..', '..', '..', '..', 'node_modules', '@marinoscar', 'platform-api', 'dist', 'settings', 'settings.permissions.js'), 'utf8');
 
@@ -99,6 +100,8 @@ describe('browser agent cards', () => {
     expect(listRoute?.[1]).toBe('agent_policies:read');
     const approvalsList = /@Get\(\)\s*\n\s*@ApiDataResponse\([^)]*\)\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(approvalsController);
     expect(approvalsList?.[1]).toBe('approvals:read');
+    const secretsStatusPermission = /@Get\('status'\)\s*\n\s*@ApiDataResponse\([^)]*\)\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(secretsController);
+    expect(secretsStatusPermission?.[1]).toBe('secrets:read');
     expect(group(USER_SETTINGS_SECTIONS)?.cards.map((c) => [c.path, c.permission, c.feature])).toEqual([
       ['/settings/agent-policies', listRoute![1], undefined],
       ['/settings/agent-model-tiers', 'agent_policies:read', 'ai'],
@@ -110,6 +113,8 @@ describe('browser agent cards', () => {
       ['/settings/memories', 'memories:read', undefined],
       // #554, appended: what GET /api/approval-rules enforces.
       ['/settings/approvals', approvalsList![1], undefined],
+      // E37.4 / E37.5, appended: what GET /api/secrets/status enforces.
+      ['/settings/secrets', secretsStatusPermission![1], undefined],
     ]);
   });
 

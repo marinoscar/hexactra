@@ -1,6 +1,6 @@
 import { APP_NAME } from '@app/shared';
 import { Box, CircularProgress } from '@mui/material';
-import { Fragment, Suspense, type ComponentType, type ReactNode } from 'react';
+import { Fragment, Suspense, lazy, type ComponentType, type ReactNode } from 'react';
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { DoctorPage } from '@marinoscar/platform-web/doctor/ui';
 import {
@@ -71,6 +71,7 @@ import { ModelTiersPage } from './pages/ModelTiersPage';
 import { AgentCeilingsPage } from './pages/AgentCeilingsPage';
 import { RunHistorySettingsPage } from './pages/RunHistorySettingsPage';
 import { SavedApprovalsPage } from './pages/SavedApprovalsPage';
+import { SecretsSettingsPage } from './pages/SecretsSettingsPage';
 import { AiAppCeilingsPage } from './pages/AiAppCeilingsPage';
 import { AiAppDetailPage } from './pages/AiAppDetailPage';
 import { AiAppsPage } from './pages/AiAppsPage';
@@ -102,6 +103,9 @@ registerSettingsFeature('orgs', useOrgsFeature);
 // The `oauthServer` feature (#459): the Connected apps card shows only while the
 // OAuth server is on (it ships off; an administrator switches it on in OAuth clients).
 registerSettingsFeature('oauthServer', useOAuthServerFeature);
+
+// "My saved logins" (E37.5): Vault's own pages, a separate chunk loaded when the route opens.
+const SavedLoginsRoutes = lazy(() => import('./secrets/SavedLoginsRoutes'));
 
 const spinner = (
   <Box sx={{ display: 'grid', placeItems: 'center', minHeight: '60vh' }}>
@@ -281,6 +285,8 @@ export function AppRoutes() {
           <Route path="settings/run-history" element={<Gate permission="runs:delete"><RunHistorySettingsPage /></Gate>} />
           {/* Connected AI apps (#464): `connected_apps:read` is what /api/connected-apps enforces. */}
           <Route path="settings/ai-apps" element={<Gate permission="connected_apps:read"><AiAppsPage /></Gate>} />
+          <Route path="settings/secrets" element={<Gate permission="secrets:read"><SecretsSettingsPage /></Gate>} />
+          <Route path="secrets/*" element={<Gate permission="secrets:read"><SavedLoginsRoutes /></Gate>} />
           <Route path="settings/approvals" element={<Gate permission="approvals:read"><SavedApprovalsPage /></Gate>} />
           <Route path="settings/ai-apps/connect" element={<Gate permission="connected_apps:read"><ConnectAiAppPage /></Gate>} />
           <Route path="settings/ai-apps/:clientId" element={<Gate permission="connected_apps:read"><AiAppDetailPage /></Gate>} />
