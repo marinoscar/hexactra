@@ -141,10 +141,12 @@ export function runHarnessHostConformance(host: HarnessHost): void {
       expect(questions.parse({})).toMatchObject({ ok: false });
       const asked = questions.prepare({ kind: 'other', input: 'text', prompt: 'Which size?' });
       const opened = await questions.open(asked);
-      expect(typeof opened.handoffId).toBe('string');
-      expect(opened.handoffId).not.toBe('');
-      expect(await run.answer(opened.handoffId)).toBe(true);
-      expect(await run.answer(opened.handoffId)).toBe(false);
+      // A question that needs no browser has no handoff id (E39.7): it is answered through its own id.
+      const key = opened.handoffId ?? opened.questionId ?? '';
+      expect(typeof key).toBe('string');
+      expect(key).not.toBe('');
+      expect(await run.answer(key)).toBe(true);
+      expect(await run.answer(key)).toBe(false);
     });
   });
 }

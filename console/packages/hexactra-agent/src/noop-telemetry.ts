@@ -10,6 +10,7 @@ export const noopTelemetry: TelemetryPort = {
   modelFailed: () => undefined,
   useFallback: () => undefined,
   stepRecorded: () => undefined,
+  toolAttributes: () => undefined,
   gated: () => undefined,
   asked: () => undefined,
   answered: () => undefined,

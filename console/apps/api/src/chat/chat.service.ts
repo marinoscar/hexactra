@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { Prisma, type ChatMessage, type ChatMessageKind, type ChatMessageRole, type Conversation } from '@prisma/client';
 
+import { assertSelectable, conversationConnectionViews, replaceConversationConnections, type ConnectionSelectionView } from '../connections/agent-connections';
 import { ownerDefaultUseSavedLogins } from '../secrets/saved-logins-default';
 import { PoliciesService } from '../policies/policies.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -23,6 +24,8 @@ export interface ChatView {
   useSavedLogins: boolean;
   useSavedIdentity: boolean;
   useSavedCards: boolean;
+  /** The connections the chat may use (E39.7). */
+  connections: ConnectionSelectionView[];
   lastMessageAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -80,8 +83,8 @@ export function titleFromMessage(text: string): string {
   return clip(oneLine(text), Math.min(TITLE_FROM_MESSAGE_MAX, CHAT_TITLE_MAX));
 }
 
-function view(c: Conversation): ChatView {
-  return { id: c.id, title: c.title, status: c.status, profile: c.profile, hostId: c.hostId, hostFallback: c.hostFallback, policyId: c.policyRef, allowedDomains: c.allowedDomains, confirmRiskyActions: c.confirmRiskyActions, useSavedLogins: c.useSavedLogins, useSavedIdentity: c.useSavedIdentity, useSavedCards: c.useSavedCards, lastMessageAt: c.lastMessageAt, createdAt: c.createdAt, updatedAt: c.updatedAt };
+function view(c: Conversation, connections: ConnectionSelectionView[] = []): ChatView {
+  return { connections, id: c.id, title: c.title, status: c.status, profile: c.profile, hostId: c.hostId, hostFallback: c.hostFallback, policyId: c.policyRef, allowedDomains: c.allowedDomains, confirmRiskyActions: c.confirmRiskyActions, useSavedLogins: c.useSavedLogins, useSavedIdentity: c.useSavedIdentity, useSavedCards: c.useSavedCards, lastMessageAt: c.lastMessageAt, createdAt: c.createdAt, updatedAt: c.updatedAt };
 }
 function messageView(m: ChatMessage): ChatMessageView {
   return { id: m.id, seq: m.seq, role: m.role, kind: m.kind, text: m.text, runId: m.runId, meta: m.meta, createdAt: m.createdAt };
@@ -160,16 +163,22 @@ export class ChatService {
         : [],
       this.liveRuns(userId, ids),
     ]);
+    const conns = await conversationConnectionViews(this.prisma, ids);
     const previews = new Map(last.map((m) => [m.conversationId, { role: m.role, kind: m.kind, text: clip(oneLine(m.text), PREVIEW_MAX) }]));
     const tail = page[page.length - 1];
     return {
-      items: page.map((c) => ({ ...view(c), preview: previews.get(c.id) ?? null, liveRun: live.get(c.id) ?? null })),
+      items: page.map((c) => ({ ...view(c, conns.get(c.id) ?? []), preview: previews.get(c.id) ?? null, liveRun: live.get(c.id) ?? null })),
       nextCursor: rows.length > q.limit && tail ? encodeCursor({ at: tail.lastMessageAt.toISOString(), id: tail.id }) : null,
     };
   }
 
+  private async withConnections(c: Conversation): Promise<ChatView> {
+    return view(c, (await conversationConnectionViews(this.prisma, [c.id])).get(c.id) ?? []);
+  }
+
   async create(userId: string, input: CreateChatDto): Promise<ChatView> {
     await this.policies?.assertAssignable(userId, input.policyId);
+    if (input.connections) await assertSelectable(this.prisma, userId, input.connections);
     const c = await this.db(userId).conversation.create({
       data: {
         userId,
@@ -186,7 +195,8 @@ export class ChatService {
         ...(input.useSavedCards !== undefined ? { useSavedCards: input.useSavedCards } : {}),
       },
     });
-    return view(c);
+    if (input.connections?.length) await this.prisma.$transaction((tx) => replaceConversationConnections(tx, c.id, input.connections!));
+    return this.withConnections(c);
   }
 
   /** The chat and its messages after `afterSeq`, oldest first (at most `CHAT_MESSAGES_MAX`). */
@@ -196,16 +206,19 @@ export class ChatService {
       this.prisma.chatMessage.findMany({ where: { conversationId: c.id, seq: { gt: afterSeq } }, orderBy: { seq: 'asc' }, take: CHAT_MESSAGES_MAX + 1 }),
       this.liveRuns(userId, [c.id]),
     ]);
-    return { ...view(c), messages: rows.slice(0, CHAT_MESSAGES_MAX).map(messageView), hasMore: rows.length > CHAT_MESSAGES_MAX, liveRun: live.get(c.id) ?? null, thinking: c.turnLeaseUntil !== null && c.turnLeaseUntil > new Date() };
+    return { ...(await this.withConnections(c)), messages: rows.slice(0, CHAT_MESSAGES_MAX).map(messageView), hasMore: rows.length > CHAT_MESSAGES_MAX, liveRun: live.get(c.id) ?? null, thinking: c.turnLeaseUntil !== null && c.turnLeaseUntil > new Date() };
   }
 
   async update(userId: string, id: string, patch: UpdateChatDto): Promise<ChatView> {
-    const { policyId, ...fields } = patch;
+    const { policyId, connections, ...fields } = patch;
     await this.policies?.assertAssignable(userId, policyId);
+    if (connections) await assertSelectable(this.prisma, userId, connections);
     const data: Prisma.ConversationUpdateManyMutationInput = { ...fields, ...(policyId !== undefined ? { policyRef: policyId } : {}) };
     const { count } = await this.db(userId).conversation.updateMany({ where: { id }, data });
     if (count === 0) throw notFound();
-    return view(await this.owned(userId, id));
+    // The chat's own list changes; a run already started keeps its snapshot (E39.7).
+    if (connections) await this.prisma.$transaction((tx) => replaceConversationConnections(tx, id, connections));
+    return this.withConnections(await this.owned(userId, id));
   }
 
   /**

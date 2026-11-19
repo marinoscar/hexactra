@@ -1,6 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Module, type OnModuleInit } from '@nestjs/common';
 import { CredentialsModule, UserCredentialsModule } from '@marinoscar/platform-api/credentials';
 
+import { PrismaService } from '../prisma/prisma.service';
+import { agentConnectionUsage } from './agent-connections';
 import { CapabilityProviderRegistry } from './capability-provider.registry';
 import { ConnectionApps } from './connection-apps.service';
 import { ConnectionCapabilities } from './connection-capabilities.service';
@@ -46,4 +48,14 @@ import { ConnectionsService } from './connections.service';
   ],
   exports: [ConnectionProviderRegistry, CapabilityProviderRegistry, ConnectionCapabilities, ConnectionUsageRegistry, ConnectionResolverService, ConnectionTokensService, ConnectionsService, ConnectionApps],
 })
-export class ConnectionsModule {}
+export class ConnectionsModule implements OnModuleInit {
+  constructor(
+    private readonly usage: ConnectionUsageRegistry,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  /** The tasks and chats that use a connection (E39.7) show in the Disconnect dialog, and are cleared when it is removed. */
+  onModuleInit(): void {
+    for (const source of agentConnectionUsage(this.prisma)) this.usage.register(source);
+  }
+}

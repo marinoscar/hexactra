@@ -117,6 +117,8 @@ export class FakeControl implements ControlPort {
 export class FakeQuestions implements QuestionPort {
   opened: QuestionSpec[] = [];
   failToOpen = false;
+  /** Ask without a browser (E39.7): the question has no handoff and the run waits on it by its own id. */
+  noHandoff = false;
   parse(raw: Record<string, unknown>) {
     if (typeof raw.prompt !== 'string' || !raw.prompt) return { ok: false as const, message: 'prompt: required' };
     return { ok: true as const, spec: raw as unknown as QuestionSpec };
@@ -127,19 +129,25 @@ export class FakeQuestions implements QuestionPort {
   async open(spec: QuestionSpec): Promise<OpenedQuestion> {
     if (this.failToOpen) throw new Error('nobody to ask');
     this.opened.push(spec);
-    return { handoffId: `handoff-${this.opened.length}`, expiresAt: null, questionId: `question-${this.opened.length}` };
+    return { handoffId: this.noHandoff ? null : `handoff-${this.opened.length}`, expiresAt: null, questionId: `question-${this.opened.length}` };
   }
 }
 
 export class FakeApprovals implements ApprovalPort {
   enabled = true;
   rules: { host: string; category: string; label: string; id: string; summary: string }[] = [];
+  /** Connection rules (E39.7): the connection, the tool and the approved recipients. */
+  connectionRules: { connectionId: string; tool: string; recipients: string[]; id: string; summary: string }[] = [];
   uses: { id: string; stepSeq: number }[] = [];
   async matchGate(t: { host: string; category: string; label: string }) {
     return this.rules.find((r) => r.host === t.host && r.category === t.category && r.label === t.label) ?? null;
   }
   async matchAsk() {
     return null;
+  }
+  async matchConnection(t: { connectionId: string; tool: string; recipients: readonly string[] }) {
+    const covered = (r: { recipients: string[] }, a: string) => r.recipients.includes(a.toLowerCase()) || r.recipients.includes(a.toLowerCase().slice(a.indexOf('@')));
+    return this.connectionRules.find((r) => r.connectionId === t.connectionId && r.tool === t.tool && t.recipients.every((a) => covered(r, a))) ?? null;
   }
   async recordUse(rule: { id: string }, use: { stepSeq: number }) {
     this.uses.push({ id: rule.id, stepSeq: use.stepSeq });
@@ -177,6 +185,9 @@ export class FakeTelemetry implements TelemetryPort {
   modelFailed() {}
   useFallback() {}
   stepRecorded() {}
+  toolAttributes(attrs: Record<string, string | number | boolean>) {
+    this.calls.push(`attrs:${JSON.stringify(attrs)}`);
+  }
   gated(category: string) {
     this.calls.push(`gated:${category}`);
   }

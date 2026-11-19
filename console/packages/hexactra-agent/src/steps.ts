@@ -93,9 +93,10 @@ export async function record(ctx: Ctx, kind: string, action: string | null, args
  * as it is now. A job that dies before `record` finishes it leaves this row, and the next job marks it `unknown`. Returns the row's
  * `seq`, or null when this job no longer holds the run (nothing is written then).
  */
-export async function openIntent(ctx: Ctx, action: string, args: Record<string, unknown>, gate: GateTarget | null): Promise<number | null> {
+export async function openIntent(ctx: Ctx, action: string, args: Record<string, unknown>, gate: GateTarget | null, named?: string): Promise<number | null> {
   const { state } = ctx;
-  const what = describeIntent(action, args, gate);
+  // A tool that knows what it is about to do (a send, a booking) says so itself; the rest are described from their arguments.
+  const what = named ?? describeIntent(action, args, gate);
   const held = await ctx.ports.store.openIntent(ctx.memory, {
     seq: state.seq + 1,
     kind: 'action',

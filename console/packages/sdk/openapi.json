@@ -44321,6 +44321,7 @@
               "INVALID_INPUT",
               "SENSITIVE_INPUT",
               "SCHEDULE_INPUTS_MISSING",
+              "CONNECTION_SELECTION_INVALID",
               "INVALID_CRON",
               "INVALID_TIMEZONE",
               "CRON_TOO_FREQUENT",
@@ -44367,6 +44368,17 @@
               "WEBHOOK_EVENT_UNKNOWN",
               "WEBHOOK_EVENT_NOT_PERMITTED",
               "WEBHOOK_LIMIT_REACHED",
+              "CONNECTION_NOT_FOUND",
+              "CONNECTION_LABEL_TAKEN",
+              "CONNECTION_LIMIT",
+              "CONNECTION_PROVIDER_UNAVAILABLE",
+              "CONNECTION_NEEDS_RECONNECT",
+              "CONNECTION_PAUSED",
+              "CONNECTION_CAPABILITY_OFF",
+              "CONNECTION_AMBIGUOUS",
+              "CONNECTION_NONE",
+              "CONNECTION_UNAVAILABLE",
+              "CONNECTION_DEFAULT_NEEDS_CAPABILITY",
               "CHAT_NOT_FOUND",
               "CHAT_ARCHIVED",
               "CHAT_RUN_LIVE",
@@ -44385,17 +44397,6 @@
               "DELIVERY_TEST_RATE_LIMITED",
               "RECIPIENT_NOT_CONFIRMED",
               "RECIPIENT_LIMIT",
-              "CONNECTION_NOT_FOUND",
-              "CONNECTION_LABEL_TAKEN",
-              "CONNECTION_LIMIT",
-              "CONNECTION_PROVIDER_UNAVAILABLE",
-              "CONNECTION_NEEDS_RECONNECT",
-              "CONNECTION_PAUSED",
-              "CONNECTION_CAPABILITY_OFF",
-              "CONNECTION_AMBIGUOUS",
-              "CONNECTION_NONE",
-              "CONNECTION_UNAVAILABLE",
-              "CONNECTION_DEFAULT_NEEDS_CAPABILITY",
               "MAIL_TRIGGER_NOT_FOUND",
               "MAIL_TRIGGER_LIMIT",
               "MAIL_TRIGGER_CONNECTION_INVALID",
@@ -71949,6 +71950,18 @@
                     "minimum": 500,
                     "maximum": 20000,
                     "description": "Most characters of one page observation sent to the model."
+                  },
+                  "connectionReadMessages": {
+                    "description": "Most mail messages a run may read through the owner's connections (E39.7). Default 25.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 500
+                  },
+                  "connectionReadChars": {
+                    "description": "Most characters of content a run may read through the owner's connections: mail bodies, documents, sheets, events (E39.7). Default 200000.",
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 2000000
                   }
                 },
                 "required": [
@@ -72998,6 +73011,18 @@
                           "minimum": 500,
                           "maximum": 20000,
                           "description": "Most characters of one page observation sent to the model."
+                        },
+                        "connectionReadMessages": {
+                          "description": "Most mail messages a run may read through the owner's connections (E39.7). Default 25.",
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 500
+                        },
+                        "connectionReadChars": {
+                          "description": "Most characters of content a run may read through the owner's connections: mail bodies, documents, sheets, events (E39.7). Default 200000.",
+                          "type": "integer",
+                          "minimum": 1000,
+                          "maximum": 2000000
                         }
                       },
                       "required": [
@@ -73513,6 +73538,18 @@
                     "minimum": 500,
                     "maximum": 20000,
                     "description": "Most characters of one page observation sent to the model."
+                  },
+                  "connectionReadMessages": {
+                    "description": "Most mail messages a run may read through the owner's connections (E39.7). Default 25.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 500
+                  },
+                  "connectionReadChars": {
+                    "description": "Most characters of content a run may read through the owner's connections: mail bodies, documents, sheets, events (E39.7). Default 200000.",
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 2000000
                   }
                 },
                 "required": [
@@ -73815,6 +73852,18 @@
                     "minimum": 500,
                     "maximum": 20000,
                     "description": "Most characters of one page observation sent to the model."
+                  },
+                  "connectionReadMessages": {
+                    "description": "Most mail messages a run may read through the owner's connections (E39.7). Default 25.",
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 500
+                  },
+                  "connectionReadChars": {
+                    "description": "Most characters of content a run may read through the owner's connections: mail bodies, documents, sheets, events (E39.7). Default 200000.",
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 2000000
                   }
                 },
                 "required": [
@@ -74557,13 +74606,14 @@
                   "type": "string",
                   "enum": [
                     "gate",
-                    "ask"
+                    "ask",
+                    "connection"
                   ],
-                  "description": "`gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own."
+                  "description": "`gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own. `connection`: a call that changes something through one of the owner's connections (E39.7)."
                 },
                 "host": {
                   "type": "string",
-                  "description": "The registrable domain it applies on."
+                  "description": "The registrable domain it applies on; for a `connection` rule, the connection's id."
                 },
                 "category": {
                   "description": "For `gate`: payment, purchase, send, delete or submit.",
@@ -74626,6 +74676,13 @@
                     "string",
                     "null"
                   ]
+                },
+                "recipients": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "`connection` rules that send mail or invite people (E39.7): the addresses (or `@domain`) the owner approved. A call to anyone else asks again. Empty for every other rule."
                 },
                 "expiresAt": {
                   "type": [
@@ -74692,6 +74749,7 @@
                 "conversationId",
                 "maxAmount",
                 "cardRef",
+                "recipients",
                 "expiresAt",
                 "enabled",
                 "createdFromQuestionId",
@@ -74745,13 +74803,14 @@
             "type": "string",
             "enum": [
               "gate",
-              "ask"
+              "ask",
+              "connection"
             ],
-            "description": "`gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own."
+            "description": "`gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own. `connection`: a call that changes something through one of the owner's connections (E39.7)."
           },
           "host": {
             "type": "string",
-            "description": "The registrable domain it applies on."
+            "description": "The registrable domain it applies on; for a `connection` rule, the connection's id."
           },
           "category": {
             "description": "For `gate`: payment, purchase, send, delete or submit.",
@@ -74814,6 +74873,13 @@
               "string",
               "null"
             ]
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`connection` rules that send mail or invite people (E39.7): the addresses (or `@domain`) the owner approved. A call to anyone else asks again. Empty for every other rule."
           },
           "expiresAt": {
             "type": [
@@ -74922,6 +74988,7 @@
           "conversationId",
           "maxAmount",
           "cardRef",
+          "recipients",
           "expiresAt",
           "enabled",
           "createdFromQuestionId",
@@ -74945,13 +75012,14 @@
             "type": "string",
             "enum": [
               "gate",
-              "ask"
+              "ask",
+              "connection"
             ],
-            "description": "`gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own."
+            "description": "`gate`: a step the server stops for (a commitment). `ask`: a question the agent would ask on its own. `connection`: a call that changes something through one of the owner's connections (E39.7)."
           },
           "host": {
             "type": "string",
-            "description": "The registrable domain it applies on."
+            "description": "The registrable domain it applies on; for a `connection` rule, the connection's id."
           },
           "category": {
             "description": "For `gate`: payment, purchase, send, delete or submit.",
@@ -75014,6 +75082,13 @@
               "string",
               "null"
             ]
+          },
+          "recipients": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`connection` rules that send mail or invite people (E39.7): the addresses (or `@domain`) the owner approved. A call to anyone else asks again. Empty for every other rule."
           },
           "expiresAt": {
             "type": [
@@ -75080,6 +75155,7 @@
           "conversationId",
           "maxAmount",
           "cardRef",
+          "recipients",
           "expiresAt",
           "enabled",
           "createdFromQuestionId",
@@ -77717,6 +77793,59 @@
             ],
             "description": "`ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`"
           },
+          "needsBrowser": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
+            "description": "Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool"
+          },
+          "connections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "description": "A connection of the caller (`GET /api/connections`)."
+                },
+                "access": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "read_write"
+                  ],
+                  "description": "`read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time)."
+                },
+                "label": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "accountEmail": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "description": "The connection's status now (`active`, `paused`, `needs_reconnect`): a run cannot use one that is not active."
+                }
+              },
+              "required": [
+                "connectionId",
+                "access",
+                "label",
+                "provider",
+                "accountEmail",
+                "status"
+              ]
+            },
+            "description": "The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default."
+          },
           "model": {
             "deprecated": true,
             "description": "Deprecated: see `policyId`",
@@ -78275,6 +78404,8 @@
           "useSavedIdentity",
           "useSavedCards",
           "unattendedPayments",
+          "needsBrowser",
+          "connections",
           "model",
           "policyId",
           "parameters",
@@ -78369,6 +78500,59 @@
                     "allow"
                   ],
                   "description": "`ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`"
+                },
+                "needsBrowser": {
+                  "type": "string",
+                  "enum": [
+                    "auto",
+                    "always",
+                    "never"
+                  ],
+                  "description": "Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool"
+                },
+                "connections": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "connectionId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "description": "A connection of the caller (`GET /api/connections`)."
+                      },
+                      "access": {
+                        "type": "string",
+                        "enum": [
+                          "read",
+                          "read_write"
+                        ],
+                        "description": "`read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time)."
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "provider": {
+                        "type": "string"
+                      },
+                      "accountEmail": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "description": "The connection's status now (`active`, `paused`, `needs_reconnect`): a run cannot use one that is not active."
+                      }
+                    },
+                    "required": [
+                      "connectionId",
+                      "access",
+                      "label",
+                      "provider",
+                      "accountEmail",
+                      "status"
+                    ]
+                  },
+                  "description": "The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default."
                 },
                 "model": {
                   "deprecated": true,
@@ -78928,6 +79112,8 @@
                 "useSavedIdentity",
                 "useSavedCards",
                 "unattendedPayments",
+                "needsBrowser",
+                "connections",
                 "model",
                 "policyId",
                 "parameters",
@@ -79261,6 +79447,59 @@
               "allow"
             ],
             "description": "`ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`"
+          },
+          "needsBrowser": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
+            "description": "Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool"
+          },
+          "connections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "description": "A connection of the caller (`GET /api/connections`)."
+                },
+                "access": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "read_write"
+                  ],
+                  "description": "`read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time)."
+                },
+                "label": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "accountEmail": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "description": "The connection's status now (`active`, `paused`, `needs_reconnect`): a run cannot use one that is not active."
+                }
+              },
+              "required": [
+                "connectionId",
+                "access",
+                "label",
+                "provider",
+                "accountEmail",
+                "status"
+              ]
+            },
+            "description": "The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default."
           },
           "model": {
             "deprecated": true,
@@ -79820,6 +80059,8 @@
           "useSavedIdentity",
           "useSavedCards",
           "unattendedPayments",
+          "needsBrowser",
+          "connections",
           "model",
           "policyId",
           "parameters",
@@ -80174,6 +80415,44 @@
             ],
             "description": "What an unattended run (a schedule, the API or an AI app) does at a payment step after it signed in with a saved login: `ask` (the default) keeps the confirmation on for that run even when `confirmRiskyActions` is off; `allow` leaves the task's own setting. The owner's saved approvals still apply."
           },
+          "needsBrowser": {
+            "default": "auto",
+            "type": "string",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
+            "description": "Whether the task's runs open a browser (E39.7). `auto` (the default): a run that has connections opens the browser when its first browser tool is called, so a job that needs only mail, a calendar or documents never allocates a node; a run with no connection opens it at the start, as before. `always`: open it at the start. `never`: no browser tool is offered and none is opened."
+          },
+          "connections": {
+            "maxItems": 25,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "description": "A connection of the caller (`GET /api/connections`)."
+                },
+                "access": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "read_write"
+                  ],
+                  "description": "`read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time)."
+                }
+              },
+              "required": [
+                "connectionId",
+                "access"
+              ]
+            },
+            "description": "The connections the agent may use in this task or chat, and how. Off until listed: nothing is available by default. A run takes a snapshot when it starts."
+          },
           "schedules": {
             "maxItems": 10,
             "type": "array",
@@ -80338,6 +80617,59 @@
               "allow"
             ],
             "description": "`ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`"
+          },
+          "needsBrowser": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
+            "description": "Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool"
+          },
+          "connections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "description": "A connection of the caller (`GET /api/connections`)."
+                },
+                "access": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "read_write"
+                  ],
+                  "description": "`read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time)."
+                },
+                "label": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "accountEmail": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "description": "The connection's status now (`active`, `paused`, `needs_reconnect`): a run cannot use one that is not active."
+                }
+              },
+              "required": [
+                "connectionId",
+                "access",
+                "label",
+                "provider",
+                "accountEmail",
+                "status"
+              ]
+            },
+            "description": "The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default."
           },
           "model": {
             "deprecated": true,
@@ -80604,6 +80936,8 @@
           "useSavedIdentity",
           "useSavedCards",
           "unattendedPayments",
+          "needsBrowser",
+          "connections",
           "model",
           "policyId",
           "parameters",
@@ -80949,6 +81283,43 @@
               "allow"
             ],
             "description": "What an unattended run (a schedule, the API or an AI app) does at a payment step after it signed in with a saved login: `ask` (the default) keeps the confirmation on for that run even when `confirmRiskyActions` is off; `allow` leaves the task's own setting. The owner's saved approvals still apply."
+          },
+          "needsBrowser": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
+            "description": "Whether the task's runs open a browser (E39.7). `auto` (the default): a run that has connections opens the browser when its first browser tool is called, so a job that needs only mail, a calendar or documents never allocates a node; a run with no connection opens it at the start, as before. `always`: open it at the start. `never`: no browser tool is offered and none is opened."
+          },
+          "connections": {
+            "maxItems": 25,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "description": "A connection of the caller (`GET /api/connections`)."
+                },
+                "access": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "read_write"
+                  ],
+                  "description": "`read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time)."
+                }
+              },
+              "required": [
+                "connectionId",
+                "access"
+              ]
+            },
+            "description": "The connections the agent may use in this task or chat, and how. Off until listed: nothing is available by default. A run takes a snapshot when it starts."
           }
         }
       },
@@ -81123,6 +81494,59 @@
               "allow"
             ],
             "description": "`ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`"
+          },
+          "needsBrowser": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "always",
+              "never"
+            ],
+            "description": "Whether the task's runs open a browser (E39.7): `auto` opens it at the first browser tool when the run has connections, `always` at the start, `never` offers no browser tool"
+          },
+          "connections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "description": "A connection of the caller (`GET /api/connections`)."
+                },
+                "access": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "read_write"
+                  ],
+                  "description": "`read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time)."
+                },
+                "label": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "accountEmail": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "description": "The connection's status now (`active`, `paused`, `needs_reconnect`): a run cannot use one that is not active."
+                }
+              },
+              "required": [
+                "connectionId",
+                "access",
+                "label",
+                "provider",
+                "accountEmail",
+                "status"
+              ]
+            },
+            "description": "The connections the agent may use in this task, and how (E39.7). Empty: none; nothing is available by default."
           },
           "model": {
             "deprecated": true,
@@ -81691,6 +82115,8 @@
           "useSavedIdentity",
           "useSavedCards",
           "unattendedPayments",
+          "needsBrowser",
+          "connections",
           "model",
           "policyId",
           "parameters",
@@ -85293,6 +85719,18 @@
                             "minimum": 500,
                             "maximum": 20000,
                             "description": "Most characters of one page observation sent to the model."
+                          },
+                          "connectionReadMessages": {
+                            "description": "Most mail messages a run may read through the owner's connections (E39.7). Default 25.",
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 500
+                          },
+                          "connectionReadChars": {
+                            "description": "Most characters of content a run may read through the owner's connections: mail bodies, documents, sheets, events (E39.7). Default 200000.",
+                            "type": "integer",
+                            "minimum": 1000,
+                            "maximum": 2000000
                           }
                         },
                         "required": [
@@ -88668,12 +89106,13 @@
                     "type": "string",
                     "enum": [
                       "gate",
-                      "ask"
+                      "ask",
+                      "connection"
                     ]
                   },
                   "host": {
                     "type": "string",
-                    "description": "The registrable domain of the page the browser reported"
+                    "description": "The registrable domain of the page the browser reported; for a `connection` question, the connection's id"
                   },
                   "category": {
                     "description": "gate: payment, purchase, send, delete or submit",
@@ -88713,6 +89152,13 @@
                   "amount": {
                     "description": "A saved card: the purchase this approval is for, a decimal with two places",
                     "type": "string"
+                  },
+                  "recipients": {
+                    "description": "A connection call that reaches people (E39.7): the addresses the approved call reaches; \"Don't ask again\" remembers these people (`rememberRule.recipientsFrom: these`) or anyone at their domains (`domain`)",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 },
                 "required": [
@@ -88728,6 +89174,70 @@
               }
             ],
             "description": "What \"Don't ask again\" would remember (#555): the kind, the site, the category and the label or topic, and the summary the owner reads. Computed by the server only; null when the question cannot be remembered."
+          },
+          "action": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "connectionId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "connectionLabel": {
+                    "type": "string"
+                  },
+                  "tool": {
+                    "type": "string",
+                    "description": "The tool the agent called: `mail_send`, `calendar_create_event`, `sheet_append_rows`, ..."
+                  },
+                  "lines": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "label": {
+                          "type": "string"
+                        },
+                        "value": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "value"
+                      ]
+                    },
+                    "description": "The labelled facts the card shows: from, to, subject, a body preview, an event's time and attendees, a file's name and the cells"
+                  },
+                  "summary": {
+                    "type": "string",
+                    "description": "What it does in one line, with no body and no cells: what the run's step and the notifications say"
+                  },
+                  "body": {
+                    "description": "The whole text for \"show all\" (at most 20,000 characters)",
+                    "type": "string"
+                  },
+                  "hash": {
+                    "description": "A hash of the validated arguments the card shows; only that exact call goes through once approved",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "connectionId",
+                  "connectionLabel",
+                  "tool",
+                  "lines",
+                  "summary"
+                ],
+                "description": "A call through one of the owner's connections this question asks to approve (E39.7), built by the server from the tool's validated arguments. Set by the server only."
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The call through one of the owner's connections this question asks to approve (E39.7); null for every other question"
           },
           "status": {
             "type": "string",
@@ -89025,6 +89535,7 @@
           "fields",
           "gate",
           "rememberable",
+          "action",
           "status",
           "response",
           "pageTitle",
@@ -89287,6 +89798,13 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 3650
+              },
+              "recipientsFrom": {
+                "type": "string",
+                "enum": [
+                  "these",
+                  "domain"
+                ]
               }
             },
             "required": [
@@ -89456,6 +89974,13 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 3650
+              },
+              "recipientsFrom": {
+                "type": "string",
+                "enum": [
+                  "these",
+                  "domain"
+                ]
               }
             },
             "required": [
@@ -89708,6 +90233,10 @@
                   "type": "boolean",
                   "description": "Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's \"confirm purchases\" limit still makes every card use ask."
                 },
+                "allowConnections": {
+                  "type": "boolean",
+                  "description": "Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner."
+                },
                 "paused": {
                   "type": "boolean",
                   "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -89725,6 +90254,7 @@
                 "allowSavedLogins",
                 "allowSavedIdentity",
                 "allowSavedCards",
+                "allowConnections",
                 "paused"
               ]
             },
@@ -90085,6 +90615,10 @@
                 "type": "boolean",
                 "description": "Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's \"confirm purchases\" limit still makes every card use ask."
               },
+              "allowConnections": {
+                "type": "boolean",
+                "description": "Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner."
+              },
               "paused": {
                 "type": "boolean",
                 "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -90102,6 +90636,7 @@
               "allowSavedLogins",
               "allowSavedIdentity",
               "allowSavedCards",
+              "allowConnections",
               "paused"
             ]
           },
@@ -90230,6 +90765,10 @@
             "type": "boolean",
             "description": "Let this app's runs pay with the owner's saved cards (E37.7). Off by default: an AI app never gets a card unless the owner allows it here (the task or chat must have `useSavedCards` on too, and `allowSavedLogins`); the app's \"confirm purchases\" limit still makes every card use ask."
           },
+          "allowConnections": {
+            "type": "boolean",
+            "description": "Let this app's runs use the owner's connections (mail, calendar, documents: E39.7). Off by default: an AI app never gets the owner's mailbox through Hexactra unless the owner allows it here AND the task lists the connections. Reads are free; anything that sends, creates or changes still asks the owner."
+          },
           "paused": {
             "type": "boolean",
             "description": "Refuse new runs and sessions from this app without disconnecting it."
@@ -90247,6 +90786,7 @@
           "allowSavedLogins",
           "allowSavedIdentity",
           "allowSavedCards",
+          "allowConnections",
           "paused"
         ]
       },
@@ -90318,6 +90858,9 @@
             "type": "boolean"
           },
           "allowSavedCards": {
+            "type": "boolean"
+          },
+          "allowConnections": {
             "type": "boolean"
           },
           "paused": {
@@ -90818,12 +91361,13 @@
                     "type": "string",
                     "enum": [
                       "gate",
-                      "ask"
+                      "ask",
+                      "connection"
                     ]
                   },
                   "host": {
                     "type": "string",
-                    "description": "The registrable domain of the page the browser reported"
+                    "description": "The registrable domain of the page the browser reported; for a `connection` question, the connection's id"
                   },
                   "category": {
                     "description": "gate: payment, purchase, send, delete or submit",
@@ -90863,6 +91407,13 @@
                   "amount": {
                     "description": "A saved card: the purchase this approval is for, a decimal with two places",
                     "type": "string"
+                  },
+                  "recipients": {
+                    "description": "A connection call that reaches people (E39.7): the addresses the approved call reaches; \"Don't ask again\" remembers these people (`rememberRule.recipientsFrom: these`) or anyone at their domains (`domain`)",
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 },
                 "required": [
@@ -92965,6 +93516,50 @@
                   "type": "boolean",
                   "description": "Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default"
                 },
+                "connections": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "connectionId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                        "description": "A connection of the caller (`GET /api/connections`)."
+                      },
+                      "access": {
+                        "type": "string",
+                        "enum": [
+                          "read",
+                          "read_write"
+                        ],
+                        "description": "`read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time)."
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "provider": {
+                        "type": "string"
+                      },
+                      "accountEmail": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "type": "string",
+                        "description": "The connection's status now (`active`, `paused`, `needs_reconnect`): a run cannot use one that is not active."
+                      }
+                    },
+                    "required": [
+                      "connectionId",
+                      "access",
+                      "label",
+                      "provider",
+                      "accountEmail",
+                      "status"
+                    ]
+                  },
+                  "description": "The connections the chat may use, and how (E39.7). Empty: none; nothing is available by default."
+                },
                 "lastMessageAt": {
                   "type": "string",
                   "description": "ISO 8601 timestamp"
@@ -93063,6 +93658,7 @@
                 "useSavedLogins",
                 "useSavedIdentity",
                 "useSavedCards",
+                "connections",
                 "lastMessageAt",
                 "createdAt",
                 "updatedAt",
@@ -93154,6 +93750,50 @@
             "type": "boolean",
             "description": "Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default"
           },
+          "connections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "description": "A connection of the caller (`GET /api/connections`)."
+                },
+                "access": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "read_write"
+                  ],
+                  "description": "`read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time)."
+                },
+                "label": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "accountEmail": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "description": "The connection's status now (`active`, `paused`, `needs_reconnect`): a run cannot use one that is not active."
+                }
+              },
+              "required": [
+                "connectionId",
+                "access",
+                "label",
+                "provider",
+                "accountEmail",
+                "status"
+              ]
+            },
+            "description": "The connections the chat may use, and how (E39.7). Empty: none; nothing is available by default."
+          },
           "lastMessageAt": {
             "type": "string",
             "description": "ISO 8601 timestamp"
@@ -93180,6 +93820,7 @@
           "useSavedLogins",
           "useSavedIdentity",
           "useSavedCards",
+          "connections",
           "lastMessageAt",
           "createdAt",
           "updatedAt"
@@ -93252,6 +93893,34 @@
           "useSavedCards": {
             "type": "boolean",
             "description": "Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: the agent never sees a card value. Off by default; it needs `useSavedLogins`."
+          },
+          "connections": {
+            "maxItems": 25,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "description": "A connection of the caller (`GET /api/connections`)."
+                },
+                "access": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "read_write"
+                  ],
+                  "description": "`read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time)."
+                }
+              },
+              "required": [
+                "connectionId",
+                "access"
+              ]
+            },
+            "description": "The connections (mail, calendar, documents) the chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). Off until listed."
           }
         }
       },
@@ -93324,6 +93993,50 @@
           "useSavedCards": {
             "type": "boolean",
             "description": "Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default"
+          },
+          "connections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "description": "A connection of the caller (`GET /api/connections`)."
+                },
+                "access": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "read_write"
+                  ],
+                  "description": "`read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time)."
+                },
+                "label": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "accountEmail": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "description": "The connection's status now (`active`, `paused`, `needs_reconnect`): a run cannot use one that is not active."
+                }
+              },
+              "required": [
+                "connectionId",
+                "access",
+                "label",
+                "provider",
+                "accountEmail",
+                "status"
+              ]
+            },
+            "description": "The connections the chat may use, and how (E39.7). Empty: none; nothing is available by default."
           },
           "lastMessageAt": {
             "type": "string",
@@ -93468,6 +94181,7 @@
           "useSavedLogins",
           "useSavedIdentity",
           "useSavedCards",
+          "connections",
           "lastMessageAt",
           "createdAt",
           "updatedAt",
@@ -93552,6 +94266,34 @@
           "useSavedCards": {
             "type": "boolean",
             "description": "Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: the agent never sees a card value. Off by default; it needs `useSavedLogins`."
+          },
+          "connections": {
+            "maxItems": 25,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "description": "A connection of the caller (`GET /api/connections`)."
+                },
+                "access": {
+                  "type": "string",
+                  "enum": [
+                    "read",
+                    "read_write"
+                  ],
+                  "description": "`read` offers the agent only the tools that read; `read_write` also the tools that send, create or change (each of those still asks the owner the first time)."
+                }
+              },
+              "required": [
+                "connectionId",
+                "access"
+              ]
+            },
+            "description": "The connections (mail, calendar, documents) the chat may use, and how (E39.7): `read` lets the chat answer questions from them without starting a run; `read_write` also lets its runs send, create or change (each of those asks the owner). Off until listed."
           }
         }
       },
