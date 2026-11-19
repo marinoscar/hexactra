@@ -92,6 +92,8 @@ export interface TaskSummary {
   runCounts: { total: number; last7d: { succeeded: number; failed: number; cancelled: number } };
   /** The policy a run started now would use. */
   policy: { id: string; name: string; builtin: boolean; isDefault: boolean } | null;
+  /** Email triggers that are switched on (E39.8). */
+  mailTriggers?: number;
 }
 
 /** A task with its summary: a row of `GET /api/tasks?envelope=1&include=summary`. */
