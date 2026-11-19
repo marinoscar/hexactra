@@ -179,7 +179,7 @@ export class TasksService {
   async getRun(userId: string, id: string) {
     const r = await this.db(userId).run.findFirst({
       where: { id },
-      omit: { transcript: true },
+      omit: { transcript: true, spanId: true, traceIds: true },
       include: { steps: { orderBy: { seq: 'asc' }, include: { question: { select: STEP_QUESTION_SELECT } } } },
     });
     if (!r) throw new NotFoundException({ code: 'RUN_NOT_FOUND', message: 'Run not found' });
@@ -230,7 +230,7 @@ export class TasksService {
         if (isTerminal(to)) await this.prisma.question.updateMany({ where: { runId: id, status: 'pending', blocking: true }, data: { status: 'cancelled' } });
         if (to === 'running' && !run.startedAt) this.metrics.started(run.trigger);
         if (to === 'waiting_human') this.metrics.handoff();
-        const saved = await db.run.findFirstOrThrow({ where: { id }, omit: { transcript: true } });
+        const saved = await db.run.findFirstOrThrow({ where: { id }, omit: { transcript: true, spanId: true, traceIds: true } });
         // After the write: wake anyone following the run (MCP run_wait).
         await this.events?.publish({ type: 'run.status', runId: id, ownerUserId: userId, status: to });
         if (isTerminal(to)) {

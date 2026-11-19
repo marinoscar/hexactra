@@ -34,6 +34,7 @@ function trace(steps: number, reasoningChars = 200): RunTrace {
       taskName: null,
       conversationId: null,
       profile: 'default',
+      traceIds: [],
       host: null,
       createdAt: '2026-11-18T18:00:00.000Z',
       startedAt: '2026-11-18T18:00:01.000Z',

@@ -116,6 +116,7 @@ export function traceFixture(o: TraceFixtureOptions = {}): RunTrace {
       taskName: 'Morning fares',
       conversationId: null,
       profile: 'default',
+      traceIds: [],
       host: { id: '44444444-4444-4444-8444-444444444444', name: 'Node Alpha' },
       createdAt: at(0),
       startedAt: at(1),

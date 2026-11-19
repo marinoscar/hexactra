@@ -112,6 +112,8 @@ export interface Run {
   tier?: RunTier | null;
   /** The tier the run is on now (also `tier.current`); null before it starts. */
   currentTier?: Tier | null;
+  /** The OpenTelemetry trace id of the run's latest job (E38.4), to find it in the deployment's trace collector; null with telemetry off. */
+  traceId?: string | null;
   /** The run budget; null on a run that has not started. */
   budget?: RunBudget | null;
   /** The machine the run asked for; null: any available one (#384). */

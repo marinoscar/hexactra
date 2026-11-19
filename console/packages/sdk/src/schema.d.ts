@@ -16582,6 +16582,8 @@ export interface components {
             currentTier: ("fast" | "standard" | "frontier") | null;
             /** @description How many times the run moved to a stronger tier because it stalled */
             escalations: number;
+            /** @description The OpenTelemetry trace id (32 hex characters) of the run's latest job, to find the run in the deployment's trace collector (docs/runbooks/operations.md, "Reading a run's trace"). Null before the first job and with the telemetry slice off. A queued chat run holds the chat turn's trace until its first job starts. */
+            traceId: string | null;
             /** @description Input tokens the provider served from its cache (part of inputTokens) */
             cachedInputTokens: number;
             /** @description Model calls (provider round trips) made so far */
@@ -16796,6 +16798,8 @@ export interface components {
                 currentTier: ("fast" | "standard" | "frontier") | null;
                 /** @description How many times the run moved to a stronger tier because it stalled */
                 escalations: number;
+                /** @description The OpenTelemetry trace id (32 hex characters) of the run's latest job, to find the run in the deployment's trace collector (docs/runbooks/operations.md, "Reading a run's trace"). Null before the first job and with the telemetry slice off. A queued chat run holds the chat turn's trace until its first job starts. */
+                traceId: string | null;
                 /** @description Input tokens the provider served from its cache (part of inputTokens) */
                 cachedInputTokens: number;
                 /** @description Model calls (provider round trips) made so far */
@@ -16952,6 +16956,8 @@ export interface components {
                 taskName: string | null;
                 conversationId: string | null;
                 profile: string;
+                /** @description The OpenTelemetry trace ids of the run's jobs (32 hex characters each), oldest first, the newest 100: one trace per job. Empty with the telemetry slice off. Find them in the deployment's trace collector. */
+                traceIds: string[];
                 /** @description The machine the run used; `name` null when the fabric could not be asked */
                 host: {
                     /** Format: uuid */
@@ -17311,6 +17317,8 @@ export interface components {
             currentTier: ("fast" | "standard" | "frontier") | null;
             /** @description How many times the run moved to a stronger tier because it stalled */
             escalations: number;
+            /** @description The OpenTelemetry trace id (32 hex characters) of the run's latest job, to find the run in the deployment's trace collector (docs/runbooks/operations.md, "Reading a run's trace"). Null before the first job and with the telemetry slice off. A queued chat run holds the chat turn's trace until its first job starts. */
+            traceId: string | null;
             /** @description Input tokens the provider served from its cache (part of inputTokens) */
             cachedInputTokens: number;
             /** @description Model calls (provider round trips) made so far */
@@ -17592,6 +17600,8 @@ export interface components {
             currentTier: ("fast" | "standard" | "frontier") | null;
             /** @description How many times the run moved to a stronger tier because it stalled */
             escalations: number;
+            /** @description The OpenTelemetry trace id (32 hex characters) of the run's latest job, to find the run in the deployment's trace collector (docs/runbooks/operations.md, "Reading a run's trace"). Null before the first job and with the telemetry slice off. A queued chat run holds the chat turn's trace until its first job starts. */
+            traceId: string | null;
             /** @description Input tokens the provider served from its cache (part of inputTokens) */
             cachedInputTokens: number;
             /** @description Model calls (provider round trips) made so far */

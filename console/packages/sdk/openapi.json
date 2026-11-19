@@ -78154,6 +78154,13 @@
             "maximum": 9007199254740991,
             "description": "How many times the run moved to a stronger tier because it stalled"
           },
+          "traceId": {
+            "description": "The OpenTelemetry trace id (32 hex characters) of the run's latest job, to find the run in the deployment's trace collector (docs/runbooks/operations.md, \"Reading a run's trace\"). Null before the first job and with the telemetry slice off. A queued chat run holds the chat turn's trace until its first job starts.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "cachedInputTokens": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -78437,6 +78444,7 @@
           "tier",
           "currentTier",
           "escalations",
+          "traceId",
           "cachedInputTokens",
           "modelCalls",
           "costUsd",
@@ -79075,6 +79083,13 @@
                   "maximum": 9007199254740991,
                   "description": "How many times the run moved to a stronger tier because it stalled"
                 },
+                "traceId": {
+                  "description": "The OpenTelemetry trace id (32 hex characters) of the run's latest job, to find the run in the deployment's trace collector (docs/runbooks/operations.md, \"Reading a run's trace\"). Null before the first job and with the telemetry slice off. A queued chat run holds the chat turn's trace until its first job starts.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "cachedInputTokens": {
                   "type": "integer",
                   "minimum": -9007199254740991,
@@ -79358,6 +79373,7 @@
                 "tier",
                 "currentTier",
                 "escalations",
+                "traceId",
                 "cachedInputTokens",
                 "modelCalls",
                 "costUsd",
@@ -79692,6 +79708,13 @@
               "profile": {
                 "type": "string"
               },
+              "traceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The OpenTelemetry trace ids of the run's jobs (32 hex characters each), oldest first, the newest 100: one trace per job. Empty with the telemetry slice off. Find them in the deployment's trace collector."
+              },
               "host": {
                 "anyOf": [
                   {
@@ -79845,6 +79868,7 @@
               "taskName",
               "conversationId",
               "profile",
+              "traceIds",
               "host",
               "createdAt",
               "startedAt",
@@ -81377,6 +81401,13 @@
             "maximum": 9007199254740991,
             "description": "How many times the run moved to a stronger tier because it stalled"
           },
+          "traceId": {
+            "description": "The OpenTelemetry trace id (32 hex characters) of the run's latest job, to find the run in the deployment's trace collector (docs/runbooks/operations.md, \"Reading a run's trace\"). Null before the first job and with the telemetry slice off. A queued chat run holds the chat turn's trace until its first job starts.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "cachedInputTokens": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -81983,6 +82014,7 @@
           "tier",
           "currentTier",
           "escalations",
+          "traceId",
           "cachedInputTokens",
           "modelCalls",
           "costUsd",
@@ -82616,6 +82648,13 @@
             "maximum": 9007199254740991,
             "description": "How many times the run moved to a stronger tier because it stalled"
           },
+          "traceId": {
+            "description": "The OpenTelemetry trace id (32 hex characters) of the run's latest job, to find the run in the deployment's trace collector (docs/runbooks/operations.md, \"Reading a run's trace\"). Null before the first job and with the telemetry slice off. A queued chat run holds the chat turn's trace until its first job starts.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "cachedInputTokens": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -82919,6 +82958,7 @@
           "tier",
           "currentTier",
           "escalations",
+          "traceId",
           "cachedInputTokens",
           "modelCalls",
           "costUsd",
