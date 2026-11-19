@@ -21,6 +21,8 @@ export interface ApprovalRule {
   taskName: string | null;
   conversationId: string | null;
   maxAmount: number | null;
+  /** A saved card (E37.7): `<provider>:<item id>`; the rule pays with that one card on this site, up to `maxAmount` in the currency of its match key. Null for every other rule. */
+  cardRef?: string | null;
   expiresAt: string | null;
   enabled: boolean;
   createdFromQuestionId: string | null;
@@ -42,8 +44,9 @@ export const RISKY_CATEGORIES: readonly string[] = ['payment', 'purchase', 'send
 export const AMOUNT_CATEGORIES: readonly string[] = ['payment', 'purchase', 'send'];
 
 /** The chip of a rule: its gate category, or "Question" for an ask. */
-export function categoryLabel(r: Pick<ApprovalRule, 'kind' | 'category'>): string {
+export function categoryLabel(r: Pick<ApprovalRule, 'kind' | 'category'> & { cardRef?: string | null }): string {
   if (r.kind === 'ask') return 'Question';
+  if (r.cardRef) return 'Card payment';
   const c = r.category ?? 'submit';
   return c.charAt(0).toUpperCase() + c.slice(1);
 }
@@ -60,10 +63,17 @@ export function money(n: number): string {
   return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/** The currency of a card rule (`saved card usd` → `USD`), or null for any other rule. */
+export function cardCurrency(r: Pick<ApprovalRule, 'cardRef' | 'matchKey'>): string | null {
+  if (!r.cardRef) return null;
+  const m = /^saved card ([a-z]{3})$/.exec(r.matchKey);
+  return m ? m[1]!.toUpperCase() : null;
+}
+
 /** The rule's limits in words: "up to $50.00 · only in the task Zelle to Paula · until Dec 31, 2026", or "No limits". */
 export function limitsText(r: ApprovalRule, formatDate: (iso: string) => string = (iso) => new Date(iso).toLocaleDateString()): string {
   const parts: string[] = [];
-  if (r.maxAmount !== null) parts.push(`up to ${money(r.maxAmount)}`);
+  if (r.maxAmount !== null) parts.push(r.cardRef ? `up to ${r.maxAmount.toFixed(2)} ${cardCurrency(r) ?? ''}`.trim() : `up to ${money(r.maxAmount)}`);
   if (r.taskId) parts.push(r.taskName ? `only in the task ${r.taskName}` : 'only in one task');
   if (r.conversationId) parts.push('only in one chat');
   if (r.expiresAt) parts.push(`until ${formatDate(r.expiresAt)}`);

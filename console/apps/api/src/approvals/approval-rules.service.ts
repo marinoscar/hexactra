@@ -13,7 +13,7 @@ import { UserSettingsService } from '@marinoscar/platform-api/settings';
 import { Prisma, type ApprovalRule } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { findRule, normaliseLabel, registrableDomain, ruleSummary, ASK_TOPICS, GATE_CATEGORIES, MATCH_KEY_MAX, type ApprovalRuleKind, type MatchQuery } from './approval-match';
+import { findRule, normaliseLabel, registrableDomain, ruleSummary, ASK_TOPICS, CARD_MATCH_KEY_PREFIX, GATE_CATEGORIES, MATCH_KEY_MAX, type ApprovalRuleKind, type MatchQuery } from './approval-match';
 import { ApprovalMetrics } from './approval-metrics';
 import { APPROVAL_RULE_USES_KEPT, APPROVAL_RULE_USES_SHOWN, type ApprovalRuleDetailView, type ApprovalRuleView, type ApprovalRulesList, type PatchApprovalRule } from './approval-rules.schemas';
 import './approvals.errors';
@@ -29,6 +29,12 @@ export interface Rememberable {
   matchKey: string;
   /** What the owner reads; recomputed when absent. */
   summary?: string | null;
+  /**
+   * A saved card (E37.7): `<provider>:<item id>`. Set by the runner from its own record of the card, never from a model or a
+   * request. A card rule is a `gate` rule of category `payment` keyed on `saved card <currency>`; the owner's amount limit is
+   * REQUIRED for it.
+   */
+  cardRef?: string | null;
 }
 
 /** The owner's choices when they tick "Don't ask again" (#555). All optional. */
@@ -88,6 +94,11 @@ function invalid(message: string): HttpException {
   return new HttpException({ code: 'APPROVAL_RULE_INVALID', message }, HttpStatus.UNPROCESSABLE_ENTITY);
 }
 
+/** A card rule without an amount limit is refused (E37.7): unlike other approvals, the limit is required. */
+function needsLimit(): HttpException {
+  return new HttpException({ code: 'CARD_RULE_NEEDS_AMOUNT_LIMIT', message: 'A saved approval for a card needs an amount limit: choose the most it may pay without asking.' }, HttpStatus.UNPROCESSABLE_ENTITY);
+}
+
 /** A rule as the API returns it. */
 export function ruleView(r: ApprovalRule, taskName: string | null = null): ApprovalRuleView {
   return {
@@ -101,6 +112,7 @@ export function ruleView(r: ApprovalRule, taskName: string | null = null): Appro
     taskName,
     conversationId: r.conversationId || null,
     maxAmount: amount(r.maxAmount),
+    cardRef: r.cardRef || null,
     expiresAt: iso(r.expiresAt),
     enabled: r.enabled,
     createdFromQuestionId: r.createdFromQuestionId,
@@ -114,7 +126,7 @@ export function ruleView(r: ApprovalRule, taskName: string | null = null): Appro
 
 /** A rule's facts as the matcher reads them. */
 function matchable(r: ApprovalRule) {
-  return { ...r, category: r.category || null, taskId: r.taskId || null, conversationId: r.conversationId || null, maxAmount: amount(r.maxAmount) };
+  return { ...r, category: r.category || null, taskId: r.taskId || null, conversationId: r.conversationId || null, cardRef: r.cardRef || null, maxAmount: amount(r.maxAmount) };
 }
 
 @Injectable()
@@ -200,12 +212,19 @@ export class ApprovalRulesService {
     const r = question.rememberable;
     const kind = r.kind;
     if (kind !== 'gate' && kind !== 'ask') throw invalid('The question cannot be remembered.');
+    const cardRef = (r.cardRef ?? '').trim();
     const host = (r.host ?? '').trim().toLowerCase();
     if (!host || host.includes('*') || host.length > 253 || registrableDomain(`https://${host}/`) !== host) throw invalid('The question has no site a rule could be kept for.');
     let category = '';
     let matchKey: string;
     let label: string | null = null;
-    if (kind === 'gate') {
+    if (cardRef) {
+      // A saved card (E37.7): a payment gate rule bound to the merchant's site and this card, in one currency.
+      if (kind !== 'gate' || (r.category ?? '').trim().toLowerCase() !== 'payment' || !/^[a-z][a-z0-9_-]{0,19}:[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(cardRef)) throw invalid('The question has no card a rule could be kept for.');
+      category = 'payment';
+      matchKey = (r.matchKey ?? '').trim().toLowerCase();
+      if (!new RegExp(`^${CARD_MATCH_KEY_PREFIX} [a-z]{3}$`).test(matchKey)) throw invalid('The question has no currency a card rule could be kept for.');
+    } else if (kind === 'gate') {
       category = (r.category ?? '').trim().toLowerCase();
       if (!(GATE_CATEGORIES as readonly string[]).includes(category)) throw invalid('The question has no commitment a rule could be kept for.');
       label = r.matchKey;
@@ -221,13 +240,14 @@ export class ApprovalRulesService {
     if (scope === 'this_task' && !taskId) throw invalid('The question did not come from a task.');
     if (scope === 'this_chat' && !conversationId) throw invalid('The question did not come from a chat.');
     const maxAmount = choice.maxAmount ?? null;
+    if (cardRef && maxAmount === null) throw needsLimit();
     if (maxAmount !== null && !(Number.isFinite(maxAmount) && maxAmount > 0)) throw invalid('An amount limit must be a positive number.');
     const days = choice.expiresInDays ?? null;
     if (days !== null && !(Number.isInteger(days) && days > 0 && days <= 3650)) throw invalid('An expiry must be a whole number of days.');
-    const summary = (r.summary?.trim() || ruleSummary({ kind, host, label, topic: matchKey })).slice(0, 300);
+    const summary = (r.summary?.trim() || ruleSummary({ kind, host, label, topic: matchKey, card: cardRef ? 'a saved card' : null })).slice(0, 300);
 
-    const key = { userId: question.userId, kind, host, category, matchKey: matchKey.slice(0, MATCH_KEY_MAX), taskId, conversationId };
-    const existing = await db.approvalRule.findUnique({ where: { userId_kind_host_category_matchKey_taskId_conversationId: key } });
+    const key = { userId: question.userId, kind, host, category, matchKey: matchKey.slice(0, MATCH_KEY_MAX), taskId, conversationId, cardRef };
+    const existing = await db.approvalRule.findUnique({ where: { approval_rule_key: key } });
     if (existing) return { rule: ruleView(existing), created: false };
     let row: ApprovalRule;
     try {
@@ -242,12 +262,12 @@ export class ApprovalRulesService {
       });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002' && !opts.tx) {
-        const again = await db.approvalRule.findUnique({ where: { userId_kind_host_category_matchKey_taskId_conversationId: key } });
+        const again = await db.approvalRule.findUnique({ where: { approval_rule_key: key } });
         if (again) return { rule: ruleView(again), created: false };
       }
       throw e;
     }
-    await this.audit(db, question.userId, opts.orgId ?? null, APPROVAL_AUDIT.created, row, { questionId: question.id, scoped: Boolean(taskId || conversationId), limited: maxAmount !== null, expires: days !== null });
+    await this.audit(db, question.userId, opts.orgId ?? null, APPROVAL_AUDIT.created, row, { questionId: question.id, scoped: Boolean(taskId || conversationId), limited: maxAmount !== null, expires: days !== null, ...(cardRef ? { card: true } : {}) });
     return { rule: ruleView(row), created: true };
   }
 

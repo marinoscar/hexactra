@@ -316,6 +316,24 @@ export class FabricSession {
     return { selected: true };
   }
 
+  /**
+   * Type one field of a saved card into the target (E37.7), under the owner's merchant grant: a `selector` in the
+   * top-level document, or a `point` (which may lie inside an embedded payment frame; the fabric reads the frame's
+   * origin itself and refuses when it cannot). The fabric reads the merchant's top-level origin, asks the provider
+   * with it, the frame's origin, the amount and the currency, types with trusted input and wipes the value: the answer
+   * is `{ typed: true, frameOrigin? }`, never the value. `expiry` is composed `MM/YY` inside the fabric.
+   */
+  async typeCardField(sessionId: string, opts: TypeCardFieldOptions): Promise<{ typed: true; frameOrigin: string | null }> {
+    const op = await this.act(
+      sessionId,
+      { type: 'type_card_field', item_id: opts.itemId, field: opts.field, ...target(opts), amount: opts.amount, currency: opts.currency, clear: opts.clear ?? true, ...providerMeta(opts) },
+      opts.timeoutMs,
+      { waitForTakeover: opts.waitForTakeover },
+    );
+    const r = secretsResult(op) as { frame_origin?: string | null };
+    return { typed: true, frameOrigin: r.frame_origin ?? null };
+  }
+
   /** Like {@link typeFromProvider} with a one-time code fetched immediately before typing. */
   async typeCodeFromProvider(sessionId: string, opts: TypeCodeFromProviderOptions): Promise<{ typed: true; expiresAt: Date | null }> {
     const op = await this.act(
@@ -397,6 +415,22 @@ export type SelectFromProviderOptions = ProviderCallOptions & {
   part?: 'day' | 'month' | 'year';
 };
 
+/** The card fields a `type_card_field` action types; `expiry` is one `MM/YY` input composed by the fabric. */
+export const CARD_FIELDS = ['number', 'expiry', 'exp_month', 'exp_year', 'holder_name', 'postal_code', 'security_code'] as const;
+export type CardFieldName = (typeof CARD_FIELDS)[number];
+
+export type TypeCardFieldOptions = ProviderCallOptions &
+  ProviderTarget & {
+    itemId: string;
+    field: CardFieldName;
+    /** The purchase's amount: a decimal with at most two places. */
+    amount: string;
+    /** ISO 4217, upper case. */
+    currency: string;
+    /** Clear the existing value first (default true). */
+    clear?: boolean;
+  };
+
 export type TypeCodeFromProviderOptions = ProviderCallOptions &
   ProviderTarget & {
     itemId: string;
@@ -421,6 +455,13 @@ interface WireItem {
   has_code?: boolean;
   updated_at?: string | null;
   fields?: { key: SecretField; label?: string; sensitive?: boolean; usable_here?: boolean }[];
+  card?: {
+    brand?: string | null;
+    last4?: string | null;
+    exp_month?: string | null;
+    exp_year?: string | null;
+    grant?: { max_amount: string; currency: string; includes_security_code?: boolean; expires_at?: string | null } | null;
+  };
 }
 
 interface WireProviderView {
@@ -448,6 +489,18 @@ function itemOf(i: WireItem): ItemSummary {
     hasCode: i.has_code ?? false,
     updatedAt: dateOf(i.updated_at),
     ...(i.fields ? { fields: i.fields.map((f) => ({ key: f.key, label: f.label ?? String(f.key), sensitive: f.sensitive === true, usableHere: f.usable_here === true })) } : {}),
+    ...(i.card
+      ? {
+          card: {
+            brand: i.card.brand ?? null,
+            // At most the last four digits ever cross this boundary; a longer text is dropped, not trimmed.
+            last4: i.card.last4 && /^\d{1,4}$/.test(i.card.last4) ? i.card.last4 : null,
+            expMonth: i.card.exp_month ?? null,
+            expYear: i.card.exp_year ?? null,
+            grant: i.card.grant ? { maxAmount: i.card.grant.max_amount, currency: i.card.grant.currency, includesSecurityCode: i.card.grant.includes_security_code === true, expiresAt: dateOf(i.card.grant.expires_at) } : null,
+          },
+        }
+      : {}),
   };
 }
 

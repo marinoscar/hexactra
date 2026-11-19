@@ -18,14 +18,16 @@ use hexactra_control::runtime::secrets::SecretsProviders;
 use hexactra_control::runtime::webhooks::Webhooks;
 use hexactra_control::runtime::{self, ApiState, RuntimeStore};
 use hexactra_core::remote::{
-    CreateSessionRequest, ItemKind, OperationResult, OperationState, OperationView,
+    CardField, CreateSessionRequest, ItemKind, OperationResult, OperationState, OperationView,
     RegisterHostRequest, RemoteAction, SecretField, SecretPurpose, SecretsProviderKind, SelectPart,
     ViewportPoint, REDACTED_TEXT,
 };
 use hexactra_credential_resolver::test_provider::{
-    TestItem, TestProvider, FIXTURE_CITY, FIXTURE_CODE, FIXTURE_COUNTRY, FIXTURE_DOB,
-    FIXTURE_FULL_NAME, FIXTURE_IDENTITY_ID, FIXTURE_ID_NUMBER, FIXTURE_ITEM_ID, FIXTURE_ORIGIN,
-    FIXTURE_PASSWORD, FIXTURE_SITE_ITEM_ID, FIXTURE_USERNAME,
+    TestItem, TestProvider, FIXTURE_CARD_2_ID, FIXTURE_CARD_CVV, FIXTURE_CARD_EXP_MONTH,
+    FIXTURE_CARD_EXP_YEAR, FIXTURE_CARD_HOLDER, FIXTURE_CARD_ID, FIXTURE_CARD_NUMBER,
+    FIXTURE_CARD_POSTAL, FIXTURE_CITY, FIXTURE_CODE, FIXTURE_COUNTRY, FIXTURE_DOB,
+    FIXTURE_FULL_NAME, FIXTURE_IDENTITY_ID, FIXTURE_ID_NUMBER, FIXTURE_ITEM_ID, FIXTURE_MERCHANT,
+    FIXTURE_ORIGIN, FIXTURE_PASSWORD, FIXTURE_PAY_FRAME, FIXTURE_SITE_ITEM_ID, FIXTURE_USERNAME,
 };
 use hexactra_credential_resolver::ProviderError;
 use serde_json::{json, Value};
@@ -71,6 +73,9 @@ struct Ext {
     hold: Arc<AtomicBool>,
     /// What the options probe of `select_from_provider` answers.
     select: Arc<Mutex<Value>>,
+    /// What the next card-target probes answer (the last one stays), instead
+    /// of `frame`; empty: `frame`.
+    card_probe: Arc<Mutex<VecDeque<Value>>>,
 }
 
 impl Ext {
@@ -146,6 +151,7 @@ async fn start_with(webhooks: Webhooks) -> Fabric {
         select: Arc::new(Mutex::new(
             json!({"found": true, "select": true, "options": []}),
         )),
+        card_probe: Default::default(),
     };
     {
         let (host, ext) = (host.clone(), ext.clone());
@@ -178,6 +184,19 @@ async fn start_with(webhooks: Webhooks) -> Fabric {
                     // The options probe of `select_from_provider`.
                     RemoteAction::Evaluate { script, .. } if script.contains("e.options") => {
                         json!({"value": ext.select.lock().unwrap().clone()})
+                    }
+                    // The probe of `type_card_field`: what is at the target.
+                    RemoteAction::Evaluate { script, .. }
+                        if script.contains("hexactra:card-target")
+                            && !ext.card_probe.lock().unwrap().is_empty() =>
+                    {
+                        let mut q = ext.card_probe.lock().unwrap();
+                        let v = if q.len() > 1 {
+                            q.pop_front().unwrap()
+                        } else {
+                            q.front().cloned().unwrap()
+                        };
+                        json!({"value": v})
                     }
                     RemoteAction::Evaluate { .. } => {
                         json!({"value": ext.frame.lock().unwrap().clone()})
@@ -1546,6 +1565,499 @@ async fn canary_scan_over_logs_state_results_and_events() {
         .any(|c| c.op == "release" && c.field == Some("password")));
 }
 
+// ------------------------------------------------------------ cards (E37.7)
+
+const SHOP_PAGE: &str = "https://checkout.shop.example.test/pay";
+
+fn lookup_cards() -> RemoteAction {
+    RemoteAction::SecretsLookup {
+        kind: ItemKind::Card,
+        provider: None,
+        run_id: Some("run-1".into()),
+        client_label: Some("Console".into()),
+        tab_id: None,
+    }
+}
+
+/// One card field, typed into a selector (or a point), for a purchase.
+fn card_field(
+    item: &str,
+    field: CardField,
+    selector: Option<&str>,
+    point: Option<ViewportPoint>,
+    amount: &str,
+) -> RemoteAction {
+    RemoteAction::TypeCardField {
+        item_id: item.into(),
+        field,
+        selector: selector.map(Into::into),
+        point,
+        amount: amount.into(),
+        currency: "USD".into(),
+        clear: true,
+        provider: None,
+        run_id: Some("run-1".into()),
+        client_label: Some("Console".into()),
+        tab_id: None,
+    }
+}
+
+fn card_by_selector(field: CardField, selector: &str) -> RemoteAction {
+    card_field(FIXTURE_CARD_ID, field, Some(selector), None, "42.50")
+}
+
+fn card_by_point(field: CardField, x: i64, y: i64) -> RemoteAction {
+    card_field(
+        FIXTURE_CARD_ID,
+        field,
+        None,
+        Some(ViewportPoint { x, y }),
+        "42.50",
+    )
+}
+
+const CARD_VALUES: [&str; 6] = [
+    FIXTURE_CARD_NUMBER,
+    FIXTURE_CARD_CVV,
+    FIXTURE_CARD_EXP_MONTH,
+    FIXTURE_CARD_EXP_YEAR,
+    FIXTURE_CARD_HOLDER,
+    FIXTURE_CARD_POSTAL,
+];
+
+fn typed_texts(f: &Fabric) -> Vec<String> {
+    f.ext
+        .typed()
+        .into_iter()
+        .map(|a| match a {
+            RemoteAction::Type { text, .. } | RemoteAction::TypeKeys { text, .. } => text,
+            other => panic!("{other:?}"),
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn card_lookup_lists_brand_last_four_and_the_grant_never_a_number() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    f.ext.goto(&[SHOP_PAGE]);
+    let op = f.act(s, lookup_cards()).await;
+    assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
+    let r = op.result.clone().unwrap();
+    let items = r["items"].as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    let card = &items[0]["card"];
+    assert_eq!(card["last4"], "4242");
+    assert_eq!(card["brand"], "visa");
+    assert_eq!(card["grant"]["max_amount"], "500.00");
+    assert_eq!(card["grant"]["includes_security_code"], true);
+    for v in [FIXTURE_CARD_NUMBER, FIXTURE_CARD_CVV] {
+        assert!(!text_of(&op).contains(v));
+    }
+    // A merchant with no grant lists nothing.
+    f.ext.goto(&["https://elsewhere.test/pay"]);
+    let none = f.act(s, lookup_cards()).await;
+    assert_eq!(none.result.unwrap()["items"], json!([]));
+}
+
+#[tokio::test]
+async fn card_fields_are_typed_in_order_with_the_security_code_last() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    f.ext.goto(&[SHOP_PAGE]);
+    // The order the console's tool follows: number, expiry, holder, postal code, security code last.
+    let steps = [
+        (CardField::Number, "#cc-number"),
+        (CardField::Expiry, "#cc-exp"),
+        (CardField::HolderName, "#cc-name"),
+        (CardField::PostalCode, "#zip"),
+        (CardField::SecurityCode, "#cc-csc"),
+    ];
+    let mut ops = Vec::new();
+    for (field, selector) in steps {
+        let op = f.act(s, card_by_selector(field, selector)).await;
+        assert_eq!(op.state, OperationState::Succeeded, "{field:?}: {op:?}");
+        assert_eq!(op.result, Some(json!({"typed": true})), "{field:?}");
+        ops.push(op);
+    }
+    // The browser got trusted `type`s, in that order; the combined expiry is MM/YY.
+    assert_eq!(
+        typed_texts(&f),
+        vec![
+            FIXTURE_CARD_NUMBER.to_string(),
+            "09/31".into(),
+            FIXTURE_CARD_HOLDER.into(),
+            FIXTURE_CARD_POSTAL.into(),
+            FIXTURE_CARD_CVV.into(),
+        ]
+    );
+    assert!(f.ext.typed().iter().all(|a| matches!(
+        a,
+        RemoteAction::Type {
+            sensitive: true,
+            submit: false,
+            ..
+        }
+    )));
+    // The provider was asked for one field each, with the purchase; the code was asked for last.
+    let provider_fields: Vec<_> = f
+        .events("secrets.release")
+        .iter()
+        .map(|e| e["field"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(
+        provider_fields,
+        [
+            "number",
+            "expiry",
+            "holder_name",
+            "postal_code",
+            "security_code"
+        ]
+    );
+    for e in f.events("secrets.release") {
+        assert_eq!(e["amount"], "42.50");
+        assert_eq!(e["currency"], "USD");
+        assert_eq!(e["purpose"], "purchase");
+        assert_eq!(e["outcome"], "typed");
+        assert_eq!(e["origin"], "https://checkout.shop.example.test");
+        assert_eq!(e["frame_origin"], Value::Null);
+    }
+    // No value in any operation or event; the typing steps show [secret].
+    let mut shown = vec![text_of(&ops), text_of(&f.store.log.recent())];
+    let mut seen = std::collections::HashSet::new();
+    for e in f.store.log.recent() {
+        if let Some(id) = e.data.get("op_id").and_then(Value::as_str) {
+            if seen.insert(id.to_string()) {
+                shown.push(text_of(
+                    &f.client.operation(id.parse().unwrap()).await.unwrap(),
+                ));
+            }
+        }
+    }
+    for what in &shown {
+        for v in [FIXTURE_CARD_NUMBER, FIXTURE_CARD_CVV, "09/31"] {
+            assert!(!what.contains(v), "{v} leaks in {what}");
+        }
+    }
+    // Pictures are allowed again once typing ended.
+    let shot = f
+        .act(
+            s,
+            RemoteAction::Screenshot {
+                marks: false,
+                mask: true,
+                tab_id: None,
+            },
+        )
+        .await;
+    assert_eq!(shot.state, OperationState::Succeeded);
+}
+
+#[tokio::test]
+async fn a_cross_origin_payment_frame_is_typed_by_coordinates_and_its_origin_reported() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    f.ext.goto(&[SHOP_PAGE]);
+    let frame = |src: &str| json!({"found": true, "frame": true, "same_origin": false, "src": src});
+    *f.ext.frame.lock().unwrap() = frame(&format!("{FIXTURE_PAY_FRAME}/elements?session=abc"));
+
+    let op = f.act(s, card_by_point(CardField::Number, 300, 480)).await;
+    assert_eq!(op.state, OperationState::Succeeded, "{op:?}");
+    assert_eq!(
+        op.result,
+        Some(json!({"typed": true, "frame_origin": FIXTURE_PAY_FRAME}))
+    );
+    // Typed through coordinates: a click and keystrokes, no script in the frame.
+    let kinds = f.ext.kinds();
+    for k in ["click_at", "type_keys"] {
+        assert!(kinds.contains(&k), "{k} in {kinds:?}");
+    }
+    assert!(f.ext.typed().iter().all(|a| matches!(
+        a,
+        RemoteAction::TypeKeys {
+            sensitive: true,
+            ..
+        }
+    )));
+    // The merchant is the top-level origin; the frame is reported on its own.
+    let e = f.events("secrets.release").pop().unwrap();
+    assert_eq!(e["origin"], "https://checkout.shop.example.test");
+    assert_eq!(e["frame_origin"], FIXTURE_PAY_FRAME);
+    assert!(!text_of(&op).contains(FIXTURE_CARD_NUMBER));
+
+    // A frame whose origin the fabric cannot determine is refused before any value is fetched.
+    let typed_before = f.ext.typed().len();
+    for src in [
+        "",
+        "about:blank",
+        "data:text/html,x",
+        "http://pay.processor.example.test/x",
+        "not a url",
+    ] {
+        *f.ext.frame.lock().unwrap() = frame(src);
+        let op = f
+            .act(s, card_by_point(CardField::SecurityCode, 300, 520))
+            .await;
+        failed_with(&op, "frame_unknown");
+        assert_eq!(
+            f.events("secrets.release").last().unwrap()["released"],
+            false,
+            "{src}"
+        );
+    }
+    assert_eq!(f.ext.typed().len(), typed_before);
+
+    // A frame the grant does not list: the provider refuses; nothing is typed.
+    *f.ext.frame.lock().unwrap() = frame("https://evil.example.test/steal");
+    failed_with(
+        &f.act(s, card_by_point(CardField::Number, 300, 480)).await,
+        "origin_mismatch",
+    );
+    assert_eq!(f.ext.typed().len(), typed_before);
+
+    // A selector may not name a frame element; the point inside it is the way.
+    *f.ext.frame.lock().unwrap() = frame(FIXTURE_PAY_FRAME);
+    failed_with(
+        &f.act(s, card_by_selector(CardField::Number, "iframe"))
+            .await,
+        "typing_failed",
+    );
+    // Nothing at the point.
+    *f.ext.frame.lock().unwrap() = json!({"found": false});
+    failed_with(
+        &f.act(s, card_by_point(CardField::Number, 1, 1)).await,
+        "typing_failed",
+    );
+    assert_eq!(f.ext.typed().len(), typed_before);
+}
+
+#[tokio::test]
+async fn the_target_is_read_again_after_the_provider_answers() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    f.ext.goto(&[SHOP_PAGE]);
+    // The frame under the point is the processor's at first and another origin a moment later.
+    let frame = |src: &str| json!({"found": true, "frame": true, "same_origin": false, "src": src});
+    *f.ext.card_probe.lock().unwrap() = VecDeque::from([
+        frame(FIXTURE_PAY_FRAME),
+        frame("https://evil.example.test/x"),
+    ]);
+    failed_with(
+        &f.act(s, card_by_point(CardField::Number, 300, 480)).await,
+        "origin_mismatch",
+    );
+    assert!(f.ext.typed().is_empty());
+    assert_eq!(
+        f.events("secrets.release").last().unwrap()["released"],
+        true
+    );
+
+    // The page navigates between the two reads: refused as well.
+    f.ext.card_probe.lock().unwrap().clear();
+    f.ext.goto(&[SHOP_PAGE, "https://evil.example.test/"]);
+    failed_with(
+        &f.act(s, card_by_selector(CardField::Number, "#cc")).await,
+        "origin_mismatch",
+    );
+    assert!(f.ext.typed().is_empty());
+}
+
+#[tokio::test]
+async fn a_card_is_not_typed_into_an_http_page_and_the_grant_is_enforced() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    let provider_calls = || -> usize {
+        f.events("secrets.release")
+            .iter()
+            .filter(|e| e["released"] == true)
+            .count()
+    };
+
+    // http: refused whatever the provider says, before any value is fetched.
+    f.ext.goto(&["http://127.0.0.1:8080/pay"]);
+    failed_with(
+        &f.act(s, card_by_selector(CardField::Number, "#cc")).await,
+        "insecure_origin",
+    );
+    assert_eq!(provider_calls(), 0);
+
+    f.ext.goto(&[SHOP_PAGE]);
+    // More than the grant allows, the wrong currency, a code the grant does not include, an unknown card.
+    let mut over = card_by_selector(CardField::Number, "#cc");
+    if let RemoteAction::TypeCardField { amount, .. } = &mut over {
+        *amount = "500.01".into();
+    }
+    failed_with(&f.act(s, over).await, "amount_exceeded");
+    let mut euro = card_by_selector(CardField::Number, "#cc");
+    if let RemoteAction::TypeCardField { currency, .. } = &mut euro {
+        *currency = "EUR".into();
+    }
+    failed_with(&f.act(s, euro).await, "currency_mismatch");
+    failed_with(
+        &f.act(
+            s,
+            card_field(
+                FIXTURE_CARD_2_ID,
+                CardField::SecurityCode,
+                Some("#csc"),
+                None,
+                "5",
+            ),
+        )
+        .await,
+        "security_code_not_granted",
+    );
+    failed_with(
+        &f.act(
+            s,
+            card_field("no-such-card", CardField::Number, Some("#cc"), None, "5"),
+        )
+        .await,
+        "not_found",
+    );
+    // Another merchant (the card is granted elsewhere only).
+    f.ext.goto(&["https://elsewhere.test/pay"]);
+    failed_with(
+        &f.act(s, card_by_selector(CardField::Number, "#cc")).await,
+        "origin_mismatch",
+    );
+    assert!(f.ext.typed().is_empty());
+
+    // `type_from_provider` never types a card: it has no purchase.
+    f.ext.goto(&[SHOP_PAGE]);
+    let by_login_path = RemoteAction::TypeFromProvider {
+        item_id: FIXTURE_CARD_ID.into(),
+        field: SecretField::CardNumber,
+        selector: Some("#cc".into()),
+        point: None,
+        purpose: SecretPurpose::Purchase,
+        clear: true,
+        submit: false,
+        provider: None,
+        run_id: None,
+        client_label: None,
+        tab_id: None,
+    };
+    failed_with(&f.act(s, by_login_path).await, "refused");
+    assert!(f.ext.typed().is_empty());
+    let _ = FIXTURE_MERCHANT;
+}
+
+#[tokio::test]
+async fn no_screenshot_while_a_card_is_being_typed() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    f.ext.goto(&[SHOP_PAGE]);
+    f.ext.hold.store(true, Ordering::SeqCst);
+    let typing = {
+        let (client, action) = (f.client.clone(), card_by_selector(CardField::Number, "#cc"));
+        tokio::spawn(async move { client.act(s, action, Some(Duration::from_secs(10))).await })
+    };
+    for _ in 0..200 {
+        if !f.ext.typed().is_empty() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    assert!(!f.ext.typed().is_empty(), "the typing never started");
+    for mask in [false, true] {
+        let err = f
+            .client
+            .act(
+                s,
+                RemoteAction::Screenshot {
+                    marks: false,
+                    mask,
+                    tab_id: None,
+                },
+                Some(Duration::from_secs(1)),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(err.status(), Some(409), "{err}");
+    }
+    f.ext.hold.store(false, Ordering::SeqCst);
+    assert_eq!(
+        typing.await.unwrap().unwrap().state,
+        OperationState::Succeeded
+    );
+}
+
+#[tokio::test]
+async fn card_values_reach_nothing_but_the_browser() {
+    let f = start().await;
+    f.register_test(json!({})).await;
+    let s = f.session(Some(OWNER)).await;
+    f.ext.goto(&[SHOP_PAGE]);
+    let mut ops = vec![f.act(s, lookup_cards()).await];
+    for (field, sel) in [
+        (CardField::Number, "#n"),
+        (CardField::Expiry, "#e"),
+        (CardField::HolderName, "#h"),
+        (CardField::SecurityCode, "#c"),
+    ] {
+        ops.push(f.act(s, card_by_selector(field, sel)).await);
+    }
+    // A refusal too.
+    ops.push(
+        f.act(
+            s,
+            card_field(FIXTURE_CARD_ID, CardField::Number, Some("#n"), None, "9999"),
+        )
+        .await,
+    );
+    f.client.end_session(s).await.unwrap();
+    // Positive control: the browser did receive them.
+    let typed = text_of(&f.ext.typed());
+    for v in [FIXTURE_CARD_NUMBER, FIXTURE_CARD_CVV] {
+        assert!(typed.contains(v), "{v} was not typed");
+    }
+    let mut shown = vec![
+        text_of(&ops),
+        text_of(&f.store.log.recent()),
+        text_of(&f.client.sessions().await.unwrap()),
+    ];
+    let mut seen = std::collections::HashSet::new();
+    for e in f.store.log.recent() {
+        if let Some(id) = e.data.get("op_id").and_then(Value::as_str) {
+            if seen.insert(id.to_string()) {
+                shown.push(text_of(
+                    &f.client.operation(id.parse().unwrap()).await.unwrap(),
+                ));
+            }
+        }
+    }
+    // The state database after a save.
+    let dir = tempfile::tempdir().unwrap();
+    let db = StateDb::open(&dir.path().join("state.db")).unwrap();
+    db.flush(&f.store, &f.state.credentials);
+    let mut files = Vec::new();
+    for entry in std::fs::read_dir(dir.path()).unwrap() {
+        files.push(entry.unwrap().path());
+    }
+    assert!(!files.is_empty());
+    for v in CARD_VALUES.iter().take(2).chain(["09/31"].iter()) {
+        for what in &shown {
+            assert!(!what.contains(v), "{v} leaks in {what}");
+        }
+        for path in &files {
+            let bytes = std::fs::read(path).unwrap();
+            assert!(
+                !bytes.windows(v.len()).any(|w| w == v.as_bytes()),
+                "{} leaks {v}",
+                path.display()
+            );
+        }
+    }
+}
+
 #[test]
 fn the_registry_is_a_plain_value() {
     // The registry can be built and shared without a server.
@@ -1995,6 +2507,119 @@ mod vault_provider {
         }
         // Vault was reached with the registered token and nothing leaked it.
         assert!(vault.requests().len() >= 5);
+    }
+
+    #[tokio::test]
+    async fn a_card_is_looked_up_and_typed_through_vault_with_the_purchase_and_no_value_anywhere() {
+        use hexactra_credential_resolver::fake_vault::{
+            CARD_CVV, CARD_FRAME, CARD_ID, CARD_NUMBER,
+        };
+        let f = start().await;
+        let vault = FakeVault::start().await;
+        let token = vault.card_token();
+        assert_eq!(f.register_vault(&vault, &token).await.status(), 200);
+        let s = f.session(Some(OWNER)).await;
+        f.ext.goto(&["https://checkout.shop.example.test/pay"]);
+
+        let look = f.act(s, lookup_cards()).await;
+        assert_eq!(look.state, OperationState::Succeeded, "{look:?}");
+        let ids: Vec<_> = look.result.as_ref().unwrap()["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|i| i["id"].as_str().unwrap().to_string())
+            .collect();
+        assert!(
+            ids.contains(&CARD_ID.to_string()) && ids.len() == 2,
+            "{ids:?}"
+        );
+
+        // The number into a processor frame by coordinates, the expiry and the holder by selector.
+        *f.ext.frame.lock().unwrap() = json!({"found": true, "frame": true, "same_origin": false, "src": format!("{CARD_FRAME}/elements")});
+        let number = f
+            .act(
+                s,
+                card_field(
+                    CARD_ID,
+                    CardField::Number,
+                    None,
+                    Some(ViewportPoint { x: 5, y: 6 }),
+                    "42.50",
+                ),
+            )
+            .await;
+        assert_eq!(
+            number.result,
+            Some(json!({"typed": true, "frame_origin": CARD_FRAME})),
+            "{number:?}"
+        );
+        *f.ext.frame.lock().unwrap() = json!({"found": true, "frame": false, "same_origin": true});
+        let expiry = f
+            .act(
+                s,
+                card_field(CARD_ID, CardField::Expiry, Some("#exp"), None, "42.50"),
+            )
+            .await;
+        assert_eq!(expiry.state, OperationState::Succeeded, "{expiry:?}");
+        // The grant has no security code: refused with its own code, nothing typed.
+        failed_with(
+            &f.act(
+                s,
+                card_field(
+                    CARD_ID,
+                    CardField::SecurityCode,
+                    Some("#csc"),
+                    None,
+                    "42.50",
+                ),
+            )
+            .await,
+            "security_code_not_granted",
+        );
+        // Over the grant.
+        failed_with(
+            &f.act(
+                s,
+                card_field(CARD_ID, CardField::Number, Some("#n"), None, "500.01"),
+            )
+            .await,
+            "amount_exceeded",
+        );
+        // What Vault was asked: merchant, frame, amount, currency, purpose, one field per call.
+        let fills = vault.requests_to("/fill");
+        assert_eq!(fills[0].params["field"], "number");
+        assert_eq!(
+            fills[0].params["origin"],
+            "https://checkout.shop.example.test"
+        );
+        assert_eq!(fills[0].params["frameOrigin"], CARD_FRAME);
+        assert_eq!(fills[0].params["amount"], "42.5");
+        assert_eq!(fills[0].params["purpose"], "purchase");
+        assert!(!fills[1].params.contains_key("frameOrigin"));
+        assert_eq!(
+            fills
+                .iter()
+                .map(|r| r.params["field"].as_str())
+                .collect::<Vec<_>>(),
+            ["number", "expMonth", "expYear", "securityCode", "number"]
+        );
+        assert_eq!(
+            typed_texts(&f),
+            vec![CARD_NUMBER.to_string(), "09/31".into()]
+        );
+        // No result, event or log carries a value.
+        let shown = [
+            text_of(&look),
+            text_of(&number),
+            text_of(&expiry),
+            text_of(&f.store.log.recent()),
+        ];
+        for what in &shown {
+            for v in [CARD_NUMBER, CARD_CVV, "09/31"] {
+                assert!(!what.contains(v), "{v} leaks in {what}");
+            }
+        }
+        assert!(!text_of(&f.store.log.recent()).contains(&token));
     }
 
     #[tokio::test]

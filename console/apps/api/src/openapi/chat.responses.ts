@@ -24,6 +24,7 @@ export const chatResponseSchema = z.object({
   confirmRiskyActions: z.boolean().describe('Ask the owner before a purchase or another step that is hard to undo'),
   useSavedLogins: z.boolean().describe("Let the chat's runs sign in from the owner's saved logins (E37.3); off by default"),
   useSavedIdentity: z.boolean().describe("Let the chat's runs fill identity details from the owner's saved details (E37.6); off by default"),
+  useSavedCards: z.boolean().describe("Let the chat's runs pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit; off by default"),
   lastMessageAt: iso,
   createdAt: iso,
   updatedAt: iso,
@@ -59,6 +60,7 @@ export const chatTaskDraftResponseSchema = z.object({
   confirmRiskyActions: z.boolean(),
   useSavedLogins: z.boolean().describe("The chat's saved-logins switch (E37.3), carried over to the task"),
   useSavedIdentity: z.boolean().describe("The chat's saved-details switch (E37.6), carried over to the task"),
+  useSavedCards: z.boolean().describe("The chat's saved-cards switch (E37.7), carried over to the task"),
   parameters: z.array(taskParameterResponseSchema).describe("The goal's `{{Name}}` parameters the draft proposes (#556): amounts and dates asked every time, people and accounts defaulted from a memory or a value. Empty when nothing varies."),
 });
 export class ChatTaskDraftResponseDto extends createZodDto(chatTaskDraftResponseSchema) {}

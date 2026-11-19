@@ -43,6 +43,11 @@ const taskFields = {
     .describe(
       "Let the agent fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): it names the field and the fabric types it, so the model never reads the value. Off by default, and it works only with `useSavedLogins` on and a provider that holds identity details.",
     ),
+  useSavedCards: z
+    .boolean()
+    .describe(
+      "Let the agent pay with a saved card (E37.7) under the owner's per-merchant approval and amount limit: it names the card and the fields, the fabric types them, so the model never reads a number, an expiry or a code. The owner approves each merchant and amount (and may remember it with a required limit); an unattended run types a card only with `unattendedPayments: allow` and a matching remembered approval. Off by default, and it works only with `useSavedLogins` on and a provider that has a merchant grant for the card.",
+    ),
   unattendedPayments: z
     .enum(UNATTENDED_PAYMENTS)
     .describe(
@@ -67,6 +72,7 @@ export const createTaskSchema = z.object({
   // Absent: the owner's `secrets.defaultUseSavedLogins` (off unless they turned it on).
   useSavedLogins: taskFields.useSavedLogins.optional(),
   useSavedIdentity: taskFields.useSavedIdentity.optional(),
+  useSavedCards: taskFields.useSavedCards.optional(),
   unattendedPayments: taskFields.unattendedPayments.default('ask'),
   schedules: taskSchedulesField.optional(),
 });

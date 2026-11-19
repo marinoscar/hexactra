@@ -100,6 +100,18 @@ export class HexactraAlertsService implements OnApplicationBootstrap, OnModuleDe
       return rows.map((r) => ({ runId: r.id, userId: r.userId, taskName: r.task?.name ?? null, goal: r.goal, costUsd: Number(r.costUsd), costKnown: r.costKnown }));
     },
     busyApprovals: (minUses, since) => this.approvals.busyRules(minUses, since),
+    cardUsage: async (since) => {
+      // Card payments are the `number` releases that were typed (E37.7): counts and the declared amount, never a card or a merchant.
+      const rows = await this.prisma.secretsActivity.findMany({ where: { event: 'release', field: 'number', purpose: 'purchase', outcome: 'typed', occurredAt: { gte: since } }, select: { userId: true, amount: true, currency: true }, take: 5_000 });
+      const by = new Map<string, { uses: number; largest: { amount: string; currency: string } | null }>();
+      for (const r of rows) {
+        const cur = by.get(r.userId) ?? { uses: 0, largest: null };
+        cur.uses += 1;
+        if (r.amount && r.currency && (cur.largest === null || Number(r.amount) > Number(cur.largest.amount))) cur.largest = { amount: r.amount, currency: r.currency };
+        by.set(r.userId, cur);
+      }
+      return [...by.entries()].map(([userId, v]) => ({ userId, ...v }));
+    },
   };
 
   async onApplicationBootstrap(): Promise<void> {

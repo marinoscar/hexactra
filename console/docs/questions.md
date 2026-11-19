@@ -29,7 +29,7 @@ Every question has an **owner** (the user it is asked of), an **asker** (`user:<
 | `memory` | Save or decline a memory the agent proposes (#553); **created by the server only** | `proposal: { kind, label, aliases, attributes, supersedes }` | `memoryId` of the saved memory |
 | `form` | The missing parameter values of a task run, all at once, before it starts (#552, #556); **created by the server only** | `fields: [{ key, label, type, required, options?, help?, constraints? }]`, at most 20 | `fields`: the values by key, masked |
 
-`kind` says why it is asked (`captcha`, `code`, `passkey`, `login`, `confirmation`, `other`). Declining is `outcome: "cancelled"` for any type.
+`kind` says why it is asked (`captcha`, `code`, `passkey`, `login`, `confirmation`, `verification`, `other`). `verification` is the owner's own bank wanting them to confirm a payment (a banking-app approval, 3-D Secure): the agent does not try to pass it and waits (E37.7). Declining is `outcome: "cancelled"` for any type.
 
 A response is `{ outcome, value?, values?, valueWithheld, channel?, by?, answeredAt }`. `by` is the signed-in answerer (`user:<id>`); a webhook answer is recorded as its owner on channel `webhook`. **The first answer wins**: a later one is a 409, whichever channel it comes from.
 

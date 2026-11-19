@@ -5,7 +5,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { OutboundHttp, OutboundHttpError } from '../oauth-client';
-import { VAULT_AGENT_API_PATH, VAULT_ERROR_CODES, VAULT_IDENTITY_DISABLED, vaultIdentityLookupSchema, vaultWhoamiSchema, type VaultIdentityItem, type VaultWhoami } from './vault-contract';
+import { VAULT_AGENT_API_PATH, VAULT_CARD_DISABLED, VAULT_ERROR_CODES, VAULT_IDENTITY_DISABLED, vaultCardsLookupSchema, vaultIdentityLookupSchema, vaultWhoamiSchema, type VaultCardItem, type VaultIdentityItem, type VaultWhoami } from './vault-contract';
 
 export type WhoamiResult =
   | { status: 'ok'; whoami: VaultWhoami }
@@ -20,6 +20,14 @@ export type IdentityListResult =
   /** The deployment's identity switch is off in Vault (`403 IDENTITY_ACCESS_DISABLED`). */
   | { status: 'identity_disabled' }
   /** The token is not accepted (401), or lacks an identity scope (403 insufficient_scope). */
+  | { status: 'unauthorized' }
+  | { status: 'unavailable'; code: string };
+
+export type CardListResult =
+  | { status: 'ok'; cards: VaultCardItem[] }
+  /** The deployment's card switch is off in Vault (`403 CARD_ACCESS_DISABLED`). */
+  | { status: 'cards_disabled' }
+  /** The token is not accepted (401), or lacks a card scope (403 insufficient_scope). */
   | { status: 'unauthorized' }
   | { status: 'unavailable'; code: string };
 
@@ -59,6 +67,42 @@ export class VaultApiClient {
         // not JSON
       }
       return code === VAULT_IDENTITY_DISABLED || code === VAULT_ERROR_CODES.disabled ? { status: 'identity_disabled' } : { status: 'unauthorized' };
+    }
+    return { status: 'unavailable', code: `http_${res.status}` };
+  }
+
+  /**
+   * `GET /cards?origin=` (contract 1.1, scope `vault:cards_read`): the owner's opened cards that hold a live merchant grant for
+   * `merchantOrigin` (matched by registrable domain on Vault's side), to LIST on the Secrets page. Vault's agent API lists a card
+   * only for a merchant it is granted for, so there is no call that lists every card. Never a number or a code; nothing is logged.
+   */
+  async cards(baseUrl: string, accessToken: string, merchantOrigin: string, allowedHosts: readonly string[] = []): Promise<CardListResult> {
+    const base = baseUrl.replace(/\/+$/, '');
+    let res;
+    try {
+      res = await this.http.send({ method: 'GET', url: `${base}${VAULT_AGENT_API_PATH}/cards?origin=${encodeURIComponent(merchantOrigin)}`, headers: { authorization: `Bearer ${accessToken}` }, allowedHosts, maxBytes: 256 * 1024 });
+    } catch (e) {
+      return { status: 'unavailable', code: e instanceof OutboundHttpError ? e.code : 'network' };
+    }
+    if (res.status === 200) {
+      let doc: unknown = null;
+      try {
+        doc = JSON.parse(res.body);
+      } catch {
+        // not JSON
+      }
+      const parsed = vaultCardsLookupSchema.safeParse(doc);
+      return parsed.success ? { status: 'ok', cards: parsed.data.data } : { status: 'unavailable', code: 'bad_response' };
+    }
+    if (res.status === 401) return { status: 'unauthorized' };
+    if (res.status === 403) {
+      let code: unknown;
+      try {
+        code = (JSON.parse(res.body) as { code?: unknown } | null)?.code;
+      } catch {
+        // not JSON
+      }
+      return code === VAULT_CARD_DISABLED || code === VAULT_ERROR_CODES.disabled ? { status: 'cards_disabled' } : { status: 'unauthorized' };
     }
     return { status: 'unavailable', code: `http_${res.status}` };
   }

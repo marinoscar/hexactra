@@ -34,6 +34,25 @@ export const ASK_TOPIC_PHRASES: Readonly<Record<AskTopic, string>> = {
   other: 'Other steps',
 };
 
+/**
+ * A saved card (E37.7): a card rule is a `gate` rule of category `payment` whose key is NOT a button label but this fixed
+ * phrase plus the currency (`saved card usd`), so the limit is in one currency, and whose `cardRef` names the card
+ * (`<provider>:<item id>`). A rule with a `cardRef` matches only a query with the same one, and a rule without it never
+ * matches a card use: the site-wide "routine steps" rule cannot cover a card.
+ */
+export const CARD_MATCH_KEY_PREFIX = 'saved card';
+
+/** The match key of a card rule or query for one currency (`saved card usd`). */
+export function cardMatchKey(currency: string): string {
+  return `${CARD_MATCH_KEY_PREFIX} ${currency.trim().toLowerCase().slice(0, 3)}`;
+}
+
+/** The reference of a saved card in a rule: `<provider>:<item id>`; null unless both parts are plain. */
+export function cardRefOf(provider: string, itemId: string): string | null {
+  const ok = /^[a-z][a-z0-9_-]{0,19}$/.test(provider) && /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(itemId);
+  return ok ? `${provider}:${itemId}` : null;
+}
+
 /** At most this many characters of a normalised label. */
 export const MATCH_KEY_MAX = 200;
 
@@ -77,7 +96,8 @@ export function normaliseLabel(label: string | null | undefined): string {
 }
 
 /** The sentence the owner reads and the rule stores: "Press 'Pay' on bankofamerica.com", "Choose dates on bankofamerica.com". */
-export function ruleSummary(r: { kind: ApprovalRuleKind; host: string; label?: string | null; topic?: string | null }): string {
+export function ruleSummary(r: { kind: ApprovalRuleKind; host: string; label?: string | null; topic?: string | null; card?: string | null }): string {
+  if (r.card) return `Pay with ${r.card.replace(/\s+/g, ' ').trim().slice(0, 80)} on ${r.host}`.slice(0, 300);
   if (r.kind === 'ask') {
     const phrase = ASK_TOPIC_PHRASES[(r.topic ?? 'other') as AskTopic] ?? ASK_TOPIC_PHRASES.other;
     return `${phrase} on ${r.host}`.slice(0, 300);
@@ -95,6 +115,8 @@ export interface MatchableRule {
   matchKey: string;
   taskId: string | null;
   conversationId: string | null;
+  /** A saved card (E37.7): `<provider>:<item id>`; empty or absent for every other rule. */
+  cardRef?: string | null;
   /** A number, or a decimal string as Prisma returns it; null for no limit. */
   maxAmount: number | string | { toString(): string } | null;
   expiresAt: Date | null;
@@ -112,6 +134,8 @@ export interface MatchQuery {
   matchKey: string;
   taskId: string | null;
   conversationId: string | null;
+  /** A card use (E37.7): the card's reference. Absent for everything else, so a card rule never matches a plain click. */
+  cardRef?: string | null;
   /** The amount at stake when the owner's inputs make one known; null or undefined when unknown. */
   amount?: number | null;
   now: Date;
@@ -137,7 +161,11 @@ export function ruleMatches(rule: MatchableRule, q: MatchQuery): boolean {
   if (q.kind === 'ask' && rule.matchKey === 'other') return false;
   if (rule.taskId && rule.taskId !== q.taskId) return false;
   if (rule.conversationId && rule.conversationId !== q.conversationId) return false;
+  // A card rule matches only the same card, and a rule for no card never matches a card use (E37.7).
+  if ((rule.cardRef || null) !== (q.cardRef || null)) return false;
   const limit = amountOf(rule.maxAmount);
+  // A card rule without an amount limit matches nothing: the limit is required, whatever a row says.
+  if (rule.cardRef && limit === null) return false;
   if (limit !== null) {
     if (q.amount === null || q.amount === undefined || !Number.isFinite(q.amount)) return false;
     if (q.amount > limit) return false;

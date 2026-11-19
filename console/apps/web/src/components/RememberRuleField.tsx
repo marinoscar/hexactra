@@ -22,17 +22,17 @@ export interface RememberRuleState {
 
 export const NO_REMEMBER: RememberRuleState = { ticked: false, scope: 'everywhere', amount: '', days: 'always' };
 
-/** Why the amount limit is not a positive amount, or null ('' is no limit). */
-export function amountError(amount: string): string | null {
+/** Why the amount limit is not a positive amount, or null ('' is no limit, unless one is required: a saved card, E37.7). */
+export function amountError(amount: string, required = false): string | null {
   const v = amount.trim();
-  if (v === '') return null;
+  if (v === '') return required ? 'A limit is required for a card: enter the most it may pay without asking' : null;
   if (!/^\d+(\.\d{1,2})?$/.test(v) || Number(v) <= 0) return 'Enter an amount, like 50 or 49.99';
   return null;
 }
 
 /** The `rememberRule` an answer carries, or undefined when the box is not ticked (or the amount is not valid). */
 export function rememberRuleOf(r: Rememberable | null | undefined, s: RememberRuleState): RememberRuleBody | undefined {
-  if (!r || !s.ticked || amountError(s.amount)) return undefined;
+  if (!r || !s.ticked || amountError(s.amount, r.requiresLimit === true)) return undefined;
   const scopes = r.scopes ?? ['everywhere'];
   const withAmount = r.kind === 'gate' && AMOUNT_CATEGORIES.includes(r.category ?? '');
   return {
@@ -68,7 +68,10 @@ export function RememberRuleField({ rememberable: r, value: s, onChange, disable
   const scopes = r.scopes ?? ['everywhere'];
   const withAmount = r.kind === 'gate' && AMOUNT_CATEGORIES.includes(r.category ?? '');
   const warn = r.kind === 'gate' && WARN_CATEGORIES.includes(r.category ?? '');
-  const amountProblem = amountError(s.amount);
+  // A saved card (E37.7): the amount limit is REQUIRED, so it is not tucked into "Limit it": it is the first thing under the box.
+  const card = r.requiresLimit === true;
+  const currency = (r.currency ?? '').toUpperCase();
+  const amountProblem = amountError(s.amount, card);
   const set = (patch: Partial<RememberRuleState>) => onChange({ ...s, ...patch });
   return (
     <Box data-testid="remember-rule" sx={{ mt: 1.5 }}>
@@ -85,8 +88,23 @@ export function RememberRuleField({ rememberable: r, value: s, onChange, disable
         <Box sx={{ pl: { xs: 0, sm: 4 } }}>
           {warn && (
             <Alert severity="warning" variant="outlined" sx={{ mt: 1, overflowWrap: 'anywhere' }}>
-              The agent will do this without asking, whenever a job reaches this button on this site. You can stop it in Settings → Saved approvals.
+              {card
+                ? 'The agent will pay this shop with this card, up to the limit, without asking, and without you watching if a task allows it. A larger amount still asks. You can stop it in Settings → Saved approvals.'
+                : 'The agent will do this without asking, whenever a job reaches this button on this site. You can stop it in Settings → Saved approvals.'}
             </Alert>
+          )}
+          {card && (
+            <TextField
+              required
+              label={`Pay without asking up to${currency ? ` (${currency})` : ''}`}
+              value={s.amount}
+              onChange={(e) => set({ amount: e.target.value })}
+              disabled={disabled}
+              error={Boolean(amountProblem)}
+              helperText={amountProblem ?? `Required for a card. The most this approval pays at ${r.host}; a larger amount asks again. This purchase is ${r.amount ?? 'an amount the agent declared'}${currency ? ` ${currency}` : ''}.`}
+              slotProps={{ htmlInput: { inputMode: 'decimal', 'data-testid': 'card-limit' }, inputLabel: { shrink: true } }}
+              sx={{ mt: 2, maxWidth: 360 }}
+            />
           )}
           <Button
             size="small"
@@ -111,7 +129,7 @@ export function RememberRuleField({ rememberable: r, value: s, onChange, disable
                   </RadioGroup>
                 </FormControl>
               )}
-              {withAmount && (
+              {withAmount && !card && (
                 <TextField
                   label="Up to an amount (optional)"
                   value={s.amount}

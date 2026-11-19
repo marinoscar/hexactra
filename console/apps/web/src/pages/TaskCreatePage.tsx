@@ -23,6 +23,7 @@ export function valuesFromDraft(draft: ChatTaskDraft): TaskFormValues {
     // The chat's saved-logins switch carries over (E37.3); a draft from before has none: off.
     useSavedLogins: draft.useSavedLogins === true,
     useSavedIdentity: draft.useSavedIdentity === true,
+    useSavedCards: draft.useSavedCards === true,
     // The parameters the draft proposes (#556): the owner reviews each in the form; nothing is saved by the draft.
     parameters: Array.isArray(draft.parameters) ? draft.parameters.filter((p) => p && typeof p.key === 'string').map((p) => ({ ...p })) : [],
   };

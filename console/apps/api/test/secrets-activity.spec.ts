@@ -34,6 +34,9 @@ describe('sanitizeSecretsEvent', () => {
       outcome: 'typed',
       matches: null,
       released: true,
+      amount: null,
+      currency: null,
+      frameSite: null,
     });
   });
 

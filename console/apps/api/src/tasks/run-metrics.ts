@@ -18,6 +18,9 @@ const TRACE_RESULTS = ['stored', 'skipped', 'failed'] as const;
 /** The formats of a run export: the JSON file (#542) and the PDF report (#543). */
 const RUN_EXPORT_FORMAT_LABELS = ['json', 'pdf'] as const;
 
+/** The outcomes of a saved-card use (E37.7): `typed` (every field went in), a refusal code of the fabric, or a gate of the server. */
+export const CARD_USE_OUTCOMES = ['typed', 'asked', 'approved', 'declined', 'refused_amount', 'refused_shop', 'refused_limit', 'refused_other', 'unattended_waits', 'mismatch'] as const;
+
 /** Names are permanent once dashboards read them. */
 export const RUN_METRICS: readonly AppMetricDef[] = [
   { key: 'runsStarted', name: 'app.runs.started', kind: 'counter', unit: '{run}', description: 'Runs that started executing.', attributes: { trigger: { kind: 'enum', values: TRIGGERS } } },
@@ -105,6 +108,14 @@ export const RUN_METRICS: readonly AppMetricDef[] = [
     description: 'Run trace files exported (#542), by format and whether the screenshots were embedded.',
     attributes: { format: { kind: 'enum', values: RUN_EXPORT_FORMAT_LABELS }, screenshots: { kind: 'enum', values: ['embed', 'none'] } },
   },
+  {
+    key: 'secretsCardUses',
+    name: 'app.secrets.card_uses',
+    kind: 'counter',
+    unit: '{use}',
+    description: 'Saved-card uses (E37.7), by outcome: typed, asked (the owner was asked), refused (amount, shop, limit, other), an unattended run that waits for the owner, or an amount mismatch after paying. No card, shop or user in a label.',
+    attributes: { outcome: { kind: 'enum', values: CARD_USE_OUTCOMES } },
+  },
 ];
 registerAppMetrics(RUN_METRICS);
 
@@ -124,6 +135,11 @@ export class RunMetrics {
 
   step(kind: string, ok: boolean): void {
     this.metrics?.add('runSteps', 1, { kind, ok: String(ok) });
+  }
+
+  /** A saved-card use or refusal (E37.7). */
+  cardUse(outcome: (typeof CARD_USE_OUTCOMES)[number]): void {
+    this.metrics?.add('secretsCardUses' as never, 1, { outcome });
   }
 
   handoff(): void {

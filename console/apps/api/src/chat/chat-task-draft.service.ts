@@ -22,6 +22,7 @@ export interface ChatTaskDraft {
   confirmRiskyActions: boolean;
   useSavedLogins: boolean;
   useSavedIdentity: boolean;
+  useSavedCards: boolean;
   /** The goal's `{{Name}}` parameters the draft proposes (#556): checked like a saved task's; empty when nothing varies. */
   parameters: TaskParameter[];
 }
@@ -188,6 +189,7 @@ export class ChatTaskDraftService {
       confirmRiskyActions: c.confirmRiskyActions,
       useSavedLogins: c.useSavedLogins,
       useSavedIdentity: c.useSavedIdentity,
+      useSavedCards: c.useSavedCards,
       parameters: draftDefinitions(goal, base.parameters ?? [], memories),
     };
   }

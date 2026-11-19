@@ -896,6 +896,7 @@
               "passkey",
               "login",
               "confirmation",
+              "verification",
               "other"
             ],
             "type": "string"

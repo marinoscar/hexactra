@@ -1,13 +1,14 @@
 // `/api/secrets/activity`, `/api/secrets/reach` and `/api/secrets/admin/summary` (E37.4, #593): what the agent used,
 // which logins it has reached, and the administrator's counts. NOTHING HERE RETURNS A LOGIN, A USERNAME, A PASSWORD OR
 // A CODE: every field is a column of `secrets_activity`, which holds ids, hosts, field kinds and outcome codes only.
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { ApiDataResponse } from '@marinoscar/platform-api/core';
 import { Auth, CurrentUser } from '@marinoscar/platform-api/identity';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { SecretsActivityService } from './secrets-activity.service';
-import { AdminSummaryResponseDto, ActivityListResponseDto, IdentityListingResponseDto, ReachResponseDto } from './secrets-activity.schemas';
+import { AdminSummaryResponseDto, ActivityListResponseDto, CardListingResponseDto, CardQueryDto, IdentityListingResponseDto, ReachResponseDto } from './secrets-activity.schemas';
+import { SecretsCardsService } from './secrets-cards.service';
 import { SecretsIdentityService } from './secrets-identity.service';
 import { SecretsPolicyService } from './secrets-policy.service';
 import { VaultConnectionService } from './vault-connection.service';
@@ -20,6 +21,7 @@ export class SecretsActivityController {
     private readonly policy: SecretsPolicyService,
     private readonly vault: VaultConnectionService,
     private readonly identity: SecretsIdentityService,
+    private readonly cards: SecretsCardsService,
   ) {}
 
   @Get('identity')
@@ -32,6 +34,18 @@ export class SecretsActivityController {
   })
   async identityDetails(@CurrentUser('id') userId: string) {
     return this.identity.list(userId);
+  }
+
+  @Get('cards')
+  @ApiDataResponse(CardListingResponseDto)
+  @Auth({ permissions: ['secrets:read'] })
+  @ApiOperation({
+    summary: 'The cards you granted for a merchant',
+    description:
+      "The cards you opened to the agent that hold a live permission for ONE merchant (`merchant`: a host or an https address), by name, with brand, last four digits, expiry and the permission's limit, currency and whether the security code is included. Read-only: the provider lists a card only for a merchant it is granted for, so there is no list of every card; permissions are made in the provider (`manageUrl`). Never a number, never a code. `available` is false, with a `reason`, until Vault is connected with the card permissions and its card release is switched on.",
+  })
+  async cardList(@CurrentUser('id') userId: string, @Query() q: CardQueryDto) {
+    return this.cards.list(userId, q.merchant);
   }
 
   @Get('activity')

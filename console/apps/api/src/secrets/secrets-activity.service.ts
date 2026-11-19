@@ -29,6 +29,10 @@ export interface ActivityItem {
   refused: boolean;
   /** For a lookup: how many logins matched the page. */
   matches: number | null;
+  /** A card field (E37.7): the declared amount and currency, and the payment frame's host when the field was typed into one. */
+  amount: string | null;
+  currency: string | null;
+  frameSite: string | null;
 }
 
 export interface ReachItem {
@@ -95,6 +99,9 @@ export class SecretsActivityService {
         outcome: r.outcome,
         matches: r.matches,
         released: r.released,
+        amount: r.amount,
+        currency: r.currency,
+        frameSite: r.frameSite,
       }));
     if (data.length === 0) return 0;
     const res = await this.prisma.secretsActivity.createMany({ data, skipDuplicates: true });
@@ -144,6 +151,9 @@ export class SecretsActivityService {
       outcome: r.outcome,
       refused: isRefusal(r.outcome),
       matches: r.matches,
+      amount: r.amount,
+      currency: r.currency,
+      frameSite: r.frameSite,
     }));
   }
 

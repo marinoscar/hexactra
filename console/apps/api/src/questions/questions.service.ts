@@ -580,6 +580,12 @@ export class QuestionsService {
     if (!approves) refuse('REMEMBER_NEEDS_APPROVAL', '"Don\'t ask again" goes with an approval only.');
     const run = q.runId ? await this.db(actor.id).run.findFirst({ where: { id: q.runId }, select: { taskId: true, conversationId: true } }) : null;
     const r = input.rememberRule!;
+    // A card (E37.7): unlike other approvals the amount limit is required, and it must cover this purchase.
+    if (rememberable!.cardRef) {
+      if (r.maxAmount === undefined) refuse('CARD_RULE_NEEDS_AMOUNT_LIMIT', 'A saved approval for a card needs an amount limit: choose the most it may pay without asking.');
+      const purchase = Number(rememberable!.amount ?? 'NaN');
+      if (Number.isFinite(purchase) && r.maxAmount! < purchase) refuse('CARD_RULE_LIMIT_TOO_LOW', 'The limit is lower than this purchase. Choose at least this amount, or approve it once without ticking "Don\'t ask again".');
+    }
     return {
       question: { id: q.id, userId: actor.id, rememberable: rememberable!, taskId: run?.taskId ?? null, conversationId: run?.conversationId ?? null },
       choice: { scope: r.scope, maxAmount: r.maxAmount ?? null, expiresInDays: r.expiresInDays ?? null },

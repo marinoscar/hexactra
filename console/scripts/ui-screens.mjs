@@ -122,6 +122,13 @@ export const ROUTES = [
       await page.waitForTimeout(400);
     },
   }],
+  // Paying with a saved card (E37.7): the approval card with the box ticked, so the required limit shows under it.
+  ['inbox-card-approval', '/inbox', {
+    action: async (page) => {
+      await page.getByRole('checkbox', { name: /^Don't ask again: Pay with Visa/ }).first().click({ timeout: 5_000 });
+      await page.waitForTimeout(400);
+    },
+  }],
   // Saved approvals (#554): the page, and its "Add a limit" dialog.
   ['settings-approvals', '/settings/approvals'],
   ['settings-approvals-limit', '/settings/approvals', {
@@ -137,6 +144,15 @@ export const ROUTES = [
   ['settings-secrets-reconnect', '/settings/secrets?state=needs_reconnect'],
   ['settings-secrets-deployment-off', '/settings/secrets?state=deployment_off'],
   ['settings-secrets-empty', '/settings/secrets?state=empty'],
+  // The Payment cards section (E37.7): a shop checked, listing the cards granted for it (the mock lists them for any shop but one with "nowhere" in its name).
+  ['settings-secrets-cards', '/settings/secrets', {
+    action: async (page) => {
+      await page.getByLabel('Shop to check').fill('shop.example.com');
+      await page.getByRole('button', { name: 'Check', exact: true }).click({ timeout: 5_000 });
+      await page.getByTestId('cards-result').waitFor({ timeout: 5_000 });
+      await page.waitForTimeout(300);
+    },
+  }],
   ['admin-secrets', '/admin/settings/secrets'],
   // The task form's "Saved logins" section while no provider is connected (the switch disabled with its reason; `task-new` shows it available).
   ['task-new-saved-logins-unavailable', '/tasks/new?state=not_connected'],
