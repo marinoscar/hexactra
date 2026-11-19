@@ -7,6 +7,10 @@
   - **API change (fabric):** removed the stub routes `POST /goals`, `GET /goals` and `GET /goals/{goalId}` (they were never mounted in the router) and the scopes `goals:read` and `goals:write`. A token that carries either scope still validates; the unknown scope is ignored. Start a goal through the console (`POST /api/runs`, MCP `run_goal`, `hexactra runs start`).
   - **SDK:** removed `ControlPlaneClient.createGoal` and the `Goal`, `CreateGoalRequest` and `CreateGoalResponse` types of `@hexactra/sdk` (and `@hexactra/contracts`); the route they called did not exist.
   - Decision record and usage table: `docs/decisions/one-agent-loop.md`.
+- **Crash safety of a run** (E38.3, #584).
+  - A run keeps its progress after every action. If the worker dies or is restarted for a deploy, the retried job continues from the last action that really happened and tells the agent the run was interrupted.
+  - An action that can commit something (a payment or order click, a typed secret) is written down before it is sent. If the job dies in between, the step is `unknown`: the agent is told not to repeat it, the owner is asked again, and a saved approval does not cover that button for the rest of the run.
+  - Only one job acts on a run (`runs.worker_token`). New counter `app.runs.recovered` and alert rule `hexactra.run_recovered`. The `browser.goal.run` job is retried up to three times when its worker dies.
 - **E32 close-out: documentation and client parity** (#432).
   - MCP: new tools `schedule_preview`, `task_pause` and `task_resume`; `task_create` accepts `schedules[]`; `runs_list` is paged.
   - CLI: `runs delete <id>` and `runs delete --older-than <days>`, `tasks pause` and `tasks resume`; the TUI's run list loads more with `m`.

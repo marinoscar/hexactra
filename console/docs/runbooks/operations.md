@@ -133,6 +133,7 @@ The console's alert rules (Administration → Alerts, created once by key; an ed
 | Run budget exceeded (`hexactra.run_budget`) | `hexactra_run_budget` | In `windowHours`, one user's runs used more than `maxTokens` tokens, or more than `maxCostUsd` US dollars (`runs.cost_usd`; `null` checks no cost), or `maxBudgetStops` runs ended on a `budget_*` stop reason | `{ windowHours: 24, maxTokens: 2000000, maxCostUsd: null, maxBudgetStops: 5 }`, enabled |
 | Runs stalling (`hexactra.run_stalled`) | `hexactra_run_stalled` | In `windowHours`, `minStalls` or more of one user's runs ended `stalled` | `{ windowHours: 24, minStalls: 3 }`, warning, enabled |
 | Expensive run (`hexactra.run_cost`) | `hexactra_run_cost` | One run created in the last `windowHours` cost more than `maxRunCostUsd` | `{ maxRunCostUsd: 10, windowHours: 24 }`, **disabled** |
+| Run keeps being interrupted (`hexactra.run_recovered`) | `hexactra_run_recovered` | One run created in the last `windowHours` was recovered `minRecoveries` or more times after its job was interrupted (`runs.recoveries`) | `{ minRecoveries: 4, windowHours: 24 }`, warning, enabled |
 
 - **Tuning.** Set `maxCostUsd` on the run-budget rule to about a day's acceptable spend per user once [Model prices](#model-prices) cover your models (without prices every cost is 0 and the threshold never fires). Raise `minStalls` if users run many exploratory goals; lower it to 1 for a scheduled task that must never loop. Turn the expensive-run rule on when anyone uses the Unlimited policy or a policy without a cost budget, with `maxRunCostUsd` a little above the cost of a normal long run (the task spend line gives the average).
 - **What the summary carries.** The run's short id and its task's name (or, for a one-off goal, the goal cut to 80 characters with secret-looking values such as `password: …`, `token=…` and long keys masked), and amounts as "$x" or "≥ $x". Never the full goal, the result or a step. The notifications and `alerts.alert.*` webhooks reuse the platform's channels.
@@ -179,6 +180,14 @@ A user who reports a run that did something odd, stopped early or "failed after 
 - **Read it:** `run` (status, `stopReason`, `result`, `error`, `confirmedActions`: steps the owner approved that were carried out), `budget` (`enforcement: "soft"` for a chat run, which is never stopped by a budget; `over` lists the budgets past their limit), `models` (the tiers used), then `steps` in order: `kind` `action`/`handoff`/`finish`/`error`, `handoff` + `action: "answered"` for the owner's answer, `guidance` for what they added in the chat, `routing` for tier changes, `end` last. A `question` on a step holds the prompt and the answer (`valueWithheld` for a secret). `masking.hits` says how much was masked.
 - **Common readings:** `stopReason: "stalled"` → the stall detector (`docs/runs.md`); a `budget_*` reason on a scheduled or API run → a hard budget; a result that starts "The step you confirmed was carried out" → the run ended after a confirmed, irreversible step — check the site before running it again.
 - **Never ask** for a screenshot of their bank, a password or a code; the file never holds those.
+
+### A run was interrupted (worker restart, crash)
+
+A restart of the API during a run is safe: the run keeps its progress after every action and the queue retries the job (`docs/runs.md`, "Crash safety").
+
+- **What you see.** The run page shows "The run was interrupted and continued" in the agent's log and `runs.recoveries` goes up; the counter `app.runs.recovered` and a warning log line (`recovered after an interruption`) record it. More than three recoveries of one run raises "Run keeps being interrupted": look at why the worker keeps dying (memory, deploys, a page that crashes the runner).
+- **A step marked unknown.** `SELECT seq, action, phase, summary FROM run_steps WHERE run_id = '<id>' ORDER BY seq` lists the phases. A step in `unknown` was a click or typed secret that may or may not have gone through when the job died. The agent is told not to repeat it and the owner is asked again before the same button is pressed. Check the site (the order, the account's recent activity) before approving a repeat.
+- **A run that does nothing after a restart.** `runs.worker_token` not null on a `running` run whose job is gone means the retry has not started yet (the job queue's lease must expire first, up to the job's runtime limit). It starts by itself; do not cancel and re-run a run that may have paid.
 
 ## 9. External AI apps
 
