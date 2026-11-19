@@ -18,6 +18,12 @@
 // text, never read again as a placeholder, and the data markers ⟦ ⟧ are
 // removed from a value so it cannot close its own marker.
 
+/**
+ * The saved identity fields a parameter's default may name (E37.6): the fields of the provider's identity type. The value is never
+ * stored or shown: the goal holds `[provided: <label>]` and the fabric fills the field.
+ */
+const IDENTITY_DEFAULT_FIELDS = ['full_name', 'date_of_birth', 'id_type', 'id_number', 'id_issuing_country', 'address_line1', 'address_line2', 'city', 'region', 'postal_code', 'country', 'phone', 'email'];
+
 const MAX_PARAMETERS = 20;
 const MAX_NAME_LENGTH = 40;
 const PARAMETER_TYPES = Object.freeze(['text', 'number', 'money', 'date', 'choice', 'phone', 'email']);
@@ -299,6 +305,11 @@ function definitionProblems(def) {
   }
   if (typeof c.min === 'number' && typeof c.max === 'number' && c.min > c.max) add('The minimum is above the maximum');
   if (def.sensitive && def.default) add('A sensitive parameter cannot have a default: it is asked for every time');
+  if (def.default && def.default.identity !== undefined) {
+    const f = def.default.identity && def.default.identity.field;
+    if (!IDENTITY_DEFAULT_FIELDS.includes(f)) add(`The default: choose one of the saved detail fields (${IDENTITY_DEFAULT_FIELDS.join(', ')})`);
+    if (def.options && def.options.length) add('A parameter taken from your saved details has no options');
+  }
   if (def.default && def.default.value !== undefined) {
     const r = normalizeValue(def, def.default.value, {});
     // `today` and `tomorrow` are good defaults for a date: they are resolved at run time.
@@ -339,6 +350,7 @@ function matchInputKey(parameters, name) {
   return null;
 }
 
+exports.IDENTITY_DEFAULT_FIELDS = IDENTITY_DEFAULT_FIELDS;
 exports.MAX_PARAMETERS = MAX_PARAMETERS;
 exports.MAX_NAME_LENGTH = MAX_NAME_LENGTH;
 exports.MAX_VALUE_LENGTH = MAX_VALUE_LENGTH;

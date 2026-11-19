@@ -18,6 +18,7 @@ export const APP_LIMIT_DEFAULTS = {
   confirmPurchases: true,
   confirmSensitiveActions: true,
   allowSavedLogins: false,
+  allowSavedIdentity: false,
   paused: false,
 } as const;
 
@@ -41,6 +42,9 @@ export const appLimitsSchema = z.object({
   allowSavedLogins: z
     .boolean()
     .describe("Let this app's runs sign in from the owner's saved logins (E37.3). Off by default: an AI app never gets the owner's logins unless the owner allows it here (the task or chat must have the switch on too)."),
+  allowSavedIdentity: z
+    .boolean()
+    .describe("Let this app's runs fill identity details from the owner's saved details (E37.6). Off by default: an AI app never gets the owner's identity details unless the owner allows it here (the task or chat must have `useSavedIdentity` on too, and `allowSavedLogins`)."),
   paused: z.boolean().describe('Refuse new runs and sessions from this app without disconnecting it.'),
 });
 export type AppLimits = z.infer<typeof appLimitsSchema>;
@@ -59,6 +63,7 @@ export const patchAppSettingsSchema = z
     confirmPurchases: z.boolean(),
     confirmSensitiveActions: z.boolean(),
     allowSavedLogins: z.boolean(),
+    allowSavedIdentity: z.boolean(),
     paused: z.boolean(),
   })
   .partial()

@@ -87,7 +87,7 @@ export class TaskRunStarter {
     const timeZone = await this.zone(userId, opts.timeZone);
     const given = checkValues(params, keyInputs(params, opts.inputs), { timeZone });
     const resolved = await resolveInputs(userId, params, given, { presets: opts.presets, presetSource: 'schedule', resolver: this.memories ?? null, timeZone });
-    const inputs: RunInputs | null = params.length ? { values: resolved.values, sensitive: resolved.sensitive } : null;
+    const inputs: RunInputs | null = params.length ? { values: resolved.values, sensitive: resolved.sensitive, identity: resolved.identity } : null;
     const base = {
       ...opts.data,
       userId,
@@ -163,7 +163,7 @@ export class TaskRunStarter {
     const db = this.prisma.forUser({ userId: actor.id });
     const run = await db.run.findFirst({ where: { id: q.runId }, select: { id: true, status: true, handoffId: true, goal: true, inputs: true, task: { select: { goal: true, parameters: true } } } });
     if (!run || run.status !== 'waiting_human' || run.handoffId) return;
-    const prior = readRunInputs(run.inputs) ?? { values: {}, sensitive: [] };
+    const prior = readRunInputs(run.inputs) ?? { values: {}, sensitive: [], identity: [] };
     const fields = (q.fields as unknown as FormField[] | null) ?? [];
     const asked: RunInputs['values'] = {};
     for (const [k, v] of Object.entries(values)) asked[k] = { value: v, source: 'asked' satisfies InputSource, label: fields.find((f) => f.key === k)?.label ?? k };
@@ -171,7 +171,7 @@ export class TaskRunStarter {
     // The task's definitions when it still exists; else the form's fields (the task was deleted while it waited).
     const params = run.task ? readParameters(run.task.parameters) : (fields as TaskParameter[]);
     const goal = renderRunGoal(run.task?.goal ?? run.goal, params, all);
-    await db.run.updateMany({ where: { id: run.id, status: 'waiting_human' }, data: { goal, inputs: { values: all, sensitive: prior.sensitive } as unknown as Prisma.InputJsonValue } });
+    await db.run.updateMany({ where: { id: run.id, status: 'waiting_human' }, data: { goal, inputs: { values: all, sensitive: prior.sensitive, identity: prior.identity ?? [] } as unknown as Prisma.InputJsonValue } });
     try {
       await this.tasks.transition(actor.id, run.id, 'queued');
     } catch (e) {

@@ -48,7 +48,7 @@ export const runInputResponseSchema = z.object({
   key: z.string(),
   label: z.string(),
   value: z.string().describe('Masked like the rest of the run (#538); a sensitive value is never stored: "[provided at run time]"'),
-  source: z.enum(['provided', 'default', 'memory', 'asked', 'schedule']),
+  source: z.enum(['provided', 'default', 'memory', 'asked', 'schedule', 'saved_details']),
 });
 
 export const taskResponseSchema = z.object({
@@ -64,6 +64,7 @@ export const taskResponseSchema = z.object({
   maxMinutes: z.number().int().meta({ deprecated: true }).describe('Deprecated: see `policyId`'),
   confirmRiskyActions: z.boolean(),
   useSavedLogins: z.boolean().describe("Whether the agent may sign in from the owner's saved logins on this task's runs (E37.3)"),
+  useSavedIdentity: z.boolean().describe("Whether the agent may fill identity details from the owner's saved details on this task's runs (E37.6); the model never reads a value"),
   unattendedPayments: z.enum(['ask', 'allow']).describe('`ask`: an unattended run that signed in with a saved login keeps the confirmation before payments on; `allow`: it follows `confirmRiskyActions`'),
   model: z.string().nullable().meta({ deprecated: true }).describe('Deprecated: see `policyId`'),
   policyId: z.string().nullable().describe("The task's agent policy (an own policy's UUID or `builtin:<key>`); null follows the user's default"),
@@ -197,6 +198,17 @@ export const runResponseSchema = z.object({
       }),
     )
     .describe('The saved logins the run signed in with (E37.3), oldest first; empty when it used none. "Signed in with: Shop login" on the run page.'),
+  usedSavedIdentity: z
+    .array(
+      z.object({
+        provider: z.string().describe('The secrets provider that held the details (`vault`)'),
+        itemName: z.string().describe("The saved identity item's name as the owner gave it (\"Passport\")"),
+        label: z.string().describe('The field filled, by its label (\"Date of birth\"): never its value'),
+        origin: z.string().describe('The site it was filled on'),
+        at: iso.describe('When it was first filled in this run'),
+      }),
+    )
+    .describe('The identity details the run filled (E37.6), oldest first; labels only, empty when it filled none. "Filled from your saved details: Date of birth, ID number" on the run page.'),
   inputs: z.array(runInputResponseSchema).nullable().optional().describe("The task parameter values the run was started with (#552), masked, with their source; null for a run without parameters"),
   memoryIds: z.array(z.uuid()).describe('The owner\'s memories this run used (#553): the ones its goal names. A deleted memory leaves its id.'),
   createdAt: iso,

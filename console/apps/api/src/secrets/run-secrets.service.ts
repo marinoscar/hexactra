@@ -8,6 +8,7 @@ import { Injectable, Logger } from '@nestjs/common';
 
 import { SecretsProviderRegistrar, type RegistrationResult } from './secrets-provider.registrar';
 import { VaultConnectionService, type ProviderOutcome } from './vault-connection.service';
+import { hasIdentityScopes } from './vault-contract';
 
 @Injectable()
 export class RunSecretsService {
@@ -29,6 +30,28 @@ export class RunSecretsService {
     } catch (e) {
       this.log.warn(`could not prepare the secrets provider for a run (${e instanceof Error ? e.name : 'error'})`);
       return 'unavailable';
+    }
+  }
+
+  /**
+   * Whether the owner's connected provider can look up and fill identity details (E37.6): the Vault grant holds both identity
+   * scopes. The runner asks this only for a run whose task or chat opted in to identity. Never throws.
+   */
+  async identitySupported(userId: string): Promise<boolean> {
+    try {
+      return hasIdentityScopes(await this.connection.grantedScopes(userId));
+    } catch (e) {
+      this.log.warn(`could not read the granted scopes (${e instanceof Error ? e.name : 'error'})`);
+      return false;
+    }
+  }
+
+  /** The address of the owner's provider, to point them to it ("add this site in <address>"); null when there is none. Never throws. */
+  async providerAddress(userId: string): Promise<string | null> {
+    try {
+      return (await this.connection.status(userId)).providers.vault.baseUrl ?? null;
+    } catch {
+      return null;
     }
   }
 

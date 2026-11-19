@@ -38,6 +38,11 @@ const taskFields = {
     .describe(
       "Let the agent sign in from the owner's saved logins when a page asks (E37.3). Off by default (a new task starts from the owner's `secrets.defaultUseSavedLogins` setting). It works only while the deployment's and the owner's secrets switches are on and a Vault is connected.",
     ),
+  useSavedIdentity: z
+    .boolean()
+    .describe(
+      "Let the agent fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): it names the field and the fabric types it, so the model never reads the value. Off by default, and it works only with `useSavedLogins` on and a provider that holds identity details.",
+    ),
   unattendedPayments: z
     .enum(UNATTENDED_PAYMENTS)
     .describe(
@@ -61,6 +66,7 @@ export const createTaskSchema = z.object({
   parameters: taskFields.parameters.optional(),
   // Absent: the owner's `secrets.defaultUseSavedLogins` (off unless they turned it on).
   useSavedLogins: taskFields.useSavedLogins.optional(),
+  useSavedIdentity: taskFields.useSavedIdentity.optional(),
   unattendedPayments: taskFields.unattendedPayments.default('ask'),
   schedules: taskSchedulesField.optional(),
 });

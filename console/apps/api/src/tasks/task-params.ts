@@ -112,6 +112,8 @@ export interface ResolvedInputs {
   missing: TaskParameter[];
   /** Sensitive parameters: asked for as a secret once the browser is open. */
   sensitive: { key: string; label: string }[];
+  /** Parameters taken from the owner's saved identity details (E37.6): the fabric fills the field; never a value here. */
+  identity: { key: string; label: string; field: string }[];
 }
 
 /**
@@ -129,6 +131,7 @@ export async function resolveInputs(
   const values: RunInputs['values'] = {};
   const missing: TaskParameter[] = [];
   const sensitive: ResolvedInputs['sensitive'] = [];
+  const identity: ResolvedInputs['identity'] = [];
   const check = (def: TaskParameter, raw: string): string | null => {
     const r = normalizeValue(def, raw, { timeZone: opts.timeZone, now: opts.now });
     return r.error === undefined ? r.value : null;
@@ -136,6 +139,11 @@ export async function resolveInputs(
   for (const p of params) {
     if (p.sensitive) {
       sensitive.push({ key: p.key, label: p.label });
+      continue;
+    }
+    // From the owner's saved identity details (E37.6): no value is read here, stored or shown; the runner has the fabric fill it.
+    if (p.default && 'identity' in p.default && given[p.key] === undefined) {
+      identity.push({ key: p.key, label: p.label, field: p.default.identity.field });
       continue;
     }
     let got: { value: string; source: InputSource } | null = null;
@@ -157,7 +165,7 @@ export async function resolveInputs(
     if (got) values[p.key] = { ...got, label: p.label };
     else if (p.required) missing.push(p);
   }
-  return { values, missing, sensitive };
+  return { values, missing, sensitive, identity };
 }
 
 /**
@@ -175,7 +183,7 @@ export function renderRunGoal(goal: string, params: readonly TaskParameter[], va
     display: (key, value) => displayValue(byKey.get(key), value),
     missing: ({ key, name }) => {
       const p = byKey.get(key);
-      return p?.sensitive ? `[provided: ${p.label}]` : p ? '' : `{{${name}}}`;
+      return p?.sensitive || (p?.default && 'identity' in p.default) ? `[provided: ${p.label}]` : p ? '' : `{{${name}}}`;
     },
   }).slice(0, 4000);
 }
@@ -193,6 +201,7 @@ export function runInputsView(raw: unknown): { key: string; label: string; value
   const values = r.values && typeof r.values === 'object' ? r.values : {};
   const out = Object.entries(values).map(([key, v]) => ({ key, label: v.label ?? key, value: maskSensitive(String(v.value ?? '')).text, source: v.source }));
   for (const s of Array.isArray(r.sensitive) ? r.sensitive : []) out.push({ key: s.key, label: s.label, value: '[provided at run time]', source: 'asked' });
+  for (const s of Array.isArray(r.identity) ? r.identity : []) out.push({ key: s.key, label: s.label, value: '[from your saved details]', source: 'saved_details' });
   return out;
 }
 

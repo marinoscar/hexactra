@@ -11,17 +11,28 @@ import { z } from 'zod';
 /** `AGENT_API_BASE_PATH`: the agent API's path under the Vault's `APP_URL`. */
 export const VAULT_AGENT_API_PATH = '/api/agent/v1';
 
-/** The OAuth scopes of the agent API (`AGENT_SCOPES`), logins only: cards and identity are E37.6/E37.7. */
+/** The OAuth scopes of the agent API (`AGENT_SCOPES`): logins, identity details (E37.6; contract 1.1), cards are E37.7. */
 export const VAULT_SCOPES = {
   read: 'vault:items_read',
   fill: 'vault:items_fill',
   write: 'vault:items_write',
+  identityRead: 'vault:identity_read',
+  identityFill: 'vault:identity_fill',
   offline: 'offline_access',
 } as const;
 
-/** What Connect asks for. `vault:items_write` (create, rotate) only when the owner switched on "let the agent save and change logins" (E37.4): adding it later is a new consent. */
-export function vaultConnectScopes(allowWrite: boolean): string[] {
-  return [VAULT_SCOPES.read, VAULT_SCOPES.fill, ...(allowWrite ? [VAULT_SCOPES.write] : []), VAULT_SCOPES.offline];
+/**
+ * What Connect asks for. `vault:items_write` (create, rotate) only when the owner switched on "let the agent save and change
+ * logins" (E37.4), and the two identity scopes only when they switched on "let the agent fill identity details" (E37.6): adding
+ * either later is a new consent.
+ */
+export function vaultConnectScopes(allowWrite: boolean, allowIdentity = false): string[] {
+  return [VAULT_SCOPES.read, VAULT_SCOPES.fill, ...(allowWrite ? [VAULT_SCOPES.write] : []), ...(allowIdentity ? [VAULT_SCOPES.identityRead, VAULT_SCOPES.identityFill] : []), VAULT_SCOPES.offline];
+}
+
+/** Whether a grant's scopes let the fabric look up and fill identity details. */
+export function hasIdentityScopes(scopes: readonly string[]): boolean {
+  return scopes.includes(VAULT_SCOPES.identityRead) && scopes.includes(VAULT_SCOPES.identityFill);
 }
 
 /** The Vault's authorization server paths (Vault's guide, section 1), used when it publishes no metadata. */

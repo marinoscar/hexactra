@@ -1,8 +1,14 @@
 /** The types a task parameter may have (E36.6, #552). */
 export type TaskParameterType = 'text' | 'number' | 'money' | 'date' | 'choice' | 'phone' | 'email';
 
-/** A parameter's default: a fixed value, or an attribute of one of the owner's memories (resolved at run time). */
-export type TaskParameterDefault = { value: string } | { memory: { id: string; attribute: string } };
+/** The saved identity fields a parameter's default may name (E37.6). */
+export declare const IDENTITY_DEFAULT_FIELDS: readonly string[];
+
+/**
+ * A parameter's default: a fixed value, an attribute of one of the owner's memories (resolved at run time), or a field of the
+ * owner's saved identity details (E37.6): never stored or shown, the fabric fills it.
+ */
+export type TaskParameterDefault = { value: string } | { memory: { id: string; attribute: string } } | { identity: { field: string } };
 
 export interface TaskParameterConstraints {
   min?: number;

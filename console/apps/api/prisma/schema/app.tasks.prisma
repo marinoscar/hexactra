@@ -95,6 +95,9 @@ model Task {
   /// Let the agent sign in from the owner's saved login when a page asks (E37.3): an opt-in, off by default.
   /// A run uses saved logins only when this is on AND both secrets switches are on AND a provider is connected.
   useSavedLogins Boolean  @default(false) @map("use_saved_logins")
+  /// Let the agent fill identity details (a date of birth, an ID number, an address) from the owner's saved details (E37.6): its own
+  /// sub-switch, off by default, and only meaningful with `use_saved_logins` on. The model sees labels, never values.
+  useSavedIdentity Boolean @default(false) @map("use_saved_identity")
   /// What an unattended run (a schedule, the API, MCP) that signed in with a saved login does at a payment step (E37.3):
   /// `ask` (the default) keeps the confirmation on for that run even if `confirm_risky_actions` is off; `allow` leaves it as set.
   unattendedPayments String @default("ask") @map("unattended_payments") @db.VarChar(8)
@@ -213,6 +216,9 @@ model Run {
   /// The saved logins the run signed in with (E37.3): `[{ provider, itemName, origin, at }]`, at most 20, deduplicated by
   /// item and origin. Names and origins, never a username, a password or a code.
   usedSavedLogins  Json?         @map("used_saved_logins")
+  /// The identity details the run filled (E37.6): `[{ provider, itemName, label, origin, at }]`, at most 40, deduplicated by item,
+  /// label and origin. Labels ("Date of birth"), never a value.
+  usedSavedIdentity Json?        @map("used_saved_identity")
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   task         Task?         @relation(fields: [taskId], references: [id], onDelete: SetNull)

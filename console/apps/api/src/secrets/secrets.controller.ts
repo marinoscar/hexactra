@@ -72,7 +72,7 @@ export class SecretsController {
   @ApiOperation({
     summary: "Start connecting your Vault (OAuth 2.1 authorization code with PKCE)",
     description:
-      'Returns `authorizeUrl`: send the browser there (Vault\'s own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` (a new consent). The `resource` indicator is the Vault\'s `/api/agent/v1`.',
+      'Returns `authorizeUrl`: send the browser there (Vault\'s own consent screen). The PKCE verifier and `state` are kept on the server and the flow is bound to this browser by an HttpOnly cookie set on this response, so the callback must arrive in the same browser within 10 minutes. Scopes: `vault:items_read vault:items_fill offline_access`; `allowWrite` adds `vault:items_write` and `allowIdentity` adds `vault:identity_read vault:identity_fill` (each a new consent). The `resource` indicator is the Vault\'s `/api/agent/v1`.',
   })
   async connect(@CurrentUser('id') userId: string, @Body() body: ConnectVaultDto, @Res({ passthrough: true }) reply: FastifyReply) {
     const r = await this.vault.connect(userId, body);
