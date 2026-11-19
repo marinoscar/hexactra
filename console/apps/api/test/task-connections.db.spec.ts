@@ -19,6 +19,7 @@ beforeAll(async () => {
   prisma = app.get(PrismaService);
 });
 afterAll(async () => {
+  await prisma?.connection.deleteMany({ where: { accountId: { endsWith: `-${stamp}` } } });
   await app?.close();
 });
 

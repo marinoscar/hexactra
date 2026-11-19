@@ -31,6 +31,7 @@ beforeAll(async () => {
   kit = connectionKit(app);
 });
 afterAll(async () => {
+  await kit?.cleanup();
   await Promise.all(stopSignals.map((x) => x.dispose()));
   await app?.close();
 });

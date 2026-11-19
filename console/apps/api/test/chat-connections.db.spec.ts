@@ -33,6 +33,7 @@ beforeAll(async () => {
   kit = connectionKit(app);
 });
 afterAll(async () => {
+  await kit?.cleanup();
   await app?.close();
 });
 

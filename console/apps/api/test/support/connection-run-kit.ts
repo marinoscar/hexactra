@@ -87,6 +87,8 @@ export interface Kit {
   runner(model: ReturnType<typeof scriptedModel>, fabric: ReturnType<typeof fakeFabric>): GoalRunnerService;
   /** A connection row of the user with the switches on. */
   connect(userId: string, label: string, capabilities: string[], extra?: { email?: string; defaultFor?: string[]; status?: 'active' | 'paused' | 'needs_reconnect' }): Promise<{ id: string; label: string }>;
+  /** Deletes the connections this kit created: other specs (the daily health job) must not find them idle. */
+  cleanup(): Promise<void>;
   /** The owner answers the card the run waits on. */
   answer(userId: string, runId: string, input: Record<string, unknown>, channel?: string): Promise<unknown>;
 }
@@ -99,6 +101,7 @@ export function connectionKit(app: NestFastifyApplication): Kit {
   const approvals = app.get(ApprovalRulesService);
   const questions = new QuestionsService(prisma, { request: async () => ({}) } as never, { enqueue: async (j: unknown) => void enqueued.push(j) } as never, new QuestionEvents(), undefined, undefined, approvals);
   const hub = app.get(ConnectionCapabilities);
+  const created: string[] = [];
   const adapters = app.get(ConnectionProviderRegistry);
   return {
     prisma,
@@ -117,7 +120,11 @@ export function connectionKit(app: NestFastifyApplication): Kit {
       const row = await prisma.connection.create({
         data: { userId, provider: 'google', accountId: `acct-${randomUUID()}`, accountEmail: extra.email ?? `${label.toLowerCase().replace(/\W+/g, '-')}@example.test`, label, capabilities, grantedScopes: adapters.get('google')?.scopesFor(capabilities as Capability[]) ?? capabilities, defaultFor: extra.defaultFor ?? [], status: extra.status ?? 'active' },
       });
+      created.push(row.id);
       return { id: row.id, label: row.label };
+    },
+    async cleanup() {
+      await prisma.connection.deleteMany({ where: { id: { in: created } } });
     },
     async answer(userId, runId, input, channel = 'web') {
       return questions.answerRun({ id: userId }, runId, input as never, { channel });
