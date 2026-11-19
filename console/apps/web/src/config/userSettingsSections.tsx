@@ -6,6 +6,7 @@ import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined';
 import PsychologyOutlinedIcon from '@mui/icons-material/PsychologyOutlined';
 import VerifiedUserOutlinedIcon from '@mui/icons-material/VerifiedUserOutlined';
 import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
+import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined';
 import { identityUserSettingsSections } from '@marinoscar/platform-web/identity/ui';
 import type { SettingsSectionDef } from '@marinoscar/platform-web/settings/ui';
 import { DANGER_ZONE_GROUP_LABEL } from '@marinoscar/platform-web/user-data/headless';
@@ -113,6 +114,15 @@ const CORE_USER_SECTIONS: SettingsSectionDef[] = [
         Icon: KeyOutlinedIcon,
         path: '/settings/secrets',
         permission: 'secrets:read',
+      },
+      // Connections (E39.2). `connections:read` is what `GET /api/connections` enforces
+      // (apps/api/src/connections/connections.controller.ts); connecting, changing and removing need `connections:write`, checked in the page.
+      {
+        title: 'Connections',
+        description: 'Your Google and Microsoft accounts: what each may do (mail, calendar, documents), which is the default, and pausing or removing one.',
+        Icon: LinkOutlinedIcon,
+        path: '/settings/connections',
+        permission: 'connections:read',
       },
     ],
   },

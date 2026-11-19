@@ -10,6 +10,7 @@ import { webhooksAdminSections } from '@marinoscar/platform-web/webhooks/ui';
 
 import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
 import KeyOutlinedIcon from '@mui/icons-material/KeyOutlined';
+import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import PaidOutlinedIcon from '@mui/icons-material/PaidOutlined';
@@ -116,6 +117,15 @@ const CORE_ADMIN_SECTIONS: SettingsSectionDef[] = [
         description: 'The kill switch for the agent using saved logins, the default Vault your users connect to, and how much it is used.',
         Icon: KeyOutlinedIcon,
         path: '/admin/settings/secrets',
+        permission: 'system_settings:read',
+      },
+      // Connections (E39.2): the deployment's apps at Google and Microsoft. `system_settings:read` is what
+      // GET /api/connections/admin/apps enforces; saving needs `:write`, checked in the page. Never a user's connections.
+      {
+        title: 'Connections',
+        description: 'The apps your users connect their Google and Microsoft accounts through: client ids, secrets, redirect URIs and a switch for each provider.',
+        Icon: LinkOutlinedIcon,
+        path: '/admin/settings/connections',
         permission: 'system_settings:read',
       },
     ],

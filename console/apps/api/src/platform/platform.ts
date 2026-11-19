@@ -23,6 +23,7 @@ import '../tasks/runs.settings';
 import '../memories/memories.settings';
 import '../mcp/mcp.settings';
 import '../secrets/secrets.settings';
+import '../connections/connections.settings';
 import './storage.settings';
 // Everything the enabled slices add to the registries (settings namespaces,
 // credential purposes, storage prefixes, notifications, onboarding steps...).

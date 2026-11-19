@@ -62,6 +62,8 @@ export const APP_USER_DATA_MODELS: readonly UserDataModelHint<Prisma.ModelName>[
   { model: 'AgentCardGrant', category: 'saved-logins' },
   { model: 'AgentCardGrantRequest', category: 'saved-logins' },
   { model: 'SecretsActivity', category: 'credentials' },
+  { model: 'Connection', category: 'credentials' },
+  { model: 'ConnectionFlow', category: 'credentials' },
 ];
 
 /** Narrow scopes, such as "delete my notes" (none by default: the built-in scopes cover every category). */

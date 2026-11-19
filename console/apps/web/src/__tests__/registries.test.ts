@@ -93,6 +93,8 @@ describe('browser agent cards', () => {
   const approvalsController = read('../../../api/src/approvals/approval-rules.controller.ts');
   const secretsController = read('../../../api/src/secrets/secrets.controller.ts');
   const secretsActivityController = read('../../../api/src/secrets/secrets-activity.controller.ts');
+  const connectionsController = read('../../../api/src/connections/connections.controller.ts');
+  const connectionsAdminController = read('../../../api/src/connections/connections-admin.controller.ts');
   // The platform's system settings routes (GET /api/system-settings) and their permission ids.
   const settingsPermissions = readFileSync(join(__dirname, '..', '..', '..', '..', 'node_modules', '@marinoscar', 'platform-api', 'dist', 'settings', 'settings.permissions.js'), 'utf8');
 
@@ -103,6 +105,8 @@ describe('browser agent cards', () => {
     expect(approvalsList?.[1]).toBe('approvals:read');
     const secretsStatus = /@Get\('status'\)\s*\n\s*@ApiDataResponse\([^)]*\)\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(secretsController);
     expect(secretsStatus?.[1]).toBe('secrets:read');
+    const connectionsList = /@Get\(\)\s*\n\s*@ApiDataResponse\([^)]*\)\)?\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(connectionsController);
+    expect(connectionsList?.[1]).toBe('connections:read');
     expect(group(USER_SETTINGS_SECTIONS)?.cards.map((c) => [c.path, c.permission, c.feature])).toEqual([
       ['/settings/agent-policies', listRoute![1], undefined],
       ['/settings/agent-model-tiers', 'agent_policies:read', 'ai'],
@@ -116,6 +120,8 @@ describe('browser agent cards', () => {
       ['/settings/approvals', approvalsList![1], undefined],
       // #593, appended: what GET /api/secrets/status enforces.
       ['/settings/secrets', secretsStatus![1], undefined],
+      // E39.2 (#599), appended: what GET /api/connections enforces.
+      ['/settings/connections', connectionsList![1], undefined],
     ]);
   });
 
@@ -131,7 +137,10 @@ describe('browser agent cards', () => {
       ['External AI apps', '/admin/settings/ai-app-limits', 'system_settings:read', undefined],
       // #593, appended: what GET /api/secrets/admin/summary enforces.
       ['Secrets', '/admin/settings/secrets', 'system_settings:read', undefined],
+      // E39.2 (#599), appended: what GET /api/connections/admin/apps enforces.
+      ['Connections', '/admin/settings/connections', 'system_settings:read', undefined],
     ]);
+    expect(/@Get\(\)\s*\n\s*@ApiDataResponse\([^)]*\)\)?\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(connectionsAdminController)?.[1]).toBe('system_settings:read');
     expect(/@Get\('admin\/summary'\)\s*\n\s*@ApiDataResponse\([^)]*\)\s*\n\s*@Auth\(\{ permissions: \['([^']+)'\] \}\)/.exec(secretsActivityController)?.[1]).toBe('system_settings:read');
   });
 
