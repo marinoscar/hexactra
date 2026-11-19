@@ -219,6 +219,8 @@ A client authenticates to the control plane. The control plane authorizes the sp
 
 A web page, content script, memory recommendation, or model response is **never** trusted as a source of authorization.
 
+A **saved approval** (console, epic #549) is not an exception: it is the owner's own standing decision, created only by the owner's tick on a request the server issued, and matched by the server on the page's real registrable domain, the gate's category and the element's exact label. The owner can see, narrow, pause and revoke every one, and every use is on the audit trail. An owner-saved **memory** is data the agent may read, never an instruction and never a permission; only the owner's own act writes one.
+
 ### 6.3 Central vs local deployments
 
 The API and host agent may run in the same process/machine for standalone use or on different machines for distributed use. Distribution must change topology, **not** client commands, session IDs, authorization rules, or behavior.
@@ -947,6 +949,8 @@ The AEF must not:
 
 Integration should be through a separate SDK/HTTP API or events, with explicit opt-in and redact-before-export processing.
 
+**Not AEF: the console's memories and saved approvals (epic #549).** The console keeps a small set of facts the owner saved (people, accounts, preferences) and the owner's saved approvals, for the owner's own runs. They are console features, written only by the owner's own act, readable, editable and deletable on their own pages. They are not the experiential memory of the AEF, which stays independent, optional and post-v1: nothing is learned from pages or runs, nothing is shared, and no vector store or graph is required.
+
 ---
 
 ## 18. Repository and packaging strategy
@@ -1637,6 +1641,7 @@ Detail: `console/docs/runs.md` and `console/docs/chat.md`.
 - **Budgets are opt-in per policy and never reduce the agent's powers.** A policy bounds how long and how much a run spends, not what the agent may do; the owner may pick Unlimited, and an administrator's ceilings are the only hidden cap. Stop, takeover and stall detection still apply to an unlimited run.
 - **Owner-only checks go to the owner.** A code sent to the owner's phone, a passkey touch, or a CAPTCHA puzzle the agent cannot pass becomes a handoff. The agent ticks an "I am not a robot" box itself, as a person would.
 - **Page content never grants authority.** With full powers, a prompt injection in a page could act with the owner's authority. That is the main risk of this decision, and why the owner's controls above stay. Use allowed sites for tasks that visit untrusted sites. Hosted assistants (ChatGPT, Claude) get scoped consent, not full powers: the owner ticks what each may do, its sensitive browser actions wait for the owner's approval, and every call is on the audit trail (console `docs/security-hosted-clients.md`).
+- **Remembered approvals are another owner-controlled setting** (console, epic #549). The owner may tick "Don't ask again" on any approval, payments included; the server then lets the same step through on the same site without asking. The residual risk is named on the card: an agent steered by a page on that same site could reach the remembered button. Brakes: exact host and label matching, optional limits (amount, scope, expiry), every use recorded and notified, an alert on unusual use, and **Pause all**.
 - **Stealth.** No `--enable-automation`, no WebDriver, no CDP port, no `enable`d CDP domain, and `--silent-debugger-extension-api`: the browser looks like a person's.
 
 ### 27.3 Status

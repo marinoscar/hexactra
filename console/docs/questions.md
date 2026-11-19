@@ -27,6 +27,7 @@ Every question has an **owner** (the user it is asked of), an **asker** (`user:<
 | `number` | A number | `min`, `max`, `step`, `unit` | `value`: a canonical decimal string (`"7.5"`) |
 | `confirm` | Approve or deny | `confirmLabel`, `denyLabel`, `risk` (`low` or `high`, default `high`) | `value`: `approve` or `deny` |
 | `memory` | Save or decline a memory the agent proposes (#553); **created by the server only** | `proposal: { kind, label, aliases, attributes, supersedes }` | `memoryId` of the saved memory |
+| `form` | The missing parameter values of a task run, all at once, before it starts (#552, #556); **created by the server only** | `fields: [{ key, label, type, required, options?, help?, constraints? }]`, at most 20 | `fields`: the values by key, masked |
 
 `kind` says why it is asked (`captcha`, `code`, `passkey`, `login`, `confirmation`, `other`). Declining is `outcome: "cancelled"` for any type.
 
@@ -46,6 +47,15 @@ With "Ask me before purchases" on, the runner stops a click only when **the elem
 - **Never risky:** a date cell, an option, a checkbox, a radio, a text field, a tab, an accordion, plain text, and a link or menu item that names a feature ("Send money with Zelle®", "Payment activity"). "Continue", "Next", "Review" and "Cancel" are not commitments. A desktop click (`desktop_click`) has no page element and is never gated.
 - **The step and the question say why.** A paused click's step stores `{ category, label }` in its args and its summary names them. The confirmation the agent then asks carries `gate: { host, category, label }`, set by the server only: the host is the active tab's, as the browser reports it. A `gate` sent by the model or an API caller is dropped.
 - **An approval covers that target only.** Approving the question lets the click on the same category and label on the same host through, once. A different commitment asks again; so does a confirmation the agent asked on its own, before the gate named a target.
+
+### A few details to start: the `form` (#552, #556)
+
+A task whose goal holds `{{Name}}` parameters ([api-tasks-runs.md](api-tasks-runs.md#tasks-with-parameters)) and is started without every required value (no input, no default, no memory) creates its run `waiting_human` with one question of input `form`: one field per missing value, typed (`text`, `number`, `money`, `date`, `choice`, `phone`, `email`), in order. No question spec can ask one (`SERVER_QUESTION_INPUTS` in `questions.contract.ts`). It has no fabric handoff: no browser session and no model call exist until it is answered (`apps/api/src/questions/task-run-starter.ts`).
+
+- **The answer** is `{ "outcome": "completed", "fields": { "amount": "25" } }`. Every field is checked with the parameter rules; a bad one is `400 INVALID_INPUT` with `details.issues` per key, and the run keeps waiting. A good one fills the goal, moves the run to `queued` and starts it. The stored response keeps the values masked (#538); the card settles as "Provided".
+- **Declined or expired** (it lives 24 hours): the run ends `cancelled`, "The values were not provided."
+- **A sensitive parameter is never a field.** It is asked as a `secret` request right after the browser opens, in the signed-in console only, and typed by the fabric.
+- **Channels.** A form has only public fields, so it is answered in the web and Android app, the Inbox, and relayed by a hosted AI app with `inbox_answer` (`fields`). A form holding a sensitive field would need a signed-in channel (`needsSignedIn` in `packages/shared/question-rules.js`); the starter never builds one. The MCP Apps card does not fill a form in place: it sends the person to Hexactra. Notifications and webhooks carry a link, never a value.
 
 ### "Don't ask again" (#555)
 
