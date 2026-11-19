@@ -5,8 +5,13 @@
 export const CONNECTION_PROVIDER_IDS = ['google', 'microsoft'] as const;
 export type ConnectionProviderId = (typeof CONNECTION_PROVIDER_IDS)[number];
 
-/** What an account may be used for. Read is never write: each pair is two switches. */
-export const CAPABILITIES = ['mail_read', 'mail_send', 'calendar_read', 'calendar_write', 'docs_read', 'docs_write'] as const;
+/**
+ * What an account may be used for. Read is never write: each write capability brings its read capability.
+ * `mail_modify` (archive, labels, mark read, drafts) is the seventh, added by the decision record of E39.1
+ * (`docs/decisions/connections-auth.md`): at both providers it needs a higher permission than send (Gmail `gmail.modify` is a
+ * restricted scope; Graph `Mail.ReadWrite`), so it is its own switch rather than a free rider on `mail_send`.
+ */
+export const CAPABILITIES = ['mail_read', 'mail_send', 'mail_modify', 'calendar_read', 'calendar_write', 'docs_read', 'docs_write'] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
 /** The groups the owner sees as Mail, Calendar and Documents, and the unit of a default account. */
@@ -16,6 +21,7 @@ export type CapabilityGroup = (typeof CAPABILITY_GROUPS)[number];
 const GROUP_OF: Record<Capability, CapabilityGroup> = {
   mail_read: 'mail',
   mail_send: 'mail',
+  mail_modify: 'mail',
   calendar_read: 'calendar',
   calendar_write: 'calendar',
   docs_read: 'docs',
@@ -25,6 +31,7 @@ const GROUP_OF: Record<Capability, CapabilityGroup> = {
 const READ_OF: Record<Capability, Capability> = {
   mail_read: 'mail_read',
   mail_send: 'mail_read',
+  mail_modify: 'mail_read',
   calendar_read: 'calendar_read',
   calendar_write: 'calendar_read',
   docs_read: 'docs_read',
