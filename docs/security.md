@@ -30,8 +30,6 @@ Tokens are issued by the identity provider and include scopes for granular acces
 
 - `sessions:read` - List and view sessions
 - `sessions:write` - Create and manage sessions
-- `goals:read` - View goals and status
-- `goals:write` - Create and manage goals
 - `interaction:read` - View HITL requests
 - `interaction:write` - Approve/reject HITL requests
 

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **One agent loop: the Rust planning loop is retired** (#588, epic #580).
+  - Removed the crates `hexactra-planning-loop`, `hexactra-agent-run`, `hexactra-model-adapter` and `hexactra-execution`: nothing in the fabric, the CLI, the MCP server or the console used them. The agent loop is the console's goal runner (`console/apps/api/src/runner/`).
+  - **API change (fabric):** removed the stub routes `POST /goals`, `GET /goals` and `GET /goals/{goalId}` (they were never mounted in the router) and the scopes `goals:read` and `goals:write`. A token that carries either scope still validates; the unknown scope is ignored. Start a goal through the console (`POST /api/runs`, MCP `run_goal`, `hexactra runs start`).
+  - **SDK:** removed `ControlPlaneClient.createGoal` and the `Goal`, `CreateGoalRequest` and `CreateGoalResponse` types of `@hexactra/sdk` (and `@hexactra/contracts`); the route they called did not exist.
+  - Decision record and usage table: `docs/decisions/one-agent-loop.md`.
 - **E32 close-out: documentation and client parity** (#432).
   - MCP: new tools `schedule_preview`, `task_pause` and `task_resume`; `task_create` accepts `schedules[]`; `runs_list` is paged.
   - CLI: `runs delete <id>` and `runs delete --older-than <days>`, `tasks pause` and `tasks resume`; the TUI's run list loads more with `m`.

@@ -94,10 +94,6 @@ pub enum Scope {
     SessionsWrite,
     SessionsControl, // Start/stop/restart sessions
 
-    // Goal scopes
-    GoalsRead,
-    GoalsWrite,
-
     // Operation scopes
     OperationsRead,
     OperationsWrite,
@@ -125,8 +121,6 @@ impl std::fmt::Display for Scope {
             Scope::SessionsRead => write!(f, "sessions:read"),
             Scope::SessionsWrite => write!(f, "sessions:write"),
             Scope::SessionsControl => write!(f, "sessions:control"),
-            Scope::GoalsRead => write!(f, "goals:read"),
-            Scope::GoalsWrite => write!(f, "goals:write"),
             Scope::OperationsRead => write!(f, "operations:read"),
             Scope::OperationsWrite => write!(f, "operations:write"),
             Scope::InteractionRead => write!(f, "interaction:read"),
@@ -147,8 +141,6 @@ impl Scope {
             Scope::SessionsRead,
             Scope::SessionsWrite,
             Scope::SessionsControl,
-            Scope::GoalsRead,
-            Scope::GoalsWrite,
             Scope::OperationsRead,
             Scope::OperationsWrite,
             Scope::InteractionRead,
@@ -167,8 +159,6 @@ impl Scope {
             "sessions:read" => Some(Scope::SessionsRead),
             "sessions:write" => Some(Scope::SessionsWrite),
             "sessions:control" => Some(Scope::SessionsControl),
-            "goals:read" => Some(Scope::GoalsRead),
-            "goals:write" => Some(Scope::GoalsWrite),
             "operations:read" => Some(Scope::OperationsRead),
             "operations:write" => Some(Scope::OperationsWrite),
             "interaction:read" => Some(Scope::InteractionRead),
@@ -188,8 +178,6 @@ impl Scope {
             Scope::SessionsRead => "sessions:read",
             Scope::SessionsWrite => "sessions:write",
             Scope::SessionsControl => "sessions:control",
-            Scope::GoalsRead => "goals:read",
-            Scope::GoalsWrite => "goals:write",
             Scope::OperationsRead => "operations:read",
             Scope::OperationsWrite => "operations:write",
             Scope::InteractionRead => "interaction:read",
@@ -320,7 +308,6 @@ impl AccessToken {
 pub enum ResourceType {
     Profile,
     Session,
-    Goal,
     Operation,
     Host,
     InteractionRequest,
@@ -348,8 +335,6 @@ impl AuthContext {
             (ResourceType::Session, "read") => self.scopes.has(Scope::SessionsRead),
             (ResourceType::Session, "write") => self.scopes.has(Scope::SessionsWrite),
             (ResourceType::Session, "control") => self.scopes.has(Scope::SessionsControl),
-            (ResourceType::Goal, "read") => self.scopes.has(Scope::GoalsRead),
-            (ResourceType::Goal, "write") => self.scopes.has(Scope::GoalsWrite),
             (ResourceType::Operation, "read") => self.scopes.has(Scope::OperationsRead),
             (ResourceType::Operation, "write") => self.scopes.has(Scope::OperationsWrite),
             (ResourceType::Host, "read") => self.scopes.has(Scope::HostsRead),

@@ -128,7 +128,6 @@ There is deliberately no method for the deprecated `POST /v1/handoffs/{id}/claim
 
 ### ControlPlaneClient
 
-- `createGoal(sessionId, actions)` - Create a new goal
 - `getSession(sessionId)` - Get session details
 - `listSessions()` - List all sessions
 - `getOperation(operationId)` - Get operation details
