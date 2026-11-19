@@ -992,6 +992,7 @@ mod tests {
                 clear: true,
                 submit: true,
                 sensitive: true,
+                expect_origin: None,
                 tab_id: None,
             }
         );
@@ -1071,6 +1072,7 @@ mod tests {
             clear: false,
             submit: false,
             sensitive: true,
+            expect_origin: None,
             tab_id: None,
         };
         let (view, _) = s.enqueue(sess, action, Duration::from_secs(5)).unwrap();

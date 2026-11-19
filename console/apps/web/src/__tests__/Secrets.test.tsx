@@ -96,6 +96,7 @@ describe('the words', () => {
     expect(whatWords({ event: 'release', field: 'one_time_code', matches: null })).toBe('Typed the code');
     expect(whatWords({ event: 'lookup', field: null, matches: 0 })).toBe('Looked for a saved login: none found');
     expect(outcomeWords('origin_mismatch')).toBe('Refused: the page was not the saved site');
+    expect(outcomeWords('not_a_password_field')).toBe('Refused: the field was not a password field');
     expect(outcomeWords('something_new')).toBe('Failed');
   });
 });

@@ -60,6 +60,15 @@ describe('the error to instruction table', () => {
     expect(failureOf('cross_origin_frame').warn).toBe(true);
   });
 
+  it('refuses a password typed into a plain text box, tells the model to look once and then ask the owner, and keeps logins on (E37.10)', () => {
+    const f = failureOf('not_a_password_field');
+    expect(f.warn).toBe(false);
+    expect(f.text).toContain('not a password field');
+    expect(f.text).toContain('observe_elements');
+    expect(f.text).toContain('request_human');
+    expect(f.outcome).toBeNull();
+  });
+
   it.each(['disabled', 'unauthorized', 'unavailable', 'rate_limited', 'not_found', 'no_provider', 'unknown'] as const)('%s: saved logins are not available, ask the owner', (code) => {
     const f = failureOf(code);
     expect(f.warn).toBe(false);

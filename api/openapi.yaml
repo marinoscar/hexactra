@@ -1129,7 +1129,7 @@ paths:
     post:
       tags:
       - sessions
-      description: 'Queue an action on the session''s host. A `type_secret` action types the answer of a `secret` handoff of this session: the control plane consumes the value once and the operation, events and logs show `[secret]`, never the value. A `type` action with `sensitive: true` is reported the same way. `secrets_lookup`, `type_from_provider`, `type_code_from_provider`, `select_from_provider` and `type_card_field` are answered by the control plane from the session owner''s registered secrets provider (`PUT /v1/secrets-providers/{owner_id}/{provider}`): it reads the tab''s top-level origin itself, asks the provider with it, and types the value with `sensitive: true` (or, for `select_from_provider`, picks the matching `<select>` option itself); the operation reports `{ typed: true }` or `{ selected: true }`, never the value, never its length. A sensitive identity field (a date of birth, an ID number) is only typed into an `https` page. A failure is `state: failed` with `error: "<code>: <message>"` (`no_provider`, `not_found`, `origin_mismatch`, `disabled`, `rate_limited`, `unavailable`, `unauthorized`, `refused`, `origin_unavailable`, `cross_origin_frame`, `typing_failed`, `insecure_origin`, `no_option`, `amount_exceeded`, `currency_mismatch`, `security_code_not_granted`, `grant_expired`, `limit_reached`, `cards_disabled`, `frame_unknown`, `timed_out`). `type_card_field` (E37.7) types one field of a saved card under the owner''s merchant grant: the page must be `https`, the control plane reads the merchant''s top-level origin and, for a point inside an embedded frame, that frame''s origin (`frame_unknown` when it cannot tell), and passes both with the purchase''s `amount` and `currency` to the provider; it reports `{ typed: true, frame_origin? }`.'
+      description: 'Queue an action on the session''s host. A `type_secret` action types the answer of a `secret` handoff of this session: the control plane consumes the value once and the operation, events and logs show `[secret]`, never the value. A `type` action with `sensitive: true` is reported the same way. `secrets_lookup`, `type_from_provider`, `type_code_from_provider`, `select_from_provider` and `type_card_field` are answered by the control plane from the session owner''s registered secrets provider (`PUT /v1/secrets-providers/{owner_id}/{provider}`): it reads the tab''s top-level origin itself, asks the provider with it, and types the value with `sensitive: true` and `expect_origin` (the host re-checks the tab''s origin at the moment of typing and types nothing, failing with `origin_mismatch`, when the tab has moved; a saved password is only typed into a password field, else `not_a_password_field`) (or, for `select_from_provider`, picks the matching `<select>` option itself); the operation reports `{ typed: true }` or `{ selected: true }`, never the value, never its length. A sensitive identity field (a date of birth, an ID number) is only typed into an `https` page. A failure is `state: failed` with `error: "<code>: <message>"` (`no_provider`, `not_found`, `origin_mismatch`, `disabled`, `rate_limited`, `unavailable`, `unauthorized`, `refused`, `origin_unavailable`, `cross_origin_frame`, `typing_failed`, `not_a_password_field`, `insecure_origin`, `no_option`, `amount_exceeded`, `currency_mismatch`, `security_code_not_granted`, `grant_expired`, `limit_reached`, `cards_disabled`, `frame_unknown`, `timed_out`). `type_card_field` (E37.7) types one field of a saved card under the owner''s merchant grant: the page must be `https`, the control plane reads the merchant''s top-level origin and, for a point inside an embedded frame, that frame''s origin (`frame_unknown` when it cannot tell), and passes both with the purchase''s `amount` and `currency` to the provider; it reports `{ typed: true, frame_origin? }`.'
       operationId: run_action
       parameters:
       - name: id
@@ -2553,6 +2553,15 @@ components:
           clear:
             type: boolean
             description: Clear the existing value first.
+          expect_origin:
+            type:
+            - string
+            - 'null'
+            description: |-
+              The origin (`https://host[:port]`) the tab must still be at when
+              the host types: it checks the tab's URL at that moment and types
+              nothing, failing with `origin_mismatch`, when it differs. Set by
+              the provider actions (E37.10); never by a model.
           selector:
             type: string
           sensitive:
@@ -3082,6 +3091,11 @@ components:
         - text
         - type
         properties:
+          expect_origin:
+            type:
+            - string
+            - 'null'
+            description: 'As for `type`: the origin the tab must still be at (E37.10).'
           sensitive:
             type: boolean
             description: |-

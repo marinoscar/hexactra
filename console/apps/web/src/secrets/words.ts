@@ -92,6 +92,7 @@ const OUTCOME_WORDS: Record<string, string> = {
   not_found: 'Refused: no saved login for this page',
   origin_mismatch: 'Refused: the page was not the saved site',
   cross_origin_frame: 'Refused: the field was in a frame of another site',
+  not_a_password_field: 'Refused: the field was not a password field',
   disabled: 'Refused: saved logins are turned off',
   rate_limited: 'Refused: too many requests, try again later',
   unavailable: 'Failed: the provider could not be reached',

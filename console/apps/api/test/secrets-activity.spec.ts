@@ -79,6 +79,7 @@ describe('sanitizeSecretsEvent', () => {
   it('knows a success from a refusal', () => {
     expect(['typed', 'ok'].some(isRefusal)).toBe(false);
     expect(ACTIVITY_OUTCOMES.filter(isRefusal)).toContain('origin_mismatch');
+    expect(ACTIVITY_OUTCOMES.filter(isRefusal)).toContain('not_a_password_field');
     expect(isRefusal('other')).toBe(true);
   });
 });

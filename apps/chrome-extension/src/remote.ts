@@ -23,7 +23,7 @@ type Button = 'left' | 'middle' | 'right';
 export type RemoteAction =
   | { type: 'navigate'; url: string; tab_id?: number }
   | { type: 'click'; selector: string; tab_id?: number }
-  | { type: 'type'; selector: string; text: string; clear?: boolean; submit?: boolean; tab_id?: number }
+  | { type: 'type'; selector: string; text: string; clear?: boolean; submit?: boolean; expect_origin?: string; tab_id?: number }
   | { type: 'press'; key: string; selector?: string; tab_id?: number }
   | { type: 'scroll'; dx?: number; dy?: number; selector?: string; tab_id?: number }
   | { type: 'screenshot'; marks?: boolean; mask?: boolean; tab_id?: number }
@@ -32,7 +32,7 @@ export type RemoteAction =
   | { type: 'mouse'; op: 'move' | 'down' | 'up'; x: number; y: number; button?: Button; tab_id?: number }
   | { type: 'drag'; from_x: number; from_y: number; to_x: number; to_y: number; steps?: number; tab_id?: number }
   | { type: 'scroll_at'; x: number; y: number; dx?: number; dy?: number; tab_id?: number }
-  | { type: 'type_keys'; text: string; tab_id?: number }
+  | { type: 'type_keys'; text: string; expect_origin?: string; tab_id?: number }
   | { type: 'key'; key: string; modifiers?: string[]; tab_id?: number }
   | { type: 'text'; selector?: string; max_chars?: number; tab_id?: number }
   | { type: 'elements'; max_elements?: number; tab_id?: number }
@@ -184,7 +184,12 @@ export function pageClick(selector: string) {
   return {};
 }
 
-export function pageType(selector: string, text: string, clear: boolean, submit: boolean) {
+export function pageType(selector: string, text: string, clear: boolean, submit: boolean, expectOrigin: string | null = null) {
+  // The page's own origin, read in the same task as the typing (E37.10). The
+  // text is inline on purpose: this function runs in the page, with no module scope.
+  if (expectOrigin !== null && location.origin !== expectOrigin) {
+    return { __error: 'origin_mismatch: the page is not at the origin the value was released for; nothing was typed' };
+  }
   const el = document.querySelector(selector) as HTMLElement | null;
   if (!el) return { __error: `no element matches ${selector}` };
   el.scrollIntoView({ block: 'center' });
@@ -567,6 +572,26 @@ function refuseOutsideAllowed(url: string): void {
   throw new ActionError(`navigation_blocked: ${host} is not in this session's allowed sites (${allowed.join(', ')})`);
 }
 
+/** What a typing action that names an origin fails with when the tab is elsewhere (E37.10). The fabric reads the `origin_mismatch` prefix. */
+const ORIGIN_MISMATCH_TEXT = 'origin_mismatch: the page is not at the origin the value was released for; nothing was typed';
+
+/**
+ * Refuse, typing nothing, when the tab is no longer at the origin a provider
+ * released a value for (E37.10). The control plane read the origin a round
+ * trip earlier; this reads the tab's URL again in the host, at the moment of
+ * typing. Fails closed: a tab whose URL cannot be read is refused.
+ */
+function assertExpectedOrigin(tab: chrome.tabs.Tab, expected: string | undefined): void {
+  if (expected === undefined) return;
+  let now: string | null = null;
+  try {
+    now = tab.url ? new URL(tab.url).origin : null;
+  } catch {
+    now = null;
+  }
+  if (now !== expected) throw new ActionError(ORIGIN_MISMATCH_TEXT);
+}
+
 /** Execute one remote action. Throws ActionError on failure. */
 export async function executeAction(action: RemoteAction, deadline: number): Promise<unknown> {
   switch (action.type) {
@@ -585,7 +610,8 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
     }
     case 'type': {
       const tab = await resolveTab(action.tab_id);
-      return inPage(tab.id!, pageType, [action.selector, action.text, !!action.clear, !!action.submit]);
+      assertExpectedOrigin(tab, action.expect_origin);
+      return inPage(tab.id!, pageType, [action.selector, action.text, !!action.clear, !!action.submit, action.expect_origin ?? null]);
     }
     case 'press': {
       const tab = await resolveTab(action.tab_id);
@@ -645,6 +671,7 @@ export async function executeAction(action: RemoteAction, deadline: number): Pro
     }
     case 'type_keys': {
       const tab = await resolveTab(action.tab_id);
+      assertExpectedOrigin(tab, action.expect_origin);
       await viaCdp(() => cdp.typeText(tab.id!, action.text));
       return {};
     }

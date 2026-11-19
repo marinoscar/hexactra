@@ -118,12 +118,21 @@ fn host_action(view: &RemoteAction, secret: Option<Zeroizing<String>>) -> Remote
             submit,
             tab_id,
             ..
-        }
-        | RemoteAction::Type {
+        } => RemoteAction::Type {
+            selector: selector.clone(),
+            text: String::clone(&text),
+            clear: *clear,
+            submit: *submit,
+            sensitive: true,
+            expect_origin: None,
+            tab_id: *tab_id,
+        },
+        RemoteAction::Type {
             selector,
             clear,
             submit,
             tab_id,
+            expect_origin,
             ..
         } => RemoteAction::Type {
             selector: selector.clone(),
@@ -131,11 +140,17 @@ fn host_action(view: &RemoteAction, secret: Option<Zeroizing<String>>) -> Remote
             clear: *clear,
             submit: *submit,
             sensitive: true,
+            expect_origin: expect_origin.clone(),
             tab_id: *tab_id,
         },
-        RemoteAction::TypeKeys { tab_id, .. } => RemoteAction::TypeKeys {
+        RemoteAction::TypeKeys {
+            tab_id,
+            expect_origin,
+            ..
+        } => RemoteAction::TypeKeys {
             text: String::clone(&text),
             sensitive: true,
+            expect_origin: expect_origin.clone(),
             tab_id: *tab_id,
         },
         other => other.clone(),

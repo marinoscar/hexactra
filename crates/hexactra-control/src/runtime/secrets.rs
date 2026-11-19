@@ -98,6 +98,19 @@ impl Fail {
     }
 }
 
+/// A typing failure as the fabric reports it: the host refuses with an
+/// `origin_mismatch: ...` error when the tab is no longer at the origin the
+/// value was released for (E37.10). Any other host text stays `typing_failed`.
+fn typing_fail(f: Fail) -> Fail {
+    if f.message.starts_with(code::ORIGIN_MISMATCH) {
+        return Fail::new(
+            code::ORIGIN_MISMATCH,
+            "the page moved before the value was typed; nothing was typed",
+        );
+    }
+    f
+}
+
 fn provider_fail(e: ProviderError) -> Fail {
     Fail::new(e.code(), e.to_string())
 }
@@ -616,6 +629,49 @@ fn compose_expiry(month: &SecretValue, year: &SecretValue) -> Option<SecretValue
     out.flatten().map(SecretValue::from_string)
 }
 
+/// The script that says what is at a login's password target: an `input` of
+/// type `password`, or a text input the page shows as a password through a
+/// "show password" toggle (E37.10). It reads attributes only, never a value.
+/// A text input counts as a shown password when its `autocomplete` says
+/// `current-password` or `new-password`, or its name, id, `aria-label` or
+/// placeholder says `password`, `passwd` or `pwd`.
+fn password_target_script(selector: Option<&str>, point: Option<ViewportPoint>) -> String {
+    let find = match (selector, point) {
+        (Some(sel), _) => format!(
+            "document.querySelector({})",
+            serde_json::to_string(sel).unwrap_or_else(|_| "\"\"".into())
+        ),
+        // x and y are integers (validated): nothing page-controlled is spliced in.
+        (None, Some(p)) => format!("document.elementFromPoint({},{})", p.x, p.y),
+        (None, None) => "null".to_string(),
+    };
+    format!(
+        "/* hexactra:password-target */(()=>{{const e={find};if(!e)return {{found:false}};\
+         if(String(e.tagName).toLowerCase()!=='input')return {{found:true,password:false}};\
+         const ty=String(e.getAttribute('type')||'text').toLowerCase();\
+         if(ty==='password')return {{found:true,password:true}};\
+         if(ty!=='text')return {{found:true,password:false}};\
+         const ac=String(e.getAttribute('autocomplete')||'').toLowerCase().split(/\\s+/);\
+         if(ac.includes('current-password')||ac.includes('new-password'))return {{found:true,password:true}};\
+         const h=[e.name,e.id,e.getAttribute('aria-label'),e.getAttribute('placeholder')].map(x=>String(x||'')).join(' ');\
+         return {{found:true,password:/pass(word|wd)|pwd/i.test(h)}}}})()"
+    )
+}
+
+/// Read a password target probe's answer: only a password field passes.
+fn password_target_of(v: &Value) -> Result<(), Fail> {
+    if v.get("found").and_then(Value::as_bool) != Some(true) {
+        return Err(Fail::new(code::TYPING_FAILED, "there is no such element"));
+    }
+    if v.get("password").and_then(Value::as_bool) != Some(true) {
+        return Err(Fail::new(
+            code::NOT_A_PASSWORD_FIELD,
+            "the target is not a password field; the saved password was not fetched or typed",
+        ));
+    }
+    Ok(())
+}
+
 /// What a probe of a card's target found.
 #[derive(Debug, PartialEq, Eq)]
 enum CardTarget {
@@ -787,6 +843,29 @@ impl Run {
         Ok((origin, id))
     }
 
+    /// A saved password goes only into a password field (E37.10): asked
+    /// before the provider is, so a refusal releases nothing.
+    async fn check_password_target(&self, tab: i64, target: &Target) -> Result<(), Fail> {
+        let done = self
+            .op(
+                RemoteAction::Evaluate {
+                    script: password_target_script(target.selector.as_deref(), target.point),
+                    await_promise: false,
+                    tab_id: Some(tab),
+                },
+                code::TYPING_FAILED,
+            )
+            .await?;
+        let v = done
+            .result
+            .as_ref()
+            .and_then(|r| r.get("value"))
+            .cloned()
+            .unwrap_or(Value::Null);
+        self.store.discard_result(done.id);
+        password_target_of(&v)
+    }
+
     /// A target point must not land in a frame of another origin.
     async fn check_point(&self, tab: i64, p: ViewportPoint) -> Result<(), Fail> {
         // x and y are integers (validated), so nothing page-controlled is
@@ -900,6 +979,15 @@ impl Run {
         if let Some(p) = target.point {
             self.check_point(tab, p).await?;
         }
+        if matches!(
+            &source,
+            Source::Field {
+                field: SecretField::Password,
+                ..
+            }
+        ) {
+            self.check_password_target(tab, &target).await?;
+        }
 
         // 2. From here until typing ends no picture may be taken.
         let _no_pictures = self.store.secret_guard(self.session_id);
@@ -954,7 +1042,7 @@ impl Run {
 
         // 5. Type it with trusted input; the store holds the text apart from
         //    the operation (which shows `[secret]`) and zeroizes it.
-        self.type_into(&value, &target, tab).await?;
+        self.type_into(&value, &target, tab, &origin).await?;
         drop(value);
         Ok(json!(ProviderTypedResult {
             typed: true,
@@ -1095,7 +1183,7 @@ impl Run {
 
         // 5. Type it with trusted input; at a point inside a frame this is a
         //    click and keystrokes at screen coordinates: no script runs there.
-        self.type_into(&value, &target, tab).await?;
+        self.type_into(&value, &target, tab, &origin).await?;
         drop(value);
         Ok(json!(CardTypedResult {
             typed: true,
@@ -1214,7 +1302,17 @@ impl Run {
         Ok(json!(ProviderSelectedResult { selected: true }))
     }
 
-    async fn type_into(&self, value: &SecretValue, target: &Target, tab: i64) -> Result<(), Fail> {
+    /// Type `value` at `target` with trusted input. The host re-checks, at the
+    /// moment of typing, that the tab is still at `origin` (E37.10): the last
+    /// read of it was a round trip ago.
+    async fn type_into(
+        &self,
+        value: &SecretValue,
+        target: &Target,
+        tab: i64,
+        origin: &Origin,
+    ) -> Result<(), Fail> {
+        let expect_origin = Some(origin.to_string());
         let text = || {
             secret_text(value)
                 .ok_or_else(|| Fail::new(code::TYPING_FAILED, "the value is not text"))
@@ -1227,11 +1325,13 @@ impl Run {
                     clear: target.clear,
                     submit: target.submit,
                     sensitive: true,
+                    expect_origin: expect_origin.clone(),
                     tab_id: Some(tab),
                 },
                 code::TYPING_FAILED,
             )
-            .await?;
+            .await
+            .map_err(typing_fail)?;
             return Ok(());
         }
         let Some(p) = target.point else {
@@ -1267,11 +1367,13 @@ impl Run {
             RemoteAction::TypeKeys {
                 text: text()?,
                 sensitive: true,
+                expect_origin,
                 tab_id,
             },
             code::TYPING_FAILED,
         )
-        .await?;
+        .await
+        .map_err(typing_fail)?;
         if target.submit {
             self.op(
                 RemoteAction::Key {

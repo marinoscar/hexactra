@@ -231,6 +231,52 @@ describe('full-power actions through chrome.debugger (#366)', () => {
     expect(down?.params?.text).toBeUndefined();
   });
 
+  it('types nothing when the tab is not at the origin the value was released for (E37.10)', async () => {
+    // Tab 1 is at https://example.test/ (see makeChrome).
+    const refused = await handleRequest(req({ type: 'type_keys', text: 'secret', expect_origin: 'https://login.example.test' }));
+    expect(refused.ok).toBe(false);
+    expect(refused.error).toMatch(/^origin_mismatch: /);
+    expect(refused.error).not.toContain('secret');
+    expect(sent).toEqual([]);
+
+    // A look-alike with the expected origin as a prefix is not the origin.
+    chromeMock.tabs.update(1, { url: 'https://example.test.evil.test/' } as never);
+    const lookalike = await handleRequest(req({ type: 'type_keys', text: 'secret', expect_origin: 'https://example.test' }));
+    expect(lookalike.ok).toBe(false);
+    expect(sent).toEqual([]);
+
+    // The exact origin (any path, query, fragment) types.
+    chromeMock.tabs.update(1, { url: 'https://example.test/signin?next=%2F#x' } as never);
+    const ok = await handleRequest(req({ type: 'type_keys', text: 'hi', expect_origin: 'https://example.test' }));
+    expect(ok.ok).toBe(true);
+    expect(sent.length).toBeGreaterThan(0);
+
+    // Without an expected origin nothing changes.
+    sent = [];
+    expect((await handleRequest(req({ type: 'type_keys', text: 'hi' }))).ok).toBe(true);
+  });
+
+  it('refuses `type` the same way, before and inside the page (E37.10)', async () => {
+    const run = vi.fn(async (opts: { func: (...a: unknown[]) => unknown; args: unknown[] }) => [{ result: opts.func(...opts.args) }]);
+    chromeMock.scripting.executeScript = run as never;
+
+    // The tab's URL is wrong: the script is never injected.
+    const wrongTab = await handleRequest(req({ type: 'type', selector: '#pw', text: 'secret', expect_origin: 'https://login.example.test' }));
+    expect(wrongTab.ok).toBe(false);
+    expect(wrongTab.error).toMatch(/^origin_mismatch: /);
+    expect(run).not.toHaveBeenCalled();
+
+    // The page itself is elsewhere than the tab's URL says (it moved in between): the page function refuses.
+    vi.stubGlobal('location', { origin: 'https://evil.test' });
+    const querySelector = vi.fn();
+    vi.stubGlobal('document', { querySelector });
+    const moved = await handleRequest(req({ type: 'type', selector: '#pw', text: 'secret', expect_origin: 'https://example.test' }));
+    expect(moved.ok).toBe(false);
+    expect(moved.error).toMatch(/^origin_mismatch: /);
+    expect(querySelector).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
   it('inserts long text at once', async () => {
     await handleRequest(req({ type: 'type_keys', text: 'x'.repeat(KEY_BY_KEY_MAX + 1) }));
     expect(sent.map((c) => c.method)).toEqual(['Input.insertText']);

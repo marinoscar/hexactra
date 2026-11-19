@@ -191,6 +191,7 @@ export type SecretsErrorCode =
   | 'refused'
   | 'origin_unavailable'
   | 'cross_origin_frame'
+  | 'not_a_password_field'
   | 'typing_failed'
   | 'insecure_origin'
   | 'no_option'
@@ -218,6 +219,7 @@ export const SECRETS_ERROR_CODES: readonly SecretsErrorCode[] = [
   'refused',
   'origin_unavailable',
   'cross_origin_frame',
+  'not_a_password_field',
   'typing_failed',
   'insecure_origin',
   'no_option',
@@ -257,6 +259,7 @@ export function secretsErrorAction(code: SecretsErrorCode): SecretsErrorAction {
     case 'not_found':
     case 'no_provider':
     case 'provider_required':
+    case 'not_a_password_field':
       return 'ask_person';
     case 'unauthorized':
       return 'reconnect';

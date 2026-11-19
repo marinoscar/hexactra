@@ -402,6 +402,9 @@ pub mod provider_error_codes {
     /// The tab's URL could not be read, or is not a page a value may be
     /// typed into (not `https`, or `http` on loopback).
     pub const ORIGIN_UNAVAILABLE: &str = "origin_unavailable";
+    /// A saved password was about to be typed into an element that is not a
+    /// password field (E37.10): nothing was released or typed.
+    pub const NOT_A_PASSWORD_FIELD: &str = "not_a_password_field";
     /// The target is in a frame of another origin.
     pub const CROSS_ORIGIN_FRAME: &str = "cross_origin_frame";
     /// The value was fetched but the browser could not type it.
@@ -533,6 +536,12 @@ pub enum RemoteAction {
         /// sends it to the host but stores and reports it as `[secret]`.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         sensitive: bool,
+        /// The origin (`https://host[:port]`) the tab must still be at when
+        /// the host types: it checks the tab's URL at that moment and types
+        /// nothing, failing with `origin_mismatch`, when it differs. Set by
+        /// the provider actions (E37.10); never by a model.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        expect_origin: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tab_id: Option<i64>,
     },
@@ -787,6 +796,9 @@ pub enum RemoteAction {
         /// plane sends it to the host but stores and reports it as `[secret]`.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         sensitive: bool,
+        /// As for `type`: the origin the tab must still be at (E37.10).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        expect_origin: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tab_id: Option<i64>,
     },
@@ -2857,6 +2869,7 @@ mod tests {
                 clear: false,
                 submit: false,
                 sensitive: false,
+                expect_origin: None,
                 tab_id: None
             }
         );
@@ -3414,6 +3427,7 @@ mod tests {
             clear: true,
             submit: false,
             sensitive: true,
+            expect_origin: None,
             tab_id: None,
         };
         assert_eq!(a.kind(), "type");

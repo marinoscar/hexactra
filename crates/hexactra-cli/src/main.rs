@@ -805,6 +805,7 @@ async fn run() -> Result<()> {
             clear: *clear,
             submit: *submit,
             sensitive: *sensitive,
+            expect_origin: None,
             tab_id: *tab,
         },
         Commands::Press { key, selector, tab } => RemoteAction::Press {

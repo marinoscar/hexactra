@@ -165,6 +165,14 @@ export function failureOf(code: SecretsErrorCode, retryAfterSeconds?: number): S
         summary: code === 'origin_mismatch' ? 'the page is not the site this login is saved for: nothing was typed' : 'the field is in a frame of another site: nothing was typed',
         outcome: code === 'origin_mismatch' ? 'ORIGIN_MISMATCH' : null,
       };
+    case 'not_a_password_field':
+      // Nothing was fetched or typed (E37.10). One look for the right element, then the owner: never a guess.
+      return {
+        text: `That element is not a password field, so the saved password was not fetched or typed. If you named the wrong element, find the password field with observe_elements and call the tool again for it once. If it is refused again, or the form has no password field, ${ASK.charAt(0).toLowerCase()}${ASK.slice(1)}`,
+        warn: false,
+        summary: 'the field is not a password field: nothing was typed',
+        outcome: null,
+      };
     case 'disabled':
       return { text: UNAVAILABLE, warn: false, summary: 'saved logins are switched off in the vault', outcome: 'DISABLED' };
     case 'unauthorized':

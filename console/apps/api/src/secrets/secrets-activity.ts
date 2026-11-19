@@ -59,6 +59,7 @@ export const ACTIVITY_OUTCOMES = [
   'refused',
   'origin_unavailable',
   'cross_origin_frame',
+  'not_a_password_field',
   'typing_failed',
   'insecure_origin',
   'no_option',

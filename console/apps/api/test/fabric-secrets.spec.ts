@@ -161,6 +161,9 @@ describe('error mapping', () => {
     expect(secretsErrorAction('rate_limited')).toBe('wait');
     expect(secretsErrorAction('unavailable')).toBe('retry_later');
     expect(secretsErrorAction('refused')).toBe('fail');
+    // E37.10: a saved password aimed at a field that is not a password field.
+    expect(secretsErrorAction('not_a_password_field')).toBe('ask_person');
+    expect(secretsErrorOf({ id: 'op', error: 'not_a_password_field: the target is not a password field' })).toMatchObject({ code: 'not_a_password_field', action: 'ask_person' });
   });
 
   it('waits out a takeover by default and throws at once when asked', async () => {
